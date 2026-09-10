@@ -5,7 +5,7 @@ sidebarTitle: Agent
 
 AG2 ships a `#!python TelemetryMiddleware` that emits [OpenTelemetry](https://opentelemetry.io/){.external-link target="_blank"} spans for a single agent's work — its turns, LLM calls, tool executions, and human-in-the-loop interactions.
 
-The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/){.external-link target="_blank"}, so traces can be exported to **any compatible backend** — Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, and others.
+The middleware follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/){.external-link target="_blank"}, so traces can be exported to **any compatible backend** — Jaeger, Grafana Tempo, Datadog, Honeycomb, Langfuse, Arize AX, Arize Phoenix, and others.
 
 !!! tip
     To trace the interactions *between* agents in a network — the hub's dispatch, channels, agent lifecycles, and tasks — see [Network Telemetry](/docs/user-guide/telemetry/network). The two compose: an agent's `#!python invoke_agent` span links back to the network envelope that triggered it.
@@ -111,13 +111,29 @@ When content capture is enabled (the default), spans include these additional at
 
 | Attribute | Span type | Content |
 |---|---|---|
-| `gen_ai.input.messages` | llm | JSON request messages |
-| `gen_ai.output.messages` | llm | JSON response messages |
+| `gen_ai.input.messages` | llm | JSON request messages (see below) |
+| `gen_ai.output.messages` | llm | JSON response messages (see below) |
 | `gen_ai.tool.call.arguments` | tool | Tool call arguments (JSON) |
 | `gen_ai.tool.call.result` | tool | Tool execution result (see below) |
 | `ag2.tool.call.result.truncated` | tool | Present and `true` when the result was truncated |
 | `ag2.human_input.prompt` | human_input | Prompt shown to human |
 | `ag2.human_input.response` | human_input | Human's response |
+
+`gen_ai.input.messages` is the conversation history AG2 assembled for that call, not just the latest user
+message, serialised as OpenAI-style chat messages: `user` for text inputs, `assistant` for earlier model
+replies (with `tool_calls` when the model requested tools), `tool` with a `tool_call_id` for each tool result,
+and a `user` turn carrying the summary once history has been compacted. Tool results render the same way as
+`gen_ai.tool.call.result` below, including the `max_tool_result_chars` cap. Non-text user inputs (images,
+audio, documents) are omitted.
+
+The history is recorded as AG2 assembled it, not as a byte-exact copy of the provider payload. Each provider
+repairs a degraded history differently — after a partial write or a compaction that splits a tool turn, one
+may drop a tool call whose result is missing while another keeps it — so the span may differ from the request
+in those cases. It reports what AG2 held, which is what you need to diagnose the degradation itself.
+
+`gen_ai.output.messages` is the model's reply for that call, recorded whether the model answered with text,
+tool calls, or both. On a tool-calling turn the first `chat` span's output therefore carries the tool call, and
+the next `chat` span's input carries that tool call together with its result.
 
 The tool result is always recorded as a string:
 
@@ -202,4 +218,6 @@ agent = Agent(
 
 ## Backend Integration
 
-Since `#!python TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works — Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, and others. Swap the `#!python ConsoleSpanExporter` from the Quick Start above for an `#!python OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
+Since `#!python TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works — Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, Arize AX, Arize Phoenix, and others. Swap the `#!python ConsoleSpanExporter` from the Quick Start above for an `#!python OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
+
+For Arize users, [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing){.external-link target="_blank"} provides a managed production path for tracing, evaluating, and monitoring AG2 agents, while [Arize Phoenix](https://arize.com/docs/phoenix){.external-link target="_blank"} is the open-source path for local development or self-hosted inspection. The same traces can support follow-on workflows such as [agent evaluation](https://arize.com/guides/ai-agent-handbook/agent-evaluation/){.external-link target="_blank"} and [LLM evaluation](https://arize.com/resources/llm-evaluation/){.external-link target="_blank"}.

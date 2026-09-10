@@ -35,6 +35,7 @@ from ag2.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolErrorEvent,
     ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
@@ -868,6 +869,8 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
                     "type": "tool_result",
                     "tool_use_id": "tc_1",
                     "content": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
+                    # ToolNotFoundEvent is a ToolErrorEvent: the model must see a failure.
+                    "is_error": True,
                 }
             ],
         }
@@ -880,3 +883,151 @@ def test_compaction_summary_renders_as_user_turn() -> None:
     result = convert_messages([summary], SerializerCls)
 
     assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]
+
+
+class TestLooseToolResultEvent:
+    """A ToolResultEvent that arrives without its ToolResultsEvent wrapper.
+
+    mappers.py handles this because the wrapper can fail to persist; the
+    fallback must render the same block the wrapped path does.
+    """
+
+    PNG = b"\x89PNG\r\n"
+
+    def test_text_result_renders(self) -> None:
+        events = [
+            _model_response_with_tool_call('{"n": 1}'),
+            ToolResultEvent(parent_id="tc_1", result=ToolResult("ok")),
+        ]
+
+        assert convert_messages(events, SerializerCls)[-1] == {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok"}],
+        }
+
+    def test_non_text_parts_render_like_the_wrapped_path(self) -> None:
+        image = ImageInput(data=self.PNG, media_type="image/png")
+        wrapped = convert_messages(
+            [
+                _model_response_with_tool_call(None),
+                ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", result=ToolResult(image))]),
+            ],
+            SerializerCls,
+        )
+        loose = convert_messages(
+            [_model_response_with_tool_call(None), ToolResultEvent(parent_id="tc_1", result=ToolResult(image))],
+            SerializerCls,
+        )
+
+        assert loose == wrapped
+
+    def test_tool_error_event_renders(self) -> None:
+        error = ToolErrorEvent.from_call(ToolCallEvent(id="tc_1", name="list_items"), ValueError("boom"))
+        events = [_model_response_with_tool_call(None), error]
+
+        assert convert_messages(events, SerializerCls)[-1] == {
+            "role": "user",
+            "content": [
+                {"type": "tool_result", "tool_use_id": "tc_1", "content": "ValueError: boom\n", "is_error": True}
+            ],
+        }
+
+    def test_wrapper_still_wins_when_both_are_present(self) -> None:
+        loose = ToolResultEvent(parent_id="tc_1", result=ToolResult("ok"))
+        events = [_model_response_with_tool_call(None), loose, _matching_tool_result()]
+
+        results = [m for m in convert_messages(events, SerializerCls) if m["role"] == "user"]
+        assert len(results) == 1
+
+
+class TestToolErrorIsError:
+    """A failed tool must reach the model as ``is_error``, not as a successful result."""
+
+    def test_error_sets_is_error(self) -> None:
+        error = ToolErrorEvent.from_call(ToolCallEvent(id="tc_1", name="t"), ValueError("boom"))
+
+        assert convert_messages([ToolResultsEvent(results=[error])], SerializerCls) == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "tc_1", "content": "ValueError: boom\n", "is_error": True}
+                ],
+            }
+        ]
+
+    def test_success_has_no_is_error(self) -> None:
+        ok = ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("fine"))
+
+        assert convert_messages([ToolResultsEvent(results=[ok])], SerializerCls) == [
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "fine"}]}
+        ]
+
+    def test_loose_error_sets_is_error(self) -> None:
+        error = ToolErrorEvent.from_call(ToolCallEvent(id="tc_1", name="list_items"), ValueError("boom"))
+
+        assert convert_messages([_model_response_with_tool_call(None), error], SerializerCls)[-1] == {
+            "role": "user",
+            "content": [IsPartialDict({"tool_use_id": "tc_1", "is_error": True})],
+        }
+
+
+class TestToolUseVendorMetadata:
+    """``caller`` and ``toolset_name`` ride on ToolCallEvent.vendor_metadata.
+
+    ``caller`` says whether the model asked directly or a server tool did (the
+    ``allowed_callers`` feature of ``bash_20250124``). ``toolset_name`` is
+    mandatory on the way back for a browser/computer member tool: the API answers
+    400 "a tool_result answering a member tool_use must carry the paired
+    tool_use's toolset_name". Both round-trip cleanly (verified live).
+    """
+
+    def _response(self, **vendor: object) -> ModelResponse:
+        return ModelResponse(
+            message=None,
+            tool_calls=ToolCallsEvent(
+                calls=[ToolCallEvent(id="tc_1", name="navigate", arguments="{}", vendor_metadata=dict(vendor))],
+            ),
+        )
+
+    def test_caller_replays_on_the_tool_use(self) -> None:
+        events = [
+            self._response(caller={"type": "code_execution_20250825", "tool_id": "srvtoolu_1"}),
+            _matching_tool_result(),
+        ]
+
+        assert convert_messages(events, SerializerCls)[0] == {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "tc_1",
+                    "name": "navigate",
+                    "input": {},
+                    "caller": {"type": "code_execution_20250825", "tool_id": "srvtoolu_1"},
+                }
+            ],
+        }
+
+    def test_toolset_name_replays_on_both_sides(self) -> None:
+        events = [self._response(toolset_name="browser"), _matching_tool_result()]
+
+        assert convert_messages(events, SerializerCls) == [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "tool_use", "id": "tc_1", "name": "navigate", "input": {}, "toolset_name": "browser"}
+                ],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok", "toolset_name": "browser"}],
+            },
+        ]
+
+    def test_nothing_added_when_absent(self) -> None:
+        events = [self._response(), _matching_tool_result()]
+
+        assert convert_messages(events, SerializerCls) == [
+            {"role": "assistant", "content": [{"type": "tool_use", "id": "tc_1", "name": "navigate", "input": {}}]},
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok"}]},
+        ]

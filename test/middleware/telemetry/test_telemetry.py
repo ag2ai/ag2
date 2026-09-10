@@ -7,22 +7,34 @@ import threading
 from collections.abc import Sequence as SequenceType
 
 import pytest
+from dirty_equals import IsPartialDict
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 from pydantic import BaseModel
 
 from ag2 import Agent, Context
+from ag2.agent import KnowledgeConfig
+from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact
 from ag2.events import (
     BaseEvent,
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
+    ImageInput,
     ModelMessage,
+    ModelRequest,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
     Usage,
     UsageEvent,
 )
+from ag2.knowledge import MemoryKnowledgeStore
 from ag2.middleware import BaseMiddleware, Middleware
-from ag2.middleware.builtin.telemetry import MAX_TOOL_RESULT_CHARS, TelemetryMiddleware
+from ag2.middleware.builtin.telemetry import MAX_TOOL_RESULT_CHARS, TelemetryMiddleware, _build_input_messages
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 from ag2.tools import ToolResult, tool
@@ -713,6 +725,406 @@ async def test_capture_content_true_includes_messages(otel_setup):
 
     input_msgs = json.loads(llm_span.attributes["gen_ai.input.messages"])
     assert any("Hi" in str(m) for m in input_msgs)
+
+
+def _llm_spans_in_order(exporter: _InMemorySpanExporter) -> list[ReadableSpan]:
+    spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "llm"]
+    return sorted(spans, key=lambda s: s.start_time)
+
+
+def _messages(span: ReadableSpan, attribute: str) -> list[dict]:
+    return json.loads(span.attributes[attribute])
+
+
+def _weather_agent(provider, *, reply: str, **telemetry_kwargs) -> Agent:
+    """Agent scripted for one tool-calling turn: call ``get_weather``, then answer."""
+
+    @tool
+    def get_weather(city: str) -> str:
+        """Return the current weather for a city."""
+        return f"15°C and partly cloudy in {city}"
+
+    return Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent([
+                    ToolCallEvent(id="call_abc", name="get_weather", arguments='{"city": "Paris"}'),
+                ]),
+            ),
+            ModelResponse(ModelMessage(reply)),
+        ),
+        tools=[get_weather],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", **telemetry_kwargs)],
+    )
+
+
+_USER_MSG = {"content": "What's the weather in Paris?", "role": "user"}
+_TOOL_CALL_MSG = {
+    "content": None,
+    "role": "assistant",
+    "tool_calls": [
+        {"id": "call_abc", "type": "function", "function": {"arguments": '{"city": "Paris"}', "name": "get_weather"}},
+    ],
+}
+
+
+@pytest.mark.asyncio()
+async def test_tool_call_turn_records_tool_call_as_output_and_full_history_as_input(otel_setup):
+    exporter, provider = otel_setup
+    agent = _weather_agent(provider, reply="It's 15°C and partly cloudy in Paris.")
+
+    await agent.ask("What's the weather in Paris?")
+
+    first, second = _llm_spans_in_order(exporter)
+
+    # The call that chose the tool: input is the user message, output the tool call.
+    assert _messages(first, "gen_ai.input.messages") == [_USER_MSG]
+    assert _messages(first, "gen_ai.output.messages") == [_TOOL_CALL_MSG]
+
+    # The call after the tool ran: input replays everything the model saw.
+    assert _messages(second, "gen_ai.input.messages") == [
+        _USER_MSG,
+        _TOOL_CALL_MSG,
+        {"role": "tool", "tool_call_id": "call_abc", "content": "15°C and partly cloudy in Paris"},
+    ]
+    assert _messages(second, "gen_ai.output.messages") == [
+        {"content": "It's 15°C and partly cloudy in Paris.", "role": "assistant"},
+    ]
+
+
+@pytest.mark.asyncio()
+async def test_parallel_tool_calls_record_one_tool_message_per_result(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def get_weather(city: str) -> str:
+        """Return the current weather for a city."""
+        return f"18°C in {city}"
+
+    @tool
+    def get_current_time(timezone: str) -> str:
+        """Return the local time in a timezone."""
+        return f"22:15 in {timezone}"
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent([
+                    ToolCallEvent(id="call_w", name="get_weather", arguments='{"city": "Paris"}'),
+                    ToolCallEvent(id="call_t", name="get_current_time", arguments='{"timezone": "Asia/Tokyo"}'),
+                ]),
+            ),
+            ModelResponse(ModelMessage("Paris is 18°C; it's 22:15 in Tokyo.")),
+        ),
+        tools=[get_weather, get_current_time],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Weather in Paris and time in Tokyo?")
+
+    first, second = _llm_spans_in_order(exporter)
+
+    (assistant_out,) = _messages(first, "gen_ai.output.messages")
+    assert [c["id"] for c in assistant_out["tool_calls"]] == ["call_w", "call_t"]
+
+    history = _messages(second, "gen_ai.input.messages")
+    assert history[0]["role"] == "user"
+    assert history[1]["role"] == "assistant"
+    assert [c["id"] for c in history[1]["tool_calls"]] == ["call_w", "call_t"]
+    tool_msgs = history[2:]
+    assert all(m["role"] == "tool" for m in tool_msgs)
+    # Parallel results may land in completion order; each result must still be paired to its call.
+    assert {(m["tool_call_id"], m["content"]) for m in tool_msgs} == {
+        ("call_w", "18°C in Paris"),
+        ("call_t", "22:15 in Asia/Tokyo"),
+    }
+
+
+@pytest.mark.asyncio()
+async def test_capture_content_false_omits_messages_on_tool_call_turn(otel_setup):
+    exporter, provider = otel_setup
+    agent = _weather_agent(provider, reply="Done", capture_content=False)
+
+    await agent.ask("What's the weather in Paris?")
+
+    llm_spans = _llm_spans_in_order(exporter)
+    assert len(llm_spans) == 2
+    for span in llm_spans:
+        assert "gen_ai.input.messages" not in span.attributes
+        assert "gen_ai.output.messages" not in span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_input_messages_tool_result_honours_max_tool_result_chars(otel_setup):
+    exporter, provider = otel_setup
+
+    @tool
+    def dump() -> str:
+        """Return a large payload."""
+        return "x" * 200
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(tool_calls=ToolCallsEvent([ToolCallEvent(id="call_1", name="dump", arguments="{}")])),
+            ModelResponse(ModelMessage("Done")),
+        ),
+        tools=[dump],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", max_tool_result_chars=40)],
+    )
+
+    await agent.ask("Dump it")
+
+    _, second = _llm_spans_in_order(exporter)
+    tool_msg = _messages(second, "gen_ai.input.messages")[-1]
+    assert tool_msg["role"] == "tool"
+    assert tool_msg["tool_call_id"] == "call_1"
+    assert len(tool_msg["content"]) == 40
+    assert tool_msg["content"].endswith("...[truncated]")
+
+
+@pytest.mark.asyncio()
+async def test_input_messages_skip_binary_user_input(otel_setup):
+    exporter, provider = otel_setup
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("A picture."))),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    await agent.ask("Describe this", ImageInput(data=b"\x89PNG", media_type="image/png"))
+
+    (span,) = _llm_spans_in_order(exporter)
+    assert _messages(span, "gen_ai.input.messages") == [{"content": "Describe this", "role": "user"}]
+
+
+def test_build_input_messages_renders_tool_error_as_tool_message():
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments='{"city": "Tokyo"}')
+    events = [
+        ModelRequest([TextInput("And Tokyo?")]),
+        ModelResponse(tool_calls=ToolCallsEvent([call])),
+        ToolResultsEvent([ToolErrorEvent.from_call(call, RuntimeError("boom"))]),
+    ]
+
+    user, assistant, tool_error = _build_input_messages(events, None)
+
+    assert user == {"content": "And Tokyo?", "role": "user"}
+    assert assistant["role"] == "assistant"
+    assert assistant["tool_calls"][0]["id"] == "call_1"
+    # A failed tool feeds its traceback back to the model, so the trace shows it too.
+    assert tool_error["role"] == "tool"
+    assert tool_error["tool_call_id"] == "call_1"
+    assert "RuntimeError: boom" in tool_error["content"]
+
+
+def _result_event(parent_id: str, text: str) -> ToolResultEvent:
+    return ToolResultEvent(parent_id=parent_id, name="get_weather", result=ToolResult(text))
+
+
+def test_build_input_messages_includes_compaction_summary():
+    """Every provider mapper sends the summary, so the span must record it."""
+    events = [
+        CompactionSummary(summary="The user asked about Paris.", event_count=4),
+        ModelRequest([TextInput("And Tokyo?")]),
+    ]
+
+    assert _build_input_messages(events, None) == [
+        {"role": "user", "content": "[Summary of earlier conversation]\nThe user asked about Paris."},
+        {"content": "And Tokyo?", "role": "user"},
+    ]
+
+
+def test_build_input_messages_falls_back_to_a_loose_tool_result():
+    """Recovery path: anthropic, bedrock and zai send a result with no wrapper."""
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments='{"city": "Tokyo"}')
+    events = [
+        ModelRequest([TextInput("Tokyo?")]),
+        ModelResponse(tool_calls=ToolCallsEvent([call])),
+        _result_event("call_1", "22°C in Tokyo"),
+    ]
+
+    assert _build_input_messages(events, None)[-1] == {
+        "role": "tool",
+        "tool_call_id": "call_1",
+        "content": "22°C in Tokyo",
+    }
+
+
+def test_build_input_messages_records_a_wrapped_result_once():
+    """History holds both forms; recording both would double every result."""
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
+    result = _result_event("call_1", "18°C")
+    events = [
+        ModelRequest([TextInput("Weather?")]),
+        ModelResponse(tool_calls=ToolCallsEvent([call])),
+        result,
+        ToolResultsEvent([result]),
+    ]
+
+    messages = _build_input_messages(events, None)
+    assert [m for m in messages if m["role"] == "tool"] == [
+        {"role": "tool", "tool_call_id": "call_1", "content": "18°C"}
+    ]
+
+
+def test_build_input_messages_skips_a_loose_result_without_a_call_id():
+    """An unpairable result is dropped, as the bedrock mapper drops it."""
+    events = [ModelRequest([TextInput("Hi")]), _result_event("", "orphaned")]
+
+    assert _build_input_messages(events, None) == [{"content": "Hi", "role": "user"}]
+
+
+def test_build_input_messages_records_a_loose_tool_error():
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
+    events = [ModelResponse(tool_calls=ToolCallsEvent([call])), ToolErrorEvent.from_call(call, RuntimeError("boom"))]
+
+    tool_message = _build_input_messages(events, None)[-1]
+    assert tool_message["role"] == "tool"
+    assert tool_message["tool_call_id"] == "call_1"
+    assert "RuntimeError: boom" in tool_message["content"]
+
+
+def test_build_input_messages_keeps_a_result_with_no_matching_call():
+    """Orphans are kept: openai sends them, and dropping one hides a partial write."""
+    events = [ModelRequest([TextInput("Hi")]), ToolResultsEvent([_result_event("gone", "stale")])]
+
+    assert _build_input_messages(events, None) == [
+        {"content": "Hi", "role": "user"},
+        {"role": "tool", "tool_call_id": "gone", "content": "stale"},
+    ]
+
+
+def test_build_input_messages_keeps_a_tool_call_whose_result_never_landed():
+    """Anthropic drops this call and openai keeps it; the span records what AG2 held."""
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
+    events = [ModelResponse(ModelMessage("Checking..."), tool_calls=ToolCallsEvent([call]))]
+
+    assert _build_input_messages(events, None) == [
+        {
+            "content": "Checking...",
+            "role": "assistant",
+            "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"arguments": "{}", "name": "get_weather"}}
+            ],
+        }
+    ]
+
+
+def test_build_input_messages_keeps_a_reply_that_is_only_tool_calls():
+    call = ToolCallEvent(id="call_1", name="get_weather", arguments="{}")
+    events = [ModelRequest([TextInput("Hi")]), ModelResponse(tool_calls=ToolCallsEvent([call]))]
+
+    user, assistant = _build_input_messages(events, None)
+    assert user == {"content": "Hi", "role": "user"}
+    assert assistant == IsPartialDict({"content": None, "role": "assistant"})
+
+
+def test_build_input_messages_records_a_server_side_tool_call_with_its_result():
+    """Server-side tools bypass ``ModelResponse``; both halves still belong in the span."""
+    call = BuiltinToolCallEvent(id="ws_1", name="web_search", arguments='{"q": "Paris"}')
+    events = [
+        ModelRequest([TextInput("Paris?")]),
+        call,
+        BuiltinToolResultEvent(parent_id="ws_1", name="web_search", result=ToolResult("Paris is in France")),
+    ]
+
+    user, assistant, tool_message = _build_input_messages(events, None)
+    assert user == {"content": "Paris?", "role": "user"}
+    assert assistant["role"] == "assistant"
+    assert [c["id"] for c in assistant["tool_calls"]] == ["ws_1"]
+    assert tool_message == {"role": "tool", "tool_call_id": "ws_1", "content": "Paris is in France"}
+
+
+@pytest.mark.asyncio()
+async def test_malformed_tool_arguments_do_not_break_the_turn(otel_setup):
+    """Capturing content must not turn a recoverable bad tool call into a crash."""
+    exporter, provider = otel_setup
+
+    @tool
+    def get_weather(city: str) -> str:
+        """Return the current weather for a city."""
+        return f"18°C in {city}"
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent([ToolCallEvent(id="c1", name="get_weather", arguments='{"city": ')])
+            ),
+            ModelResponse(ModelMessage("Recovered")),
+            raise_tool_errors=False,
+        ),
+        tools=[get_weather],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", capture_content=True)],
+    )
+
+    reply = await agent.ask("Weather?")
+
+    assert await reply.content() == "Recovered"
+    # The unparsable arguments are recorded exactly as the model sent them.
+    first, _ = _llm_spans_in_order(exporter)
+    (assistant,) = _messages(first, "gen_ai.output.messages")
+    assert assistant["tool_calls"][0]["function"]["arguments"] == '{"city": '
+
+
+@pytest.mark.asyncio()
+async def test_a_failure_while_capturing_does_not_fail_the_call(otel_setup, monkeypatch):
+    """The guard of last resort: any serialisation failure is swallowed."""
+    exporter, provider = otel_setup
+    monkeypatch.setattr(
+        "ag2.middleware.builtin.telemetry._build_input_messages",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hello!"))),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    reply = await agent.ask("Hi")
+
+    assert await reply.content() == "Hello!"
+    (span,) = _llm_spans_in_order(exporter)
+    assert "gen_ai.input.messages" not in span.attributes
+    assert "gen_ai.output.messages" in span.attributes
+
+
+@pytest.mark.asyncio()
+async def test_compacted_history_reaches_the_span(otel_setup):
+    """End to end: once history is summarised, the span carries the summary."""
+    exporter, provider = otel_setup
+    summarizer = TestConfig(ModelResponse(ModelMessage("Earlier: the user asked about Paris.")))
+
+    agent = Agent(
+        "assistant",
+        config=TestConfig(
+            ModelResponse(ModelMessage("First answer")),
+            ModelResponse(ModelMessage("Second answer")),
+            ModelResponse(ModelMessage("Third answer")),
+        ),
+        knowledge=KnowledgeConfig(
+            store=MemoryKnowledgeStore(),
+            compact=SummarizeCompact(target=1, config=summarizer),
+            compact_trigger=CompactTrigger(max_events=2),
+            expose_tool=False,
+            write_event_log=False,
+        ),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+    )
+
+    reply = await agent.ask("What about Paris?")
+    reply = await reply.ask("And Tokyo?")
+    # The third turn is the first compacted before its call.
+    await reply.ask("And Berlin?")
+
+    inputs = [_messages(s, "gen_ai.input.messages") for s in _llm_spans_in_order(exporter)]
+    summaries = [m for msgs in inputs for m in msgs if str(m.get("content", "")).startswith("[Summary of earlier")]
+    assert summaries, f"no compaction summary recorded in any chat span: {inputs}"
+    assert "Earlier: the user asked about Paris." in summaries[0]["content"]
 
 
 @pytest.mark.asyncio()

@@ -5,7 +5,7 @@ sidebarTitle: Sandbox Shell
 
 # Sandbox Shell Tool
 
-`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose — a local subprocess, a Docker container, a Daytona or Tenki sandbox, or any custom backend. Unlike the provider-native [`ShellTool`](/docs/user-guide/tools/builtin_tools#shell) (which runs server-side and only on Anthropic/OpenAI), it executes client-side, so it works with **any model provider**.
+`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose — a local subprocess, a Docker container, a Daytona or Tenki sandbox, or any custom backend. Unlike the provider-hosted [`ShellTool`](/docs/user-guide/tools/builtin_tools#shell) (which runs server-side, and only on OpenAI), it executes client-side, so it works with **any model provider**.
 
 The design has two orthogonal pieces:
 
@@ -147,11 +147,18 @@ reply3 = await reply2.ask("Read the counter and tell me the value")
 !!! warning
     A `LocalEnvironment` gives the agent direct access to your filesystem and the ability to run arbitrary commands. Always set `allowed`, `blocked`, or `readonly` when exposing it to untrusted prompts, or use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment` for real isolation.
 
-## SandboxShellTool vs ShellTool
+## SandboxShellTool vs ShellTool vs AnthropicBashTool
 
-| | `SandboxShellTool` | `ShellTool` |
-| :--- | :--- | :--- |
-| **Execution** | Client-side, in your environment | Provider-side (Anthropic / OpenAI) |
-| **Provider support** | Any provider | Anthropic, OpenAI only |
-| **Environment control** | Full (`allowed`, `blocked`, `ignore`, backend choice) | Limited (provider-dependent) |
-| **Import** | `ag2.tools.SandboxShellTool` | `ag2.tools.ShellTool` |
+| | `SandboxShellTool` | `ShellTool` | `AnthropicBashTool` |
+| :--- | :--- | :--- | :--- |
+| **Execution** | Client-side, in your environment | Provider-side, in OpenAI's container | Client-side, in your environment |
+| **Provider support** | Any provider | OpenAI only | Anthropic only |
+| **Tool definition** | AG2's `run_shell_command` function | OpenAI's hosted shell | Anthropic's `bash_20250124` |
+| **Environment control** | Full (`allowed`, `blocked`, `ignore`, backend choice) | Limited (provider-dependent) | Full — same options as `SandboxShellTool` |
+| **Import** | `ag2.tools.SandboxShellTool` | `ag2.tools.ShellTool` | `ag2.tools.AnthropicBashTool` |
+
+`AnthropicBashTool` exists because Anthropic ships its own bash tool definition
+but does not run it. It reuses everything on this page for execution, so reach for
+it when you want Claude to use the tool it was trained on; reach for
+`SandboxShellTool` when the same agent code has to run against several providers.
+See [Anthropic Bash](/docs/user-guide/tools/builtin_tools#anthropic-bash).
