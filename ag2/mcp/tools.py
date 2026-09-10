@@ -9,7 +9,6 @@ from dataclasses import dataclass, field, is_dataclass
 from types import GenericAlias
 from typing import Annotated, Any, TypeAlias, get_type_hints, overload
 
-from fast_depends import dependency_provider
 from fast_depends.pydantic.schema import get_schema
 from mcp.server.context import ServerRequestContext
 from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
@@ -50,10 +49,16 @@ MCP_REQUEST_CONTEXT_DEP = object()
 
 @dataclass(slots=True)
 class MCPExecutionContext:
-    dependency_provider: Any = None
+    """The request-scoped values one MCP request resolves against.
+
+    Built per request from :class:`~ag2.mcp.AskContext`, so a ``Variable``, an
+    injected dependency or a :data:`MCPRequestContext` parameter resolves the
+    same way on a tool call and on the parallel resource read — while staying
+    two distinct requests that share no mutable turn state.
+    """
+
     variables: dict[str, Any] = field(default_factory=dict)
     dependencies: dict[Any, Any] = field(default_factory=dict)
-    prompt: list[str] = field(default_factory=list)
 
 
 class MCPRequestContextField(ContextField):
@@ -67,7 +72,14 @@ class MCPRequestContextField(ContextField):
         return kwargs
 
 
-def resolve_context_value(value: Any, context: MCPExecutionContext | ConversationContext) -> Any:
+def resolve_context_value(value: Any, context: "MCPExecutionContext | ConversationContext | None") -> Any:
+    """``value`` with any ``Variable`` inside it resolved against ``context``.
+
+    Returns ``value`` untouched when there is no context — every listing and read
+    path has one only inside a live request.
+    """
+    if context is None:
+        return value
     if isinstance(value, Variable):
         return resolve_variable(value, context)
     if isinstance(value, BaseModel):
@@ -79,6 +91,24 @@ def resolve_context_value(value: Any, context: MCPExecutionContext | Conversatio
     if isinstance(value, list):
         return [resolve_context_value(item, context) for item in value]
     return value
+
+
+async def call_with_context(fn: Callable[..., Any], context: "MCPExecutionContext | ConversationContext") -> Any:
+    """Invoke ``fn`` through ``fast_depends`` so its annotations resolve.
+
+    For a callable the protocol calls with no arguments of its own — a resource
+    reader, an app content provider — where the only inputs are what the
+    ``Variable``, ``Depends``/``Inject`` and :data:`MCPRequestContext`
+    annotations ask for.
+    """
+    call_model = build_model(fn, serialize_result=False)
+    async with AsyncExitStack() as stack:
+        return await call_model.asolve(
+            context,
+            **{CONTEXT_OPTION_NAME: context},
+            stack=stack,
+            cache_dependencies={},
+        )
 
 
 # A tool handler receives the call's ``arguments`` and the live MCP request
@@ -120,16 +150,14 @@ class MCPFunctionTool:
     def _mcp_tool(
         self, context: MCPExecutionContext | ConversationContext | None = None, meta_filter: "MetaFilter | None" = None
     ) -> MCPTool:
-        meta = self.meta if meta_filter is None else meta_filter(self.meta)
-        if context is not None:
-            meta = resolve_context_value(meta, context)
+        meta = resolve_context_value(self.meta if meta_filter is None else meta_filter(self.meta), context)
         return MCPTool(
             name=self.name,
             description=self.description,
             inputSchema=self.input_schema,
             outputSchema=self.output_schema,
-            title=resolve_context_value(self.title, context) if context is not None else self.title,
-            annotations=resolve_context_value(self.annotations, context) if context is not None else self.annotations,
+            title=resolve_context_value(self.title, context),
+            annotations=resolve_context_value(self.annotations, context),
             _meta=dict(meta) if meta else None,
         )
 
@@ -206,7 +234,6 @@ def _bind(call_model: Any) -> ToolHandler:
                 **(arguments | {CONTEXT_OPTION_NAME: context}),
                 stack=stack,
                 cache_dependencies={},
-                dependency_provider=context.dependency_provider or dependency_provider,
             )
 
     return handler

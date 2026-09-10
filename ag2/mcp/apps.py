@@ -34,7 +34,6 @@ import json
 import os
 import re
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
-from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, overload
@@ -45,12 +44,19 @@ from mcp.types import CallToolResult, ToolAnnotations
 
 from ag2.annotations import Variable
 from ag2.tools.builtin._resolve import resolve_variable
-from ag2.utils import CONTEXT_OPTION_NAME, build_model
 
 from ._async import call_user_fn
-from .errors import MCPAppURIError, MCPDuplicateAppURIError
+from .errors import MCPAppFrozenError, MCPAppURIError, MCPDuplicateAppURIError
 from .resources import Resource as AG2Resource
-from .tools import MCPExecutionContext, MCPFunctionTool, ToolContext, mcp_tool, resolve_context_value, to_call_result
+from .tools import (
+    MCPExecutionContext,
+    MCPFunctionTool,
+    ToolContext,
+    call_with_context,
+    mcp_tool,
+    resolve_context_value,
+    to_call_result,
+)
 
 # The key ``_meta`` reserves for MCP Apps, on a tool and on a resource alike.
 UI_META_KEY = "ui"
@@ -72,7 +78,8 @@ APP_PROTOCOL_VERSION = "2026-01-26"
 # The document content: inline HTML, a path-like file read per request, a
 # request-time variable, or a sync/async callable producing HTML per read.
 AppContent = str | os.PathLike[str] | Variable | Callable[..., "Awaitable[str] | str"]
-AppBody = AppContent
+
+# A document field a host displays, which may be resolved per request.
 AppText = str | Variable
 
 
@@ -89,11 +96,22 @@ class MCPApp:
     """A document and the tools that render it.
 
     ``uri`` must use the ``ui://`` scheme — a host discards anything else — and
-    is validated here rather than on the wire. ``html`` is the document body: a
-    string, or a sync/async callable invoked per read, matching
-    :class:`~ag2.mcp.Resource`'s reader contract. A file path is deliberately not
-    accepted: taking one would force ag2 to decide whether it is re-read per
-    request, which is the caller's decision to make inside a callable.
+    is validated here rather than on the wire.
+
+    ``content`` is the document body, in one of four forms, told apart by type
+    alone rather than by inspecting the filesystem:
+
+    * a ``str`` — always literal HTML, never a filename;
+    * an ``os.PathLike[str]`` — always a file, read on **every** resource read,
+      so a rebuilt bundle is picked up without restarting the server;
+    * a ``Variable`` — resolved per request from the ``AskContext`` the server's
+      ``context_provider`` returned;
+    * a sync or async callable invoked per read, matching
+      :class:`~ag2.mcp.Resource`'s reader contract. It may declare ``Variable``,
+      ``Depends``/``Inject`` and :data:`~ag2.mcp.MCPRequestContext` parameters,
+      which resolve like a tool's.
+
+    An overload per form makes each one visible in an IDE.
 
     ``name`` identifies the resource and defaults to the URI; ``title`` and
     ``description`` are what a client shows for it in ``resources/list``, so they
@@ -310,10 +328,19 @@ class MCPApp:
         return _runtime_script(self._name)
 
     @overload
-    def tool(self, function: Callable[..., Any]) -> MCPFunctionTool: ...
-
-    @overload
-    def tool(self, function: MCPFunctionTool) -> MCPFunctionTool: ...
+    def tool(
+        self,
+        function: Callable[..., Any] | MCPFunctionTool,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        title: str | None = None,
+        annotations: ToolAnnotations | None = None,
+        visibility: Sequence[Visibility] | None = None,
+        output_schema: dict[str, Any] | None = None,
+        meta: Mapping[str, Any] | None = None,
+        sync_to_thread: bool = True,
+    ) -> MCPFunctionTool: ...
 
     @overload
     def tool(
@@ -372,6 +399,8 @@ class MCPApp:
             ValueError: If ``meta`` carries a ``ui`` key. The binding between a
                 tool and its document is this decorator's to write; a caller
                 setting it by hand would be overwriting the app's own URI.
+            MCPAppFrozenError: If the app is already registered with a server,
+                which has read its tools; the tool would never be served.
         """
         if meta and UI_META_KEY in meta:
             raise ValueError(
@@ -379,7 +408,7 @@ class MCPApp:
                 "or declare the tool with mcp_tool() if it should not be bound to this document."
             )
         if self._frozen:
-            raise ValueError(f"MCPApp {self._uri!r} is frozen because it has already been registered with a server.")
+            raise MCPAppFrozenError(self._uri, name or getattr(function, "__name__", None))
         ui: dict[str, Any] = {"resourceUri": self._uri}
         if visibility is not None:
             ui["visibility"] = list(visibility)
@@ -421,8 +450,8 @@ class MCPApp:
 
         return make(function) if function is not None else make
 
-    def freeze(self) -> None:
-        """Freeze the app's routing identity and tool composition."""
+    def _freeze(self) -> None:
+        """Close the app's tool composition, once a server has read it."""
         self._frozen = True
 
 
@@ -502,7 +531,7 @@ def collect_apps(apps: "Iterable[MCPApp]") -> "tuple[tuple[MCPFunctionTool, ...]
         if app.uri in seen:
             raise MCPDuplicateAppURIError(app.uri)
         seen.add(app.uri)
-        app.freeze()
+        app._freeze()
         tools.extend(app.tools)
         resources.append(app.resource)
     return tuple(tools), tuple(resources)
@@ -518,14 +547,7 @@ async def _resolve_content(content: AppContent, context: MCPExecutionContext) ->
         except OSError as e:
             raise ValueError(f"Could not read MCP app document from {resolved!s}: {e.strerror or e}") from e
     if callable(resolved):
-        call_model = build_model(resolved, serialize_result=False)
-        async with AsyncExitStack() as stack:
-            value = await call_model.asolve(
-                **{CONTEXT_OPTION_NAME: context},
-                stack=stack,
-                cache_dependencies={},
-                dependency_provider=context.dependency_provider,
-            )
+        value = await call_with_context(resolved, context)
         if isinstance(value, str):
             return value
         raise TypeError(f"MCP app content provider returned {type(value).__name__}; expected str.")
@@ -833,7 +855,6 @@ __all__ = (
     "EXTENSION_ID",
     "TOOL_META_KEY",
     "UI_META_KEY",
-    "AppBody",
     "AppContent",
     "AppSandbox",
     "MCPApp",

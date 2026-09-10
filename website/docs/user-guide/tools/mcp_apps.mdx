@@ -30,7 +30,7 @@ from dataclasses import dataclass
 
 from ag2 import Agent
 from ag2.config import AnthropicConfig
-from ag2.mcp import AppResource, MCPServer
+from ag2.mcp import MCPApp, MCPServer
 
 CARD = """<div id="name">Loading…</div>
 <script>
@@ -39,7 +39,7 @@ CARD = """<div id="name">Loading…</div>
   });
 </script>"""
 
-shop = AppResource("ui://shop/card", CARD)
+shop = MCPApp("ui://shop/card", CARD)
 
 @dataclass
 class Item:
@@ -199,11 +199,65 @@ Omit it and no `visibility` is advertised at all, leaving the host to its own de
 
 ### Bringing your own bundle
 
-`bootstrap=False` turns injection off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself.
+`inject_runtime=False` turns injection off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself.
 
 ```python linenums="1"
-shop = AppResource("ui://shop/card", BUNDLED_HTML, bootstrap=False)
+shop = MCPApp("ui://shop/card", BUNDLED_HTML, inject_runtime=False)
 ```
+
+## Where the body comes from
+
+`content` takes four forms, told apart **by type alone** — never by looking at the filesystem, so a string is always literal HTML and never a filename:
+
+```python linenums="1"
+from pathlib import Path
+
+from ag2 import Variable
+
+MCPApp("ui://shop/card", CARD)                          # inline HTML
+MCPApp("ui://shop/card", Path("dist/card.html"))        # a built bundle, reread per read
+MCPApp("ui://shop/card", Variable("card"))              # a request-scoped variable
+MCPApp("ui://shop/card", render_card)                   # a sync or async callable
+```
+
+There is an overload per form, so an IDE shows you which one you are using.
+
+**A path-like value is reread on every resource read.** Rebuild the bundle and the next read serves it; there is no cache to invalidate and no server to restart. A file that has gone missing fails that read with a message naming the path, rather than at construction — the document is only promised at read time.
+
+```python linenums="1"
+shop = MCPApp("ui://shop/card", Path(__file__).parent / "dist" / "card.html", inject_runtime=False)
+```
+
+### Request-scoped bodies and metadata
+
+An app resolves runtime values from the same `context_provider` the conversational path uses, so a document is not a second dependency system. `content` may be a `Variable`, and a callable body may declare `Variable`, `Depends`/`Inject` and `MCPRequestContext` parameters exactly as a tool does:
+
+```python linenums="1"
+from typing import Annotated
+
+from ag2 import Inject, Variable
+from ag2.mcp import AskContext, MCPApp, MCPRequestContext, MCPServer
+
+async def provider(access) -> AskContext:
+    return AskContext(variables={"tenant": "north"}, dependencies={"branding": BRANDING})
+
+async def card(
+    tenant: Annotated[str, Variable("tenant")],
+    branding: Annotated[Branding, Inject("branding")],
+    ctx: MCPRequestContext,
+) -> str:
+    return render(tenant, branding)
+
+shop = MCPApp("ui://shop/card", card, title=Variable("tenant"), listed=True)
+server = MCPServer(agent, apps=[shop], context_provider=provider)
+```
+
+`title`, `description`, `inject_runtime`, the sandbox fields and the values inside `meta=` may each be a `Variable` too, resolved per request for the listing and the read.
+
+!!! warning "The context is request-scoped, not turn-scoped"
+    The host's document read and its tool call are **two separate MCP requests**, made in parallel. Each one calls your provider again and gets its own context; they share no mutable state. Do not use a variable to pass something from the call to the document — that is what `structuredContent` is for.
+
+An ordinary `Resource` and an `@mcp_tool` resolve the same way, which is what keeps [taking an app apart](#taking-an-app-apart) honest.
 
 ## Degradation
 
@@ -212,8 +266,7 @@ shop = AppResource("ui://shop/card", BUNDLED_HTML, bootstrap=False)
 That client sees the same tool without `_meta.ui`, calls it successfully, and gets the text your `__str__` produced. Because a UI-bound tool always returns text alongside its data, you usually need no branch at all. When you want to word an answer differently:
 
 ```python linenums="1"
-from ag2.mcp import client_supports_apps
-from ag2.mcp.tools import MCPRequestContext
+from ag2.mcp import MCPRequestContext, client_supports_apps
 
 @shop.tool
 async def show_item(item_id: str, ctx: MCPRequestContext) -> Item:
@@ -231,25 +284,27 @@ A server holding at least one app also advertises the extension itself, with emp
 ## The document
 
 ```python linenums="1"
-from ag2.mcp.apps import ResourceCsp, ResourcePermissions
+from ag2.mcp import AppSandbox, MCPApp, ResourceCsp, ResourcePermissions
 
-shop = AppResource(
+shop = MCPApp(
     "ui://shop/card",
     CARD,
     title="Product card",
     description="A product card that can add its item to the cart.",
     listed=False,
-    csp=ResourceCsp(connect_domains=["https://api.example.com"]),
-    permissions=ResourcePermissions(camera={}),
-    domain="https://shop.example.com",
+    sandbox=AppSandbox(
+        csp=ResourceCsp(connect_domains=["https://api.example.com"]),
+        permissions=ResourcePermissions(camera={}),
+        domain="https://shop.example.com",
+    ),
     prefers_border=True,
 )
 ```
 
-- **`ui://` is required.** A host discards any other scheme, so a URI that is not `ui://` raises when the `AppResource` is constructed, and two apps claiming one URI raise when the server is.
+- **`ui://` is required.** A host discards any other scheme, so a URI that is not `ui://` raises when the `MCPApp` is constructed, and two apps claiming one URI raise when the server is.
 - **`listed` defaults to `False`.** The document stays out of `resources/list` — a person browsing a server's resources should not meet a file that is not one — while remaining readable by URI, which is how the host gets it. Set `listed=True` for a document meant to be discoverable.
-- **The body may be a callable**, sync or async, invoked per read — for a document built per locale, per deployment, or per feature flag. A file path is deliberately not accepted: taking one would force ag2 to decide whether it is re-read per request, which is your decision to make inside the callable.
-- **Sandbox policy is typed.** `csp`, `permissions`, `domain` and `prefers_border` use the SDK's own models, so the wire spelling is never guessed at. `meta=` is a raw passthrough merged alongside, for whatever the specification adds next.
+- **The body has four forms** — inline HTML, a path-like bundle, a `Variable`, or a sync/async callable invoked per read. See [where the body comes from](#where-the-body-comes-from).
+- **Sandbox policy is typed and grouped.** `csp`, `permissions` and `domain` travel together in `sandbox=AppSandbox(...)` and use the SDK's own models, so the wire spelling is never guessed at. They are also accepted as bare keywords for a one-field policy. `prefers_border` stays separate — it is a presentation hint, not a sandbox rule. `meta=` is a raw passthrough merged alongside, for whatever the specification adds next.
 - **The `ui` slot behaves differently on a document and on a tool.** On the document it is shared, so a `ui` key inside `meta=` *merges over* the typed parameters above rather than being refused — the typed parameters are the spelling aid, not the authority. On a tool it is not shared: `@app.tool`'s `meta=` **rejects** a `ui` key outright, because the only thing in that slot is the binding the decorator itself writes. Pass `visibility=` instead, or declare the tool with `@mcp_tool` if it should not be bound to this document at all.
 
 ## Taking an app apart
@@ -269,6 +324,17 @@ server = MCPServer(agent, tools=shop.tools, resources=[shop.resource])
 Both produce the same tool list, the same resource listing, the same document and the same results — a test in the suite holds that equivalence so it cannot rot into a lie. Reach for the long form when you need an unusual arrangement; it is a rearrangement, not a rewrite.
 
 Ordinary tools are unaffected throughout. A tool declared with `@mcp_tool` and passed in `tools=` behaves exactly as it did before apps existed, alongside any number of them.
+
+**Registration closes the app's tool list.** Constructing the server is what reads `app.tools`, so a tool declared after that would exist and never be served. Declaring one raises `MCPAppFrozenError` naming the tool, instead of leaving you to find it missing on the wire:
+
+```python linenums="1"
+server = MCPServer(agent, apps=[shop])
+
+@shop.tool                      # MCPAppFrozenError: 'restock' cannot be declared on 'ui://shop/card'
+async def restock() -> str: ...
+```
+
+The app itself stays reusable — registering the same one with a second server is fine; it is the composition that is closed, not the object.
 
 ## See also
 

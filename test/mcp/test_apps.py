@@ -25,12 +25,17 @@ from mcp.types import CallToolResult, DiscoverResult, TextContent, TextResourceC
 from mcp_types.version import LATEST_MODERN_VERSION
 
 from ag2 import Inject, Variable
-from ag2.mcp import AppSandbox, MCPApp, MCPServer, client_supports_apps, mcp_tool
+from ag2.mcp import AppSandbox, MCPApp, MCPRequestContext, MCPServer, client_supports_apps, mcp_tool
 from ag2.mcp.apps import TOOL_META_KEY
-from ag2.mcp.errors import MCPAppURIError, MCPDuplicateAppURIError, MCPToolNameConflictError
+from ag2.mcp.errors import (
+    MCPAppFrozenError,
+    MCPAppURIError,
+    MCPDuplicateAppURIError,
+    MCPServerError,
+    MCPToolNameConflictError,
+)
 from ag2.mcp.executor import AskContext
 from ag2.mcp.testing import connect, connect_modern
-from ag2.mcp.tools import MCPRequestContext
 
 from ._helpers import make_agent, text_of, tool_named
 
@@ -50,9 +55,9 @@ class Item:
         return f"{self.name} costs {self.price}."
 
 
-def _card_app(html: Any = CARD, **kwargs: Any) -> MCPApp:
+def _card_app(content: Any = CARD, **kwargs: Any) -> MCPApp:
     """An app with one tool, built fresh so each test owns its own tool list."""
-    app = MCPApp("ui://shop/card", html, **kwargs)
+    app = MCPApp("ui://shop/card", content, **kwargs)
 
     @app.tool
     async def show_item(item_id: str) -> Item:
@@ -206,6 +211,60 @@ class TestTheDocument:
 
         async with connect(server, raise_exceptions=False) as session:
             with pytest.raises(MCPError, match="Could not read MCP app document"):
+                await session.read_resource("ui://shop/card")
+
+    async def test_a_variable_body_is_resolved_per_request(self) -> None:
+        bodies = iter(["<p>north</p>", "<p>south</p>"])
+
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"card": next(bodies)})
+
+        app = _card_app(Variable("card"), inject_runtime=False)
+        server = MCPServer(make_agent(), apps=[app], context_provider=provider)
+
+        async with connect(server) as session:
+            first = await session.read_resource("ui://shop/card")
+            second = await session.read_resource("ui://shop/card")
+
+        # Each read is its own request, so each one calls the provider again.
+        assert _body(first.contents[0]) == "<p>north</p>"
+        assert _body(second.contents[0]) == "<p>south</p>"
+
+    async def test_a_content_provider_returning_a_non_string_fails_on_read(self) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(lambda: 42)])
+
+        async with connect(server, raise_exceptions=False) as session:
+            with pytest.raises(MCPError, match="content provider returned int"):
+                await session.read_resource("ui://shop/card")
+
+    async def test_a_variable_body_resolving_to_an_unsupported_type_fails_on_read(self) -> None:
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"card": 42})
+
+        server = MCPServer(make_agent(), apps=[_card_app(Variable("card"))], context_provider=provider)
+
+        async with connect(server, raise_exceptions=False) as session:
+            with pytest.raises(MCPError, match="resolved to int"):
+                await session.read_resource("ui://shop/card")
+
+    async def test_a_content_provider_that_raises_surfaces_its_message(self) -> None:
+        def unavailable() -> str:
+            raise RuntimeError("bundle store offline")
+
+        server = MCPServer(make_agent(), apps=[_card_app(unavailable)])
+
+        async with connect(server, raise_exceptions=False) as session:
+            with pytest.raises(MCPError, match="bundle store offline"):
+                await session.read_resource("ui://shop/card")
+
+    async def test_a_missing_body_variable_fails_on_read(self) -> None:
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"other": "x"})
+
+        server = MCPServer(make_agent(), apps=[_card_app(Variable("card"))], context_provider=provider)
+
+        async with connect(server, raise_exceptions=False) as session:
+            with pytest.raises(MCPError):
                 await session.read_resource("ui://shop/card")
 
     async def test_sandbox_policy_reaches_the_documents_meta(self) -> None:
@@ -612,6 +671,59 @@ class TestDecomposition:
         assert a_read.model_dump() == b_read.model_dump()
         assert a_call.model_dump() == b_call.model_dump()
 
+    async def test_registering_the_pieces_by_hand_resolves_context_the_same_way(self) -> None:
+        """The decomposition holds for request-scoped values, not just static ones.
+
+        Registration must not be what decides whether a ``Variable``, an
+        injected dependency or the live request context reaches a document and
+        its tools.
+        """
+
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"tenant": "north"}, dependencies={"catalog": {"sku": "mug"}})
+
+        def build(app: MCPApp) -> MCPApp:
+            @app.tool
+            async def whoami(
+                tenant: Annotated[str, Variable("tenant")],
+                catalog: Annotated[dict[str, str], Inject("catalog")],
+                ctx: MCPRequestContext,
+            ) -> str:
+                """Report the request-scoped values."""
+                return f"{tenant}:{catalog['sku']}:{ctx.session is not None}"
+
+            return app
+
+        def app_for() -> MCPApp:
+            async def body(tenant: Annotated[str, Variable("tenant")]) -> str:
+                return f"<p>{tenant}</p>"
+
+            return build(MCPApp("ui://shop/card", body, inject_runtime=False, title=Variable("tenant"), listed=True))
+
+        shorthand = MCPServer(make_agent(), apps=[app_for()], context_provider=provider)
+        by_hand_app = app_for()
+        by_hand = MCPServer(
+            make_agent(),
+            tools=by_hand_app.tools,
+            resources=[by_hand_app.resource],
+            context_provider=provider,
+        )
+
+        async with connect(shorthand, extensions=_UI_AD) as session:
+            a_resources = await session.list_resources()
+            a_read = await session.read_resource("ui://shop/card")
+            a_call = await session.call_tool("whoami", {})
+        async with connect(by_hand, extensions=_UI_AD) as session:
+            b_resources = await session.list_resources()
+            b_read = await session.read_resource("ui://shop/card")
+            b_call = await session.call_tool("whoami", {})
+
+        assert _body(a_read.contents[0]) == "<p>north</p>"
+        assert text_of(a_call) == "north:mug:True"
+        assert a_resources.model_dump() == b_resources.model_dump()
+        assert a_read.model_dump() == b_read.model_dump()
+        assert a_call.model_dump() == b_call.model_dump()
+
     async def test_the_extension_advertisement_follows_the_tools_too(self) -> None:
         app = _card_app()
         by_hand = MCPServer(make_agent(), tools=app.tools, resources=[app.resource])
@@ -647,12 +759,18 @@ class TestDecomposition:
         app = _card_app()
         MCPServer(make_agent(), apps=[app])
 
-        with pytest.raises(ValueError, match="frozen"):
+        with pytest.raises(MCPAppFrozenError) as caught:
 
             @app.tool
             async def late() -> str:
                 """Too late."""
                 return "late"
+
+        # A dedicated error, not a bare ValueError, and it names the tool that
+        # would have gone missing rather than only the app.
+        assert isinstance(caught.value, MCPServerError)
+        assert "late" in str(caught.value)
+        assert "ui://shop/card" in str(caught.value)
 
     async def test_a_frozen_app_can_be_registered_more_than_once(self) -> None:
         app = _card_app()

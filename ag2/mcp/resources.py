@@ -5,7 +5,6 @@
 import base64
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,11 +21,11 @@ from mcp.types import (
 from mcp.types import Resource as MCPResource
 from mcp.types import ResourceTemplate as MCPResourceTemplate
 
-from ag2.utils import CONTEXT_OPTION_NAME, build_model
+from ag2.annotations import Variable
 
 from ._async import call_user_fn
 from .errors import MCPResourceNotFoundError
-from .tools import MCPExecutionContext, resolve_context_value
+from .tools import MCPExecutionContext, call_with_context, resolve_context_value
 
 # Resource bodies are either text (``str``) or binary (``bytes``); the reader may
 # be sync or async. A template reader additionally receives the variables matched
@@ -56,14 +55,18 @@ class Resource:
     ``listed`` keeps the resource out of ``resources/list`` when false. It stays
     readable by URI: the listing is a browsing surface, and a body that only
     makes sense to a machine that was told its URI does not belong there.
+
+    ``title``, ``description``, ``mime_type`` and the values inside ``meta`` may
+    each be a ``Variable``, resolved per request against the ``AskContext`` the
+    server's ``context_provider`` returned.
     """
 
     uri: str
     name: str
     read: ReadFn
-    title: str | None = None
-    description: str | None = None
-    mime_type: str | None = None
+    title: str | Variable | None = None
+    description: str | Variable | None = None
+    mime_type: str | Variable | None = None
     meta: Mapping[str, Any] | None = None
     listed: bool = True
 
@@ -149,7 +152,11 @@ class ResourceProvider:
         if resource is not None:
             data = await _call_resource_read(resource.read, context)
             return [
-                ReadResourceContents(content=data, mime_type=resource.mime_type, meta=_meta(resource.meta, context))
+                ReadResourceContents(
+                    content=data,
+                    mime_type=resolve_context_value(resource.mime_type, context),
+                    meta=_meta(resource.meta, context),
+                )
             ]
         for pattern, template in self._compiled:
             match = pattern.match(uri)
@@ -162,14 +169,7 @@ class ResourceProvider:
 async def _call_resource_read(read: ReadFn, context: MCPExecutionContext | None) -> ResourceContent:
     if context is None:
         return await call_user_fn(read)
-    call_model = build_model(read, serialize_result=False)
-    async with AsyncExitStack() as stack:
-        return await call_model.asolve(
-            **{CONTEXT_OPTION_NAME: context},
-            stack=stack,
-            cache_dependencies={},
-            dependency_provider=context.dependency_provider,
-        )
+    return await call_with_context(read, context)
 
 
 def _to_wire_contents(uri: str, contents: ReadResourceContents) -> TextResourceContents | BlobResourceContents:
@@ -179,31 +179,27 @@ def _to_wire_contents(uri: str, contents: ReadResourceContents) -> TextResourceC
     returns a complete result, so the mapping — and its MIME-type defaults, which
     :class:`Resource` documents — moves here.
     """
+    meta = _meta(contents.meta)
     if isinstance(contents.content, bytes):
-        meta = contents.meta if isinstance(contents.meta, dict) else dict(contents.meta) if contents.meta else None
         return BlobResourceContents(
             uri=uri,
             mimeType=contents.mime_type or "application/octet-stream",
             blob=base64.b64encode(contents.content).decode("ascii"),
             _meta=meta,
         )
-    meta = contents.meta if isinstance(contents.meta, dict) else dict(contents.meta) if contents.meta else None
-    kwargs: dict[str, Any] = {
-        "uri": uri,
-        "mimeType": contents.mime_type or "text/plain",
-        "text": contents.content,
-        "_meta": meta,
-    }
-    if "annotations" in TextResourceContents.model_fields:
-        kwargs["annotations"] = None
-    return TextResourceContents(**kwargs)
+    return TextResourceContents(
+        uri=uri,
+        mimeType=contents.mime_type or "text/plain",
+        text=contents.content,
+        _meta=meta,
+    )
 
 
 def _meta(meta: Mapping[str, Any] | None, context: MCPExecutionContext | None = None) -> dict[str, Any] | None:
     """``meta`` as a wire ``_meta``, or ``None`` so an empty one is never sent."""
     if not meta:
         return None
-    resolved = resolve_context_value(meta, context) if context is not None else meta
+    resolved = resolve_context_value(meta, context)
     return dict(resolved) if resolved else None
 
 
@@ -211,11 +207,9 @@ def _to_mcp_resource(resource: Resource, context: MCPExecutionContext | None = N
     return MCPResource(
         uri=resource.uri,
         name=resource.name,
-        title=resolve_context_value(resource.title, context) if context is not None else resource.title,
-        description=resolve_context_value(resource.description, context)
-        if context is not None
-        else resource.description,
-        mimeType=resolve_context_value(resource.mime_type, context) if context is not None else resource.mime_type,
+        title=resolve_context_value(resource.title, context),
+        description=resolve_context_value(resource.description, context),
+        mimeType=resolve_context_value(resource.mime_type, context),
         _meta=_meta(resource.meta, context),
     )
 

@@ -122,6 +122,34 @@ class TestRequestScopedContext:
 
         assert [c.model_dump() for c in result.contents] == [IsPartialDict({"text": "mcp=True"})]
 
+    async def test_resource_listing_resolves_request_scoped_metadata(self) -> None:
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"tenant": "North catalog", "kind": "text/markdown"})
+
+        server = MCPServer(
+            Agent("g", config=TestConfig("hi")),
+            resources=[
+                Resource(
+                    "catalog://card",
+                    "card",
+                    lambda: "body",
+                    title=Variable("tenant"),
+                    mime_type=Variable("kind"),
+                )
+            ],
+            context_provider=provider,
+        )
+
+        async with connect(server) as session:
+            listed = await session.list_resources()
+            read = await session.read_resource("catalog://card")
+
+        assert [r.model_dump() for r in listed.resources] == [
+            IsPartialDict({"title": "North catalog", "mime_type": "text/markdown"})
+        ]
+        # The read result carries the resolved value too, not the Variable.
+        assert [c.model_dump() for c in read.contents] == [IsPartialDict({"mime_type": "text/markdown"})]
+
     async def test_tool_listing_resolves_request_scoped_metadata(self) -> None:
         @mcp_tool(title=Variable("tool_title"), meta={"tenant": Variable("tenant")})
         async def read_scope() -> str:

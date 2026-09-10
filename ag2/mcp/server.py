@@ -388,6 +388,13 @@ class MCPServer:
             return tool_error(str(e) or type(e).__name__)
 
     async def _request_context(self, ctx: "ServerRequestContext[Any, Any]") -> MCPExecutionContext:
+        """The request-scoped context a resource read, tool listing or call resolves against.
+
+        Only the two fields of :class:`AskContext` that a non-conversational
+        request can use are carried over: ``prompt`` and ``tools`` shape an agent
+        turn, and this request is not one. The provider is called per request, so
+        the parallel document read and tool call stay independent.
+        """
         context = MCPExecutionContext(dependencies={MCP_REQUEST_CONTEXT_DEP: ctx})
         if self._executor.context_provider is None:
             return context
@@ -397,11 +404,6 @@ class MCPServer:
         if provided.dependencies is not None:
             context.dependencies.update(provided.dependencies)
             context.dependencies[MCP_REQUEST_CONTEXT_DEP] = ctx
-        if provided.prompt is not None:
-            if isinstance(provided.prompt, str):
-                context.prompt.append(provided.prompt)
-            else:
-                context.prompt.extend(provided.prompt)
         return context
 
     def _advertised_input_schema(self, name: str) -> dict[str, Any] | None:
