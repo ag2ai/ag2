@@ -19,11 +19,7 @@ from ._helpers import Clock, RecordingConfig
 
 
 def _request_context(session_id: str | None) -> SimpleNamespace:
-    """A minimal stand-in for the transport's RequestContext (HTTP shape).
-
-    Carries a handshake-era protocol version, the era in which an MCP session
-    exists at all and so the only one in which it can key a conversation.
-    """
+    """A minimal stand-in for the transport's RequestContext, on a handshake-era protocol version."""
     headers = {"mcp-session-id": session_id} if session_id is not None else {}
     return SimpleNamespace(request=SimpleNamespace(headers=headers), protocol_version=LATEST_HANDSHAKE_VERSION)
 
@@ -221,12 +217,7 @@ class TestHandleNamedConversations:
                 pass
 
     async def test_acquire_records_the_principal_of_the_handle_it_mints(self) -> None:
-        """A conversation first created through ``acquire`` is reachable by its creator.
-
-        ``acquire`` mints a handle like every other entry point does; recording
-        no principal for it would leave that handle nameable by nobody at all
-        once authentication is configured.
-        """
+        """A conversation first created through ``acquire`` is reachable by its creator."""
         store = SessionStore()
 
         await store.acquire("s", principal="alice")

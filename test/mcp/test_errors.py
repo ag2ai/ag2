@@ -53,9 +53,7 @@ class TestErrors:
 @pytest.mark.asyncio
 class TestToolErrorsAreLegible:
     async def test_a_message_less_exception_still_names_itself(self) -> None:
-        """``str(exc)`` is empty for a bare ``raise``, which would ship an empty
-        text block; the class name is the least the client can act on.
-        """
+        """``str(exc)`` is empty for a bare ``raise``; the class name is the least a client can act on."""
         server = MCPServer(greeter(), tools=[MCPFunctionTool("boom", "Boom", _raises_silently)])
 
         async with connect(server, raise_exceptions=False) as session:

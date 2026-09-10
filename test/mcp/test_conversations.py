@@ -88,9 +88,8 @@ async def _modern_call_with_response(
 ) -> tuple[dict[str, Any], httpx.Response]:
     """POST one ``tools/call`` as a modern-era client, keeping the HTTP response.
 
-    No handshake: the version/capabilities envelope rides in ``params._meta``,
-    and the revision requires the method and tool name in headers too. The
-    response itself is returned for the assertions that are about HTTP.
+    No handshake: the version/capabilities envelope rides in ``params._meta``, and
+    the revision requires the method and tool name in headers too.
     """
     arguments: dict[str, Any] = {"message": message}
     if conversation is not None:
@@ -171,9 +170,8 @@ async def _handshake_call(
 class TestModernEraStartsFresh:
     """2026-07-28: a connection is not a conversation, and neither is a process.
 
-    The revision says servers must not use connection or process identity to
-    establish context, and it issues nothing else to key on — so an unnamed
-    conversation starts empty on every transport.
+    The revision forbids establishing context from connection or process identity,
+    so an unnamed conversation starts empty on every transport.
     """
 
     async def test_stream_calls_do_not_share_a_conversation(self) -> None:
@@ -199,11 +197,7 @@ class TestModernEraStartsFresh:
 
 @pytest.mark.asyncio
 class TestHandshakeEraContinuity:
-    """Up to 2025-11-25 the session exists at the protocol level, so it keys history.
-
-    Pinned against regression: withdrawing the process fallback from the modern
-    era must not withdraw it from the era whose revisions prescribe it.
-    """
+    """Up to 2025-11-25 the session exists at the protocol level, so it keys history."""
 
     async def test_stdio_style_stream_accumulates(self) -> None:
         config = RecordingConfig(TestConfig("ok", "ok"))
@@ -316,10 +310,8 @@ class TestConversationHandle:
 class TestBlankHandle:
     """A blank handle names no conversation, so it reads as none being named.
 
-    The reader of the handle channel is the model, and a model given an optional
-    string argument routinely sends ``""`` rather than omitting the key. Read as
-    an unknown handle, that would make its every first call an error and leave it
-    unable to start a conversation at all.
+    The reader of the handle channel is the model, which routinely sends ``""`` for
+    an optional string argument rather than omitting the key.
     """
 
     @pytest.mark.parametrize("blank", ["", "   ", "\n"])
@@ -363,9 +355,8 @@ class TestBlankHandle:
 class TestUnknownHandle:
     """A handle the registry does not know is an error, never a fall-through.
 
-    Falling through to the transport session would let any caller name a
-    conversation with a string of their choosing and evict other callers'
-    conversations out of a bounded registry.
+    Falling through would let any caller name a conversation with a string of their
+    choosing and evict other callers' out of a bounded registry.
     """
 
     async def test_is_an_error_flagged_result_not_a_protocol_error(self) -> None:
@@ -439,12 +430,7 @@ class TestAdvertisedConversationArgument:
         assert _conversation_argument(tool) == IsPartialDict({"description": IsStr(regex=r".*\b900\b.*\b64\b.*")})
 
     async def test_presenting_one_anyway_is_refused_not_dropped(self) -> None:
-        """With conversations off, a handle is answered, not quietly discarded.
-
-        The server mints no handles, so omitting the argument would not restore
-        continuity either — which is why this is refused as unsupported rather
-        than reported as an unknown handle.
-        """
+        """With conversations off, a handle is answered as unsupported, not quietly discarded."""
         config = RecordingConfig(TestConfig("ok"))
         server = MCPServer(_agent(config), sessions=False)
 
@@ -467,12 +453,7 @@ class TestAdvertisedConversationArgument:
 
 @pytest.mark.asyncio
 async def test_structured_content_is_exactly_the_output_schema() -> None:
-    """``structuredContent`` is the agent's response schema, and nothing else.
-
-    It is advertised verbatim as the tool's ``outputSchema``, which MCP requires
-    structured content to conform to, so a server field mixed in would break the
-    tool's own declared contract.
-    """
+    """``structuredContent`` is the agent's response schema, and nothing else."""
     agent = Agent(
         "weather",
         config=TestConfig('{"city": "SF", "temp_c": 18.5}'),
@@ -493,12 +474,7 @@ async def test_structured_content_is_exactly_the_output_schema() -> None:
 
 @pytest.mark.asyncio
 async def test_stateless_transport_serves_conversations_byhandle_of() -> None:
-    """``stateless=True`` with ``sessions=True`` is coherent, not contradictory.
-
-    It was contradictory only while continuity depended on the transport issuing
-    a session id; with handles it means "no transport session, conversations by
-    handle", so it constructs without complaint and serves them.
-    """
+    """``stateless=True`` with ``sessions=True`` means no transport session, conversations by handle."""
     config = RecordingConfig(TestConfig("ok", "ok"))
     app = MCPServer(_agent(config), stateless=True, json_response=True)
 
@@ -593,8 +569,7 @@ class TestPrincipalBinding:
     """A handle names a conversation; it does not on its own confer the right to read one.
 
     The handle comes back in readable content, so it passes through the model's
-    context, the client's logs and any tracing in between — further than a
-    transport header ever went.
+    context, the client's logs and any tracing in between.
     """
 
     async def test_the_creating_principal_continues_normally(self) -> None:
@@ -639,11 +614,8 @@ class TestPrincipalBinding:
     async def test_a_session_named_conversation_is_unreachable_by_another_principal(self) -> None:
         """The other name a conversation goes by is closed to a swapped credential too.
 
-        A handshake-era conversation is keyed by the MCP session, which ag2 does
-        not revalidate — it does not have to. The transport refuses a session id
-        presented with a credential other than the one that opened it, answering
-        as though the session did not exist, so the swapped caller never reaches
-        the conversation to begin with.
+        The transport refuses a session id presented under another credential, so the
+        swapped caller never reaches the conversation to begin with.
         """
         config = RecordingConfig(TestConfig("ok", "ok"))
 

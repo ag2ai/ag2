@@ -2,13 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared scaffolding for the MCP suite.
-
-Everything here is incidental to what a test asserts: the agent that answers
-``"hi"``, the client-side callback that makes a capability declared, the two
-lines of ceremony a modern-era round trip costs. What a test is *about* stays in
-the test.
-"""
+"""Shared scaffolding for the MCP suite: everything incidental to what a test asserts."""
 
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
@@ -67,8 +61,7 @@ class Asked:
 
     ``answers`` is what ``context.input()`` returned, ``outcomes`` how each ask
     ended — ``"answered"``, or the name of the exception that ended it — and
-    ``runs`` how many times the tool body was entered, which is how "the run
-    resumed rather than restarted" is asserted: a restart enters it twice.
+    ``runs`` how many times the tool body was entered: a restart enters it twice.
     """
 
     answers: list[str] = field(default_factory=list)
@@ -80,9 +73,8 @@ class Asked:
 class Gate:
     """A hold placed inside the tool, just before it asks.
 
-    ``entered`` is set when the tool reaches the hold, which gives a
-    deterministic point at which a round is mid-flight rather than parked on a
-    question; nothing continues until ``release`` is set.
+    ``entered`` marks that the tool reached the hold, and nothing continues until
+    ``release`` is set.
     """
 
     entered: asyncio.Event = field(default_factory=asyncio.Event)
@@ -161,9 +153,7 @@ def refusing(action: str = "decline", *, seen: list[str] | None = None) -> Elici
 async def declares_elicitation(context: ClientRequestContext, params: ElicitRequestParams) -> ElicitResult:
     """A callback supplied only so the client declares that it can answer.
 
-    A server asks nobody who has not said so, which a modern-era test driving
-    the retry loop by hand still needs — and never invokes, because that era
-    carries the question back as the call's result.
+    Never invoked: the modern era carries the question back as the call's result.
     """
     raise AssertionError("a modern-era question is answered by retrying, not through the callback")
 
@@ -172,7 +162,7 @@ async def ask(session: Any, message: str = "go", *, conversation: str | None = N
     """Call the conversational tool once, ready for the modern era's paused result.
 
     ``allow_input_required=True`` keeps a pause a *result* rather than a raised
-    error; a handshake-era server never returns one, so both eras come here.
+    error, and a handshake-era server never returns one, so both eras come here.
     """
     arguments: dict[str, Any] = {"message": message}
     if conversation is not None:
@@ -197,7 +187,7 @@ async def answer(
     """Retry ``paused``'s call, answering the question it came back with.
 
     The boundary binds state to its call's arguments, so the retry repeats the
-    ``message`` (and ``conversation``) the paused call was made with.
+    ``message`` and ``conversation`` the paused call was made with.
     """
     key, _request = outstanding(paused)
     return await ask(
@@ -289,11 +279,7 @@ def initialize_request(*, request_id: int = 1, version: str = LATEST_HANDSHAKE_V
 
 
 class ChunkConfig(ModelConfig):
-    """Test config whose client streams ``ModelMessageChunk`` events before the final reply.
-
-    Used to exercise the executor's progress / log forwarding. The final body
-    defaults to the concatenation of the chunks.
-    """
+    """Test config whose client streams ``ModelMessageChunk`` events before the final reply."""
 
     def __init__(self, *chunks: str, final: str | None = None) -> None:
         self._chunks = chunks
@@ -325,9 +311,7 @@ class ChunkClient(LLMClient):
 class RecordingConfig(ModelConfig):
     """Records the whole message list the framework sends the LLM on each turn.
 
-    ``TrackingConfig`` keeps only each turn's last message, but a conversation is
-    exactly what accumulates *before* it — so continuity tests read the full list
-    through :attr:`prompts`.
+    Continuity tests read it back through :attr:`prompts`.
     """
 
     def __init__(self, config: ModelConfig) -> None:

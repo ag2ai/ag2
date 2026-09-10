@@ -16,9 +16,8 @@ from ._helpers import greeter
 class TestE2EModern:
     """The served agent, driven over protocol revision 2026-07-28.
 
-    The handshake-era suites reach the same server through ``connect``; these
-    pin that the modern-era seam reaches it too, so the era's own semantics can
-    be asserted rather than inferred.
+    The handshake-era suites reach the same server through ``connect``; these pin
+    that the modern-era seam reaches it too.
     """
 
     async def test_negotiated_version_is_the_modern_revision(self) -> None:

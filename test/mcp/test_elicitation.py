@@ -5,15 +5,9 @@
 """A served agent asking the human behind a *handshake-era* client.
 
 Those revisions still carry a bidirectional channel, so the question goes out as
-a standalone ``elicitation/create`` request and the answer comes back inline —
-nothing pauses, nothing is stored. The modern era's pause-and-resume path is
-covered in ``test_pause_and_resume.py``; behaviour the two eras share is
-asserted against both from the same body there.
-
-The scripted config carries ``raise_tool_errors=False`` throughout, which models
-a real provider: it is handed a failed tool call as an ordinary result and
-carries on. Asserting "this ends the turn" against a re-raising double would
-assert the double.
+a standalone ``elicitation/create`` and the answer comes back inline — nothing
+pauses, nothing is stored. The modern era's pause-and-resume path is covered in
+``test_pause_and_resume.py``.
 """
 
 from typing import Any

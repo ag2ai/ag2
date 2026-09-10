@@ -151,11 +151,7 @@ class TestTheServerConfigsAreKeywordOnly:
 
 
 def test_the_private_mcp_modules_the_toolkit_depends_on_still_exist() -> None:
-    """Both are imported at module scope on the eager ``ag2.tools`` path.
-
-    A rename in a minor ``mcp`` release would break ``import ag2.tools`` for every
-    user with the extra installed, so it fails here instead.
-    """
+    """Both are imported at module scope on the eager ``ag2.tools`` path, so a rename must fail here."""
     assert callable(run_input_required_driver)
     assert callable(negotiate_auto)
 

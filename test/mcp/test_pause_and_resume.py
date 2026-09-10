@@ -6,13 +6,9 @@
 
 Revision 2026-07-28 defines no server-to-client request, so the question comes
 back as the result of the call and the client answers by retrying. These tests
-drive that from the client's side of the wire — the questions it receives, the
-result it gets on retry — and never assert how the pause is stored, keyed or
-sealed. The state token is opaque by design; a test reading it would be asserting
-an implementation detail and would break on a key rotation that changes nothing
-observable.
-
-The handshake era's inline path is covered in ``test_elicitation.py``.
+drive that from the client's side of the wire and never assert how the pause is
+stored, keyed or sealed. The handshake era's inline path is covered in
+``test_elicitation.py``.
 """
 
 import pytest
@@ -99,11 +95,7 @@ class TestModernEraPause:
         assert final.is_error is False
 
     async def test_a_stale_answer_is_not_consumed_and_the_question_is_re_asked(self) -> None:
-        """An answer minted for a question the run has moved past must not be applied.
-
-        Read from the wire, where a stale key names nothing in ``inputResponses``;
-        ``TestTheRunRefusesAStaleAnswer`` covers the run's own refusal.
-        """
+        """An answer minted for a question the run has moved past must not be applied."""
         server = MCPServer(asking_agent(questions=("First?", "Second?")))
 
         async with connect_modern(server, elicitation_callback=declares_elicitation) as session:
@@ -136,11 +128,10 @@ class TestModernEraPause:
 
 @pytest.mark.asyncio
 class TestTheRunRefusesAStaleAnswer:
-    """The seam the wire test above cannot reach.
+    """The seam the wire test above cannot reach: the run's own refusal.
 
-    The serving path drops an answer whose key names nothing, so it never calls
-    the run — leaving the run's own refusal, the half that would let an answer
-    through if it went wrong, untested from outside.
+    The serving path drops an answer whose key names nothing, so it never calls the
+    run — leaving the half that would let an answer through untested from outside.
     """
 
     async def test_an_answer_to_an_earlier_question_is_refused(self) -> None:
@@ -168,12 +159,8 @@ class TestTheRunRefusesAStaleAnswer:
 class TestTheStateIsBoundToItsCaller:
     """A retry presenting state minted for another caller must not resume this run.
 
-    The first test drives it from the wire, with the identity the state binds to
-    swapped between the two calls. The other two assert the *seam*, and are not
-    redundant with it: the behavioural test supplies its own
-    ``bind_principal``, so only they can catch a default that stopped binding —
-    a server passing ``bind_principal=None`` would still pass every other test
-    in this file while quietly making one caller's state usable by another.
+    The first test drives it from the wire; the other two assert the seam, which is
+    the only place a default that stopped binding would show.
     """
 
     @pytest.mark.asyncio

@@ -4,17 +4,10 @@
 
 """What bounds a paused run, and what happens at each bound.
 
-A modern-era client that asks a question and never comes back must not hold an
-agent's turn open forever. Two bounds apply, and they are deliberately unequal in
-kind: the *state's* lifetime bounds how long the pause can be resumed at all, and
-``context.input(timeout=)`` bounds how long the asking tool waits. Whichever
-elapses first ends the turn; the other must not then report a second,
-contradictory failure.
-
-The retention bound is the state token's TTL and nothing else — once no client
-can present a resumable token the run is unreachable, so it is reclaimed. These
-tests read that from the client's side wherever they can, and from the registry
-directly only where the clock has to be controlled rather than waited on.
+Two bounds apply, deliberately unequal in kind: the state's lifetime bounds how
+long the pause can be resumed at all, and ``context.input(timeout=)`` bounds how
+long the asking tool waits. Whichever elapses first ends the turn; the other
+must not then report a second, contradictory failure.
 """
 
 import asyncio
@@ -66,11 +59,7 @@ class TestTheStatesLifetimeBoundsTheRun:
         assert "requestState" in str(raised.value)
 
     async def test_the_state_expiring_reclaims_the_run_it_named(self) -> None:
-        """The clock is injected rather than waited on: this is the registry's own bound.
-
-        A run whose state no client can present any more is unreachable, so the
-        next registry operation reclaims it and its turn scope closes.
-        """
+        """The clock is injected rather than waited on: this is the registry's own bound."""
         clock = Clock()
         runs = PausedRuns(ttl=10.0, clock=clock)
         closed: list[str] = []
@@ -89,11 +78,8 @@ class TestTheStatesLifetimeBoundsTheRun:
     async def test_a_run_that_pauses_again_is_held_for_its_newest_state(self) -> None:
         """Retention runs from the state a client actually holds, not from the first one.
 
-        Every round mints a fresh ``requestState``, so a conversation that pauses
-        and resumes several times can outlive the TTL in total while the token
-        its client holds is always young. Measuring retention from the run's
-        first pause would reclaim it under a token the boundary still accepts —
-        the client presents valid state and is told the run is gone.
+        Every round mints a fresh ``requestState``, so measuring from the first pause
+        would reclaim a run under a token the boundary still accepts.
         """
         clock = Clock()
         runs = PausedRuns(ttl=10.0, clock=clock)
@@ -171,11 +157,7 @@ class TestTheTwoBoundsDoNotFight:
         assert "requestState" not in first_text(late)
 
     async def test_an_expired_state_reclaims_the_turn_without_a_second_failure(self) -> None:
-        """The state bound elapsed first, so the timeout must not also fire.
-
-        The turn ends by reclamation — a cancellation — and the client has
-        already been told the one thing there is to tell it.
-        """
+        """The state bound elapsed first, so the timeout must not also fire."""
         asked = Asked()
         server = MCPServer(
             asking_agent(asked, timeout=30.0),

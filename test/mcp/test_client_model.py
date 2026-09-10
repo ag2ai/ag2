@@ -4,14 +4,10 @@
 
 """A served agent whose reasoning runs on the *calling client's* model.
 
-The point of the feature is a deployment holding no model credentials that can
-still serve an agent needing one. The point of these tests is that it is a
-decision: off unless asked for, never quietly substituted, and never quietly
-absent.
-
-Both eras are covered, because the transport differs and nothing else does — a
-standalone ``sampling/createMessage`` up to 2025-11-25, and from 2026-07-28 a
-request returned as the call's result and answered by the client's retry.
+These tests pin that it is a decision: off unless asked for, never quietly
+substituted, and never quietly absent. Both eras are covered — a standalone
+``sampling/createMessage`` up to 2025-11-25, and from 2026-07-28 a request
+returned as the call's result and answered by the client's retry.
 """
 
 import pytest
@@ -113,13 +109,7 @@ class TestTheModernEra:
 
 @pytest.mark.asyncio
 class TestACompletionThisAgentCannotUse:
-    """A borrowed model that answers with something unusable must fail loudly.
-
-    Every other unusable answer on this path refuses — tools, a response schema,
-    a peer that replies with the wrong result type. A completion carrying no text
-    is the same case: recorded as the empty string it would report success while
-    the agent answered with nothing at all.
-    """
+    """A borrowed model that answers with something unusable must fail loudly."""
 
     async def test_a_completion_with_no_text_block_is_refused_rather_than_read_as_silence(self) -> None:
         picture = CreateMessageResult(
@@ -171,12 +161,7 @@ class TestItIsADecision:
         assert ASKED == []
 
     async def test_an_agent_with_a_model_of_its_own_falls_back_to_it(self) -> None:
-        """Having one *is* the fallback: a deployment holding a model would rather serve than fail.
-
-        No second switch decides this. A flag saying "refuse anyway, though a
-        model is right here" only ever produced the failure above from a server
-        that could have answered.
-        """
+        """Having one *is* the fallback: a deployment holding a model would rather serve than fail."""
         server = borrowing(config=TestConfig("my own answer"))
 
         async with connect(server, raise_exceptions=False) as session:
@@ -204,11 +189,7 @@ class TestItIsADecision:
 
 @pytest.mark.asyncio
 async def test_the_sdk_s_deprecation_warning_reaches_the_operator() -> None:
-    """MCP deprecated sampling in 2026-07-28 (SEP-2577), and AG2 does not suppress the SDK's warning.
-
-    It is true and it is the protocol's; hiding it would leave an operator
-    believing a mechanism with an expiry date is ordinary.
-    """
+    """MCP deprecated sampling in 2026-07-28 (SEP-2577), and AG2 does not suppress the SDK's warning."""
     with pytest.warns(MCPDeprecationWarning, match="sampling capability is deprecated"):
         async with connect(borrowing(), sampling_callback=lends_its_model) as session:
             result = await session.call_tool("ask", {"message": "think about it"})

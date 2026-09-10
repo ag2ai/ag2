@@ -4,13 +4,10 @@
 
 """What else may happen to a conversation, and to a process, while a run is paused.
 
-A modern-era pause lets go of the conversation's turn lock so the retry that
-resumes it is not blocked by the run it is resuming. Three things follow, one per
-class here: another call naming that conversation, a round that dies between the
-registry and the client, and the process going down with runs still held.
-
-``test_pause_and_resume.py`` covers the happy round trip;
-``test_paused_run_lifetime.py`` the two bounds on how long a run may be held.
+A modern-era pause lets go of the conversation's turn lock, so the retry that
+resumes it is not blocked by the run it is resuming. One class each: another
+call naming that conversation, a round that dies between the registry and the
+client, and the process going down with runs still held.
 """
 
 import asyncio
@@ -52,10 +49,9 @@ NEVER_ON_A_PASSING_RUN = 5.0
 class TestAConversationHoldingAPausedRun:
     """A second call naming it must be refused, and refused *promptly*.
 
-    The paused run is still inside ``Agent.ask`` holding the lock the agent keys
-    on the conversation's stream id, which every call on that conversation shares
-    however fresh its ``MemoryStream`` object. Letting the second through would
-    not interleave two turns; it would park one with no timeout.
+    The paused run is still inside ``Agent.ask`` holding the lock keyed on the
+    conversation's stream id, so letting the second through would park it with no
+    timeout rather than interleave two turns.
     """
 
     async def test_a_second_call_on_it_is_refused_rather_than_hung(self) -> None:
@@ -102,9 +98,8 @@ class TestAConversationHoldingAPausedRun:
 class TestARoundThatDiesLeavesNothingBehind:
     """A cancelled round must not strand the run it was driving.
 
-    A held run is a live task holding its conversation's stream lock, and one in
-    no registry can be reached by nothing — no retry, no sweep, no eviction — so
-    it would hold that lock for the life of the process.
+    A held run in no registry can be reached by nothing — no retry, no sweep, no
+    eviction — so it would hold its conversation's lock for the life of the process.
     """
 
     async def test_a_cancelled_first_round_reclaims_the_run_it_started(self) -> None:
@@ -186,10 +181,7 @@ class TestARoundThatDiesLeavesNothingBehind:
 
 @pytest.mark.asyncio
 async def test_a_paused_turn_is_not_idle_evicted_between_its_own_rounds() -> None:
-    """Resuming keeps the conversation alive: it goes nowhere near the registry,
-    continuing a turn already inside a conversation. Left uncounted, one whose
-    turn asks several questions ages out mid-question, and the eviction reclaims
-    that run."""
+    """Resuming keeps the conversation alive; uncounted, a turn asking several questions ages out mid-question."""
     clock = Clock()
     store = SessionStore(ttl=10.0, clock=clock)
     async with store.fresh() as convo:
@@ -224,11 +216,7 @@ async def test_a_paused_turn_is_not_idle_evicted_between_its_own_rounds() -> Non
 
 
 class _Peer:
-    """Just enough request context for the paths under test.
-
-    With ``stream_progress=False`` and no context provider or client model, the
-    only thing read off one is whether the caller can answer a question.
-    """
+    """Just enough request context for the paths under test."""
 
     def __init__(self) -> None:
         self.session = _PeerSession()

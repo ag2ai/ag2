@@ -4,16 +4,10 @@
 
 """A deterministic served tool asking the calling client for something.
 
-The conversational tool is not the only thing a server exposes. A plain
-``@mcp_tool`` function served alongside it can ask too, and for these the SDK's
-own resolver mechanism fits: a resolver body is cheap to re-run, so nothing has
-to be held between rounds.
-
-**The contract is the opposite of the conversational tool's**, which is the whole
-reason these live apart. A conversational turn is held open and resumes exactly
-where it stopped, and nothing about it re-runs; a resolver runs again on every
-round. These tests pin both halves of that sentence, because an author who
-assumes the wrong one writes a side effect that fires once per round.
+A plain ``@mcp_tool`` function served next to the conversational tool can ask
+too, through the SDK's resolver mechanism. The contract is the opposite of the
+conversational tool's, which is why the two live apart: a resolver runs again on
+every round, while a held turn resumes where it stopped and re-runs nothing.
 """
 
 from typing import Annotated, Any
@@ -63,12 +57,10 @@ def paint(room: str, colour: Annotated[Colour, Resolve(pick_colour)]) -> str:
 
 
 def project_roots() -> ListRoots:
-    """Read the client's roots. Available here and *not* to a conversational turn.
+    """Read the client's roots — available here, and *not* to a conversational turn.
 
-    The served agent deliberately cannot ask for roots — it has no filesystem of
-    its own to scope, so the spec excluded it there. A deterministic tool is a
-    different thing: it may well be the code that wants the caller's directories,
-    and the resolver mechanism carries the request at no extra cost.
+    The served agent has no filesystem of its own to scope, so the spec excluded
+    roots there; a deterministic tool may well be the code that wants them.
     """
     return ListRoots()
 

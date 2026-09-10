@@ -44,9 +44,8 @@ def _app(*, required_scopes: list[str] | None = None, json_response: bool = Fals
 def _client(app: MCPServer) -> httpx.AsyncClient:
     """An HTTP client bound to ``app`` without driving its lifespan.
 
-    These tests assert what the auth layer answers, which happens before the
-    session manager is ever reached — so unlike :func:`~ag2.mcp.testing.serve`,
-    the app need not be started for them.
+    The auth layer answers before the session manager is reached, so unlike
+    :func:`~ag2.mcp.testing.serve` the app need not be started.
     """
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
 

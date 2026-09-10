@@ -31,9 +31,7 @@ def _server(*tools: MCPFunctionTool) -> MCPServer:
 
 @pytest.mark.asyncio
 class TestDeclaredSchemaIsEnforced:
-    """``mcp`` 1.x's ``@server.call_tool()`` validated arguments against the
-    advertised ``inputSchema``; 2.0 dropped the mechanism, so the server does it.
-    """
+    """``mcp`` 2.0 no longer validates arguments against the advertised ``inputSchema``, so the server does."""
 
     async def test_wrong_type_is_a_tool_error(self) -> None:
         server = _server(MCPFunctionTool("echo", "Echo n", _echo_n, _SCHEMA))
@@ -78,10 +76,7 @@ class TestDeclaredSchemaIsEnforced:
         assert first_text(result) == "got ['whatever']"
 
     async def test_a_malformed_schema_stays_a_tool_error(self) -> None:
-        """Validating against an invalid schema raises ``SchemaError``, which must
-        not escape as a protocol error — 1.x validated inside the decorator that
-        converted anything raised into a tool-level error.
-        """
+        """``SchemaError`` from an invalid schema must not escape as a protocol error."""
         bad = {"type": "object", "properties": {"n": {"type": "nonsense"}}}
         server = _server(MCPFunctionTool("echo", "Echo n", _echo_n, bad))
 
@@ -93,9 +88,7 @@ class TestDeclaredSchemaIsEnforced:
 
 @pytest.mark.asyncio
 async def test_a_missing_argument_does_not_leak_the_request_context() -> None:
-    """The pydantic layer renders the whole argument dict — including the
-    injected context — into its message, so validation must run before it.
-    """
+    """The pydantic layer renders the whole argument dict, injected context included, so validation runs first."""
 
     @mcp_tool
     def add(n: int) -> str:
