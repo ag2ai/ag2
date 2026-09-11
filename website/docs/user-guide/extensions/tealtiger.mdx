@@ -328,6 +328,22 @@ GovernancePolicy.cost_limit(max_per_session=5.0)
 
 Cumulative cost is tracked across all tool calls using `cost_per_call` (configurable, defaults to `0.002`). Once the limit is reached, further calls are denied with `BUDGET_EXCEEDED` and risk score 70.
 
+### Rate Limiting
+Cap how many tool calls happen within a rolling time window — the defence against a runaway loop that keeps calling a tool and burns budget, provider rate limits, or side effects before a cost ceiling would notice:
+```python linenums="1"
+# Global: at most 30 tool calls per minute, across all tools
+GovernancePolicy.rate_limit(30, window_seconds=60)
+# Per-tool: at most 5 emails per minute (other tools unaffected)
+GovernancePolicy.rate_limit(5, window_seconds=60, tool="send_email")
+# Pattern: the whole db_* family shares one budget
+GovernancePolicy.rate_limit(100, window_seconds=3600, tool="db_*")
+```
+It is a **sliding window**: only the calls in the last `window_seconds` count, so the allowance refills continuously rather than resetting on a fixed boundary. Omit `tool` for a global limit that every governed call shares; pass a tool name or `fnmatch` pattern to scope the limit to matching calls. Combine several — a generous global ceiling plus tighter per-tool caps — and the first limit exceeded denies the call.
+Only calls that are *allowed* count toward the window, so a call denied by another policy never consumes the budget. Exceeding the limit denies with reason code `RATE_LIMIT_EXCEEDED` and risk score 70.
+!!! note "Window state lives on the middleware instance"
+    Call timestamps are held on the `TealTigerMiddleware` factory and shared across turns for the life of that instance (cleared by `reset()`). A limit therefore spans a whole session, not a single turn — but it does not persist across process restarts or share state between separate middleware instances.
+`max_calls` must be a positive integer and `window_seconds` a positive number, validated at construction so a policy that could never allow a call fails where it is written.
+
 ### Prompt Injection Detection
 
 Block tool calls containing adversarial prompt injection patterns in their arguments:
@@ -450,7 +466,7 @@ for decision in governance.decisions:
 | `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
 | `agent_name` | `str` | Agent that made the call, or `unknown` |
 | `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
-| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `OUTPUT_PII_DETECTED:{category}`, `OUTPUT_SECRET_DETECTED`, `OUTPUT_REDACTED`, `OUTPUT_REDACTION_INCOMPLETE`, `OUTPUT_BLOCKED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `OUTPUT_PII_DETECTED:{category}`, `OUTPUT_SECRET_DETECTED`, `OUTPUT_REDACTED`, `OUTPUT_REDACTION_INCOMPLETE`, `OUTPUT_BLOCKED`, `BUDGET_EXCEEDED`, `RATE_LIMIT_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
 | `risk_score` | `int` | 0 (safe) to 100 (critical) |
 | `evaluation_time_ms` | `float` | Governance latency for this decision |
 | `cost_tracked` | `float` | Cost attributed to this call in USD |
@@ -666,6 +682,7 @@ Each policy type carries its own risk score when it denies:
 | Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
 | Tool blocklist | `TOOL_BLOCKED` | 80 |
 | Cost limit / factory budget | `BUDGET_EXCEEDED` | 70 |
+| Rate limit | `RATE_LIMIT_EXCEEDED` | 70 |
 | Output scan (post-tool, on the result) | `OUTPUT_SECRET_DETECTED` / `OUTPUT_PII_DETECTED:{category}` | 90 / 60 |
 
 !!! warning "Policy order is yours to choose"
