@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import pytest
 from pydantic import BaseModel
 
-from ag2 import Agent, PromptedSchema, ResponseSchema, response_schema
+from ag2 import Agent, LastMessagePromptedSchema, PromptedSchema, ResponseSchema, response_schema
 from ag2.testing import TestConfig, TrackingConfig
 
 
@@ -248,3 +248,80 @@ class TestAskLevelResponseSchema:
 
         next_reply = await reply.ask("Again!")
         assert await next_reply.content() == "42"
+
+
+@pytest.mark.asyncio()
+class TestLastMessagePromptedSchema:
+    async def test_last_message_prompted_schema_with_type(self) -> None:
+        tracking = TrackingConfig(TestConfig('{"data": 42}'))
+        agent = Agent("test", config=tracking, response_schema=LastMessagePromptedSchema(int))
+
+        reply = await agent.ask("Hi!")
+        result = await reply.content()
+
+        assert result == 42
+
+    async def test_instruction_lands_in_last_user_message(self) -> None:
+        tracking = TrackingConfig(TestConfig('{"data": 42}'))
+        agent = Agent("test", config=tracking, response_schema=LastMessagePromptedSchema(int))
+
+        await agent.ask("Hi!")
+
+        last_message = tracking.mock.call_args_list[0][0][0]
+        parts = last_message.parts
+        assert len(parts) >= 2
+        assert parts[0].content == "Hi!"
+        assert '"type": "integer"' in parts[-1].content
+
+    async def test_instruction_not_in_system_prompt(self) -> None:
+        tracking = TrackingConfig(TestConfig('{"data": 42}'))
+        agent = Agent(
+            "test",
+            config=tracking,
+            prompt="You are helpful.",
+            response_schema=LastMessagePromptedSchema(int),
+        )
+
+        await agent.ask("Hi!")
+
+        last_message = tracking.mock.call_args_list[0][0][0]
+        parts = last_message.parts
+        # The user's original question is first; the schema instruction is appended
+        assert parts[0].content == "Hi!"
+        assert "You are helpful." not in parts[-1].content
+        assert '"type": "integer"' in parts[-1].content
+
+    async def test_ask_level_override(self) -> None:
+        agent = Agent("test", config=TestConfig('{"data": 42}'))
+
+        reply = await agent.ask("Hi!", response_schema=LastMessagePromptedSchema(int))
+        result = await reply.content()
+
+        assert result == 42
+
+    async def test_with_callable(self) -> None:
+        @response_schema
+        def double(content: str) -> int:
+            return int(content) * 2
+
+        agent = Agent("test", config=TestConfig("21"), response_schema=LastMessagePromptedSchema(double))
+
+        reply = await agent.ask("Hi!")
+        result = await reply.content()
+
+        assert result == 42
+
+    async def test_retry_appends_instruction_each_call(self) -> None:
+        tracking = TrackingConfig(TestConfig("not a number", '{"data": 42}'))
+        agent = Agent("test", config=tracking, response_schema=LastMessagePromptedSchema(int))
+
+        reply = await agent.ask("Hi!")
+        result = await reply.content(retries=1)
+
+        assert result == 42
+        assert tracking.mock.call_count == 2
+
+        # Both calls should have the instruction appended to the last user message
+        for call in tracking.mock.call_args_list:
+            last_message = call[0][0]
+            assert '"type": "integer"' in last_message.parts[-1].content
