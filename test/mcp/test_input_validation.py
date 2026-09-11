@@ -7,11 +7,11 @@ from typing import Any
 import pytest
 from mcp.types import TextContent
 
-from ag2 import Agent
 from ag2.mcp import MCPFunctionTool, MCPServer, mcp_tool
 from ag2.mcp.testing import connect
 from ag2.mcp.tools import ToolContext
-from ag2.testing import TestConfig
+
+from ._helpers import make_agent, text_of
 
 _SCHEMA = {
     "type": "object",
@@ -26,11 +26,7 @@ async def _echo_n(args: dict[str, Any], _ctx: ToolContext) -> TextContent:
 
 
 def _server(*tools: MCPFunctionTool) -> MCPServer:
-    return MCPServer(Agent("g", config=TestConfig("hi")), tools=list(tools))
-
-
-def _text(result: Any) -> str:
-    return result.content[0].text
+    return MCPServer(make_agent(), tools=list(tools))
 
 
 @pytest.mark.asyncio
@@ -46,8 +42,8 @@ class TestDeclaredSchemaIsEnforced:
             result = await session.call_tool("echo", {"n": "5"})
 
         assert result.is_error is True
-        assert _text(result).startswith("Input validation error:")
-        assert "'5' is not of type 'integer'" in _text(result)
+        assert text_of(result).startswith("Input validation error:")
+        assert "'5' is not of type 'integer'" in text_of(result)
 
     async def test_missing_required_argument_is_a_tool_error(self) -> None:
         server = _server(MCPFunctionTool("echo", "Echo n", _echo_n, _SCHEMA))
@@ -56,7 +52,7 @@ class TestDeclaredSchemaIsEnforced:
             result = await session.call_tool("echo", {})
 
         assert result.is_error is True
-        assert _text(result) == "Input validation error: 'n' is a required property"
+        assert text_of(result) == "Input validation error: 'n' is a required property"
 
     async def test_valid_arguments_still_reach_the_handler(self) -> None:
         server = _server(MCPFunctionTool("echo", "Echo n", _echo_n, _SCHEMA))
@@ -65,7 +61,7 @@ class TestDeclaredSchemaIsEnforced:
             result = await session.call_tool("echo", {"n": 5})
 
         assert result.is_error is False
-        assert _text(result) == "5 int"
+        assert text_of(result) == "5 int"
 
     async def test_schemaless_tool_accepts_anything(self) -> None:
         """The default schema is a bare object, so it constrains nothing."""
@@ -79,7 +75,7 @@ class TestDeclaredSchemaIsEnforced:
             result = await session.call_tool("any", {"whatever": 1})
 
         assert result.is_error is False
-        assert _text(result) == "got ['whatever']"
+        assert text_of(result) == "got ['whatever']"
 
     async def test_a_malformed_schema_stays_a_tool_error(self) -> None:
         """Validating against an invalid schema raises ``SchemaError``, which must
@@ -113,9 +109,9 @@ class TestTypedToolErrorsStayClean:
             result = await session.call_tool("add", {})
 
         assert result.is_error is True
-        assert _text(result) == "Input validation error: 'n' is a required property"
-        assert "__ctx__" not in _text(result)
-        assert "ServerRequest" not in _text(result)
+        assert text_of(result) == "Input validation error: 'n' is a required property"
+        assert "__ctx__" not in text_of(result)
+        assert "ServerRequest" not in text_of(result)
 
 
 @pytest.mark.asyncio
@@ -127,4 +123,4 @@ class TestAgentToolIsValidatedToo:
             result = await session.call_tool("ask", {"message": 7})
 
         assert result.is_error is True
-        assert _text(result).startswith("Input validation error:")
+        assert text_of(result).startswith("Input validation error:")
