@@ -5588,54 +5588,56 @@ It can be thought of as a superset of regular [Tools](tools.md), created to solv
 1. Each LLM provider had its own tool schema and types, making tools non-portable across providers.
 2. There was no standard way to give an LLM a scoped, context-optimized surface to invoke APIs, RPCs, and similar remote capabilities.
 
-!!! note "Serving, not consuming"
+!!! note "Consuming, not serving"
     This page is about wiring an existing MCP server into an agent. For the inverse - exposing an AG2 `Agent` **as** an MCP server other clients connect to - see [Serving an Agent as an MCP Server](serving_mcp.md).
 
-## Two ways to connect an MCP server
-
-Autogen supports both ways MCP servers are typically wired into an agent:
-
-- **Client-side connection** - Autogen connects to the MCP server itself, discovers the tools, and executes them locally. The LLM only ever sees ordinary function tools. Works with every provider. Supports both **remote** servers (HTTP / streamable-http) and **local** servers (subprocess speaking MCP over stdin/stdout).
-- **Provider-side connection** - the MCP server URL and credentials are forwarded to the LLM provider, which connects to the server and invokes the tools on its end. Only works with providers that natively support it (e.g. Anthropic).
-
-| | `MCPToolkit` (client-side) | `MCPServerTool` (provider-side) |
-|---|---|---|
-| Who connects to the MCP server | Autogen | LLM provider |
-| Who executes tool calls | Autogen | LLM provider |
-| Works with any LLM provider | Yes | No - provider must support MCP passthrough |
-| Supports local stdio servers | Yes | No - provider only accepts URLs |
-| Credentials leave your infra | No | Yes - forwarded to the LLM provider |
-| Custom middleware on tool calls | Yes | No |
-| Lifecycle / connection pooling | Handled by Autogen | Handled by provider |
-
-!!! tip
-    Pick `MCPToolkit` when you want provider-agnostic behavior, local control over tool execution, when you need to run a local stdio MCP server, or when your MCP credentials must stay inside your infrastructure. Pick `MCPServerTool` when you're only targeting a provider that supports it and you'd rather let the provider manage the MCP lifecycle for you.
-
-## Client-side: `MCPToolkit`
-
-`MCPToolkit` is a [Toolkit](toolkits.md) - it discovers the server's tools lazily and exposes each one as a regular function tool to the agent. It accepts either a remote URL/`MCPServerConfig` or an `MCPStdioServerConfig` for a locally-launched subprocess; the rest of the agent doesn't care which transport is in use.
-
-### Remote servers (HTTP)
-
-The simplest form takes a URL string and uses the streamable-http transport:
+## Quick start
 
 ```python
 from ag2 import Agent
 from ag2.tools import MCPToolkit
 
-agent_with_mcp = Agent(
+agent = Agent(
     name="Weather bot",
     tools=[MCPToolkit("https://my-mcp-url.example.com")],
 )
 ```
 
-Most real-world MCP servers require authentication. Use `MCPServerConfig` for typed configuration:
+That is the whole of the common case. `MCPToolkit` connects to the server, discovers its tools lazily, and exposes each one to the agent as an ordinary function tool. Nothing of yours is handed to the server unless you say so.
+
+### Which of the two connection styles you want
+
+AG2 supports both ways MCP servers are typically wired into an agent:
+
+- **Client-side connection** (`MCPToolkit`) - AG2 connects to the MCP server itself, discovers the tools, and executes them locally. The LLM only ever sees ordinary function tools. Works with every provider. Supports both **remote** servers (HTTP / streamable-http) and **local** servers (subprocess speaking MCP over stdin/stdout).
+- **Provider-side connection** (`MCPServerTool`) - the MCP server URL and credentials are forwarded to the LLM provider, which connects to the server and invokes the tools on its end. Only works with providers that natively support it (e.g. Anthropic).
+
+| | `MCPToolkit` (client-side) | `MCPServerTool` (provider-side) |
+|---|---|---|
+| Who connects to the MCP server | AG2 | LLM provider |
+| Who executes tool calls | AG2 | LLM provider |
+| Works with any LLM provider | Yes | No - provider must support MCP passthrough |
+| Supports local stdio servers | Yes | No - provider only accepts URLs |
+| Credentials leave your infra | No | Yes - forwarded to the LLM provider |
+| Custom middleware on tool calls | Yes | No |
+| Lifecycle / connection pooling | Handled by AG2 | Handled by provider |
+
+!!! tip
+    Pick `MCPToolkit` when you want provider-agnostic behavior, local control over tool execution, when you need to run a local stdio MCP server, or when your MCP credentials must stay inside your infrastructure. Pick `MCPServerTool` when you're only targeting a provider that supports it and you'd rather let the provider manage the MCP lifecycle for you.
+
+---
+
+## Recipes
+
+### Authenticate to a remote server
+
+Most real-world MCP servers require authentication. `MCPServerConfig` is keyword-only, so every setting names itself:
 
 ```python
 from ag2 import Agent
-from ag2.tools import MCPToolkit, MCPServerConfig
+from ag2.tools import MCPServerConfig, MCPToolkit
 
-agent_with_mcp = Agent(
+agent = Agent(
     name="Weather bot",
     tools=[
         MCPToolkit(
@@ -5648,36 +5650,15 @@ agent_with_mcp = Agent(
 )
 ```
 
-`MCPServerConfig` also accepts `headers`, `allowed_tools`, `blocked_tools`, `description`, and a `server_label` for logging, plus transport-level knobs `connection_timeout` (default `30.0`), `proxy`, and `verify` (TLS verification, default `True`). The first group - `server_url`, `server_label`, `authorization_token`, `description`, `allowed_tools`, `blocked_tools`, `headers` - can also be a `Variable` if the value is only known at runtime; `connection_timeout`, `proxy`, and `verify` take plain values only.
+### Launch a local server over stdio
 
-### Local servers (stdin/stdout)
-
-Many MCP servers ship as CLIs that speak MCP over their own stdin/stdout - `npx -y @modelcontextprotocol/server-filesystem`, `uvx some-mcp-server`, a Python script in your repo, etc. Use `MCPStdioServerConfig` to launch one as a subprocess; Autogen pipes the MCP protocol through its stdio.
+Many MCP servers ship as CLIs that speak MCP over their own stdin/stdout - `npx -y @modelcontextprotocol/server-filesystem`, `uvx some-mcp-server`, a Python script in your repo. `MCPStdioServerConfig` launches one as a subprocess and pipes the protocol through its stdio:
 
 ```python
 from ag2 import Agent
-from ag2.tools import MCPToolkit, MCPStdioServerConfig
+from ag2.tools import MCPStdioServerConfig, MCPToolkit
 
-agent_with_local_mcp = Agent(
-    name="Filesystem bot",
-    tools=[
-        MCPToolkit(
-            MCPStdioServerConfig(
-                command="npx",
-                args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp/workspace"],
-            )
-        )
-    ],
-)
-```
-
-You can pass environment variables, a working directory, and the usual filtering options:
-
-```python
-from ag2 import Agent
-from ag2.tools import MCPToolkit, MCPStdioServerConfig
-
-agent_with_local_mcp = Agent(
+agent = Agent(
     name="GitHub bot",
     tools=[
         MCPToolkit(
@@ -5694,20 +5675,18 @@ agent_with_local_mcp = Agent(
 )
 ```
 
-`MCPStdioServerConfig` accepts `command`, `args`, `env`, `cwd`, `server_label`, `description`, `allowed_tools`, `blocked_tools`, and `encoding` (default `"utf-8"`). All of these except `encoding` can be a `Variable` if the value is only known at runtime - handy for injecting per-conversation tokens or workspace paths.
-
 !!! note
     The subprocess is launched lazily, on the first tool-discovery / tool-call. A short-lived MCP session is opened for each operation, so there's no persistent process to manage from your code.
 
-### Multiple servers
+### Connect several servers at once
 
-`MCPToolkit` is just a toolkit, so you can register as many as you need - and freely mix remote and local ones:
+`MCPToolkit` is just a [Toolkit](toolkits.md), so you can register as many as you need - and freely mix remote and local ones:
 
 ```python
 from ag2 import Agent
-from ag2.tools import MCPToolkit, MCPStdioServerConfig
+from ag2.tools import MCPStdioServerConfig, MCPToolkit
 
-agent_with_mcp = Agent(
+agent = Agent(
     name="Mixed bot",
     tools=[
         MCPToolkit("https://my-mcp-url.example.com"),
@@ -5722,15 +5701,15 @@ agent_with_mcp = Agent(
 )
 ```
 
-When servers expose the same tool name, set `tool_name_prefix` to namespace the
-names locally. The prefix is visible to the model, while calls sent to the MCP
-server keep the original name:
+### Namespace the tool names
+
+When two servers expose the same tool name, set `tool_name_prefix` to keep them apart locally. The prefix is what the model sees; calls sent to the server keep the original name:
 
 ```python
 from ag2 import Agent
-from ag2.tools import MCPToolkit, MCPServerConfig
+from ag2.tools import MCPServerConfig, MCPToolkit
 
-agent_with_mcp = Agent(
+agent = Agent(
     name="Mixed bot",
     tools=[
         MCPToolkit(
@@ -5749,16 +5728,13 @@ agent_with_mcp = Agent(
 )
 ```
 
-For example, two remote `search` tools are exposed locally as `github_search`
-and `docs_search`. `allowed_tools` and `blocked_tools` continue to match the
-original remote names.
+Two remote `search` tools are then exposed locally as `github_search` and `docs_search`. `allowed_tools` and `blocked_tools` still match the original remote names.
 
-Like the other config fields, `tool_name_prefix` accepts a `Variable`, so the
-namespace can be resolved from the context at discovery time:
+Like the other config fields, `tool_name_prefix` accepts a `Variable`, so the namespace can be resolved from the context at discovery time:
 
 ```python
 from ag2 import Variable
-from ag2.tools import MCPToolkit, MCPServerConfig
+from ag2.tools import MCPServerConfig, MCPToolkit
 
 toolkit = MCPToolkit(
     MCPServerConfig(
@@ -5769,9 +5745,175 @@ toolkit = MCPToolkit(
 ```
 
 !!! warning
-    Namespacing is opt-in. Two servers exposing the same tool name **without**
-    distinct prefixes still collide: both proxies answer the same tool call, so
-    the tool runs twice for one request.
+    Namespacing is opt-in. Two servers exposing the same tool name **without** distinct prefixes still collide: both proxies answer the same tool call, so the tool runs twice for one request.
+
+### Declare what a server may ask you for
+
+A tool call can come back asking for input instead of returning a result. `answering=` is the one place you declare which of your own resources a server may use, and **everything in it is off by default**:
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import MCPAnswerPolicy, MCPServerConfig, MCPToolkit
+
+agent = Agent(
+    name="researcher",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+    hitl_hook=lambda event: input(event.content),  # where a server's question goes
+    tools=[
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://my-mcp-url.example.com",
+                protocol_mode="auto",       # needed for a modern-era server; see below
+            ),
+            answering=MCPAnswerPolicy(
+                elicitation="ask",          # route questions to this agent's human
+                sampling=True,              # let the server borrow this agent's model
+                roots=["/srv/project"],     # directories to report
+                max_rounds=10,              # how often it may come back for more
+            ),
+        )
+    ],
+)
+```
+
+`MCPToolkit` answers what you have enabled and retries the call - the whole loop happens inside the one operation, so nothing is held between calls: the pause is on the remote server and your end is simply waiting.
+
+With no human-input hook configured, a question surfaces the usual "human input was requested but not provided" failure rather than a silent decline: an absent channel is not a refusal, and reporting it as one would hand the server a decline you never made.
+
+### Reach a server on the modern protocol era
+
+Pass `protocol_mode="auto"`. It probes `server/discover` and falls back to the handshake, which is what a server on revision 2026-07-28 needs - only that era can return a question as the *result* of a call. The default `"legacy"` performs the handshake only.
+
+---
+
+## Concepts
+
+### Protocol era
+
+A **protocol era** is which family of MCP revisions a connection speaks, and therefore how a request for input travels. `protocol_mode` chooses how the connection settles on one:
+
+| | `"legacy"` (default) | `"auto"` |
+|---|---|---|
+| on connect | the `initialize` handshake, nothing else | probes `server/discover`, falls back to the handshake |
+| a request for input arrives | as a standalone request on the back-channel | as the **result** of the call, which is then retried |
+| cost | none - byte-identical to previous behaviour | one probe round trip per connection |
+
+The default stays `"legacy"` so upgrading AG2 changes no existing connection. Choosing the modern era is a visible line in your code.
+
+### Paused run
+
+A **paused run** is a turn held mid-flight while someone is asked for something - and on this side of the protocol there never is one. The answer/retry loop runs inside the single operation that opened the session, so nothing is held between your calls: the pause is the remote server's, and your end is simply waiting. Nothing about sticky routing or restarts applies here. The [serving guide](serving_mcp.md) covers the side that does hold one.
+
+### Resolved parameter
+
+A server may declare a **resolved parameter** - a tool parameter whose value comes from asking you rather than from the model's arguments. You do not write these; you decide whether to answer them, which is what the answer policy is for. The [serving guide](serving_mcp.md) covers writing one.
+
+### What the MCP answer policy hands over
+
+| field | what it hands over | default |
+|---|---|---|
+| `elicitation` | your user's attention - the question goes to `context.input()`, and so to the agent's `hitl_hook` | `"decline"` |
+| `sampling` | **your model budget** - the completion runs on this agent's own model, and you pay for it | `False` |
+| `roots` | your filesystem layout - plain paths only, no `Variable`, since these are deployment configuration rather than a runtime value | `()` |
+| `max_rounds` | nothing; it bounds how many times a server may come back before the call is abandoned | `10` |
+
+`elicitation` reuses the same two-valued `ElicitationPolicy` as `ACPConfig.elicitation_policy`, so the word means one thing across AG2's protocol integrations. `sampling` is named for the protocol operation rather than "model" on purpose: this side **lends** your model, while [serving](serving_mcp.md)'s `client_model=` **borrows** the caller's - opposite directions that must not share a word.
+
+!!! warning "MCP has deprecated sampling and roots"
+    SEP-2577 reached Final status on 2026-04-14 and deprecates sampling, roots and logging - not elicitation. The deprecation is annotation-only: each stays fully functional for a year past the release of every subsequent specification version. For `sampling`, the alternative SEP-2577 recommends is the server integrating an LLM provider API of its own. For `roots`, it recommends tool parameters, resource URIs, or the server's own configuration. Both fields stay here because a server that asks for one today needs an answer.
+
+### A capability is advertised only when you enabled it
+
+So a conforming server never asks for what you would refuse. There is nothing to keep in step by hand: the client derives what it declares from which answering callbacks are supplied, and not enabling one *is* how it goes unadvertised.
+
+### Refusal is asymmetric
+
+A server that asks anyway is refused, and the two refusals do not look alike:
+
+- **Elicitation has a `decline` action on the wire.** A question this agent will not answer is declined, and the server can degrade deliberately.
+- **Sampling and roots have no such arm.** The error returned for one of those ends the client session's request loop, so the **tool call** fails with that message rather than the server hearing an answer.
+
+### A question has to fit a one-line answer
+
+`context.input()` is one string in, one string out, so that is the only shape of question this side can answer. A form-mode elicitation with exactly one property is put to your human and answered on that property, carrying the text they typed verbatim - a server that declared the property as a number receives that text, not a number.
+
+Anything else is declined without your human ever seeing it: a URL-mode elicitation, because a text channel cannot confirm that an out-of-band browser flow happened, and a form with more than one property, because splitting one free-text answer across fields would be fabricating data.
+
+### What is *not* forwarded to your model
+
+The server's `max_tokens`, `temperature`, `stop_sequences`, `model_preferences` and `include_context` are all ignored: your configuration governs a call you are paying for, and a third party does not get to pick your model or redirect your spending. Only the messages and the system prompt it sent are used. The completion is one call against the model client, not a turn of your agent - your tools, history and response schema stay out of it, and any tool declarations the request carried are dropped with them, so a borrowed model cannot reach back into the agent that lent it.
+
+---
+
+## Operations
+
+### What a failing answer looks like
+
+- **A server exhausts `max_rounds`.** The tool call fails; the agent sees a tool error it can act on. Raise the bound only if a server legitimately needs that many rounds - an unbounded one could loop the agent.
+- **A server asks for something you did not enable.** Elicitation is declined on the wire; sampling and roots fail the tool call. See [Refusal is asymmetric](#refusal-is-asymmetric).
+- **A server asks a question and you configured no human-input hook.** The call surfaces the usual "human input was requested but not provided" failure rather than a silent decline.
+- **A server asks a question this side cannot shape an answer for.** A URL-mode elicitation, or a form with more than one property, is declined without your human seeing it. See [A question has to fit a one-line answer](#a-question-has-to-fit-a-one-line-answer).
+- **A server is only reachable on the modern era.** `"legacy"` performs the handshake and nothing else, so a server that announces itself through `server/discover` is never met there. Set `protocol_mode="auto"`.
+
+### Connections are per-operation
+
+A short-lived MCP session is opened for each operation - discovery, and each tool call - and closed after it. There is no persistent process or pool to manage from your code, and a stdio server's subprocess is launched lazily on the first one.
+
+That is also why the callbacks your `answering` policy implies are supplied per tool call rather than installed once on the toolkit: your human and your model are reachable only from the live context a call runs in. Discovery is opened without them, so nothing can be asked of you while the server's tools are being listed.
+
+### The `mcp` SDK is a hard dependency of this path
+
+`MCPToolkit` imports two private `mcp` modules at module scope, on the eager `ag2.tools` import path. A rename in a minor `mcp` release therefore breaks `import ag2.tools` for everyone with the `mcp` extra installed, not only users of `protocol_mode="auto"`. AG2 pins both with a test so an SDK upgrade fails in CI rather than at your import - but pin your `mcp` version if you deploy from a floating range.
+
+---
+
+## Constructor reference
+
+### `MCPToolkit(server, *, middleware=(), answering=None)`
+
+| parameter | what it is for |
+|---|---|
+| `server` | a URL string, an `MCPServerConfig`, or an `MCPStdioServerConfig` |
+| `middleware` | tool middleware applied to every call through this toolkit |
+| `answering` | an `MCPAnswerPolicy`; with none passed, nothing is advertised and nothing is answered |
+
+### `MCPServerConfig` (keyword-only)
+
+| field | default | what it is for |
+|---|---|---|
+| `server_url` | - | where the server listens, including the MCP endpoint path |
+| `authorization_token` | `None` | bearer token sent on every request |
+| `headers` | `None` | extra HTTP headers |
+| `connection_timeout` | `30.0` | seconds to wait on the server |
+| `proxy` | `None` | HTTP proxy to route through |
+| `verify` | `True` | verify the server's TLS certificate |
+| `protocol_mode` | `"legacy"` | `"auto"` probes for a modern-era peer and falls back |
+| `server_label` | `""` | name the toolkit reports itself under |
+| `description` | `None` | what this server is for |
+| `allowed_tools` | `None` | tool names to expose; all of them when unset |
+| `blocked_tools` | `None` | tool names to hide, applied after `allowed_tools` |
+| `tool_name_prefix` | `""` | prefix put in front of the agent-visible tool names |
+
+### `MCPStdioServerConfig` (keyword-only)
+
+| field | default | what it is for |
+|---|---|---|
+| `command` | - | the executable to launch |
+| `args` | `[]` | arguments passed to it |
+| `env` | `None` | subprocess environment; inherits this process's when unset |
+| `cwd` | `None` | working directory |
+| `encoding` | `"utf-8"` | encoding of the stdio pipes |
+| `protocol_mode` | `"legacy"` | `"auto"` probes for a modern-era peer and falls back |
+| `server_label` / `description` / `allowed_tools` / `blocked_tools` / `tool_name_prefix` | as above | as above |
+
+Every field of both configs except `connection_timeout`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime - handy for injecting per-conversation tokens or workspace paths.
+
+### `MCPAnswerPolicy`
+
+`elicitation` (`"decline"`), `sampling` (`False`), `roots` (`()`), `max_rounds` (`10`) - see [What the MCP answer policy hands over](#what-the-mcp-answer-policy-hands-over).
+
+---
 
 ## Provider-side: `MCPServerTool`
 
@@ -5817,13 +5959,11 @@ Source: https://docs.ag2.ai/docs/user-guide/tools/serving_mcp/
 
 `ag2.mcp.MCPServer` exposes an AG2 `Agent` **as** an MCP server: any MCP client - Claude Desktop, Cursor, the MCP Inspector, another agent framework - can list its tools and talk to your agent. This is the inverse of [consuming an MCP server as tools](mcp_servers.md) with `MCPToolkit` / `MCPServerTool`.
 
-## Installation
+## Quick start
 
 ```bash
 pip install "ag2[mcp]"
 ```
-
-## Serving over HTTP
 
 An `MCPServer` **is** an ASGI3 application. It serves MCP over streamable HTTP and manages its own lifespan, so a standalone `uvicorn` run just works:
 
@@ -5839,17 +5979,23 @@ agent = Agent(
     prompt="You are a helpful assistant.",
     config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
 )
-app = MCPServer(agent, path="/mcp")
+app = MCPServer(agent)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
 ```
 
+That is the whole of the common case. The agent is exposed as one tool - `ask` - that runs `Agent.ask()` and returns the reply; conversations are kept, and questions the agent raises reach the human behind the calling client. Everything below is opt-in on top of it.
+
 The server is also mountable into a host Starlette/FastAPI app, since it is an ordinary ASGI app.
 
-## Serving over stdio
+---
 
-For a locally-launched client, serve over stdin/stdout instead. The HTTP parameters (`path`, `stateless`, `json_response`, `security`) are ignored on this transport:
+## Recipes
+
+### Serve over stdio instead
+
+For a locally-launched client, serve over stdin/stdout. The HTTP parameters (`path`, `stateless`, `json_response`, `security`) are ignored on this transport:
 
 ```python
 import asyncio
@@ -5865,11 +6011,9 @@ if __name__ == "__main__":
     asyncio.run(server.run_stdio())
 ```
 
-## The conversational tool
+### Rename the tool, or return a schema
 
-The agent is exposed as a single tool - `ask` by default - that runs `Agent.ask()` and returns the reply. It takes a required `message` and an optional `context` string that is prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`.
-
-If the agent has a `response_schema`, that schema is advertised verbatim as the tool's `outputSchema` and validated replies come back as `structuredContent`.
+The conversational tool takes a required `message` and an optional `context` string prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`. If the agent has a `response_schema`, that schema is advertised verbatim as the tool's `outputSchema` and validated replies come back as `structuredContent`:
 
 ```python
 from pydantic import BaseModel
@@ -5892,11 +6036,214 @@ app = MCPServer(agent, tool_name="forecast")
 
 Presentation metadata (`name`, `version`, `title`, `description`, `instructions`, `website_url`, `icons`) is never derived from the agent - `instructions` in particular is client-facing "how to use this server" guidance, not the agent's system prompt. Pass it explicitly when you want it.
 
-## Conversations
+### Ask the calling client's human a question
+
+A tool inside a served agent can call `context.input()`, and the question reaches the human behind the **calling client** - the same tool code that prompts a terminal locally:
+
+```python
+from ag2 import Agent, Context
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+async def book_table(when: str, ctx: Context) -> str:
+    """Book a table, confirming the party size with the user."""
+    size = await ctx.input(f"How many people for {when}?")
+    return f"Booked {when} for {size}."
+
+agent = Agent(name="concierge", config=AnthropicConfig(model="claude-haiku-4-5-20251001"), tools=[book_table])
+app = MCPServer(agent, elicitation_policy="ask")  # "ask" is the default
+```
+
+`elicitation_policy="decline"` never asks a client at all. There is deliberately no `"auto"`: an arbitrary question has no answer AG2 could invent without fabricating data on the user's behalf.
+
+Only a client that advertised it can answer is ever asked. A client that cannot - or a policy of `"decline"` - falls through to the agent's own `hitl_hook`, and with none configured the turn fails with the usual `HumanInputNotProvidedError` and its instructional message. That loud failure is deliberate: silently returning a degraded result would hide from the caller that the question went nowhere.
+
+### Run on the calling client's model
+
+A deployment holding no model credentials can still serve an agent that needs one: `client_model=True` runs the agent's own reasoning on the **calling client's** LLM, over MCP sampling.
+
+```python
+from ag2 import Agent
+from ag2.mcp import MCPServer
+
+agent = Agent(name="assistant")  # no config of its own
+app = MCPServer(agent, client_model=True)
+```
+
+It is off unless you ask for it, and a server that has not enabled it never sends a sampling request and never needs the capability of its clients.
+
+!!! warning "This moves three things to the caller"
+    **Cost** - every turn the agent takes spends their budget. **Capability** - which model answers is a fact about the client, so the same agent gives different answers to different callers and its quality is no longer yours to control. **Reproducibility** - a trace cannot be re-run against a known model, because the model was the peer's.
+
+A client that advertised no sampling capability is never asked. What happens then is read off the agent, not off a second switch: one with a `config` of its own falls back to it, and one without fails the turn with `MCPSamplingUnavailableError`. So `client_model=` decides only whether the caller's budget may be spent at all - a deployment holding credentials it would rather not spend keeps them as the fallback simply by configuring them.
+
+A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here, and so does a completion that comes back carrying no text at all - read as an empty reply it would report success while the agent answered with nothing.
+
+!!! note "`MCPDeprecationWarning` on this path is expected"
+    MCP deprecated sampling in revision 2026-07-28 (SEP-2577), and the `mcp` SDK raises `mcp.MCPDeprecationWarning` on every borrowed request. The warning comes from the SDK, not from AG2, and AG2 does not suppress it - it is true, and hiding it would leave you believing a mechanism with an expiry date is ordinary. The deprecation is annotation-only: sampling stays functional for a year past each subsequent specification release. The alternative SEP-2577 recommends is integrating an LLM provider directly, which is what `client_model=False` already does.
+
+### Serve a deterministic tool that asks for something
+
+A `@mcp_tool` served alongside the agent can ask the calling client for a parameter's value, using the SDK's resolver mechanism. A parameter annotated `Annotated[T, Resolve(fn)]` is a **resolved parameter**: the framework runs `fn`, and if it returns a request marker - `Elicit`, `Sample` or `ListRoots` - puts that request to the client and injects the answer.
+
+```python
+from typing import Annotated
+
+from pydantic import BaseModel
+
+from ag2 import Agent
+from ag2.mcp import Elicit, MCPServer, Resolve, mcp_tool
+
+class Colour(BaseModel):
+    answer: str
+
+def pick_colour() -> Elicit[Colour]:
+    return Elicit("What colour?", Colour)
+
+@mcp_tool
+def paint(room: str, colour: Annotated[Colour, Resolve(pick_colour)]) -> str:
+    """Paint a room."""
+    return f"painted {room} {colour.answer}"
+
+app = MCPServer(Agent(name="painter"), tools=[paint])
+```
+
+A resolved parameter is kept out of the advertised `inputSchema` - it is filled by its resolver, never by the caller.
+
+`Resolve`, `Elicit`, `Sample`, `ListRoots` and `RequestStateSecurity` are re-exported from `ag2.mcp` so AG2's own examples have one import location. Everything else - wire models, less common types - comes from `mcp` directly; AG2 does not mirror the SDK.
+
+### Run both halves against each other
+
+`examples/mcp/server_elicitation_stdio.py` serves an agent whose tool asks a question, and `examples/mcp/client_elicitation.py` calls it from a second AG2 agent whose `hitl_hook` answers it:
+
+```python
+# examples/mcp/server_elicitation_stdio.py - the served half
+import asyncio
+
+from ag2 import Agent, Context
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+from ag2.tools import tool
+
+@tool(description="Book a table, confirming the party size with the user.")
+async def book_table(when: str, context: Context) -> str:
+    size = await context.input(f"How many people for {when}?")
+    return f"Booked {when} for {size}."
+
+agent = Agent(
+    name="concierge",
+    prompt="You are a restaurant concierge. Use book_table to make a booking.",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[book_table],
+)
+
+async def main() -> None:
+    await MCPServer(agent, elicitation_policy="ask").run_stdio()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+```python
+# examples/mcp/client_elicitation.py - the calling half
+import asyncio
+import os
+import sys
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.events import HumanInputRequest, HumanMessage
+from ag2.tools import MCPAnswerPolicy, MCPStdioServerConfig, MCPToolkit
+
+def hitl_hook(event: HumanInputRequest) -> HumanMessage:
+    print(f"[the served agent asks] {event.content}")
+    return HumanMessage(content="four")
+
+async def main() -> None:
+    agent = Agent(
+        name="diner",
+        config=AnthropicConfig(model="claude-sonnet-5"),
+        hitl_hook=hitl_hook,
+        tools=[
+            MCPToolkit(
+                MCPStdioServerConfig(
+                    command=sys.executable,
+                    args=["-m", "examples.mcp.server_elicitation_stdio"],
+                    env=dict(os.environ),
+                ),
+                answering=MCPAnswerPolicy(elicitation="ask"),
+            )
+        ],
+    )
+
+    reply = await agent.ask("Ask the concierge to book a table for Friday at 8pm.")
+    print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Run `python -m examples.mcp.client_elicitation` with `ANTHROPIC_API_KEY` set; it launches the served half as a subprocess.
+
+---
+
+## Concepts
+
+### Served agent and calling client
+
+The **served agent** is the AG2 agent this server exposes; the **calling client** is whatever MCP client invokes it. The two are separate deployments with separate resources - separate humans, separate model credentials - and every setting on this page is about which of them supplies what.
+
+### Elicitation, and what the policy governs
+
+An **elicitation** is a question raised while a turn is running and put to the human behind the calling client. `elicitation_policy` governs the **served agent's own** questions: a `context.input()` inside a tool the agent called, which the deployment may not have written.
+
+**It does not gate a resolved parameter.** An `Elicit` returned by a `Resolve(...)` resolver asks regardless of the policy, and that is deliberate on two grounds:
+
+- A resolved parameter is part of a tool's signature - written by whoever wrote that tool and put it in `tools=[...]`. It is not run-time agent behaviour for a policy to override.
+- It cannot be gated cleanly. The SDK's `Resolve` marker holds only a callable, so what a resolver will ask for is unknowable until it runs. Gating would therefore have to refuse `Sample` and `ListRoots` resolvers too - a setting named for elicitation breaking two unrelated mechanisms.
+
+A deployment with no human anywhere simply serves no such tool.
+
+### Calling-client model
+
+The **calling-client model** is the model a client makes available for the served agent's reasoning. It is not a second AG2 model configuration: nothing selects a model, and only `max_tokens` travels, because it is the only generation parameter the protocol makes mandatory. AG2 fixes that internally at 4096 and exposes no knob for it - the remaining generation parameters belong to a model configuration, and a borrowed model has none here.
+
+### Deterministic MCP tool and resolved parameter
+
+A **deterministic MCP tool** is a `@mcp_tool` served next to the agent: its declared inputs and its result do not depend on an agent turn. A **resolved parameter** is one whose value comes from asking the calling client, declared in the signature rather than raised at run time.
+
+Its contract is the **opposite** of the conversational tool's:
+
+| | the agent's `ask` tool | a `@mcp_tool` resolver |
+|---|---|---|
+| across a round trip | the run is **held**, and resumes where it stopped | the resolver body **re-runs**, with answers already collected supplied to it |
+| runs more than once? | never | once per round |
+| the tool body | is the turn | runs **once**, on the round where every resolved parameter is satisfied |
+| can ask for | a question for the client's human | `Elicit`, `Sample`, or `ListRoots` |
+
+The last row is worth noticing: the agent's own turn never asks for the caller's roots - it has no filesystem of its own to scope to them - but a deterministic tool may be exactly the code that wants them.
+
+Write resolvers **idempotently**: a side effect in one fires once per round. Nothing is held for a deterministic tool, so none of the paused-run operations below apply to it.
+
+### Protocol era
+
+MCP has two eras, and which one a connection speaks decides how a request for input travels:
+
+| | handshake era (up to 2025-11-25) | modern era (2026-07-28) |
+|---|---|---|
+| how the question travels | a standalone `elicitation/create` request, awaited inline | back as the **result** of the call, in an `InputRequiredResult` |
+| what the client does | answers on the back-channel | retries the call carrying the answer |
+| what the server holds | nothing | **the paused run, in this process** |
+
+The modern revision defines no server-to-client request at all, so a question can only come back as the result of the call.
+
+### Paused run
+
+A **paused run** is a served agent's turn held mid-flight while the calling client is asked for something. A conversational turn cannot be replayed to get back to where it was - re-running it would re-issue LLM calls, re-run tool side effects and re-spend tokens - so on the modern era the run is held in the serving process between the two calls. See [Operating a server that pauses](#operating-a-server-that-pauses).
+
+### Conversations
 
 By default (`sessions=True`) the server keeps **conversation sessions**: a history that accumulates across `tools/call` invocations, so a caller can hold a multi-turn exchange instead of a series of unrelated questions.
-
-### Starting and continuing one
 
 A caller names the conversation it wants to continue. The tool takes an optional `conversation` argument holding an opaque **conversation handle**:
 
@@ -5937,28 +6284,26 @@ asyncio.run(main())
 
 Handles are minted by the server and are version-4 UUIDs - opaque and unguessable. A caller-chosen string is never adopted as a new conversation name; that would let any caller push other callers' conversations out of the bounded registry.
 
-### When a handle is not recognised
-
 A handle the server does not know - expired, evicted, or never minted - comes back as a **tool execution error**: a result flagged `isError`, not a JSON-RPC protocol error. The protocol draws that line so the model can recover by starting a new conversation instead of failing the turn. It is never treated as a fresh conversation, and never falls back to the MCP session.
 
-### What differs between the two protocol eras
-
-MCP has two eras, and each sanctions a different continuity mechanism:
+Which conversation an unnamed call lands in depends on the era, since each sanctions a different mechanism:
 
 | a `conversation` passed? | handshake era (up to 2025-11-25) | modern era (2026-07-28) |
 |---|---|---|
 | yes | that conversation | that conversation |
 | no  | the caller's **MCP session** keeps its own history (one per process over stdio) | a fresh conversation each call |
 
-A **handshake-era** client negotiates an `initialize` handshake that opens an **MCP session** - the transport's own notion of a connected client - so it gets implicit continuity without passing anything, exactly as before. It may still opt into explicit handles: the handle returned on its first call names the same conversation its MCP session does, so it can migrate ahead of changing protocol revision.
+A **handshake-era** client negotiates an `initialize` handshake that opens an **MCP session** - the transport's own notion of a connected client - so it gets implicit continuity without passing anything. It may still opt into explicit handles: the handle returned on its first call names the same conversation its MCP session does, so it can migrate ahead of changing protocol revision.
 
 A **modern-era** client has no MCP session. The revision states that connections do not represent conversations, that clients may interleave unrelated requests on one transport, and that servers must not use connection or process identity to establish context - so the handle is the only continuity mechanism available there, on every transport.
 
-### Turning conversations off
+`sessions=False` makes every call stateless, and the `conversation` argument disappears from the advertised tool - a client is never offered an argument that cannot work. A client that passes one anyway gets a tool error saying the server keeps no conversations, rather than a reply that quietly forgets.
 
-`sessions=False` makes every call stateless, and the `conversation` argument disappears from the advertised tool - a client is never offered an argument that cannot work. A client that passes one anyway gets a tool error saying the server keeps no conversations, rather than a reply that quietly forgets: this server mints no handles, so continuity is not something omitting the argument would restore either.
+---
 
-### Tuning the registry
+## Operations
+
+### Sizing the conversation registry
 
 `SessionConfig` bounds the registry so a long-lived server cannot leak memory:
 
@@ -5976,29 +6321,14 @@ app = MCPServer(
 
 - `max_sessions` - LRU cap; the least-recently-used conversation's history is dropped once the cap is exceeded.
 - `ttl` - idle expiry in seconds; a conversation untouched for longer has its history dropped (`None`, the default, means no expiry).
-- `storage` - the history backend (see below).
+- `storage` - the history backend.
 
 Both bounds are quoted in the `conversation` argument's own description, so a client can judge whether an old handle is still worth presenting.
 
 !!! note "Every unnamed call with no session to fall back on creates a conversation"
     A call that omits `conversation` and has no MCP session to key on gets a fresh conversation - and a handle for it - on every call. That is every modern-era call, and every handshake-era call on a `stateless=True` transport, so one-shot traffic occupies registry slots too. Size `max_sessions` for your call rate, and set a `ttl` so abandoned one-shot conversations expire instead of pushing real ones out.
 
-## What `stateless` governs
-
-`stateless=True` stops the **HTTP transport** issuing an `mcp-session-id`. That is a *handshake-era* switch: modern-era requests are self-contained single exchanges that never carry a session id in the first place, so the flag does not reach them.
-
-Pairing `stateless=True` with `sessions=True` is a valid configuration, not a contradiction - no transport session, conversations named by handle:
-
-```python
-from ag2 import Agent
-from ag2.config import AnthropicConfig
-from ag2.mcp import MCPServer
-
-agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
-app = MCPServer(agent, stateless=True)
-```
-
-## Where conversations live
+### Where conversations live
 
 A conversation's history is written through the configured `Storage`; the registry that maps a conversation's *name* - a handle, or an MCP session id - to that history is held **in the serving process**.
 
@@ -6022,7 +6352,36 @@ app = MCPServer(
 !!! warning "A shared backend does not make a handle portable"
     The registry is per-process, so a shared `Storage` shares the stored history but not the mapping from a name to it. Cross-replica continuity still needs the caller pinned to one replica.
 
-## Authentication and who owns a conversation
+### What `stateless` governs
+
+`stateless=True` stops the **HTTP transport** issuing an `mcp-session-id`. That is a *handshake-era* switch: modern-era requests are self-contained single exchanges that never carry a session id in the first place, so the flag does not reach them.
+
+Pairing `stateless=True` with `sessions=True` is a valid configuration, not a contradiction - no transport session, conversations named by handle.
+
+### Operating a server that pauses
+
+A modern-era paused run lives in exactly one process. Four facts decide a deployment:
+
+- **Sticky routing is required.** The retry that resumes a run must reach the process holding it. A pausing server must not sit behind plain round-robin.
+- **A pause does not survive a restart.** The retry is refused with a protocol error and the caller starts the call again.
+- **More than one replica needs a shared `requestState` key.** The default policy mints a process-local one, so state minted by one worker is rejected by another; name the signing keys yourself with `request_state_security=` (see [Advanced: replacing the request-state policy](#advanced-replacing-the-request-state-policy)). Necessary, and not sufficient - the run is still in exactly one process.
+- **A conversation with a paused run takes no other calls.** A call naming that same `conversation` comes back as a tool error telling the caller to answer the outstanding question or start a separate conversation. The pause deliberately lets go of the conversation's lock - the retry that resumes it would otherwise deadlock behind it - but a conversation's history is still one thread of work, so a second call would queue inside the agent behind a run waiting on a human, with nothing to time it out. Refusing it is the recoverable answer, and one a model can act on.
+
+!!! warning "Stateless serving and pausing pull against each other"
+    A server that can pause a run cannot be freely stateless. The first two failures above are *intermittent* under a load balancer, and the symptom is an occasional "Invalid or expired requestState" with nothing pointing at the cause.
+
+### How long a pause lives, and what an idle server retains
+
+Retention is bounded by the lifetime of the `requestState` token that names the run - one number, not two that can disagree. Unless you replace the policy that mints it, that lifetime is the SDK ephemeral default of **600 seconds**. Once the token has expired no client can resume, so the run is unreachable.
+
+**Reclamation is lazy.** An expired run is swept on the next registry operation, so a server that receives no further call keeps an unreachable task and its stream until the process exits. What an idle server therefore retains is at most `ag2.mcp.pause.MAX_PAUSED_RUNS` (256) runs' worth of task and stream, whatever their tokens' age; a server still taking traffic sweeps them as it goes. Process shutdown reclaims all of them.
+
+`context.input(timeout=)` keeps its own meaning - how long the caller waits for an answer - and is enforced independently; whichever bound elapses first ends the turn, and the other does not then report a second, contradictory failure.
+
+!!! note "The timeout spans the client's side of the round trip"
+    Served this way, the wait covers the network and a human reading the question in another application, which it never did before. Size it for that, not for a local prompt.
+
+### Authentication and who owns a conversation
 
 `security=` makes the server an OAuth 2.1 Resource Server: it advertises RFC 9728 Protected Resource Metadata at `/.well-known/oauth-protected-resource`, answers a missing or invalid token with `401` (pointing at that metadata) and an insufficient scope with `403`.
 
@@ -6050,11 +6409,85 @@ With authentication configured, a conversation records the principal that create
 !!! warning "Without `security`, the handle is the only credential"
     With no authentication there is no principal to bind to, so anyone holding a handle can continue the conversation it names. The handle travels through readable content - the model's context, client logs, tracing in between - so decide whether that is acceptable for your deployment before serving unauthenticated.
 
+### Advanced: replacing the request-state policy
+
+`request_state_security=` is an escape hatch, not part of the happy path. It replaces the ephemeral policy that seals the state a paused run is resumed with, and whose `ttl` (600 seconds by default) is how long a pause lives. Pass `ephemeral(ttl=)` to move that bound; name the signing `keys` when more than one replica has to accept state another one minted:
+
+```python
+import os
+
+from ag2.mcp import MCPServer, RequestStateSecurity
+
+# A shorter pause lifetime, under a key this process alone knows.
+app = MCPServer(agent, request_state_security=RequestStateSecurity.ephemeral(ttl=120.0))
+
+# A key every replica shares, so a retry can be verified by whichever one answers it.
+app = MCPServer(agent, request_state_security=RequestStateSecurity(keys=[os.environ["MCP_STATE_KEY"]]))
+```
+
+Each key must carry at least 32 bytes of secret randomness - generate one with `python -c "import secrets; print(secrets.token_hex(32))"` - and a shorter one is rejected at construction. Pass several to rotate: any of them verifies, the first one signs.
+
+The shared key only makes the state *verifiable* everywhere; the run it names is still held in one process, so sticky routing is still what gets the retry back to it.
+
+### Other escape hatches
+
+- **`server`** - the underlying low-level `mcp` `Server`, for wiring the SDK reaches that AG2 does not.
+- **`lifespan=`** - an `mcp` server lifespan whose yielded state every `tools/call` can reach via `request_context.lifespan_context`.
+- **`context_provider=`** - build the agent's `ConversationContext` yourself per call.
+
+---
+
+## Constructor reference
+
+### `MCPServer(agent, **options)`
+
+| option | default | what it is for |
+|---|---|---|
+| `name` / `version` / `title` / `description` / `instructions` / `website_url` / `icons` | derived / `None` | populate the `initialize` handshake; presentation only, never derived from the agent |
+| `cache_hints` | `None` | `ttlMs` / `cacheScope` freshness hints (SEP-2549); only 2026-07-28 clients see them |
+| `tool_name` | `"ask"` | the conversational tool's name |
+| `tool_description` | `None` | its description |
+| `stream_progress` | `True` | forward the agent's stream events as progress notifications and log messages |
+| `context_provider` | `None` | build the agent's context per call |
+| `lifespan` | `None` | an `mcp` server lifespan |
+| `sessions` | `True` | conversation history: `True`, a `SessionConfig`, or `False` for stateless |
+| `elicitation_policy` | `"ask"` | whether the served agent's questions reach the calling client's human |
+| `client_model` | `False` | run the agent's reasoning on the calling client's model |
+| `resources` / `resource_templates` / `prompts` | `()` | expose these alongside the tool; each capability is advertised only when non-empty |
+| `tools` | `()` | deterministic `@mcp_tool` tools served next to `ask` |
+| `apps` | `()` | MCP Apps whose tools and interactive documents are served together |
+| `extensions` | `None` | protocol extensions advertised by the server |
+| `path` | `"/mcp"` | the HTTP endpoint path |
+| `stateless` | `False` | stop the HTTP transport issuing an `mcp-session-id` |
+| `json_response` | `False` | answer with JSON rather than SSE |
+| `security` | `None` | OAuth 2.1 Resource Server requirements |
+| `request_state_security` | `None` | advanced: replace the ephemeral request-state policy |
+
+### `SessionConfig`
+
+| field | default | what it is for |
+|---|---|---|
+| `max_sessions` | `1024` | LRU cap on remembered conversations |
+| `ttl` | `None` | idle expiry, in seconds |
+| `storage` | `None` | the history backend; in-memory when unset |
+
+### `MCPFunctionTool`
+
+Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `description`, `handler`, `input_schema`, `title`, `annotations`, `output_schema`, and `meta` - and nothing else; resolver metadata is the decorator's own state, not a constructor argument.
+
+### Names re-exported from `ag2.mcp`
+
+`MCPServer`, `SessionConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
+
+Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the last: `MCPAgentConfigError`, `MCPToolNameConflictError`, `UnknownConversationError` (a handle naming no live conversation, reported to the caller as a tool error), `MCPResourceNotFoundError`, `MCPPromptNotFoundError`, and `MCPSamplingUnavailableError` / `MCPSamplingRefusedError` (both `MCPSamplingError`). `MCPElicitationDeclinedError` subclasses core's `HumanInputNotProvidedError` instead, so a question the client refused is the same failure as one nobody was there to answer.
+
 ## Beyond the conversational tool
 
-- **Custom tools** run a handler of yours directly instead of invoking the agent - see [MCP-UI Resources](mcp_ui.md) for `@mcp_tool` and returning renderable UI. Their state is their own; conversation handles apply only to the conversational tool.
-- **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`; the matching capability is advertised only when a non-empty collection is supplied.
-- **Progress and logs** - while the agent runs, its stream events are forwarded to the client as progress notifications and log messages. Turn this off with `stream_progress=False`.
+- **MCP-UI** - see [MCP-UI Resources](mcp_ui.md) for returning renderable UI from a `@mcp_tool`.
+- **MCP Apps** - pass `apps=[MCPApp(...)]` to serve an interactive document and its bound tools together; see [MCP Apps](mcp_apps.md).
+- **Structured custom tools** - a pydantic model or dataclass return annotation supplies `outputSchema`; its value is returned as `structuredContent`, while `__str__` supplies readable text. `output_schema=` can override derivation and `meta=` adds extension metadata.
+- **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`.
+- **Protocol extensions** are advertised with `extensions=` and inspected per request with `client_extension()`.
 
 ---
 
@@ -6070,6 +6503,9 @@ AG2 builds these resources and the interactive callbacks (**UI Actions**) in `ag
 
 !!! note "This is the serving side of MCP"
     `ag2.mcp.MCPServer` exposes an agent **as** an MCP server - see [Serving an Agent as an MCP Server](serving_mcp.md) for transports, conversations and security. This is the inverse of consuming an MCP server as tools with `MCPToolkit` / `MCPServerTool` - see [MCP Servers](mcp_servers.md) for that.
+
+!!! warning "MCP-UI and MCP Apps are alternatives - pick one"
+    [MCP Apps](mcp_apps.md) - `ag2.mcp.apps`, the `io.modelcontextprotocol/ui` extension - is the other mechanism, and it inverts this one. There the document is registered as a resource and read by URI **in parallel with** the call, so it cannot be built from the call's arguments; the per-call data reaches it as the result's `structuredContent` instead. A host implementing MCP Apps will not render UI a handler returned. Choose by the host you are serving.
 
 ## Installation
 
@@ -6240,6 +6676,351 @@ Wire both into `MCPServer(agent, tools=[show_greeting, add_to_cart])`. When the 
 
 !!! tip "Runnable example"
     A complete stdio server - greeting card, an iframe of the docs, and the `add_to_cart` loop - lives in `examples/mcp/server_ui.py`.
+
+---
+
+# MCP Apps
+
+Source: https://docs.ag2.ai/docs/user-guide/tools/mcp_apps/
+
+# MCP Apps
+
+[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) - the `io.modelcontextprotocol/ui` extension - lets a served agent hand a host a **real interface** instead of a wall of text. `ag2.mcp.apps` serves one as an **app**: a document plus the tools that render it.
+
+## The constraint that shapes everything
+
+**The host reads the document in parallel with the call that references it.** It does not wait for your handler; it fetches the `ui://` resource as soon as it sees the tool being called, often before.
+
+So the document **cannot be built from the call's arguments**. It is a static body, registered as a resource and read by URI. The per-call data reaches it afterwards, as the result's `structuredContent`, which the host redelivers into the frame as a `ui/notifications/tool-result` notification.
+
+Everything below follows from that one fact: why the HTML is declared next to the tool rather than returned by it, why your return type matters so much, and why a document that serves two tools needs to be told which result just arrived.
+
+!!! warning "MCP Apps and MCP-UI are alternatives - pick one"
+    [`ag2.mcp_ui`](mcp_ui.md) teaches the **opposite** pattern: its handler builds HTML from the arguments it was given and returns it inside the call result. That is exactly what a host implementing MCP Apps will not render, and the parallel read is why.
+
+    The two modules coexist and neither replaces the other. `ag2.mcp_ui` targets [MCP-UI](https://mcpui.dev/) clients and ships as the `ag2[mcp-ui]` extra; `ag2.mcp.apps` targets MCP Apps hosts and needs nothing beyond `ag2[mcp]`. Choose by the host you are serving.
+
+## A first app
+
+`ag2ui` in the HTML below is not imported and not a package you install. It is a global that `ag2.mcp` itself injects: the server places a `<script>` at the head of the document before serving it - inside `<head>` when there is one, after `<html>` when there is not, at the very front of a fragment like the one below - so by the time your own script runs the global exists. What it is and what it exposes is [below](#inside-the-document-ag2ui).
+
+```python
+import asyncio
+from dataclasses import dataclass
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPApp, MCPServer
+
+CARD = """<div id="name">Loading...</div>
+<script>
+  ag2ui.onToolResult(function (result) {
+    document.getElementById("name").textContent = result.structuredContent.name;
+  });
+</script>"""
+
+shop = MCPApp("ui://shop/card", CARD)
+
+@dataclass
+class Item:
+    name: str
+    price: int
+
+    def __str__(self) -> str:
+        return f"{self.name} costs ${self.price}."
+
+@shop.tool
+async def show_item(item_id: str) -> Item:
+    """Show a product card."""
+    return Item(name="Espresso cup", price=12)
+
+agent = Agent(name="shopkeeper", config=AnthropicConfig(model="claude-sonnet-5"))
+server = MCPServer(agent, apps=[shop])
+
+if __name__ == "__main__":
+    asyncio.run(server.run_stdio())
+```
+
+That is the whole thing. `MCPServer(agent, apps=[shop])` registers the document as a resource served with `text/html;profile=mcp-app` (the only MIME type a host will render a `ui://` resource under), advertises `_meta.ui.resourceUri` on `show_item`, and injects the document runtime that makes `ag2ui` exist.
+
+`examples/mcp/server_apps.py` is the runnable version, with a button that calls a second tool.
+
+## The return type does three jobs
+
+`Item` above is doing more work than it looks. From one annotation the framework derives all three of the things MCP wants:
+
+| From `-> Item` | Becomes | Read by |
+|---|---|---|
+| its JSON schema | the tool's `outputSchema` | the client, to validate |
+| its dump | the result's `structuredContent` | your document |
+| its `__str__` | the result's text content | the model, and a text-only client |
+
+Which is why `__str__` is worth writing: a text-only client gets *"Espresso cup costs $12."* rather than a JSON dump.
+
+Both pydantic models and dataclasses work. This applies to any custom tool, not only a UI-bound one - see [Structured output](serving_mcp.md#structured-output).
+
+### Three levels of control
+
+A handler returns whichever of these fits, in increasing order of control:
+
+```python
+from mcp.types import CallToolResult, TextContent
+
+@shop.tool
+async def typed() -> Item:
+    """A typed value: schema, structured content and text all derived."""
+    return Item(name="Espresso cup", price=12)
+
+@shop.tool
+async def mapping() -> dict:
+    """A mapping: structured content verbatim, text a JSON rendering, no schema."""
+    return {"name": "Espresso cup", "price": 12}
+
+@shop.tool
+async def explicit() -> CallToolResult:
+    """A full result: nothing derived. Also how you state text and data separately."""
+    return CallToolResult(
+        content=[TextContent(type="text", text="One espresso cup, $12.")],
+        structuredContent={"name": "Espresso cup", "price": 12},
+    )
+```
+
+!!! note "The schema follows the annotation, not the value"
+    `outputSchema` is decided once, when the tool is declared. Annotating `-> CallToolResult` is what opts a tool out of an advertised schema; returning one from a handler annotated `-> Item` still advertises `Item`'s schema, and MCP requires your `structuredContent` to conform to it.
+
+## Inside the document: `ag2ui`
+
+A host **discards every message from a view that has not completed the `ui/initialize` handshake**, and tells it nothing. A hand-written button on a document without that handshake is silently dead - which is why the runtime is injected by default.
+
+It defines one global, `ag2ui`:
+
+```javascript
+await ag2ui.ready;                       // the handshake completed
+
+ag2ui.onToolResult(fn);                  // every result for this document
+ag2ui.onToolResult("show_item", fn);     // only that tool's results
+ag2ui.onToolInput(fn);                   // the call's arguments
+ag2ui.onToolInputPartial(fn);            // arguments while the model is still writing them
+ag2ui.onHostContextChanged(fn);          // theme, display mode, styles, locale...
+ag2ui.onCancelled(fn);
+
+await ag2ui.callTool("add_to_cart", { item_id: "42" });
+await ag2ui.sendMessage("Show me the kettle");   // into the conversation
+await ag2ui.openLink("https://example.com");
+await ag2ui.readResource("ui://shop/card");
+await ag2ui.updateContext({ content: [{ type: "text", text: "Viewing item 42" }] });
+await ag2ui.requestDisplayMode("fullscreen");
+await ag2ui.downloadFile(contents);
+await ag2ui.sampling({ messages: [...] });
+ag2ui.log("info", "rendered");
+ag2ui.reportSize();                      // force a size report; it is automatic otherwise
+
+ag2ui.host.capabilities;     // what the host advertised
+ag2ui.host.context;          // theme, styles, display mode, container size
+ag2ui.host.protocolVersion;  // the dialect revision the host answered with
+ag2ui.host.info;             // the host's name and version
+```
+
+Each subscription returns an unsubscribe function. The document's size is reported automatically via a `ResizeObserver`, so the host can size the frame without your writing one.
+
+**Subscribe whenever you like; call only after `ag2ui.ready`.** Registering a handler is local and is safe the moment the document parses - which is why the card above awaits nothing. Everything that *talks* to the host is refused until the handshake completes, so `await ag2ui.ready` before the first `callTool`, `sendMessage` or `readResource`; calling earlier throws rather than posting into a channel the host is still discarding.
+
+Errors arrive on the **same** channel as results - a failed call is a result carrying `isError`, matching how `ag2.mcp` already treats a tool error as a result rather than an exception.
+
+Calling something the host did not advertise **throws in JavaScript before anything is sent**, because a host's own answer to an unadvertised method is silence:
+
+```javascript
+try {
+  await ag2ui.downloadFile(contents);
+} catch (e) {
+  // "the host did not advertise 'downloadFile'" - rather than a button that does nothing.
+}
+```
+
+`requestDisplayMode` refuses locally in the same way, against `ag2ui.host.context.availableDisplayModes` rather than against a capability: asking for a mode the host never offered throws instead of hanging on an answer that will not come.
+
+### Which tool answered
+
+MCP Apps gives the document nothing to correlate with: the notification carrying a result names neither the call nor the tool. With one tool per document that does not matter. With two - a card that renders itself *and* updates after an action - it does.
+
+The server therefore stamps the answering tool's name into the result's `_meta` under `ai.ag2/tool`, and `ag2ui.onToolResult(name, fn)` routes on it:
+
+```javascript
+ag2ui.onToolResult("show_item", renderCard);
+ag2ui.onToolResult("add_to_cart", showConfirmation);
+```
+
+Set that key yourself and your value travels instead, so you can route by your own scheme. This is the one respect in which a `CallToolResult` you assembled yourself is modified; every other key you set travels untouched alongside the stamp.
+
+### Who may call a tool
+
+A tool the document calls through `ag2ui.callTool` need not be one the model can call. `visibility=` says where the host surfaces it - `"model"` in the model's tool list, `"app"` to the document:
+
+```python
+@dataclass
+class CartLine:
+    status: str
+
+    def __str__(self) -> str:
+        return self.status
+
+@shop.tool
+async def show_item(item_id: str) -> Item:
+    """Show a product card."""
+    return Item(name="Espresso cup", price=12)
+
+@shop.tool(visibility=["app"])
+async def add_to_cart(item_id: str) -> CartLine:
+    """Add an item to the cart. Called by the card's button, not by the model."""
+    return CartLine(status="Added to your cart")
+```
+
+Omit it and no `visibility` is advertised at all, leaving the host to its own default. It is a hint about where to *surface* a tool, not an authorization boundary: the tool is served and dispatched exactly like any other, so anything that must not be called by the model has to refuse in the handler.
+
+### Bringing your own bundle
+
+`inject_runtime=False` turns injection off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself.
+
+```python
+shop = MCPApp("ui://shop/card", BUNDLED_HTML, inject_runtime=False)
+```
+
+## Where the body comes from
+
+`content` takes four forms, told apart **by type alone** - never by looking at the filesystem, so a string is always literal HTML and never a filename:
+
+```python
+from pathlib import Path
+
+from ag2 import Variable
+
+MCPApp("ui://shop/card", CARD)                          # inline HTML
+MCPApp("ui://shop/card", Path("dist/card.html"))        # a built bundle, reread per read
+MCPApp("ui://shop/card", Variable("card"))              # a request-scoped variable
+MCPApp("ui://shop/card", render_card)                   # a sync or async callable
+```
+
+There is an overload per form, so an IDE shows you which one you are using.
+
+**A path-like value is reread on every resource read.** Rebuild the bundle and the next read serves it; there is no cache to invalidate and no server to restart. A file that has gone missing fails that read with a message naming the path, rather than at construction - the document is only promised at read time.
+
+```python
+shop = MCPApp("ui://shop/card", Path(__file__).parent / "dist" / "card.html", inject_runtime=False)
+```
+
+### Request-scoped bodies and metadata
+
+An app resolves runtime values from the same `context_provider` the conversational path uses, so a document is not a second dependency system. `content` may be a `Variable`, and a callable body may declare `Variable`, `Depends`/`Inject` and `MCPRequestContext` parameters exactly as a tool does:
+
+```python
+from typing import Annotated
+
+from ag2 import Inject, Variable
+from ag2.mcp import AskContext, MCPApp, MCPRequestContext, MCPServer
+
+async def provider(access) -> AskContext:
+    return AskContext(variables={"tenant": "north"}, dependencies={"branding": BRANDING})
+
+async def card(
+    tenant: Annotated[str, Variable("tenant")],
+    branding: Annotated[Branding, Inject("branding")],
+    ctx: MCPRequestContext,
+) -> str:
+    return render(tenant, branding)
+
+shop = MCPApp("ui://shop/card", card, title=Variable("tenant"), listed=True)
+server = MCPServer(agent, apps=[shop], context_provider=provider)
+```
+
+`title`, `description`, `inject_runtime`, the sandbox fields and the values inside `meta=` may each be a `Variable` too, resolved per request for the listing and the read.
+
+!!! warning "The context is request-scoped, not turn-scoped"
+    The host's document read and its tool call are **two separate MCP requests**, made in parallel. Each one calls your provider again and gets its own context; they share no mutable state. Do not use a variable to pass something from the call to the document - that is what `structuredContent` is for.
+
+An ordinary `Resource` and an `@mcp_tool` resolve the same way, which is what keeps [taking an app apart](#taking-an-app-apart) honest.
+
+## Degradation
+
+**The UI binding is withheld from a client that did not advertise the extension.** It is a promise that the client can read the document and render it; to a client that cannot, it is a promise about a document it will never fetch. There is no switch - this is correctness, not policy.
+
+That client sees the same tool without `_meta.ui`, calls it successfully, and gets the text your `__str__` produced. Because a UI-bound tool always returns text alongside its data, you usually need no branch at all. When you want to word an answer differently:
+
+```python
+from ag2.mcp import MCPRequestContext, client_supports_apps
+
+@shop.tool
+async def show_item(item_id: str, ctx: MCPRequestContext) -> Item:
+    """Show a product card."""
+    item = Item(name="Espresso cup", price=12)
+    if not client_supports_apps(ctx):
+        ...  # a fuller sentence, since there will be no card
+    return item
+```
+
+A client that advertised the identifier but not the `text/html;profile=mcp-app` MIME type counts as unable to render - advertising the extension alone says nothing about being able to display the one format a document arrives in.
+
+A server holding at least one app also advertises the extension itself, with empty settings. Be clear-eyed about what that is worth: the specification defines only the client direction and says nothing about servers advertising at all, and a handshake-era client never receives it - see [the two directions are not symmetric](serving_mcp.md#the-two-directions-are-not-symmetric). It is visible in discovery and inert otherwise.
+
+## The document
+
+```python
+from ag2.mcp import AppSandbox, MCPApp, ResourceCsp, ResourcePermissions
+
+shop = MCPApp(
+    "ui://shop/card",
+    CARD,
+    title="Product card",
+    description="A product card that can add its item to the cart.",
+    listed=False,
+    sandbox=AppSandbox(
+        csp=ResourceCsp(connect_domains=["https://api.example.com"]),
+        permissions=ResourcePermissions(camera={}),
+        domain="https://shop.example.com",
+    ),
+    prefers_border=True,
+)
+```
+
+- **`ui://` is required.** A host discards any other scheme, so a URI that is not `ui://` raises when the `MCPApp` is constructed, and two apps claiming one URI raise when the server is.
+- **`listed` defaults to `False`.** The document stays out of `resources/list` - a person browsing a server's resources should not meet a file that is not one - while remaining readable by URI, which is how the host gets it. Set `listed=True` for a document meant to be discoverable.
+- **The body has four forms** - inline HTML, a path-like bundle, a `Variable`, or a sync/async callable invoked per read. See [where the body comes from](#where-the-body-comes-from).
+- **Sandbox policy is typed and grouped.** `csp`, `permissions` and `domain` travel together in `sandbox=AppSandbox(...)` and use the SDK's own models, so the wire spelling is never guessed at. They are also accepted as bare keywords for a one-field policy. `prefers_border` stays separate - it is a presentation hint, not a sandbox rule. `meta=` is a raw passthrough merged alongside, for whatever the specification adds next.
+- **The `ui` slot behaves differently on a document and on a tool.** On the document it is shared, so a `ui` key inside `meta=` *merges over* the typed parameters above rather than being refused - the typed parameters are the spelling aid, not the authority. On a tool it is not shared: `@app.tool`'s `meta=` **rejects** a `ui` key outright, because the only thing in that slot is the binding the decorator itself writes. Pass `visibility=` instead, or declare the tool with `@mcp_tool` if it should not be bound to this document at all.
+
+## Taking an app apart
+
+An app is not a special kind of registration. `app.tools` are ordinary `MCPFunctionTool`s and `app.resource` is an ordinary `Resource`, so this:
+
+```python
+server = MCPServer(agent, apps=[shop])
+```
+
+is defined as shorthand for this:
+
+```python
+server = MCPServer(agent, tools=shop.tools, resources=[shop.resource])
+```
+
+Both produce the same tool list, the same resource listing, the same document and the same results - a test in the suite holds that equivalence so it cannot rot into a lie. Reach for the long form when you need an unusual arrangement; it is a rearrangement, not a rewrite.
+
+Ordinary tools are unaffected throughout. A tool declared with `@mcp_tool` and passed in `tools=` behaves exactly as it did before apps existed, alongside any number of them.
+
+**Registration closes the app's tool list.** Constructing the server is what reads `app.tools`, so a tool declared after that would exist and never be served. Declaring one raises `MCPAppFrozenError` naming the tool, instead of leaving you to find it missing on the wire:
+
+```python
+server = MCPServer(agent, apps=[shop])
+
+@shop.tool                      # MCPAppFrozenError: 'restock' cannot be declared on 'ui://shop/card'
+async def restock() -> str: ...
+```
+
+The app itself stays reusable - registering the same one with a second server is fine; it is the composition that is closed, not the object.
+
+## See also
+
+- [Serving an Agent as an MCP Server](serving_mcp.md) - transports, conversations, security, and protocol extensions.
+- [MCP-UI Resources](mcp_ui.md) - the other mechanism, for MCP-UI clients.
+- [MCP Servers](mcp_servers.md) - the inverse direction, consuming an MCP server as tools.
 
 ---
 
@@ -8064,13 +8845,29 @@ When content capture is enabled (the default), spans include these additional at
 
 | Attribute | Span type | Content |
 |---|---|---|
-| `gen_ai.input.messages` | llm | JSON request messages |
-| `gen_ai.output.messages` | llm | JSON response messages |
+| `gen_ai.input.messages` | llm | JSON request messages (see below) |
+| `gen_ai.output.messages` | llm | JSON response messages (see below) |
 | `gen_ai.tool.call.arguments` | tool | Tool call arguments (JSON) |
 | `gen_ai.tool.call.result` | tool | Tool execution result (see below) |
 | `ag2.tool.call.result.truncated` | tool | Present and `true` when the result was truncated |
 | `ag2.human_input.prompt` | human_input | Prompt shown to human |
 | `ag2.human_input.response` | human_input | Human's response |
+
+`gen_ai.input.messages` is the conversation history AG2 assembled for that call, not just the latest user
+message, serialised as OpenAI-style chat messages: `user` for text inputs, `assistant` for earlier model
+replies (with `tool_calls` when the model requested tools), `tool` with a `tool_call_id` for each tool result,
+and a `user` turn carrying the summary once history has been compacted. Tool results render the same way as
+`gen_ai.tool.call.result` below, including the `max_tool_result_chars` cap. Non-text user inputs (images,
+audio, documents) are omitted.
+
+The history is recorded as AG2 assembled it, not as a byte-exact copy of the provider payload. Each provider
+repairs a degraded history differently - after a partial write or a compaction that splits a tool turn, one
+may drop a tool call whose result is missing while another keeps it - so the span may differ from the request
+in those cases. It reports what AG2 held, which is what you need to diagnose the degradation itself.
+
+`gen_ai.output.messages` is the model's reply for that call, recorded whether the model answered with text,
+tool calls, or both. On a tool-calling turn the first `chat` span's output therefore carries the tool call, and
+the next `chat` span's input carries that tool call together with its result.
 
 The tool result is always recorded as a string:
 
@@ -24101,7 +24898,7 @@ python coordinator.py
 
 Source: https://docs.ag2.ai/docs/user-guide/extensions/tealtiger/
 
-The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists and blocklists, validates tool arguments, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts - with no LLM in the governance path.
+The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists and blocklists, validates tool arguments, detects PII and secrets in tool arguments and in tool results, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts - with no LLM in the governance path.
 
 ## Installation
 
@@ -24119,6 +24916,7 @@ from ag2.extensions.tealtiger import (
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
+    OutputAction,
     TEECReceipt,
     TealTigerMiddleware,
 )
@@ -24165,21 +24963,24 @@ Every tool call now flows through deterministic governance evaluation before exe
 
 ## Multi-Stage Defense
 
-TealTiger governs at two stages of the AG2 agent lifecycle:
+TealTiger governs at three stages of the AG2 agent lifecycle:
 
 ```mermaid
 flowchart LR
     A[👤 User Message] --> B{🛡️ Stage 1<br/>on_turn}
     B -->|Kill Switch<br/>Check| C[🤖 Agent<br/>Processing]
     C --> D[🔧 Tool Call]
-    D --> E{🛡️ Stage 2<br/>on_tool_execution}
+    D --> E{🛡️ Stage 2<br/>pre-tool}
     E -->|"✅ ALLOW"| F[⚡ Execute Tool]
     E -->|"❌ DENY"| G[🚫 ToolErrorEvent]
-    F --> H[📝 TEEC Receipt]
+    F --> I{🛡️ Stage 3<br/>output_scan}
+    I -->|"✅ clean or redacted"| H[📝 TEEC Receipt]
+    I -->|"❌ BLOCK"| G
     G --> H
 
     style B fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
     style E fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style I fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
     style H fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
     style F fill:#f0fdf4,stroke:#16a34a
     style G fill:#fef2f2,stroke:#dc2626
@@ -24189,8 +24990,9 @@ flowchart LR
 |------|-------|-------------|
 | `on_turn` | Turn defense | Kill switch enforcement - frozen agents cannot take turns |
 | `on_tool_execution` | Pre-tool defense | Tool allowlist/blocklist, argument validation, PII scan, secret scan, cost limit check |
+| `on_tool_execution` | Post-tool defense | Output scan - PII and secrets in the tool's *result*, before it re-enters the model's context |
 
-Both stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
+All three stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
 
 !!! note "Receipts come from the tool stage"
 
@@ -24361,6 +25163,56 @@ GovernancePolicy.secret_detection()
 
 Denied with reason code `SECRET_DETECTED` and risk score 95 - the highest of the policy checks.
 
+### Output Scanning
+
+Every policy above inspects a tool's *arguments* before it runs. `output_scan` inspects what a tool *returns* - the data-leakage direction. A tool that reads a database, a file, or an external API can hand back an SSN or a leaked credential that would otherwise land straight in the model's context on the next turn. This scans the result first and redacts, blocks, or flags it.
+
+```python
+# Redact PII, block secrets (the defaults)
+GovernancePolicy.output_scan()
+
+# Block on any PII too, and only scan the categories you care about.
+# Actions take an OutputAction member or its string name, as `mode` takes GovernanceMode.
+GovernancePolicy.output_scan(pii_action=OutputAction.BLOCK, categories=["ssn", "credit_card"])
+```
+
+Each detector carries its own action:
+
+| Action | Effect |
+|--------|--------|
+| `REDACT` | Replace matched values in the result with `[REDACTED:{type}]`; the sanitized result flows through to the model. |
+| `BLOCK` | Withhold the whole result and fail the turn with a governance error (ENFORCE only). In MONITOR it degrades to `REDACT` so the value still never leaks. |
+| `FLAG` | Record the finding in the decision and receipt trail; pass the result through unchanged. |
+
+The defaults mirror the sensible split: PII is redacted (the agent usually still needs the surrounding result), secrets are blocked (a leaked credential should not reach the model at all).
+
+The two detectors act independently: `output_scan(pii_action="FLAG", secret_action="REDACT")` records the PII it finds and rewrites only the credential. Where they overlap - a single result carrying both, or several `output_scan` policies disagreeing about the same detector - the more restrictive action wins.
+
+Results are scanned whatever shape they arrive in. A tool returning a `dict` or a list leaks just as readily as one returning a sentence, so structured results are scanned and redacted through their strings:
+
+```python
+# A tool whose result is a dict, not a sentence
+def lookup_customer(name: str) -> dict[str, str]:
+    return {"name": name, "ssn": "123-45-6789"}
+
+# With GovernancePolicy.output_scan() configured, the model receives:
+#   {"name": "Ada", "ssn": "[REDACTED:ssn]"}
+```
+
+Findings are recorded with reason codes `OUTPUT_PII_DETECTED:{category}` and `OUTPUT_SECRET_DETECTED`, plus `OUTPUT_REDACTED`, `OUTPUT_REDACTION_INCOMPLETE`, or `OUTPUT_BLOCKED` describing what was done. Risk score is 90 when a secret is present, 60 for PII only.
+
+Error results are scanned too. A tool that *raises* with an SSN or credential in its exception message leaks it into the model's context just as a returned value would, so `output_scan` scans a `ToolErrorEvent`'s message and traceback on the same terms. An error stays an error: its content is redacted in place, and a `BLOCK` in ENFORCE replaces it with a sanitized governance error rather than turning the failure into a success.
+
+!!! warning "A value spanning two result parts is withheld, not half-redacted"
+
+    Detection reads a result's parts together, while redaction rewrites each part on its own - so a value split across a part boundary can be found but not cut out. Rather than pass on a result it could not fully sanitize, TealTiger withholds it and adds the reason code `OUTPUT_REDACTION_INCOMPLETE`. Outside ENFORCE the affected parts are replaced with `[REDACTED:unredactable]`.
+
+`output_scan` validates its own configuration: scanning nothing (`scan_pii=False, scan_secrets=False`), an invalid action, an unknown PII category, or `scan_pii=True` with an empty `categories` list all raise `ValueError` at construction, so a policy that would silently scan nothing cannot be created by mistake.
+
+!!! note "Runs after the tool, in MONITOR and ENFORCE"
+
+    Output scanning evaluates the tool's result - successful or error - so it necessarily runs *after* the tool executes; it governs what re-enters the model's context, not whether the tool runs. In OBSERVE mode results pass through unmodified, consistent with OBSERVE never altering a call.
+
 ### Cost Limit
 
 Enforce per-session cost ceilings:
@@ -24493,7 +25345,7 @@ for decision in governance.decisions:
 | `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
 | `agent_name` | `str` | Agent that made the call, or `unknown` |
 | `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
-| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `OUTPUT_PII_DETECTED:{category}`, `OUTPUT_SECRET_DETECTED`, `OUTPUT_REDACTED`, `OUTPUT_REDACTION_INCOMPLETE`, `OUTPUT_BLOCKED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
 | `risk_score` | `int` | 0 (safe) to 100 (critical) |
 | `evaluation_time_ms` | `float` | Governance latency for this decision |
 | `cost_tracked` | `float` | Cost attributed to this call in USD |
@@ -24670,7 +25522,7 @@ if __name__ == "__main__":
 
 ## Evaluation Order
 
-Two checks always run first, in this order. Everything after them is your policy list, walked in the order you declared it - the first DENY wins and short-circuits the rest:
+Two checks always run first, in this order. Everything after them is your policy list, walked in the order you declared it - the first DENY wins and short-circuits the rest. Once the tool has run, `output_scan` gets the last word on its result:
 
 ```mermaid
 flowchart TD
@@ -24680,14 +25532,22 @@ flowchart TD
     S2{{ "{{" }}"2️⃣ Factory Budget<br/>(risk: 70)"{{ "}}" }} -->|exceeded| DENY
     S2 -->|within budget| S3
     S3{{ "{{" }}"3️⃣ Your policies, in list order<br/>first DENY wins"{{ "}}" }} -->|violation| DENY
-    S3 -->|all clean| ALLOW[✅ ALLOW]
+    S3 -->|all clean| RUN[/Tool executes/]
+    RUN --> S4
+    S4{{ "{{" }}"4️⃣ Output scan, on the result<br/>(risk: 90 secret / 60 PII)"{{ "}}" }} -->|BLOCK| DENY
+    S4 -->|REDACT| SANITIZED[✅ ALLOW<br/>sanitized result]
+    S4 -->|FLAG or clean| ALLOW[✅ ALLOW]
 
     style S1 fill:#fef2f2,stroke:#fca5a5
     style S2 fill:#fef9c3,stroke:#fde047
     style S3 fill:#eff6ff,stroke:#93c5fd
+    style S4 fill:#faf5ff,stroke:#c4b5fd
     style DENY fill:#fef2f2,stroke:#dc2626,stroke-width:2px
     style ALLOW fill:#f0fdf4,stroke:#16a34a,stroke-width:2px
+    style SANITIZED fill:#f0fdf4,stroke:#16a34a,stroke-width:2px
 ```
+
+Steps 1-3 govern whether the tool runs; step 4 governs what its result is allowed to carry back. Only step 4 runs after execution, and it is skipped entirely in OBSERVE mode.
 
 Each policy type carries its own risk score when it denies:
 
@@ -24701,6 +25561,7 @@ Each policy type carries its own risk score when it denies:
 | Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
 | Tool blocklist | `TOOL_BLOCKED` | 80 |
 | Cost limit / factory budget | `BUDGET_EXCEEDED` | 70 |
+| Output scan (post-tool, on the result) | `OUTPUT_SECRET_DETECTED` / `OUTPUT_PII_DETECTED:{category}` | 90 / 60 |
 
 !!! warning "Policy order is yours to choose"
 
