@@ -5,6 +5,12 @@
 from ag2.exceptions import missing_optional_dependency
 
 try:
+    # Curated MCP SDK re-exports: the names AG2's own deterministic-tool examples
+    # type. The rest of the SDK is not mirrored — import wire models and less
+    # common types from ``mcp`` directly.
+    from mcp.server.mcpserver import Elicit, ListRoots, Resolve, Sample
+    from mcp.server.request_state import RequestStateSecurity
+
     from .apps import (
         AppContent,
         AppSandbox,
@@ -36,6 +42,11 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
     PromptMessage = missing_optional_dependency("PromptMessage", "mcp", e)  # type: ignore[misc]
     MCPFunctionTool = missing_optional_dependency("MCPFunctionTool", "mcp", e)  # type: ignore[misc]
     mcp_tool = missing_optional_dependency("mcp_tool", "mcp", e)  # type: ignore[misc]
+    Elicit = missing_optional_dependency("Elicit", "mcp", e)  # type: ignore[misc]
+    ListRoots = missing_optional_dependency("ListRoots", "mcp", e)  # type: ignore[misc]
+    Resolve = missing_optional_dependency("Resolve", "mcp", e)  # type: ignore[misc]
+    Sample = missing_optional_dependency("Sample", "mcp", e)  # type: ignore[misc]
+    RequestStateSecurity = missing_optional_dependency("RequestStateSecurity", "mcp", e)  # type: ignore[misc]
     client_extension = missing_optional_dependency("client_extension", "mcp", e)  # type: ignore[misc]
     ExtensionMap = missing_optional_dependency("ExtensionMap", "mcp", e)  # type: ignore[misc]
     AppSandbox = missing_optional_dependency("AppSandbox", "mcp", e)  # type: ignore[misc]
@@ -54,7 +65,9 @@ __all__ = (
     "AppText",
     "AskContext",
     "ContextProvider",
+    "Elicit",
     "ExtensionMap",
+    "ListRoots",
     "MCPApp",
     "MCPFunctionTool",
     "MCPRequestContext",
@@ -62,10 +75,13 @@ __all__ = (
     "Prompt",
     "PromptArgument",
     "PromptMessage",
+    "RequestStateSecurity",
+    "Resolve",
     "Resource",
     "ResourceCsp",
     "ResourcePermissions",
     "ResourceTemplate",
+    "Sample",
     "SessionConfig",
     "Visibility",
     "build_ask_tool",

@@ -427,7 +427,7 @@ class MCPApp:
                     )
                 if f.meta and UI_META_KEY in f.meta and f.meta[UI_META_KEY].get("resourceUri") != self._uri:
                     raise ValueError("Existing MCPFunctionTool is already bound to a different MCP app document.")
-                built = replace(
+                built = _replace_tool(
                     f,
                     title=title if title is not None else f.title,
                     annotations=annotations if annotations is not None else f.annotations,
@@ -444,7 +444,7 @@ class MCPApp:
                     meta=merged,
                     sync_to_thread=sync_to_thread,
                 )
-            stamped = replace(built, handler=_stamping(built.handler, built.name))
+            stamped = _replace_tool(built, handler=_stamping(built.handler, built.name))
             self._tools.append(stamped)
             return stamped
 
@@ -453,6 +453,14 @@ class MCPApp:
     def _freeze(self) -> None:
         """Close the app's tool composition, once a server has read it."""
         self._frozen = True
+
+
+def _replace_tool(tool: MCPFunctionTool, **changes: Any) -> MCPFunctionTool:
+    """Replace public tool fields while retaining private resolver state."""
+    built = replace(tool, **changes)
+    object.__setattr__(built, "_resolved_params", tool._resolved_params)
+    object.__setattr__(built, "_resolver_plans", tool._resolver_plans)
+    return built
 
 
 class _AppResourceReader:

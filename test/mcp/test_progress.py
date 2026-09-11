@@ -11,13 +11,13 @@ from ag2.mcp import MCPServer
 from ag2.mcp.testing import connect
 from ag2.testing import TestConfig
 
-from ._helpers import ChunkConfig, make_agent
+from ._helpers import ChunkConfig
 
 
 @pytest.mark.asyncio
 class TestProgress:
     async def test_chunks_forwarded_as_progress(self) -> None:
-        agent = make_agent(config=ChunkConfig("Hello, ", "world!", final="Hello, world!"))
+        agent = Agent("streamer", config=ChunkConfig("Hello, ", "world!", final="Hello, world!"))
         server = MCPServer(agent)
 
         updates: list[tuple[float, float | None, str | None]] = []
@@ -37,7 +37,7 @@ class TestProgress:
         assert reply == TextContent(type="text", text="Hello, world!")
 
     async def test_no_progress_without_token(self) -> None:
-        agent = make_agent(config=ChunkConfig("a", "b"))
+        agent = Agent("streamer", config=ChunkConfig("a", "b"))
         server = MCPServer(agent)
 
         # No progress_callback => no progressToken => the call still succeeds.
@@ -47,7 +47,7 @@ class TestProgress:
         assert result.is_error is False
 
     async def test_progress_disabled(self) -> None:
-        agent = make_agent(config=ChunkConfig("a", "b"))
+        agent = Agent("streamer", config=ChunkConfig("a", "b"))
         server = MCPServer(agent, stream_progress=False)
 
         updates: list[str | None] = []

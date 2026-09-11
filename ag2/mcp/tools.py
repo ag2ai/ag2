@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Hashable, Mapping, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field, is_dataclass
 from types import GenericAlias
@@ -11,7 +11,16 @@ from typing import Annotated, Any, TypeAlias, get_type_hints, overload
 
 from fast_depends.pydantic.schema import get_schema
 from mcp.server.context import ServerRequestContext
-from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
+from mcp.server.mcpserver.context import Context as ResolverContext
+from mcp.server.mcpserver.resolve import Resolve, build_resolver_plans, find_resolved_parameters, resolve_arguments
+from mcp.types import (
+    CallToolResult,
+    ContentBlock,
+    InputRequiredResult,
+    InputResponseRequestParams,
+    TextContent,
+    ToolAnnotations,
+)
 from mcp.types import Tool as MCPTool
 from pydantic import BaseModel, JsonValue
 
@@ -33,7 +42,10 @@ ToolResult: TypeAlias = (
 )
 
 # The MCP request context handed to a handler (``None`` outside a live request).
-ToolContext: TypeAlias = "ServerRequestContext[Any, Any] | None"
+ToolContext: TypeAlias = "ServerRequestContext[Any, Any] | MCPExecutionContext | ConversationContext | None"
+
+# Answers and verified state carried by a retry of a tool with resolved inputs.
+InputRound: TypeAlias = "InputResponseRequestParams | None"
 
 # A per-request view of a tool's ``_meta``, applied when the tool list is built.
 # Some metadata is addressed to a capability the requesting client may not have,
@@ -146,6 +158,8 @@ class MCPFunctionTool:
     annotations: ToolAnnotations | Variable | None = None
     output_schema: dict[str, Any] | None = None
     meta: Mapping[str, Any] | None = None
+    _resolved_params: "Mapping[str, tuple[Resolve, bool]]" = field(default_factory=dict, init=False, repr=False)
+    _resolver_plans: "Mapping[Hashable, Any]" = field(default_factory=dict, init=False, repr=False)
 
     def _mcp_tool(
         self, context: MCPExecutionContext | ConversationContext | None = None, meta_filter: "MetaFilter | None" = None
@@ -161,8 +175,34 @@ class MCPFunctionTool:
             _meta=dict(meta) if meta else None,
         )
 
-    async def call(self, arguments: dict[str, Any], request_context: ToolContext = None) -> CallToolResult:
+    async def call(
+        self,
+        arguments: dict[str, Any],
+        request_context: ToolContext = None,
+        *,
+        input_round: InputRound = None,
+    ) -> "CallToolResult | InputRequiredResult":
+        if self._resolved_params:
+            resolved = await resolve_arguments(
+                self._resolved_params,
+                self._resolver_plans,
+                arguments,
+                ResolverContext(
+                    request_context=_server_request_context(request_context),
+                    input_params=input_round,
+                ),
+            )
+            if isinstance(resolved, InputRequiredResult):
+                return resolved
+            arguments = {**arguments, **resolved}
         return to_call_result(await call_user_fn(self.handler, arguments, request_context))
+
+
+def _server_request_context(context: ToolContext) -> "ServerRequestContext[Any, Any] | None":
+    if isinstance(context, MCPExecutionContext):
+        value = context.dependencies.get(MCP_REQUEST_CONTEXT_DEP)
+        return value if isinstance(value, ServerRequestContext) else None
+    return context if isinstance(context, ServerRequestContext) else None
 
 
 def to_call_result(result: "ToolResult") -> CallToolResult:
@@ -287,6 +327,10 @@ def mcp_tool(
     receives the live request context and is excluded from the advertised
     schema. Pass the result in ``MCPServer(tools=[...])``.
 
+    A parameter annotated ``Annotated[T, Resolve(fn)]`` is filled by the MCP
+    resolver protocol and omitted from the advertised input schema. A resolver
+    may request elicitation, sampling, or client roots before the tool body runs.
+
     Args:
         function: The function (when used as a bare ``@mcp_tool``).
         name: Tool name. Defaults to the function name.
@@ -301,10 +345,11 @@ def mcp_tool(
 
     def make(f: Callable[..., Any]) -> MCPFunctionTool:
         call_model = build_model(f, sync_to_thread=sync_to_thread, serialize_result=False)
-        schema = get_schema(call_model, exclude=(CONTEXT_OPTION_NAME,))
+        resolved_params = find_resolved_parameters(f)
+        schema = get_schema(call_model, exclude=(CONTEXT_OPTION_NAME, *resolved_params))
         if schema.get("type") != "object":
             schema = {"type": "object", "properties": {}}
-        return MCPFunctionTool(
+        built = MCPFunctionTool(
             name=name or f.__name__,
             description=description or f.__doc__ or "",
             handler=_bind(call_model),
@@ -314,6 +359,11 @@ def mcp_tool(
             output_schema=output_schema if output_schema is not None else derive_output_schema(f),
             meta=meta,
         )
+        object.__setattr__(built, "_resolved_params", dict(resolved_params))
+        object.__setattr__(
+            built, "_resolver_plans", build_resolver_plans(resolved_params, set(schema.get("properties") or ()))
+        )
+        return built
 
     if function is not None:
         return make(function)
@@ -355,5 +405,12 @@ class ToolProvider:
         """The JSON Schema advertised for ``name``."""
         return self._by_name[name].input_schema
 
-    async def call(self, name: str, arguments: dict[str, Any], request_context: ToolContext = None) -> CallToolResult:
-        return await self._by_name[name].call(arguments, request_context)
+    async def call(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        request_context: ToolContext = None,
+        *,
+        input_round: InputRound = None,
+    ) -> "CallToolResult | InputRequiredResult":
+        return await self._by_name[name].call(arguments, request_context, input_round=input_round)

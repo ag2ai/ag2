@@ -33,10 +33,8 @@ _DEFAULT_MEDIA_TYPE = "image/png"
 def tool_error(message: str) -> CallToolResult:
     """The ``tools/call`` error result carrying ``message``.
 
-    ``mcp`` 1.x's ``@server.call_tool()`` decorator caught whatever a handler
-    raised and returned this shape; 2.0's ``on_call_tool`` lets the exception
-    propagate as a JSON-RPC error instead. Callers that promised a tool-level
-    error therefore convert it themselves, here.
+    ``mcp`` 2.0 lets a raising handler propagate as a JSON-RPC error, so a
+    caller that wants a tool-level error converts it here.
     """
     return CallToolResult(content=[TextContent(type="text", text=message)], isError=True)
 
@@ -44,15 +42,10 @@ def tool_error(message: str) -> CallToolResult:
 def input_validation_error(arguments: dict[str, Any], schema: dict[str, Any]) -> str | None:
     """The message for ``arguments`` failing ``schema``, or ``None`` when they pass.
 
-    ``mcp`` 1.x's ``@server.call_tool()`` validated arguments against the tool's
-    advertised ``inputSchema`` (its ``validate_input`` defaulted to ``True``) and
-    returned the failure as a tool-level error. 2.0 dropped the mechanism, so a
-    caller that promised that validation performs it here. ``jsonschema`` is a
-    hard dependency of ``mcp`` itself, so this adds nothing to install.
-
-    A malformed *schema* raises ``jsonschema.SchemaError`` rather than returning a
-    message; 1.x validated from inside the decorator that converted anything raised
-    into a tool-level error, so callers keep this inside that same guard.
+    ``mcp`` 2.0 no longer validates arguments against the advertised
+    ``inputSchema``, so a caller that promised that validation performs it here.
+    A malformed *schema* raises ``jsonschema.SchemaError`` rather than returning
+    a message, so keep this inside the caller's tool-error guard.
     """
     try:
         jsonschema.validate(arguments, schema)
@@ -64,10 +57,8 @@ def input_validation_error(arguments: dict[str, Any], schema: dict[str, Any]) ->
 def reply_to_content(reply: "AgentReply[Any, Any]") -> list[ContentBlock]:
     """Convert an :class:`AgentReply` into MCP ``tools/call`` content blocks.
 
-    Inverse of the consume-side ``_extract_content``
-    (``ag2/tools/toolkits/mcp_server/toolkit.py``): the reply body
-    becomes a :class:`TextContent`, and each generated binary file becomes the
-    closest content variant (image / audio / embedded blob resource).
+    The reply body becomes a :class:`TextContent`, and each generated binary
+    file the closest content variant (image / audio / embedded blob resource).
     """
     blocks: list[ContentBlock] = []
     body = reply.body
@@ -109,8 +100,8 @@ def _media_type(file: BinaryResult) -> str:
 def to_structured_dict(value: Any) -> dict[str, Any] | None:
     """Coerce a validated structured-output value into a JSON-able object dict.
 
-    Returns ``None`` when the value cannot be represented as an object (so the
-    caller can skip ``structuredContent`` rather than emit a malformed result).
+    ``None`` when the value is not representable as an object, so the caller can
+    skip ``structuredContent`` rather than emit a malformed result.
     """
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
