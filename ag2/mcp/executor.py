@@ -59,6 +59,7 @@ class AskContext:
     Returned by a ``context_provider``; any field left ``None`` is omitted."""
 
     variables: dict[str, Any] | None = None
+    dependencies: dict[Any, Any] | None = None
     tools: list[Any] | None = None
     prompt: list[str] | str | None = None
 
@@ -118,6 +119,11 @@ class AgentExecutor:
         # built directly, with no ``requestState`` protection installed) leaves
         # the era without the pause transport: nowhere safe to put the state.
         self._paused = paused_runs
+
+    @property
+    def context_provider(self) -> "ContextProvider | None":
+        """The optional per-request context provider shared by MCP handlers."""
+        return self._context_provider
 
     def list_tools(self) -> list[MCPTool]:
         return [
@@ -329,6 +335,8 @@ class AgentExecutor:
             ctx = await self._context_provider(get_access_token())
             if ctx.variables is not None:
                 ask_kwargs["variables"] = ctx.variables
+            if ctx.dependencies is not None:
+                ask_kwargs["dependencies"] = ctx.dependencies
             if ctx.tools is not None:
                 ask_kwargs["tools"] = ctx.tools
             if ctx.prompt is not None:

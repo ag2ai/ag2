@@ -503,6 +503,8 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `client_model` | `False` | run the agent's reasoning on the calling client's model |
 | `resources` / `resource_templates` / `prompts` | `()` | expose these alongside the tool; each capability is advertised only when non-empty |
 | `tools` | `()` | deterministic `@mcp_tool` tools served next to `ask` |
+| `apps` | `()` | MCP Apps whose tools and interactive documents are served together |
+| `extensions` | `None` | protocol extensions advertised by the server |
 | `path` | `"/mcp"` | the HTTP endpoint path |
 | `stateless` | `False` | stop the HTTP transport issuing an `mcp-session-id` |
 | `json_response` | `False` | answer with JSON rather than SSE |
@@ -519,15 +521,18 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 
 ### `MCPFunctionTool`
 
-Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `description`, `handler`, `input_schema`, `title` and `annotations` — and nothing else; resolver metadata is the decorator's own state, not a constructor argument.
+Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `description`, `handler`, `input_schema`, `title`, `annotations`, `output_schema`, and `meta` — and nothing else; resolver metadata is the decorator's own state, not a constructor argument.
 
 ### Names re-exported from `ag2.mcp`
 
-`MCPServer`, `SessionConfig`, `MCPFunctionTool`, `mcp_tool`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
+`MCPServer`, `SessionConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
 
 Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the last: `MCPAgentConfigError`, `MCPToolNameConflictError`, `UnknownConversationError` (a handle naming no live conversation, reported to the caller as a tool error), `MCPResourceNotFoundError`, `MCPPromptNotFoundError`, and `MCPSamplingUnavailableError` / `MCPSamplingRefusedError` (both `MCPSamplingError`). `MCPElicitationDeclinedError` subclasses core's `HumanInputNotProvidedError` instead, so a question the client refused is the same failure as one nobody was there to answer.
 
 ## Beyond the conversational tool
 
 - **MCP-UI** — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for returning renderable UI from a `@mcp_tool`.
+- **MCP Apps** — pass `apps=[MCPApp(...)]` to serve an interactive document and its bound tools together; see [MCP Apps](/docs/user-guide/tools/mcp_apps).
+- **Structured custom tools** — a pydantic model or dataclass return annotation supplies `outputSchema`; its value is returned as `structuredContent`, while `__str__` supplies readable text. `output_schema=` can override derivation and `meta=` adds extension metadata.
 - **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`.
+- **Protocol extensions** are advertised with `extensions=` and inspected per request with `client_extension()`.

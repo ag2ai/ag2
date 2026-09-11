@@ -14,9 +14,9 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from dirty_equals import IsPartialDict, IsStr
-from mcp.server.streamable_http import MCP_SESSION_ID_HEADER
+from mcp.server.streamable_http import CONTENT_TYPE_JSON, CONTENT_TYPE_SSE, MCP_SESSION_ID_HEADER
 from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, MCP_PROTOCOL_VERSION_HEADER
-from mcp.types import TextContent
+from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from mcp_types.version import LATEST_HANDSHAKE_VERSION, LATEST_MODERN_VERSION
@@ -32,7 +32,9 @@ from ag2.mcp.testing import connect, connect_modern, serve
 from ag2.mcp.tools import ToolContext
 from ag2.testing import TestConfig
 
-from ._helpers import JSON_HEADERS, RecordingConfig, Weather, handle_of
+from ._helpers import RecordingConfig, Weather
+
+_JSON = {"Accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}", "Content-Type": CONTENT_TYPE_JSON}
 
 
 def _agent(config: RecordingConfig) -> Agent:
@@ -88,14 +90,15 @@ async def _modern_call_with_response(
 ) -> tuple[dict[str, Any], httpx.Response]:
     """POST one ``tools/call`` as a modern-era client, keeping the HTTP response.
 
-    No handshake: the version/capabilities envelope rides in ``params._meta``, and
-    the revision requires the method and tool name in headers too.
+    No handshake: the version/capabilities envelope rides in ``params._meta``,
+    and the revision requires the method and tool name in headers too. The
+    response itself is returned for the assertions that are about HTTP.
     """
     arguments: dict[str, Any] = {"message": message}
     if conversation is not None:
         arguments["conversation"] = conversation
     headers = {
-        **JSON_HEADERS,
+        **_JSON,
         MCP_PROTOCOL_VERSION_HEADER: LATEST_MODERN_VERSION,
         MCP_METHOD_HEADER: "tools/call",
         MCP_NAME_HEADER: "ask",
@@ -127,7 +130,7 @@ async def _open_handshake_session(
     client: httpx.AsyncClient, *, request_id: int, token: str | None = None
 ) -> dict[str, str]:
     """Run the ``initialize`` handshake and return the headers its session needs."""
-    opening = JSON_HEADERS if token is None else {**JSON_HEADERS, "Authorization": f"Bearer {token}"}
+    opening = _JSON if token is None else {**_JSON, "Authorization": f"Bearer {token}"}
     response = await client.post(
         "/mcp",
         headers=opening,
@@ -170,8 +173,9 @@ async def _handshake_call(
 class TestModernEraStartsFresh:
     """2026-07-28: a connection is not a conversation, and neither is a process.
 
-    The revision forbids establishing context from connection or process identity,
-    so an unnamed conversation starts empty on every transport.
+    The revision says servers must not use connection or process identity to
+    establish context, and it issues nothing else to key on — so an unnamed
+    conversation starts empty on every transport.
     """
 
     async def test_stream_calls_do_not_share_a_conversation(self) -> None:
@@ -197,7 +201,11 @@ class TestModernEraStartsFresh:
 
 @pytest.mark.asyncio
 class TestHandshakeEraContinuity:
-    """Up to 2025-11-25 the session exists at the protocol level, so it keys history."""
+    """Up to 2025-11-25 the session exists at the protocol level, so it keys history.
+
+    Pinned against regression: withdrawing the process fallback from the modern
+    era must not withdraw it from the era whose revisions prescribe it.
+    """
 
     async def test_stdio_style_stream_accumulates(self) -> None:
         config = RecordingConfig(TestConfig("ok", "ok"))
@@ -233,8 +241,14 @@ class TestHandshakeEraContinuity:
         assert config.prompts == [["first"], ["second"]]
 
 
-def _modernhandle_of(result: dict[str, Any]) -> str:
-    """:func:`handle_of` for the raw JSON a modern-era POST returns."""
+def _handle(result: CallToolResult) -> str:
+    """The conversation handle a result carries, as a programmatic client reads it."""
+    assert result.meta is not None
+    return result.meta[CONVERSATION_META_KEY]
+
+
+def _modern_handle(result: dict[str, Any]) -> str:
+    """:func:`_handle` for the raw JSON a modern-era POST returns."""
     return str(result["_meta"][CONVERSATION_META_KEY])
 
 
@@ -242,23 +256,23 @@ def _modernhandle_of(result: dict[str, Any]) -> str:
 class TestConversationHandle:
     """Continuity the caller names, which is the only kind the modern era has."""
 
-    async def test_modern_era_continues_byhandle_of(self) -> None:
+    async def test_modern_era_continues_by_handle(self) -> None:
         config = RecordingConfig(TestConfig("ok", "ok"))
         server = MCPServer(_agent(config))
 
         async with connect_modern(server) as session:
             first = await session.call_tool("ask", {"message": "first"})
-            await session.call_tool("ask", {"message": "second", "conversation": handle_of(first)})
+            await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
 
         assert config.prompts == [["first"], ["first", "second"]]
 
-    async def test_handshake_era_continues_byhandle_of(self) -> None:
+    async def test_handshake_era_continues_by_handle(self) -> None:
         config = RecordingConfig(TestConfig("ok", "ok"))
         server = MCPServer(_agent(config))
 
         async with connect(server) as session:
             first = await session.call_tool("ask", {"message": "first"})
-            await session.call_tool("ask", {"message": "second", "conversation": handle_of(first)})
+            await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
 
         assert config.prompts == [["first"], ["first", "second"]]
 
@@ -267,8 +281,8 @@ class TestConversationHandle:
         server = MCPServer(_agent(config))
 
         async with connect_modern(server) as session:
-            one = handle_of(await session.call_tool("ask", {"message": "one"}))
-            two = handle_of(await session.call_tool("ask", {"message": "two"}))
+            one = _handle(await session.call_tool("ask", {"message": "one"}))
+            two = _handle(await session.call_tool("ask", {"message": "two"}))
             await session.call_tool("ask", {"message": "one again", "conversation": one})
             await session.call_tool("ask", {"message": "two again", "conversation": two})
 
@@ -286,7 +300,7 @@ class TestConversationHandle:
         async with connect_modern(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
 
-        handle = handle_of(result)
+        handle = _handle(result)
         # The agent's own reply leads; the handle rides in the block after it, so
         # the model can recover from an expired one without reading `_meta`.
         reply, trailer = result.content
@@ -297,8 +311,8 @@ class TestConversationHandle:
         server = MCPServer(_agent(RecordingConfig(TestConfig("ok", "ok"))))
 
         async with connect_modern(server) as session:
-            first = handle_of(await session.call_tool("ask", {"message": "one"}))
-            second = handle_of(await session.call_tool("ask", {"message": "two"}))
+            first = _handle(await session.call_tool("ask", {"message": "one"}))
+            second = _handle(await session.call_tool("ask", {"message": "two"}))
 
         # Version-4 UUIDs: opaque, unguessable, and header-safe.
         assert UUID(first).version == 4
@@ -310,8 +324,10 @@ class TestConversationHandle:
 class TestBlankHandle:
     """A blank handle names no conversation, so it reads as none being named.
 
-    The reader of the handle channel is the model, which routinely sends ``""`` for
-    an optional string argument rather than omitting the key.
+    The reader of the handle channel is the model, and a model given an optional
+    string argument routinely sends ``""`` rather than omitting the key. Read as
+    an unknown handle, that would make its every first call an error and leave it
+    unable to start a conversation at all.
     """
 
     @pytest.mark.parametrize("blank", ["", "   ", "\n"])
@@ -325,16 +341,16 @@ class TestBlankHandle:
         assert result.is_error is False
         # A handle comes back, so the caller that could not omit the key can still
         # continue what it just started.
-        assert UUID(handle_of(result)).version == 4
+        assert UUID(_handle(result)).version == 4
         assert config.prompts == [["first"]]
 
-    async def test_the_conversation_it_started_continues_by_itshandle_of(self) -> None:
+    async def test_the_conversation_it_started_continues_by_its_handle(self) -> None:
         config = RecordingConfig(TestConfig("ok", "ok"))
         server = MCPServer(_agent(config))
 
         async with connect_modern(server) as session:
             first = await session.call_tool("ask", {"message": "first", "conversation": ""})
-            await session.call_tool("ask", {"message": "second", "conversation": handle_of(first)})
+            await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
 
         assert config.prompts == [["first"], ["first", "second"]]
 
@@ -355,8 +371,9 @@ class TestBlankHandle:
 class TestUnknownHandle:
     """A handle the registry does not know is an error, never a fall-through.
 
-    Falling through would let any caller name a conversation with a string of their
-    choosing and evict other callers' out of a bounded registry.
+    Falling through to the transport session would let any caller name a
+    conversation with a string of their choosing and evict other callers'
+    conversations out of a bounded registry.
     """
 
     async def test_is_an_error_flagged_result_not_a_protocol_error(self) -> None:
@@ -430,7 +447,12 @@ class TestAdvertisedConversationArgument:
         assert _conversation_argument(tool) == IsPartialDict({"description": IsStr(regex=r".*\b900\b.*\b64\b.*")})
 
     async def test_presenting_one_anyway_is_refused_not_dropped(self) -> None:
-        """With conversations off, a handle is answered as unsupported, not quietly discarded."""
+        """With conversations off, a handle is answered, not quietly discarded.
+
+        The server mints no handles, so omitting the argument would not restore
+        continuity either — which is why this is refused as unsupported rather
+        than reported as an unknown handle.
+        """
         config = RecordingConfig(TestConfig("ok"))
         server = MCPServer(_agent(config), sessions=False)
 
@@ -453,7 +475,12 @@ class TestAdvertisedConversationArgument:
 
 @pytest.mark.asyncio
 async def test_structured_content_is_exactly_the_output_schema() -> None:
-    """``structuredContent`` is the agent's response schema, and nothing else."""
+    """``structuredContent`` is the agent's response schema, and nothing else.
+
+    It is advertised verbatim as the tool's ``outputSchema``, which MCP requires
+    structured content to conform to, so a server field mixed in would break the
+    tool's own declared contract.
+    """
     agent = Agent(
         "weather",
         config=TestConfig('{"city": "SF", "temp_c": 18.5}'),
@@ -469,12 +496,17 @@ async def test_structured_content_is_exactly_the_output_schema() -> None:
     assert tool.output_schema is not None
     assert set(tool.output_schema["properties"]) == {"city", "temp_c"}
     # The handle still travels, just not through the declared output contract.
-    assert handle_of(result)
+    assert _handle(result)
 
 
 @pytest.mark.asyncio
-async def test_stateless_transport_serves_conversations_byhandle_of() -> None:
-    """``stateless=True`` with ``sessions=True`` means no transport session, conversations by handle."""
+async def test_stateless_transport_serves_conversations_by_handle() -> None:
+    """``stateless=True`` with ``sessions=True`` is coherent, not contradictory.
+
+    It was contradictory only while continuity depended on the transport issuing
+    a session id; with handles it means "no transport session, conversations by
+    handle", so it constructs without complaint and serves them.
+    """
     config = RecordingConfig(TestConfig("ok", "ok"))
     app = MCPServer(_agent(config), stateless=True, json_response=True)
 
@@ -482,7 +514,7 @@ async def test_stateless_transport_serves_conversations_byhandle_of() -> None:
         first, response = await _modern_call_with_response(client, "first", request_id=1)
         # The one assertion that is genuinely about HTTP: no session comes back.
         assert MCP_SESSION_ID_HEADER not in response.headers
-        handle = _modernhandle_of(first)
+        handle = _modern_handle(first)
         await _modern_call(client, "second", request_id=2, conversation=handle)
 
     assert config.prompts == [["first"], ["first", "second"]]
@@ -497,7 +529,7 @@ class TestRegistryGuaranteesApplyToHandles:
         server = MCPServer(_agent(config), sessions=SessionConfig(max_sessions=1))
 
         async with connect_modern(server) as session:
-            evicted = handle_of(await session.call_tool("ask", {"message": "one"}))
+            evicted = _handle(await session.call_tool("ask", {"message": "one"}))
             await session.call_tool("ask", {"message": "two"})
             result = await session.call_tool("ask", {"message": "one again", "conversation": evicted})
 
@@ -509,7 +541,7 @@ class TestRegistryGuaranteesApplyToHandles:
         server = MCPServer(_agent(config), sessions=SessionConfig(storage=storage))
 
         async with connect_modern(server) as session:
-            first = handle_of(await session.call_tool("ask", {"message": "first"}))
+            first = _handle(await session.call_tool("ask", {"message": "first"}))
             await session.call_tool("ask", {"message": "second", "conversation": first})
 
         # One conversation, its turns replayed from the backend the operator
@@ -569,7 +601,8 @@ class TestPrincipalBinding:
     """A handle names a conversation; it does not on its own confer the right to read one.
 
     The handle comes back in readable content, so it passes through the model's
-    context, the client's logs and any tracing in between.
+    context, the client's logs and any tracing in between — further than a
+    transport header ever went.
     """
 
     async def test_the_creating_principal_continues_normally(self) -> None:
@@ -577,7 +610,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
-            handle = _modernhandle_of(first)
+            handle = _modern_handle(first)
             await _modern_call(client, "second", request_id=2, conversation=handle, token="alice")
 
         assert config.prompts == [["first"], ["first", "second"]]
@@ -587,7 +620,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
-            handle = _modernhandle_of(first)
+            handle = _modern_handle(first)
             stolen = await _modern_call(client, "second", request_id=2, conversation=handle, token="bob")
             unknown = await _modern_call(client, "second", request_id=3, conversation=str(uuid4()), token="bob")
 
@@ -602,7 +635,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
-            handle = _modernhandle_of(first)
+            handle = _modern_handle(first)
             continued = await _modern_call(client, "second", request_id=2, conversation=handle, token="alice")
             swapped = await _modern_call(client, "third", request_id=3, conversation=handle, token="bob")
 
@@ -614,8 +647,11 @@ class TestPrincipalBinding:
     async def test_a_session_named_conversation_is_unreachable_by_another_principal(self) -> None:
         """The other name a conversation goes by is closed to a swapped credential too.
 
-        The transport refuses a session id presented under another credential, so the
-        swapped caller never reaches the conversation to begin with.
+        A handshake-era conversation is keyed by the MCP session, which ag2 does
+        not revalidate — it does not have to. The transport refuses a session id
+        presented with a credential other than the one that opened it, answering
+        as though the session did not exist, so the swapped caller never reaches
+        the conversation to begin with.
         """
         config = RecordingConfig(TestConfig("ok", "ok"))
 
@@ -642,7 +678,7 @@ class TestPrincipalBinding:
 
         async with serve(_authenticated(config)) as client:
             first = await _modern_call(client, "first", request_id=1, token="kiosk")
-            handle = _modernhandle_of(first)
+            handle = _modern_handle(first)
             same = await _modern_call(client, "second", request_id=2, conversation=handle, token="kiosk")
             other = await _modern_call(client, "third", request_id=3, conversation=handle, token="other-kiosk")
 

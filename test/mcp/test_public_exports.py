@@ -23,11 +23,17 @@ from ag2.tools import MCPAnswerPolicy, MCPServerConfig, MCPStdioServerConfig
 # The names the MCP namespace advertises. Pinned rather than derived, so a rename
 # is a decision someone made here rather than a diff nobody read.
 _PUBLIC_NAMES = {
+    "AppContent",
+    "AppSandbox",
+    "AppText",
     "AskContext",
     "ContextProvider",
     "Elicit",
+    "ExtensionMap",
     "ListRoots",
+    "MCPApp",
     "MCPFunctionTool",
+    "MCPRequestContext",
     "MCPServer",
     "Prompt",
     "PromptArgument",
@@ -35,10 +41,15 @@ _PUBLIC_NAMES = {
     "RequestStateSecurity",
     "Resolve",
     "Resource",
+    "ResourceCsp",
+    "ResourcePermissions",
     "ResourceTemplate",
     "Sample",
     "SessionConfig",
+    "Visibility",
     "build_ask_tool",
+    "client_extension",
+    "client_supports_apps",
     "mcp_tool",
 }
 
@@ -77,9 +88,9 @@ class TestTheCuratedSDKReExports:
 
 
 class TestTheDeterministicToolConstructor:
-    """A tool author is offered the six fields they might supply, and no resolver internals."""
+    """A tool author is offered public fields, and no resolver internals."""
 
-    def test_it_accepts_only_the_six_public_fields(self) -> None:
+    def test_it_accepts_only_the_public_fields(self) -> None:
         assert [f.name for f in dataclasses.fields(MCPFunctionTool) if f.init] == [
             "name",
             "description",
@@ -87,6 +98,8 @@ class TestTheDeterministicToolConstructor:
             "input_schema",
             "title",
             "annotations",
+            "output_schema",
+            "meta",
         ]
 
     @pytest.mark.parametrize(

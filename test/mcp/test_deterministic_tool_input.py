@@ -14,6 +14,7 @@ from typing import Annotated, Any
 
 import pytest
 from mcp.client.session import ClientRequestContext
+from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID
 from mcp.server.mcpserver import Elicit, ListRoots, Resolve
 from mcp.types import (
     ElicitRequest,
@@ -27,7 +28,7 @@ from mcp.types import (
 )
 from pydantic import BaseModel
 
-from ag2.mcp import MCPServer, mcp_tool
+from ag2.mcp import MCPApp, MCPServer, mcp_tool
 from ag2.mcp.testing import connect, connect_modern
 
 from ._helpers import greeter, outstanding
@@ -178,3 +179,22 @@ async def test_the_handshake_era_answers_the_question_inline_with_no_second_roun
     assert result.content == [TextContent(type="text", text="painted kitchen blue")]
     assert RESOLVER_RUNS == ["resolver"], "the inline path ran the resolver more than once"
     assert BODY_RUNS == ["body"]
+
+
+@pytest.mark.asyncio
+async def test_an_app_bound_tool_retains_its_resolver() -> None:
+    """MCP Apps decoration must preserve a deterministic tool's private resolver plan."""
+    app = MCPApp("ui://paint/card", "<p>Paint</p>")
+    app.tool(paint)
+    server = MCPServer(greeter("unused", name="host"), apps=[app])
+
+    async with connect(
+        server,
+        elicitation_callback=accepts_blue,
+        extensions={EXTENSION_ID: {"mimeTypes": [APP_MIME_TYPE]}},
+    ) as session:
+        listed = {tool.name: tool for tool in (await session.list_tools()).tools}
+        result = await session.call_tool("paint", {"room": "kitchen"})
+
+    assert listed["paint"].meta == {"ui": {"resourceUri": "ui://paint/card"}}
+    assert result.content == [TextContent(type="text", text="painted kitchen blue")]

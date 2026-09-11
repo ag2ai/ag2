@@ -16,8 +16,10 @@ from mcp.types import (
     ElicitRequestParams,
     ElicitResult,
     InputRequiredResult,
+    ListToolsResult,
     TextContent,
 )
+from mcp.types import Tool as MCPTool
 from mcp_types.version import LATEST_HANDSHAKE_VERSION
 from pydantic import BaseModel
 from typing_extensions import Self
@@ -48,6 +50,25 @@ class Weather(BaseModel):
 
     city: str
     temp_c: float
+
+
+def text_of(result: CallToolResult) -> str:
+    """The text carried by a result's first content block."""
+    block = result.content[0]
+    assert isinstance(block, TextContent)
+    return block.text
+
+
+def tool_named(result: ListToolsResult, name: str) -> MCPTool:
+    """The advertised tool called ``name``."""
+    return next(tool for tool in result.tools if tool.name == name)
+
+
+def make_agent(
+    *, name: str = "test-agent", prompt: str = "", config: ModelConfig | None = None, **kwargs: Any
+) -> Agent:
+    """Build a minimally configured agent for server-side tests."""
+    return Agent(name, prompt, config=config if config is not None else TestConfig("hi"), **kwargs)
 
 
 def greeter(reply: str = "hi", *, name: str = "greeter", **agent_kwargs: Any) -> Agent:

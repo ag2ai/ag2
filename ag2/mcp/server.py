@@ -6,10 +6,11 @@ import importlib.metadata
 import logging
 from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from functools import partial
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
+from mcp.server.auth.middleware.auth_context import AuthContextMiddleware, get_access_token
 from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
 from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
 from mcp.server.caching import CacheHint, CacheableMethod
@@ -35,15 +36,17 @@ from ag2.agent import Agent
 from ag2.history import MemoryStorage
 from ag2.hitl import ElicitationPolicy
 
+from .apps import EXTENSION_ID, MCPApp, binds_ui, client_supports_apps, collect_apps, visible_meta
 from .errors import MCPToolNameConflictError
 from .executor import AgentExecutor, ContextProvider
+from .extensions import ExtensionMap, validated_extensions
 from .mappers import input_validation_error, tool_error
 from .pause import PausedRuns
 from .prompts import Prompt, PromptProvider
 from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
-from .tools import MCPFunctionTool, ToolProvider
+from .tools import MCP_REQUEST_CONTEXT_DEP, MCPExecutionContext, MCPFunctionTool, MetaFilter, ToolProvider
 
 if TYPE_CHECKING:
     from mcp.server.context import ServerRequestContext
@@ -74,6 +77,16 @@ def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | Non
         ttl=cfg.ttl,
         storage=cfg.storage or MemoryStorage(),
     )
+
+
+def _ui_binding_filter(ctx: "ServerRequestContext[Any, Any]") -> MetaFilter:
+    """A ``_meta`` filter withholding the MCP Apps binding from a client that cannot render it.
+
+    Applied to every custom tool, whether it came from ``apps=`` or was
+    registered by hand, so the two routes describe the same server. It is a
+    no-op on a tool whose ``_meta`` has no ``ui`` key, which is most of them.
+    """
+    return partial(visible_meta, supports_apps=client_supports_apps(ctx))
 
 
 def _session_manager_lifespan(manager: StreamableHTTPSessionManager, paused_runs: PausedRuns) -> "Lifespan[Any]":
@@ -158,6 +171,83 @@ class MCPServer:
     Raises:
         MCPToolNameConflictError: A ``tools=`` entry collides with ``tool_name`` or
             with another entry.
+
+    For local clients (Claude Desktop, Cursor, the MCP Inspector), :meth:`run_stdio`
+    serves over stdin/stdout instead. The HTTP transport parameters (``path``,
+    ``stateless``, ``json_response``, ``security``) are ignored over stdio.
+
+    ``name`` / ``version`` / ``title`` / ``description`` / ``instructions`` /
+    ``website_url`` / ``icons`` populate the ``initialize`` handshake's
+    ``serverInfo`` + ``instructions``. ``instructions`` is client-facing "how to
+    use this server" guidance — it is *not* derived from the agent's system
+    prompt (which is internal); pass it explicitly when you want to advertise
+    usage hints. ``title`` and ``description`` are likewise presentation-only
+    and never derived from the agent.
+
+    ``cache_hints`` fills ``ttlMs`` / ``cacheScope`` freshness hints on results
+    of the cacheable methods (SEP-2549). The served tool set is fixed at
+    construction, so ``{"tools/list": CacheHint(ttl_ms=...)}`` is always sound
+    here; the same goes for ``resources`` / ``prompts``, which cannot change
+    after init. Only protocol revision 2026-07-28 clients see the hints — older
+    revisions drop the fields at serialization.
+
+    ``sessions`` controls multi-turn history. By default (``True``) a
+    conversation history accumulates across ``tools/call`` invocations; pass a
+    :class:`~ag2.mcp.sessions.SessionConfig` to tune the bound / TTL / backend,
+    or ``False`` to make every call stateless. Which conversation a call lands in
+    is decided by the protocol era, since each era sanctions a different
+    mechanism:
+
+    | a conversation named? | handshake era (up to 2025-11-25)                     | modern era (2026-07-28) |
+    |-----------------------|------------------------------------------------------|-------------------------|
+    | yes                   | that conversation                                    | that conversation       |
+    | no                    | the MCP session's own history (per-process on stdio)  | a fresh conversation    |
+
+    The modern era has no MCP session and forbids deriving context from
+    connection or process identity, so a caller there continues a conversation
+    only by naming it. The name is an opaque handle the server mints and returns
+    — in a text content block and in the result's ``_meta`` under
+    ``ai.ag2/conversation`` — and never one the caller chooses. A handle the
+    server does not recognise is a tool-level error, not a fresh conversation;
+    under ``sessions=False`` — where the argument is not advertised and no handle
+    is ever minted — presenting one is likewise refused rather than dropped.
+
+    A conversation is bound to the principal that created it (the access token's
+    subject, falling back to its client id) and that binding is revalidated on
+    every call, so a leaked handle does not expose one caller's history to
+    another. **With no** ``security`` **configured there is no principal to bind
+    to, and the handle is then the only credential for the conversation it
+    names** — it travels through readable content, so treat it as one.
+
+    ``stateless`` governs the *handshake* era only: it stops the HTTP transport
+    issuing an ``mcp-session-id``, so handshake-era calls have no session to key
+    on and start fresh. Modern-era requests are single exchanges that never carry
+    a session id in the first place, so the flag does not reach them. Pairing
+    ``stateless=True`` with ``sessions=True`` is a valid configuration — no
+    transport session, conversations named explicitly.
+
+    ``resources`` / ``resource_templates`` / ``prompts`` expose MCP resources and
+    prompts alongside the conversational tool; the corresponding capability is
+    advertised only when a non-empty collection is supplied.
+
+    ``apps`` serves interactive documents — MCP Apps — alongside the agent: each
+    :class:`~ag2.mcp.apps.MCPApp` contributes its tools to ``tools`` and its document
+    to ``resources``, so ``apps=[app]`` is exactly shorthand for passing
+    ``app.tools`` and ``app.resource`` by hand. Two apps claiming one document URI
+    raise here, as a duplicate tool name does. A server holding at least one app
+    also advertises ``io.modelcontextprotocol/ui`` in ``extensions``, and withholds
+    each UI binding from a client that did not advertise it — see
+    :mod:`ag2.mcp.apps`.
+
+    ``extensions`` advertises SEP-2133 extension support: a mapping of
+    reverse-DNS identifier to that extension's settings, written to
+    ``ServerCapabilities.extensions``. Identifiers are validated here, so a
+    malformed one fails at construction the way a tool-name conflict does. The
+    two directions of SEP-2133 are **not** symmetric, and this one is the weaker:
+    the field does not exist in the 2025-11-25 wire schema, so a handshake-era
+    client never receives what is advertised here — only a 2026-07-28 client
+    does. Reading what a *client* advertised works in both eras; see
+    :func:`~ag2.mcp.extensions.client_extension`.
     """
 
     __slots__ = (
@@ -178,6 +268,7 @@ class MCPServer:
         "_resource_provider",
         "_prompt_provider",
         "_tool_provider",
+        "_extensions",
         "_http",
     )
 
@@ -205,6 +296,8 @@ class MCPServer:
         resource_templates: "Sequence[ResourceTemplate]" = (),
         prompts: "Sequence[Prompt]" = (),
         tools: "Sequence[MCPFunctionTool]" = (),
+        apps: "Sequence[MCPApp]" = (),
+        extensions: "ExtensionMap | None" = None,
         path: str = "/mcp",
         stateless: bool = False,
         json_response: bool = False,
@@ -228,6 +321,10 @@ class MCPServer:
             request_state_security if request_state_security is not None else RequestStateSecurity.ephemeral()
         )
         self._paused_runs = PausedRuns(ttl=state_security.ttl)
+        if apps:
+            app_tools, app_resources = collect_apps(apps)
+            tools = (*tools, *app_tools)
+            resources = (*resources, *app_resources)
         self._resource_provider = (
             ResourceProvider(resources, resource_templates) if (resources or resource_templates) else None
         )
@@ -241,6 +338,15 @@ class MCPServer:
                     raise MCPToolNameConflictError(tool.name, reserved=False)
                 seen.add(tool.name)
         self._tool_provider = ToolProvider(tools) if tools else None
+        self._extensions = validated_extensions(extensions) if extensions else {}
+        if binds_ui(tools):
+            # Read off the tools rather than off ``apps=``, so registering an app's
+            # pieces by hand yields the same server. Deliberate decoration: the
+            # specification defines only the client direction of SEP-2133 and says
+            # nothing about servers advertising at all, and a handshake-era client
+            # never receives it. Visible in discovery, inert otherwise. An explicit
+            # setting wins.
+            self._extensions.setdefault(EXTENSION_ID, {})
         self._executor = AgentExecutor(
             agent,
             tool_name=tool_name,
@@ -260,6 +366,7 @@ class MCPServer:
         # The lowlevel tier installs no default policy, so it is installed here
         # and state never leaves this process unsealed.
         self._server.middleware.append(RequestStateBoundary(state_security, default_audience=self._name))
+        self._server.extensions.update(self._extensions)
         routes, manager = self._streamable_routes(
             path=path, stateless=stateless, json_response=json_response, security=security
         )
@@ -285,10 +392,10 @@ class MCPServer:
         if self._lifespan is not None:
             kwargs["lifespan"] = self._lifespan
         if self._resource_provider is not None:
-            kwargs["on_list_resources"] = self._resource_provider.on_list_resources
-            kwargs["on_read_resource"] = self._resource_provider.on_read_resource
+            kwargs["on_list_resources"] = self._on_list_resources
+            kwargs["on_read_resource"] = self._on_read_resource
             if self._resource_provider.has_templates:
-                kwargs["on_list_resource_templates"] = self._resource_provider.on_list_resource_templates
+                kwargs["on_list_resource_templates"] = self._on_list_resource_templates
         if self._prompt_provider is not None:
             kwargs["on_list_prompts"] = self._prompt_provider.on_list_prompts
             kwargs["on_get_prompt"] = self._prompt_provider.on_get_prompt
@@ -306,12 +413,29 @@ class MCPServer:
             **kwargs,
         )
 
+    async def _on_list_resources(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> Any:
+        assert self._resource_provider is not None
+        return await self._resource_provider.on_list_resources(await self._request_context(ctx), params)
+
+    async def _on_list_resource_templates(
+        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+    ) -> Any:
+        assert self._resource_provider is not None
+        return await self._resource_provider.on_list_resource_templates(await self._request_context(ctx), params)
+
+    async def _on_read_resource(self, ctx: "ServerRequestContext[Any, Any]", params: Any) -> Any:
+        assert self._resource_provider is not None
+        return await self._resource_provider.on_read_resource(await self._request_context(ctx), params)
+
     async def _on_list_tools(
         self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
     ) -> ListToolsResult:
         tools = self._executor.list_tools()
         if self._tool_provider is not None:
-            tools += self._tool_provider.list_mcp_tools()
+            context = await self._request_context(ctx)
+            tools += self._tool_provider.list_mcp_tools(context, _ui_binding_filter(ctx))
         return ListToolsResult(tools=tools)
 
     async def _on_call_tool(
@@ -334,7 +458,7 @@ class MCPServer:
                 outcome = await self._tool_provider.call(
                     params.name,
                     arguments,
-                    ctx,
+                    await self._request_context(ctx),
                     input_round=InputResponseRequestParams(
                         inputResponses=params.input_responses,
                         requestState=params.request_state,
@@ -342,7 +466,7 @@ class MCPServer:
                 )
                 if isinstance(outcome, InputRequiredResult):
                     return outcome
-                return CallToolResult(content=outcome)
+                return outcome
             return await self._executor.call(
                 params.name,
                 message=arguments.get("message", ""),
@@ -362,6 +486,25 @@ class MCPServer:
             # ``str`` is empty for a bare ``raise SomeError``; the class name is the
             # least a client can act on.
             return tool_error(str(e) or type(e).__name__)
+
+    async def _request_context(self, ctx: "ServerRequestContext[Any, Any]") -> MCPExecutionContext:
+        """The request-scoped context a resource read, tool listing or call resolves against.
+
+        Only the two fields of :class:`AskContext` that a non-conversational
+        request can use are carried over: ``prompt`` and ``tools`` shape an agent
+        turn, and this request is not one. The provider is called per request, so
+        the parallel document read and tool call stay independent.
+        """
+        context = MCPExecutionContext(dependencies={MCP_REQUEST_CONTEXT_DEP: ctx})
+        if self._executor.context_provider is None:
+            return context
+        provided = await self._executor.context_provider(get_access_token())
+        if provided.variables is not None:
+            context.variables.update(provided.variables)
+        if provided.dependencies is not None:
+            context.dependencies.update(provided.dependencies)
+            context.dependencies[MCP_REQUEST_CONTEXT_DEP] = ctx
+        return context
 
     def _advertised_input_schema(self, name: str) -> dict[str, Any] | None:
         """The ``inputSchema`` ``tools/list`` advertises for ``name``, or ``None``."""

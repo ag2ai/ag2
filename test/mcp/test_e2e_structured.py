@@ -9,7 +9,7 @@ from ag2.mcp import MCPServer
 from ag2.mcp.testing import connect
 from ag2.testing import TestConfig
 
-from ._helpers import Weather
+from ._helpers import Weather, tool_named
 
 
 @pytest.mark.asyncio
@@ -23,7 +23,7 @@ class TestE2EStructured:
         server = MCPServer(agent)
 
         async with connect(server) as session:
-            tool = next(t for t in (await session.list_tools()).tools if t.name == "ask")
+            tool = tool_named(await session.list_tools(), "ask")
             result = await session.call_tool("ask", {"message": "weather in SF?"})
 
         assert tool.output_schema is not None

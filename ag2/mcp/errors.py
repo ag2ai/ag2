@@ -99,3 +99,36 @@ class MCPSamplingRefusedError(MCPSamplingError):
 
     def __init__(self, reason: str) -> None:
         super().__init__(f"Cannot run this turn on the calling MCP client's model: {reason}.")
+
+
+class MCPAppURIError(MCPServerError):
+    """Raised when an app's document URI does not use the ``ui://`` scheme."""
+
+    def __init__(self, uri: str) -> None:
+        super().__init__(f"An app document URI must use the ui:// scheme, got {uri!r}; a host discards anything else.")
+
+
+class MCPDuplicateAppURIError(MCPServerError):
+    """Raised when two apps registered on one server claim the same document URI."""
+
+    def __init__(self, uri: str) -> None:
+        super().__init__(
+            f"Duplicate app document URI {uri!r}; one document would shadow the other and the losing "
+            "app's tools would point at a body nobody wrote."
+        )
+
+
+class MCPAppFrozenError(MCPServerError):
+    """Raised when a tool is declared on an app already registered with a server.
+
+    Registration is what reads an app's tool composition, so a tool added after
+    it would exist and never be served. Failing here names the tool rather than
+    leaving a silently absent one to be found on the wire.
+    """
+
+    def __init__(self, uri: str, name: str | None = None) -> None:
+        tool = f"Tool {name!r} cannot" if name else "A tool cannot"
+        super().__init__(
+            f"{tool} be declared on app {uri!r}: it is already registered with an MCPServer, which has "
+            "read its tools. Declare every tool before constructing the server."
+        )
