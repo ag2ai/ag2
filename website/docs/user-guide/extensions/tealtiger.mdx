@@ -3,7 +3,7 @@ title: TealTiger Governance
 sidebarTitle: TealTiger
 ---
 
-The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists and blocklists, validates tool arguments, detects PII and secrets in tool arguments, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — with no LLM in the governance path.
+The `ag2.extensions.tealtiger` module adds deterministic governance guardrails to AG2 agents. `TealTigerMiddleware` enforces tool allowlists and blocklists, validates tool arguments, detects PII and secrets in tool arguments and in tool results, blocks prompt injection attempts, tracks per-session cost, provides per-agent kill switches, and produces structured TEEC audit receipts — with no LLM in the governance path.
 
 ## Installation
 
@@ -21,6 +21,7 @@ from ag2.extensions.tealtiger import (
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
+    OutputAction,
     TEECReceipt,
     TealTigerMiddleware,
 )
@@ -30,7 +31,7 @@ from ag2.extensions.tealtiger import (
 
 `TealTigerMiddleware` is a [middleware factory](/docs/user-guide/middleware) — pass the instance straight into an agent's `middleware` list.
 
-```python linenums="1" hl_lines="7-15 21"
+```python linenums="1" hl_lines="7-16 21"
 import asyncio
 
 from ag2 import Agent
@@ -67,21 +68,24 @@ Every tool call now flows through deterministic governance evaluation before exe
 
 ## Multi-Stage Defense
 
-TealTiger governs at two stages of the AG2 agent lifecycle:
+TealTiger governs at three stages of the AG2 agent lifecycle:
 
 ```mermaid
 flowchart LR
     A[👤 User Message] --> B{🛡️ Stage 1<br/>on_turn}
     B -->|Kill Switch<br/>Check| C[🤖 Agent<br/>Processing]
     C --> D[🔧 Tool Call]
-    D --> E{🛡️ Stage 2<br/>on_tool_execution}
+    D --> E{🛡️ Stage 2<br/>pre-tool}
     E -->|"✅ ALLOW"| F[⚡ Execute Tool]
     E -->|"❌ DENY"| G[🚫 ToolErrorEvent]
-    F --> H[📝 TEEC Receipt]
+    F --> I{🛡️ Stage 3<br/>output_scan}
+    I -->|"✅ clean or redacted"| H[📝 TEEC Receipt]
+    I -->|"❌ BLOCK"| G
     G --> H
 
     style B fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
     style E fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
+    style I fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
     style H fill:#f0fdfa,stroke:#14b8a6,stroke-width:2px
     style F fill:#f0fdf4,stroke:#16a34a
     style G fill:#fef2f2,stroke:#dc2626
@@ -91,8 +95,9 @@ flowchart LR
 |------|-------|-------------|
 | `on_turn` | Turn defense | Kill switch enforcement — frozen agents cannot take turns |
 | `on_tool_execution` | Pre-tool defense | Tool allowlist/blocklist, argument validation, PII scan, secret scan, cost limit check |
+| `on_tool_execution` | Post-tool defense | Output scan — PII and secrets in the tool's *result*, before it re-enters the model's context |
 
-Both stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
+All three stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
 
 !!! note "Receipts come from the tool stage"
 
@@ -263,6 +268,56 @@ GovernancePolicy.secret_detection()
 
 Denied with reason code `SECRET_DETECTED` and risk score 95 — the highest of the policy checks.
 
+### Output Scanning
+
+Every policy above inspects a tool's *arguments* before it runs. `output_scan` inspects what a tool *returns* — the data-leakage direction. A tool that reads a database, a file, or an external API can hand back an SSN or a leaked credential that would otherwise land straight in the model's context on the next turn. This scans the result first and redacts, blocks, or flags it.
+
+```python linenums="1"
+# Redact PII, block secrets (the defaults)
+GovernancePolicy.output_scan()
+
+# Block on any PII too, and only scan the categories you care about.
+# Actions take an OutputAction member or its string name, as `mode` takes GovernanceMode.
+GovernancePolicy.output_scan(pii_action=OutputAction.BLOCK, categories=["ssn", "credit_card"])
+```
+
+Each detector carries its own action:
+
+| Action | Effect |
+|--------|--------|
+| `REDACT` | Replace matched values in the result with `[REDACTED:{type}]`; the sanitized result flows through to the model. |
+| `BLOCK` | Withhold the whole result and fail the turn with a governance error (ENFORCE only). In MONITOR it degrades to `REDACT` so the value still never leaks. |
+| `FLAG` | Record the finding in the decision and receipt trail; pass the result through unchanged. |
+
+The defaults mirror the sensible split: PII is redacted (the agent usually still needs the surrounding result), secrets are blocked (a leaked credential should not reach the model at all).
+
+The two detectors act independently: `output_scan(pii_action="FLAG", secret_action="REDACT")` records the PII it finds and rewrites only the credential. Where they overlap — a single result carrying both, or several `output_scan` policies disagreeing about the same detector — the more restrictive action wins.
+
+Results are scanned whatever shape they arrive in. A tool returning a `dict` or a list leaks just as readily as one returning a sentence, so structured results are scanned and redacted through their strings:
+
+```python linenums="1"
+# A tool whose result is a dict, not a sentence
+def lookup_customer(name: str) -> dict[str, str]:
+    return {"name": name, "ssn": "123-45-6789"}
+
+# With GovernancePolicy.output_scan() configured, the model receives:
+#   {"name": "Ada", "ssn": "[REDACTED:ssn]"}
+```
+
+Findings are recorded with reason codes `OUTPUT_PII_DETECTED:{category}` and `OUTPUT_SECRET_DETECTED`, plus `OUTPUT_REDACTED`, `OUTPUT_REDACTION_INCOMPLETE`, or `OUTPUT_BLOCKED` describing what was done. Risk score is 90 when a secret is present, 60 for PII only.
+
+Error results are scanned too. A tool that *raises* with an SSN or credential in its exception message leaks it into the model's context just as a returned value would, so `output_scan` scans a `ToolErrorEvent`'s message and traceback on the same terms. An error stays an error: its content is redacted in place, and a `BLOCK` in ENFORCE replaces it with a sanitized governance error rather than turning the failure into a success.
+
+!!! warning "A value spanning two result parts is withheld, not half-redacted"
+
+    Detection reads a result's parts together, while redaction rewrites each part on its own — so a value split across a part boundary can be found but not cut out. Rather than pass on a result it could not fully sanitize, TealTiger withholds it and adds the reason code `OUTPUT_REDACTION_INCOMPLETE`. Outside ENFORCE the affected parts are replaced with `[REDACTED:unredactable]`.
+
+`output_scan` validates its own configuration: scanning nothing (`scan_pii=False, scan_secrets=False`), an invalid action, an unknown PII category, or `scan_pii=True` with an empty `categories` list all raise `ValueError` at construction, so a policy that would silently scan nothing cannot be created by mistake.
+
+!!! note "Runs after the tool, in MONITOR and ENFORCE"
+
+    Output scanning evaluates the tool's result — successful or error — so it necessarily runs *after* the tool executes; it governs what re-enters the model's context, not whether the tool runs. In OBSERVE mode results pass through unmodified, consistent with OBSERVE never altering a call.
+
 ### Cost Limit
 
 Enforce per-session cost ceilings:
@@ -395,7 +450,7 @@ for decision in governance.decisions:
 | `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
 | `agent_name` | `str` | Agent that made the call, or `unknown` |
 | `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
-| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `OUTPUT_PII_DETECTED:{category}`, `OUTPUT_SECRET_DETECTED`, `OUTPUT_REDACTED`, `OUTPUT_REDACTION_INCOMPLETE`, `OUTPUT_BLOCKED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
 | `risk_score` | `int` | 0 (safe) to 100 (critical) |
 | `evaluation_time_ms` | `float` | Governance latency for this decision |
 | `cost_tracked` | `float` | Cost attributed to this call in USD |
@@ -572,7 +627,7 @@ if __name__ == "__main__":
 
 ## Evaluation Order
 
-Two checks always run first, in this order. Everything after them is your policy list, walked in the order you declared it — the first DENY wins and short-circuits the rest:
+Two checks always run first, in this order. Everything after them is your policy list, walked in the order you declared it — the first DENY wins and short-circuits the rest. Once the tool has run, `output_scan` gets the last word on its result:
 
 ```mermaid
 flowchart TD
@@ -582,14 +637,22 @@ flowchart TD
     S2{{"2️⃣ Factory Budget<br/>(risk: 70)"}} -->|exceeded| DENY
     S2 -->|within budget| S3
     S3{{"3️⃣ Your policies, in list order<br/>first DENY wins"}} -->|violation| DENY
-    S3 -->|all clean| ALLOW[✅ ALLOW]
+    S3 -->|all clean| RUN[/Tool executes/]
+    RUN --> S4
+    S4{{"4️⃣ Output scan, on the result<br/>(risk: 90 secret / 60 PII)"}} -->|BLOCK| DENY
+    S4 -->|REDACT| SANITIZED[✅ ALLOW<br/>sanitized result]
+    S4 -->|FLAG or clean| ALLOW[✅ ALLOW]
 
     style S1 fill:#fef2f2,stroke:#fca5a5
     style S2 fill:#fef9c3,stroke:#fde047
     style S3 fill:#eff6ff,stroke:#93c5fd
+    style S4 fill:#faf5ff,stroke:#c4b5fd
     style DENY fill:#fef2f2,stroke:#dc2626,stroke-width:2px
     style ALLOW fill:#f0fdf4,stroke:#16a34a,stroke-width:2px
+    style SANITIZED fill:#f0fdf4,stroke:#16a34a,stroke-width:2px
 ```
+
+Steps 1–3 govern whether the tool runs; step 4 governs what its result is allowed to carry back. Only step 4 runs after execution, and it is skipped entirely in OBSERVE mode.
 
 Each policy type carries its own risk score when it denies:
 
@@ -603,6 +666,7 @@ Each policy type carries its own risk score when it denies:
 | Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
 | Tool blocklist | `TOOL_BLOCKED` | 80 |
 | Cost limit / factory budget | `BUDGET_EXCEEDED` | 70 |
+| Output scan (post-tool, on the result) | `OUTPUT_SECRET_DETECTED` / `OUTPUT_PII_DETECTED:{category}` | 90 / 60 |
 
 !!! warning "Policy order is yours to choose"
 

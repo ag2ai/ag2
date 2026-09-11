@@ -6,6 +6,7 @@
 import re
 import time
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -17,6 +18,51 @@ class GovernanceMode(str, Enum):
     OBSERVE = "OBSERVE"  # Log decisions, never block
     MONITOR = "MONITOR"  # Log decisions with warnings, never block
     ENFORCE = "ENFORCE"  # Log decisions AND block denied tool calls
+
+
+class OutputAction(str, Enum):
+    """What an ``output_scan`` detector does with a finding in a tool result."""
+
+    REDACT = "REDACT"  # Replace matched values in place; the sanitized result flows through
+    BLOCK = "BLOCK"  # Withhold the whole result (ENFORCE only; degrades to REDACT elsewhere)
+    FLAG = "FLAG"  # Record the finding only; the result passes through unchanged
+
+
+# Severity order for resolving one effective action out of several policies.
+# A more restrictive action always wins.
+_OUTPUT_ACTION_SEVERITY: dict[OutputAction, int] = {
+    OutputAction.FLAG: 0,
+    OutputAction.REDACT: 1,
+    OutputAction.BLOCK: 2,
+}
+
+
+def most_restrictive(actions: Iterable[OutputAction], default: OutputAction) -> OutputAction:
+    """The most restrictive of `actions` (BLOCK > REDACT > FLAG), or `default` if empty."""
+    return max(actions, key=lambda a: _OUTPUT_ACTION_SEVERITY[a], default=default)
+
+
+# PII detection patterns, keyed by the category name policies refer to. This dict is
+# the single source of truth for which categories exist: `PII_CATEGORIES` is derived
+# from it, and both the `pii_block` / `output_scan` validators and the middleware's
+# detection and redaction read it rather than restating the list.
+PII_PATTERNS: dict[str, re.Pattern[str]] = {
+    "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+    "credit_card": re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b"),
+    "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+    "phone": re.compile(r"\b(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
+}
+
+PII_CATEGORIES: tuple[str, ...] = tuple(PII_PATTERNS)
+
+SECRET_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\b(sk-[a-zA-Z0-9]{20,})\b"),
+    re.compile(r"\b(ghp_[a-zA-Z0-9]{36,})\b"),
+    re.compile(r"\b(AKIA[0-9A-Z]{16})\b"),
+    re.compile(r"\b(xox[bpors]-[a-zA-Z0-9-]+)\b"),
+    re.compile(r"(?i)(?:api[_-]?key|apikey)\s*[:=]\s*['\"]?[a-zA-Z0-9_\-]{20,}"),
+    re.compile(r"-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----"),
+]
 
 
 # Minimum pattern confidence a prompt-injection finding needs to trigger a block.
@@ -212,17 +258,112 @@ class GovernancePolicy:
         """Block tool calls containing PII in arguments.
 
         Args:
-            categories: PII categories to detect. Default: ["ssn", "credit_card", "email", "phone"].
+            categories: PII categories to detect. Default: every category in
+                `PII_CATEGORIES`.
         """
         return cls(
             type="pii_block",
-            config={"categories": categories or ["ssn", "credit_card", "email", "phone"]},
+            config={"categories": categories or list(PII_CATEGORIES)},
         )
 
     @classmethod
     def secret_detection(cls) -> "GovernancePolicy":
         """Block tool calls containing API keys/tokens in arguments."""
         return cls(type="secret_detection", config={})
+
+    @classmethod
+    def output_scan(
+        cls,
+        scan_pii: bool = True,
+        scan_secrets: bool = True,
+        pii_action: str | OutputAction = OutputAction.REDACT,
+        secret_action: str | OutputAction = OutputAction.BLOCK,
+        categories: list[str] | None = None,
+    ) -> "GovernancePolicy":
+        """Scan tool *results* for PII/secrets before they flow back into agent context.
+
+        Where `pii_block` / `secret_detection` inspect a tool's *arguments*
+        before it runs, this inspects what the tool *returns* — the data-leakage
+        direction. A tool that reads a database, file, or API can hand back an
+        SSN or a leaked credential that would otherwise land straight in the
+        model's context on the next turn. This policy scans that result and
+        redacts, blocks, or flags it first.
+
+        Each detector has an independent action:
+
+        | Action | Effect |
+        |--------|--------|
+        | `REDACT` | Replace matched values in the result with `[REDACTED:<type>]`; the sanitized result flows through. |
+        | `BLOCK` | Replace the whole result with a governance error (ENFORCE only). In MONITOR it degrades to REDACT so the value still never leaks. |
+        | `FLAG` | Record the finding in the decision/receipt trail; pass the result through unchanged. |
+
+        The two actions are independent: flagging PII while redacting secrets records
+        the PII and rewrites only the credential. In OBSERVE mode results are not
+        scanned at all, consistent with OBSERVE never altering a call. When several
+        `output_scan` policies are configured, the most restrictive action any of
+        them asks for wins, per detector.
+
+        Defaults mirror the sensible split: PII is redacted (the agent usually
+        still needs the surrounding result), secrets are blocked (a leaked
+        credential should not reach the model at all).
+
+        Example::
+
+            GovernancePolicy.output_scan()  # redact PII, block secrets
+            GovernancePolicy.output_scan(pii_action="BLOCK", categories=["ssn", "credit_card"])
+
+        Args:
+            scan_pii: Scan results for PII. Default True.
+            scan_secrets: Scan results for leaked credentials. Default True.
+            pii_action: Action when PII is found — an `OutputAction` member or its
+                string name (`REDACT`, `BLOCK`, `FLAG`).
+            secret_action: Action when a secret is found, same accepted values.
+            categories: PII categories to detect. Default: every category in
+                `PII_CATEGORIES`. Ignored when `scan_pii` is False.
+
+        Raises:
+            ValueError: If both `scan_pii` and `scan_secrets` are False (the
+                policy would scan nothing), if `scan_pii` is True but
+                `categories` is an empty list (PII scanning that scans no
+                category), if an action is not one of `REDACT`/`BLOCK`/`FLAG`,
+                or if `categories` names an unknown PII category — any of which
+                would silently do nothing.
+        """
+        if not scan_pii and not scan_secrets:
+            raise ValueError("output_scan must scan something: set scan_pii and/or scan_secrets to True.")
+
+        actions: dict[str, OutputAction] = {}
+        for label, value in (("pii_action", pii_action), ("secret_action", secret_action)):
+            try:
+                actions[label] = OutputAction(value)
+            except ValueError:
+                valid = ", ".join(a.value for a in OutputAction)
+                raise ValueError(f"Invalid {label} '{value}'. Valid actions: {valid}.") from None
+
+        resolved_categories = list(categories) if categories is not None else list(PII_CATEGORIES)
+        if scan_pii and not resolved_categories:
+            raise ValueError(
+                "output_scan(scan_pii=True) needs at least one PII category to scan; "
+                "pass a non-empty `categories` list or omit it to scan every category "
+                f"({', '.join(PII_CATEGORIES)})."
+            )
+        unknown = set(resolved_categories) - set(PII_CATEGORIES)
+        if unknown:
+            raise ValueError(
+                f"Unknown PII category(ies): {', '.join(sorted(unknown))}. "
+                f"Valid categories: {', '.join(sorted(PII_CATEGORIES))}."
+            )
+
+        return cls(
+            type="output_scan",
+            config={
+                "scan_pii": scan_pii,
+                "scan_secrets": scan_secrets,
+                "pii_action": actions["pii_action"].value,
+                "secret_action": actions["secret_action"].value,
+                "categories": resolved_categories,
+            },
+        )
 
     @classmethod
     def cost_limit(cls, max_per_session: float) -> "GovernancePolicy":
