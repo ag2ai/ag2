@@ -349,9 +349,7 @@ class TestToolErrorsAreScannedToo:
             mode=GovernanceMode.ENFORCE,
         )
         # raise_tool_errors=False models a real provider, which is handed the failure.
-        tracking = TrackingConfig(
-            TestConfig(_call("lookup_customer", name="Ada"), "Done.", raise_tool_errors=False)
-        )
+        tracking = TrackingConfig(TestConfig(_call("lookup_customer", name="Ada"), "Done.", raise_tool_errors=False))
         agent = Agent("assistant", config=tracking, tools=[lookup_customer], middleware=[governance])
 
         await agent.ask("look up Ada")
@@ -370,9 +368,7 @@ class TestToolErrorsAreScannedToo:
             policies=[GovernancePolicy.output_scan()],  # secret_action BLOCK
             mode=GovernanceMode.ENFORCE,
         )
-        tracking = TrackingConfig(
-            TestConfig(_call("read_config", key="aws"), "Done.", raise_tool_errors=False)
-        )
+        tracking = TrackingConfig(TestConfig(_call("read_config", key="aws"), "Done.", raise_tool_errors=False))
         agent = Agent("assistant", config=tracking, tools=[read_config], middleware=[governance])
 
         await agent.ask("what is the aws key")
@@ -390,9 +386,7 @@ class TestToolErrorsAreScannedToo:
             policies=[GovernancePolicy.output_scan()],
             mode=GovernanceMode.ENFORCE,
         )
-        tracking = TrackingConfig(
-            TestConfig(_call("lookup_customer", name="Ada"), "Done.", raise_tool_errors=False)
-        )
+        tracking = TrackingConfig(TestConfig(_call("lookup_customer", name="Ada"), "Done.", raise_tool_errors=False))
         agent = Agent("assistant", config=tracking, tools=[lookup_customer], middleware=[governance])
 
         await agent.ask("look up Ada")
