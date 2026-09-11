@@ -103,6 +103,19 @@ def _rewrite_part(part: Any, rewrite: Callable[[str], str]) -> None:
         part.data = _rewrite_string_leaves(part.data, rewrite)
 
 
+def _reconstructable(exc: BaseException) -> bool:
+    """Whether `type(exc)(message)` is safe to construct.
+
+    Custom exceptions can take extra required constructor args; for those we fall
+    back to a plain `Exception` rather than risk a TypeError while sanitizing.
+    """
+    try:
+        type(exc)(str(exc))
+    except Exception:
+        return False
+    return True
+
+
 def _matches_blocked_terms(text: str, spec: dict[str, Any]) -> bool:
     """Whether `text` contains any of the spec's blocked terms, case-insensitively."""
     if "blocked_terms" not in spec:
@@ -398,7 +411,7 @@ class _TealTigerPerTurn(BaseMiddleware):
         self._emit_receipt(decision, execution_outcome=outcome)
 
         # Post-tool defense: scan the RESULT for PII/secrets before it flows back
-        # into agent context. Runs only on successful results (not errors) and
+        # into agent context. Applies to successful and error results alike, and
         # only if an output_scan policy is configured.
         return self._scan_result(event, tool_name, result)
 
@@ -502,13 +515,21 @@ class _TealTigerPerTurn(BaseMiddleware):
         )
 
     def _scan_result(self, event: "ToolCallEvent", tool_name: str, result: "ToolResultType") -> "ToolResultType":
-        """Scan a successful tool result for PII/secrets, and redact, withhold, or flag it.
+        """Scan a tool result for PII/secrets, and redact, withhold, or flag it.
 
-        Each detector resolves its own action across the configured ``output_scan``
-        policies, taking the most restrictive one asked for.
+        Applies to both successful results and error results (``ToolErrorEvent``),
+        whose exception message and traceback reach the model just like a returned
+        value. Each detector resolves its own action across the configured
+        ``output_scan`` policies, taking the most restrictive one asked for. An
+        error stays an error: a blocked error result is replaced with a sanitized
+        governance error, never turned into a success.
         """
-        # Only successful results carry scannable content; skip errors/others.
-        if not isinstance(result, ToolResultEvent) or isinstance(result, ToolErrorEvent):
+        is_error = isinstance(result, ToolErrorEvent)
+        # ToolResultEvent covers both successful results and ToolErrorEvent
+        # (a subclass): a tool that raises with an SSN or credential in its
+        # message leaks it into model context just as a returned value would,
+        # so error results are scanned too. Non-result types have nothing to scan.
+        if not isinstance(result, ToolResultEvent):
             return result
 
         policies = [p for p in self._factory.policies if p.type == "output_scan"]
@@ -570,6 +591,10 @@ class _TealTigerPerTurn(BaseMiddleware):
             categories = pii_categories if redact_pii else []
             for part in scannable:
                 _rewrite_part(part, lambda text: self._redact(text, categories, redact_secrets))
+            # An error result also carries the exception itself; `str(error)` reaches
+            # the model independently of the parts, so redact it in place too.
+            if is_error:
+                self._redact_error(result, categories, redact_secrets)
 
             # Detection runs over the joined parts, redaction over each part alone, so a
             # value straddling two parts can be found but not removed. Rather than let it
@@ -648,6 +673,19 @@ class _TealTigerPerTurn(BaseMiddleware):
             self._factory.on_decision(decision)
         self._emit_receipt(decision, execution_outcome=execution_outcome)
         return decision
+
+    def _redact_error(self, result: "ToolErrorEvent", categories: list[str], redact_secrets: bool) -> None:
+        """Sanitize the exception carried by an error result, in place.
+
+        `ToolErrorEvent.error` is a separate `Exception` whose rendered string
+        reaches the model alongside `result.parts`. Redacting the parts alone
+        would leave the credential/PII visible via `str(error)`, so the error is
+        replaced with one carrying the redacted message.
+        """
+        original = str(result.error)
+        redacted = self._redact(original, categories, redact_secrets)
+        if redacted != original:
+            result.error = type(result.error)(redacted) if _reconstructable(result.error) else Exception(redacted)
 
     @staticmethod
     def _redact(text: str, categories: list[str], redact_secrets: bool) -> str:

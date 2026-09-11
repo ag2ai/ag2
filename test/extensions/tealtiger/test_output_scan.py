@@ -58,6 +58,16 @@ class TestOutputScanPolicyValidation:
         with pytest.raises(ValueError, match="Unknown PII category"):
             GovernancePolicy.output_scan(categories=["ssn", "passport"])
 
+    def test_scan_pii_with_empty_categories_is_rejected(self):
+        # scan_pii=True + [] would construct but scan no category — must fail loudly.
+        with pytest.raises(ValueError, match="at least one PII category"):
+            GovernancePolicy.output_scan(scan_pii=True, scan_secrets=False, categories=[])
+
+    def test_empty_categories_is_allowed_when_only_secrets_are_scanned(self):
+        # With scan_pii=False the empty PII category list is irrelevant, not an error.
+        policy = GovernancePolicy.output_scan(scan_pii=False, scan_secrets=True, categories=[])
+        assert policy.config["scan_pii"] is False
+
     def test_an_action_is_accepted_as_an_enum_member_or_its_string_name(self):
         from_enum = GovernancePolicy.output_scan(pii_action=OutputAction.BLOCK)
         from_string = GovernancePolicy.output_scan(pii_action="BLOCK")
@@ -322,23 +332,74 @@ async def test_a_value_split_across_parts_is_withheld_rather_than_half_redacted(
 
 
 @pytest.mark.asyncio
-async def test_a_tool_error_passes_through_untouched():
-    def lookup_customer(name: str) -> str:
-        raise RuntimeError(f"lookup failed for SSN {SSN}")
+class TestToolErrorsAreScannedToo:
+    """A tool that raises can leak PII/secrets through its exception message.
 
-    governance = TealTigerMiddleware(
-        policies=[GovernancePolicy.output_scan()],
-        mode=GovernanceMode.ENFORCE,
-    )
-    # raise_tool_errors=False models a real provider, which is handed the failure.
-    tracking = TrackingConfig(TestConfig(_call("lookup_customer", name="Ada"), "Done.", raise_tool_errors=False))
-    agent = Agent("assistant", config=tracking, tools=[lookup_customer], middleware=[governance])
+    ``ToolErrorEvent`` subclasses ``ToolResultEvent`` and carries the traceback in
+    its result parts plus the exception itself, both of which reach the model — so
+    output scanning covers error results, not only successful ones.
+    """
 
-    await agent.ask("look up Ada")
+    async def test_pii_in_an_exception_is_redacted_not_leaked(self):
+        def lookup_customer(name: str) -> str:
+            raise RuntimeError(f"lookup failed for SSN {SSN}")
 
-    [error_text] = _results_seen_by_model(tracking)
-    assert SSN in error_text
-    assert all(not code.startswith("OUTPUT_") for code in _reason_codes(governance))
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.output_scan()],  # pii_action REDACT
+            mode=GovernanceMode.ENFORCE,
+        )
+        # raise_tool_errors=False models a real provider, which is handed the failure.
+        tracking = TrackingConfig(
+            TestConfig(_call("lookup_customer", name="Ada"), "Done.", raise_tool_errors=False)
+        )
+        agent = Agent("assistant", config=tracking, tools=[lookup_customer], middleware=[governance])
+
+        await agent.ask("look up Ada")
+
+        [error_text] = _results_seen_by_model(tracking)
+        assert SSN not in error_text
+        assert "[REDACTED:ssn]" in error_text
+        assert "OUTPUT_PII_DETECTED:ssn" in _reason_codes(governance)
+        assert "OUTPUT_REDACTED" in _reason_codes(governance)
+
+    async def test_a_secret_in_an_exception_is_withheld_in_enforce(self):
+        def read_config(key: str) -> str:
+            raise RuntimeError(f"connection string aws_key={AWS_KEY}")
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.output_scan()],  # secret_action BLOCK
+            mode=GovernanceMode.ENFORCE,
+        )
+        tracking = TrackingConfig(
+            TestConfig(_call("read_config", key="aws"), "Done.", raise_tool_errors=False)
+        )
+        agent = Agent("assistant", config=tracking, tools=[read_config], middleware=[governance])
+
+        await agent.ask("what is the aws key")
+
+        # The credential must not reach the model on any error path.
+        [error_text] = _results_seen_by_model(tracking)
+        assert AWS_KEY not in error_text
+        assert "OUTPUT_SECRET_DETECTED" in _reason_codes(governance)
+
+    async def test_a_clean_exception_passes_through_untouched(self):
+        def lookup_customer(name: str) -> str:
+            raise RuntimeError("customer not found")
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.output_scan()],
+            mode=GovernanceMode.ENFORCE,
+        )
+        tracking = TrackingConfig(
+            TestConfig(_call("lookup_customer", name="Ada"), "Done.", raise_tool_errors=False)
+        )
+        agent = Agent("assistant", config=tracking, tools=[lookup_customer], middleware=[governance])
+
+        await agent.ask("look up Ada")
+
+        [error_text] = _results_seen_by_model(tracking)
+        assert "customer not found" in error_text
+        assert all(not code.startswith("OUTPUT_") for code in _reason_codes(governance))
 
 
 @pytest.mark.asyncio

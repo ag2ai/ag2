@@ -323,9 +323,11 @@ class GovernancePolicy:
 
         Raises:
             ValueError: If both `scan_pii` and `scan_secrets` are False (the
-                policy would scan nothing), if an action is not one of
-                `REDACT`/`BLOCK`/`FLAG`, or if `categories` names an unknown
-                PII category — any of which would silently do nothing.
+                policy would scan nothing), if `scan_pii` is True but
+                `categories` is an empty list (PII scanning that scans no
+                category), if an action is not one of `REDACT`/`BLOCK`/`FLAG`,
+                or if `categories` names an unknown PII category — any of which
+                would silently do nothing.
         """
         if not scan_pii and not scan_secrets:
             raise ValueError("output_scan must scan something: set scan_pii and/or scan_secrets to True.")
@@ -339,6 +341,12 @@ class GovernancePolicy:
                 raise ValueError(f"Invalid {label} '{value}'. Valid actions: {valid}.") from None
 
         resolved_categories = list(categories) if categories is not None else list(PII_CATEGORIES)
+        if scan_pii and not resolved_categories:
+            raise ValueError(
+                "output_scan(scan_pii=True) needs at least one PII category to scan; "
+                "pass a non-empty `categories` list or omit it to scan every category "
+                f"({', '.join(PII_CATEGORIES)})."
+            )
         unknown = set(resolved_categories) - set(PII_CATEGORIES)
         if unknown:
             raise ValueError(

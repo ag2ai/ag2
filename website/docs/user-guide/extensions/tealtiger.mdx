@@ -306,13 +306,17 @@ def lookup_customer(name: str) -> dict[str, str]:
 
 Findings are recorded with reason codes `OUTPUT_PII_DETECTED:{category}` and `OUTPUT_SECRET_DETECTED`, plus `OUTPUT_REDACTED`, `OUTPUT_REDACTION_INCOMPLETE`, or `OUTPUT_BLOCKED` describing what was done. Risk score is 90 when a secret is present, 60 for PII only.
 
+Error results are scanned too. A tool that *raises* with an SSN or credential in its exception message leaks it into the model's context just as a returned value would, so `output_scan` scans a `ToolErrorEvent`'s message and traceback on the same terms. An error stays an error: its content is redacted in place, and a `BLOCK` in ENFORCE replaces it with a sanitized governance error rather than turning the failure into a success.
+
 !!! warning "A value spanning two result parts is withheld, not half-redacted"
 
     Detection reads a result's parts together, while redaction rewrites each part on its own — so a value split across a part boundary can be found but not cut out. Rather than pass on a result it could not fully sanitize, TealTiger withholds it and adds the reason code `OUTPUT_REDACTION_INCOMPLETE`. Outside ENFORCE the affected parts are replaced with `[REDACTED:unredactable]`.
 
+`output_scan` validates its own configuration: scanning nothing (`scan_pii=False, scan_secrets=False`), an invalid action, an unknown PII category, or `scan_pii=True` with an empty `categories` list all raise `ValueError` at construction, so a policy that would silently scan nothing cannot be created by mistake.
+
 !!! note "Runs after the tool, in MONITOR and ENFORCE"
 
-    Output scanning evaluates the tool's result, so it necessarily runs *after* the tool executes — it governs what re-enters the model's context, not whether the tool runs. In OBSERVE mode results pass through unmodified, consistent with OBSERVE never altering a call.
+    Output scanning evaluates the tool's result — successful or error — so it necessarily runs *after* the tool executes; it governs what re-enters the model's context, not whether the tool runs. In OBSERVE mode results pass through unmodified, consistent with OBSERVE never altering a call.
 
 ### Cost Limit
 
