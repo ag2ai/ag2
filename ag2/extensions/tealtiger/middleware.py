@@ -688,20 +688,24 @@ class _TealTigerPerTurn(BaseMiddleware):
         return len(history) >= config["max_calls"]
 
     def _record_rate_limit_calls(self, tool_name: str) -> None:
-        """Record `now` against every rate_limit bucket `tool_name` falls under.
+        """Record `now` once against each distinct rate_limit bucket `tool_name` falls under.
 
         Called only for allowed calls, so a denied call never counts toward the
         window. A call can match several buckets (e.g. a global limit and a
-        per-tool one); each is recorded independently.
+        per-tool one), and several policies can share one bucket key (two global
+        limits both key ``"*"``, or two policies with the same tool pattern). The
+        bucket — not the policy — is what a window counts, so a single real call
+        must add exactly one timestamp per *distinct* key; recording per policy
+        would double-count shared buckets and trip the tighter limit early.
         """
         now = time.time()
-        for policy in self._factory.policies:
-            if policy.type != "rate_limit":
-                continue
-            pattern = policy.config.get("tool")
-            if pattern is not None and not fnmatch.fnmatch(tool_name, pattern):
-                continue
-            key = self._rate_limit_key(policy.config)
+        keys = {
+            self._rate_limit_key(policy.config)
+            for policy in self._factory.policies
+            if policy.type == "rate_limit"
+            and (policy.config.get("tool") is None or fnmatch.fnmatch(tool_name, policy.config["tool"]))
+        }
+        for key in keys:
             self._factory._call_history.setdefault(key, []).append(now)
 
     def _record_decision(

@@ -216,3 +216,51 @@ async def test_rate_limit_blocks_a_real_agent_turn_in_enforce():
         await agent.ask("search for hello")
 
     assert governance.deny_count == 1
+
+
+class TestSharedBucketIsCountedOnce:
+    """Regression for PR #3246 review: policies sharing a bucket key must not
+    double-count a single real call.
+    """
+
+    def test_two_global_limits_share_one_bucket_without_double_counting(self):
+        # Both policies are global -> both use the "*" bucket. A single real call
+        # must add exactly one timestamp, not one per policy.
+        governance = TealTigerMiddleware(
+            policies=[
+                GovernancePolicy.rate_limit(10, window_seconds=60),
+                GovernancePolicy.rate_limit(100, window_seconds=3600),
+            ],
+            mode=GovernanceMode.ENFORCE,
+        )
+
+        for _ in range(5):
+            assert _decide(governance, "search") == "ALLOW"
+
+        # Five real calls -> five timestamps in the shared bucket (not ten).
+        assert len(governance._call_history["*"]) == 5
+
+        # The 10/min limit must still have five allowances left, not be tripped.
+        for _ in range(5):
+            assert _decide(governance, "search") == "ALLOW"
+        # The 11th real call is the one that trips the 10/min limit.
+        per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
+        assert per_turn._evaluate("search", "{}").action == "DENY"
+
+    def test_two_policies_with_same_tool_pattern_share_one_bucket(self):
+        governance = TealTigerMiddleware(
+            policies=[
+                GovernancePolicy.rate_limit(4, window_seconds=60, tool="db_*"),
+                GovernancePolicy.rate_limit(50, window_seconds=3600, tool="db_*"),
+            ],
+            mode=GovernanceMode.ENFORCE,
+        )
+
+        for _ in range(4):
+            assert _decide(governance, "db_read") == "ALLOW"
+
+        # Four real calls -> four timestamps in the shared "db_*" bucket, not eight.
+        assert len(governance._call_history["db_*"]) == 4
+        # The 4/min limit trips on the 5th real call, exactly at its threshold.
+        per_turn = governance(ToolCallEvent(name="db_write", arguments="{}"), _FakeContext())
+        assert per_turn._evaluate("db_write", "{}").action == "DENY"
