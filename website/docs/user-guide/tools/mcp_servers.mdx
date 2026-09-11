@@ -30,20 +30,20 @@ That is the whole of the common case. `MCPToolkit` connects to the server, disco
 
 ### Which of the two connection styles you want
 
-Autogen supports both ways MCP servers are typically wired into an agent:
+AG2 supports both ways MCP servers are typically wired into an agent:
 
-- **Client-side connection** (`MCPToolkit`) — Autogen connects to the MCP server itself, discovers the tools, and executes them locally. The LLM only ever sees ordinary function tools. Works with every provider. Supports both **remote** servers (HTTP / streamable-http) and **local** servers (subprocess speaking MCP over stdin/stdout).
+- **Client-side connection** (`MCPToolkit`) — AG2 connects to the MCP server itself, discovers the tools, and executes them locally. The LLM only ever sees ordinary function tools. Works with every provider. Supports both **remote** servers (HTTP / streamable-http) and **local** servers (subprocess speaking MCP over stdin/stdout).
 - **Provider-side connection** (`MCPServerTool`) — the MCP server URL and credentials are forwarded to the LLM provider, which connects to the server and invokes the tools on its end. Only works with providers that natively support it (e.g. Anthropic).
 
 | | `MCPToolkit` (client-side) | `MCPServerTool` (provider-side) |
 |---|---|---|
-| Who connects to the MCP server | Autogen | LLM provider |
-| Who executes tool calls | Autogen | LLM provider |
+| Who connects to the MCP server | AG2 | LLM provider |
+| Who executes tool calls | AG2 | LLM provider |
 | Works with any LLM provider | Yes | No — provider must support MCP passthrough |
 | Supports local stdio servers | Yes | No — provider only accepts URLs |
 | Credentials leave your infra | No | Yes — forwarded to the LLM provider |
 | Custom middleware on tool calls | Yes | No |
-| Lifecycle / connection pooling | Handled by Autogen | Handled by provider |
+| Lifecycle / connection pooling | Handled by AG2 | Handled by provider |
 
 !!! tip
     Pick `MCPToolkit` when you want provider-agnostic behavior, local control over tool execution, when you need to run a local stdio MCP server, or when your MCP credentials must stay inside your infrastructure. Pick `MCPServerTool` when you're only targeting a provider that supports it and you'd rather let the provider manage the MCP lifecycle for you.
