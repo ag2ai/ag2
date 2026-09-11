@@ -253,7 +253,7 @@ Merge conditions (all must hold):
 
 1. CI is green.
 2. CLA signed.
-3. Approval from a core maintainer — who thereby agrees the change will be supported (per the [Contribution Policy](../../website/docs/user-guide/contribution_policy.mdx)).
+3. Approval from a core maintainer — who thereby agrees the change will be supported (per the [Contribution Policy](../../website/docs/contributor-guide/contribution_policy.mdx)).
 4. For `type:feature`: documentation updated in the same PR where applicable.
 5. For `area:extensions`: the Extension has a named maintainer (see [§6](#6-extensions)).
 
@@ -282,7 +282,7 @@ Exempt from stale: everything that is not gated — `status:needs-triage` (a slo
 
 ## 6. Extensions
 
-Extensions (`ag2/extensions/`, labeled `area:extensions` by path) follow the [Contribution Policy](../../website/docs/user-guide/contribution_policy.mdx): they are first-class components held to Core's quality bar, but **maintained by a named maintainer rather than by AG2**.
+Extensions (`ag2/extensions/`, labeled `area:extensions` by path) follow the [Contribution Policy](../../website/docs/contributor-guide/contribution_policy.mdx): they are first-class components held to Core's quality bar, but **maintained by a named maintainer rather than by AG2**.
 
 Differences from the standard flow:
 
