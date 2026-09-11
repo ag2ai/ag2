@@ -1,0 +1,82 @@
+---
+title: Recursive Search
+sidebarTitle: Recursive Search
+---
+
+Recursive search lets an agent research a complex query with a swarm of search nodes. The root node decomposes the query into sub-objectives, delegates them to child nodes (which may delegate further), and aggregates the evidence that flows back up into a final answer. The mechanism is adapted from [WebSwarm](https://arxiv.org/abs/2607.08662v1).
+
+## Why Use Recursive Search
+
+- **Deep-and-wide coverage** — a wide query is split into independent aspects, each researched in parallel, then synthesized.
+- **Bounded by code, not by prompt** — the delegation depth budget and fan-out cap are enforced structurally, so the tree cannot grow unboundedly.
+- **Framework-agnostic search backends** — nodes use caller-supplied search/fetch tools (e.g. `#!python DuckDuckSearchTool`), so nothing new is pulled in.
+
+## How It Works
+
+Every non-atom search node is an agent carrying the caller's search tools plus a self-referential `#!python solve_subtasks` tool. Nodes have two modes:
+
+- **`#!python ATOM`** — solves its objective directly with its search tools and cannot delegate.
+- **`#!python WIDE`** — covers the objective broadly by delegating up to `#!python max_children` homogeneous child nodes, then aggregates their evidence.
+
+When a node's depth budget is exhausted, `#!python solve_subtasks` returns a downgrade sentinel and the node falls back to solving the objectives itself.
+
+## Quick Start
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools.search import DuckDuckSearchTool
+from ag2.tools.subagents import SearchMode, recursive_search_tool
+
+
+async def main() -> None:
+    config = AnthropicConfig(model="claude-sonnet-4-6")
+    agent = Agent(
+        name="researcher",
+        config=config,
+        tools=[
+            recursive_search_tool(
+                config=config,
+                search_mode=SearchMode.WIDE,
+                tools=[DuckDuckSearchTool(max_results=5)],
+                max_depth=3,
+                max_children=3,
+            )
+        ],
+    )
+
+    reply = await agent.ask("Compare the leading vector databases for a RAG workload.")
+    print(await reply.content())
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## API
+
+### `#!python recursive_search_tool(*, config, name, search_mode, tools, max_depth, max_children, stream)`
+
+Creates a `#!python FunctionTool` that runs a root search node for the given query. Every non-atom node beneath the root carries the self-referential `#!python solve_subtasks` tool.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `#!python config` | *(required)* | LLM config shared by every search node. Nodes are plain agents, so the calling agent's model is not inherited. |
+| `#!python name` | `#!python "recursive_search"` | Tool name. |
+| `#!python search_mode` | `#!python SearchMode.WIDE` | Mode of the root node; children pick their own mode per subtask. |
+| `#!python tools` | `#!python ()` | Search/fetch tools every node uses to actually search (e.g. `#!python DuckDuckSearchTool`). |
+| `#!python max_depth` | `#!python 3` | Delegation depth budget. A node whose budget is exhausted gets a downgrade sentinel and must solve objectives itself. |
+| `#!python max_children` | `#!python 3` | Fan-out cap per delegation call (2-3 recommended for wide mode). |
+| `#!python stream` | `#!python None` | Optional stream factory for per-node persistent history (e.g. `#!python persistent_stream()`). |
+| `#!python timeout` | `#!python 300` | **Idle deadline** in seconds: the search is cancelled only when *no events* are written for `#!python timeout` seconds. A search that is slow but keeps making progress is never interrupted — only a hung one is killed. Pass `#!python None` to disable. Cannot be combined with `#!python stream=` (idle tracking needs the shared-history stream). |
+| `#!python max_nodes` | `#!python None` | Hard ceiling on the total number of nodes the search may spawn (including the root). Nodes may call `#!python solve_subtasks` repeatedly, so depth and fan-out alone do not bound tree size; this budget does. When exhausted, further delegation returns a sentinel and the node solves the objectives itself. `#!python None` means no cap. |
+| `#!python max_evidence_chars` | `#!python 4000` | Per-child cap on how much of a node's result is included in the evidence passed up the tree, so deep swarms do not blow up the parent's context. Pass `#!python None` to disable. |
+
+### `#!python recursive_search_agent(name, *, config, search_mode, tools, max_depth, max_children, stream, prompt, timeout, max_nodes, max_evidence_chars)`
+
+Convenience factory that builds an `#!python Agent` carrying `#!python recursive_search_tool` with the given configuration.
+
+!!! note
+    The current port covers the paper's `#!python atom` and `#!python wide` verbs. The `#!python deep` verb (proposer/verifier architecture) and `#!python entity_collect` verb (schema inference, split-verify-merge) are intentionally out of scope and are candidates for follow-up modules.
