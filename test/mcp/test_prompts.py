@@ -5,11 +5,11 @@
 import pytest
 from mcp.server.lowlevel import NotificationOptions
 
-from ag2 import Agent
 from ag2.mcp import MCPServer, Prompt, PromptArgument, PromptMessage
 from ag2.mcp.errors import MCPPromptNotFoundError
 from ag2.mcp.prompts import PromptProvider
-from ag2.testing import TestConfig
+
+from ._helpers import greeter
 
 
 @pytest.mark.asyncio
@@ -55,18 +55,17 @@ class TestPromptGet:
             await provider.get("missing", {})
 
 
-class TestPromptCapability:
-    def test_advertised_only_when_prompts_present(self) -> None:
-        agent = Agent("a", config=TestConfig("hi"))
-        opts = NotificationOptions()
+def test_the_prompt_capability_is_advertised_only_when_prompts_are_present() -> None:
+    agent = greeter()
+    opts = NotificationOptions()
 
-        without = MCPServer(agent).server.get_capabilities(opts, {})
-        with_prompts = MCPServer(agent, prompts=[Prompt(name="greet", render=lambda _a: "hi")]).server.get_capabilities(
-            opts, {}
-        )
+    without = MCPServer(agent).server.get_capabilities(opts, {})
+    with_prompts = MCPServer(agent, prompts=[Prompt(name="greet", render=lambda _a: "hi")]).server.get_capabilities(
+        opts, {}
+    )
 
-        assert without.prompts is None
-        assert with_prompts.prompts is not None
+    assert without.prompts is None
+    assert with_prompts.prompts is not None
 
 
 def test_prompt_argument_declaration() -> None:

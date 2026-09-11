@@ -12,14 +12,9 @@ from pydantic import AnyHttpUrl
 
 @dataclass(frozen=True, slots=True)
 class Scheme:
-    """A named OAuth 2.0 authorization server that may issue tokens for this MCP
-    resource server.
+    """An OAuth 2.0 authorization server that may issue tokens for this MCP server.
 
-    MCP authorization is bearer-only — RFC 9728 Protected Resource Metadata
-    advertises a list of authorization servers — so this is the single scheme
-    kind (cf. A2A's ``bearer_scheme`` / ``api_key_scheme`` / ``oauth2_scheme``
-    variants). Build one with :func:`oauth2_scheme`; pass ``Scheme`` objects to
-    :func:`require` to build a :class:`Requirement`."""
+    Build one with :func:`oauth2_scheme` and pass it to :func:`require`."""
 
     url: str
 
@@ -28,19 +23,11 @@ class Scheme:
 class Requirement:
     """The OAuth 2.0 Resource Server security requirement for an MCP server.
 
-    Mirrors A2A's ``Requirement``: it declares the auth a remote client must
-    satisfy. Unlike A2A (which only advertises), an MCP server also *enforces*,
-    so this carries the bring-your-own ``verifier`` and the ``required_scopes``
-    enforced on the MCP endpoint. :meth:`to_metadata` renders the raw RFC 9728
+    Carries the bring-your-own ``verifier`` and the ``required_scopes`` enforced
+    on the MCP endpoint; :meth:`to_metadata` renders the RFC 9728
     ``ProtectedResourceMetadata`` served at
-    ``/.well-known/oauth-protected-resource`` (cf. A2A ``Requirement.to_proto``).
-
-    The MCP server is purely an OAuth 2.1 Resource Server here: it advertises the
-    trusted authorization server(s) and verifies tokens. Issuing tokens and
-    serving authorization-server metadata stay with the external authorization
-    server (out of scope per the MCP authorization spec).
-
-    Build via :func:`require`."""
+    ``/.well-known/oauth-protected-resource``. Issuing tokens stays with the
+    external authorization server. Build via :func:`require`."""
 
     schemes: tuple[Scheme, ...]
     verifier: TokenVerifier
@@ -61,12 +48,11 @@ class Requirement:
 
 
 def oauth2_scheme(*, url: str) -> Scheme:
-    """OAuth 2.0 authorization-server declaration (the issuer ``url`` that mints
-    tokens for this resource server).
+    """Declare an authorization server by the issuer ``url`` that mints its tokens.
 
-    ``url`` must be an absolute ``http(s)`` URL (RFC 9728 advertises it as such).
-    An OIDC issuer *string* like ``stytch.com/project-...`` is not usable here —
-    pass the full URL whose ``/.well-known/...`` metadata resolves."""
+    ``url`` must be an absolute ``http(s)`` URL: an OIDC issuer *string* like
+    ``stytch.com/project-...`` is not usable here — pass the full URL whose
+    ``/.well-known/...`` metadata resolves."""
     if not url.startswith(("http://", "https://")):
         raise ValueError(
             f"oauth2_scheme url must be an absolute http(s) URL, got {url!r} "

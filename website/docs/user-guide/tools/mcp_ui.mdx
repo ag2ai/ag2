@@ -12,6 +12,9 @@ AG2 builds these resources and the interactive callbacks (**UI Actions**) in `ag
 !!! note "This is the serving side of MCP"
     `ag2.mcp.MCPServer` exposes an agent **as** an MCP server — see [Serving an Agent as an MCP Server](/docs/user-guide/tools/serving_mcp) for transports, conversations and security. This is the inverse of consuming an MCP server as tools with `MCPToolkit` / `MCPServerTool` — see [MCP Servers](/docs/user-guide/tools/mcp_servers) for that.
 
+!!! warning "MCP-UI and MCP Apps are alternatives — pick one"
+    [MCP Apps](/docs/user-guide/tools/mcp_apps) — `ag2.mcp.apps`, the `io.modelcontextprotocol/ui` extension — is the other mechanism, and it inverts this one. There the document is registered as a resource and read by URI **in parallel with** the call, so it cannot be built from the call's arguments; the per-call data reaches it as the result's `structuredContent` instead. A host implementing MCP Apps will not render UI a handler returned. Choose by the host you are serving.
+
 ## Installation
 
 `ag2.mcp_ui` ships as an optional extra (it is **not** pulled in by `ag2[mcp]`):

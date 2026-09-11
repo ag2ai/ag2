@@ -6,17 +6,13 @@ import importlib.metadata
 
 import pytest
 from mcp.server import CacheHint
-from pydantic import BaseModel
 
 from ag2 import Agent
 from ag2.mcp import MCPServer, build_ask_tool
 from ag2.mcp.testing import serve
 from ag2.testing import TestConfig
 
-
-class Weather(BaseModel):
-    city: str
-    temp_c: float
+from ._helpers import Weather
 
 
 def test_server_exposes_agent() -> None:

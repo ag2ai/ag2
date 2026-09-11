@@ -5,11 +5,11 @@
 import pytest
 from mcp.server.lowlevel import NotificationOptions
 
-from ag2 import Agent
 from ag2.mcp import MCPServer, Resource, ResourceTemplate
 from ag2.mcp.errors import MCPResourceNotFoundError
 from ag2.mcp.resources import ResourceProvider
-from ag2.testing import TestConfig
+
+from ._helpers import greeter
 
 # ``mcp`` 2.0 keys request handlers by method string rather than by request type.
 _TEMPLATES_LIST = "resources/templates/list"
@@ -75,7 +75,7 @@ class TestResourceRead:
 
 class TestResourceCapability:
     def test_advertised_only_when_resources_present(self) -> None:
-        agent = Agent("a", config=TestConfig("hi"))
+        agent = greeter()
         opts = NotificationOptions()
 
         without = MCPServer(agent).server.get_capabilities(opts, {})
@@ -87,7 +87,7 @@ class TestResourceCapability:
         assert with_res.resources is not None
 
     def test_templates_listed_only_when_present(self) -> None:
-        agent = Agent("a", config=TestConfig("hi"))
+        agent = greeter()
 
         static_only = MCPServer(agent, resources=[Resource(uri="config://app", name="app", read=lambda: "hi")]).server
         with_tpl = MCPServer(agent, resource_templates=[ResourceTemplate("x://{v}", "x", lambda v: v["v"])]).server

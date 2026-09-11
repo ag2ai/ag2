@@ -11,11 +11,13 @@ from ag2.mcp import MCPServer
 from ag2.mcp.testing import connect
 from ag2.testing import TestConfig, TrackingConfig
 
+from ._helpers import greeter
+
 
 @pytest.mark.asyncio
 class TestE2EText:
     async def test_list_tools_exposes_ask(self) -> None:
-        server = MCPServer(Agent("greeter", "Be nice.", config=TestConfig("hi")))
+        server = MCPServer(greeter())
 
         async with connect(server) as session:
             tools = await session.list_tools()
@@ -23,7 +25,7 @@ class TestE2EText:
         assert [t.name for t in tools.tools] == ["ask"]
 
     async def test_call_tool_returns_reply(self) -> None:
-        server = MCPServer(Agent("greeter", config=TestConfig("hello there!")))
+        server = MCPServer(greeter("hello there!"))
 
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
@@ -45,7 +47,7 @@ class TestE2EText:
         tracking.mock.assert_called_with(ModelRequest([TextInput("Context:\nbe brief"), TextInput("do it")]))
 
     async def test_custom_tool_name(self) -> None:
-        server = MCPServer(Agent("greeter", config=TestConfig("yo")), tool_name="chat")
+        server = MCPServer(greeter("yo"), tool_name="chat")
 
         async with connect(server) as session:
             tools = await session.list_tools()

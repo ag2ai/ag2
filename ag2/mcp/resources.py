@@ -4,9 +4,9 @@
 
 import base64
 import re
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.types import (
@@ -21,17 +21,17 @@ from mcp.types import (
 from mcp.types import Resource as MCPResource
 from mcp.types import ResourceTemplate as MCPResourceTemplate
 
+from ag2.annotations import Variable
+
 from ._async import call_user_fn
 from .errors import MCPResourceNotFoundError
-
-if TYPE_CHECKING:
-    from mcp.server.context import ServerRequestContext
+from .tools import MCPExecutionContext, call_with_context, resolve_context_value
 
 # Resource bodies are either text (``str``) or binary (``bytes``); the reader may
 # be sync or async. A template reader additionally receives the variables matched
 # out of the request URI.
 ResourceContent = str | bytes
-ReadFn = Callable[[], Awaitable[ResourceContent] | ResourceContent]
+ReadFn = Callable[..., Awaitable[ResourceContent] | ResourceContent]
 TemplateReadFn = Callable[[dict[str, str]], Awaitable[ResourceContent] | ResourceContent]
 
 
@@ -42,13 +42,33 @@ class Resource:
     ``read`` returns the body (``str`` → text, ``bytes`` → binary) and may be sync
     or async. ``mime_type`` defaults to ``text/plain`` for text and
     ``application/octet-stream`` for bytes when left ``None``.
+
+    ``meta`` reaches ``_meta`` on both the listing entry and the read result. It
+    is a generic passthrough into the protocol's extension slot — ag2 puts
+    nothing of its own there — so an extension's keys (``ui`` for MCP Apps, say)
+    go in verbatim. An empty mapping puts no ``_meta`` on the wire at all.
+
+    ``title`` is the display name a client shows in ``resources/list``; ``name``
+    stays the identifier. It reaches the listing entry only — the wire's read
+    result has no such field — so it is visible only on a listed resource.
+
+    ``listed`` keeps the resource out of ``resources/list`` when false. It stays
+    readable by URI: the listing is a browsing surface, and a body that only
+    makes sense to a machine that was told its URI does not belong there.
+
+    ``title``, ``description``, ``mime_type`` and the values inside ``meta`` may
+    each be a ``Variable``, resolved per request against the ``AskContext`` the
+    server's ``context_provider`` returned.
     """
 
     uri: str
     name: str
     read: ReadFn
-    description: str | None = None
-    mime_type: str | None = None
+    title: str | Variable | None = None
+    description: str | Variable | None = None
+    mime_type: str | Variable | None = None
+    meta: Mapping[str, Any] | None = None
+    listed: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,32 +134,42 @@ class ResourceProvider:
         return bool(self._templates)
 
     async def on_list_resources(
-        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+        self, ctx: MCPExecutionContext, params: PaginatedRequestParams | None
     ) -> ListResourcesResult:
-        return ListResourcesResult(resources=[_to_mcp_resource(r) for r in self._resources])
+        return ListResourcesResult(resources=[_to_mcp_resource(r, ctx) for r in self._resources if r.listed])
 
     async def on_list_resource_templates(
-        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+        self, ctx: MCPExecutionContext, params: PaginatedRequestParams | None
     ) -> ListResourceTemplatesResult:
         return ListResourceTemplatesResult(resourceTemplates=[_to_mcp_template(t) for t in self._templates])
 
-    async def on_read_resource(
-        self, ctx: "ServerRequestContext[Any, Any]", params: ReadResourceRequestParams
-    ) -> ReadResourceResult:
-        contents = await self.read(params.uri)
+    async def on_read_resource(self, ctx: MCPExecutionContext, params: ReadResourceRequestParams) -> ReadResourceResult:
+        contents = await self.read(params.uri, ctx)
         return ReadResourceResult(contents=[_to_wire_contents(params.uri, c) for c in contents])
 
-    async def read(self, uri: str) -> list[ReadResourceContents]:
+    async def read(self, uri: str, context: MCPExecutionContext | None = None) -> list[ReadResourceContents]:
         resource = self._by_uri.get(uri)
         if resource is not None:
-            data = await call_user_fn(resource.read)
-            return [ReadResourceContents(content=data, mime_type=resource.mime_type)]
+            data = await _call_resource_read(resource.read, context)
+            return [
+                ReadResourceContents(
+                    content=data,
+                    mime_type=resolve_context_value(resource.mime_type, context),
+                    meta=_meta(resource.meta, context),
+                )
+            ]
         for pattern, template in self._compiled:
             match = pattern.match(uri)
             if match is not None:
                 data = await call_user_fn(template.read, match.groupdict())
                 return [ReadResourceContents(content=data, mime_type=template.mime_type)]
         raise MCPResourceNotFoundError(uri)
+
+
+async def _call_resource_read(read: ReadFn, context: MCPExecutionContext | None) -> ResourceContent:
+    if context is None:
+        return await call_user_fn(read)
+    return await call_with_context(read, context)
 
 
 def _to_wire_contents(uri: str, contents: ReadResourceContents) -> TextResourceContents | BlobResourceContents:
@@ -149,27 +179,38 @@ def _to_wire_contents(uri: str, contents: ReadResourceContents) -> TextResourceC
     returns a complete result, so the mapping — and its MIME-type defaults, which
     :class:`Resource` documents — moves here.
     """
+    meta = _meta(contents.meta)
     if isinstance(contents.content, bytes):
         return BlobResourceContents(
             uri=uri,
             mimeType=contents.mime_type or "application/octet-stream",
             blob=base64.b64encode(contents.content).decode("ascii"),
-            _meta=contents.meta,
+            _meta=meta,
         )
     return TextResourceContents(
         uri=uri,
         mimeType=contents.mime_type or "text/plain",
         text=contents.content,
-        _meta=contents.meta,
+        _meta=meta,
     )
 
 
-def _to_mcp_resource(resource: Resource) -> MCPResource:
+def _meta(meta: Mapping[str, Any] | None, context: MCPExecutionContext | None = None) -> dict[str, Any] | None:
+    """``meta`` as a wire ``_meta``, or ``None`` so an empty one is never sent."""
+    if not meta:
+        return None
+    resolved = resolve_context_value(meta, context)
+    return dict(resolved) if resolved else None
+
+
+def _to_mcp_resource(resource: Resource, context: MCPExecutionContext | None = None) -> MCPResource:
     return MCPResource(
         uri=resource.uri,
         name=resource.name,
-        description=resource.description,
-        mimeType=resource.mime_type,
+        title=resolve_context_value(resource.title, context),
+        description=resolve_context_value(resource.description, context),
+        mimeType=resolve_context_value(resource.mime_type, context),
+        _meta=_meta(resource.meta, context),
     )
 
 
