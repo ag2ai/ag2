@@ -20,7 +20,8 @@ text. Importing this module requires Starlette and ``ag2[ag-ui]``.
 
 import functools
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -29,14 +30,26 @@ from ag_ui.core import (
     RunAgentInput,
     RunErrorEvent,
     RunFinishedEvent,
-    RunStartedEvent,
     TextMessageChunkEvent,
 )
 from ag_ui.encoder import EventEncoder
 from starlette.requests import Request
-from starlette.responses import Response, StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
+from ag2.ag_ui.interrupts import (
+    DEFAULT_RETENTION,
+    ClientInterrupter,
+    Retention,
+    ServedTurn,
+    ServedTurns,
+    TurnOutput,
+    interrupt_capabilities,
+    serve_exchange,
+    success_outcome,
+    timestamp_ms,
+    utc_now,
+)
 from ag2.ag_ui.stream import AGStreamInput, map_agui_messages_to_events, map_usage_events_to_ag_ui
 from ag2.events import TextInput, UsageEvent
 
@@ -62,21 +75,51 @@ _A2UI_OPERATIONS_KEY = "a2ui_operations"
 class AgUiTransport:
     """Serve the turn over AG-UI for CopilotKit's A2UI renderer.
 
+    A turn that asks the human a question is held here, suspended where it
+    stopped, until a later run on the same thread answers it — the same
+    behaviour, on the same wire, as ``ag2.ag_ui.AGUIStream``, over the same
+    shared registry. :meth:`aclose` cancels whatever is still held; the
+    :class:`~ag2.a2ui.A2UIServer` calls it on shutdown.
+
     Args:
         path: The POST route path. Defaults to ``"/"``.
+        retention: How long an unanswered question is held, and how many at
+            once. The time bound is what a client is shown as the interrupt's
+            deadline.
+        now: The clock deadlines are read off. For tests; see
+            :class:`~ag2.ag_ui.AGUIStream`.
     """
 
-    __slots__ = ("_path",)
+    __slots__ = ("_path", "_turns")
 
-    def __init__(self, *, path: str = "/") -> None:
+    def __init__(
+        self,
+        *,
+        path: str = "/",
+        retention: Retention = DEFAULT_RETENTION,
+        now: Callable[[], datetime] = utc_now,
+    ) -> None:
         self._path = path
+        self._turns = ServedTurns(retention=retention, now=now)
 
     def routes(self, core: "_A2UITurnCore") -> list[Route]:
-        endpoint = functools.partial(_endpoint, core)
-        return [Route(self._path, endpoint, methods=["POST"])]
+        endpoint = functools.partial(_endpoint, self._turns, core)
+        # GET on the same route answers a client asking what this agent can do,
+        # exactly as the other AG-UI transport does: the two are meant to be
+        # indistinguishable, and a client decides up front whether to offer the
+        # interrupt UI.
+        return [Route(self._path, endpoint, methods=["GET", "POST"])]
+
+    async def aclose(self) -> None:
+        """Cancel every turn this transport is still running."""
+        await self._turns.release_all()
 
 
-async def _endpoint(core: "_A2UITurnCore", request: Request) -> Response:
+async def _endpoint(turns: ServedTurns, core: "_A2UITurnCore", request: Request) -> Response:
+    if request.method == "GET":
+        capabilities = interrupt_capabilities(core.agent.name)
+        return JSONResponse(capabilities.model_dump(by_alias=True, exclude_none=True))
+
     try:
         body = await request.body()
         incoming = RunAgentInput.model_validate_json(body)
@@ -84,7 +127,10 @@ async def _endpoint(core: "_A2UITurnCore", request: Request) -> Response:
         return Response('{"error": "invalid AG-UI RunAgentInput body"}', status_code=400, media_type="application/json")
 
     encoder = EventEncoder(accept=request.headers.get("accept", ""))
-    return StreamingResponse(_dispatch(core, incoming, encoder=encoder), media_type=encoder.get_content_type())
+    return StreamingResponse(
+        _dispatch(turns, core, incoming, encoder=encoder),
+        media_type=encoder.get_content_type(),
+    )
 
 
 def _click_envelopes(forwarded_props: object) -> list[JsonObject]:
@@ -144,13 +190,57 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     )
 
 
-async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, encoder: EventEncoder) -> AsyncIterator[str]:
-    """Run one turn and yield encoded AG-UI events.
+def _dispatch(
+    turns: ServedTurns,
+    core: "_A2UITurnCore",
+    incoming: RunAgentInput,
+    *,
+    encoder: EventEncoder,
+) -> AsyncIterator[str]:
+    """Drive one exchange over a turn of this transport's, and yield its events.
 
-    Emits ``RunStarted`` → (``TextMessageChunk`` if there is prose) → (one
-    ``ActivitySnapshot`` carrying all A2UI operations, if any) → ``RunFinished``.
-    A mid-turn failure surfaces as a ``RunError`` event (the run has already
-    started 200 OK on the wire).
+    The exchange itself — begin or resume, carry the run to its terminating
+    event, leave a held turn running — is ``ag2.ag_ui``'s, shared so that the
+    two AG-UI transports cannot drift into behaving differently on a wire a
+    client reads the same way.
+    """
+    return serve_exchange(turns, incoming, encoder, functools.partial(_start_turn, turns, core, incoming))
+
+
+def _start_turn(
+    turns: ServedTurns,
+    core: "_A2UITurnCore",
+    incoming: RunAgentInput,
+    output: TurnOutput,
+) -> ServedTurn:
+    """Launch a turn of this transport's, writing to ``output``.
+
+    The turn is tracked on the registry, so a question it raises can be answered
+    by a later exchange.
+    """
+    turn = ServedTurn(output)
+    # This transport's turn core carries a plain agent, so the only hook
+    # there can be is the one the agent was constructed with. With none,
+    # the question goes to the client rather than killing the turn.
+    interrupter = None if core.agent._hitl_hook is not None else ClientInterrupter(turn, turns)
+    turns.track(turn, turn.start(_run_turn(core, incoming, output, interrupter)))
+    return turn
+
+
+async def _run_turn(
+    core: "_A2UITurnCore",
+    incoming: RunAgentInput,
+    output: TurnOutput,
+    interrupter: ClientInterrupter | None,
+) -> None:
+    """Run one turn, writing its AG-UI events to ``output``.
+
+    Emits (``TextMessageChunk`` if there is prose) → (one ``ActivitySnapshot``
+    carrying all A2UI operations, if any) → ``RunFinished``; the exchange emits
+    ``RunStarted`` for itself, since a resumed turn outlives the run that
+    started it. A mid-turn failure surfaces as a ``RunError`` event (the run has
+    already started 200 OK on the wire) rather than as a raise: this transport
+    reports a failed turn and ends it.
 
     Both terminating events carry the turn's token usage, so what a client can
     report does not depend on which AG-UI endpoint it connected to. The records
@@ -163,12 +253,11 @@ async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, encoder: 
     operations: list[ServerToClientMessage] = []
     usage_records: list[UsageEvent] = []
 
-    yield encoder.encode(RunStartedEvent(thread_id=incoming.thread_id, run_id=incoming.run_id))
     try:
-        async for frame in core.run_turn(request, usage_records=usage_records):
+        async for frame in core.run_turn(request, usage_records=usage_records, interrupter=interrupter):
             if isinstance(frame, A2UIProseFrame):
                 if frame.text:
-                    yield encoder.encode(
+                    await output.send(
                         TextMessageChunkEvent(message_id=text_message_id, role="assistant", delta=frame.text),
                     )
             elif isinstance(frame, A2UIMessageFrame):
@@ -177,7 +266,7 @@ async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, encoder: 
         if operations:
             # One snapshot per turn (replace=True default): the renderer rebuilds
             # the surface(s) from the full operations list.
-            yield encoder.encode(
+            await output.send(
                 ActivitySnapshotEvent(
                     message_id=uuid4().hex,
                     activity_type=_A2UI_ACTIVITY_TYPE,
@@ -186,16 +275,24 @@ async def _dispatch(core: "_A2UITurnCore", incoming: RunAgentInput, *, encoder: 
             )
     except Exception as e:  # noqa: BLE001 - report as a RunError frame, don't tear down the stream silently
         logger.exception("A2UI AG-UI turn failed")
-        yield encoder.encode(RunErrorEvent(message=repr(e), usage=map_usage_events_to_ag_ui(usage_records)))
-        return
-
-    yield encoder.encode(
-        RunFinishedEvent(
-            thread_id=incoming.thread_id,
-            run_id=incoming.run_id,
-            usage=map_usage_events_to_ag_ui(usage_records),
+        await output.send(
+            RunErrorEvent(message=repr(e), timestamp=timestamp_ms(), usage=map_usage_events_to_ag_ui(usage_records))
         )
-    )
+    else:
+        await output.send(
+            RunFinishedEvent(
+                thread_id=output.thread_id,
+                run_id=output.run_id,
+                timestamp=timestamp_ms(),
+                usage=map_usage_events_to_ag_ui(usage_records),
+                outcome=success_outcome(),
+            )
+        )
+    finally:
+        # The exchange reading this turn ends on its terminating event, but the
+        # channel is the turn's: closed here, on every path including
+        # cancellation while held.
+        await output.aclose()
 
 
 __all__ = ("AgUiTransport",)

@@ -192,10 +192,32 @@ class ModelMessageChunk(ModelEvent):
 
 
 class HumanInputRequest(BaseEvent):
-    """Event requesting input from a human user."""
+    """Event requesting input from a human user.
+
+    ``timeout`` is how long the asking call will wait, in seconds, or ``None``
+    for indefinitely. Carried on the event because a transport that routes the
+    question to a remote human has to tell them when it stops being worth
+    answering, and there is no other way to reach the number: it is an argument
+    to an ``asyncio`` wait that exposes no deadline. Not compared, like ``id``:
+    two requests are the same question when they ask the same thing.
+    """
 
     id: str = Field(default_factory=lambda: str(uuid4()), compare=False)
     content: str = Field(kw_only=False)
+    timeout: float | None = Field(default=None, compare=False)
+
+
+class ToolApprovalRequest(HumanInputRequest):
+    """A human-input request asking whether one tool call may go ahead.
+
+    A :class:`HumanInputRequest` in every respect — the same ask-and-reply
+    correlation, the same hooks, the same timeout — carrying which call it is
+    about, so a transport that renders the question can name the call rather
+    than making the human read it out of the prose.
+    """
+
+    tool_call_id: str = Field(default="", compare=False)
+    tool_name: str = Field(default="", compare=False)
 
 
 class HumanMessage(BaseEvent):

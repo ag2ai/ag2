@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.events import ToolApprovalRequest, ToolCallEvent, ToolResultEvent
 from ag2.middleware import approval_required
 from ag2.middleware.builtin.tools.approval import BYPASS_KEY
 
@@ -17,9 +17,16 @@ def make_context(
     variables: dict[str, Any] | None = None,
 ) -> AsyncMock:
     context = AsyncMock()
-    context.input = AsyncMock(return_value=response)
+    context.ask = AsyncMock(return_value=response)
     context.variables = variables if variables is not None else {}
     return context
+
+
+def asked(context: AsyncMock) -> ToolApprovalRequest:
+    """The request the middleware put to the human."""
+    [request], _ = context.ask.await_args
+    assert isinstance(request, ToolApprovalRequest)
+    return request
 
 
 @pytest.fixture
@@ -41,7 +48,7 @@ async def test_accepts_various_affirmative_inputs(tool_call: ToolCallEvent, resp
     result = await hook(call_next, tool_call, context)
 
     assert result == expected
-    context.input.assert_awaited_once()
+    context.ask.assert_awaited_once()
 
 
 @pytest.mark.asyncio()
@@ -67,9 +74,10 @@ async def test_custom_message(tool_call: ToolCallEvent) -> None:
 
     await hook(call_next, tool_call, context)
 
-    context.input.assert_awaited_once_with(
+    assert asked(context) == ToolApprovalRequest(
         'Approve calculator with {"a": 1, "b": 2}?',
-        timeout=None,
+        tool_call_id=tool_call.id,
+        tool_name="calculator",
     )
 
 
@@ -82,8 +90,7 @@ async def test_custom_timeout(tool_call: ToolCallEvent) -> None:
 
     await hook(call_next, tool_call, context)
 
-    _, kwargs = context.input.await_args
-    assert kwargs["timeout"] == 60
+    assert asked(context).timeout == 60
 
 
 @pytest.mark.asyncio()
@@ -108,12 +115,12 @@ async def test_always_sets_bypass_flag(tool_call: ToolCallEvent) -> None:
 
     # first execution should prompt
     await hook(call_next, tool_call, context)
-    context.input.assert_awaited_once()
+    context.ask.assert_awaited_once()
     assert context.variables[BYPASS_KEY]["calculator"] is True
 
     # second execution should not prompt
     await hook(call_next, tool_call, context)
-    context.input.assert_awaited_once()
+    context.ask.assert_awaited_once()
 
 
 @pytest.mark.asyncio()
@@ -128,7 +135,7 @@ async def test_always_is_per_tool(tool_call: ToolCallEvent) -> None:
 
     assert result == expected
     # Should still prompt since "calculator" is not in the bypass dict
-    context.input.assert_awaited_once()
+    context.ask.assert_awaited_once()
 
 
 @pytest.mark.asyncio()

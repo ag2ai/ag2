@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, Callable, Sequence
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING
 
 from starlette.applications import Starlette
@@ -115,7 +116,12 @@ class A2UIServer:
         )
         # The instance IS the app (no ``.app``/``build_app()``): build the
         # Starlette app once from the transport's routes and delegate to it.
-        self._starlette = Starlette(routes=transport.routes(self._core))
+        # A transport that holds anything of its own — a paused turn waiting on
+        # a human, say — is told when the process is going down.
+        self._starlette = Starlette(
+            routes=transport.routes(self._core),
+            lifespan=_closing(transport),
+        )
 
     @property
     def agent(self) -> Agent:
@@ -124,6 +130,28 @@ class A2UIServer:
     async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
         """ASGI entrypoint — delegate to the transport-built Starlette app."""
         await self._starlette(scope, receive, send)
+
+
+def _closing(transport: A2UITransport) -> "Callable[[Starlette], AbstractAsyncContextManager[None]]":
+    """A lifespan that releases whatever ``transport`` still holds, on the way down.
+
+    ``aclose`` is optional on :class:`A2UITransport`: a stateless transport has
+    nothing to release, and requiring one would break every transport already
+    written against the protocol. A transport that does hold something — a turn
+    paused on a question to a human — needs this, because nothing else will ever
+    come back for it.
+    """
+
+    @asynccontextmanager
+    async def lifespan(app: Starlette) -> "AsyncGenerator[None]":
+        try:
+            yield
+        finally:
+            aclose = getattr(transport, "aclose", None)
+            if aclose is not None:
+                await aclose()
+
+    return lifespan
 
 
 __all__ = ("A2UIServer",)

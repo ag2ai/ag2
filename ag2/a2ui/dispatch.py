@@ -8,13 +8,15 @@ followed by one :class:`A2UIMessageFrame` per A2UI message. Shared core under
 the SSE / NDJSON wire encoders.
 """
 
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from ag2.agent import Agent
+from ag2.annotations import Context
 from ag2.context import ConversationContext
-from ag2.events import BaseEvent, ModelRequest, TextInput, UsageEvent
+from ag2.events import BaseEvent, HumanInputRequest, ModelRequest, TextInput, UsageEvent
 from ag2.stream import MemoryStream
 from ag2.usage import collect_usage_events
 
@@ -44,6 +46,11 @@ class A2UIMessageFrame:
 
 A2UIFrame = A2UIProseFrame | A2UIMessageFrame
 
+# What a transport hands in to answer the agent's ``context.input()`` itself.
+# Spelled structurally rather than imported: the transport that has one is the
+# optional AG-UI one, and this module must import without it.
+Interrupter = Callable[[HumanInputRequest, Context], Awaitable[BaseEvent | None]]
+
 # Shared immutable default so the keyword arg never aliases a mutable {}.
 _NO_SERVER_ACTIONS: Mapping[str, A2UIAction] = MappingProxyType({})
 
@@ -55,6 +62,7 @@ async def stream_turn(
     *,
     server_actions: Mapping[str, A2UIAction] = _NO_SERVER_ACTIONS,
     usage_records: list[UsageEvent] | None = None,
+    interrupter: Interrupter | None = None,
 ) -> AsyncIterator[A2UIFrame]:
     """Execute one turn and yield its prose then A2UI message frames.
 
@@ -79,6 +87,11 @@ async def stream_turn(
             is created here and never leaves, and a caller handed the records
             only on a clean return would have none for a turn that raised —
             which is the turn whose cost most wants reporting.
+        interrupter: Where a question the agent asks goes — a transport that can
+            put it to whoever is connected supplies one, for the same reason the
+            records are the caller's: the stream it would have to register on
+            never leaves this function. Registered ahead of the agent's own
+            arrangements, and only supplied when the agent has none.
 
     Yields:
         Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
@@ -162,12 +175,16 @@ async def stream_turn(
         extra_middleware.append(A2UIInboundMiddleware(request.client_interactions))
 
     initial_event: BaseEvent = ModelRequest(request.current_inputs or [TextInput("")])
-    reply = await agent._execute(
-        initial_event,
-        context=ctx,
-        client=client,
-        additional_middleware=extra_middleware,
-    )
+    with ExitStack() as stack:
+        if interrupter is not None:
+            stack.enter_context(stream.where(HumanInputRequest).sub_scope(interrupter, interrupt=True))
+
+        reply = await agent._execute(
+            initial_event,
+            context=ctx,
+            client=client,
+            additional_middleware=extra_middleware,
+        )
 
     response = reply.response
     prose = response.message.content if response.message else ""
@@ -197,11 +214,13 @@ class _A2UITurnCore:
         request: A2UIServerRequest,
         *,
         usage_records: list[UsageEvent] | None = None,
+        interrupter: Interrupter | None = None,
     ) -> AsyncIterator[A2UIFrame]:
         """Run one turn and yield its prose then A2UI message frames.
 
         Pass ``usage_records`` to have the turn's token accounting collected into
-        it; see :func:`stream_turn`.
+        it, and ``interrupter`` to answer the agent's questions from wherever the
+        transport can reach a human; see :func:`stream_turn`.
         """
         return stream_turn(
             self.agent,
@@ -209,7 +228,8 @@ class _A2UITurnCore:
             request,
             server_actions=self.server_actions,
             usage_records=usage_records,
+            interrupter=interrupter,
         )
 
 
-__all__ = ("A2UIFrame", "A2UIMessageFrame", "A2UIProseFrame", "stream_turn")
+__all__ = ("A2UIFrame", "A2UIMessageFrame", "A2UIProseFrame", "Interrupter", "stream_turn")
