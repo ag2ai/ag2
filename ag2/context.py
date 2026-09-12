@@ -158,15 +158,28 @@ class ConversationContext:
         that, not for a local prompt. It stays independent of any lifetime the
         transport puts on the pause; whichever elapses first ends the turn.
         """
-        request_msg = HumanInputRequest(message)
-        async with self.stream.get(HumanMessage.parent_id == request_msg.id) as response:
+        return await self.ask(HumanInputRequest(message, timeout=timeout))
+
+    async def ask(self, request: HumanInputRequest) -> str:
+        """Put ``request`` to a human and return their answer.
+
+        What :meth:`input` does, minus composing the question — for a caller
+        with more to say about it than a string. :class:`ToolApprovalRequest`
+        naming the call it gates is the one in the box; a transport that routes
+        questions to a client can then render it as the approval it is.
+
+        Every way this can fail to produce an answer still leaves as a
+        :class:`~ag2.exceptions.HumanInputError`, decided here and nowhere else;
+        the wait comes off ``request.timeout``.
+        """
+        async with self.stream.get(HumanMessage.parent_id == request.id) as response:
             try:
-                # The hook runs inline inside ``send``, so *timeout* has to
+                # The hook runs inline inside ``send``, so the timeout has to
                 # cover the asking as well as the waiting. Timing only
                 # ``response`` starts the clock after the hook has already
                 # returned, which makes the timeout unreachable and leaves a
                 # hook that hangs hanging the turn forever.
-                result = await asyncio.wait_for(_ask_human(self, request_msg, response), timeout)
+                result = await asyncio.wait_for(_ask_human(self, request, response), request.timeout)
 
             except HumanInputError:
                 raise  # classified already, by _ask_human or by the hook itself
@@ -174,7 +187,7 @@ class ConversationContext:
             except asyncio.TimeoutError as exc:
                 # Only ``wait_for`` can reach this: anything the channel raised,
                 # timeouts included, left _ask_human as a HumanInputError.
-                raise HumanInputTimeoutError(timeout) from exc  # type: ignore[arg-type]
+                raise HumanInputTimeoutError(request.timeout) from exc  # type: ignore[arg-type]
 
         return result.content
 

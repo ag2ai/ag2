@@ -3,16 +3,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from base64 import b64decode
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable
+from contextlib import ExitStack
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
+from functools import partial
 from math import isfinite
 from typing import Any
 from uuid import uuid4
 
 from ag_ui.core import (
+    AgentCapabilities,
     AudioInputContent,
-    BaseEvent,
     BinaryInputContent,
     DocumentInputContent,
     ImageInputContent,
@@ -27,7 +29,6 @@ from ag_ui.core import (
     RunAgentInput,
     RunErrorEvent,
     RunFinishedEvent,
-    RunStartedEvent,
     StateSnapshotEvent,
     StepFinishedEvent,
     StepStartedEvent,
@@ -45,8 +46,6 @@ from ag_ui.core import (
     VideoInputContent,
 )
 from ag_ui.encoder import EventEncoder
-from anyio import create_memory_object_stream, create_task_group
-from anyio.streams.memory import MemoryObjectSendStream
 from fast_depends.library.serializer import SerializerProto
 from pydantic_core import to_jsonable_python
 
@@ -61,6 +60,19 @@ from ag2.tools.tool import Tool
 from ag2.usage import UsageRecord, UsageReport
 
 from .events import AGUIEvent
+from .interrupts import (
+    DEFAULT_RETENTION,
+    ClientInterrupter,
+    Retention,
+    ServedTurn,
+    ServedTurns,
+    TurnOutput,
+    interrupt_capabilities,
+    serve_exchange,
+    success_outcome,
+    timestamp_ms,
+    utc_now,
+)
 
 try:
     from starlette.endpoints import HTTPEndpoint
@@ -70,8 +82,46 @@ except ImportError:
 
 
 class AGUIStream:
-    def __init__(self, agent: Agent) -> None:
+    """Serve an :class:`~ag2.Agent` over AG-UI.
+
+    A turn's lifetime belongs to this object, not to the HTTP exchange that
+    started it: an agent that asks a human a question is held here, suspended
+    where it stopped, until the client answers. Call :meth:`aclose` on the way
+    down — from your app's shutdown hook, or by using the stream as an async
+    context manager — so a turn still waiting is cancelled rather than left
+    running into the void.
+    """
+
+    def __init__(
+        self,
+        agent: Agent,
+        *,
+        retention: Retention = DEFAULT_RETENTION,
+        now: Callable[[], datetime] = utc_now,
+    ) -> None:
+        """Serve ``agent``, holding a turn paused on a question for ``retention``.
+
+        ``now`` is the clock every deadline is read off. It is there for tests:
+        a held turn expires against wall-clock time, and a test that had to
+        outlast a retention bound to see it would either take that long or push
+        the bound down to something no operator would configure.
+        """
         self.__agent = agent
+        self.__turns = ServedTurns(retention=retention, now=now)
+
+    async def __aenter__(self) -> "AGUIStream":
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        """Cancel every turn this stream is still running."""
+        await self.__turns.release_all()
+
+    def capabilities(self) -> AgentCapabilities:
+        """What this agent tells a client it can do, before any run starts."""
+        return interrupt_capabilities(self.__agent.name)
 
     def build_asgi(self) -> "type[HTTPEndpoint]":
         """Build an ASGI endpoint for the AGUIStream."""
@@ -94,35 +144,43 @@ class AGUIStream:
         hitl_hook: HumanHook | None = None,
         accept: str | None = None,
     ) -> AsyncIterator[str]:
-        write_events_stream, read_events_stream = create_memory_object_stream[BaseEvent]()
+        command = AGStreamInput(
+            incoming=incoming,
+            variables=variables or {},
+            prompt=list(prompt),
+            dependencies=dependencies,
+            config=config,
+            tools=list(tools),
+            middleware=list(middleware),
+            observers=list(observers),
+            hitl_hook=hitl_hook,
+        )
 
-        async with create_task_group() as tg:
-            tg.start_soon(
-                run_stream,
-                AGStreamInput(
-                    incoming=incoming,
-                    variables=variables or {},
-                    prompt=list(prompt),
-                    dependencies=dependencies,
-                    config=config,
-                    tools=list(tools),
-                    middleware=list(middleware),
-                    observers=list(observers),
-                    hitl_hook=hitl_hook,
-                ),
-                self.__agent,
-                write_events_stream,
-            )
+        # EventEncoder typed incompletely, so we need to ignore the type error
+        encoder = EventEncoder(accept=accept)  # type: ignore[arg-type]
 
-            # EventEncoder typed incompletely, so we need to ignore the type error
-            encoder = EventEncoder(accept=accept)  # type: ignore[arg-type]
+        async for chunk in serve_exchange(self.__turns, incoming, encoder, partial(self.__start, command)):
+            # ASYNC119: a true streaming generator, holding its channel open
+            # across yields; consumers are expected to use contextlib.aclosing.
+            yield chunk  # noqa: ASYNC119
 
-            async with read_events_stream:
-                async for event in read_events_stream:
-                    # ASYNC119: this is a true streaming generator that must hold the
-                    # task group and stream open across yields; consumers are expected
-                    # to use contextlib.aclosing for timely cleanup.
-                    yield encoder.encode(event)  # noqa: ASYNC119
+    def __start(self, command: "AGStreamInput", output: TurnOutput) -> ServedTurn:
+        """Launch a fresh turn writing to ``output``, and own its lifetime."""
+        turn = ServedTurn(output)
+        interrupter = None if self.__answers_in_process(command.hitl_hook) else ClientInterrupter(turn, self.__turns)
+        # Started as a task the server owns rather than inside this request's
+        # scope: the turn outlives the exchange, so the exchange must not own it.
+        self.__turns.track(turn, turn.start(run_stream(command, self.__agent, output, interrupter)))
+        return turn
+
+    def __answers_in_process(self, hitl_hook: HumanHook | None) -> bool:
+        """Whether this run already has somewhere of its own to put a question.
+
+        Read off what was *supplied*, never off the core's "nobody to ask"
+        default: a caller who passed a hook keeps today's behaviour exactly, and
+        only a caller who passed none has the question put to the client.
+        """
+        return hitl_hook is not None or self.__agent._hitl_hook is not None
 
 
 @dataclass(slots=True)
@@ -141,8 +199,15 @@ class AGStreamInput:
 async def run_stream(
     command: AGStreamInput,
     agent: Agent,
-    write_events_stream: MemoryObjectSendStream[BaseEvent],
+    output: TurnOutput,
+    interrupter: ClientInterrupter | None = None,
 ) -> None:
+    """Run one served turn, writing its events to ``output``.
+
+    ``interrupter`` is where a question the agent asks goes when the caller
+    supplied no hook of its own; ``None`` leaves the agent's own human-input
+    arrangements untouched.
+    """
     client_tools = []
     client_tools_names = set()
     for t in command.incoming.tools:
@@ -168,13 +233,13 @@ async def run_stream(
         nonlocal streaming_msg_id, reasoning_msg_id
 
         if reasoning_msg_id is not None and not isinstance(event, events.ModelReasoning):
-            await write_events_stream.send(
+            await output.send(
                 ReasoningMessageEndEvent(
                     message_id=reasoning_msg_id,
                     timestamp=_get_timestamp(),
                 )
             )
-            await write_events_stream.send(
+            await output.send(
                 ReasoningEndEvent(
                     message_id=reasoning_msg_id,
                     timestamp=_get_timestamp(),
@@ -188,13 +253,13 @@ async def run_stream(
 
             if reasoning_msg_id is None:
                 reasoning_msg_id = str(uuid4())
-                await write_events_stream.send(
+                await output.send(
                     ReasoningStartEvent(
                         message_id=reasoning_msg_id,
                         timestamp=_get_timestamp(),
                     )
                 )
-                await write_events_stream.send(
+                await output.send(
                     ReasoningMessageStartEvent(
                         message_id=reasoning_msg_id,
                         role="reasoning",
@@ -202,7 +267,7 @@ async def run_stream(
                     )
                 )
 
-            await write_events_stream.send(
+            await output.send(
                 ReasoningMessageContentEvent(
                     message_id=reasoning_msg_id,
                     delta=event.content,
@@ -217,14 +282,14 @@ async def run_stream(
 
             if streaming_msg_id is None:
                 streaming_msg_id = str(uuid4())
-                await write_events_stream.send(
+                await output.send(
                     TextMessageStartEvent(
                         message_id=streaming_msg_id,
                         timestamp=_get_timestamp(),
                     )
                 )
 
-            await write_events_stream.send(
+            await output.send(
                 TextMessageContentEvent(
                     message_id=streaming_msg_id,
                     delta=event.content,
@@ -234,7 +299,7 @@ async def run_stream(
 
         elif isinstance(event, events.ModelMessage):
             if streaming_msg_id:
-                await write_events_stream.send(
+                await output.send(
                     TextMessageEndEvent(
                         message_id=streaming_msg_id,
                         timestamp=_get_timestamp(),
@@ -243,7 +308,7 @@ async def run_stream(
                 streaming_msg_id = None
 
             elif event.content:
-                await write_events_stream.send(
+                await output.send(
                     TextMessageChunkEvent(
                         message_id=str(uuid4()),
                         delta=event.content,
@@ -252,7 +317,7 @@ async def run_stream(
                 )
 
         elif isinstance(event, events.ClientToolCallEvent):
-            await write_events_stream.send(
+            await output.send(
                 ToolCallChunkEvent(
                     tool_call_id=event.id,
                     tool_call_name=event.name,
@@ -265,14 +330,14 @@ async def run_stream(
             if event.name in client_tools_names:
                 return
 
-            await write_events_stream.send(
+            await output.send(
                 ToolCallStartEvent(
                     tool_call_id=event.id,
                     tool_call_name=event.name,
                     timestamp=_get_timestamp(),
                 )
             )
-            await write_events_stream.send(
+            await output.send(
                 ToolCallArgsEvent(
                     tool_call_id=event.id,
                     delta=event.arguments,
@@ -288,7 +353,7 @@ async def run_stream(
                 elif isinstance(p, events.DataInput):
                     text_parts.append(agent._serializer.encode(p.data).decode())
 
-            await write_events_stream.send(
+            await output.send(
                 ToolCallResultEvent(
                     tool_call_id=event.parent_id,
                     content=_stringify_tool_result(event.result, agent._serializer),
@@ -297,7 +362,7 @@ async def run_stream(
                     role="tool",
                 )
             )
-            await write_events_stream.send(
+            await output.send(
                 ToolCallEndEvent(
                     tool_call_id=event.parent_id,
                     timestamp=_get_timestamp(),
@@ -305,34 +370,33 @@ async def run_stream(
             )
 
         elif isinstance(event, events.TaskStarted):
-            await write_events_stream.send(StepStartedEvent(step_name=f"task:{event.agent_name}"))
+            await output.send(StepStartedEvent(step_name=f"task:{event.agent_name}"))
 
         elif isinstance(event, events.TaskCompleted):
-            await write_events_stream.send(StepFinishedEvent(step_name=f"task:{event.agent_name}"))
+            await output.send(StepFinishedEvent(step_name=f"task:{event.agent_name}"))
 
         elif isinstance(event, AGUIEvent):
-            await write_events_stream.send(event.event)
+            await output.send(event.event)
 
-    async with write_events_stream:
-        try:
-            await write_events_stream.send(
-                RunStartedEvent(
-                    thread_id=command.incoming.thread_id,
-                    run_id=command.incoming.run_id,
+    try:
+        initial_vars = agent._agent_variables | command.variables
+        if vars := _encode_context(initial_vars):
+            await output.send(
+                StateSnapshotEvent(
+                    snapshot=vars,
                     timestamp=_get_timestamp(),
                 )
             )
 
-            initial_vars = agent._agent_variables | command.variables
-            if vars := _encode_context(initial_vars):
-                await write_events_stream.send(
-                    StateSnapshotEvent(
-                        snapshot=vars,
-                        timestamp=_get_timestamp(),
-                    )
-                )
+        initial_state = (command.incoming.state or {}) | initial_vars
 
-            initial_state = (command.incoming.state or {}) | initial_vars
+        with ExitStack() as stack:
+            if interrupter is not None:
+                # Registered *before* ``ask`` so it runs ahead of the "nobody
+                # could be asked" default the agent registers for itself.
+                stack.enter_context(
+                    stream.where(events.HumanInputRequest).sub_scope(interrupter, interrupt=True),
+                )
 
             result = await agent.ask(
                 *current_turn,
@@ -347,33 +411,40 @@ async def run_stream(
                 stream=stream,
             )
 
-            if (vars := _encode_context(result.context.variables)) != initial_state:
-                await write_events_stream.send(
-                    StateSnapshotEvent(
-                        snapshot=vars,
-                        timestamp=_get_timestamp(),
-                    )
-                )
-
-        except Exception as e:
-            await write_events_stream.send(
-                RunErrorEvent(
-                    message=repr(e),
+        if (vars := _encode_context(result.context.variables)) != initial_state:
+            await output.send(
+                StateSnapshotEvent(
+                    snapshot=vars,
                     timestamp=_get_timestamp(),
-                    usage=await _run_token_usage(stream),
                 )
             )
-            raise e
 
-        else:
-            await write_events_stream.send(
-                RunFinishedEvent(
-                    thread_id=command.incoming.thread_id,
-                    run_id=command.incoming.run_id,
-                    timestamp=_get_timestamp(),
-                    usage=await _run_token_usage(stream),
-                )
+    except Exception as e:
+        await output.send(
+            RunErrorEvent(
+                message=repr(e),
+                timestamp=_get_timestamp(),
+                usage=await _run_token_usage(stream),
             )
+        )
+        raise e
+
+    else:
+        await output.send(
+            RunFinishedEvent(
+                thread_id=output.thread_id,
+                run_id=output.run_id,
+                timestamp=_get_timestamp(),
+                usage=await _run_token_usage(stream),
+                outcome=success_outcome(),
+            )
+        )
+
+    finally:
+        # The exchange reading this turn ends on its terminating event, but
+        # the channel is the turn's: closed here, once there is nothing more
+        # to say, on every path including cancellation while held.
+        await output.aclose()
 
 
 async def _run_token_usage(stream: MemoryStream) -> list[TokenUsage] | None:
@@ -607,7 +678,7 @@ def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> s
 
 
 def _get_timestamp() -> int:
-    return int(datetime.now(timezone.utc).timestamp() * 1000)
+    return timestamp_ms()
 
 
 def _encode_context(context: dict[str, Any] | None) -> dict[str, Any]:

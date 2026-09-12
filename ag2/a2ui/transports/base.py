@@ -32,5 +32,15 @@ class A2UITransport(Protocol):
         """
         ...
 
+    # Optional: a transport holding state of its own beyond a single request —
+    # a turn paused on a question to a human, say — may define
+    #
+    #     async def aclose(self) -> None: ...
+    #
+    # and :class:`A2UIServer` will call it on ASGI shutdown. Deliberately not
+    # declared as a member: a transport with nothing to release should not have
+    # to write an empty one, and a third-party transport predating this should
+    # not stop satisfying the protocol.
+
 
 __all__ = ("A2UITransport",)

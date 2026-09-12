@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from ag2.annotations import Context
-from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.events import ToolApprovalRequest, ToolCallEvent, ToolResultEvent
 from ag2.middleware.base import ToolExecution, ToolMiddleware, ToolResultType
 from ag2.middleware.describe import MiddlewareDescription
 
@@ -58,12 +58,16 @@ class ApprovalRequired:
             if bypass_dict.get(event.name):
                 return await call_next(event, context)
 
-        user_result = (
-            await context.input(
-                self._prompt.format(tool_name=event.name, tool_arguments=event.arguments),
-                timeout=self._timeout,
-            )
-        ).lower()
+        # Asked as a request that names the call, so a transport putting the
+        # question to a remote human can render it as the approval it is. To
+        # everything in between it is an ordinary human-input request.
+        request = ToolApprovalRequest(
+            self._prompt.format(tool_name=event.name, tool_arguments=event.arguments),
+            tool_call_id=event.id,
+            tool_name=event.name,
+            timeout=self._timeout,
+        )
+        user_result = (await context.ask(request)).lower()
 
         if self._allow_always and user_result == "always":
             bypass_dict = context.variables.get(BYPASS_KEY, {})

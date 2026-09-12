@@ -9,10 +9,13 @@ except ImportError as e:
 
 
 from .events import AGUIEvent
+from .interrupts import DEFAULT_RETENTION, Retention
 from .stream import AGUIStream
 
 __all__ = (
+    "DEFAULT_RETENTION",
     "AGUIEvent",
     "AGUIStream",
+    "Retention",
     "RunAgentInput",
 )

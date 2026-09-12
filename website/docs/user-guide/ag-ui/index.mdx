@@ -36,6 +36,7 @@ Verified AG-UI features are supported in AG2:
 * [x] [Frontend-tool dispatch](https://docs.copilotkit.ai/ag2/generative-ui/frontend-tools){.external-link target="_blank"} (`TOOL_CALL_CHUNK` for client tools in `RunAgentInput.tools`)
 * [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state){.external-link target="_blank"} (`STATE_SNAPSHOT`) from context and agent state
 * [x] [Human input checkpoints](https://docs.copilotkit.ai/ag2/human-in-the-loop){.external-link target="_blank"} (`input_required` surfaced as user-visible message events)
+* [x] Run interrupts: an agent pauses on a question and a later run on the same thread answers it (`RUN_FINISHED` with an `interrupt` outcome, resumed through `resume`) — see [Asking the human a question](#asking-the-human-a-question)
 
 ## Installation
 
@@ -167,6 +168,141 @@ unset rather than mislabelled. A run that spent nothing omits `usage` entirely.
 The A2UI AG-UI transport (`A2UIServer(..., transport=AgUiTransport())`) reports
 the same field on the same two events, so what a client can show does not depend
 on which endpoint it connected to.
+
+## Asking the human a question
+
+An agent can stop mid-run and ask. When a tool calls `context.input(...)`, the
+question leaves as the outcome of the run that raised it, and the turn is held
+in the server — suspended exactly where it stopped — until a later run on the
+same thread answers it.
+
+```python title="ask.py"
+@agent.tool
+async def book_flight(context: Context, flight: str) -> str:
+    """Book a flight, once the traveller confirms it."""
+    answer = await context.input(f"Book {flight}? (yes/no)")
+    return "Booked." if answer.strip().lower() == "yes" else "Cancelled."
+```
+
+The exchange ends normally — not with an error — carrying the question:
+
+```text
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
+       "outcome":{"type":"interrupt","interrupts":[
+         {"id":"e2c1...","reason":"human_input","message":"Book LH441? (yes/no)",
+          "responseSchema":{"type":"string","title":"Answer"},
+          "expiresAt":"2026-01-01T12:15:00+00:00",
+          "metadata":{"ag2":{"proof":"g7Qk..."}}}]}}
+```
+
+The client answers with a **new run id on the same thread**, naming the
+interrupt in `resume`:
+
+```json
+{"threadId": "thread-1", "runId": "run-2", "messages": [],
+ "resume": [{"interruptId": "e2c1...", "status": "resolved", "payload": "yes",
+             "metadata": {"ag2": {"proof": "g7Qk..."}}}]}
+```
+
+`context.input` returns `"yes"` inside the tool, and the turn runs on to
+completion in that second exchange — `RUN_STARTED` for the resuming run, then
+whatever the agent does next. A client that has given up sends
+`"status": "cancelled"` instead; the turn ends and the run finishes with a
+success outcome, having delivered nothing.
+
+Two things must travel back untouched: the **interrupt id**, and the
+**`metadata` envelope**. The envelope carries proof that the answer comes from
+whoever the question was put to — an answer attributed to a human is the input an
+agent trusts most, and an interrupt id alone is a bare string in a request body.
+A resume without it is refused. Clients are required to echo an interrupt's
+metadata, so a compliant one already does this.
+
+Every refusal arrives as `RUN_ERROR` with a machine-readable `code`, never as a
+stream that simply stops:
+
+| `code` | What happened |
+| --- | --- |
+| `INTERRUPT_NOT_HELD` | Nothing is held for this thread: unknown id, already answered, or expired |
+| `INTERRUPT_NOT_OUTSTANDING` | Something is held, but it is not waiting on the interrupt this run names |
+| `INTERRUPT_NOT_PROVEN` | The envelope's proof is missing, malformed, or not the one issued |
+| `INTERRUPT_PAYLOAD_REFUSED` | The payload is not what the interrupt asked for |
+
+A refusal that is not the turn's own fault — a bad payload, an id it is not
+waiting on — leaves the held turn resumable by a legitimate answer, without
+extending its deadline.
+
+A runnable version of this exchange — server and client in one script — is in
+`examples/ag_ui/human_input.py`.
+
+### With a hook, nothing changes
+
+Supplying a human-input hook (`Agent(..., hitl_hook=...)`, or `hitl_hook=` on
+`dispatch`) keeps today's behaviour exactly: the question is answered in
+process, no interrupt is emitted, and the run finishes in one exchange. The
+interrupt path is what a run with *no* hook now does — where it used to fail
+with "nobody could be asked", it now asks the client.
+
+### Retention, and the deadline clients are shown
+
+How long a held turn survives, and how many may be held at once, is
+`Retention` — set where the transport is constructed, on both of them:
+
+```python
+from ag2.ag_ui import AGUIStream, Retention
+from ag2.a2ui import A2UIServer
+from ag2.a2ui.transports import AgUiTransport
+
+retention = Retention(ttl=900.0, max_held=128)  # the defaults
+
+stream = AGUIStream(agent, retention=retention)
+server = A2UIServer(agent, transport=AgUiTransport(retention=retention))
+```
+
+`ttl` is not an internal detail: it is what a client is shown as the interrupt's
+`expiresAt`, so changing it changes what clients are told. The advertised
+deadline is the **earlier** of `ttl` and the deadline implied by any `timeout=`
+passed to `context.input` — the protocol treats an absent deadline as a promise
+that the interrupt never expires, and clients reject late answers locally on the
+strength of it, so the figure on the wire is always the one that will in fact
+apply. Past it the turn is gone and its task cancelled; a `max_held` overflow
+cancels the oldest.
+
+**Memory is proportional to retention.** A held turn is a suspended coroutine
+with its whole conversation history, not a record — `ttl` × arrival rate, capped
+by `max_held`, is roughly what a pausing server holds.
+
+### Deployment: a held turn lives in one process
+
+This is invisible on the wire — the two exchanges look the same either way — and
+it is the constraint that matters most when you deploy:
+
+- **Sticky routing is required.** A resume must reach the process holding the
+  turn. Route by `threadId`; behind a round-robin load balancer, resumes will
+  land on a process that knows nothing and be refused with
+  `INTERRUPT_NOT_HELD`.
+- **A restart drops every held turn.** After a deploy or a crash, a client
+  answering a question asked by the old process gets `RUN_ERROR` /
+  `INTERRUPT_NOT_HELD` — the same code as an expired one. Treat it as "ask
+  again", not as a bug.
+- **Close the stream on the way down.** `A2UIServer` does it for you (it runs
+  `AgUiTransport.aclose()` on ASGI shutdown). `AGUIStream` is not an app, so
+  nothing can hang a shutdown hook on it for you — call `await stream.aclose()`
+  from your own, or use it as an async context manager, so held turns are
+  cancelled rather than left running into the void.
+
+### Why a resume does not replay the run
+
+Because the call is suspended *inside your Python function*. `context.input`
+stopped mid-way through `book_flight`, with its local variables, its loop
+position and whatever it had already done still live. A message history cannot
+rebuild that: replaying the run would re-enter the tool from the top and redo
+whatever it did before it asked.
+
+That is also why held turns cannot be moved to Redis or a database and shared
+across processes: a suspended coroutine is not serialisable. A durable,
+cross-process version of this is a different feature — one where the agent's
+continuation is expressed as resumable state rather than as a paused
+function — not a setting on this one.
 
 ## UI clients
 
