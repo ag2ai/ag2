@@ -10,6 +10,8 @@ an envelope beside the answer for exactly this — signatures and routing keys,
 never the answer itself — and requires clients to carry it back.
 """
 
+from typing import Any
+
 import pytest
 from dirty_equals import IsPartialDict, IsStr
 
@@ -39,13 +41,13 @@ pytestmark = pytest.mark.asyncio
 SECOND_QUESTION = "And your favourite number?"
 
 
-def proof_of(interrupt: dict) -> str:
+def proof_of(interrupt: dict[str, Any]) -> str:
     proof = interrupt["metadata"][AG2_METADATA_KEY][PROOF_KEY]
     assert isinstance(proof, str)
     return proof
 
 
-async def refused(app, resume: list, *, run_id: str = "r2") -> dict:
+async def refused(app: Any, resume: list[dict[str, Any]], *, run_id: str = "r2") -> dict[str, Any]:
     events = await post_run(app, run_body(thread_id="t1", run_id=run_id, text=None, resume=resume))
     assert types_of(events)[-1] == "RUN_ERROR", f"the client was left without a terminating event: {types_of(events)}"
     return only(events, "RUN_ERROR")
@@ -80,16 +82,15 @@ class TestTheInterruptCarriesItsProof:
         assert proof_of(second_interrupt) != proof_of(first)
 
 
-class TestWhatIsAccepted:
-    async def test_the_proof_it_was_issued_with(self) -> None:
-        agent, asked = asking_agent()
-        app = app_for(AGUIStream(agent))
+async def test_the_proof_it_was_issued_with_is_accepted() -> None:
+    agent, asked = asking_agent()
+    app = app_for(AGUIStream(agent))
 
-        interrupt = await ask_once(app)
-        events = await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")))
+    interrupt = await ask_once(app)
+    events = await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")))
 
-        assert asked.answers == ["blue"]
-        assert outcome_of(events) == {"type": "success"}
+    assert asked.answers == ["blue"]
+    assert outcome_of(events) == {"type": "success"}
 
 
 class TestWhatIsRefused:

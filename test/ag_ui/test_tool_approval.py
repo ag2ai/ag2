@@ -59,22 +59,21 @@ def gated_agent(**middleware_kwargs: Any) -> tuple[Agent, list[str]]:
     return agent, ran
 
 
-class TestTheCallIsPutToTheClient:
-    async def test_the_interrupt_names_the_call_it_is_gating(self) -> None:
-        agent, ran = gated_agent()
-        app = app_for(AGUIStream(agent))
+async def test_the_interrupt_names_the_call_it_is_gating() -> None:
+    agent, ran = gated_agent()
+    app = app_for(AGUIStream(agent))
 
-        events = await post_run(app, run_body(thread_id="t1", run_id="r1"))
-        [interrupt] = outcome_of(events)["interrupts"]
+    events = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+    [interrupt] = outcome_of(events)["interrupts"]
 
-        assert interrupt == IsPartialDict({
-            "reason": TOOL_APPROVAL_REASON,
-            "toolCallId": only(events, "TOOL_CALL_START")["toolCallId"],
-            "message": IsStr(),
-            "expiresAt": IsStr(),
-        })
-        assert "delete_everything" in interrupt["message"]
-        assert ran == []
+    assert interrupt == IsPartialDict({
+        "reason": TOOL_APPROVAL_REASON,
+        "toolCallId": only(events, "TOOL_CALL_START")["toolCallId"],
+        "message": IsStr(),
+        "expiresAt": IsStr(),
+    })
+    assert "delete_everything" in interrupt["message"]
+    assert ran == []
 
 
 class TestTheAnswerDecides:

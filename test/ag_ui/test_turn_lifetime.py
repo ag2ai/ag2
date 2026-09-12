@@ -64,8 +64,7 @@ async def test_turn_runs_on_past_the_end_of_its_exchange() -> None:
     await events.aclose()
 
     gate.set()
-    async with asyncio.timeout(_NEVER):
-        await reached.wait()
+    await asyncio.wait_for(reached.wait(), timeout=_NEVER)
 
     await stream.aclose()
 
@@ -94,8 +93,7 @@ async def test_a_turn_nobody_awaits_does_not_report_an_unretrieved_exception() -
         await events.aclose()
 
         gate.set()
-        async with asyncio.timeout(_NEVER):
-            await reached.wait()
+        await asyncio.wait_for(reached.wait(), timeout=_NEVER)
 
         await stream.aclose()
         # Let the turn unwind and be collected: an unretrieved task exception is
@@ -130,10 +128,8 @@ async def test_a_turn_still_running_is_cancelled_on_shutdown() -> None:
     events = stream.dispatch(create_run_input(UserMessage(id="m1", content="go")))
     await _drain_until(events, "TOOL_CALL_ARGS")
     await events.aclose()
-    async with asyncio.timeout(_NEVER):
-        await parked.wait()
+    await asyncio.wait_for(parked.wait(), timeout=_NEVER)
 
     await stream.aclose()
 
-    async with asyncio.timeout(_NEVER):
-        await cancelled.wait()
+    await asyncio.wait_for(cancelled.wait(), timeout=_NEVER)

@@ -102,27 +102,26 @@ class TestOneQuestionOneAnswer:
         assert "TOOL_CALL_START" not in types_of(second)
 
 
-class TestSeveralRounds:
-    async def test_a_second_question_is_asked_and_answered(self) -> None:
-        agent, asked = asking_agent(questions=(QUESTION, "And your favourite number?"))
-        app = app_for(AGUIStream(agent))
+async def test_a_second_question_is_asked_and_answered() -> None:
+    agent, asked = asking_agent(questions=(QUESTION, "And your favourite number?"))
+    app = app_for(AGUIStream(agent))
 
-        first = await post_run(app, run_body(thread_id="t1", run_id="r1"))
-        second = await post_run(
-            app,
-            run_body(thread_id="t1", run_id="r2", text=None, resume=answer(sole_interrupt(first), "blue")),
-        )
+    first = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+    second = await post_run(
+        app,
+        run_body(thread_id="t1", run_id="r2", text=None, resume=answer(sole_interrupt(first), "blue")),
+    )
 
-        assert sole_interrupt(second) == IsPartialDict({"message": "And your favourite number?"})
-        assert sole_interrupt(second)["id"] != sole_interrupt(first)["id"]
+    assert sole_interrupt(second) == IsPartialDict({"message": "And your favourite number?"})
+    assert sole_interrupt(second)["id"] != sole_interrupt(first)["id"]
 
-        third = await post_run(
-            app,
-            run_body(thread_id="t1", run_id="r3", text=None, resume=answer(sole_interrupt(second), "7")),
-        )
+    third = await post_run(
+        app,
+        run_body(thread_id="t1", run_id="r3", text=None, resume=answer(sole_interrupt(second), "7")),
+    )
 
-        assert asked.answers == ["blue", "7"]
-        assert outcome_of(third) == {"type": "success"}
+    assert asked.answers == ["blue", "7"]
+    assert outcome_of(third) == {"type": "success"}
 
 
 class TestTheHeldTurnIsFoundByThread:
@@ -195,22 +194,21 @@ class TestRunsThatAskNothing:
         assert outcome_of(events) == {"type": "success"}
 
 
-class TestDeclaredCapabilities:
-    async def test_the_agent_says_it_speaks_the_interrupt_protocol(self) -> None:
-        agent, _ = asking_agent()
-        app = app_for(AGUIStream(agent))
+async def test_the_agent_says_it_speaks_the_interrupt_protocol() -> None:
+    agent, _ = asking_agent()
+    app = app_for(AGUIStream(agent))
 
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://ag-ui.test") as client:
-            response = await client.get("/")
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://ag-ui.test") as client:
+        response = await client.get("/")
 
-        assert response.status_code == 200
-        assert response.json() == IsPartialDict({
-            "humanInTheLoop": IsPartialDict({"supported": True, "interrupts": True}),
-        })
+    assert response.status_code == 200
+    assert response.json() == IsPartialDict({
+        "humanInTheLoop": IsPartialDict({"supported": True, "interrupts": True}),
+    })
 
 
-class TestOneQuestionAtATime:
+async def test_a_second_question_is_refused_and_the_first_still_answers() -> None:
     """A turn carries one outstanding question, and says so when asked for two.
 
     At the registry seam rather than over in-process HTTP: driving two genuinely
@@ -223,23 +221,21 @@ class TestOneQuestionAtATime:
     deadline, and sends the second question out on an exchange that already
     ended on the first.
     """
+    send, _receive = create_memory_object_stream[BaseEvent](max_buffer_size=10)
+    turns = ServedTurns()
+    turn = ServedTurn(TurnOutput(thread_id="thread-1", run_id="run-1", send=send))
 
-    async def test_a_second_question_is_refused_and_the_first_still_answers(self) -> None:
-        send, _receive = create_memory_object_stream[BaseEvent](max_buffer_size=10)
-        turns = ServedTurns()
-        turn = ServedTurn(TurnOutput(thread_id="thread-1", run_id="run-1", send=send))
+    def question(n: int) -> Interrupt:
+        return Interrupt(id=f"interrupt-{n}", reason="human_input", message=f"Q{n}?")
 
-        def question(n: int) -> Interrupt:
-            return Interrupt(id=f"interrupt-{n}", reason="human_input", message=f"Q{n}?")
+    first = asyncio.create_task(turns.ask(turn, question(1)))
+    await asyncio.sleep(0)  # let the first ask park on its question
 
-        first = asyncio.create_task(turns.ask(turn, question(1)))
-        await asyncio.sleep(0)  # let the first ask park on its question
+    with pytest.raises(HumanInputError, match="already waiting on interrupt interrupt-1"):
+        await turns.ask(turn, question(2))
 
-        with pytest.raises(HumanInputError, match="already waiting on interrupt interrupt-1"):
-            await turns.ask(turn, question(2))
+    assert turn.outstanding is not None
+    assert turn.outstanding.id == "interrupt-1"
 
-        assert turn.outstanding is not None
-        assert turn.outstanding.id == "interrupt-1"
-
-        turn.deliver("still answerable")
-        assert await asyncio.wait_for(first, timeout=_NEVER) == "still answerable"
+    turn.deliver("still answerable")
+    assert await asyncio.wait_for(first, timeout=_NEVER) == "still answerable"

@@ -9,6 +9,8 @@ left with an event that ends the run. A stream that simply stops is the one
 outcome a client cannot recover from — it waits.
 """
 
+from typing import Any
+
 import pytest
 from dirty_equals import IsPartialDict
 
@@ -40,7 +42,9 @@ TTL = 60.0
 SECOND_QUESTION = "And your favourite number?"
 
 
-async def refusal(app, *, thread_id: str = "t1", run_id: str = "r2", resume: list) -> dict:
+async def refusal(
+    app: Any, *, thread_id: str = "t1", run_id: str = "r2", resume: list[dict[str, Any]]
+) -> dict[str, Any]:
     """Drive one exchange expected to be refused, and return its run error."""
     events = await post_run(app, run_body(thread_id=thread_id, run_id=run_id, text=None, resume=resume))
     assert types_of(events)[-1] == "RUN_ERROR", f"the client was left without a terminating event: {types_of(events)}"

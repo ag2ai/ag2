@@ -141,17 +141,16 @@ class TestBoundsOnWhatIsHeld:
         assert await asked.ending_within() == "cancelled"
 
 
-class TestTheCallersOwnTimeout:
-    async def test_it_still_ends_the_turn_when_it_falls_first(self) -> None:
-        """The two bounds stay independent: whichever elapses first ends the turn."""
-        agent, asked = asking_agent(timeout=0.05)
-        app = app_for(AGUIStream(agent, retention=Retention(ttl=TTL)))
+async def test_the_callers_own_timeout_still_ends_the_turn_when_it_falls_first() -> None:
+    """The two bounds stay independent: whichever elapses first ends the turn."""
+    agent, asked = asking_agent(timeout=0.05)
+    app = app_for(AGUIStream(agent, retention=Retention(ttl=TTL)))
 
-        interrupt = await ask_once(app)
+    interrupt = await ask_once(app)
 
-        assert await asked.ending_within() == "no answer"
-        events = await post_run(
-            app,
-            run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")),
-        )
-        assert types_of(events)[-1] == "RUN_ERROR"
+    assert await asked.ending_within() == "no answer"
+    events = await post_run(
+        app,
+        run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")),
+    )
+    assert types_of(events)[-1] == "RUN_ERROR"
