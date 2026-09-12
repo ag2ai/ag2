@@ -100,7 +100,8 @@ class TestGlobalRateLimit:
             mode=GovernanceMode.ENFORCE,
         )
         # Seed two calls as if they happened ~61s ago — outside a 60s window.
-        governance._call_history["*"] = [time.time() - 61, time.time() - 61]
+        # History is keyed by policy index; this is the only (index 0) policy.
+        governance._call_history[0] = [time.time() - 61, time.time() - 61]
         # They should have aged out, so a fresh call is allowed.
         assert _decide(governance, "search") == "ALLOW"
 
@@ -110,7 +111,7 @@ class TestGlobalRateLimit:
             mode=GovernanceMode.ENFORCE,
         )
         # Two calls 1s ago are inside the 60s window -> the next is denied.
-        governance._call_history["*"] = [time.time() - 1, time.time() - 1]
+        governance._call_history[0] = [time.time() - 1, time.time() - 1]
         assert _decide(governance, "search") == "DENY"
 
 
@@ -166,7 +167,7 @@ class TestRateLimitRespectsMode:
         )
         # Bucket already over the limit — but OBSERVE short-circuits before policy
         # evaluation, so the call still runs and is only recorded as a passthrough.
-        governance._call_history["*"] = [time.time(), time.time()]
+        governance._call_history[0] = [time.time(), time.time()]
         agent = Agent(
             "assistant",
             config=TestConfig(_call("search", query="hi"), "Done."),
@@ -184,7 +185,7 @@ class TestRateLimitRespectsMode:
             policies=[GovernancePolicy.rate_limit(1, window_seconds=60)],
             mode=GovernanceMode.MONITOR,
         )
-        governance._call_history["*"] = [time.time()]
+        governance._call_history[0] = [time.time()]
         per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
         decision = per_turn._evaluate("search", "{}")
         # In MONITOR the decision still reads DENY (the violation is real and logged),
@@ -202,8 +203,8 @@ async def test_rate_limit_blocks_a_real_agent_turn_in_enforce():
         policies=[GovernancePolicy.rate_limit(5, window_seconds=60, tool="search")],
         mode=GovernanceMode.ENFORCE,
     )
-    # Pre-fill the search bucket to its limit so the very next call is denied.
-    governance._call_history["search"] = [time.time()] * 5
+    # Pre-fill the search policy's history to its limit so the next call is denied.
+    governance._call_history[0] = [time.time()] * 5
 
     agent = Agent(
         "assistant",
@@ -218,14 +219,17 @@ async def test_rate_limit_blocks_a_real_agent_turn_in_enforce():
     assert governance.deny_count == 1
 
 
-class TestSharedBucketIsCountedOnce:
-    """Regression for PR #3246 review: policies sharing a bucket key must not
-    double-count a single real call.
+class TestSharedScopeCountsPerPolicy:
+    """Regression for PR #3246 review: policies that share a tool scope but use
+    different windows must each count a real call exactly once against their own
+    window. Each policy keeps its own timestamp list (keyed by policy index), so
+    a single call adds one timestamp per policy and the tighter limit trips at
+    its real threshold — never at half of it from double counting.
     """
 
-    def test_two_global_limits_share_one_bucket_without_double_counting(self):
-        # Both policies are global -> both use the "*" bucket. A single real call
-        # must add exactly one timestamp, not one per policy.
+    def test_two_global_limits_each_count_once_against_their_own_window(self):
+        # Both policies are global and share the same scope; index 0 is the
+        # 10/min limit, index 1 the 100/hour limit.
         governance = TealTigerMiddleware(
             policies=[
                 GovernancePolicy.rate_limit(10, window_seconds=60),
@@ -237,8 +241,10 @@ class TestSharedBucketIsCountedOnce:
         for _ in range(5):
             assert _decide(governance, "search") == "ALLOW"
 
-        # Five real calls -> five timestamps in the shared bucket (not ten).
-        assert len(governance._call_history["*"]) == 5
+        # Five real calls -> five timestamps for each policy (not ten): one per
+        # call per policy, so neither window is inflated by the other.
+        assert len(governance._call_history[0]) == 5
+        assert len(governance._call_history[1]) == 5
 
         # The 10/min limit must still have five allowances left, not be tripped.
         for _ in range(5):
@@ -247,7 +253,7 @@ class TestSharedBucketIsCountedOnce:
         per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
         assert per_turn._evaluate("search", "{}").action == "DENY"
 
-    def test_two_policies_with_same_tool_pattern_share_one_bucket(self):
+    def test_two_policies_with_same_tool_pattern_each_count_once(self):
         governance = TealTigerMiddleware(
             policies=[
                 GovernancePolicy.rate_limit(4, window_seconds=60, tool="db_*"),
@@ -259,8 +265,90 @@ class TestSharedBucketIsCountedOnce:
         for _ in range(4):
             assert _decide(governance, "db_read") == "ALLOW"
 
-        # Four real calls -> four timestamps in the shared "db_*" bucket, not eight.
-        assert len(governance._call_history["db_*"]) == 4
+        # Four real calls -> four timestamps for each db_* policy, not eight.
+        assert len(governance._call_history[0]) == 4
+        assert len(governance._call_history[1]) == 4
         # The 4/min limit trips on the 5th real call, exactly at its threshold.
         per_turn = governance(ToolCallEvent(name="db_write", arguments="{}"), _FakeContext())
         assert per_turn._evaluate("db_write", "{}").action == "DENY"
+
+
+class TestMixedWindowSharedScopePruning:
+    """Regression for PR #3246 review (discussion r3992565377): two rate_limit
+    policies that share a tool scope but use different windows must not prune each
+    other's history. A short-window policy must never delete timestamps that a
+    longer-window policy sharing the same scope still needs, so the long window
+    keeps counting calls that have aged out of the short one. Because each policy
+    owns its own timestamp list (keyed by policy index), this holds regardless of
+    the order the policies are declared in.
+    """
+
+    def _seed_aged_calls(self, governance: TealTigerMiddleware, hourly_index: int, count: int) -> None:
+        """Put `count` timestamps ~120s old into the hourly policy's own list.
+
+        120s is outside a 60s minute window but well inside a 3600s hour window,
+        so a correct hourly limit still counts them while the minute limit does not.
+        """
+        aged = [time.time() - 120] * count
+        governance._call_history[hourly_index] = list(aged)
+
+    def test_hourly_limit_still_counts_calls_aged_out_of_the_minute_window(self):
+        # index 0 = 10/min, index 1 = 100/hour, both global (shared scope).
+        governance = TealTigerMiddleware(
+            policies=[
+                GovernancePolicy.rate_limit(10, window_seconds=60),
+                GovernancePolicy.rate_limit(100, window_seconds=3600),
+            ],
+            mode=GovernanceMode.ENFORCE,
+        )
+        # 100 calls happened ~120s ago: gone from the 60s window, still in the hour.
+        self._seed_aged_calls(governance, hourly_index=1, count=100)
+
+        # The minute limit has forgotten them (its own list is empty), so from the
+        # minute's perspective the next call is fine...
+        per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
+        # ...but the hourly limit is already at 100/100 and must deny — proving the
+        # minute policy did not destructively prune the hourly policy's history.
+        decision = per_turn._evaluate("search", "{}")
+        assert decision.action == "DENY"
+        assert "RATE_LIMIT_EXCEEDED" in decision.reason_codes
+
+    def test_minute_limit_refills_while_hourly_keeps_the_aged_calls(self):
+        governance = TealTigerMiddleware(
+            policies=[
+                GovernancePolicy.rate_limit(10, window_seconds=60),
+                GovernancePolicy.rate_limit(100, window_seconds=3600),
+            ],
+            mode=GovernanceMode.ENFORCE,
+        )
+        # 50 aged calls: inside the hour, outside the minute. Under the hourly cap.
+        self._seed_aged_calls(governance, hourly_index=1, count=50)
+
+        # The minute window is empty, so up to 10 fresh calls flow through...
+        for _ in range(10):
+            assert _decide(governance, "search") == "ALLOW"
+        # ...and the hourly limit has been counting them on top of the 50 aged ones.
+        assert len(governance._call_history[1]) == 60
+        # The 11th fresh call trips the minute limit (10 recent), not the hour.
+        per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
+        assert per_turn._evaluate("search", "{}").action == "DENY"
+
+    def test_behavior_is_independent_of_policy_order(self):
+        # Same two limits, declared hour-first: index 0 = 100/hour, index 1 = 10/min.
+        governance = TealTigerMiddleware(
+            policies=[
+                GovernancePolicy.rate_limit(100, window_seconds=3600),
+                GovernancePolicy.rate_limit(10, window_seconds=60),
+            ],
+            mode=GovernanceMode.ENFORCE,
+        )
+        # Age 100 calls out of the minute window but keep them in the hour; the
+        # hourly policy is index 0 in this ordering.
+        governance._call_history[0] = [time.time() - 120] * 100
+
+        # The minute limit (index 1) has an empty list, but the hourly limit is at
+        # its cap and must still deny — order does not change the outcome.
+        per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
+        decision = per_turn._evaluate("search", "{}")
+        assert decision.action == "DENY"
+        assert "RATE_LIMIT_EXCEEDED" in decision.reason_codes

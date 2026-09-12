@@ -235,9 +235,11 @@ class TealTigerMiddleware:
         self._receipts: list[TEECReceipt] = []
         self._frozen_agents: set[str] = set()
         self._cumulative_cost: float = 0.0
-        # Rolling call timestamps per rate_limit bucket key ("*" for a global
-        # limit, or the tool pattern for a per-tool one). Survives across turns.
-        self._call_history: dict[str, list[float]] = {}
+        # Rolling call timestamps for each rate_limit policy, keyed by the
+        # policy's index in ``policies``. Each policy owns its own list so
+        # policies that share a tool scope but use different windows never
+        # prune or count one another's timestamps. Survives across turns.
+        self._call_history: dict[int, list[float]] = {}
 
         # Compute policy digest for receipts
         policy_str = str(sorted((p.type, str(p.config)) for p in self.policies))
@@ -454,7 +456,7 @@ class _TealTigerPerTurn(BaseMiddleware):
 
         args_str = str(tool_args) if not isinstance(tool_args, str) else tool_args
 
-        for policy in self._factory.policies:
+        for policy_index, policy in enumerate(self._factory.policies):
             if policy.type == "prompt_injection_block":
                 techniques = policy.config.get("techniques", list(INJECTION_TECHNIQUES))
                 threshold = policy.config.get("confidence_threshold", DEFAULT_INJECTION_CONFIDENCE_THRESHOLD)
@@ -514,7 +516,7 @@ class _TealTigerPerTurn(BaseMiddleware):
                     break
 
             elif policy.type == "rate_limit":
-                if self._rate_limit_exceeded(tool_name, policy.config):
+                if self._rate_limit_exceeded(tool_name, policy.config, policy_index):
                     action = "DENY"
                     reason_codes.append("RATE_LIMIT_EXCEEDED")
                     risk_score = max(risk_score, 70)
@@ -665,48 +667,43 @@ class _TealTigerPerTurn(BaseMiddleware):
             ),
         )
 
-    def _rate_limit_key(self, config: dict[str, Any]) -> str:
-        """The call-history bucket key for a rate_limit policy: its tool pattern, or "*"."""
-        return config.get("tool") or "*"
-
-    def _rate_limit_exceeded(self, tool_name: str, config: dict[str, Any]) -> bool:
+    def _rate_limit_exceeded(self, tool_name: str, config: dict[str, Any], policy_index: int) -> bool:
         """Whether `tool_name` is already at or over this policy's limit.
 
         A per-tool policy (``tool`` set) only applies to matching calls; a global
-        policy (``tool`` is None) applies to every call. Timestamps older than the
-        window are pruned first, so the check reflects a sliding window.
+        policy (``tool`` is None) applies to every call. Each policy keeps its own
+        timestamp list (keyed by ``policy_index``) and prunes only that list
+        against its own window, so a short-window policy can never delete
+        timestamps a longer-window policy sharing the same tool scope still needs.
         """
         pattern = config.get("tool")
         if pattern is not None and not fnmatch.fnmatch(tool_name, pattern):
             return False
 
-        key = self._rate_limit_key(config)
         window = config["window_seconds"]
         cutoff = time.time() - window
-        history = [t for t in self._factory._call_history.get(key, []) if t > cutoff]
-        self._factory._call_history[key] = history
+        history = [t for t in self._factory._call_history.get(policy_index, []) if t > cutoff]
+        self._factory._call_history[policy_index] = history
         return len(history) >= config["max_calls"]
 
     def _record_rate_limit_calls(self, tool_name: str) -> None:
-        """Record `now` once against each distinct rate_limit bucket `tool_name` falls under.
+        """Record `now` against every rate_limit policy `tool_name` falls under.
 
         Called only for allowed calls, so a denied call never counts toward the
-        window. A call can match several buckets (e.g. a global limit and a
-        per-tool one), and several policies can share one bucket key (two global
-        limits both key ``"*"``, or two policies with the same tool pattern). The
-        bucket — not the policy — is what a window counts, so a single real call
-        must add exactly one timestamp per *distinct* key; recording per policy
-        would double-count shared buckets and trip the tighter limit early.
+        window. Each policy owns its own timestamp list (keyed by its index), so a
+        single real call adds exactly one timestamp to each policy it matches.
+        Because lists are per policy, two policies sharing a tool scope (two global
+        limits, or two with the same pattern) each count the call once against
+        their own window — no double counting, and no shared list to fight over.
         """
         now = time.time()
-        keys = {
-            self._rate_limit_key(policy.config)
-            for policy in self._factory.policies
-            if policy.type == "rate_limit"
-            and (policy.config.get("tool") is None or fnmatch.fnmatch(tool_name, policy.config["tool"]))
-        }
-        for key in keys:
-            self._factory._call_history.setdefault(key, []).append(now)
+        for policy_index, policy in enumerate(self._factory.policies):
+            if policy.type != "rate_limit":
+                continue
+            pattern = policy.config.get("tool")
+            if pattern is not None and not fnmatch.fnmatch(tool_name, pattern):
+                continue
+            self._factory._call_history.setdefault(policy_index, []).append(now)
 
     def _record_decision(
         self,
