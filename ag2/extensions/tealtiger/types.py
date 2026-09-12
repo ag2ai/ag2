@@ -375,6 +375,69 @@ class GovernancePolicy:
         return cls(type="cost_limit", config={"max_per_session": max_per_session})
 
     @classmethod
+    def rate_limit(
+        cls,
+        max_calls: int,
+        window_seconds: float,
+        tool: str | None = None,
+    ) -> "GovernancePolicy":
+        """Deny tool calls once more than `max_calls` occur within a rolling window.
+
+        Where `cost_limit` caps cumulative *spend*, this caps call *frequency* —
+        the defence against a runaway loop that keeps invoking the same tool (or
+        any tool) and burns budget, rate limits, or side effects before a cost
+        ceiling would even notice. It is a sliding window: only the calls in the
+        last `window_seconds` count, so the limit refills continuously rather than
+        resetting on a fixed boundary.
+
+        Scope is set by `tool`:
+
+        - `tool=None` (default) — **global**: every governed tool call shares one
+          budget. `rate_limit(30, 60)` caps the agent to 30 tool calls per minute
+          total.
+        - `tool="pattern"` — **per-tool**: only calls whose name matches the
+          `fnmatch` pattern count against (and are limited by) this policy.
+          `rate_limit(5, 60, tool="search")` caps `search` to 5/min while leaving
+          other tools alone; `rate_limit(10, 60, tool="db_*")` caps the `db_*`
+          family together.
+
+        Combine several: a global ceiling plus tighter per-tool caps all apply,
+        and the first one exceeded denies the call.
+
+        Example::
+
+            GovernancePolicy.rate_limit(30, 60)  # 30 tool calls / minute, total
+            GovernancePolicy.rate_limit(5, 60, tool="send_email")  # 5 emails / minute
+            GovernancePolicy.rate_limit(100, 3600, tool="api_*")  # 100 api_* calls / hour
+
+        Args:
+            max_calls: Maximum calls permitted within the window. Must be a
+                positive integer.
+            window_seconds: Length of the rolling window in seconds. Must be a
+                positive number.
+            tool: Tool name or `fnmatch` pattern to scope the limit to. Omit for a
+                global limit across all tools.
+
+        Raises:
+            ValueError: If `max_calls` is not a positive integer, `window_seconds`
+                is not a positive number, or `tool` is given but empty — any of
+                which would leave a policy that limits nothing or can never allow a
+                call.
+        """
+        # bool is an int subclass; a True max_calls is almost certainly a mistake.
+        if isinstance(max_calls, bool) or not isinstance(max_calls, int) or max_calls <= 0:
+            raise ValueError(f"`max_calls` must be a positive integer, got {max_calls!r}.")
+        if isinstance(window_seconds, bool) or not isinstance(window_seconds, (int, float)) or window_seconds <= 0:
+            raise ValueError(f"`window_seconds` must be a positive number, got {window_seconds!r}.")
+        if tool is not None and not tool:
+            raise ValueError("`tool` must not be empty; omit it for a global rate limit.")
+
+        return cls(
+            type="rate_limit",
+            config={"max_calls": max_calls, "window_seconds": float(window_seconds), "tool": tool},
+        )
+
+    @classmethod
     def prompt_injection_block(
         cls,
         techniques: list[str] | None = None,

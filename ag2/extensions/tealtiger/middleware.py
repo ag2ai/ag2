@@ -235,6 +235,11 @@ class TealTigerMiddleware:
         self._receipts: list[TEECReceipt] = []
         self._frozen_agents: set[str] = set()
         self._cumulative_cost: float = 0.0
+        # Rolling call timestamps for each rate_limit policy, keyed by the
+        # policy's index in ``policies``. Each policy owns its own list so
+        # policies that share a tool scope but use different windows never
+        # prune or count one another's timestamps. Survives across turns.
+        self._call_history: dict[int, list[float]] = {}
 
         # Compute policy digest for receipts
         policy_str = str(sorted((p.type, str(p.config)) for p in self.policies))
@@ -284,6 +289,7 @@ class TealTigerMiddleware:
         self._receipts.clear()
         self._frozen_agents.clear()
         self._cumulative_cost = 0.0
+        self._call_history.clear()
 
 
 class _TealTigerPerTurn(BaseMiddleware):
@@ -403,6 +409,11 @@ class _TealTigerPerTurn(BaseMiddleware):
         decision.cost_tracked = self._factory.cost_per_call
         decision.cumulative_cost = self._factory._cumulative_cost
 
+        # Count this (allowed) call against every rate_limit bucket it matches, so
+        # the window reflects calls that actually happened. In MONITOR a would-be
+        # denial still executes, so it still counts — the limit observes real load.
+        self._record_rate_limit_calls(tool_name)
+
         # Execute the tool
         result = await call_next(event, context)
 
@@ -445,7 +456,7 @@ class _TealTigerPerTurn(BaseMiddleware):
 
         args_str = str(tool_args) if not isinstance(tool_args, str) else tool_args
 
-        for policy in self._factory.policies:
+        for policy_index, policy in enumerate(self._factory.policies):
             if policy.type == "prompt_injection_block":
                 techniques = policy.config.get("techniques", list(INJECTION_TECHNIQUES))
                 threshold = policy.config.get("confidence_threshold", DEFAULT_INJECTION_CONFIDENCE_THRESHOLD)
@@ -501,6 +512,13 @@ class _TealTigerPerTurn(BaseMiddleware):
                 if self._factory._cumulative_cost >= limit:
                     action = "DENY"
                     reason_codes.append("BUDGET_EXCEEDED")
+                    risk_score = max(risk_score, 70)
+                    break
+
+            elif policy.type == "rate_limit":
+                if self._rate_limit_exceeded(tool_name, policy.config, policy_index):
+                    action = "DENY"
+                    reason_codes.append("RATE_LIMIT_EXCEEDED")
                     risk_score = max(risk_score, 70)
                     break
 
@@ -648,6 +666,44 @@ class _TealTigerPerTurn(BaseMiddleware):
                 f"sensitive data detected. Reason: {reason}. Decision ID: {decision.decision_id}"
             ),
         )
+
+    def _rate_limit_exceeded(self, tool_name: str, config: dict[str, Any], policy_index: int) -> bool:
+        """Whether `tool_name` is already at or over this policy's limit.
+
+        A per-tool policy (``tool`` set) only applies to matching calls; a global
+        policy (``tool`` is None) applies to every call. Each policy keeps its own
+        timestamp list (keyed by ``policy_index``) and prunes only that list
+        against its own window, so a short-window policy can never delete
+        timestamps a longer-window policy sharing the same tool scope still needs.
+        """
+        pattern = config.get("tool")
+        if pattern is not None and not fnmatch.fnmatch(tool_name, pattern):
+            return False
+
+        window = config["window_seconds"]
+        cutoff = time.time() - window
+        history = [t for t in self._factory._call_history.get(policy_index, []) if t > cutoff]
+        self._factory._call_history[policy_index] = history
+        return len(history) >= config["max_calls"]
+
+    def _record_rate_limit_calls(self, tool_name: str) -> None:
+        """Record `now` against every rate_limit policy `tool_name` falls under.
+
+        Called only for allowed calls, so a denied call never counts toward the
+        window. Each policy owns its own timestamp list (keyed by its index), so a
+        single real call adds exactly one timestamp to each policy it matches.
+        Because lists are per policy, two policies sharing a tool scope (two global
+        limits, or two with the same pattern) each count the call once against
+        their own window — no double counting, and no shared list to fight over.
+        """
+        now = time.time()
+        for policy_index, policy in enumerate(self._factory.policies):
+            if policy.type != "rate_limit":
+                continue
+            pattern = policy.config.get("tool")
+            if pattern is not None and not fnmatch.fnmatch(tool_name, pattern):
+                continue
+            self._factory._call_history.setdefault(policy_index, []).append(now)
 
     def _record_decision(
         self,
