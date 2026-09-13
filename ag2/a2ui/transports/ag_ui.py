@@ -75,19 +75,14 @@ _A2UI_OPERATIONS_KEY = "a2ui_operations"
 class AgUiTransport:
     """Serve the turn over AG-UI for CopilotKit's A2UI renderer.
 
-    A turn that asks the human a question is held here, suspended where it
-    stopped, until a later run on the same thread answers it — the same
-    behaviour, on the same wire, as ``ag2.ag_ui.AGUIStream``, over the same
-    shared registry. :meth:`aclose` cancels whatever is still held; the
-    :class:`~ag2.a2ui.A2UIServer` calls it on shutdown.
+    A turn that asks the human a question is held until a later run on the same
+    thread answers it, exactly as ``ag2.ag_ui.AGUIStream`` does.
+    :class:`~ag2.a2ui.A2UIServer` calls :meth:`aclose` on shutdown.
 
     Args:
-        path: The POST route path. Defaults to ``"/"``.
-        retention: How long an unanswered question is held, and how many at
-            once. The time bound is what a client is shown as the interrupt's
-            deadline.
-        now: The clock deadlines are read off. For tests; see
-            :class:`~ag2.ag_ui.AGUIStream`.
+        path: The route path, serving POST runs and GET capabilities.
+        retention: How long an unanswered question is held, and how many at once.
+        now: The clock deadlines are read off. For tests.
     """
 
     __slots__ = ("_path", "_turns")
@@ -197,13 +192,8 @@ def _dispatch(
     *,
     encoder: EventEncoder,
 ) -> AsyncIterator[str]:
-    """Drive one exchange over a turn of this transport's, and yield its events.
-
-    The exchange itself — begin or resume, carry the run to its terminating
-    event, leave a held turn running — is ``ag2.ag_ui``'s, shared so that the
-    two AG-UI transports cannot drift into behaving differently on a wire a
-    client reads the same way.
-    """
+    # The exchange itself is ``ag2.ag_ui``'s, shared so the two AG-UI transports
+    # cannot drift apart on a wire a client reads the same way.
     return serve_exchange(turns, incoming, encoder, functools.partial(_start_turn, turns, core, incoming))
 
 
@@ -213,11 +203,8 @@ def _start_turn(
     incoming: RunAgentInput,
     output: TurnOutput,
 ) -> ServedTurn:
-    """Launch a turn of this transport's, writing to ``output``.
-
-    The turn is tracked on the registry, so a question it raises can be answered
-    by a later exchange.
-    """
+    # Tracked on the registry, so a question it raises can be answered by a
+    # later exchange.
     turn = ServedTurn(output)
     # This transport's turn core carries a plain agent, so the only hook
     # there can be is the one the agent was constructed with. With none,
@@ -235,19 +222,14 @@ async def _run_turn(
 ) -> None:
     """Run one turn, writing its AG-UI events to ``output``.
 
-    Emits (``TextMessageChunk`` if there is prose) → (one ``ActivitySnapshot``
-    carrying all A2UI operations, if any) → ``RunFinished``; the exchange emits
-    ``RunStarted`` for itself, since a resumed turn outlives the run that
-    started it. A mid-turn failure surfaces as a ``RunError`` event (the run has
-    already started 200 OK on the wire) rather than as a raise: this transport
-    reports a failed turn and ends it.
-
-    Both terminating events carry the turn's token usage, so what a client can
-    report does not depend on which AG-UI endpoint it connected to. The records
-    are collected live rather than read back from history, because the turn core
-    owns the stream and this transport never sees it — and collecting live is
-    also what leaves the failure path with something to report.
+    Emits any prose, then one ``ActivitySnapshot`` of the A2UI operations, then
+    ``RunFinished`` — or ``RunError``, since the run has already started 200 OK
+    on the wire and a failure is reported rather than raised. Both terminating
+    events carry the turn's token usage.
     """
+    # Usage is collected live rather than read back from history: the turn core
+    # owns the stream and this transport never sees it, and live collection is
+    # what leaves the failure path with something to report.
     request = _request_from_agui(core, incoming)
     text_message_id = uuid4().hex
     operations: list[ServerToClientMessage] = []

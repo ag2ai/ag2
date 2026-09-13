@@ -64,7 +64,6 @@ class ApprovalRequired:
         request = ToolApprovalRequest(
             self._prompt.format(tool_name=event.name, tool_arguments=event.arguments),
             tool_call_id=event.id,
-            tool_name=event.name,
             timeout=self._timeout,
         )
         user_result = (await context.ask(request)).lower()

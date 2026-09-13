@@ -140,6 +140,20 @@ class TestBoundsOnWhatIsHeld:
 
         assert await asked.ending_within() == "cancelled"
 
+    async def test_shutdown_waits_for_the_turns_it_cancels(self) -> None:
+        """``aclose`` returning means the cleanup ran, not that it was scheduled.
+
+        Asserted without ``ending_within``: a cancellation merely requested is
+        indistinguishable from one that completed if the assertion may wait.
+        """
+        agent, asked = asking_agent()
+        stream = AGUIStream(agent)
+
+        await ask_once(app_for(stream))
+        await stream.aclose()
+
+        assert asked.ending == "cancelled"
+
 
 async def test_the_callers_own_timeout_still_ends_the_turn_when_it_falls_first() -> None:
     """The two bounds stay independent: whichever elapses first ends the turn."""

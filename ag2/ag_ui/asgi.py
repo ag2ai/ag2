@@ -23,12 +23,7 @@ def build_asgi(stream: "AGUIStream") -> type[HTTPEndpoint]:
             endpoint,  # noqa: N805
             request: Request,
         ) -> JSONResponse:
-            """Tell a client what this agent can do, before it starts a run.
-
-            The protocol describes the capabilities document but defines neither
-            an event nor a transport that carries it, so it is served from the
-            same route the runs are posted to.
-            """
+            """Tell a client what this agent can do, before it starts a run."""
             return JSONResponse(stream.capabilities().model_dump(by_alias=True, exclude_none=True))
 
         async def post(

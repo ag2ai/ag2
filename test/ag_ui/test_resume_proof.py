@@ -114,6 +114,29 @@ class TestWhatIsRefused:
         assert error == IsPartialDict({"code": NOT_PROVEN})
         assert asked.answers == []
 
+    async def test_a_proof_that_is_not_ascii(self) -> None:
+        """Refused like any other wrong proof — not a stream that stops mid-run.
+
+        ``secrets.compare_digest`` raises ``TypeError`` rather than returning
+        ``False`` when handed a non-ASCII ``str``, and it is fed straight off
+        the wire.
+        """
+        agent, asked = asking_agent()
+        app = app_for(AGUIStream(agent))
+
+        interrupt = await ask_once(app)
+        forged = {AG2_METADATA_KEY: {PROOF_KEY: "pr\u00fcf-not-the-one-issued"}}
+        error = await refused(app, resolved(interrupt["id"], "blue", metadata=forged))
+
+        assert error == IsPartialDict({"code": NOT_PROVEN})
+        assert asked.answers == []
+
+        # Refused, not dropped: a turn taken for a resume that failed is put
+        # back, so the real answer still reaches it.
+        events = await post_run(app, run_body(thread_id="t1", run_id="r3", text=None, resume=answer(interrupt, "blue")))
+        assert asked.answers == ["blue"]
+        assert outcome_of(events) == {"type": "success"}
+
     async def test_a_guessed_proof(self) -> None:
         agent, asked = asking_agent()
         app = app_for(AGUIStream(agent))

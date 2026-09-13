@@ -87,11 +87,9 @@ async def stream_turn(
             is created here and never leaves, and a caller handed the records
             only on a clean return would have none for a turn that raised —
             which is the turn whose cost most wants reporting.
-        interrupter: Where a question the agent asks goes — a transport that can
-            put it to whoever is connected supplies one, for the same reason the
-            records are the caller's: the stream it would have to register on
-            never leaves this function. Registered ahead of the agent's own
-            arrangements, and only supplied when the agent has none.
+        interrupter: Where a question the agent asks goes. Supplied only by a
+            transport that can put it to whoever is connected, and only when the
+            agent has no hook of its own.
 
     Yields:
         Any server-action :class:`A2UIMessageFrame`s first, then (when the agent

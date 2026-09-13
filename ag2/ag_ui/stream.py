@@ -82,14 +82,12 @@ except ImportError:
 
 
 class AGUIStream:
-    """Serve an :class:`~ag2.Agent` over AG-UI.
+    """Serve an `Agent` over AG-UI.
 
     A turn's lifetime belongs to this object, not to the HTTP exchange that
-    started it: an agent that asks a human a question is held here, suspended
-    where it stopped, until the client answers. Call :meth:`aclose` on the way
-    down — from your app's shutdown hook, or by using the stream as an async
-    context manager — so a turn still waiting is cancelled rather than left
-    running into the void.
+    started it: an agent that asks a human a question is held here until the
+    client answers. Call `aclose` on shutdown, or use the stream as an async
+    context manager, so a turn still waiting is cancelled.
     """
 
     def __init__(
@@ -99,12 +97,10 @@ class AGUIStream:
         retention: Retention = DEFAULT_RETENTION,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
-        """Serve ``agent``, holding a turn paused on a question for ``retention``.
+        """Serve `agent`, holding a turn paused on a question for `retention`.
 
-        ``now`` is the clock every deadline is read off. It is there for tests:
-        a held turn expires against wall-clock time, and a test that had to
-        outlast a retention bound to see it would either take that long or push
-        the bound down to something no operator would configure.
+        `now` is the clock deadlines are read off, for tests that would
+        otherwise have to outlast a retention bound to reach one.
         """
         self.__agent = agent
         self.__turns = ServedTurns(retention=retention, now=now)
@@ -124,7 +120,7 @@ class AGUIStream:
         return interrupt_capabilities(self.__agent.name)
 
     def build_asgi(self) -> "type[HTTPEndpoint]":
-        """Build an ASGI endpoint for the AGUIStream."""
+        """Build an ASGI endpoint serving this stream: POST runs, GET capabilities."""
         # import here to avoid Starlette requirements in the main package
         from .asgi import build_asgi
 
@@ -144,6 +140,15 @@ class AGUIStream:
         hitl_hook: HumanHook | None = None,
         accept: str | None = None,
     ) -> AsyncIterator[str]:
+        """Run `incoming` and yield encoded AG-UI events.
+
+        `accept` is the request's `Accept` header, selecting SSE or NDJSON.
+        `hitl_hook` is where a question the agent asks goes — omit it and the
+        question is put to the client as an interrupt instead.
+
+        Wrap the returned iterator in `contextlib.aclosing`: it holds a
+        channel open across yields.
+        """
         command = AGStreamInput(
             incoming=incoming,
             variables=variables or {},
@@ -165,7 +170,6 @@ class AGUIStream:
             yield chunk  # noqa: ASYNC119
 
     def __start(self, command: "AGStreamInput", output: TurnOutput) -> ServedTurn:
-        """Launch a fresh turn writing to ``output``, and own its lifetime."""
         turn = ServedTurn(output)
         interrupter = None if self.__answers_in_process(command.hitl_hook) else ClientInterrupter(turn, self.__turns)
         # Started as a task the server owns rather than inside this request's
@@ -174,12 +178,8 @@ class AGUIStream:
         return turn
 
     def __answers_in_process(self, hitl_hook: HumanHook | None) -> bool:
-        """Whether this run already has somewhere of its own to put a question.
-
-        Read off what was *supplied*, never off the core's "nobody to ask"
-        default: a caller who passed a hook keeps today's behaviour exactly, and
-        only a caller who passed none has the question put to the client.
-        """
+        # Read off what was supplied, never off the core's "nobody to ask"
+        # default: only a run that passed no hook has its question sent out.
         return hitl_hook is not None or self.__agent._hitl_hook is not None
 
 
@@ -202,10 +202,10 @@ async def run_stream(
     output: TurnOutput,
     interrupter: ClientInterrupter | None = None,
 ) -> None:
-    """Run one served turn, writing its events to ``output``.
+    """Run one served turn, writing its events to `output`.
 
-    ``interrupter`` is where a question the agent asks goes when the caller
-    supplied no hook of its own; ``None`` leaves the agent's own human-input
+    `interrupter` is where a question the agent asks goes when the caller
+    supplied no hook of its own; `None` leaves the agent's own human-input
     arrangements untouched.
     """
     client_tools = []
@@ -392,7 +392,7 @@ async def run_stream(
 
         with ExitStack() as stack:
             if interrupter is not None:
-                # Registered *before* ``ask`` so it runs ahead of the "nobody
+                # Registered *before* `ask` so it runs ahead of the "nobody
                 # could be asked" default the agent registers for itself.
                 stack.enter_context(
                     stream.where(events.HumanInputRequest).sub_scope(interrupter, interrupt=True),
@@ -448,55 +448,36 @@ async def run_stream(
 
 
 async def _run_token_usage(stream: MemoryStream) -> list[TokenUsage] | None:
-    """Token usage for this run, read off its event log.
-
-    Safe on the failure path: the stream awaits its subscribers on send, so persistence
-    has already seen every usage event emitted before the exception.
-    """
+    # Safe on the failure path: the stream awaits its subscribers on send, so
+    # persistence has seen every usage event emitted before the exception.
     return map_usage_events_to_ag_ui(await stream.history.get_events())
 
 
 def map_usage_events_to_ag_ui(usage_events: Iterable[events.BaseEvent]) -> list[TokenUsage] | None:
-    """Attributed spend for a set of events, as AG-UI's per-(provider, model) list.
-
-    The whole path from events to wire entries, not just the mapping: attribution is
-    ``UsageReport``'s and the grouping is :func:`map_usage_records_to_ag_ui`'s, and a
-    transport that composed the two itself could compose them differently. Both AG-UI
-    transports call this, differing only in where their events come from — this module's
-    reads them back off the run's history, while ``ag2/a2ui/`` collects them live because
-    its turn core owns the stream and the transport never sees it.
-    """
+    """Attributed spend for a set of events, as AG-UI's per-(provider, model) list."""
+    # Both AG-UI transports call this, so the two cannot compose attribution and
+    # grouping differently. They differ only in where the events come from.
     return map_usage_records_to_ag_ui(UsageReport.from_events(usage_events).records)
 
 
 def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsage] | None:
     """Attributed spend, as AG-UI's per-(provider, model) list.
 
-    Takes ``UsageReport.records`` rather than the report's ``by_model`` / ``by_provider``:
-    those are independent maps, so the pair is unrecoverable from them, and each drops what
-    the other side didn't label — where a delegated sub-agent's spend lives. Pairs aren't
-    folded together either, since absent counts add as zero: merging a provider that
-    reports reasoning tokens with one that doesn't would read as a complete measurement.
-
-    Within a pair the calls *are* summed, because there an absent additive count means the
-    provider had nothing to report for that call — it omits ``thinking_tokens`` on a call
-    that did no reasoning. ``total_tokens`` is the exception and is handled separately; see
-    ``_reported_total``.
-
-    Nothing is derived, and ``cache_creation_input_tokens`` is dropped rather than folded
-    into a neighbour — providers disagree on whether cached tokens already sit in the
-    prompt count.
-
-    The rule behind all of this: a transport copies a count or omits it, and never
-    derives, zero-fills or folds one into another. A client can tell absence from zero
-    and decide what to do about it; it cannot tell a measured figure from one this
-    layer invented. That binds any transport that grows a usage field, not just this
-    one — which is why the mapping lives here to be shared rather than restated.
+    Counts a provider did not report are omitted, never zero-filled or derived.
     """
+    # Records, not the report's by_model / by_provider: those are independent
+    # maps, so the (provider, model) pair cannot be recovered from them, and each
+    # drops what the other side did not label — where a sub-agent's spend lives.
     grouped: dict[tuple[str | None, str | None], list[Usage]] = {}
     for record in records:
         grouped.setdefault((record.provider, record.model), []).append(record.usage)
 
+    # Pairs are never folded together: absent counts add as zero, so merging a
+    # provider that reports reasoning tokens with one that does not would read as
+    # a complete measurement. Within a pair the calls are summed, because there an
+    # absent additive count does mean the provider had nothing to report.
+    # cache_creation_input_tokens is dropped rather than folded into a neighbour —
+    # providers disagree on whether cached tokens already sit in the prompt count.
     entries = []
     for (provider, model), usages in grouped.items():
         summed = sum(usages, Usage())
@@ -515,15 +496,10 @@ def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsag
 
 
 def _reported_total(usages: Iterable[Usage]) -> float | None:
-    """The pair's total across its calls, or absence when a call didn't report one.
-
-    Unlike the additive counts, an absent total does not mean zero: a call that ran had a
-    total whatever the provider chose to say about it. Summing anyway would put a figure on
-    the wire smaller than the input and output beside it — 100+10 with a total of 110, then
-    40+4 with none, reads as 140 in, 14 out, 110 altogether. So the total is reported only
-    when every call in the pair supplied one, and is otherwise left absent rather than
-    derived from input and output, which would add a third definition of "total" here.
-    """
+    # An absent total does not mean zero, unlike the additive counts: a call that
+    # ran had a total whatever the provider said about it. Summing anyway puts a
+    # figure on the wire smaller than the input and output beside it — 100+10 with
+    # a total of 110, then 40+4 with none, reads as 140 in, 14 out, 110 altogether.
     totals = [usage.total_tokens for usage in usages]
     if any(total is None for total in totals):
         return None
@@ -531,12 +507,9 @@ def _reported_total(usages: Iterable[Usage]) -> float | None:
 
 
 def _token_count(value: float | None) -> int | None:
-    """Narrow an internal token count to what AG-UI accepts, or to absence.
-
-    The wire type admits only non-negative integers, and this also runs on the failure
-    path *before* the run's own exception is re-raised — so a value the wire type would
-    reject is omitted here rather than left to raise in place of the real cause.
-    """
+    # The wire type admits only non-negative integers, and this runs on the
+    # failure path before the run's own exception is re-raised — so a value the
+    # wire would reject is omitted rather than left to raise over the real cause.
     if value is None or not isfinite(value) or value < 0:
         return None
     return int(value)
@@ -585,14 +558,14 @@ def map_agui_content_to_input(content: InputContent) -> events.Input:
 def map_agui_messages_to_events(
     command: AGStreamInput,
 ) -> tuple[list[str], list[events.BaseEvent], list[events.Input]]:
-    """Translate AG-UI history into the parts ``run_stream`` hands to the agent.
+    """Translate AG-UI history into the parts `run_stream` hands to the agent.
 
-    Returns the system/developer ``prompt`` strings, the prior-turn ``history``
+    Returns the system/developer `prompt` strings, the prior-turn `history`
     events, and the parts of the current user turn (trailing run of
-    ``UserMessage`` entries). The current turn is kept separate because
-    ``Agent.ask`` always constructs a ``ModelRequest`` from ``*msg`` and sends
+    `UserMessage` entries). The current turn is kept separate because
+    `Agent.ask` always constructs a `ModelRequest` from `*msg` and sends
     it as the loop's initial event — putting the current turn there gives the
-    LLM a meaningful ``messages[-1]`` instead of an empty placeholder.
+    LLM a meaningful `messages[-1]` instead of an empty placeholder.
     """
     prompt, messages = [], []
 
@@ -651,12 +624,10 @@ def map_agui_messages_to_events(
 
 
 def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> str:
-    """Flatten a multi-part ``ToolResult`` into a string for the AG-UI wire format.
+    """Flatten a multi-part `ToolResult` into a string.
 
-    AG-UI's ``ToolCallResultEvent.content`` is a plain string, but AG2 tool
-    results are now structured lists of ``Input`` parts (text, data, binary,
-    urls, file-ids). Collapse them here so any kind of tool return still
-    surfaces in the stream.
+    AG-UI's `ToolCallResultEvent.content` is a plain string, while an AG2 tool
+    result is a list of `Input` parts.
     """
     chunks: list[str] = []
     for part in result.parts:
@@ -682,10 +653,7 @@ def _get_timestamp() -> int:
 
 
 def _encode_context(context: dict[str, Any] | None) -> dict[str, Any]:
-    """Drop all unserializable values from the context.
-
-    It is required to share with AG-UI frontend application only data values.
-    Any Python objects (like functions, classes, etc.) will be dropped from the context."""
+    """Drop all unserializable values from the context."""
     if not context:
         return {}
 

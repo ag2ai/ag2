@@ -164,13 +164,12 @@ class ConversationContext:
         """Put ``request`` to a human and return their answer.
 
         What :meth:`input` does, minus composing the question — for a caller
-        with more to say about it than a string. :class:`ToolApprovalRequest`
-        naming the call it gates is the one in the box; a transport that routes
-        questions to a client can then render it as the approval it is.
+        with more to say about it than a string, such as a
+        :class:`~ag2.events.ToolApprovalRequest` naming the call it gates. The
+        wait comes off ``request.timeout``.
 
-        Every way this can fail to produce an answer still leaves as a
-        :class:`~ag2.exceptions.HumanInputError`, decided here and nowhere else;
-        the wait comes off ``request.timeout``.
+        Raises:
+            HumanInputError: every way this fails to produce an answer.
         """
         async with self.stream.get(HumanMessage.parent_id == request.id) as response:
             try:

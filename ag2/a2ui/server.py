@@ -5,6 +5,7 @@
 import os
 from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from functools import partial
 from typing import TYPE_CHECKING
 
 from starlette.applications import Starlette
@@ -133,25 +134,17 @@ class A2UIServer:
 
 
 def _closing(transport: A2UITransport) -> "Callable[[Starlette], AbstractAsyncContextManager[None]]":
-    """A lifespan that releases whatever ``transport`` still holds, on the way down.
+    """A Starlette lifespan releasing whatever ``transport`` still holds, on shutdown."""
+    return partial(_release_on_shutdown, transport)
 
-    ``aclose`` is optional on :class:`A2UITransport`: a stateless transport has
-    nothing to release, and requiring one would break every transport already
-    written against the protocol. A transport that does hold something — a turn
-    paused on a question to a human — needs this, because nothing else will ever
-    come back for it.
-    """
 
-    @asynccontextmanager
-    async def lifespan(app: Starlette) -> "AsyncGenerator[None]":
-        try:
-            yield
-        finally:
-            aclose = getattr(transport, "aclose", None)
-            if aclose is not None:
-                await aclose()
-
-    return lifespan
+@asynccontextmanager
+async def _release_on_shutdown(transport: A2UITransport, app: Starlette) -> "AsyncGenerator[None]":
+    try:
+        yield
+    finally:
+        # Nothing else comes back for a turn paused on a question to a human.
+        await transport.aclose()
 
 
 __all__ = ("A2UIServer",)
