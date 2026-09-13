@@ -210,6 +210,22 @@ whatever the agent does next. A client that has given up sends
 `"status": "cancelled"` instead; the turn ends and the run finishes with a
 success outcome, having delivered nothing.
 
+!!! warning "A paused tool call's lifecycle spans two runs"
+
+    The tool call that asked the question is still open when its run ends, so
+    its events are split across the two exchanges. The first emits
+    `TOOL_CALL_START` and `TOOL_CALL_ARGS`; the second emits `TOOL_CALL_RESULT`
+    and `TOOL_CALL_END`, under a **different `runId`**:
+
+    ```text
+    run-1:  RUN_STARTED → TOOL_CALL_START → TOOL_CALL_ARGS → RUN_FINISHED (interrupt)
+    run-2:  RUN_STARTED → TOOL_CALL_RESULT → TOOL_CALL_END → TEXT_MESSAGE_CHUNK → RUN_FINISHED
+    ```
+
+    Key open tool calls by `threadId`, not by `runId`. A client that drops that
+    state when a run finishes will see a `TOOL_CALL_RESULT` for a call it has no
+    record of starting, and has nothing to attach the result to.
+
 Two things must travel back untouched: the **interrupt id**, and the
 **`metadata` envelope**. The envelope carries proof that the answer comes from
 whoever the question was put to — an answer attributed to a human is the input an
