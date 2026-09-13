@@ -46,6 +46,7 @@ _PUBLIC_NAMES = {
     "ResourceTemplate",
     "Sample",
     "SessionConfig",
+    "TransportConfig",
     "Visibility",
     "build_ask_tool",
     "client_extension",

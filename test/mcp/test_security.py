@@ -131,3 +131,67 @@ class TestEnforcement:
         # Auth passed (not 401/403) and the MCP layer handled the initialize handshake.
         assert resp.status_code == 200
         assert resp.json()["result"]["serverInfo"]["name"] == "greeter"
+
+
+class _ResourceVerifier:
+    """A verifier whose one token carries ``resource`` — or deliberately does not."""
+
+    def __init__(self, resource: str | None) -> None:
+        self._resource = resource
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        if token != "good-token":
+            return None
+        return AccessToken(token=token, client_id="demo-client", scopes=["mcp.read"], resource=self._resource)
+
+
+def _resource_app(*, token_resource: str | None, validate: bool) -> MCPServer:
+    return MCPServer(
+        greeter(),
+        json_response=True,
+        security=require(
+            oauth2_scheme(url="https://auth.example.com"),
+            resource_url="http://test/mcp",
+            verifier=_ResourceVerifier(token_resource),
+            required_scopes=["mcp.read"],
+            validate_token_resource=validate,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+class TestResourceIndicator:
+    """RFC 8707: a token minted for another service must not be replayable here."""
+
+    async def test_a_token_issued_for_this_server_is_accepted(self) -> None:
+        async with serve(_resource_app(token_resource="http://test/mcp", validate=True)) as client:
+            resp = await client.post("/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT)
+
+        assert resp.status_code == 200
+        assert resp.json()["result"]["serverInfo"]["name"] == "greeter"
+
+    async def test_a_token_issued_for_another_service_is_refused(self) -> None:
+        async with serve(_resource_app(token_resource="https://other.example.com/mcp", validate=True)) as client:
+            resp = await client.post("/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT)
+
+        assert resp.status_code == 401
+
+    async def test_a_token_carrying_no_resource_indicator_is_refused(self) -> None:
+        async with serve(_resource_app(token_resource=None, validate=True)) as client:
+            resp = await client.post("/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT)
+
+        assert resp.status_code == 401
+
+    async def test_off_by_default_a_token_for_another_service_still_works(self) -> None:
+        """The promise to deployments already in the field, whose verifiers set no resource."""
+        async with serve(_resource_app(token_resource="https://other.example.com/mcp", validate=False)) as client:
+            named_elsewhere = await client.post(
+                "/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT
+            )
+        async with serve(_resource_app(token_resource=None, validate=False)) as client:
+            unnamed = await client.post(
+                "/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT
+            )
+
+        assert named_elsewhere.status_code == 200
+        assert unnamed.status_code == 200

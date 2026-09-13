@@ -400,6 +400,58 @@ app = MCPServer(
 !!! warning "A shared backend does not make a handle portable"
     The registry is per-process, so a shared `Storage` shares the stored history but not the mapping from a name to it. Cross-replica continuity still needs the caller pinned to one replica.
 
+### Configuring the HTTP transport
+
+`transport=` groups every streamable-HTTP setting that has no other route onto the server. The values below are **AG2's own defaults**, passed through explicitly — not whatever the resolved `mcp` release happens to use, so a deployment's behaviour does not move under you when a patch release retunes one.
+
+```python linenums="1"
+from mcp.server.transport_security import TransportSecuritySettings
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, TransportConfig
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(
+    agent,
+    transport=TransportConfig(
+        max_request_body_size=16 * 1024 * 1024,
+        security_settings=TransportSecuritySettings(
+            allowed_hosts=["agent.example.com"],
+            allowed_origins=["https://agent.example.com"],
+        ),
+    ),
+)
+```
+
+Omitting `transport=` is exactly passing `TransportConfig()`.
+
+!!! danger "No transport security settings means DNS rebinding protection is **off**"
+    `security_settings=None` — the default — is not a neutral value: the SDK reads an absent value as an instruction to disable the protection, for backwards compatibility. A served agent therefore has none until you name the hosts and origins it answers on.
+
+    A *default-constructed* `TransportSecuritySettings()` is not the safe middle ground either. It enables the protection with **empty** allow-lists, so every request is refused. Behind a reverse proxy, list the public names your deployment answers on (`"agent.example.com"`, `"agent.example.com:*"` to allow any port) — AG2 does not guess them from `security.resource_url`, because that URL cannot see your topology.
+
+#### Two different session bounds in one call
+
+`SessionConfig(max_sessions=...)` and `TransportConfig(max_mcp_sessions=...)` sit side by side and bound different things:
+
+- `max_sessions` caps **conversation** sessions — how much history the server remembers. Overflowing it drops the least-recently-used conversation; nothing is refused.
+- `max_mcp_sessions` caps concurrent **MCP** sessions — the transport's own handshake-era sessions. A request that would open one beyond the cap is answered `503`.
+
+### Stateless transports and the idle timeout
+
+A stateless transport issues no `mcp-session-id`, so there are no MCP sessions to reap. Asking for reaping anyway is refused at construction rather than silently ignored:
+
+```python
+MCPServer(agent, stateless=True, transport=TransportConfig(mcp_session_idle_timeout=60.0))
+# ValueError: stateless=True issues no mcp-session-id, so transport.mcp_session_idle_timeout (60.0) ...
+```
+
+What counts is whether you asked, not what the number is — supplying `1800.0`, the default value, is refused too. Two things are not asking, and both serve stateless happily:
+
+- **leaving the field alone** — a default you never chose is not a choice;
+- **`mcp_session_idle_timeout=None`** — that asks the transport *not* to reap, which a stateless transport cannot contradict.
+
 ### What `stateless` governs
 
 `stateless=True` stops the **HTTP transport** issuing an `mcp-session-id`. That is a *handshake-era* switch: modern-era requests are self-contained single exchanges that never carry a session id in the first place, so the flag does not reach them.
@@ -453,6 +505,24 @@ app = MCPServer(
 ```
 
 With authentication configured, a conversation records the principal that created it — the access token's subject, falling back to its client id — and revalidates that on **every** call, not only at creation. A handle presented under a different principal gets the same error as an unknown one, so the error does not disclose that the handle exists.
+
+#### Refusing a token minted for another service
+
+`validate_token_resource=True` turns on the RFC 8707 check: the server then accepts only a token whose resource indicator (`AccessToken.resource`) names `resource_url`, so a token issued for a different service cannot be replayed against your agent.
+
+```python linenums="1"
+security = require(
+    oauth2_scheme(url="https://auth.example.com"),
+    resource_url="https://agent.example.com/mcp",
+    verifier=my_token_verifier,
+    validate_token_resource=True,
+)
+```
+
+It ships **off**. The resource field is optional on the token your own verifier builds, and an absent value fails the check — so turning it on for everyone would answer `401` to every deployment whose verifier does not populate it. Enable it when your authorization server binds tokens to the `resource` the client asked for; leave it off when your verifier checks the audience itself.
+
+!!! note "The SDK makes this its default in 3.0"
+    `mcp` defaults the same check off through 2.x and on in 3.0. AG2 flips its default when that release lands, so enable it deliberately now rather than meeting it as a surprise then.
 
 !!! warning "Without `security`, the handle is the only credential"
     With no authentication there is no principal to bind to, so anyone holding a handle can continue the conversation it names. The handle travels through readable content — the model's context, client logs, tracing in between — so decide whether that is acceptable for your deployment before serving unauthenticated.
@@ -508,6 +578,7 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `path` | `"/mcp"` | the HTTP endpoint path |
 | `stateless` | `False` | stop the HTTP transport issuing an `mcp-session-id` |
 | `json_response` | `False` | answer with JSON rather than SSE |
+| `transport` | `None` | a `TransportConfig` of streamable-HTTP settings; omitting it is a default-constructed one |
 | `security` | `None` | OAuth 2.1 Resource Server requirements |
 | `request_state_security` | `None` | advanced: replace the ephemeral request-state policy |
 
@@ -519,13 +590,26 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `ttl` | `None` | idle expiry, in seconds |
 | `storage` | `None` | the history backend; in-memory when unset |
 
+### `TransportConfig`
+
+| field | default | what it is for |
+|---|---|---|
+| `mcp_session_idle_timeout` | `1800.0` | seconds an MCP session may idle before the transport closes it; its next request gets `404`. `None` never reaps |
+| `max_mcp_sessions` | `10_000` | concurrent MCP sessions; one beyond the cap is answered `503`. `None` removes the cap |
+| `max_request_body_size` | `4 MiB` | a larger body is refused `413`, before it is parsed and before a session is created |
+| `security_settings` | `None` | DNS rebinding protection. **`None` disables it**; a default-constructed `TransportSecuritySettings()` refuses everything |
+| `sse_retry_interval` | `None` | milliseconds to suggest a client waits before reconnecting a dropped SSE stream. A documented passthrough — AG2 exercises no behaviour of it |
+| `event_store` | `None` | makes connections resumable: a client reconnecting with `Last-Event-ID` receives what it missed. Bring your own; what is proven is one end-to-end test over a real socket (`test/mcp/test_resumability.py`) |
+
+Non-positive bounds are refused when the `TransportConfig` is constructed.
+
 ### `MCPFunctionTool`
 
 Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `description`, `handler`, `input_schema`, `title`, `annotations`, `output_schema`, and `meta` — and nothing else; resolver metadata is the decorator's own state, not a constructor argument.
 
 ### Names re-exported from `ag2.mcp`
 
-`MCPServer`, `SessionConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
+`MCPServer`, `SessionConfig`, `TransportConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
 
 Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the last: `MCPAgentConfigError`, `MCPToolNameConflictError`, `UnknownConversationError` (a handle naming no live conversation, reported to the caller as a tool error), `MCPResourceNotFoundError`, `MCPPromptNotFoundError`, and `MCPSamplingUnavailableError` / `MCPSamplingRefusedError` (both `MCPSamplingError`). `MCPElicitationDeclinedError` subclasses core's `HumanInputNotProvidedError` instead, so a question the client refused is the same failure as one nobody was there to answer.
 

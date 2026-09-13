@@ -176,7 +176,9 @@ async def test_configured_headers_reach_the_server(context: Context) -> None:
 @pytest.mark.asyncio
 async def test_a_slashless_url_still_reaches_the_server(context: Context) -> None:
     """A Starlette-mounted endpoint 307s the slashless form, and that form is what
-    a caller naturally writes, so the toolkit's client has to follow the redirect.
+    a caller naturally writes, so it has to keep connecting. From ``mcp`` 2.2.0 the
+    transport follows the same-origin redirect itself — the toolkit's HTTP client
+    asks for nothing — and this test is the guarantee that it does.
     """
     async with _live_mcp_server() as url:
         schemas = list(await MCPToolkit(url.rstrip("/")).schemas(context))

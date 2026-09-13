@@ -27,7 +27,21 @@ class Requirement:
     on the MCP endpoint; :meth:`to_metadata` renders the RFC 9728
     ``ProtectedResourceMetadata`` served at
     ``/.well-known/oauth-protected-resource``. Issuing tokens stays with the
-    external authorization server. Build via :func:`require`."""
+    external authorization server. Build via :func:`require`.
+
+    Attributes:
+        schemes: The authorization servers that may issue tokens for this server.
+        verifier: Validates a presented bearer token.
+        resource_url: This server's public endpoint (the RFC 9728 resource
+            identifier); its path must equal the served ``path``.
+        required_scopes: Every scope a token must carry.
+        resource_name: Human-readable name for the metadata document.
+        resource_documentation: Documentation URL for the metadata document.
+        validate_token_resource: Accept only a token whose RFC 8707 resource
+            indicator names :attr:`resource_url`. Off by default: the indicator
+            is optional and an absent one fails the check, so enabling it for
+            everyone would ``401`` deployments whose verifier omits it. Named
+            after the SDK's own setting, which makes it the default in 3.0."""
 
     schemes: tuple[Scheme, ...]
     verifier: TokenVerifier
@@ -35,6 +49,7 @@ class Requirement:
     required_scopes: tuple[str, ...] = ()
     resource_name: str | None = None
     resource_documentation: str | None = None
+    validate_token_resource: bool = False
 
     def to_metadata(self) -> ProtectedResourceMetadata:
         """Render this requirement as RFC 9728 ``ProtectedResourceMetadata``."""
@@ -68,12 +83,15 @@ def require(
     required_scopes: Sequence[str] = (),
     resource_name: str | None = None,
     resource_documentation: str | None = None,
+    validate_token_resource: bool = False,
 ) -> Requirement:
     """Build a :class:`Requirement` from one or more authorization-server schemes.
 
     ``resource_url`` is this MCP server's public endpoint (the RFC 9728 resource
     identifier); ``verifier`` validates presented bearer tokens; a token must
-    carry every scope in ``required_scopes``.
+    carry every scope in ``required_scopes``. ``validate_token_resource`` adds
+    the RFC 8707 check that a token was issued *for this server*; see
+    :class:`Requirement`.
 
     Example::
 
@@ -94,6 +112,7 @@ def require(
         required_scopes=tuple(required_scopes),
         resource_name=resource_name,
         resource_documentation=resource_documentation,
+        validate_token_resource=validate_token_resource,
     )
 
 
