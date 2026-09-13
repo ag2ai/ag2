@@ -7,6 +7,7 @@ import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import unquote
 
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.types import (
@@ -79,6 +80,11 @@ class ResourceTemplate:
     are supported: ``{var}`` matches a single path segment, ``{+var}`` matches
     across ``/``. ``read`` receives the matched variables as a ``{name: value}``
     dict and returns the body (sync or async).
+
+    Matched values are percent-decoded once as UTF-8, preserving literal ``+``.
+    Readers should use these values directly: ``%2520`` becomes the literal
+    ``%20``, not a space. Matching and the returned resource URI use the original
+    encoded URI.
 
     Example::
 
@@ -161,7 +167,8 @@ class ResourceProvider:
         for pattern, template in self._compiled:
             match = pattern.match(uri)
             if match is not None:
-                data = await call_user_fn(template.read, match.groupdict())
+                variables = {name: unquote(value) for name, value in match.groupdict().items()}
+                data = await call_user_fn(template.read, variables)
                 return [ReadResourceContents(content=data, mime_type=template.mime_type)]
         raise MCPResourceNotFoundError(uri)
 
