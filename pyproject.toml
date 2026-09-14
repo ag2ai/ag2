@@ -239,14 +239,14 @@ types = [
     "ag2[openai, a2a, ag-ui]",
 ]
 
-lint = ["ruff==0.16.5", "codespell==2.4.3", "zizmor==1.30.0"]
+lint = ["ruff==0.16.6", "codespell==2.4.3", "zizmor==1.30.0"]
 
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
-    "prek==0.5.0",
+    "prek==0.5.2",
 ]
 
 [tool.pytest.ini_options]
