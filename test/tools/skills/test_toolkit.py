@@ -11,7 +11,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 from dirty_equals import IsPartialDict
 
-from ag2 import Context
+from ag2 import Context, TextInput
 from ag2.events import ToolCallEvent, ToolErrorEvent
 from ag2.tools import SkillsToolkit
 from ag2.tools.sandbox import ExecResult, Sandbox
@@ -68,6 +68,27 @@ async def test_run_script_falls_through_on_skill_not_found(tmp_path: Path, conte
 
     assert not isinstance(result, ToolErrorEvent)
     assert "HELLO" in result.result.parts[0].content
+
+
+@pytest.mark.asyncio
+async def test_run_skill_script_executes_nested_script(tmp_path: Path, context: Context) -> None:
+    skills_root = tmp_path / "skills"
+    skill_dir = skills_root / "nested-script"
+    scripts_dir = skill_dir / "scripts" / "helpers"
+    scripts_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: nested-script\ndescription: Runs a nested script\n---\n# Nested script\n"
+    )
+    (scripts_dir / "report.py").write_text('print("NESTED SCRIPT RAN")\n')
+    run_tool = SkillsToolkit(LocalRuntime(dir=skills_root)).run_skill_script()
+
+    args = json.dumps({"name": "nested-script", "script": "helpers/report.py"})
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    [output] = result.result.parts
+    assert isinstance(output, TextInput)
+    assert "NESTED SCRIPT RAN" in output.content
 
 
 @pytest.mark.asyncio
