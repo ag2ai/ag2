@@ -3,16 +3,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from base64 import b64decode
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable
+from contextlib import ExitStack
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
+from functools import partial
 from math import isfinite
 from typing import Any
 from uuid import uuid4
 
 from ag_ui.core import (
+    AgentCapabilities,
     AudioInputContent,
-    BaseEvent,
     BinaryInputContent,
     DocumentInputContent,
     ImageInputContent,
@@ -27,7 +29,6 @@ from ag_ui.core import (
     RunAgentInput,
     RunErrorEvent,
     RunFinishedEvent,
-    RunStartedEvent,
     StateSnapshotEvent,
     StepFinishedEvent,
     StepStartedEvent,
@@ -45,8 +46,6 @@ from ag_ui.core import (
     VideoInputContent,
 )
 from ag_ui.encoder import EventEncoder
-from anyio import create_memory_object_stream, create_task_group
-from anyio.streams.memory import MemoryObjectSendStream
 from fast_depends.library.serializer import SerializerProto
 from pydantic_core import to_jsonable_python
 
@@ -61,6 +60,19 @@ from ag2.tools.tool import Tool
 from ag2.usage import UsageRecord, UsageReport
 
 from .events import AGUIEvent
+from .interrupts import (
+    DEFAULT_RETENTION,
+    ClientInterrupter,
+    Retention,
+    ServedTurn,
+    ServedTurns,
+    TurnOutput,
+    interrupt_capabilities,
+    serve_exchange,
+    success_outcome,
+    timestamp_ms,
+    utc_now,
+)
 
 try:
     from starlette.endpoints import HTTPEndpoint
@@ -70,11 +82,45 @@ except ImportError:
 
 
 class AGUIStream:
-    def __init__(self, agent: Agent) -> None:
+    """Serve an `Agent` over AG-UI.
+
+    A turn's lifetime belongs to this object, not to the HTTP exchange that
+    started it: an agent that asks a human a question is held here until the
+    client answers. Call `aclose` on shutdown, or use the stream as an async
+    context manager, so a turn still waiting is cancelled.
+    """
+
+    def __init__(
+        self,
+        agent: Agent,
+        *,
+        retention: Retention = DEFAULT_RETENTION,
+        now: Callable[[], datetime] = utc_now,
+    ) -> None:
+        """Serve `agent`, holding a turn paused on a question for `retention`.
+
+        `now` is the clock deadlines are read off, for tests that would
+        otherwise have to outlast a retention bound to reach one.
+        """
         self.__agent = agent
+        self.__turns = ServedTurns(retention=retention, now=now)
+
+    async def __aenter__(self) -> "AGUIStream":
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        """Cancel every turn this stream is still running."""
+        await self.__turns.release_all()
+
+    def capabilities(self) -> AgentCapabilities:
+        """What this agent tells a client it can do, before any run starts."""
+        return interrupt_capabilities(self.__agent.name)
 
     def build_asgi(self) -> "type[HTTPEndpoint]":
-        """Build an ASGI endpoint for the AGUIStream."""
+        """Build an ASGI endpoint serving this stream: POST runs, GET capabilities."""
         # import here to avoid Starlette requirements in the main package
         from .asgi import build_asgi
 
@@ -94,35 +140,47 @@ class AGUIStream:
         hitl_hook: HumanHook | None = None,
         accept: str | None = None,
     ) -> AsyncIterator[str]:
-        write_events_stream, read_events_stream = create_memory_object_stream[BaseEvent]()
+        """Run `incoming` and yield encoded AG-UI events.
 
-        async with create_task_group() as tg:
-            tg.start_soon(
-                run_stream,
-                AGStreamInput(
-                    incoming=incoming,
-                    variables=variables or {},
-                    prompt=list(prompt),
-                    dependencies=dependencies,
-                    config=config,
-                    tools=list(tools),
-                    middleware=list(middleware),
-                    observers=list(observers),
-                    hitl_hook=hitl_hook,
-                ),
-                self.__agent,
-                write_events_stream,
-            )
+        `accept` is the request's `Accept` header, selecting SSE or NDJSON.
+        `hitl_hook` is where a question the agent asks goes — omit it and the
+        question is put to the client as an interrupt instead.
 
-            # EventEncoder typed incompletely, so we need to ignore the type error
-            encoder = EventEncoder(accept=accept)  # type: ignore[arg-type]
+        Wrap the returned iterator in `contextlib.aclosing`: it holds a
+        channel open across yields.
+        """
+        command = AGStreamInput(
+            incoming=incoming,
+            variables=variables or {},
+            prompt=list(prompt),
+            dependencies=dependencies,
+            config=config,
+            tools=list(tools),
+            middleware=list(middleware),
+            observers=list(observers),
+            hitl_hook=hitl_hook,
+        )
 
-            async with read_events_stream:
-                async for event in read_events_stream:
-                    # ASYNC119: this is a true streaming generator that must hold the
-                    # task group and stream open across yields; consumers are expected
-                    # to use contextlib.aclosing for timely cleanup.
-                    yield encoder.encode(event)  # noqa: ASYNC119
+        # EventEncoder typed incompletely, so we need to ignore the type error
+        encoder = EventEncoder(accept=accept)  # type: ignore[arg-type]
+
+        async for chunk in serve_exchange(self.__turns, incoming, encoder, partial(self.__start, command)):
+            # ASYNC119: a true streaming generator, holding its channel open
+            # across yields; consumers are expected to use contextlib.aclosing.
+            yield chunk  # noqa: ASYNC119
+
+    def __start(self, command: "AGStreamInput", output: TurnOutput) -> ServedTurn:
+        turn = ServedTurn(output)
+        interrupter = None if self.__answers_in_process(command.hitl_hook) else ClientInterrupter(turn, self.__turns)
+        # Started as a task the server owns rather than inside this request's
+        # scope: the turn outlives the exchange, so the exchange must not own it.
+        self.__turns.track(turn, turn.start(run_stream(command, self.__agent, output, interrupter)))
+        return turn
+
+    def __answers_in_process(self, hitl_hook: HumanHook | None) -> bool:
+        # Read off what was supplied, never off the core's "nobody to ask"
+        # default: only a run that passed no hook has its question sent out.
+        return hitl_hook is not None or self.__agent._hitl_hook is not None
 
 
 @dataclass(slots=True)
@@ -141,8 +199,15 @@ class AGStreamInput:
 async def run_stream(
     command: AGStreamInput,
     agent: Agent,
-    write_events_stream: MemoryObjectSendStream[BaseEvent],
+    output: TurnOutput,
+    interrupter: ClientInterrupter | None = None,
 ) -> None:
+    """Run one served turn, writing its events to `output`.
+
+    `interrupter` is where a question the agent asks goes when the caller
+    supplied no hook of its own; `None` leaves the agent's own human-input
+    arrangements untouched.
+    """
     client_tools = []
     client_tools_names = set()
     for t in command.incoming.tools:
@@ -168,13 +233,13 @@ async def run_stream(
         nonlocal streaming_msg_id, reasoning_msg_id
 
         if reasoning_msg_id is not None and not isinstance(event, events.ModelReasoning):
-            await write_events_stream.send(
+            await output.send(
                 ReasoningMessageEndEvent(
                     message_id=reasoning_msg_id,
                     timestamp=_get_timestamp(),
                 )
             )
-            await write_events_stream.send(
+            await output.send(
                 ReasoningEndEvent(
                     message_id=reasoning_msg_id,
                     timestamp=_get_timestamp(),
@@ -188,13 +253,13 @@ async def run_stream(
 
             if reasoning_msg_id is None:
                 reasoning_msg_id = str(uuid4())
-                await write_events_stream.send(
+                await output.send(
                     ReasoningStartEvent(
                         message_id=reasoning_msg_id,
                         timestamp=_get_timestamp(),
                     )
                 )
-                await write_events_stream.send(
+                await output.send(
                     ReasoningMessageStartEvent(
                         message_id=reasoning_msg_id,
                         role="reasoning",
@@ -202,7 +267,7 @@ async def run_stream(
                     )
                 )
 
-            await write_events_stream.send(
+            await output.send(
                 ReasoningMessageContentEvent(
                     message_id=reasoning_msg_id,
                     delta=event.content,
@@ -217,14 +282,14 @@ async def run_stream(
 
             if streaming_msg_id is None:
                 streaming_msg_id = str(uuid4())
-                await write_events_stream.send(
+                await output.send(
                     TextMessageStartEvent(
                         message_id=streaming_msg_id,
                         timestamp=_get_timestamp(),
                     )
                 )
 
-            await write_events_stream.send(
+            await output.send(
                 TextMessageContentEvent(
                     message_id=streaming_msg_id,
                     delta=event.content,
@@ -234,7 +299,7 @@ async def run_stream(
 
         elif isinstance(event, events.ModelMessage):
             if streaming_msg_id:
-                await write_events_stream.send(
+                await output.send(
                     TextMessageEndEvent(
                         message_id=streaming_msg_id,
                         timestamp=_get_timestamp(),
@@ -243,7 +308,7 @@ async def run_stream(
                 streaming_msg_id = None
 
             elif event.content:
-                await write_events_stream.send(
+                await output.send(
                     TextMessageChunkEvent(
                         message_id=str(uuid4()),
                         delta=event.content,
@@ -252,7 +317,7 @@ async def run_stream(
                 )
 
         elif isinstance(event, events.ClientToolCallEvent):
-            await write_events_stream.send(
+            await output.send(
                 ToolCallChunkEvent(
                     tool_call_id=event.id,
                     tool_call_name=event.name,
@@ -265,14 +330,14 @@ async def run_stream(
             if event.name in client_tools_names:
                 return
 
-            await write_events_stream.send(
+            await output.send(
                 ToolCallStartEvent(
                     tool_call_id=event.id,
                     tool_call_name=event.name,
                     timestamp=_get_timestamp(),
                 )
             )
-            await write_events_stream.send(
+            await output.send(
                 ToolCallArgsEvent(
                     tool_call_id=event.id,
                     delta=event.arguments,
@@ -288,7 +353,7 @@ async def run_stream(
                 elif isinstance(p, events.DataInput):
                     text_parts.append(agent._serializer.encode(p.data).decode())
 
-            await write_events_stream.send(
+            await output.send(
                 ToolCallResultEvent(
                     tool_call_id=event.parent_id,
                     content=_stringify_tool_result(event.result, agent._serializer),
@@ -297,7 +362,7 @@ async def run_stream(
                     role="tool",
                 )
             )
-            await write_events_stream.send(
+            await output.send(
                 ToolCallEndEvent(
                     tool_call_id=event.parent_id,
                     timestamp=_get_timestamp(),
@@ -305,34 +370,33 @@ async def run_stream(
             )
 
         elif isinstance(event, events.TaskStarted):
-            await write_events_stream.send(StepStartedEvent(step_name=f"task:{event.agent_name}"))
+            await output.send(StepStartedEvent(step_name=f"task:{event.agent_name}"))
 
         elif isinstance(event, events.TaskCompleted):
-            await write_events_stream.send(StepFinishedEvent(step_name=f"task:{event.agent_name}"))
+            await output.send(StepFinishedEvent(step_name=f"task:{event.agent_name}"))
 
         elif isinstance(event, AGUIEvent):
-            await write_events_stream.send(event.event)
+            await output.send(event.event)
 
-    async with write_events_stream:
-        try:
-            await write_events_stream.send(
-                RunStartedEvent(
-                    thread_id=command.incoming.thread_id,
-                    run_id=command.incoming.run_id,
+    try:
+        initial_vars = agent._agent_variables | command.variables
+        if vars := _encode_context(initial_vars):
+            await output.send(
+                StateSnapshotEvent(
+                    snapshot=vars,
                     timestamp=_get_timestamp(),
                 )
             )
 
-            initial_vars = agent._agent_variables | command.variables
-            if vars := _encode_context(initial_vars):
-                await write_events_stream.send(
-                    StateSnapshotEvent(
-                        snapshot=vars,
-                        timestamp=_get_timestamp(),
-                    )
-                )
+        initial_state = (command.incoming.state or {}) | initial_vars
 
-            initial_state = (command.incoming.state or {}) | initial_vars
+        with ExitStack() as stack:
+            if interrupter is not None:
+                # Registered *before* `ask` so it runs ahead of the "nobody
+                # could be asked" default the agent registers for itself.
+                stack.enter_context(
+                    stream.where(events.HumanInputRequest).sub_scope(interrupter, interrupt=True),
+                )
 
             result = await agent.ask(
                 *current_turn,
@@ -347,85 +411,73 @@ async def run_stream(
                 stream=stream,
             )
 
-            if (vars := _encode_context(result.context.variables)) != initial_state:
-                await write_events_stream.send(
-                    StateSnapshotEvent(
-                        snapshot=vars,
-                        timestamp=_get_timestamp(),
-                    )
-                )
-
-        except Exception as e:
-            await write_events_stream.send(
-                RunErrorEvent(
-                    message=repr(e),
+        if (vars := _encode_context(result.context.variables)) != initial_state:
+            await output.send(
+                StateSnapshotEvent(
+                    snapshot=vars,
                     timestamp=_get_timestamp(),
-                    usage=await _run_token_usage(stream),
                 )
             )
-            raise e
 
-        else:
-            await write_events_stream.send(
-                RunFinishedEvent(
-                    thread_id=command.incoming.thread_id,
-                    run_id=command.incoming.run_id,
-                    timestamp=_get_timestamp(),
-                    usage=await _run_token_usage(stream),
-                )
+    except Exception as e:
+        await output.send(
+            RunErrorEvent(
+                message=repr(e),
+                timestamp=_get_timestamp(),
+                usage=await _run_token_usage(stream),
             )
+        )
+        raise e
+
+    else:
+        await output.send(
+            RunFinishedEvent(
+                thread_id=output.thread_id,
+                run_id=output.run_id,
+                timestamp=_get_timestamp(),
+                usage=await _run_token_usage(stream),
+                outcome=success_outcome(),
+            )
+        )
+
+    finally:
+        # The exchange reading this turn ends on its terminating event, but
+        # the channel is the turn's: closed here, once there is nothing more
+        # to say, on every path including cancellation while held.
+        await output.aclose()
 
 
 async def _run_token_usage(stream: MemoryStream) -> list[TokenUsage] | None:
-    """Token usage for this run, read off its event log.
-
-    Safe on the failure path: the stream awaits its subscribers on send, so persistence
-    has already seen every usage event emitted before the exception.
-    """
+    # Safe on the failure path: the stream awaits its subscribers on send, so
+    # persistence has seen every usage event emitted before the exception.
     return map_usage_events_to_ag_ui(await stream.history.get_events())
 
 
 def map_usage_events_to_ag_ui(usage_events: Iterable[events.BaseEvent]) -> list[TokenUsage] | None:
-    """Attributed spend for a set of events, as AG-UI's per-(provider, model) list.
-
-    The whole path from events to wire entries, not just the mapping: attribution is
-    ``UsageReport``'s and the grouping is :func:`map_usage_records_to_ag_ui`'s, and a
-    transport that composed the two itself could compose them differently. Both AG-UI
-    transports call this, differing only in where their events come from — this module's
-    reads them back off the run's history, while ``ag2/a2ui/`` collects them live because
-    its turn core owns the stream and the transport never sees it.
-    """
+    """Attributed spend for a set of events, as AG-UI's per-(provider, model) list."""
+    # Both AG-UI transports call this, so the two cannot compose attribution and
+    # grouping differently. They differ only in where the events come from.
     return map_usage_records_to_ag_ui(UsageReport.from_events(usage_events).records)
 
 
 def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsage] | None:
     """Attributed spend, as AG-UI's per-(provider, model) list.
 
-    Takes ``UsageReport.records`` rather than the report's ``by_model`` / ``by_provider``:
-    those are independent maps, so the pair is unrecoverable from them, and each drops what
-    the other side didn't label — where a delegated sub-agent's spend lives. Pairs aren't
-    folded together either, since absent counts add as zero: merging a provider that
-    reports reasoning tokens with one that doesn't would read as a complete measurement.
-
-    Within a pair the calls *are* summed, because there an absent additive count means the
-    provider had nothing to report for that call — it omits ``thinking_tokens`` on a call
-    that did no reasoning. ``total_tokens`` is the exception and is handled separately; see
-    ``_reported_total``.
-
-    Nothing is derived, and ``cache_creation_input_tokens`` is dropped rather than folded
-    into a neighbour — providers disagree on whether cached tokens already sit in the
-    prompt count.
-
-    The rule behind all of this: a transport copies a count or omits it, and never
-    derives, zero-fills or folds one into another. A client can tell absence from zero
-    and decide what to do about it; it cannot tell a measured figure from one this
-    layer invented. That binds any transport that grows a usage field, not just this
-    one — which is why the mapping lives here to be shared rather than restated.
+    Counts a provider did not report are omitted, never zero-filled or derived.
     """
+    # Records, not the report's by_model / by_provider: those are independent
+    # maps, so the (provider, model) pair cannot be recovered from them, and each
+    # drops what the other side did not label — where a sub-agent's spend lives.
     grouped: dict[tuple[str | None, str | None], list[Usage]] = {}
     for record in records:
         grouped.setdefault((record.provider, record.model), []).append(record.usage)
 
+    # Pairs are never folded together: absent counts add as zero, so merging a
+    # provider that reports reasoning tokens with one that does not would read as
+    # a complete measurement. Within a pair the calls are summed, because there an
+    # absent additive count does mean the provider had nothing to report.
+    # cache_creation_input_tokens is dropped rather than folded into a neighbour —
+    # providers disagree on whether cached tokens already sit in the prompt count.
     entries = []
     for (provider, model), usages in grouped.items():
         summed = sum(usages, Usage())
@@ -444,15 +496,10 @@ def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsag
 
 
 def _reported_total(usages: Iterable[Usage]) -> float | None:
-    """The pair's total across its calls, or absence when a call didn't report one.
-
-    Unlike the additive counts, an absent total does not mean zero: a call that ran had a
-    total whatever the provider chose to say about it. Summing anyway would put a figure on
-    the wire smaller than the input and output beside it — 100+10 with a total of 110, then
-    40+4 with none, reads as 140 in, 14 out, 110 altogether. So the total is reported only
-    when every call in the pair supplied one, and is otherwise left absent rather than
-    derived from input and output, which would add a third definition of "total" here.
-    """
+    # An absent total does not mean zero, unlike the additive counts: a call that
+    # ran had a total whatever the provider said about it. Summing anyway puts a
+    # figure on the wire smaller than the input and output beside it — 100+10 with
+    # a total of 110, then 40+4 with none, reads as 140 in, 14 out, 110 altogether.
     totals = [usage.total_tokens for usage in usages]
     if any(total is None for total in totals):
         return None
@@ -460,12 +507,9 @@ def _reported_total(usages: Iterable[Usage]) -> float | None:
 
 
 def _token_count(value: float | None) -> int | None:
-    """Narrow an internal token count to what AG-UI accepts, or to absence.
-
-    The wire type admits only non-negative integers, and this also runs on the failure
-    path *before* the run's own exception is re-raised — so a value the wire type would
-    reject is omitted here rather than left to raise in place of the real cause.
-    """
+    # The wire type admits only non-negative integers, and this runs on the
+    # failure path before the run's own exception is re-raised — so a value the
+    # wire would reject is omitted rather than left to raise over the real cause.
     if value is None or not isfinite(value) or value < 0:
         return None
     return int(value)
@@ -514,14 +558,14 @@ def map_agui_content_to_input(content: InputContent) -> events.Input:
 def map_agui_messages_to_events(
     command: AGStreamInput,
 ) -> tuple[list[str], list[events.BaseEvent], list[events.Input]]:
-    """Translate AG-UI history into the parts ``run_stream`` hands to the agent.
+    """Translate AG-UI history into the parts `run_stream` hands to the agent.
 
-    Returns the system/developer ``prompt`` strings, the prior-turn ``history``
+    Returns the system/developer `prompt` strings, the prior-turn `history`
     events, and the parts of the current user turn (trailing run of
-    ``UserMessage`` entries). The current turn is kept separate because
-    ``Agent.ask`` always constructs a ``ModelRequest`` from ``*msg`` and sends
+    `UserMessage` entries). The current turn is kept separate because
+    `Agent.ask` always constructs a `ModelRequest` from `*msg` and sends
     it as the loop's initial event — putting the current turn there gives the
-    LLM a meaningful ``messages[-1]`` instead of an empty placeholder.
+    LLM a meaningful `messages[-1]` instead of an empty placeholder.
     """
     prompt, messages = [], []
 
@@ -580,12 +624,10 @@ def map_agui_messages_to_events(
 
 
 def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> str:
-    """Flatten a multi-part ``ToolResult`` into a string for the AG-UI wire format.
+    """Flatten a multi-part `ToolResult` into a string.
 
-    AG-UI's ``ToolCallResultEvent.content`` is a plain string, but AG2 tool
-    results are now structured lists of ``Input`` parts (text, data, binary,
-    urls, file-ids). Collapse them here so any kind of tool return still
-    surfaces in the stream.
+    AG-UI's `ToolCallResultEvent.content` is a plain string, while an AG2 tool
+    result is a list of `Input` parts.
     """
     chunks: list[str] = []
     for part in result.parts:
@@ -607,14 +649,11 @@ def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> s
 
 
 def _get_timestamp() -> int:
-    return int(datetime.now(timezone.utc).timestamp() * 1000)
+    return timestamp_ms()
 
 
 def _encode_context(context: dict[str, Any] | None) -> dict[str, Any]:
-    """Drop all unserializable values from the context.
-
-    It is required to share with AG-UI frontend application only data values.
-    Any Python objects (like functions, classes, etc.) will be dropped from the context."""
+    """Drop all unserializable values from the context."""
     if not context:
         return {}
 
