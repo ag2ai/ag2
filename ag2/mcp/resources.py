@@ -86,12 +86,20 @@ class ResourceTemplate:
     ``%20``, not a space. Matching and the returned resource URI use the original
     encoded URI.
 
+    Decoding never widens what a form matches. A ``{var}`` value is one segment
+    after decoding too, so ``files:///a%2Fb`` does not match ``files:///{var}``
+    — it would hand the reader a separator the pattern just refused. A ``{+var}``
+    value may span ``/`` and may contain ``..``, so a reader behind it owns its
+    own containment — one addressing a filesystem has to confine the path itself
+    before opening it. A URI whose escapes are not valid UTF-8 matches no
+    template.
+
     Example::
 
         ResourceTemplate(
-            uri_template="file:///{+path}",
-            name="file",
-            read=lambda vars: Path(vars["path"]).read_text(),
+            uri_template="weather://{city}",
+            name="weather",
+            read=lambda vars: f"sunny in {vars['city']}",
         )
     """
 
@@ -105,18 +113,46 @@ class ResourceTemplate:
 _VAR = re.compile(r"\{(\+?)(\w+)\}")
 
 
-def _compile_template(uri_template: str) -> "re.Pattern[str]":
-    """Compile an RFC 6570 ``{var}`` / ``{+var}`` template into a match regex."""
+def _compile_template(uri_template: str) -> tuple["re.Pattern[str]", frozenset[str]]:
+    """Compile an RFC 6570 ``{var}`` / ``{+var}`` template into a match regex.
+
+    Returns the regex and the names it confines to a single path segment.
+    """
     parts: list[str] = []
+    segment_vars: list[str] = []
     last = 0
     for m in _VAR.finditer(uri_template):
         parts.append(re.escape(uri_template[last : m.start()]))
         reserved, name = m.group(1), m.group(2)
         # {+var} (reserved expansion) may span '/'; plain {var} is one segment.
         parts.append(f"(?P<{name}>.+)" if reserved else f"(?P<{name}>[^/]+)")
+        if not reserved:
+            segment_vars.append(name)
         last = m.end()
     parts.append(re.escape(uri_template[last:]))
-    return re.compile("^" + "".join(parts) + "$")
+    return re.compile("^" + "".join(parts) + "$"), frozenset(segment_vars)
+
+
+def _decoded_variables(match: "re.Match[str]", segment_vars: frozenset[str]) -> dict[str, str] | None:
+    """The matched variables decoded once, or ``None`` if the URI addresses nothing here.
+
+    Decoding runs after matching, so it can reveal a separator the pattern
+    refused: ``files:///a%2Fb`` matches ``files:///{var}`` as one segment and only
+    then decodes to ``a/b``. Honouring that would hand a ``{var}`` reader a path
+    it was promised it would never see, so such a URI addresses no template at
+    all. Escapes that are not valid UTF-8 likewise address nothing, rather than
+    decoding to replacement characters.
+    """
+    variables: dict[str, str] = {}
+    for name, value in match.groupdict().items():
+        try:
+            decoded = unquote(value, errors="strict")
+        except UnicodeDecodeError:
+            return None
+        if name in segment_vars and "/" in decoded:
+            return None
+        variables[name] = decoded
+    return variables
 
 
 class ResourceProvider:
@@ -128,7 +164,7 @@ class ResourceProvider:
         self._resources = tuple(resources)
         self._templates = tuple(templates)
         self._by_uri = {r.uri: r for r in self._resources}
-        self._compiled = [(_compile_template(t.uri_template), t) for t in self._templates]
+        self._compiled = [(*_compile_template(t.uri_template), t) for t in self._templates]
 
     @property
     def has_templates(self) -> bool:
@@ -164,10 +200,12 @@ class ResourceProvider:
                     meta=_meta(resource.meta, context),
                 )
             ]
-        for pattern, template in self._compiled:
+        for pattern, segment_vars, template in self._compiled:
             match = pattern.match(uri)
-            if match is not None:
-                variables = {name: unquote(value) for name, value in match.groupdict().items()}
+            if match is None:
+                continue
+            variables = _decoded_variables(match, segment_vars)
+            if variables is not None:
                 data = await call_user_fn(template.read, variables)
                 return [ReadResourceContents(content=data, mime_type=template.mime_type)]
         raise MCPResourceNotFoundError(uri)

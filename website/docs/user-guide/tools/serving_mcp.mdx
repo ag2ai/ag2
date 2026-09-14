@@ -537,4 +537,8 @@ Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the la
 - **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`.
 - **Protocol extensions** are advertised with `extensions=` and inspected per request with `client_extension()`.
 
-`ResourceTemplate` readers receive variable values percent-decoded once as UTF-8. For example, reading `files:///hello%20world.txt` through `files:///{name}` passes `{"name": "hello world.txt"}` to the reader. Use these values directly: `%2520` becomes the literal `%20`, and a literal `+` stays `+`. Decoding happens after template matching; the returned resource URI keeps the original encoding.
+!!! note "`ResourceTemplate` readers receive decoded variables"
+
+    Variable values are percent-decoded once as UTF-8, so reading `files:///hello%20world.txt` through `files:///{name}` passes `{"name": "hello world.txt"}` to the reader. Use these values directly: `%2520` becomes the literal `%20`, and a literal `+` stays `+`. Decoding happens after template matching, and the returned resource URI keeps the original encoding.
+
+    Decoding never widens what a form matches. A `{name}` value is still one path segment after decoding, so `files:///a%2Fb` matches no `files:///{name}` template — serving it would hand the reader the separator the form promised to keep out. A `{+name}` value may span `/` and may contain `..`, so a reader behind the reserved form owns its own containment checks. A URI whose escapes are not valid UTF-8 matches no template rather than decoding to replacement characters.

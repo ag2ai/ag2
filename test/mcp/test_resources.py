@@ -63,6 +63,27 @@ class TestResourceRead:
         with pytest.raises(MCPResourceNotFoundError):
             await provider.read("x://a/b")  # plain {seg} won't match across '/'
 
+    @pytest.mark.parametrize(
+        ("uri", "reason"),
+        [
+            ("files:///nested%2Freport.txt", "an encoded separator would leave the matched segment"),
+            ("files:///%2E%2E%2Fsecret.txt", "a decoded '..' segment would escape the served root"),
+            ("files:///calf%E9.txt", "the escape is not valid UTF-8"),
+        ],
+    )
+    async def test_plain_var_refuses_a_uri_whose_decoding_would_widen_the_match(self, uri: str, reason: str) -> None:
+        provider = ResourceProvider([], [ResourceTemplate("files:///{path}", "file", lambda v: v["path"])])
+
+        with pytest.raises(MCPResourceNotFoundError):
+            await provider.read(uri)
+
+    async def test_reserved_var_keeps_a_decoded_separator(self) -> None:
+        provider = ResourceProvider([], [ResourceTemplate("files:///{+path}", "file", lambda v: v["path"])])
+
+        [contents] = await provider.read("files:///nested%2Freport.txt")
+
+        assert contents.content == "nested/report.txt"
+
     async def test_static_takes_precedence_over_template(self) -> None:
         provider = ResourceProvider(
             [Resource(uri="weather://London", name="exact", read=lambda: "cached")],
@@ -92,7 +113,6 @@ class TestResourceTemplateRead:
             ("files:///{path}", "files:///a+b.txt", "a+b.txt"),
             ("files:///{path}", "files:///a%2Bb.txt", "a+b.txt"),
             ("files:///{path}", "files:///literal%2520name.txt", "literal%20name.txt"),
-            ("files:///{path}", "files:///nested%2Freport.txt", "nested/report.txt"),
             ("files:///{+path}", "files:///nested/hello%20world.txt", "nested/hello world.txt"),
             ("files:///{+path}", "files:///nested/%E6%8A%A5%E5%91%8A.txt", "nested/报告.txt"),
             ("files:///{+path}", "files:///literal%2520name.txt", "literal%20name.txt"),
