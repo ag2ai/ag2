@@ -18,6 +18,7 @@ or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
 import asyncio
 import json
 import logging
+import threading
 import types
 import weakref
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
@@ -751,12 +752,13 @@ class Agent(PluginTarget, Generic[TResult]):
         else:
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
-        # Created on first use, and re-created whenever the running loop
-        # changes: an asyncio.Semaphore binds to the first loop that awaits on
-        # it while contended, so a cached one would raise on a later loop (the
-        # same hazard called out in ag2/extensions/docker/sandbox.py).
-        self._task_slots: asyncio.Semaphore | None = None
-        self._task_slots_loop: asyncio.AbstractEventLoop | None = None
+        # One Semaphore per running loop (sharing one raises once a second
+        # loop awaits it contended); weak-keyed to self-clean short-lived
+        # loops, lock-guarded since more than one OS thread can drive this.
+        self._task_slots: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+            weakref.WeakKeyDictionary()
+        )
+        self._task_slots_lock = threading.Lock()
 
         # Knowledge store + compaction/aggregation strategies
         if knowledge:
@@ -1488,10 +1490,12 @@ class Agent(PluginTarget, Generic[TResult]):
             return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
         if tc.max_concurrency is not None:
             loop = asyncio.get_running_loop()
-            if self._task_slots is None or self._task_slots_loop is not loop:
-                self._task_slots = asyncio.Semaphore(tc.max_concurrency)
-                self._task_slots_loop = loop
-            async with self._task_slots:
+            with self._task_slots_lock:
+                slots = self._task_slots.get(loop)
+                if slots is None:
+                    slots = asyncio.Semaphore(tc.max_concurrency)
+                    self._task_slots[loop] = slots
+            async with slots:
                 return await self._run_subtask(task, ctx, tc)
         return await self._run_subtask(task, ctx, tc)
 
