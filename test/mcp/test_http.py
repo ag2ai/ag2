@@ -5,7 +5,7 @@
 import asyncio
 
 import pytest
-from mcp.server.streamable_http_manager import DEFAULT_SESSION_IDLE_TIMEOUT
+from mcp.server.streamable_http_manager import DEFAULT_MAX_SESSIONS, DEFAULT_SESSION_IDLE_TIMEOUT
 from mcp.server.transport_security import TransportSecuritySettings
 
 from ag2.mcp import MCPServer, TransportConfig
@@ -151,6 +151,18 @@ class TestTransportBounds:
 
         assert without_under.status_code == with_default_under.status_code == 200
         assert without_over.status_code == with_default_over.status_code == 413
+
+
+def test_the_session_cap_default_still_matches_the_sdks() -> None:
+    """Red when upstream retunes the cap, rather than a support ticket later.
+
+    AG2 passes its own value through explicitly, so a retune upstream cannot
+    change what a deployment does — it can only make this promise stale. The
+    other two defaults are pinned by tests that exercise them: the idle timeout
+    by the stateless guard below, the body limit by the 4 MiB refusals above.
+    This one has no behaviour to ride on — opening 10 001 sessions is not a test.
+    """
+    assert TransportConfig().max_mcp_sessions == DEFAULT_MAX_SESSIONS
 
 
 class TestTransportValidation:
