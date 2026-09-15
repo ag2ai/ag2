@@ -194,14 +194,20 @@ class TestTransportValidation:
 
         assert app.agent.name == "greeter"
 
-    def test_supplying_the_default_idle_timeout_is_still_supplying_one(self) -> None:
-        """Provenance, not value: asking for what you would have got is still asking."""
-        with pytest.raises(ValueError, match="mcp_session_idle_timeout"):
-            MCPServer(
-                greeter(),
-                stateless=True,
-                transport=TransportConfig(mcp_session_idle_timeout=DEFAULT_SESSION_IDLE_TIMEOUT),
-            )
+    def test_spelling_out_the_default_idle_timeout_is_not_asking_for_reaping(self) -> None:
+        """Value, not provenance: the default number asks for nothing, however it arrives.
+
+        Telling it apart from an inherited default would need the value to carry
+        where it came from, and that is not worth a sentinel — a caller who types
+        the default has expressed what the default already says.
+        """
+        app = MCPServer(
+            greeter(),
+            stateless=True,
+            transport=TransportConfig(mcp_session_idle_timeout=DEFAULT_SESSION_IDLE_TIMEOUT),
+        )
+
+        assert app.agent.name == "greeter"
 
     def test_stateless_may_ask_for_no_reaping_at_all(self) -> None:
         """``None`` asks the transport *not* to reap, which stateless cannot contradict."""

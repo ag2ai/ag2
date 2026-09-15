@@ -572,7 +572,7 @@ class MCPServer:
             stateless=stateless,
             json_response=json_response,
             event_store=transport.event_store,
-            security_settings=transport.security_settings,
+            security_settings=transport.security_settings_for(security.resource_url if security else None),
             retry_interval=transport.sse_retry_interval,
             session_idle_timeout=transport.mcp_session_idle_timeout,
             max_request_body_size=transport.max_request_body_size,

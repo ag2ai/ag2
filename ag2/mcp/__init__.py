@@ -10,6 +10,8 @@ try:
     # common types from ``mcp`` directly.
     from mcp.server.mcpserver import Elicit, ListRoots, Resolve, Sample
     from mcp.server.request_state import RequestStateSecurity
+    from mcp.server.streamable_http import EventStore
+    from mcp.server.transport_security import TransportSecuritySettings
 
     from .apps import (
         AppContent,
@@ -37,6 +39,8 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
     ContextProvider = missing_optional_dependency("ContextProvider", "mcp", e)  # type: ignore[misc]
     SessionConfig = missing_optional_dependency("SessionConfig", "mcp", e)  # type: ignore[misc]
     TransportConfig = missing_optional_dependency("TransportConfig", "mcp", e)  # type: ignore[misc]
+    TransportSecuritySettings = missing_optional_dependency("TransportSecuritySettings", "mcp", e)  # type: ignore[misc]
+    EventStore = missing_optional_dependency("EventStore", "mcp", e)  # type: ignore[misc]
     Resource = missing_optional_dependency("Resource", "mcp", e)  # type: ignore[misc]
     ResourceTemplate = missing_optional_dependency("ResourceTemplate", "mcp", e)  # type: ignore[misc]
     Prompt = missing_optional_dependency("Prompt", "mcp", e)  # type: ignore[misc]
@@ -68,6 +72,7 @@ __all__ = (
     "AskContext",
     "ContextProvider",
     "Elicit",
+    "EventStore",
     "ExtensionMap",
     "ListRoots",
     "MCPApp",
@@ -86,6 +91,7 @@ __all__ = (
     "Sample",
     "SessionConfig",
     "TransportConfig",
+    "TransportSecuritySettings",
     "Visibility",
     "build_ask_tool",
     "client_extension",
