@@ -21,7 +21,9 @@ class SkillRuntime(Protocol):
     1. **Storage** — where skills are installed (``install``, ``remove``).
     2. **Discovery** — the skills it owns (``skills``, ``invalidate``).
     3. **IO** — reading and executing those skills (``read``, ``read_resource``,
-       ``execute``). The runtime owns *how* its content is reached, so a
+       ``execute``). All three are async and take the live ``ConversationContext``,
+       because a runtime may reach its content by running a callable rather than by
+       touching the filesystem. The runtime owns *how* its content is reached, so a
        filesystem runtime reads from disk and an in-memory one from RAM. A
        :class:`~ag2.tools.skills.skill_types.Skill` is a pure descriptor
        and never performs IO itself.
@@ -54,8 +56,14 @@ class SkillRuntime(Protocol):
         """Return descriptors for all skills this runtime owns."""
         ...
 
-    def read(self, name: str) -> str:
+    async def read(self, name: str, context: "ConversationContext") -> str:
         """Return the model-ready content for skill *name* (wrapped SKILL.md).
+
+        Async because a runtime may produce the body by running a callable
+        (``MemoryRuntime``), not just reading a file (``LocalRuntime``). *context*
+        is the live conversation context, used for dependency injection
+        (``Context`` / ``Variable`` / ``Inject``) by runtimes that render the body
+        from a callable; a filesystem runtime ignores it.
 
         Raises:
             SkillNotFoundError: if this runtime does not own *name*.

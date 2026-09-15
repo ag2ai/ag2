@@ -241,6 +241,30 @@ def environment(region: Annotated[str, Variable("region")]) -> str:
     return f"Region: {region}"
 ```
 
+### A dynamic body
+
+`instructions` accepts a **callable** as well as a string. Pass one and the body is rendered on every `load_skill` instead of being fixed when the skill is constructed — so the instructions the model reads can reflect the live run:
+
+```python linenums="1" hl_lines="11"
+from typing import Annotated
+from ag2 import Variable
+from ag2.tools import MemorySkill
+
+async def deploy_instructions(region: Annotated[str, Variable("region")]) -> str:
+    return f"Deploy to {region}. Run the health check before switching traffic."
+
+deploy = MemorySkill(
+    name="deploy",
+    description="Deploy the service. Use when asked to ship or roll out a release.",
+    instructions=deploy_instructions,
+)
+```
+
+The callable may be sync or async, and supports the same dependency injection as a resource or script. Use it when the *always-needed* part of the instructions varies; a resource still fits better for bulk data the model should fetch only when it turns out to need it.
+
+!!! note
+    Only the body is dynamic. A skill's catalog entry — the name and description in `<available_skills>` — is a snapshot taken when the plugin is built, so it stays in lockstep with the set of skills the activation tools accept.
+
 ### Composing with file-based skills
 
 A `MemorySkill` composes with paths and runtimes like any other source — declaration order decides precedence, and the last source wins on a name clash:

@@ -26,10 +26,12 @@ a separate tool).
 
 **Runtime**:
 The backend that owns a set of skills — it discovers them (`runtime.skills`) and
-performs all IO on them (`read` / `read_resource` / `execute`). `LocalRuntime`
-backs skills with the filesystem; a `MemoryRuntime` backs them with RAM. Skills,
-Scripts, and Resources are inert descriptors; the Runtime does the reading and
-running.
+performs all IO on them (`read` / `read_resource` / `execute`). All three are
+async and take the live `ConversationContext`, because a runtime may reach its
+content by running a callable rather than by touching the filesystem.
+`LocalRuntime` backs skills with the filesystem; a `MemoryRuntime` backs them
+with RAM. Skills, Scripts, and Resources are inert descriptors; the Runtime does
+the reading and running.
 _Avoid_: store, source, provider (for this concept).
 
 **MemorySkill**:
@@ -39,6 +41,15 @@ by a `MemoryRuntime`. A MemorySkill's Scripts are in-process callables (not
 `scripts/` files) run through the same `run_skill_script` tool; their parameter
 JSON-schema is disclosed inside the loaded skill content.
 _Avoid_: code skill, inline skill (informal).
+
+**Dynamic body**:
+A MemorySkill whose `instructions` is a callable rather than a string. It is
+rendered on every `load_skill` — through the same `FunctionTool` path as a
+Resource, so it can use `Context` / `Variable` / `Inject` dependency injection.
+Only the **body** is dynamic: a skill's catalog entry (name + description) stays
+a construction-time snapshot, kept in lockstep with the `Literal` enum of skill
+names on the activation tools.
+_Avoid_: dynamic skill (the skill is not dynamic, its body is).
 
 **Shadowing**:
 When the same skill name exists in more than one Runtime, the **last** Runtime

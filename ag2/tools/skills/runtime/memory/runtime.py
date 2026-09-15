@@ -27,8 +27,10 @@ class MemoryRuntime(SkillRuntime):
     """RAM-backed runtime owning code-defined :class:`MemorySkill` instances.
 
     Reads instructions and Resources straight from memory and runs Scripts as
-    in-process callables. Read-only: it owns no installable storage, so
-    ``install`` / ``remove`` / ``lock_dir`` raise.
+    in-process callables. A skill whose ``instructions`` is a callable has its
+    body rendered on every read, so it may reflect the live conversation.
+    Read-only: it owns no installable storage, so ``install`` / ``remove`` /
+    ``lock_dir`` raise.
 
     Holds one or more skills::
 
@@ -57,9 +59,9 @@ class MemoryRuntime(SkillRuntime):
     def skills(self) -> list[Skill]:
         return [s.descriptor for s in self._skills.values()]
 
-    def read(self, name: str) -> str:
+    async def read(self, name: str, context: "ConversationContext") -> str:
         skill = self._get(name)
-        return _wrap_memory_content(skill)
+        return _wrap_memory_content(skill, await _render_instructions(skill, context))
 
     async def read_resource(self, name: str, resource: str, context: "ConversationContext") -> str:
         skill = self._get(name)
@@ -132,12 +134,24 @@ def _to_text(value: Any) -> str:
     return value if isinstance(value, str) else str(value)
 
 
-def _wrap_memory_content(skill: MemorySkill) -> str:
+async def _render_instructions(skill: MemorySkill, context: "ConversationContext") -> str:
+    """Return the skill body — static text, or the result of its callable.
+
+    A dynamic body runs on every read through the same ``FunctionTool`` path as a
+    resource, so it sees the live conversation and can use dependency injection.
+    """
+    entry = skill.instructions_tool
+    if entry is None:
+        return str(skill.instructions)
+    return _to_text(await _run_tool(entry, {}, context))
+
+
+def _wrap_memory_content(skill: MemorySkill, instructions: str) -> str:
     """Wrap a MemorySkill's instructions with its resource list and script schemas."""
     descriptor = skill.descriptor
     lines = [
         f'<skill_content name="{skill.name}">',
-        skill.instructions.strip(),
+        instructions.strip(),
     ]
     if descriptor.resources:
         lines.append("<skill_resources>")
