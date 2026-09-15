@@ -300,30 +300,38 @@ def initialize_request(*, request_id: int = 1, version: str = LATEST_HANDSHAKE_V
 
 
 class ChunkConfig(ModelConfig):
-    """Test config whose client streams ``ModelMessageChunk`` events before the final reply."""
+    """Test config whose client streams ``ModelMessageChunk`` events before the final reply.
 
-    def __init__(self, *chunks: str, final: str | None = None) -> None:
+    ``pause`` holds the turn open between chunks, which is what lets a test drop
+    a stream part-way through one.
+    """
+
+    def __init__(self, *chunks: str, final: str | None = None, pause: float = 0.0) -> None:
         self._chunks = chunks
         self._final = final if final is not None else "".join(chunks)
+        self._pause = pause
 
     def copy(self) -> Self:
         return self
 
     def create(self) -> "ChunkClient":
-        return ChunkClient(self._chunks, self._final)
+        return ChunkClient(self._chunks, self._final, self._pause)
 
     def create_files_client(self) -> None:
         raise NotImplementedError
 
 
 class ChunkClient(LLMClient):
-    def __init__(self, chunks: Sequence[str], final: str) -> None:
+    def __init__(self, chunks: Sequence[str], final: str, pause: float = 0.0) -> None:
         self._chunks = chunks
         self._final = final
+        self._pause = pause
 
     async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
         for chunk in self._chunks:
             await context.send(ModelMessageChunk(chunk))
+            if self._pause:
+                await asyncio.sleep(self._pause)
         message = ModelMessage(self._final)
         await context.send(message)
         return ModelResponse(message=message)
