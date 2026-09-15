@@ -10,6 +10,7 @@ per-turn _TealTigerPerTurn instances that share a reference to the factory state
 No external dependencies beyond AG2 and the standard library.
 """
 
+import asyncio
 import fnmatch
 import hashlib
 import time
@@ -235,10 +236,12 @@ class TealTigerMiddleware:
         self._receipts: list[TEECReceipt] = []
         self._frozen_agents: set[str] = set()
         self._cumulative_cost: float = 0.0
-        # Rolling call timestamps for each rate_limit policy, keyed by the
-        # policy's index in ``policies``. Each policy owns its own list so
-        # policies that share a tool scope but use different windows never
-        # prune or count one another's timestamps. Survives across turns.
+        # Rolling ``time.monotonic()`` call timestamps for each rate_limit policy,
+        # keyed by the policy's index in ``policies``. Each policy owns its own
+        # list so policies that share a tool scope but use different windows never
+        # prune or count one another's timestamps. A monotonic clock keeps a
+        # window immune to wall-clock steps (NTP, manual changes), which would
+        # otherwise resurrect or silently erase calls. Survives across turns.
         self._call_history: dict[int, list[float]] = {}
 
         # Compute policy digest for receipts
@@ -385,6 +388,16 @@ class _TealTigerPerTurn(BaseMiddleware):
 
         # MONITOR and ENFORCE: evaluate policies
         decision = self._evaluate(tool_name, tool_args)
+
+        # Rate limits run after the argument policies, so a call those already deny
+        # never consumes window budget. They are applied here rather than inside
+        # ``_evaluate`` because in ENFORCE the answer may be "wait", which needs to
+        # await — and waiting, not refusing, is what actually slows a runaway loop:
+        # a refusal goes back to the model as a tool error and a looping agent
+        # simply calls again, spending a model round-trip per refusal.
+        if decision.action != "DENY":
+            await self._apply_rate_limits(decision, tool_name)
+
         decision.evaluation_time_ms = round((time.perf_counter() - start_time) * 1000, 3)
 
         # Record decision
@@ -409,10 +422,11 @@ class _TealTigerPerTurn(BaseMiddleware):
         decision.cost_tracked = self._factory.cost_per_call
         decision.cumulative_cost = self._factory._cumulative_cost
 
-        # Count this (allowed) call against every rate_limit bucket it matches, so
-        # the window reflects calls that actually happened. In MONITOR a would-be
-        # denial still executes, so it still counts — the limit observes real load.
-        self._record_rate_limit_calls(tool_name)
+        # In ENFORCE the slot was already reserved while the limits were applied.
+        # Everything that reaches here in MONITOR really runs — including a call
+        # whose would-be denial was only recorded — so it counts too.
+        if self._factory.mode != GovernanceMode.ENFORCE:
+            self._record_rate_limit_calls(tool_name)
 
         # Execute the tool
         result = await call_next(event, context)
@@ -456,7 +470,7 @@ class _TealTigerPerTurn(BaseMiddleware):
 
         args_str = str(tool_args) if not isinstance(tool_args, str) else tool_args
 
-        for policy_index, policy in enumerate(self._factory.policies):
+        for policy in self._factory.policies:
             if policy.type == "prompt_injection_block":
                 techniques = policy.config.get("techniques", list(INJECTION_TECHNIQUES))
                 threshold = policy.config.get("confidence_threshold", DEFAULT_INJECTION_CONFIDENCE_THRESHOLD)
@@ -512,13 +526,6 @@ class _TealTigerPerTurn(BaseMiddleware):
                 if self._factory._cumulative_cost >= limit:
                     action = "DENY"
                     reason_codes.append("BUDGET_EXCEEDED")
-                    risk_score = max(risk_score, 70)
-                    break
-
-            elif policy.type == "rate_limit":
-                if self._rate_limit_exceeded(tool_name, policy.config, policy_index):
-                    action = "DENY"
-                    reason_codes.append("RATE_LIMIT_EXCEEDED")
                     risk_score = max(risk_score, 70)
                     break
 
@@ -667,43 +674,113 @@ class _TealTigerPerTurn(BaseMiddleware):
             ),
         )
 
-    def _rate_limit_exceeded(self, tool_name: str, config: dict[str, Any], policy_index: int) -> bool:
-        """Whether `tool_name` is already at or over this policy's limit.
+    @staticmethod
+    def _rate_limit_covers(tool_name: str, config: dict[str, Any]) -> bool:
+        """Whether a rate_limit policy's scope covers `tool_name`.
 
-        A per-tool policy (``tool`` set) only applies to matching calls; a global
-        policy (``tool`` is None) applies to every call. Each policy keeps its own
-        timestamp list (keyed by ``policy_index``) and prunes only that list
-        against its own window, so a short-window policy can never delete
-        timestamps a longer-window policy sharing the same tool scope still needs.
+        A global policy (``tool`` is None) covers every call; a scoped one covers
+        only names matching its ``fnmatch`` pattern.
         """
         pattern = config.get("tool")
-        if pattern is not None and not fnmatch.fnmatch(tool_name, pattern):
-            return False
+        return pattern is None or fnmatch.fnmatch(tool_name, pattern)
 
-        window = config["window_seconds"]
-        cutoff = time.time() - window
-        history = [t for t in self._factory._call_history.get(policy_index, []) if t > cutoff]
-        self._factory._call_history[policy_index] = history
-        return len(history) >= config["max_calls"]
+    def _rate_limit_delay(self, config: dict[str, Any], policy_index: int) -> float:
+        """Seconds until this policy has room for another call — 0.0 if it has room now.
+
+        A pure query: it reads the timestamps still inside this policy's own window
+        (keyed by ``policy_index``) without rewriting them, so asking one policy
+        never disturbs the history another policy is counting. When the window is
+        full, the wait is until the oldest call that still counts ages out of it.
+        """
+        now = time.monotonic()
+        max_calls = int(config["max_calls"])
+        window = float(config["window_seconds"])
+        recent = sorted(t for t in self._factory._call_history.get(policy_index, []) if t > now - window)
+        if len(recent) < max_calls:
+            return 0.0
+        # Dropping everything up to and including this entry leaves max_calls - 1
+        # in the window, which is exactly enough room for one more call.
+        frees_at = recent[len(recent) - max_calls] + window
+        return max(0.0, frees_at - now)
+
+    def _rate_limit_wait(self, tool_name: str) -> float | None:
+        """How long `tool_name` must wait before every policy covering it has room.
+
+        0.0 means it may proceed now. ``None`` means it must not proceed at all —
+        some policy covering it is over its limit and either asked to deny outright
+        or would hold the call longer than its `max_wait_seconds` allows.
+        """
+        wait = 0.0
+        for policy_index, policy in enumerate(self._factory.policies):
+            if policy.type != "rate_limit" or not self._rate_limit_covers(tool_name, policy.config):
+                continue
+            delay = self._rate_limit_delay(policy.config, policy_index)
+            if delay <= 0.0:
+                continue
+            if policy.config["on_exceeded"] == "deny" or delay > policy.config["max_wait_seconds"]:
+                return None
+            wait = max(wait, delay)
+        return wait
+
+    async def _apply_rate_limits(self, decision: GovernanceDecision, tool_name: str) -> None:
+        """Hold `tool_name` until its rate limits have room, or mark the decision denied.
+
+        In ENFORCE this both waits and *reserves* the slot: the final check and the
+        recording that follows it are not separated by an await, so under asyncio
+        the pair is atomic and concurrent tool calls in one turn cannot all slip
+        past the same check. MONITOR never waits — it records the would-be denial
+        and lets the call through, and the call is counted once it has run.
+        """
+        if self._factory.mode != GovernanceMode.ENFORCE:
+            if self._rate_limit_wait(tool_name) != 0.0:
+                self._deny_for_rate_limit(decision)
+            return
+
+        while True:
+            wait = self._rate_limit_wait(tool_name)
+            if wait is None:
+                self._deny_for_rate_limit(decision)
+                return
+            if wait <= 0.0:
+                # No await since the check above: the reservation is atomic.
+                self._record_rate_limit_calls(tool_name)
+                return
+            decision.reason_codes.append(f"RATE_LIMIT_WAIT:{wait:.3f}s")
+            await asyncio.sleep(wait)
+
+    @staticmethod
+    def _deny_for_rate_limit(decision: GovernanceDecision) -> None:
+        """Turn `decision` into a rate-limit denial.
+
+        The argument policies had already marked it ``POLICY_ALLOW``; that code
+        stands for "nothing objected" and would otherwise be reported alongside
+        the denial it is now contradicted by, both in the audit trail and in the
+        error the model is handed.
+        """
+        decision.action = "DENY"
+        decision.reason_codes = [c for c in decision.reason_codes if c != "POLICY_ALLOW"]
+        decision.reason_codes.append("RATE_LIMIT_EXCEEDED")
+        decision.risk_score = max(decision.risk_score, 70)
 
     def _record_rate_limit_calls(self, tool_name: str) -> None:
         """Record `now` against every rate_limit policy `tool_name` falls under.
 
-        Called only for allowed calls, so a denied call never counts toward the
-        window. Each policy owns its own timestamp list (keyed by its index), so a
-        single real call adds exactly one timestamp to each policy it matches.
-        Because lists are per policy, two policies sharing a tool scope (two global
-        limits, or two with the same pattern) each count the call once against
-        their own window — no double counting, and no shared list to fight over.
+        Called only for calls that were allowed to run, so a call blocked in
+        ENFORCE never consumes the window budget. Each policy owns its own
+        timestamp list (keyed by its index), so one real call adds exactly one
+        timestamp per matching policy — two policies sharing a tool scope each
+        count it once against their own window, never twice. This is the only
+        place the history is mutated: entries that have aged out of a policy's
+        own window are dropped here as it appends.
         """
-        now = time.time()
+        now = time.monotonic()
         for policy_index, policy in enumerate(self._factory.policies):
-            if policy.type != "rate_limit":
+            if policy.type != "rate_limit" or not self._rate_limit_covers(tool_name, policy.config):
                 continue
-            pattern = policy.config.get("tool")
-            if pattern is not None and not fnmatch.fnmatch(tool_name, pattern):
-                continue
-            self._factory._call_history.setdefault(policy_index, []).append(now)
+            cutoff = now - policy.config["window_seconds"]
+            history = [t for t in self._factory._call_history.get(policy_index, []) if t > cutoff]
+            history.append(now)
+            self._factory._call_history[policy_index] = history
 
     def _record_decision(
         self,

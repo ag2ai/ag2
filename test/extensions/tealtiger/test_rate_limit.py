@@ -1,354 +1,643 @@
 # Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for TealTiger rate limiting: max tool calls per rolling time window.
+"""Tests for TealTiger rate limiting: how fast tool calls may happen.
 
-The enforcement lives in ``_evaluate`` (deny) and ``_record_rate_limit_calls``
-(count allowed calls), so most cases drive the middleware directly through a
-per-turn instance rather than a full agent turn — that keeps the window math
-explicit and lets a test advance time deterministically by seeding the call
-history. A couple of end-to-end cases confirm the policy denies through a real
-``Agent`` too.
+Everything runs through a real ``Agent`` with scripted turns, so what is asserted
+is what a user sees — the reply and the recorded decisions — never the window
+bookkeeping underneath. Time is made to pass by giving a tool a small delay
+rather than by seeding timestamps, which keeps the windows honest.
+
+`raise_tool_errors=False` models a real provider throughout: a denied call comes
+back to the model as an ordinary failed tool result and the agent carries on,
+which is exactly why refusing an over-limit call costs a model round-trip.
 """
 
+import asyncio
 import time
-from typing import Any
 
 import pytest
+from dirty_equals import IsList, IsPartialDataclass, IsStr
 
 from ag2 import Agent
 from ag2.events import ToolCallEvent
 from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTigerMiddleware
-from ag2.testing import TestConfig
-
-
-def _call(tool_name: str, **arguments: Any) -> ToolCallEvent:
-    import json
-
-    return ToolCallEvent(name=tool_name, arguments=json.dumps(arguments))
-
-
-def _decide(middleware: TealTigerMiddleware, tool_name: str) -> str:
-    """Run one governance evaluation for `tool_name` and record it if allowed.
-
-    Mirrors what ``on_tool_execution`` does around ``_evaluate``: evaluate, and
-    on a non-deny (allowed) outcome count the call against the rate-limit buckets.
-    Returns the decision action ("ALLOW" / "DENY" / "MONITOR").
-    """
-    per_turn = middleware(ToolCallEvent(name=tool_name, arguments="{}"), _FakeContext())
-    decision = per_turn._evaluate(tool_name, "{}")
-    if decision.action != "DENY":
-        per_turn._record_rate_limit_calls(tool_name)
-    return decision.action
-
-
-class _FakeContext:
-    """Minimal Context stand-in: no agent in dependencies -> agent_name is None."""
-
-    class _Deps:
-        def get(self, _key: Any) -> None:
-            return None
-
-    dependencies = _Deps()
+from ag2.testing import TestConfig, TrackingConfig
 
 
 class TestRateLimitValidation:
     def test_non_positive_max_calls_is_rejected(self):
-        with pytest.raises(ValueError, match="max_calls"):
-            GovernancePolicy.rate_limit(0, 60)
+        with pytest.raises(ValueError, match="positive integer"):
+            GovernancePolicy.rate_limit(0, window_seconds=60)
 
     def test_boolean_max_calls_is_rejected(self):
-        with pytest.raises(ValueError, match="max_calls"):
-            GovernancePolicy.rate_limit(True, 60)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="positive integer"):
+            GovernancePolicy.rate_limit(True, window_seconds=60)
 
     def test_non_positive_window_is_rejected(self):
-        with pytest.raises(ValueError, match="window_seconds"):
-            GovernancePolicy.rate_limit(5, 0)
+        with pytest.raises(ValueError, match="positive number"):
+            GovernancePolicy.rate_limit(5, window_seconds=0)
 
     def test_empty_tool_is_rejected(self):
-        with pytest.raises(ValueError, match="tool"):
-            GovernancePolicy.rate_limit(5, 60, tool="")
+        with pytest.raises(ValueError, match="must not be empty"):
+            GovernancePolicy.rate_limit(5, window_seconds=60, tool="")
 
-    def test_valid_policy_stores_config(self):
-        policy = GovernancePolicy.rate_limit(5, 60, tool="search")
-        assert policy.type == "rate_limit"
-        assert policy.config == {"max_calls": 5, "window_seconds": 60.0, "tool": "search"}
+    def test_unknown_on_exceeded_is_rejected(self):
+        with pytest.raises(ValueError, match="'wait' or 'deny'"):
+            GovernancePolicy.rate_limit(5, window_seconds=60, on_exceeded="throttle")
 
-    def test_global_policy_has_no_tool(self):
-        assert GovernancePolicy.rate_limit(30, 60).config["tool"] is None
+    def test_non_positive_max_wait_is_rejected(self):
+        with pytest.raises(ValueError, match="positive number"):
+            GovernancePolicy.rate_limit(5, window_seconds=60, max_wait_seconds=0)
 
 
+@pytest.mark.asyncio
 class TestGlobalRateLimit:
-    def test_allows_up_to_the_limit_then_denies(self):
-        governance = TealTigerMiddleware(
-            policies=[GovernancePolicy.rate_limit(3, window_seconds=60)],
-            mode=GovernanceMode.ENFORCE,
-        )
-        # Three calls (to any tools) are allowed; the fourth within the window is denied.
-        assert _decide(governance, "search") == "ALLOW"
-        assert _decide(governance, "read_file") == "ALLOW"
-        assert _decide(governance, "search") == "ALLOW"
-        # The 4th call within the window is denied with the rate-limit reason code.
-        per_turn = governance(ToolCallEvent(name="anything", arguments="{}"), _FakeContext())
-        decision = per_turn._evaluate("anything", "{}")
-        assert decision.action == "DENY"
-        assert "RATE_LIMIT_EXCEEDED" in decision.reason_codes
-
-    def test_window_expiry_lets_calls_through_again(self):
-        governance = TealTigerMiddleware(
-            policies=[GovernancePolicy.rate_limit(2, window_seconds=60)],
-            mode=GovernanceMode.ENFORCE,
-        )
-        # Seed two calls as if they happened ~61s ago — outside a 60s window.
-        # History is keyed by policy index; this is the only (index 0) policy.
-        governance._call_history[0] = [time.time() - 61, time.time() - 61]
-        # They should have aged out, so a fresh call is allowed.
-        assert _decide(governance, "search") == "ALLOW"
-
-    def test_recent_calls_still_count(self):
-        governance = TealTigerMiddleware(
-            policies=[GovernancePolicy.rate_limit(2, window_seconds=60)],
-            mode=GovernanceMode.ENFORCE,
-        )
-        # Two calls 1s ago are inside the 60s window -> the next is denied.
-        governance._call_history[0] = [time.time() - 1, time.time() - 1]
-        assert _decide(governance, "search") == "DENY"
-
-
-class TestPerToolRateLimit:
-    def test_limit_is_isolated_to_the_matching_tool(self):
-        governance = TealTigerMiddleware(
-            policies=[GovernancePolicy.rate_limit(2, window_seconds=60, tool="search")],
-            mode=GovernanceMode.ENFORCE,
-        )
-        assert _decide(governance, "search") == "ALLOW"
-        assert _decide(governance, "search") == "ALLOW"
-        # search is now capped...
-        assert _decide(governance, "search") == "DENY"
-        # ...but a different tool is untouched by this per-tool limit.
-        assert _decide(governance, "read_file") == "ALLOW"
-        assert _decide(governance, "read_file") == "ALLOW"
-        assert _decide(governance, "read_file") == "ALLOW"
-
-    def test_pattern_caps_a_family_together(self):
-        governance = TealTigerMiddleware(
-            policies=[GovernancePolicy.rate_limit(2, window_seconds=60, tool="db_*")],
-            mode=GovernanceMode.ENFORCE,
-        )
-        assert _decide(governance, "db_read") == "ALLOW"
-        assert _decide(governance, "db_write") == "ALLOW"
-        # db_read + db_write share the db_* bucket, so the third db_* call is denied.
-        assert _decide(governance, "db_delete") == "DENY"
-
-    def test_global_and_per_tool_limits_compose(self):
-        governance = TealTigerMiddleware(
-            policies=[
-                GovernancePolicy.rate_limit(10, window_seconds=60),  # generous global
-                GovernancePolicy.rate_limit(1, window_seconds=60, tool="send_email"),  # tight per-tool
-            ],
-            mode=GovernanceMode.ENFORCE,
-        )
-        assert _decide(governance, "send_email") == "ALLOW"
-        # The per-tool cap denies the 2nd email even though the global budget is fine.
-        assert _decide(governance, "send_email") == "DENY"
-        # Other tools still flow under the global limit.
-        assert _decide(governance, "search") == "ALLOW"
-
-
-class TestRateLimitRespectsMode:
-    @pytest.mark.asyncio
-    async def test_observe_never_denies(self):
-        def search(query: str) -> str:
+    async def test_allows_up_to_the_limit_then_denies(self):
+        def search(query: str = "") -> str:
             return "results"
 
         governance = TealTigerMiddleware(
-            policies=[GovernancePolicy.rate_limit(1, window_seconds=60)],
-            mode=GovernanceMode.OBSERVE,
+            policies=[GovernancePolicy.rate_limit(2, window_seconds=60, on_exceeded="deny")],
+            mode=GovernanceMode.ENFORCE,
         )
-        # Bucket already over the limit — but OBSERVE short-circuits before policy
-        # evaluation, so the call still runs and is only recorded as a passthrough.
-        governance._call_history[0] = [time.time(), time.time()]
         agent = Agent(
             "assistant",
-            config=TestConfig(_call("search", query="hi"), "Done."),
+            config=TestConfig(
+                ToolCallEvent(name="search", arguments="{}"),
+                ToolCallEvent(name="search", arguments="{}"),
+                ToolCallEvent(name="search", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
             tools=[search],
             middleware=[governance],
         )
 
-        reply = await agent.ask("search")
+        reply = await agent.ask("search repeatedly")
 
         assert reply.body == "Done."
-        assert governance.deny_count == 0
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="DENY", reason_codes=["RATE_LIMIT_EXCEEDED"], risk_score=70),
+        ]
 
-    def test_monitor_records_denial_but_would_not_block(self):
+    async def test_the_window_refills_so_a_paced_agent_is_never_denied(self):
+        async def slow(query: str = "") -> str:
+            # Outlasts the window, so each call has aged out before the next starts.
+            await asyncio.sleep(0.08)
+            return "results"
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.rate_limit(1, window_seconds=0.05, on_exceeded="deny")],
+            mode=GovernanceMode.ENFORCE,
+        )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ToolCallEvent(name="slow", arguments="{}"),
+                ToolCallEvent(name="slow", arguments="{}"),
+                ToolCallEvent(name="slow", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[slow],
+            middleware=[governance],
+        )
+
+        await agent.ask("call slowly")
+
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+        ]
+
+    async def test_a_denied_call_is_handed_back_to_the_model_as_a_tool_error(self):
+        """Why refusing is the expensive option: the model gets the refusal and answers it.
+
+        The denial arrives as an ordinary failed tool result, so an agent in a
+        loop simply calls again — each refusal costing a model round-trip.
+        """
+
+        def search(query: str = "") -> str:
+            return "results"
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.rate_limit(1, window_seconds=60, on_exceeded="deny")],
+            mode=GovernanceMode.ENFORCE,
+        )
+        tracking = TrackingConfig(
+            TestConfig(
+                ToolCallEvent(name="search", arguments="{}"),
+                ToolCallEvent(name="search", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            )
+        )
+        agent = Agent("assistant", config=tracking, tools=[search], middleware=[governance])
+
+        await agent.ask("search twice")
+
+        assert "GOVERNANCE DENIED" in str([call.args[0] for call in tracking.mock.call_args_list])
+        # The denial is reported as exactly that, with no stale allow verdict beside it.
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW", reason_codes=["POLICY_ALLOW"]),
+            IsPartialDataclass(action="DENY", reason_codes=["RATE_LIMIT_EXCEEDED"]),
+        ]
+
+
+@pytest.mark.asyncio
+class TestPerToolRateLimit:
+    async def test_limit_is_isolated_to_the_matching_tool(self):
+        def search(query: str = "") -> str:
+            return "results"
+
+        def read_file(path: str = "") -> str:
+            return "contents"
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.rate_limit(1, window_seconds=60, tool="search", on_exceeded="deny")],
+            mode=GovernanceMode.ENFORCE,
+        )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ToolCallEvent(name="search", arguments="{}"),
+                ToolCallEvent(name="search", arguments="{}"),
+                ToolCallEvent(name="read_file", arguments="{}"),
+                ToolCallEvent(name="read_file", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[search, read_file],
+            middleware=[governance],
+        )
+
+        await agent.ask("mix tools")
+
+        # Only the second search trips; read_file is untouched by a search-scoped limit.
+        assert governance.decisions == [
+            IsPartialDataclass(tool_name="search", action="ALLOW"),
+            IsPartialDataclass(tool_name="search", action="DENY"),
+            IsPartialDataclass(tool_name="read_file", action="ALLOW"),
+            IsPartialDataclass(tool_name="read_file", action="ALLOW"),
+        ]
+
+    async def test_pattern_caps_a_family_together(self):
+        def db_read(key: str = "") -> str:
+            return "row"
+
+        def db_write(key: str = "") -> str:
+            return "ok"
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.rate_limit(2, window_seconds=60, tool="db_*", on_exceeded="deny")],
+            mode=GovernanceMode.ENFORCE,
+        )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ToolCallEvent(name="db_read", arguments="{}"),
+                ToolCallEvent(name="db_write", arguments="{}"),
+                ToolCallEvent(name="db_read", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[db_read, db_write],
+            middleware=[governance],
+        )
+
+        await agent.ask("touch the db")
+
+        # db_read and db_write share the db_* scope, so the third db_* call is denied.
+        assert governance.decisions == [
+            IsPartialDataclass(tool_name="db_read", action="ALLOW"),
+            IsPartialDataclass(tool_name="db_write", action="ALLOW"),
+            IsPartialDataclass(tool_name="db_read", action="DENY"),
+        ]
+
+    async def test_global_and_per_tool_limits_compose(self):
+        def send_email(to: str = "") -> str:
+            return "sent"
+
+        def search(query: str = "") -> str:
+            return "results"
+
+        governance = TealTigerMiddleware(
+            policies=[
+                GovernancePolicy.rate_limit(10, window_seconds=60, on_exceeded="deny"),
+                GovernancePolicy.rate_limit(1, window_seconds=60, tool="send_email", on_exceeded="deny"),
+            ],
+            mode=GovernanceMode.ENFORCE,
+        )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ToolCallEvent(name="send_email", arguments="{}"),
+                ToolCallEvent(name="send_email", arguments="{}"),
+                ToolCallEvent(name="search", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[send_email, search],
+            middleware=[governance],
+        )
+
+        await agent.ask("email then search")
+
+        # The per-tool cap denies the 2nd email though the global budget is fine,
+        # and other tools still flow under the global limit.
+        assert governance.decisions == [
+            IsPartialDataclass(tool_name="send_email", action="ALLOW"),
+            IsPartialDataclass(tool_name="send_email", action="DENY"),
+            IsPartialDataclass(tool_name="search", action="ALLOW"),
+        ]
+
+
+@pytest.mark.asyncio
+class TestRateLimitWaits:
+    """The default: an over-limit call is held until the window refills.
+
+    This is the behaviour the feature rests on. Refusing an over-limit call hands
+    the model a tool error, and an agent stuck in a loop answers it by calling
+    again — so a refusal converts a throttled tool call into a model round-trip
+    and burns tokens faster than the call it replaced. Holding the call does not.
+    """
+
+    async def test_over_limit_call_is_delayed_not_denied(self):
+        def search(query: str = "") -> str:
+            return "results"
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.rate_limit(1, window_seconds=0.1)],
+            mode=GovernanceMode.ENFORCE,
+        )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ToolCallEvent(name="search", arguments="{}"),
+                ToolCallEvent(name="search", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[search],
+            middleware=[governance],
+        )
+
+        started = time.monotonic()
+        reply = await agent.ask("search twice")
+        elapsed = time.monotonic() - started
+
+        # The second call waited out the window instead of being refused, and the
+        # wait it served is on the record rather than being silent latency.
+        assert reply.body == "Done."
+        assert elapsed >= 0.08
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW", reason_codes=["POLICY_ALLOW"]),
+            IsPartialDataclass(
+                action="ALLOW",
+                reason_codes=["POLICY_ALLOW", IsStr(regex=r"RATE_LIMIT_WAIT:[0-9.]+s")],
+            ),
+        ]
+
+    async def test_a_wait_longer_than_max_wait_seconds_denies_instead_of_stalling(self):
+        def search(query: str = "") -> str:
+            return "results"
+
+        # Room frees only in an hour, but the policy will not hold a call past 50ms.
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.rate_limit(1, window_seconds=3600, max_wait_seconds=0.05)],
+            mode=GovernanceMode.ENFORCE,
+        )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ToolCallEvent(name="search", arguments="{}"),
+                ToolCallEvent(name="search", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[search],
+            middleware=[governance],
+        )
+
+        started = time.monotonic()
+        await agent.ask("search twice")
+
+        # Denied promptly rather than held for the hour it would have taken.
+        assert time.monotonic() - started < 1.0
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="DENY", reason_codes=["RATE_LIMIT_EXCEEDED"]),
+        ]
+
+    async def test_parallel_calls_in_one_turn_do_not_overshoot_the_limit(self):
+        """The window check and the slot it reserves have to be atomic.
+
+        A turn's tool calls are executed concurrently, so without an atomic
+        reservation every waiter wakes, sees room, and records — letting more
+        calls through than the limit allows.
+        """
+        ran: list[str] = []
+
+        def search(query: str = "") -> str:
+            ran.append(query)
+            return "results"
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.rate_limit(2, window_seconds=60, on_exceeded="deny")],
+            mode=GovernanceMode.ENFORCE,
+        )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                [ToolCallEvent(name="search", arguments="{}") for _ in range(5)],
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[search],
+            middleware=[governance],
+        )
+
+        await agent.ask("search five times at once")
+
+        assert governance.decisions == IsList(
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="DENY"),
+            IsPartialDataclass(action="DENY"),
+            IsPartialDataclass(action="DENY"),
+            check_order=False,
+        )
+        # Exactly two calls reached the tool; the denied three never ran.
+        assert len(ran) == 2
+
+
+@pytest.mark.asyncio
+class TestRateLimitRespectsMode:
+    async def test_observe_never_denies(self):
+        def search(query: str = "") -> str:
+            return "results"
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.rate_limit(1, window_seconds=60, on_exceeded="deny")],
+            mode=GovernanceMode.OBSERVE,
+        )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ToolCallEvent(name="search", arguments="{}"),
+                ToolCallEvent(name="search", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[search],
+            middleware=[governance],
+        )
+
+        reply = await agent.ask("search twice")
+
+        # OBSERVE short-circuits before policy evaluation: both calls just run.
+        assert reply.body == "Done."
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW", reason_codes=["OBSERVE_PASSTHROUGH"]),
+            IsPartialDataclass(action="ALLOW", reason_codes=["OBSERVE_PASSTHROUGH"]),
+        ]
+
+    async def test_monitor_records_the_denial_but_runs_the_call_anyway(self):
+        ran: list[str] = []
+
+        def search(query: str = "") -> str:
+            ran.append(query)
+            return "results"
+
         governance = TealTigerMiddleware(
             policies=[GovernancePolicy.rate_limit(1, window_seconds=60)],
             mode=GovernanceMode.MONITOR,
         )
-        governance._call_history[0] = [time.time()]
-        per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
-        decision = per_turn._evaluate("search", "{}")
-        # In MONITOR the decision still reads DENY (the violation is real and logged),
-        # but on_tool_execution only turns a DENY into a block in ENFORCE.
-        assert decision.action == "DENY"
-        assert "RATE_LIMIT_EXCEEDED" in decision.reason_codes
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ToolCallEvent(name="search", arguments="{}"),
+                ToolCallEvent(name="search", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[search],
+            middleware=[governance],
+        )
+
+        await agent.ask("search twice")
+
+        # The violation is recorded, but only ENFORCE blocks — and MONITOR never
+        # waits either, since waiting is itself a form of blocking.
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="DENY", reason_codes=["RATE_LIMIT_EXCEEDED"]),
+        ]
+        assert len(ran) == 2
+
+    async def test_monitor_counts_the_call_it_did_not_block(self):
+        """A MONITOR call that was over the limit still ran, so the window counts it.
+
+        The timings isolate that: with a 0.3s window and a 0.2s tool, by the third
+        call the first has aged out but the second has not. The third is therefore
+        denied only if the second — denied yet executed — was counted.
+        """
+
+        async def slow(query: str = "") -> str:
+            await asyncio.sleep(0.2)
+            return "results"
+
+        governance = TealTigerMiddleware(
+            policies=[GovernancePolicy.rate_limit(1, window_seconds=0.3)],
+            mode=GovernanceMode.MONITOR,
+        )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ToolCallEvent(name="slow", arguments="{}"),
+                ToolCallEvent(name="slow", arguments="{}"),
+                ToolCallEvent(name="slow", arguments="{}"),
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[slow],
+            middleware=[governance],
+        )
+
+        await agent.ask("call slowly three times")
+
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="DENY"),
+            IsPartialDataclass(action="DENY"),
+        ]
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_blocks_a_real_agent_turn_in_enforce():
-    def search(query: str) -> str:
+async def test_enforce_surfaces_the_governance_error_to_the_caller():
+    def search(query: str = "") -> str:
         return "results"
 
     governance = TealTigerMiddleware(
-        policies=[GovernancePolicy.rate_limit(5, window_seconds=60, tool="search")],
+        policies=[GovernancePolicy.rate_limit(1, window_seconds=60, tool="search", on_exceeded="deny")],
         mode=GovernanceMode.ENFORCE,
     )
-    # Pre-fill the search policy's history to its limit so the next call is denied.
-    governance._call_history[0] = [time.time()] * 5
-
     agent = Agent(
         "assistant",
-        config=TestConfig(_call("search", query="hello"), "Done."),
+        config=TestConfig(
+            ToolCallEvent(name="search", arguments="{}"),
+            ToolCallEvent(name="search", arguments="{}"),
+            "Done.",
+        ),
         tools=[search],
         middleware=[governance],
     )
 
     with pytest.raises(Exception, match=r"\[GOVERNANCE DENIED\].*RATE_LIMIT_EXCEEDED"):
-        await agent.ask("search for hello")
+        await agent.ask("search twice")
 
     assert governance.deny_count == 1
 
 
+@pytest.mark.asyncio
 class TestSharedScopeCountsPerPolicy:
-    """Regression for PR #3246 review: policies that share a tool scope but use
-    different windows must each count a real call exactly once against their own
-    window. Each policy keeps its own timestamp list (keyed by policy index), so
-    a single call adds one timestamp per policy and the tighter limit trips at
-    its real threshold — never at half of it from double counting.
+    """Regression for PR #3246 review: policies sharing a tool scope must each
+    count a real call exactly once against their own window, so the tighter limit
+    trips at its real threshold rather than at half of it from double counting.
     """
 
-    def test_two_global_limits_each_count_once_against_their_own_window(self):
-        # Both policies are global and share the same scope; index 0 is the
-        # 10/min limit, index 1 the 100/hour limit.
+    async def test_two_global_limits_do_not_double_count_one_call(self):
+        def search(query: str = "") -> str:
+            return "results"
+
         governance = TealTigerMiddleware(
             policies=[
-                GovernancePolicy.rate_limit(10, window_seconds=60),
-                GovernancePolicy.rate_limit(100, window_seconds=3600),
+                GovernancePolicy.rate_limit(4, window_seconds=60, on_exceeded="deny"),
+                GovernancePolicy.rate_limit(100, window_seconds=3600, on_exceeded="deny"),
             ],
             mode=GovernanceMode.ENFORCE,
         )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                *[ToolCallEvent(name="search", arguments="{}") for _ in range(5)],
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[search],
+            middleware=[governance],
+        )
 
-        for _ in range(5):
-            assert _decide(governance, "search") == "ALLOW"
+        await agent.ask("search five times")
 
-        # Five real calls -> five timestamps for each policy (not ten): one per
-        # call per policy, so neither window is inflated by the other.
-        assert len(governance._call_history[0]) == 5
-        assert len(governance._call_history[1]) == 5
+        # Were the shared scope counted twice per call, the 4-call limit would
+        # have tripped on the third call instead of the fifth.
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="DENY"),
+        ]
 
-        # The 10/min limit must still have five allowances left, not be tripped.
-        for _ in range(5):
-            assert _decide(governance, "search") == "ALLOW"
-        # The 11th real call is the one that trips the 10/min limit.
-        per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
-        assert per_turn._evaluate("search", "{}").action == "DENY"
+    async def test_two_policies_with_the_same_pattern_do_not_double_count(self):
+        def db_read(key: str = "") -> str:
+            return "row"
 
-    def test_two_policies_with_same_tool_pattern_each_count_once(self):
         governance = TealTigerMiddleware(
             policies=[
-                GovernancePolicy.rate_limit(4, window_seconds=60, tool="db_*"),
-                GovernancePolicy.rate_limit(50, window_seconds=3600, tool="db_*"),
+                GovernancePolicy.rate_limit(3, window_seconds=60, tool="db_*", on_exceeded="deny"),
+                GovernancePolicy.rate_limit(50, window_seconds=3600, tool="db_*", on_exceeded="deny"),
             ],
             mode=GovernanceMode.ENFORCE,
         )
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                *[ToolCallEvent(name="db_read", arguments="{}") for _ in range(4)],
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[db_read],
+            middleware=[governance],
+        )
 
-        for _ in range(4):
-            assert _decide(governance, "db_read") == "ALLOW"
+        await agent.ask("read the db four times")
 
-        # Four real calls -> four timestamps for each db_* policy, not eight.
-        assert len(governance._call_history[0]) == 4
-        assert len(governance._call_history[1]) == 4
-        # The 4/min limit trips on the 5th real call, exactly at its threshold.
-        per_turn = governance(ToolCallEvent(name="db_write", arguments="{}"), _FakeContext())
-        assert per_turn._evaluate("db_write", "{}").action == "DENY"
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="DENY"),
+        ]
 
 
-class TestMixedWindowSharedScopePruning:
+@pytest.mark.asyncio
+class TestMixedWindowSharedScope:
     """Regression for PR #3246 review (discussion r3992565377): two rate_limit
     policies that share a tool scope but use different windows must not prune each
-    other's history. A short-window policy must never delete timestamps that a
-    longer-window policy sharing the same scope still needs, so the long window
-    keeps counting calls that have aged out of the short one. Because each policy
-    owns its own timestamp list (keyed by policy index), this holds regardless of
-    the order the policies are declared in.
+    other's history. A short-window policy must never drop timestamps the longer
+    window still needs, and the outcome must not depend on declaration order.
+
+    Both cases pace the calls past the short window so it never binds; the long
+    limit then denies the fourth call only if its own history survived intact.
     """
 
-    def _seed_aged_calls(self, governance: TealTigerMiddleware, hourly_index: int, count: int) -> None:
-        """Put `count` timestamps ~120s old into the hourly policy's own list.
-
-        120s is outside a 60s minute window but well inside a 3600s hour window,
-        so a correct hourly limit still counts them while the minute limit does not.
-        """
-        aged = [time.time() - 120] * count
-        governance._call_history[hourly_index] = list(aged)
-
-    def test_hourly_limit_still_counts_calls_aged_out_of_the_minute_window(self):
-        # index 0 = 10/min, index 1 = 100/hour, both global (shared scope).
+    async def test_the_long_window_still_counts_calls_the_short_one_forgot(self):
         governance = TealTigerMiddleware(
             policies=[
-                GovernancePolicy.rate_limit(10, window_seconds=60),
-                GovernancePolicy.rate_limit(100, window_seconds=3600),
+                GovernancePolicy.rate_limit(2, window_seconds=0.05, on_exceeded="deny"),
+                GovernancePolicy.rate_limit(3, window_seconds=60, on_exceeded="deny"),
             ],
             mode=GovernanceMode.ENFORCE,
         )
-        # 100 calls happened ~120s ago: gone from the 60s window, still in the hour.
-        self._seed_aged_calls(governance, hourly_index=1, count=100)
 
-        # The minute limit has forgotten them (its own list is empty), so from the
-        # minute's perspective the next call is fine...
-        per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
-        # ...but the hourly limit is already at 100/100 and must deny — proving the
-        # minute policy did not destructively prune the hourly policy's history.
-        decision = per_turn._evaluate("search", "{}")
-        assert decision.action == "DENY"
-        assert "RATE_LIMIT_EXCEEDED" in decision.reason_codes
+        await self._run(governance)
 
-    def test_minute_limit_refills_while_hourly_keeps_the_aged_calls(self):
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="DENY", reason_codes=["RATE_LIMIT_EXCEEDED"]),
+        ]
+
+    async def test_the_outcome_does_not_depend_on_policy_order(self):
         governance = TealTigerMiddleware(
             policies=[
-                GovernancePolicy.rate_limit(10, window_seconds=60),
-                GovernancePolicy.rate_limit(100, window_seconds=3600),
+                GovernancePolicy.rate_limit(3, window_seconds=60, on_exceeded="deny"),
+                GovernancePolicy.rate_limit(2, window_seconds=0.05, on_exceeded="deny"),
             ],
             mode=GovernanceMode.ENFORCE,
         )
-        # 50 aged calls: inside the hour, outside the minute. Under the hourly cap.
-        self._seed_aged_calls(governance, hourly_index=1, count=50)
 
-        # The minute window is empty, so up to 10 fresh calls flow through...
-        for _ in range(10):
-            assert _decide(governance, "search") == "ALLOW"
-        # ...and the hourly limit has been counting them on top of the 50 aged ones.
-        assert len(governance._call_history[1]) == 60
-        # The 11th fresh call trips the minute limit (10 recent), not the hour.
-        per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
-        assert per_turn._evaluate("search", "{}").action == "DENY"
+        await self._run(governance)
 
-    def test_behavior_is_independent_of_policy_order(self):
-        # Same two limits, declared hour-first: index 0 = 100/hour, index 1 = 10/min.
-        governance = TealTigerMiddleware(
-            policies=[
-                GovernancePolicy.rate_limit(100, window_seconds=3600),
-                GovernancePolicy.rate_limit(10, window_seconds=60),
-            ],
-            mode=GovernanceMode.ENFORCE,
+        assert governance.decisions == [
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="ALLOW"),
+            IsPartialDataclass(action="DENY", reason_codes=["RATE_LIMIT_EXCEEDED"]),
+        ]
+
+    @staticmethod
+    async def _run(governance: TealTigerMiddleware) -> None:
+        async def slow(query: str = "") -> str:
+            # Longer than the short window, so that limit never binds.
+            await asyncio.sleep(0.08)
+            return "results"
+
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                *[ToolCallEvent(name="slow", arguments="{}") for _ in range(4)],
+                "Done.",
+                raise_tool_errors=False,
+            ),
+            tools=[slow],
+            middleware=[governance],
         )
-        # Age 100 calls out of the minute window but keep them in the hour; the
-        # hourly policy is index 0 in this ordering.
-        governance._call_history[0] = [time.time() - 120] * 100
-
-        # The minute limit (index 1) has an empty list, but the hourly limit is at
-        # its cap and must still deny — order does not change the outcome.
-        per_turn = governance(ToolCallEvent(name="search", arguments="{}"), _FakeContext())
-        decision = per_turn._evaluate("search", "{}")
-        assert decision.action == "DENY"
-        assert "RATE_LIMIT_EXCEEDED" in decision.reason_codes
+        await agent.ask("call slowly four times")

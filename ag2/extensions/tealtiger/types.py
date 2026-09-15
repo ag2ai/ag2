@@ -380,15 +380,17 @@ class GovernancePolicy:
         max_calls: int,
         window_seconds: float,
         tool: str | None = None,
+        on_exceeded: str = "wait",
+        max_wait_seconds: float | None = None,
     ) -> "GovernancePolicy":
-        """Deny tool calls once more than `max_calls` occur within a rolling window.
+        """Cap how fast tool calls happen within a rolling window.
 
-        Where `cost_limit` caps cumulative *spend*, this caps call *frequency* —
-        the defence against a runaway loop that keeps invoking the same tool (or
-        any tool) and burns budget, rate limits, or side effects before a cost
-        ceiling would even notice. It is a sliding window: only the calls in the
-        last `window_seconds` count, so the limit refills continuously rather than
-        resetting on a fixed boundary.
+        Where `cost_limit` caps how *many* calls a session may make in total, this
+        caps how *fast* they happen and then lets the allowance return — the
+        defence against a runaway loop that keeps invoking the same tool and burns
+        provider rate limits, side effects, and budget. It is a sliding window:
+        only the calls in the last `window_seconds` count, so the limit refills
+        continuously rather than resetting on a fixed boundary.
 
         Scope is set by `tool`:
 
@@ -402,13 +404,27 @@ class GovernancePolicy:
           family together.
 
         Combine several: a global ceiling plus tighter per-tool caps all apply,
-        and the first one exceeded denies the call.
+        and an over-limit call waits for (or is refused by) the first one it trips.
+
+        What happens at the limit is `on_exceeded`:
+
+        - `"wait"` (default) — **throttle**: the call is held until the window has
+          room, then runs. This is what actually slows a runaway loop down. A
+          refusal does not: it returns to the model as a tool error, and a looping
+          agent just calls again, spending a model round-trip per refusal and
+          burning tokens faster than the tool calls it replaced.
+        - `"deny"` — **refuse**: block the call with `RATE_LIMIT_EXCEEDED` instead
+          of delaying it. Right where a late call is worse than no call, or where
+          stalling the turn is unacceptable.
+
+        A wait is bounded by `max_wait_seconds`; a call that would wait longer is
+        denied rather than held, so the turn cannot stall indefinitely.
 
         Example::
 
-            GovernancePolicy.rate_limit(30, 60)  # 30 tool calls / minute, total
-            GovernancePolicy.rate_limit(5, 60, tool="send_email")  # 5 emails / minute
-            GovernancePolicy.rate_limit(100, 3600, tool="api_*")  # 100 api_* calls / hour
+            GovernancePolicy.rate_limit(30, 60)  # throttle to 30 tool calls / minute
+            GovernancePolicy.rate_limit(5, 60, tool="send_email", on_exceeded="deny")
+            GovernancePolicy.rate_limit(100, 3600, tool="api_*", max_wait_seconds=30)
 
         Args:
             max_calls: Maximum calls permitted within the window. Must be a
@@ -417,12 +433,18 @@ class GovernancePolicy:
                 positive number.
             tool: Tool name or `fnmatch` pattern to scope the limit to. Omit for a
                 global limit across all tools.
+            on_exceeded: `"wait"` to hold an over-limit call until the window has
+                room, `"deny"` to refuse it outright.
+            max_wait_seconds: Longest a single call may be held under `"wait"`.
+                Defaults to `window_seconds`, the most a sliding window can ever
+                need. A call facing a longer wait is denied instead. Ignored when
+                `on_exceeded="deny"`.
 
         Raises:
             ValueError: If `max_calls` is not a positive integer, `window_seconds`
-                is not a positive number, or `tool` is given but empty — any of
-                which would leave a policy that limits nothing or can never allow a
-                call.
+                or `max_wait_seconds` is not a positive number, `tool` is given but
+                empty, or `on_exceeded` is not `"wait"`/`"deny"` — any of which
+                would leave a policy that limits nothing or can never allow a call.
         """
         # bool is an int subclass; a True max_calls is almost certainly a mistake.
         if isinstance(max_calls, bool) or not isinstance(max_calls, int) or max_calls <= 0:
@@ -431,10 +453,26 @@ class GovernancePolicy:
             raise ValueError(f"`window_seconds` must be a positive number, got {window_seconds!r}.")
         if tool is not None and not tool:
             raise ValueError("`tool` must not be empty; omit it for a global rate limit.")
+        if on_exceeded not in ("wait", "deny"):
+            raise ValueError(f"`on_exceeded` must be 'wait' or 'deny', got {on_exceeded!r}.")
+        if max_wait_seconds is not None and (
+            isinstance(max_wait_seconds, bool)
+            or not isinstance(max_wait_seconds, (int, float))
+            or max_wait_seconds <= 0
+        ):
+            raise ValueError(f"`max_wait_seconds` must be a positive number, got {max_wait_seconds!r}.")
 
         return cls(
             type="rate_limit",
-            config={"max_calls": max_calls, "window_seconds": float(window_seconds), "tool": tool},
+            config={
+                "max_calls": max_calls,
+                "window_seconds": float(window_seconds),
+                "tool": tool,
+                "on_exceeded": on_exceeded,
+                # None means "as long as the window itself" — the most a sliding
+                # window can ever need before a slot frees.
+                "max_wait_seconds": float(max_wait_seconds) if max_wait_seconds is not None else float(window_seconds),
+            },
         )
 
     @classmethod
