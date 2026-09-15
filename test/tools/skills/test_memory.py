@@ -13,6 +13,7 @@ from ag2 import Agent, Context, Depends, Variable
 from ag2.events import ToolCallEvent, ToolResultsEvent
 from ag2.exceptions import ToolNotFoundError
 from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.final.function_tool import FunctionTool
 from ag2.tools.skills import MemoryRuntime, MemorySkill, SkillPlugin
 
 
@@ -46,6 +47,117 @@ class TestCatalog:
         await agent.ask("hi")
 
         assert "Say hello warmly." in _tool_result(tracking)
+
+
+@pytest.mark.asyncio
+class TestDynamicInstructions:
+    async def test_callable_body_renders_against_the_live_run(self) -> None:
+        # The whole point of an async, context-aware read: the body is produced
+        # per read and resolves dependencies like a resource or a script does.
+        async def body(region: Annotated[str, Variable("region")]) -> str:
+            return f"Deploy to {region}."
+
+        skill = MemorySkill(name="deploy", description="d", instructions=body)
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="deploy"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi", variables={"region": "eu-west-1"})
+
+        assert "Deploy to eu-west-1." in _tool_result(tracking)
+
+    async def test_decorator_registers_the_body(self) -> None:
+        skill = MemorySkill(name="greeter", description="d")
+
+        @skill.instructions
+        def body() -> str:
+            return "Decorated body."
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="greeter"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        assert "Decorated body." in _tool_result(tracking)
+
+    async def test_decorator_overrides_constructor_instructions(self) -> None:
+        skill = MemorySkill(name="s", description="d", instructions="static body")
+
+        @skill.instructions
+        def body() -> str:
+            return "dynamic body"
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        content = _tool_result(tracking)
+        assert "dynamic body" in content
+        assert "static body" not in content
+
+    async def test_body_is_rendered_on_every_read(self) -> None:
+        calls = 0
+
+        def body() -> str:
+            nonlocal calls
+            calls += 1
+            return f"read #{calls}"
+
+        skill = MemorySkill(name="s", description="d", instructions=body)
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), _call("load_skill", name="s"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        assert "read #1" in _tool_result(tracking, 1)
+        assert "read #2" in _tool_result(tracking, 2)
+
+    async def test_callable_body_keeps_resource_and_script_blocks(self) -> None:
+        skill = MemorySkill(name="s", description="d", instructions=lambda: "dynamic body")
+
+        @skill.resource
+        def roster() -> str:
+            return "Alice"
+
+        @skill.script
+        def go(text: str) -> str:
+            """Do the thing."""
+            return text
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        content = _tool_result(tracking)
+        assert "dynamic body" in content
+        assert "<file>roster</file>" in content
+        assert '<script name="go" description="Do the thing.">' in content
+
+
+class TestInstructionsRegistration:
+    # Registration is pure bookkeeping on the skill — no agent needed.
+    def test_decorator_returns_the_function_unchanged(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.instructions
+        def body() -> str:
+            return "text"
+
+        assert body() == "text"
+
+    def test_called_decorator_form_registers(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.instructions()
+        def body() -> str:
+            return "text"
+
+        assert isinstance(skill.get_instructions(), FunctionTool)
+
+    def test_non_string_non_callable_rejected(self) -> None:
+        with pytest.raises(TypeError, match="must be a string or a callable"):
+            MemorySkill(name="s", description="d", instructions=42)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

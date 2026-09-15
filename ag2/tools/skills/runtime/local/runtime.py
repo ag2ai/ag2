@@ -98,8 +98,11 @@ class LocalRuntime(SkillRuntime):
     def skills(self) -> list[Skill]:
         return self._loader.discover()
 
-    def read(self, name: str) -> str:
+    async def read(self, name: str, context: "ConversationContext") -> str:
         """Return the model-ready content for *name* (wrapped SKILL.md body).
+
+        *context* is part of the runtime protocol (used by callable-backed runtimes
+        to render a dynamic body); a filesystem read ignores it.
 
         Raises ``SkillNotFoundError`` (via the loader) when *name* is unknown.
         """
