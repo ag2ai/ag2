@@ -59,18 +59,10 @@ class MemorySkill:
     ``SkillsToolkit`` and it is wrapped automatically.
     """
 
-    __slots__ = (
-        "name",
-        "description",
-        "version",
-        "_instructions_text",
-        "_instructions_tool",
-        "_resources",
-        "_scripts",
-    )
+    __slots__ = ("name", "description", "version", "_instructions", "_resources", "_scripts")
 
-    _instructions_text: str | None
-    _instructions_tool: FunctionTool | None
+    # Static text, or the FunctionTool that renders it — never both.
+    _instructions: "str | FunctionTool"
 
     def __init__(
         self,
@@ -112,35 +104,18 @@ class MemorySkill:
 
         def register(body: "str | Callable[..., Any]") -> "str | Callable[..., Any]":
             if isinstance(body, str):
-                self._instructions_text = body
-                self._instructions_tool = None
+                self._instructions = body
             elif callable(body):
                 # Wrap eagerly, so the tool can never drift from the value it renders
                 # and a bad signature surfaces here rather than at load_skill. The
                 # explicit name keeps the wrap working for callables without
                 # ``__name__`` (a partial, a callable object) and is never surfaced.
-                self._instructions_text = None
-                self._instructions_tool = tool(body, name=f"{self.name}_instructions")
+                self._instructions = tool(body, name=f"{self.name}_instructions")
             else:
                 raise TypeError(f"instructions must be a string or a callable, got {type(body).__name__}")
             return body
 
         return register(value) if value is not None else register
-
-    @property
-    def instructions_text(self) -> str | None:
-        """The body when it is static text; ``None`` when a callable renders it."""
-        return self._instructions_text
-
-    @property
-    def instructions_tool(self) -> FunctionTool | None:
-        """The wrapped instructions callable, or ``None`` when the body is static.
-
-        Wrapping with ``tool()`` puts a dynamic body on the same
-        FastDepends-validated invocation path as a resource or a script, so it can
-        use ``Context`` / ``Variable`` / ``Inject`` dependency injection.
-        """
-        return self._instructions_tool
 
     @overload
     def resource(self, func: Callable[P, T]) -> Callable[P, T]: ...
@@ -218,6 +193,15 @@ class MemorySkill:
             resources=tuple(Resource(name=r.name) for r in sorted(self._resources.values(), key=lambda r: r.name)),
             location=None,
         )
+
+    def get_instructions(self) -> "str | FunctionTool":
+        """The body: static text, or the ``FunctionTool`` that renders it per read.
+
+        Wrapping a callable body with ``tool()`` puts it on the same
+        FastDepends-validated invocation path as a resource or a script, so it can
+        use ``Context`` / ``Variable`` / ``Inject`` dependency injection.
+        """
+        return self._instructions
 
     def get_resource(self, resource: str) -> "_MemoryResource | None":
         return self._resources.get(resource)

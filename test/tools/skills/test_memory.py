@@ -13,6 +13,7 @@ from ag2 import Agent, Context, Depends, Variable
 from ag2.events import ToolCallEvent, ToolResultsEvent
 from ag2.exceptions import ToolNotFoundError
 from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.final.function_tool import FunctionTool
 from ag2.tools.skills import MemoryRuntime, MemorySkill, SkillPlugin
 
 
@@ -167,12 +168,10 @@ class TestInstructionsValidation:
 
     def test_setting_a_callable_after_construction_rewraps(self) -> None:
         skill = MemorySkill(name="s", description="d", instructions="static")
-        assert skill.instructions_text == "static"
-        assert skill.instructions_tool is None
+        assert skill.get_instructions() == "static"
 
         skill.instructions(lambda: "dynamic")
-        assert skill.instructions_text is None
-        assert skill.instructions_tool is not None
+        assert isinstance(skill.get_instructions(), FunctionTool)
 
     def test_decorator_returns_the_function_unchanged(self) -> None:
         skill = MemorySkill(name="s", description="d")
@@ -182,7 +181,7 @@ class TestInstructionsValidation:
             return "text"
 
         assert body() == "text"  # still an ordinary callable
-        assert skill.instructions_tool is not None
+        assert isinstance(skill.get_instructions(), FunctionTool)
 
     def test_non_string_non_callable_rejected_by_the_decorator(self) -> None:
         skill = MemorySkill(name="s", description="d")

@@ -140,10 +140,10 @@ async def _render_instructions(skill: MemorySkill, context: "ConversationContext
     A dynamic body runs on every read through the same ``FunctionTool`` path as a
     resource, so it sees the live conversation and can use dependency injection.
     """
-    entry = skill.instructions_tool
-    if entry is None:
-        return skill.instructions_text or ""
-    return _to_text(await _run_tool(entry, {}, context))
+    body = skill.get_instructions()
+    if isinstance(body, str):
+        return body
+    return _to_text(await _run_tool(body, {}, context))
 
 
 def _wrap_memory_content(skill: MemorySkill, instructions: str) -> str:

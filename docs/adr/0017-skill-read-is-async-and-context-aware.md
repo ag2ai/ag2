@@ -58,9 +58,13 @@ every read through the same `FunctionTool` path as a resource.**
 
   It accepts a string too (`skill.instructions("text")`), validates (a non-`str`,
   non-callable raises `TypeError`), and re-wraps on every set, so the cached
-  `FunctionTool` can never drift from the value it renders. The two read
-  accessors — `instructions_text` and `instructions_tool` — are what the runtime
-  reads; exactly one is non-`None`.
+  `FunctionTool` can never drift from the value it renders.
+
+- **One slot, one reader.** The body is stored as `str | FunctionTool` in a single
+  slot and read back by `get_instructions()`, alongside the existing
+  `get_resource()` / `get_script()`. Storing the two forms in two fields would put
+  an "exactly one is non-`None`" invariant on the class that the sum type makes
+  structurally impossible.
 - **Only the body is dynamic.** The catalog entry — `name` and `description` in
   `<available_skills>` — stays the construction-time snapshot 0005 established.
 
@@ -85,7 +89,7 @@ every read through the same `FunctionTool` path as a resource.**
   should be visible, not silently truncated mid-sentence.
 
 - **`skill.instructions` is no longer readable as a string** — it is now a bound
-  method, and the value is read through `instructions_text` / `instructions_tool`.
+  method, and the value is read through `get_instructions()`.
   This is the price of spelling the decorator `@skill.instructions`, which is the
   spelling that matches `@skill.resource` and `@skill.script`; a property and a
   decorator cannot share one name without a hybrid str-subclass-that-is-callable,
