@@ -27,10 +27,9 @@ class MemoryRuntime(SkillRuntime):
     """RAM-backed runtime owning code-defined :class:`MemorySkill` instances.
 
     Reads instructions and Resources straight from memory and runs Scripts as
-    in-process callables. A skill whose ``instructions`` is a callable has its
-    body rendered on every read, so it may reflect the live conversation.
-    Read-only: it owns no installable storage, so ``install`` / ``remove`` /
-    ``lock_dir`` raise.
+    in-process callables. A skill with a callable body has it rendered on every
+    read, so the instructions can reflect the live conversation. Read-only: it
+    owns no installable storage, so ``install`` / ``remove`` / ``lock_dir`` raise.
 
     Holds one or more skills::
 
@@ -137,7 +136,7 @@ def _to_text(value: Any) -> str:
 async def _render_instructions(skill: MemorySkill, context: "ConversationContext") -> str:
     """Return the skill body — static text, or the result of its callable.
 
-    A dynamic body runs on every read through the same ``FunctionTool`` path as a
+    A callable body runs on every read through the same ``FunctionTool`` path as a
     resource, so it sees the live conversation and can use dependency injection.
     """
     body = skill.get_instructions()

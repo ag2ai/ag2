@@ -51,29 +51,19 @@ class TestCatalog:
 
 @pytest.mark.asyncio
 class TestDynamicInstructions:
-    async def test_callable_instructions_rendered_on_load(self) -> None:
-        def body() -> str:
-            return "Say hello warmly."
+    async def test_callable_body_renders_against_the_live_run(self) -> None:
+        # The whole point of an async, context-aware read: the body is produced
+        # per read and resolves dependencies like a resource or a script does.
+        async def body(region: Annotated[str, Variable("region")]) -> str:
+            return f"Deploy to {region}."
 
-        skill = MemorySkill(name="greeter", description="d", instructions=body)
-        tracking = TrackingConfig(TestConfig(_call("load_skill", name="greeter"), "done"))
+        skill = MemorySkill(name="deploy", description="d", instructions=body)
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="deploy"), "done"))
         agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
 
-        await agent.ask("hi")
+        await agent.ask("hi", variables={"region": "eu-west-1"})
 
-        assert "Say hello warmly." in _tool_result(tracking)
-
-    async def test_async_callable_instructions(self) -> None:
-        async def body() -> str:
-            return "Async body."
-
-        skill = MemorySkill(name="s", description="d", instructions=body)
-        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
-        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
-
-        await agent.ask("hi")
-
-        assert "Async body." in _tool_result(tracking)
+        assert "Deploy to eu-west-1." in _tool_result(tracking)
 
     async def test_decorator_registers_the_body(self) -> None:
         skill = MemorySkill(name="greeter", description="d")
@@ -88,20 +78,6 @@ class TestDynamicInstructions:
         await agent.ask("hi")
 
         assert "Decorated body." in _tool_result(tracking)
-
-    async def test_decorator_called_form(self) -> None:
-        skill = MemorySkill(name="greeter", description="d")
-
-        @skill.instructions()
-        async def body(region: Annotated[str, Variable("region")]) -> str:
-            return f"Deploy to {region}."
-
-        tracking = TrackingConfig(TestConfig(_call("load_skill", name="greeter"), "done"))
-        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
-
-        await agent.ask("hi", variables={"region": "eu-west-1"})
-
-        assert "Deploy to eu-west-1." in _tool_result(tracking)
 
     async def test_decorator_overrides_constructor_instructions(self) -> None:
         skill = MemorySkill(name="s", description="d", instructions="static body")
@@ -119,8 +95,7 @@ class TestDynamicInstructions:
         assert "dynamic body" in content
         assert "static body" not in content
 
-    async def test_instructions_rerendered_on_each_load(self) -> None:
-        # The point of a callable body: it is not a construction-time snapshot.
+    async def test_body_is_rendered_on_every_read(self) -> None:
         calls = 0
 
         def body() -> str:
@@ -137,7 +112,7 @@ class TestDynamicInstructions:
         assert "read #1" in _tool_result(tracking, 1)
         assert "read #2" in _tool_result(tracking, 2)
 
-    async def test_dynamic_body_keeps_resource_and_script_blocks(self) -> None:
+    async def test_callable_body_keeps_resource_and_script_blocks(self) -> None:
         skill = MemorySkill(name="s", description="d", instructions=lambda: "dynamic body")
 
         @skill.resource
@@ -160,19 +135,8 @@ class TestDynamicInstructions:
         assert '<script name="go" description="Do the thing.">' in content
 
 
-class TestInstructionsValidation:
-    # Sync: rejection happens at construction, with no agent involved.
-    def test_non_string_non_callable_instructions_rejected(self) -> None:
-        with pytest.raises(TypeError, match="must be a string or a callable"):
-            MemorySkill(name="s", description="d", instructions=42)  # type: ignore[arg-type]
-
-    def test_setting_a_callable_after_construction_rewraps(self) -> None:
-        skill = MemorySkill(name="s", description="d", instructions="static")
-        assert skill.get_instructions() == "static"
-
-        skill.instructions(lambda: "dynamic")
-        assert isinstance(skill.get_instructions(), FunctionTool)
-
+class TestInstructionsRegistration:
+    # Registration is pure bookkeeping on the skill — no agent needed.
     def test_decorator_returns_the_function_unchanged(self) -> None:
         skill = MemorySkill(name="s", description="d")
 
@@ -180,13 +144,20 @@ class TestInstructionsValidation:
         def body() -> str:
             return "text"
 
-        assert body() == "text"  # still an ordinary callable
+        assert body() == "text"
+
+    def test_called_decorator_form_registers(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.instructions()
+        def body() -> str:
+            return "text"
+
         assert isinstance(skill.get_instructions(), FunctionTool)
 
-    def test_non_string_non_callable_rejected_by_the_decorator(self) -> None:
-        skill = MemorySkill(name="s", description="d")
+    def test_non_string_non_callable_rejected(self) -> None:
         with pytest.raises(TypeError, match="must be a string or a callable"):
-            skill.instructions(42)  # type: ignore[call-overload]
+            MemorySkill(name="s", description="d", instructions=42)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -390,30 +361,6 @@ class TestDependencyInjection:
         await agent.ask("hi", variables={"region": "eu-west-1"})
 
         assert _tool_result(tracking) == "eu-west-1"
-
-    async def test_instructions_resolve_variable(self) -> None:
-        def body(region: Annotated[str, Variable("region")]) -> str:
-            return f"Deploy to {region}."
-
-        skill = MemorySkill(name="s", description="d", instructions=body)
-        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
-        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
-
-        await agent.ask("hi", variables={"region": "eu-west-1"})
-
-        assert "Deploy to eu-west-1." in _tool_result(tracking)
-
-    async def test_instructions_receive_context(self) -> None:
-        def body(ctx: Context) -> str:  # type: ignore[valid-type]
-            return f"Body for {ctx.variables['k']}"
-
-        skill = MemorySkill(name="s", description="d", instructions=body)
-        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
-        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
-
-        await agent.ask("hi", variables={"k": "v"})
-
-        assert "Body for v" in _tool_result(tracking)
 
     async def test_script_resolves_depends_via_agent_provider(self) -> None:
         # The agent's dependency provider flows through context.dependency_provider,

@@ -37,10 +37,9 @@ class MemorySkill:
         def convert(value: float, factor: float) -> str:
             return str(value * factor)
 
-    The body may be a plain string or a **callable**, in which case it is
-    rendered on every ``load_skill`` instead of being fixed at construction.
-    Pass it to the constructor, or register it with the ``@skill.instructions``
-    decorator (which wins over a constructor argument)::
+    The body is a string used as-is, or a callable rendered on every
+    ``load_skill``. Pass it to the constructor, or register it with the
+    ``@skill.instructions`` decorator, which takes precedence::
 
         skill = MemorySkill(name="deploy", description="Deploy the service")
 
