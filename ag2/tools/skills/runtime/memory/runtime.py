@@ -142,7 +142,7 @@ async def _render_instructions(skill: MemorySkill, context: "ConversationContext
     """
     entry = skill.instructions_tool
     if entry is None:
-        return str(skill.instructions)
+        return skill.instructions_text or ""
     return _to_text(await _run_tool(entry, {}, context))
 
 

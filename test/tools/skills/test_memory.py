@@ -74,6 +74,50 @@ class TestDynamicInstructions:
 
         assert "Async body." in _tool_result(tracking)
 
+    async def test_decorator_registers_the_body(self) -> None:
+        skill = MemorySkill(name="greeter", description="d")
+
+        @skill.instructions
+        def body() -> str:
+            return "Decorated body."
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="greeter"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        assert "Decorated body." in _tool_result(tracking)
+
+    async def test_decorator_called_form(self) -> None:
+        skill = MemorySkill(name="greeter", description="d")
+
+        @skill.instructions()
+        async def body(region: Annotated[str, Variable("region")]) -> str:
+            return f"Deploy to {region}."
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="greeter"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi", variables={"region": "eu-west-1"})
+
+        assert "Deploy to eu-west-1." in _tool_result(tracking)
+
+    async def test_decorator_overrides_constructor_instructions(self) -> None:
+        skill = MemorySkill(name="s", description="d", instructions="static body")
+
+        @skill.instructions
+        def body() -> str:
+            return "dynamic body"
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        content = _tool_result(tracking)
+        assert "dynamic body" in content
+        assert "static body" not in content
+
     async def test_instructions_rerendered_on_each_load(self) -> None:
         # The point of a callable body: it is not a construction-time snapshot.
         calls = 0
@@ -121,12 +165,29 @@ class TestInstructionsValidation:
         with pytest.raises(TypeError, match="must be a string or a callable"):
             MemorySkill(name="s", description="d", instructions=42)  # type: ignore[arg-type]
 
-    def test_assigning_a_callable_after_construction_rewraps(self) -> None:
+    def test_setting_a_callable_after_construction_rewraps(self) -> None:
         skill = MemorySkill(name="s", description="d", instructions="static")
+        assert skill.instructions_text == "static"
         assert skill.instructions_tool is None
 
-        skill.instructions = lambda: "dynamic"
+        skill.instructions(lambda: "dynamic")
+        assert skill.instructions_text is None
         assert skill.instructions_tool is not None
+
+    def test_decorator_returns_the_function_unchanged(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.instructions
+        def body() -> str:
+            return "text"
+
+        assert body() == "text"  # still an ordinary callable
+        assert skill.instructions_tool is not None
+
+    def test_non_string_non_callable_rejected_by_the_decorator(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+        with pytest.raises(TypeError, match="must be a string or a callable"):
+            skill.instructions(42)  # type: ignore[call-overload]
 
 
 @pytest.mark.asyncio

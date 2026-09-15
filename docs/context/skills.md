@@ -43,9 +43,10 @@ JSON-schema is disclosed inside the loaded skill content.
 _Avoid_: code skill, inline skill (informal).
 
 **Dynamic body**:
-A MemorySkill whose `instructions` is a callable rather than a string. It is
-rendered on every `load_skill` — through the same `FunctionTool` path as a
-Resource, so it can use `Context` / `Variable` / `Inject` dependency injection.
+A MemorySkill whose body is a callable rather than a string — passed as
+`instructions=` or registered with `@skill.instructions`. It is rendered on every
+`load_skill` — through the same `FunctionTool` path as a Resource, so it can use
+`Context` / `Variable` / `Inject` dependency injection.
 Only the **body** is dynamic: a skill's catalog entry (name + description) stays
 a construction-time snapshot, kept in lockstep with the `Literal` enum of skill
 names on the activation tools.

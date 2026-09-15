@@ -37,15 +37,17 @@ class MemorySkill:
         def convert(value: float, factor: float) -> str:
             return str(value * factor)
 
-    ``instructions`` may be a plain string or a **callable**, in which case the
-    body is rendered on every ``load_skill`` instead of being fixed at
-    construction::
+    The body may be a plain string or a **callable**, in which case it is
+    rendered on every ``load_skill`` instead of being fixed at construction.
+    Pass it to the constructor, or register it with the ``@skill.instructions``
+    decorator (which wins over a constructor argument)::
 
+        skill = MemorySkill(name="deploy", description="Deploy the service")
+
+
+        @skill.instructions
         async def body(region: Annotated[str, Variable("region")]) -> str:
             return f"Deploy to {region}."
-
-
-        skill = MemorySkill(name="deploy", description="...", instructions=body)
 
     A Resource callable runs every read (so it may return live data). A Script
     callable runs in-process when invoked via ``run_skill_script``; its JSON
@@ -57,7 +59,18 @@ class MemorySkill:
     ``SkillsToolkit`` and it is wrapped automatically.
     """
 
-    __slots__ = ("name", "description", "version", "_instructions", "_instructions_tool", "_resources", "_scripts")
+    __slots__ = (
+        "name",
+        "description",
+        "version",
+        "_instructions_text",
+        "_instructions_tool",
+        "_resources",
+        "_scripts",
+    )
+
+    _instructions_text: str | None
+    _instructions_tool: FunctionTool | None
 
     def __init__(
         self,
@@ -70,25 +83,54 @@ class MemorySkill:
         self.name = name
         self.description = description
         self.version = version
-        self.instructions = instructions
         self._resources: dict[str, _MemoryResource] = {}
         self._scripts: dict[str, _MemoryScript] = {}
+        self.instructions(instructions)
+
+    @overload
+    def instructions(self, value: Callable[P, T]) -> Callable[P, T]: ...
+
+    @overload
+    def instructions(self, value: str) -> str: ...
+
+    @overload
+    def instructions(self, value: None = None) -> Callable[[Callable[P, T]], Callable[P, T]]: ...
+
+    def instructions(self, value: "str | Callable[..., Any] | None" = None) -> Any:
+        """Set the skill body — static text, or a callable that renders it.
+
+        Usable as a decorator (``@skill.instructions``, bare or called) or as a
+        plain setter (``skill.instructions("text")``). Returns its argument
+        unchanged, so a decorated function stays callable in its own right::
+
+            @skill.instructions
+            async def body(region: Annotated[str, Variable("region")]) -> str:
+                return f"Deploy to {region}."
+
+        A callable body is rendered on every read; a string is used as-is.
+        """
+
+        def register(body: "str | Callable[..., Any]") -> "str | Callable[..., Any]":
+            if isinstance(body, str):
+                self._instructions_text = body
+                self._instructions_tool = None
+            elif callable(body):
+                # Wrap eagerly, so the tool can never drift from the value it renders
+                # and a bad signature surfaces here rather than at load_skill. The
+                # explicit name keeps the wrap working for callables without
+                # ``__name__`` (a partial, a callable object) and is never surfaced.
+                self._instructions_text = None
+                self._instructions_tool = tool(body, name=f"{self.name}_instructions")
+            else:
+                raise TypeError(f"instructions must be a string or a callable, got {type(body).__name__}")
+            return body
+
+        return register(value) if value is not None else register
 
     @property
-    def instructions(self) -> "Instructions":
-        """The skill body: either static text or the callable that renders it."""
-        return self._instructions
-
-    @instructions.setter
-    def instructions(self, value: "Instructions") -> None:
-        if not isinstance(value, str) and not callable(value):
-            raise TypeError(f"instructions must be a string or a callable, got {type(value).__name__}")
-        self._instructions = value
-        # Wrap eagerly, so the tool can never drift from the value it renders and
-        # a bad signature surfaces at definition time rather than at load_skill.
-        # An explicit name keeps the wrap working for callables without __name__
-        # (a partial, a callable object); the name itself is never surfaced.
-        self._instructions_tool = None if isinstance(value, str) else tool(value, name=f"{self.name}_instructions")
+    def instructions_text(self) -> str | None:
+        """The body when it is static text; ``None`` when a callable renders it."""
+        return self._instructions_text
 
     @property
     def instructions_tool(self) -> FunctionTool | None:

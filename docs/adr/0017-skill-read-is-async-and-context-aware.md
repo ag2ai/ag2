@@ -48,10 +48,19 @@ every read through the same `FunctionTool` path as a resource.**
   `CallModel.asolve` with `__ctx__` and the context's dependency provider — the
   same path resources and scripts already take. Sync callables run in a worker
   thread; `Depends` / `Variable` / `Inject` / `Context` all resolve.
-- **`instructions` is a property, not a plain attribute.** The setter validates
-  (a non-`str`, non-callable raises `TypeError`) and re-wraps, so the cached
-  `FunctionTool` can never drift from the value it renders — including on
-  post-construction assignment.
+- **`instructions` is a method that doubles as a decorator**, matching
+  `@skill.resource` and `@skill.script`:
+
+  ```python
+  @skill.instructions
+  async def body(region: Annotated[str, Variable("region")]) -> str: ...
+  ```
+
+  It accepts a string too (`skill.instructions("text")`), validates (a non-`str`,
+  non-callable raises `TypeError`), and re-wraps on every set, so the cached
+  `FunctionTool` can never drift from the value it renders. The two read
+  accessors — `instructions_text` and `instructions_tool` — are what the runtime
+  reads; exactly one is non-`None`.
 - **Only the body is dynamic.** The catalog entry — `name` and `description` in
   `<available_skills>` — stays the construction-time snapshot 0005 established.
 
@@ -75,11 +84,19 @@ every read through the same `FunctionTool` path as a resource.**
   arbitrary data pulled in at read time. A runaway body is an authoring bug that
   should be visible, not silently truncated mid-sentence.
 
-- **No `@skill.instructions` decorator, unlike `@skill.resource` and
-  `@skill.script`.** Those decorators exist because resources and scripts are
-  *keyed collections* needing a registration mechanism. The body is a single
-  value; a constructor argument is the idiomatic way to pass one, and adding a
-  second spelling would buy nothing but a naming collision with the attribute.
+- **`skill.instructions` is no longer readable as a string** — it is now a bound
+  method, and the value is read through `instructions_text` / `instructions_tool`.
+  This is the price of spelling the decorator `@skill.instructions`, which is the
+  spelling that matches `@skill.resource` and `@skill.script`; a property and a
+  decorator cannot share one name without a hybrid str-subclass-that-is-callable,
+  which is more magic than the ergonomics are worth. A constructor argument
+  (`MemorySkill(instructions=...)`) still works and remains the shortest form for
+  a static body; the decorator wins when both are given, since it runs later.
+
+- **The decorator takes no `name=` / `description=`, unlike the other two.** A
+  body has neither — it is one value, not an entry in a keyed collection. The
+  called form `@skill.instructions()` is accepted anyway, purely so the habit of
+  writing empty parens does not produce a baffling error.
 
 - **The body is re-rendered on every `load_skill`, with no caching.** That is the
   feature — a body that is a construction-time snapshot is what a plain string
