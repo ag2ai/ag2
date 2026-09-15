@@ -7,9 +7,8 @@
 Resumability is the one transport setting the in-memory ASGI transport cannot
 observe: it does not stream SSE, and the only way to see an event store working
 is to drop a stream part-way and reconnect with a ``Last-Event-ID``. So this
-module serves under ``uvicorn`` on a loopback port, as
-``test/tools/test_mcp_live_transport.py`` does, behind the same import guard —
-``uvicorn`` ships with ``ag2[acp]``, not ``ag2[mcp]``.
+module serves under ``uvicorn`` through :func:`test._serving.serving`, which
+carries the import guard — ``uvicorn`` ships with ``ag2[acp]``, not ``ag2[mcp]``.
 
 The guard is harmless here rather than silently skipping in CI: ``ag2[acp]``
 pulls in ``uvicorn``, the ``optionals`` dependency group installs ``ag2[acp]``,
@@ -18,27 +17,17 @@ and the test workflow installs that group.
 
 import asyncio
 import json
-from collections.abc import AsyncGenerator, Sequence
-from contextlib import asynccontextmanager
-from typing import Any
 
 import httpx
 import pytest
-
-pytest.importorskip("uvicorn")
-
-import uvicorn
 from mcp.server.streamable_http import EventCallback, EventId, EventMessage, EventStore, StreamId
 from mcp.types import JSONRPCMessage
-from typing_extensions import Self
 
-from ag2 import Agent, Context
-from ag2.config.client import LLMClient
-from ag2.config.config import ModelConfig
-from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse
+from ag2 import Agent
 from ag2.mcp import MCPServer, TransportConfig
+from test._serving import serving
 
-from ._helpers import JSON_HEADERS, initialize_request
+from ._helpers import JSON_HEADERS, ChunkConfig, initialize_request
 
 _HEADERS = {**JSON_HEADERS, "MCP-Protocol-Version": "2025-06-18"}
 """The endpoint is a Starlette ``Mount``, so requests carry the canonical trailing slash."""
@@ -79,54 +68,6 @@ class RecordingEventStore(EventStore):
         return stream_id
 
 
-class SlowChunkConfig(ModelConfig):
-    """Streams chunks with a pause between them, so a stream can be dropped mid-flight."""
-
-    def __init__(self, *chunks: str, pause: float) -> None:
-        self._chunks = chunks
-        self._pause = pause
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "SlowChunkClient":
-        return SlowChunkClient(self._chunks, self._pause)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class SlowChunkClient(LLMClient):
-    def __init__(self, chunks: Sequence[str], pause: float) -> None:
-        self._chunks = chunks
-        self._pause = pause
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        for chunk in self._chunks:
-            await context.send(ModelMessageChunk(chunk))
-            await asyncio.sleep(self._pause)
-        message = ModelMessage("".join(self._chunks))
-        await context.send(message)
-        return ModelResponse(message=message)
-
-
-@asynccontextmanager
-async def _serving(app: Any) -> AsyncGenerator[str]:
-    """Run ``app`` under ``uvicorn`` on a loopback port, yielding its base URL."""
-    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
-    # Bound here rather than inside `serve()`: the socket is already listening, so
-    # the port is known and a connection can be made without waiting for start-up.
-    sock = config.bind_socket()
-    uv = uvicorn.Server(config)
-    serving = asyncio.create_task(uv.serve(sockets=[sock]))
-    try:
-        yield f"http://127.0.0.1:{sock.getsockname()[1]}"
-    finally:
-        uv.should_exit = True
-        await serving
-        sock.close()
-
-
 async def _handshake(client: httpx.AsyncClient) -> dict[str, str]:
     """Open an MCP session, returning the headers every later request carries."""
     opened = await client.post(_ENDPOINT, headers=_HEADERS, json=initialize_request(version="2025-06-18"))
@@ -158,7 +99,8 @@ async def _progress_until_dropped(client: httpx.AsyncClient, headers: dict[str, 
 async def _progress_after(client: httpx.AsyncClient, headers: dict[str, str], *, expected: int) -> list[str]:
     """Reconnect and collect the progress notifications the replay delivers.
 
-    A resumed stream replays and then tails live, so it never ends on its own.
+    A resumed stream replays and then tails live, so it never ends on its own —
+    ``expected`` is what tells this when it has seen the whole replay.
     """
     delivered: list[str] = []
     async with client.stream("GET", _ENDPOINT, headers=headers) as stream:
@@ -182,10 +124,10 @@ async def test_a_dropped_stream_resumes_and_receives_what_it_missed() -> None:
     connection, and the server issues the other two with nobody listening.
     Reconnecting with a ``Last-Event-ID`` is what gets them delivered.
     """
-    agent = Agent("streamer", config=SlowChunkConfig("one ", "two ", "three ", pause=0.6))
+    agent = Agent("streamer", config=ChunkConfig("one ", "two ", "three ", pause=0.6))
     app = MCPServer(agent, transport=TransportConfig(event_store=RecordingEventStore()))
 
-    async with _serving(app) as base_url, httpx.AsyncClient(base_url=base_url, timeout=15.0) as client:
+    async with serving(app) as base_url, httpx.AsyncClient(base_url=base_url, timeout=15.0) as client:
         headers = await _handshake(client)
         call = asyncio.create_task(client.post(_ENDPOINT, headers=headers, json=_CALL))
 

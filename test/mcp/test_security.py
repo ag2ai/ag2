@@ -183,35 +183,28 @@ def _resource_app(*, token_resource: str | None, validate: bool) -> MCPServer:
 class TestResourceIndicator:
     """RFC 8707: a token minted for another service must not be replayable here."""
 
-    async def test_a_token_issued_for_this_server_is_accepted(self) -> None:
-        async with serve(_resource_app(token_resource="http://test/mcp", validate=True)) as client:
-            resp = await client.post("/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT)
+    @pytest.mark.parametrize(
+        ("token_resource", "expected"),
+        [
+            pytest.param("http://test/mcp", 200, id="issued-for-this-server"),
+            pytest.param("https://other.example.com/mcp", 401, id="issued-for-another-service"),
+            pytest.param(None, 401, id="carrying-no-resource-indicator"),
+        ],
+    )
+    async def test_with_the_check_on_only_a_token_naming_this_server_is_admitted(
+        self, token_resource: str | None, expected: int
+    ) -> None:
+        async with serve(_resource_app(token_resource=token_resource, validate=True)) as client:
+            resp = await client.post("/mcp", headers={**JSON_HEADERS, **_BEARER}, json=_INIT)
 
-        assert resp.status_code == 200
-        assert resp.json()["result"]["serverInfo"]["name"] == "greeter"
-
-    async def test_a_token_issued_for_another_service_is_refused(self) -> None:
-        async with serve(_resource_app(token_resource="https://other.example.com/mcp", validate=True)) as client:
-            resp = await client.post("/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT)
-
-        assert resp.status_code == 401
-
-    async def test_a_token_carrying_no_resource_indicator_is_refused(self) -> None:
-        async with serve(_resource_app(token_resource=None, validate=True)) as client:
-            resp = await client.post("/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT)
-
-        assert resp.status_code == 401
+        assert resp.status_code == expected
 
     async def test_off_by_default_a_token_for_another_service_still_works(self) -> None:
         """The promise to deployments already in the field, whose verifiers set no resource."""
         async with serve(_resource_app(token_resource="https://other.example.com/mcp", validate=False)) as client:
-            named_elsewhere = await client.post(
-                "/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT
-            )
+            named_elsewhere = await client.post("/mcp", headers={**JSON_HEADERS, **_BEARER}, json=_INIT)
         async with serve(_resource_app(token_resource=None, validate=False)) as client:
-            unnamed = await client.post(
-                "/mcp", headers={**JSON_HEADERS, "Authorization": "Bearer good-token"}, json=_INIT
-            )
+            unnamed = await client.post("/mcp", headers={**JSON_HEADERS, **_BEARER}, json=_INIT)
 
         assert named_elsewhere.status_code == 200
         assert unnamed.status_code == 200

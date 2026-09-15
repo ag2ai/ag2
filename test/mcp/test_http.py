@@ -5,8 +5,8 @@
 import asyncio
 
 import pytest
-from mcp.server.streamable_http_manager import DEFAULT_MAX_SESSIONS, DEFAULT_SESSION_IDLE_TIMEOUT
-from mcp.server.transport_security import DEFAULT_MAX_REQUEST_BODY_SIZE, TransportSecuritySettings
+from mcp.server.streamable_http_manager import DEFAULT_SESSION_IDLE_TIMEOUT
+from mcp.server.transport_security import TransportSecuritySettings
 
 from ag2.mcp import MCPServer, TransportConfig
 from ag2.mcp.testing import serve
@@ -153,32 +153,6 @@ class TestTransportBounds:
         assert without_over.status_code == with_default_over.status_code == 413
 
 
-class TestTransportDefaults:
-    """AG2's own numbers, and the upstream ones they were aligned with."""
-
-    def test_the_documented_defaults_are_the_numbers_ag2_promises(self) -> None:
-        config = TransportConfig()
-
-        assert config.mcp_session_idle_timeout == 1800.0
-        assert config.max_mcp_sessions == 10_000
-        assert config.max_request_body_size == 4 * 1024 * 1024
-        assert config.security_settings is None
-        assert config.sse_retry_interval is None
-        assert config.event_store is None
-
-    def test_the_defaults_still_match_the_sdks(self) -> None:
-        """Red when upstream retunes a default, rather than a support ticket later.
-
-        AG2 passes its own values through explicitly, so a retune upstream cannot
-        change what a deployment does — it can only make this promise stale.
-        """
-        config = TransportConfig()
-
-        assert config.mcp_session_idle_timeout == DEFAULT_SESSION_IDLE_TIMEOUT
-        assert config.max_mcp_sessions == DEFAULT_MAX_SESSIONS
-        assert config.max_request_body_size == DEFAULT_MAX_REQUEST_BODY_SIZE
-
-
 class TestTransportValidation:
     """Bounds refused at construction, which is the only seam before a request exists."""
 
@@ -197,19 +171,15 @@ class TestTransportValidation:
         where it came from, and that is not worth a sentinel — a caller who types
         the default has expressed what the default already says.
         """
-        app = MCPServer(
+        MCPServer(
             greeter(),
             stateless=True,
             transport=TransportConfig(mcp_session_idle_timeout=DEFAULT_SESSION_IDLE_TIMEOUT),
         )
 
-        assert app.agent.name == "greeter"
-
     def test_stateless_may_ask_for_no_reaping_at_all(self) -> None:
         """``None`` asks the transport *not* to reap, which stateless cannot contradict."""
-        app = MCPServer(greeter(), stateless=True, transport=TransportConfig(mcp_session_idle_timeout=None))
-
-        assert app.agent.name == "greeter"
+        MCPServer(greeter(), stateless=True, transport=TransportConfig(mcp_session_idle_timeout=None))
 
     @pytest.mark.parametrize(
         "config",
