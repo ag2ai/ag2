@@ -47,7 +47,7 @@ from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
 from .tools import MCP_REQUEST_CONTEXT_DEP, MCPExecutionContext, MCPFunctionTool, MetaFilter, ToolProvider
-from .transport import TransportConfig, _reaping_was_asked_for
+from .transport import TransportConfig
 
 if TYPE_CHECKING:
     from mcp.server.context import ServerRequestContext
@@ -561,7 +561,7 @@ class MCPServer:
         """
         # An instruction that cannot be carried out, so it is reported rather
         # than ignored — the diagnosis the SDK dropped in 2.2.0.
-        if stateless and _reaping_was_asked_for(transport.mcp_session_idle_timeout):
+        if stateless and transport.asks_to_reap:
             raise ValueError(
                 f"stateless=True issues no mcp-session-id, so transport.mcp_session_idle_timeout "
                 f"({transport.mcp_session_idle_timeout!r}) has no MCP session to reap. "

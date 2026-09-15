@@ -2,30 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from mcp.server.streamable_http import EventStore
 from mcp.server.transport_security import TransportSecuritySettings
 
+# "Nobody supplied one", distinct from every value the field accepts — ``None``
+# already means "never reap". Typed ``Any`` so it can stand in as the declared
+# default; ``__post_init__`` replaces it before anyone reads the field.
+_MISSING: Any = object()
 
-class _UntouchedIdleTimeout(float):
-    """The default idle timeout, marked as nobody's choice.
-
-    Equal to the plain float everywhere, so only the provenance check tells them
-    apart: supplying this number is asking to reap, inheriting it is not.
-    """
-
-    __slots__ = ()
-
-
-_DEFAULT_MCP_SESSION_IDLE_TIMEOUT = _UntouchedIdleTimeout(1800.0)
+_DEFAULT_MCP_SESSION_IDLE_TIMEOUT = 1800.0
 _DEFAULT_MAX_MCP_SESSIONS = 10_000
 _DEFAULT_MAX_REQUEST_BODY_SIZE = 4 * 1024 * 1024
-
-
-def _reaping_was_asked_for(timeout: "float | None") -> bool:
-    """Whether ``timeout`` asks to reap. ``None`` asks not to; the default asks nothing."""
-    return timeout is not None and type(timeout) is not _UntouchedIdleTimeout
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +33,8 @@ class TransportConfig:
         mcp_session_idle_timeout: Seconds an *MCP* session may idle before the
             transport closes it; its next request is answered ``404``. ``None``
             never reaps. Handshake-era only, so supplying one alongside
-            ``stateless=True`` is refused at construction.
+            ``stateless=True`` is refused at construction — see
+            :attr:`asks_to_reap`. Omitted, it reads back as the default.
         max_mcp_sessions: Concurrent *MCP* sessions; one beyond the cap is
             answered ``503``. ``None`` removes the cap. Not
             :attr:`~ag2.mcp.SessionConfig.max_sessions`, which bounds
@@ -61,16 +52,26 @@ class TransportConfig:
             ``Last-Event-ID`` receives what it missed. ``None`` leaves them
             non-resumable. A passthrough; bring your own. What is proven is one
             end-to-end test over a real socket (``test/mcp/test_resumability.py``).
+        asks_to_reap: Whether reaping was *asked for* rather than inherited.
+            Provenance, not value: supplying the default number is still
+            supplying one, and ``None`` asks not to reap at all. Derived at
+            construction; do not pass it.
     """
 
-    mcp_session_idle_timeout: float | None = _DEFAULT_MCP_SESSION_IDLE_TIMEOUT
+    mcp_session_idle_timeout: float | None = _MISSING
     max_mcp_sessions: int | None = _DEFAULT_MAX_MCP_SESSIONS
     max_request_body_size: int = _DEFAULT_MAX_REQUEST_BODY_SIZE
     security_settings: TransportSecuritySettings | None = None
     sse_retry_interval: int | None = None
     event_store: EventStore | None = None
+    asks_to_reap: bool = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        supplied = self.mcp_session_idle_timeout is not _MISSING
+        if not supplied:
+            object.__setattr__(self, "mcp_session_idle_timeout", _DEFAULT_MCP_SESSION_IDLE_TIMEOUT)
+        object.__setattr__(self, "asks_to_reap", supplied and self.mcp_session_idle_timeout is not None)
+
         if self.mcp_session_idle_timeout is not None and self.mcp_session_idle_timeout <= 0:
             raise ValueError(
                 f"mcp_session_idle_timeout must be > 0 when set, got {self.mcp_session_idle_timeout} "
