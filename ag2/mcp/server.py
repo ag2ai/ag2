@@ -602,7 +602,7 @@ class MCPServer:
             backend=BearerAuthBackend(
                 security.verifier,
                 # Opt-in: the indicator is optional on the operator's own token,
-                # and an absent one fails the check. See ADR 0020.
+                # and an absent one fails the check. See ADR 0017.
                 resource_server_url=metadata.resource if security.validate_token_resource else None,
             ),
         )
