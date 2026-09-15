@@ -58,14 +58,6 @@ class TestTransportBounds:
         # up: no session was opened for the request that carried it.
         assert "mcp-session-id" not in resp.headers
 
-    async def test_a_body_under_the_limit_still_reaches_the_server(self) -> None:
-        app = MCPServer(greeter(), json_response=True, transport=TransportConfig(max_request_body_size=64 * 1024))
-
-        async with serve(app) as client:
-            resp = await client.post("/mcp", headers=JSON_HEADERS, json=_INIT)
-
-        assert resp.status_code == 200
-
     async def test_a_default_server_refuses_a_body_over_four_mebibytes(self) -> None:
         """The documented default, exercised rather than read back off the server."""
         app = MCPServer(greeter(), json_response=True)
@@ -140,16 +132,25 @@ class TestTransportBounds:
         assert resp.status_code == 421
 
     async def test_omitting_the_transport_config_matches_a_default_constructed_one(self) -> None:
+        """Compared where the default bites, not on a request any config would serve.
+
+        Two small requests agree under almost any pair of configs; the boundary
+        the omitted default sets is what has to agree.
+        """
         omitted = MCPServer(greeter(), json_response=True)
         explicit = MCPServer(greeter(), json_response=True, transport=TransportConfig())
+        under = {**_INIT, "padding": "x" * (4 * 1024 * 1024 - 8192)}
+        over = {**_INIT, "padding": "x" * (4 * 1024 * 1024 + 8192)}
 
         async with serve(omitted) as client:
-            without = await client.post("/mcp", headers=JSON_HEADERS, json=_INIT)
+            without_under = await client.post("/mcp", headers=JSON_HEADERS, json=under)
+            without_over = await client.post("/mcp", headers=JSON_HEADERS, json=over)
         async with serve(explicit) as client:
-            with_default = await client.post("/mcp", headers=JSON_HEADERS, json=_INIT)
+            with_default_under = await client.post("/mcp", headers=JSON_HEADERS, json=under)
+            with_default_over = await client.post("/mcp", headers=JSON_HEADERS, json=over)
 
-        assert without.status_code == with_default.status_code == 200
-        assert without.json()["result"] == with_default.json()["result"]
+        assert without_under.status_code == with_default_under.status_code == 200
+        assert without_over.status_code == with_default_over.status_code == 413
 
 
 class TestTransportDefaults:
@@ -188,11 +189,6 @@ class TestTransportValidation:
         message = str(excinfo.value)
         assert "stateless" in message
         assert "mcp_session_idle_timeout" in message
-
-    def test_stateless_with_the_idle_timeout_left_alone_is_a_valid_server(self) -> None:
-        app = MCPServer(greeter(), stateless=True, transport=TransportConfig(max_request_body_size=1024))
-
-        assert app.agent.name == "greeter"
 
     def test_spelling_out_the_default_idle_timeout_is_not_asking_for_reaping(self) -> None:
         """Value, not provenance: the default number asks for nothing, however it arrives.

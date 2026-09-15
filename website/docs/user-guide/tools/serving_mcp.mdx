@@ -601,7 +601,7 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `max_mcp_sessions` | `10_000` | concurrent MCP sessions; one beyond the cap is answered `503`. `None` removes the cap |
 | `max_request_body_size` | `4 MiB` | a larger body is refused `413`, before it is parsed and before a session is created |
 | `security_settings` | `None` | DNS rebinding protection. **`None` disables it**; a default-constructed `TransportSecuritySettings()` refuses everything |
-| `sse_retry_interval` | `None` | milliseconds to suggest a client waits before reconnecting a dropped SSE stream. A documented passthrough — AG2 exercises no behaviour of it |
+| `sse_retry_interval` | `None` | milliseconds to suggest a client waits before reconnecting a dropped SSE stream. Carried on the priming event, so it does nothing without an `event_store` and a client on 2025-11-25 or later |
 | `event_store` | `None` | makes connections resumable: a client reconnecting with `Last-Event-ID` receives what it missed. Bring your own; what is proven is one end-to-end test over a real socket (`test/mcp/test_resumability.py`) |
 
 Non-positive bounds are refused when the `TransportConfig` is constructed.

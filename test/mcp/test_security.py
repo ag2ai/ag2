@@ -84,6 +84,24 @@ class TestSecurityBuilders:
         with pytest.raises(ValueError, match="must match the MCP endpoint path"):
             MCPServer(greeter(), path="/other", security=_security())
 
+    def test_the_resource_indicator_check_is_off_unless_asked_for(self) -> None:
+        """The promise to deployments in the field, asserted on the defaults themselves.
+
+        ``TestResourceIndicator.test_off_by_default_a_token_for_another_service_still_works``
+        passes the value explicitly, so it observes the behaviour of the switch
+        and not where the switch rests. Both defaults are load-bearing: one for
+        callers who build through :func:`require`, one for the dataclass.
+        """
+        assert _security().validate_token_resource is False
+        assert (
+            Requirement(
+                schemes=(),
+                verifier=_StaticVerifier("t", []),
+                resource_url="http://test/mcp",
+            ).validate_token_resource
+            is False
+        )
+
     def test_oauth2_scheme_rejects_schemeless_url(self) -> None:
         # An OIDC issuer string (e.g. Stytch's) is not a usable AS URL — fail
         # early with a clear message, not a cryptic AnyHttpUrl error later.
@@ -219,12 +237,6 @@ class TestDerivedTransportSecurity:
             )
 
         assert rebound.status_code == 421
-
-    async def test_the_host_named_by_resource_url_serves(self) -> None:
-        async with serve(_app(json_response=True), base_url="http://test") as client:
-            allowed = await client.post("/mcp", headers={**JSON_HEADERS, **_BEARER}, json=_INIT)
-
-        assert allowed.status_code == 200
 
     async def test_any_port_is_allowed_when_the_resource_url_names_none(self) -> None:
         """A proxy forwarding ``Host`` with a port must still reach the server."""

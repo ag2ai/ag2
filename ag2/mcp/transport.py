@@ -44,8 +44,10 @@ class TransportConfig:
             it enables the protection with empty allow-lists and so refuses
             everything.
         sse_retry_interval: Milliseconds suggested to a client before it
-            reconnects a dropped SSE stream. A passthrough AG2 has no opinion on
-            and exercises no behaviour of.
+            reconnects a dropped SSE stream. It rides the priming event, which
+            the SDK mints only for a resumable stream, so it does nothing unless
+            :attr:`event_store` is set *and* the client is on 2025-11-25 or
+            later. A passthrough otherwise: AG2 holds no opinion about the number.
         event_store: Makes connections resumable — a client reconnecting with a
             ``Last-Event-ID`` receives what it missed. ``None`` leaves them
             non-resumable. A passthrough; bring your own. What is proven is one
