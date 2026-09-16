@@ -31,7 +31,7 @@ from ag2.tools.final.function_tool import FunctionToolSchema
 from ag2.tools.tool import Tool
 
 from .events import A2AEvent, A2ATaskStatusUpdate
-from .extension import CONTEXT_UPDATE_METADATA_KEY
+from .extension import CONTEXT_UPDATE_METADATA_KEY, sanitize_context_update
 from .mappers import (
     ParsedMessage,
     a2a_event_to_sdk,
@@ -335,7 +335,10 @@ class AgentExecutor(A2AAgentExecutorBase):
             raise RuntimeError("Agent.config is not set; cannot serve via A2A")
         client = agent.config.create()
 
-        merged_variables = {**dict(agent._agent_variables), **incoming_variables}
+        merged_variables = {
+            **dict(agent._agent_variables),
+            **sanitize_context_update(incoming_variables),
+        }
         ctx = ConversationContext(
             stream,
             prompt=[*agent._system_prompt, *extra_prompt],
