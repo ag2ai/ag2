@@ -5,6 +5,7 @@
 import asyncio
 import copy
 import pickle
+import threading
 import time
 from collections.abc import Awaitable, Callable
 from unittest.mock import MagicMock
@@ -536,14 +537,25 @@ class TestSiblingToolsStopWithTheTurn:
         never reads an answer to a turn that had already failed.
         """
         finished: list[str] = []
+        started = threading.Event()
+        done = threading.Event()
 
         async def ask_human(ctx: Context) -> str:
+            # Fail only once the sibling is demonstrably *inside* its thread.
+            # The seam is a thread already running that nothing can stop; a
+            # hand-off cancelled before the worker picked it up is a different
+            # (and happier) outcome, and on a loaded machine that is the one
+            # that happens. Waiting on the real signal pins the seam instead of
+            # racing the OS scheduler for it.
+            await asyncio.to_thread(started.wait, 5)
             return await ctx.input("Say smth", timeout=1.0)
 
         def slow_side_effect() -> str:
             """A plain sync tool, so it runs off the event loop."""
+            started.set()
             time.sleep(0.2)
             finished.append("ran")
+            done.set()
             return "done"
 
         agent = Agent(
@@ -560,7 +572,7 @@ class TestSiblingToolsStopWithTheTurn:
         with pytest.raises(HumanInputNotProvidedError):
             await agent.ask("Hi!", stream=stream)
 
-        await asyncio.sleep(0.4)
+        assert await asyncio.to_thread(done.wait, 5)
         assert finished == ["ran"], "a thread cannot be cancelled; this documents that, it does not bless it"
 
         # ... and yet the transcript carries the stand-in, not what the thread

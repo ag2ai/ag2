@@ -12,7 +12,8 @@ cannot ship unexercised.
 
 Lives apart from ``test_mcp.py`` because serving on a real socket needs
 ``uvicorn``, which ships with ``ag2[acp]`` and not ``ag2[mcp]``; the skip guard
-below would otherwise take the fake-session tests down with it.
+carried by :mod:`test._serving` would otherwise take the fake-session tests
+down with it.
 
 It is also the only place an AG2 agent asks and another AG2 agent answers.
 Everything else tests one side against a double, so a wire-level disagreement
@@ -21,7 +22,6 @@ the wrong question, a capability advertised in one shape and read in another —
 survives both suites and fails only here.
 """
 
-import asyncio
 import json
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
@@ -30,9 +30,6 @@ from typing import Any
 import pytest
 
 pytest.importorskip("mcp")
-pytest.importorskip("uvicorn")
-
-import uvicorn
 
 from ag2 import Agent, Context
 from ag2.events import (
@@ -47,6 +44,7 @@ from ag2.mcp import MCPServer, mcp_tool
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 from ag2.tools import MCPAnswerPolicy, MCPServerConfig, MCPToolkit
+from test._serving import serving
 
 
 @mcp_tool
@@ -73,25 +71,15 @@ async def _live_mcp_server(
     """
     served = MCPServer(Agent("live", config=TestConfig("unused")), tools=[echo], path="/mcp")
     app = served if headers_seen is None else _recording(served, headers_seen)
-    async with _serving(app) as url:
+    async with _serving_mcp(app) as url:
         yield url
 
 
 @asynccontextmanager
-async def _serving(app: Any) -> AsyncGenerator[str]:
-    """Run ``app`` under ``uvicorn`` on a loopback port, yielding the MCP endpoint URL."""
-    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
-    # Bound here rather than inside `serve()`: the socket is already listening, so
-    # the port is known and a connection can be made without waiting for start-up.
-    sock = config.bind_socket()
-    uv = uvicorn.Server(config)
-    serving = asyncio.create_task(uv.serve(sockets=[sock]))
-    try:
-        yield f"http://127.0.0.1:{sock.getsockname()[1]}/mcp/"
-    finally:
-        uv.should_exit = True
-        await serving
-        sock.close()
+async def _serving_mcp(app: Any) -> AsyncGenerator[str]:
+    """Serve ``app`` on a loopback port, yielding the URL its MCP endpoint answers on."""
+    async with serving(app) as base_url:
+        yield f"{base_url}/mcp/"
 
 
 def _recording(app: Any, headers_seen: list[dict[str, str]]) -> Any:
@@ -176,7 +164,9 @@ async def test_configured_headers_reach_the_server(context: Context) -> None:
 @pytest.mark.asyncio
 async def test_a_slashless_url_still_reaches_the_server(context: Context) -> None:
     """A Starlette-mounted endpoint 307s the slashless form, and that form is what
-    a caller naturally writes, so the toolkit's client has to follow the redirect.
+    a caller naturally writes, so it has to keep connecting. From ``mcp`` 2.2.0 the
+    transport follows the same-origin redirect itself — the toolkit's HTTP client
+    asks for nothing — and this test is the guarantee that it does.
     """
     async with _live_mcp_server() as url:
         schemas = list(await MCPToolkit(url.rstrip("/")).schemas(context))
@@ -268,7 +258,7 @@ async def test_a_served_question_is_answered_by_the_calling_agents_human() -> No
     human = _Human("blue")
 
     served = _recording_methods(MCPServer(_asking_agent(runs, answers), path="/mcp"), methods)
-    async with _serving(served) as url:
+    async with _serving_mcp(served) as url:
         result = await _ask_through_toolkit(url, human, MCPAnswerPolicy(elicitation="ask"))
 
     assert human.asked == ["What colour?"], "the served agent's question never reached the calling human"
@@ -288,7 +278,7 @@ async def test_the_handshake_era_answers_inline_with_no_retry() -> None:
     human = _Human("green")
 
     served = _recording_methods(MCPServer(_asking_agent(runs, answers), path="/mcp"), methods)
-    async with _serving(served) as url:
+    async with _serving_mcp(served) as url:
         calling = Context(stream=MemoryStream())
         # ``legacy`` is the default; named here because it is the subject.
         toolkit = MCPToolkit(
@@ -320,7 +310,7 @@ async def test_a_calling_agent_that_will_not_answer_ends_the_served_turn_deliber
     """
     runs: list[str] = []
 
-    async with _serving(MCPServer(_asking_agent(runs), path="/mcp")) as url:
+    async with _serving_mcp(MCPServer(_asking_agent(runs), path="/mcp")) as url:
         result = await _ask_through_toolkit(url, None, MCPAnswerPolicy())
 
     assert isinstance(result, ToolErrorEvent), f"expected a deliberate failure, got {result}"

@@ -47,6 +47,7 @@ from .resources import Resource, ResourceProvider, ResourceTemplate
 from .security import Requirement
 from .sessions import SessionConfig, SessionStore
 from .tools import MCP_REQUEST_CONTEXT_DEP, MCPExecutionContext, MCPFunctionTool, MetaFilter, ToolProvider
+from .transport import TransportConfig
 
 if TYPE_CHECKING:
     from mcp.server.context import ServerRequestContext
@@ -161,6 +162,12 @@ class MCPServer:
         stateless: Stop the HTTP transport issuing an ``mcp-session-id``. A
             handshake-era switch; modern-era requests never carry one.
         json_response: Answer with JSON rather than SSE.
+        transport: Streamable-HTTP settings, grouped into one
+            :class:`~ag2.mcp.TransportConfig`; omitting it passes a
+            default-constructed one. ``stateless``, ``json_response``, ``path``
+            and ``security`` stay flat despite reaching the same SDK
+            constructors: the grouping is by meaning to an operator, not by
+            destination.
         security: OAuth 2.1 Resource Server requirements. With none configured a
             conversation has no principal, so its handle is the only credential
             for it.
@@ -171,10 +178,13 @@ class MCPServer:
     Raises:
         MCPToolNameConflictError: A ``tools=`` entry collides with ``tool_name`` or
             with another entry.
+        ValueError: ``security.resource_url``'s path does not match ``path``, or
+            ``stateless=True`` was given an MCP session idle timeout to reap.
 
     For local clients (Claude Desktop, Cursor, the MCP Inspector), :meth:`run_stdio`
     serves over stdin/stdout instead. The HTTP transport parameters (``path``,
-    ``stateless``, ``json_response``, ``security``) are ignored over stdio.
+    ``stateless``, ``json_response``, ``transport``, ``security``) are ignored
+    over stdio.
 
     ``name`` / ``version`` / ``title`` / ``description`` / ``instructions`` /
     ``website_url`` / ``icons`` populate the ``initialize`` handshake's
@@ -301,6 +311,7 @@ class MCPServer:
         path: str = "/mcp",
         stateless: bool = False,
         json_response: bool = False,
+        transport: TransportConfig | None = None,
         security: Requirement | None = None,
         request_state_security: RequestStateSecurity | None = None,
     ) -> None:
@@ -368,7 +379,11 @@ class MCPServer:
         self._server.middleware.append(RequestStateBoundary(state_security, default_audience=self._name))
         self._server.extensions.update(self._extensions)
         routes, manager = self._streamable_routes(
-            path=path, stateless=stateless, json_response=json_response, security=security
+            path=path,
+            stateless=stateless,
+            json_response=json_response,
+            transport=transport if transport is not None else TransportConfig(),
+            security=security,
         )
         self._http: Starlette = Starlette(routes=routes, lifespan=_session_manager_lifespan(manager, self._paused_runs))
 
@@ -536,6 +551,7 @@ class MCPServer:
         path: str,
         stateless: bool,
         json_response: bool,
+        transport: TransportConfig,
         security: Requirement | None,
     ) -> "tuple[list[BaseRoute], StreamableHTTPSessionManager]":
         """Build the streamable-HTTP routes and session manager for the ASGI app.
@@ -543,10 +559,24 @@ class MCPServer:
         Bearer auth wraps the MCP route rather than the app, so it stays scoped
         if the route is mounted into a host app.
         """
+        # An instruction that cannot be carried out, so it is reported rather
+        # than ignored — the diagnosis the SDK dropped in 2.2.0.
+        if stateless and transport.asks_to_reap:
+            raise ValueError(
+                f"stateless=True issues no mcp-session-id, so transport.mcp_session_idle_timeout "
+                f"({transport.mcp_session_idle_timeout!r}) has no MCP session to reap. "
+                "Drop one of the two: leave mcp_session_idle_timeout at its default, or serve with stateless=False."
+            )
         manager = StreamableHTTPSessionManager(
             app=self._server,
             stateless=stateless,
             json_response=json_response,
+            event_store=transport.event_store,
+            security_settings=transport.security_settings_for(security.resource_url if security else None),
+            retry_interval=transport.sse_retry_interval,
+            session_idle_timeout=transport.mcp_session_idle_timeout,
+            max_request_body_size=transport.max_request_body_size,
+            max_sessions=transport.max_mcp_sessions,
         )
 
         async def handle(scope: "Scope", receive: "Receive", send: "Send") -> None:
@@ -569,7 +599,12 @@ class MCPServer:
                     build_resource_metadata_url(metadata.resource),
                 ),
             ),
-            backend=BearerAuthBackend(security.verifier),
+            backend=BearerAuthBackend(
+                security.verifier,
+                # Opt-in: the indicator is optional on the operator's own token,
+                # and an absent one fails the check. See ADR 0017.
+                resource_server_url=metadata.resource if security.validate_token_resource else None,
+            ),
         )
         routes: list[BaseRoute] = [
             Route(path, endpoint=guarded),
