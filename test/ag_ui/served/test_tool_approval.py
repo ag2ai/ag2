@@ -17,24 +17,12 @@ from dirty_equals import IsPartialDict, IsStr
 
 from ag2 import Agent, Context
 from ag2.ag_ui import AGUIStream
-from ag2.ag_ui.interrupts import NOT_PROVEN, TOOL_APPROVAL_REASON
+from ag2.ag_ui.interrupts import NOT_PROVEN, TOOL_CALL_REASON
 from ag2.events import ToolCallEvent
 from ag2.middleware import approval_required
 from ag2.testing import TestConfig
-
-pytest.importorskip("starlette")
-
-from test.ag_ui.driving import (  # noqa: E402
-    answer,
-    app_for,
-    ask_once,
-    only,
-    outcome_of,
-    post_run,
-    resolved,
-    run_body,
-    types_of,
-)
+from test.ag_ui.harness import only, outcome_of, types_of
+from test.ag_ui.serving import answer, app_for, ask_once, post_run, resolved, run_body
 
 pytestmark = pytest.mark.asyncio
 
@@ -67,7 +55,7 @@ async def test_the_interrupt_names_the_call_it_is_gating() -> None:
     [interrupt] = outcome_of(events)["interrupts"]
 
     assert interrupt == IsPartialDict({
-        "reason": TOOL_APPROVAL_REASON,
+        "reason": TOOL_CALL_REASON,
         "toolCallId": only(events, "TOOL_CALL_START")["toolCallId"],
         "message": IsStr(),
         "expiresAt": IsStr(),

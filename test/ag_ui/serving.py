@@ -2,18 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Driving a served agent the way a client drives it: two POSTs over in-process HTTP.
+"""Driving a served agent the way a client drives it: real POSTs over in-process HTTP.
 
 A paused turn is two exchanges sharing state, which the single-exchange
 generator seam cannot express — so these helpers post real requests at the
 built ASGI application instead, and read only what a client can see on the wire.
+Frames come back in the same shape `harness` decodes, so `types_of`, `only`
+and `every` read a run driven either way.
 
-Importing this module needs ``starlette`` and ``httpx``; guard the importing
-test module with ``pytest.importorskip("starlette")``.
+Importing this module needs `starlette` and `httpx`; it is meant to be reached
+from inside `test/ag_ui/served/`, whose package guard skips those tests when
+starlette is absent.
 """
 
 import asyncio
-import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -26,6 +28,22 @@ from ag2.ag_ui import AGUIStream
 from ag2.events import ToolCallEvent
 from ag2.exceptions import HumanInputError
 from ag2.testing import TestConfig
+from test.ag_ui.harness import decode, sole_interrupt
+
+__all__ = (
+    "QUESTION",
+    "Asked",
+    "Clock",
+    "abandon",
+    "answer",
+    "app_for",
+    "ask_once",
+    "asking_agent",
+    "post_run",
+    "resolved",
+    "run_body",
+    "shut_down",
+)
 
 QUESTION = "What is your favourite colour?"
 
@@ -49,7 +67,7 @@ class Clock:
         self._now += timedelta(seconds=seconds)
 
     def ahead(self, seconds: float) -> str:
-        """``seconds`` from now, spelled the way the wire spells a deadline."""
+        """`seconds` from now, spelled the way the wire spells a deadline."""
         return (self._now + timedelta(seconds=seconds)).isoformat()
 
 
@@ -64,10 +82,18 @@ class Asked:
     def __init__(self) -> None:
         self.answers: list[str] = []
         self.ending: str | None = None
+        self.raised: type[BaseException] | None = None
+        """What the ask raised, when it raised something.
+
+        Kept apart from `ending`: "no answer" is one ending with several causes,
+        and a test about a deadline should not pass on a turn that failed for
+        some other reason.
+        """
         self._ended = asyncio.Event()
 
-    def ended(self, how: str) -> None:
+    def ended(self, how: str, raised: BaseException | None = None) -> None:
         self.ending = how
+        self.raised = None if raised is None else type(raised)
         self._ended.set()
 
     async def ending_within(self, timeout: float = 1.0) -> str | None:
@@ -86,7 +112,7 @@ def asking_agent(
     timeout: float | None = None,
     **agent_kwargs: Any,
 ) -> tuple[Agent, Asked]:
-    """An agent whose one tool puts ``questions`` to the human, and what came back."""
+    """An agent whose one tool puts `questions` to the human, and what came back."""
     asked = Asked()
 
     agent = Agent(
@@ -101,11 +127,11 @@ def asking_agent(
         try:
             for question in questions:
                 asked.answers.append(await context.input(question, timeout=timeout))
-        except asyncio.CancelledError:
-            asked.ended("cancelled")
+        except asyncio.CancelledError as error:
+            asked.ended("cancelled", error)
             raise
-        except HumanInputError:
-            asked.ended("no answer")
+        except HumanInputError as error:
+            asked.ended("no answer", error)
             raise
         return " / ".join(asked.answers)
 
@@ -113,6 +139,7 @@ def asking_agent(
 
 
 def app_for(stream: AGUIStream) -> Starlette:
+    """The ASGI application a server would mount this stream behind."""
     return Starlette(routes=[Route("/", stream.build_asgi())])
 
 
@@ -141,7 +168,7 @@ def run_body(
     text: str | None = "go",
     resume: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """One ``RunAgentInput``, spelled the way a browser client spells it."""
+    """One `RunAgentInput`, spelled the way a browser client spells it."""
     body: dict[str, Any] = {
         "threadId": thread_id,
         "runId": run_id,
@@ -157,14 +184,12 @@ def run_body(
 
 
 async def post_run(app: Any, body: dict[str, Any]) -> list[dict[str, Any]]:
-    """Drive one exchange over in-process HTTP and decode its AG-UI events."""
+    """Drive one exchange over in-process HTTP and decode its AG-UI frames."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://ag-ui.test") as client:
         response = await client.post("/", json=body)
         assert response.status_code == 200
-        return [
-            json.loads(line.removeprefix("data: ")) for line in response.text.splitlines() if line.startswith("data: ")
-        ]
+        return decode(line for line in response.text.splitlines() if line.startswith("data: "))
 
 
 async def ask_once(app: Any, thread_id: str = "t1", run_id: str = "r1") -> dict[str, Any]:
@@ -172,30 +197,10 @@ async def ask_once(app: Any, thread_id: str = "t1", run_id: str = "r1") -> dict[
     return sole_interrupt(await post_run(app, run_body(thread_id=thread_id, run_id=run_id)))
 
 
-def only(events: list[dict[str, Any]], event_type: str) -> dict[str, Any]:
-    [event] = [e for e in events if e["type"] == event_type]
-    return event
-
-
-def types_of(events: list[dict[str, Any]]) -> list[str]:
-    return [e["type"] for e in events]
-
-
-def outcome_of(events: list[dict[str, Any]]) -> dict[str, Any]:
-    outcome = only(events, "RUN_FINISHED")["outcome"]
-    assert isinstance(outcome, dict)
-    return outcome
-
-
-def sole_interrupt(events: list[dict[str, Any]]) -> dict[str, Any]:
-    [interrupt] = outcome_of(events)["interrupts"]
-    return interrupt
-
-
 def answer(interrupt: dict[str, Any], payload: Any) -> list[dict[str, Any]]:
     """A compliant client's resume: the answer, under the envelope it was given.
 
-    A client carries an interrupt's ``metadata`` back untouched, so anything the
+    A client carries an interrupt's `metadata` back untouched, so anything the
     server put there to recognise its own question comes home with the answer.
     """
     return resolved(interrupt["id"], payload, metadata=interrupt.get("metadata"))

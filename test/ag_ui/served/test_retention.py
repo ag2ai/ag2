@@ -12,11 +12,10 @@ a bound was enforced is that the function stopped running.
 import pytest
 
 from ag2.ag_ui import AGUIStream
-from ag2.ag_ui.interrupts import DEFAULT_RETENTION, Retention
-
-pytest.importorskip("starlette")
-
-from test.ag_ui.driving import (  # noqa: E402
+from ag2.ag_ui.interrupts import AG2_METADATA_KEY, DEFAULT_RETENTION, NOT_PROVEN, PROOF_KEY, Retention
+from ag2.exceptions import HumanInputTimeoutError
+from test.ag_ui.harness import only, sole_interrupt, types_of
+from test.ag_ui.serving import (
     QUESTION,
     Clock,
     answer,
@@ -24,9 +23,8 @@ from test.ag_ui.driving import (  # noqa: E402
     ask_once,
     asking_agent,
     post_run,
+    resolved,
     run_body,
-    sole_interrupt,
-    types_of,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -96,10 +94,28 @@ class TestBoundsOnWhatIsHeld:
 
         await ask_once(app)
         clock.advance(TTL + 1)
-        # Any later traffic reaches the registry; nothing sweeps on a timer.
+        # Traffic reaches the registry, which is the fast path to eviction; the
+        # timer below is what covers a server nothing is talking to.
         await post_run(app, run_body(thread_id="t2", run_id="r2"))
 
         assert await asked.ending_within() == "cancelled"
+
+    async def test_a_turn_past_its_time_bound_ends_with_no_traffic_at_all(self) -> None:
+        """The deadline is kept by the suspended call, not by the next request to arrive.
+
+        Driven on the real clock rather than the hand-advanced one: the point of
+        the test is that nothing had to touch the registry for the bound to
+        apply, and a hand-advanced clock can only be advanced by the test itself.
+        """
+        agent, asked = asking_agent()
+        app = app_for(AGUIStream(agent, retention=Retention(ttl=0.05)))
+
+        await ask_once(app)
+
+        assert await asked.ending_within() == "no answer"
+        # The same exception the caller's own `timeout=` raises: one deadline was
+        # advertised, so there is one way for it to elapse.
+        assert asked.raised is HumanInputTimeoutError
 
     async def test_a_turn_past_its_time_bound_is_unreachable(self) -> None:
         clock = Clock()
@@ -131,6 +147,41 @@ class TestBoundsOnWhatIsHeld:
         )
         assert types_of(refused)[-1] == "RUN_ERROR"
 
+    async def test_a_refused_resume_does_not_move_a_turn_ahead_of_one_held_after_it(self) -> None:
+        """Putting a turn back is not holding it again.
+
+        Otherwise a client with nothing but a wrong proof could keep its own turn
+        at the front of the queue and have another tenant's evicted in its place.
+        """
+        clock = Clock()
+        agent, _ = asking_agent()
+        app = app_for(AGUIStream(agent, retention=Retention(ttl=TTL, max_held=2), now=clock))
+
+        first = await ask_once(app, thread_id="t1", run_id="r1")
+        # Held a second apart, so the two deadlines are ordered rather than tied:
+        # turns expiring at the same instant are evicted in no particular order,
+        # which is fair enough — they were about to go together anyway.
+        clock.advance(1)
+        second = await ask_once(app, thread_id="t2", run_id="r2")
+        refused = await post_run(
+            app,
+            run_body(
+                thread_id="t1",
+                run_id="r3",
+                text=None,
+                resume=resolved(first["id"], "blue", metadata={AG2_METADATA_KEY: {PROOF_KEY: "not the one issued"}}),
+            ),
+        )
+        assert only(refused, "RUN_ERROR")["code"] == NOT_PROVEN
+
+        await ask_once(app, thread_id="t3", run_id="r4")
+
+        # The turn held first is the turn evicted first, refusals notwithstanding.
+        gone = await post_run(app, run_body(thread_id="t1", run_id="r5", text=None, resume=answer(first, "blue")))
+        assert types_of(gone)[-1] == "RUN_ERROR"
+        kept = await post_run(app, run_body(thread_id="t2", run_id="r6", text=None, resume=answer(second, "green")))
+        assert types_of(kept)[-1] == "RUN_FINISHED"
+
     async def test_shutdown_cancels_a_held_turn(self) -> None:
         agent, asked = asking_agent()
         stream = AGUIStream(agent)
@@ -139,6 +190,15 @@ class TestBoundsOnWhatIsHeld:
         await stream.aclose()
 
         assert await asked.ending_within() == "cancelled"
+
+    async def test_leaving_the_streams_context_cancels_a_held_turn(self) -> None:
+        """`build_asgi` returns an endpoint, so closing the stream is the caller's to do."""
+        agent, asked = asking_agent()
+
+        async with AGUIStream(agent) as stream:
+            await ask_once(app_for(stream))
+
+        assert asked.ending == "cancelled"
 
     async def test_shutdown_waits_for_the_turns_it_cancels(self) -> None:
         """``aclose`` returning means the cleanup ran, not that it was scheduled.
@@ -155,6 +215,19 @@ class TestBoundsOnWhatIsHeld:
         assert asked.ending == "cancelled"
 
 
+class TestARetentionThatCannotBeHonoured:
+    """Refused where it is written, not one held turn later."""
+
+    @pytest.mark.parametrize("ttl", [0.0, -1.0])
+    async def test_a_deadline_that_has_already_passed(self, ttl: float) -> None:
+        with pytest.raises(ValueError, match="ttl must be positive"):
+            Retention(ttl=ttl)
+
+    async def test_a_capacity_that_holds_nothing(self) -> None:
+        with pytest.raises(ValueError, match="max_held must be at least 1"):
+            Retention(max_held=0)
+
+
 async def test_the_callers_own_timeout_still_ends_the_turn_when_it_falls_first() -> None:
     """The two bounds stay independent: whichever elapses first ends the turn."""
     agent, asked = asking_agent(timeout=0.05)
@@ -163,6 +236,8 @@ async def test_the_callers_own_timeout_still_ends_the_turn_when_it_falls_first()
     interrupt = await ask_once(app)
 
     assert await asked.ending_within() == "no answer"
+    # The caller's own deadline, and not some other way of going unanswered.
+    assert asked.raised is HumanInputTimeoutError
     events = await post_run(
         app,
         run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")),

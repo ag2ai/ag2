@@ -29,7 +29,7 @@ from ag2.ag_ui import AGUIStream
 from ag2.events import ToolCallEvent
 from ag2.testing import TestConfig
 from ag2.tools import tool
-from test.ag_ui.utils import create_run_input
+from test.ag_ui.harness import run_input
 
 pytestmark = pytest.mark.asyncio
 
@@ -59,7 +59,7 @@ async def test_turn_runs_on_past_the_end_of_its_exchange() -> None:
     agent = Agent("test_agent", config=TestConfig(ToolCallEvent(name="park", arguments="{}"), "done"), tools=[park])
     stream = AGUIStream(agent)
 
-    events = stream.dispatch(create_run_input(UserMessage(id="m1", content="go")))
+    events = stream.dispatch(run_input(UserMessage(id="m1", content="go")))
     await _drain_until(events, "TOOL_CALL_ARGS")
     await events.aclose()
 
@@ -88,7 +88,7 @@ async def test_a_turn_nobody_awaits_does_not_report_an_unretrieved_exception() -
     previous = loop.get_exception_handler()
     loop.set_exception_handler(lambda _loop, context: reported.append(context))
     try:
-        events = stream.dispatch(create_run_input(UserMessage(id="m1", content="go")))
+        events = stream.dispatch(run_input(UserMessage(id="m1", content="go")))
         await _drain_until(events, "TOOL_CALL_ARGS")
         await events.aclose()
 
@@ -125,7 +125,7 @@ async def test_a_turn_still_running_is_cancelled_on_shutdown() -> None:
     agent = Agent("test_agent", config=TestConfig(ToolCallEvent(name="park", arguments="{}"), "done"), tools=[park])
     stream = AGUIStream(agent)
 
-    events = stream.dispatch(create_run_input(UserMessage(id="m1", content="go")))
+    events = stream.dispatch(run_input(UserMessage(id="m1", content="go")))
     await _drain_until(events, "TOOL_CALL_ARGS")
     await events.aclose()
     await asyncio.wait_for(parked.wait(), timeout=_NEVER)

@@ -20,29 +20,15 @@ from dirty_equals import IsPartialDict, IsStr
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream
+from ag2.ag_ui.interrupts import ANSWER_SCHEMA, ServedTurn, ServedTurns, TurnOutput
 from ag2.events import BaseEvent, HumanInputRequest, HumanMessage
 from ag2.exceptions import HumanInputError
 from ag2.testing import TestConfig
-from test.ag_ui.utils import collect_events, create_run_input
+from test.ag_ui.harness import dispatch_run, only, outcome_of, run_input, sole_interrupt, types_of
+from test.ag_ui.serving import QUESTION, answer, app_for, ask_once, asking_agent, post_run, run_body
 
 # Only so a regression fails the test instead of hanging CI until the suite timeout.
 _NEVER = 5.0
-
-pytest.importorskip("starlette")
-
-from ag2.ag_ui.interrupts import ServedTurn, ServedTurns, TurnOutput  # noqa: E402
-from test.ag_ui.driving import (  # noqa: E402
-    QUESTION,
-    answer,
-    app_for,
-    asking_agent,
-    only,
-    outcome_of,
-    post_run,
-    run_body,
-    sole_interrupt,
-    types_of,
-)
 
 pytestmark = pytest.mark.asyncio
 
@@ -61,12 +47,46 @@ class TestOneQuestionOneAnswer:
             "interrupts": [
                 IsPartialDict({
                     "id": IsStr(),
-                    "reason": "human_input",
+                    "reason": "input_required",
                     "message": QUESTION,
                     "expiresAt": IsStr(),
                 })
             ],
         }
+
+    async def test_the_question_declares_what_an_answer_may_be(self) -> None:
+        """A client is told the shape it must send, rather than finding out by refusal."""
+        agent, _ = asking_agent()
+        app = app_for(AGUIStream(agent))
+
+        interrupt = await ask_once(app)
+
+        assert interrupt["responseSchema"] == ANSWER_SCHEMA
+
+    async def test_the_tool_call_the_question_paused_is_completed_by_the_later_run(self) -> None:
+        """The call opens in one run and closes in another, which is the client's problem.
+
+        Asserted because the user guide tells a client to track open tool calls
+        by thread: nothing in a single run's events says the call it opened will
+        be finished somewhere else.
+        """
+        agent, _ = asking_agent()
+        app = app_for(AGUIStream(agent))
+
+        first = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+        second = await post_run(
+            app,
+            run_body(thread_id="t1", run_id="r2", text=None, resume=answer(sole_interrupt(first), "blue")),
+        )
+
+        assert "TOOL_CALL_START" in types_of(first)
+        assert "TOOL_CALL_END" not in types_of(first)
+        assert [t for t in types_of(second) if t.startswith("TOOL_CALL")] == ["TOOL_CALL_RESULT", "TOOL_CALL_END"]
+        # The same call, under a run id the run that opened it never mentioned.
+        [start] = [e for e in first if e["type"] == "TOOL_CALL_START"]
+        [end] = [e for e in second if e["type"] == "TOOL_CALL_END"]
+        assert end["toolCallId"] == start["toolCallId"]
+        assert {e["runId"] for e in second if "runId" in e} == {"r2"}
 
     async def test_a_later_run_on_the_same_thread_answers_it(self) -> None:
         agent, asked = asking_agent()
@@ -154,6 +174,27 @@ class TestTheHeldTurnIsFoundByThread:
         assert types_of(again)[-1] == "RUN_ERROR"
         assert asked.answers == ["blue"]
 
+    async def test_two_resumes_racing_one_thread_cannot_both_drive_it(self) -> None:
+        """Sequentially this is "already answered"; at once it is a race on one turn.
+
+        Which of the two wins is not the contract — that exactly one does, and
+        that the turn is driven once, is.
+        """
+        agent, asked = asking_agent()
+        app = app_for(AGUIStream(agent))
+
+        first = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+        interrupt = sole_interrupt(first)
+
+        both = await asyncio.gather(
+            post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue"))),
+            post_run(app, run_body(thread_id="t1", run_id="r3", text=None, resume=answer(interrupt, "red"))),
+        )
+
+        endings = sorted(types_of(events)[-1] for events in both)
+        assert endings == ["RUN_ERROR", "RUN_FINISHED"]
+        assert asked.answers in (["blue"], ["red"])
+
 
 class TestRunsThatAskNothing:
     async def test_a_completing_run_states_a_success_outcome(self) -> None:
@@ -184,9 +225,9 @@ class TestRunsThatAskNothing:
         async def hook(event: HumanInputRequest) -> HumanMessage:
             return HumanMessage("green")
 
-        events = await collect_events(
+        events = await dispatch_run(
             AGUIStream(agent),
-            create_run_input(UserMessage(id="m1", content="go")),
+            run_input(UserMessage(id="m1", content="go")),
             hitl_hook=hook,
         )
 
@@ -226,7 +267,7 @@ async def test_a_second_question_is_refused_and_the_first_still_answers() -> Non
     turn = ServedTurn(TurnOutput(thread_id="thread-1", run_id="run-1", send=send))
 
     def question(n: int) -> Interrupt:
-        return Interrupt(id=f"interrupt-{n}", reason="human_input", message=f"Q{n}?")
+        return Interrupt(id=f"interrupt-{n}", reason="input_required", message=f"Q{n}?")
 
     first = asyncio.create_task(turns.ask(turn, question(1)))
     await asyncio.sleep(0)  # let the first ask park on its question

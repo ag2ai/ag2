@@ -29,28 +29,25 @@ from ag2.ag_ui.interrupts import (  # noqa: E402
     NOT_PROVEN,
     NO_HELD_TURN,
     PROOF_KEY,
-    TOOL_APPROVAL_REASON,
+    TOOL_CALL_REASON,
     Retention,
 )
 from ag2.events import HumanInputRequest, ToolCallEvent  # noqa: E402
 from ag2.exceptions import HumanInputError  # noqa: E402
 from ag2.middleware import approval_required  # noqa: E402
 from ag2.testing import TestConfig  # noqa: E402
-from test.ag_ui.driving import (  # noqa: E402
+from test.ag_ui.harness import only, outcome_of, sole_interrupt, types_of  # noqa: E402
+from test.ag_ui.serving import (  # noqa: E402
     QUESTION,
     Asked,
     Clock,
     abandon,
     answer,
     ask_once,
-    only,
-    outcome_of,
     post_run,
     resolved,
     run_body,
     shut_down,
-    sole_interrupt,
-    types_of,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -99,7 +96,7 @@ class TestAQuestionIsAskedAndAnswered:
 
         assert types_of(events)[-1] == "RUN_FINISHED"
         assert sole_interrupt(events) == IsPartialDict({
-            "reason": "human_input",
+            "reason": "input_required",
             "message": QUESTION,
             "expiresAt": IsStr(),
             "metadata": {AG2_METADATA_KEY: {PROOF_KEY: IsStr()}},
@@ -225,7 +222,7 @@ class TestAToolCallAsksForApproval:
         interrupt = await ask_once(app)
         events = await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, True)))
 
-        assert interrupt == IsPartialDict({"reason": TOOL_APPROVAL_REASON, "toolCallId": IsStr()})
+        assert interrupt == IsPartialDict({"reason": TOOL_CALL_REASON, "toolCallId": IsStr()})
         assert ran == ["/"]
         assert outcome_of(events) == {"type": "success"}
 

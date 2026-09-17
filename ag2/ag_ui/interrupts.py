@@ -12,10 +12,10 @@ import asyncio
 import logging
 import secrets
 import time
-from collections import OrderedDict
 from collections.abc import AsyncIterator, Callable, Coroutine
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from math import inf
 from typing import Any
 
 from ag_ui.core import (
@@ -39,7 +39,7 @@ from anyio.streams.memory import MemoryObjectSendStream
 from ag2.annotations import Context
 from ag2.events import BaseEvent as AG2Event
 from ag2.events import HumanInputRequest, HumanMessage, ToolApprovalRequest
-from ag2.exceptions import AG2Error, HumanInputError
+from ag2.exceptions import AG2Error, HumanInputError, HumanInputTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,8 @@ logger = logging.getLogger(__name__)
 # protocol leaves `reason` a free string; a tool call held for approval says
 # so separately, because a client renders the two differently — a text box
 # against a pair of buttons — and should not have to read the prose to tell.
-HUMAN_INPUT_REASON = "human_input"
-TOOL_APPROVAL_REASON = "tool_approval"
+INPUT_REQUIRED_REASON = "input_required"
+TOOL_CALL_REASON = "tool_call"
 
 # `context.input()` is one string in, one string out, so this is the whole of
 # what an answer may be. Declared so a client can tell a refused payload from a
@@ -110,6 +110,15 @@ class Retention:
 
     max_held: int = 128
     """Held turns allowed at once. Holding past this one cancels the oldest."""
+
+    def __post_init__(self) -> None:
+        # Rejected here rather than surprising an operator one held turn later:
+        # `max_held=0` would have `hold` evict the turn it just took, and a
+        # non-positive `ttl` would advertise an `expiresAt` already in the past.
+        if self.ttl <= 0:
+            raise ValueError(f"Retention.ttl must be positive, got {self.ttl}")
+        if self.max_held < 1:
+            raise ValueError(f"Retention.max_held must be at least 1, got {self.max_held}")
 
 
 DEFAULT_RETENTION = Retention()
@@ -288,14 +297,14 @@ class ServedTurns:
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._live: set[ServedTurn] = set()
-        self._held: OrderedDict[str, ServedTurn] = OrderedDict()
+        self._held: dict[str, ServedTurn] = {}
         self.retention = retention
         self._now = now
 
     def track(self, turn: ServedTurn, task: "asyncio.Task[None]") -> None:
         """Own `turn`'s lifetime until its task completes."""
         self._live.add(turn)
-        task.add_done_callback(_Discard(self._live, turn))
+        task.add_done_callback(_Discard(self, turn))
 
     async def ask(self, turn: ServedTurn, interrupt: Interrupt) -> str:
         """Put `interrupt` to the client, hold `turn`, and return the answer."""
@@ -303,17 +312,30 @@ class ServedTurns:
         turn.suspend(interrupt, answer)
         # Held before the question is emitted, never after: the exchange ends on
         # that very event, so a resume can be in flight the moment it lands, and
-        # a turn not yet held is unreachable by retrieval, sweep and eviction.
+        # a turn not yet held is unreachable by retrieval and eviction.
         self.hold(turn)
+        seconds = _seconds_until(interrupt, self._now())
         try:
             await turn.output.send(
                 RunFinishedEvent(
                     thread_id=turn.output.thread_id,
                     run_id=turn.output.run_id,
+                    timestamp=timestamp_ms(),
                     outcome=RunFinishedInterruptOutcome(interrupts=[interrupt]),
                 )
             )
-            return await answer
+            # The deadline the client was shown is kept here, by the call that
+            # advertised it. A held turn is a suspended coroutine, so the
+            # coroutine is what has to stop waiting: nothing else knows when, and
+            # a registry swept only by later traffic would hold an unanswered
+            # question for as long as the process stayed quiet.
+            return await asyncio.wait_for(answer, seconds)
+        except TimeoutError as error:
+            # The same exception `context.input(timeout=)` raises, because it is
+            # the same event: `deadline()` advertised whichever bound fell first,
+            # and the caller should not have to tell them apart.
+            assert seconds is not None, "an interrupt with no deadline cannot time out"
+            raise HumanInputTimeoutError(seconds) from error
         finally:
             turn.wake()
             self.discard(turn)
@@ -328,12 +350,19 @@ class ServedTurns:
             logger.info("releasing a turn held for thread %s: it has been superseded", turn.thread_id)
             previous.release()
         self._held[turn.thread_id] = turn
-        self._held.move_to_end(turn.thread_id)
         self._evict_expired()
         while len(self._held) > self.retention.max_held:
-            _, oldest = self._held.popitem(last=False)
-            logger.warning("releasing the oldest held AG-UI turn: %d already held", self.retention.max_held)
-            oldest.release()
+            # Nearest its deadline, rather than longest held: under one `ttl` the
+            # two are the same turn, and where callers pass their own `timeout`
+            # this drops the one with least life left. Read off the interrupt,
+            # which `restore` does not touch, so a stream of refused resumes
+            # cannot move a turn down the queue.
+            soonest = min(self._held.values(), key=_deadline_of)
+            logger.warning(
+                "releasing the held AG-UI turn nearest its deadline: %d already held", self.retention.max_held
+            )
+            del self._held[soonest.thread_id]
+            soonest.release()
 
     def take(self, thread_id: str) -> "ServedTurn | None":
         """Remove and return the turn held for `thread_id`, or `None`.
@@ -349,8 +378,9 @@ class ServedTurns:
     def restore(self, turn: ServedTurn) -> None:
         """Put back a turn taken for a resume that was refused.
 
-        Not `hold`: the retention clock is not restamped, so a stream of
-        bad resumes cannot keep a turn alive past the deadline it advertised.
+        Not `hold`: the turn keeps the deadline it was holding on, so a stream of
+        bad resumes can neither extend its life nor move it down the queue for
+        eviction at another tenant's expense.
         """
         self._held[turn.thread_id] = turn
 
@@ -358,6 +388,16 @@ class ServedTurns:
         """Stop holding `turn`, if this is still the turn its thread holds."""
         if self._held.get(turn.thread_id) is turn:
             del self._held[turn.thread_id]
+
+    def retire(self, turn: ServedTurn) -> None:
+        """Forget `turn` entirely, because its task has ended.
+
+        Held as well as live: a turn that dies while held — cancelled, or failed
+        somewhere its own `ask` could not clean up after — would otherwise leave
+        an entry no resume can do anything with but rebind to a task that is gone.
+        """
+        self._live.discard(turn)
+        self.discard(turn)
 
     def release_thread(self, thread_id: str) -> None:
         """Cancel whatever `thread_id` was holding, because it has moved on."""
@@ -390,7 +430,6 @@ class ServedTurns:
         return self._now() + timedelta(seconds=seconds)
 
     def _evict_expired(self) -> None:
-        # Lazily, on registry traffic: nothing sweeps on a timer.
         now = self._now()
         for thread_id, turn in [(t, h) for t, h in self._held.items() if _expired(h, now)]:
             logger.info("releasing an expired held AG-UI turn for thread %s", thread_id)
@@ -398,9 +437,30 @@ class ServedTurns:
             turn.release()
 
 
-def _expired(turn: ServedTurn, now: datetime) -> bool:
+def _deadline_of(turn: ServedTurn) -> float:
+    """When `turn`'s question stops being answerable, as a POSIX timestamp.
+
+    `inf` for a turn waiting on nothing, or on an interrupt with no deadline:
+    the protocol reads an absent `expiresAt` as a promise never to expire, and
+    that promise is infinity rather than a date distant enough to pass for it.
+    Comparable and orderable against any other deadline, which is all either
+    caller needs.
+    """
     outstanding = turn.outstanding
-    return outstanding is not None and outstanding.expires_at is not None and _parse(outstanding.expires_at) <= now
+    if outstanding is None or outstanding.expires_at is None:
+        return inf
+    return _parse(outstanding.expires_at).timestamp()
+
+
+def _seconds_until(interrupt: Interrupt, now: datetime) -> float | None:
+    """How long there is left to answer `interrupt`, or `None` if it never expires."""
+    if interrupt.expires_at is None:
+        return None
+    return max((_parse(interrupt.expires_at) - now).total_seconds(), 0.0)
+
+
+def _expired(turn: ServedTurn, now: datetime) -> bool:
+    return _deadline_of(turn) <= now.timestamp()
 
 
 def _parse(expires_at: str) -> datetime:
@@ -408,17 +468,17 @@ def _parse(expires_at: str) -> datetime:
 
 
 class _Discard:
-    # A done-callback retiring one turn from the live set. A class rather than a
+    # A done-callback retiring one turn from the registry. A class rather than a
     # closure: `track` runs once per turn, which is a runtime execution path.
 
-    __slots__ = ("_live", "_turn")
+    __slots__ = ("_turns", "_turn")
 
-    def __init__(self, live: "set[ServedTurn]", turn: ServedTurn) -> None:
-        self._live = live
+    def __init__(self, turns: "ServedTurns", turn: ServedTurn) -> None:
+        self._turns = turns
         self._turn = turn
 
     def __call__(self, _task: "asyncio.Task[Any]") -> None:
-        self._live.discard(self._turn)
+        self._turns.retire(self._turn)
 
 
 class ClientInterrupter:
@@ -446,7 +506,7 @@ class ClientInterrupter:
         approval = event if isinstance(event, ToolApprovalRequest) else None
         return Interrupt(
             id=event.id,
-            reason=HUMAN_INPUT_REASON if approval is None else TOOL_APPROVAL_REASON,
+            reason=INPUT_REQUIRED_REASON if approval is None else TOOL_CALL_REASON,
             message=event.content,
             tool_call_id=None if approval is None else approval.tool_call_id,
             response_schema=ANSWER_SCHEMA if approval is None else APPROVAL_SCHEMA,
@@ -499,7 +559,7 @@ def answer_from(entry: ResumeEntry, interrupt: Interrupt) -> str:
     # The client drew two buttons and has a bool; the approval middleware reads
     # words. Translating here beats teaching either side the other's vocabulary.
     if isinstance(entry.payload, bool):
-        if interrupt.reason == TOOL_APPROVAL_REASON:
+        if interrupt.reason == TOOL_CALL_REASON:
             return "y" if entry.payload else "n"
     elif isinstance(entry.payload, str):
         return entry.payload
@@ -677,18 +737,16 @@ def interrupt_capabilities(agent_name: str) -> AgentCapabilities:
     )
 
 
-# The wire vocabulary, re-exported from `ag2.ag_ui`, plus the machinery the
-# two AG-UI transports share. Everything else here is this module's own.
 __all__ = (
     "AG2_METADATA_KEY",
     "DEFAULT_RETENTION",
-    "HUMAN_INPUT_REASON",
+    "INPUT_REQUIRED_REASON",
     "NOT_OUTSTANDING",
     "NOT_PROVEN",
     "NO_HELD_TURN",
     "PAYLOAD_REFUSED",
     "PROOF_KEY",
-    "TOOL_APPROVAL_REASON",
+    "TOOL_CALL_REASON",
     "ClientInterrupter",
     "Retention",
     "ServedTurn",

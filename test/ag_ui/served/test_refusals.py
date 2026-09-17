@@ -16,10 +16,8 @@ from dirty_equals import IsPartialDict
 
 from ag2.ag_ui import AGUIStream
 from ag2.ag_ui.interrupts import NOT_OUTSTANDING, NO_HELD_TURN, PAYLOAD_REFUSED, Retention
-
-pytest.importorskip("starlette")
-
-from test.ag_ui.driving import (  # noqa: E402
+from test.ag_ui.harness import only, outcome_of, sole_interrupt, types_of
+from test.ag_ui.serving import (
     QUESTION,
     Clock,
     abandon,
@@ -27,13 +25,9 @@ from test.ag_ui.driving import (  # noqa: E402
     app_for,
     ask_once,
     asking_agent,
-    only,
-    outcome_of,
     post_run,
     resolved,
     run_body,
-    sole_interrupt,
-    types_of,
 )
 
 pytestmark = pytest.mark.asyncio

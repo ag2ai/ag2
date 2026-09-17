@@ -189,7 +189,7 @@ The exchange ends normally — not with an error — carrying the question:
 ```text
 data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
        "outcome":{"type":"interrupt","interrupts":[
-         {"id":"e2c1...","reason":"human_input","message":"Book LH441? (yes/no)",
+         {"id":"e2c1...","reason":"input_required","message":"Book LH441? (yes/no)",
           "responseSchema":{"type":"string","title":"Answer"},
           "expiresAt":"2026-01-01T12:15:00+00:00",
           "metadata":{"ag2":{"proof":"g7Qk..."}}}]}}
@@ -282,6 +282,10 @@ that the interrupt never expires, and clients reject late answers locally on the
 strength of it, so the figure on the wire is always the one that will in fact
 apply. Past it the turn is gone and its task cancelled; a `max_held` overflow
 cancels the oldest.
+
+That deadline is kept by the server's own clock, not by the next request to
+arrive: a turn nobody ever answers is released when it expires, on a process
+that has gone quiet as much as on a busy one.
 
 **Memory is proportional to retention.** A held turn is a suspended coroutine
 with its whole conversation history, not a record — `ttl` × arrival rate, capped

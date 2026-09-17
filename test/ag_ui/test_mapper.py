@@ -16,6 +16,7 @@ from ag_ui.core import (
     ImageInputContent,
     InputContentDataSource,
     InputContentUrlSource,
+    ReasoningMessage,
     SystemMessage,
     TextInputContent,
     ToolCall,
@@ -33,6 +34,7 @@ from ag2.events import (
     DocumentInput,
     ImageInput,
     ModelMessage,
+    ModelReasoning,
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -43,15 +45,15 @@ from ag2.events import (
     UrlInput,
     VideoInput,
 )
-
-from .utils import create_run_input
+from test.ag_ui.harness import run_input
 
 RAW_BYTES = b"\xff\xd8\xff\xe0"
 B64_VALUE = b64encode(RAW_BYTES).decode()
 
 
 def _command(*messages: object) -> AGStreamInput:
-    return AGStreamInput(incoming=create_run_input(*messages), variables={})
+    """The command `run_stream` builds from an AG-UI request, for `messages`."""
+    return AGStreamInput(incoming=run_input(*messages), variables={})
 
 
 class TestUserMessageString:
@@ -143,6 +145,55 @@ class TestMetadata:
         text_part, image_part = current_turn
         assert text_part.metadata == {}
         assert image_part.metadata == {"alt": "cat"}
+
+    def test_content_metadata_survives_base64_decoding(self) -> None:
+        """A part carried as data, not as a URL, keeps its metadata through the decode."""
+        command = _command(
+            UserMessage(
+                id="m1",
+                content=[
+                    DocumentInputContent(
+                        source=InputContentDataSource(value=B64_VALUE, mime_type="application/pdf"),
+                        metadata={"source_filename": "report.pdf"},
+                    ),
+                ],
+            )
+        )
+
+        _, _, current_turn = map_agui_messages_to_events(command)
+
+        expected = DocumentInput(data=RAW_BYTES, media_type="application/pdf")
+        expected.metadata = {"source_filename": "report.pdf"}
+        assert current_turn == [expected]
+
+
+class TestReasoningMessages:
+    """What the model was thinking last turn is history, not part of this turn."""
+
+    def test_reasoning_message_becomes_a_model_reasoning_event(self) -> None:
+        command = _command(
+            UserMessage(id="u1", content="Hi"),
+            ReasoningMessage(id="r1", content="user is greeting me"),
+        )
+
+        _, messages, current_turn = map_agui_messages_to_events(command)
+
+        assert current_turn == []
+        assert messages == [
+            ModelRequest([TextInput("Hi")]),
+            ModelReasoning("user is greeting me"),
+        ]
+
+    def test_an_empty_reasoning_message_is_dropped(self) -> None:
+        """Rather than handed to the LLM as a thought with nothing in it."""
+        command = _command(
+            UserMessage(id="u1", content="Hi"),
+            ReasoningMessage(id="r1", content=""),
+        )
+
+        _, messages, _ = map_agui_messages_to_events(command)
+
+        assert messages == [ModelRequest([TextInput("Hi")])]
 
 
 class TestNonUserRoles:
