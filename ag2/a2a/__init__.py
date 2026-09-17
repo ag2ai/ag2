@@ -14,7 +14,7 @@ except ImportError as e:
 try:
     from .server import A2AServer
 except ImportError as e:
-    A2AServer = missing_additional_dependency("A2AServer", "a2a-sdk[http-server]", e)  # type: ignore[misc]
+    A2AServer = missing_optional_dependency("A2AServer", "a2a", e)  # type: ignore[misc]
 
 try:
     from .transports.grpc import secure_grpc_channel_factory
