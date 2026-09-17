@@ -84,6 +84,14 @@ approval_required(timeout=5, allow_always=False).describe().config
 
 Approval state (which tools the user answered "always" for) lives in `#!python context.variables`, not on the instance, so it never appears in the description. See [Describing middleware](/docs/user-guide/middleware#describing-middleware).
 
+!!! note "Only your human writes it"
+
+    The "always" answer is stored under a reserved `ag:` variable key. When the agent is
+    served over a protocol that syncs variables with a peer — A2A, NLIP, A2UI, AG-UI —
+    reserved keys are stripped from the payload in both directions, so a remote caller
+    can neither pre-approve a gated tool nor read what your human approved. See
+    [Variables over a protocol connection](/docs/user-guide/context/variables#variables-over-a-protocol-connection).
+
 ## Customizing the prompt
 
 Override the `message` parameter to tailor the approval prompt:

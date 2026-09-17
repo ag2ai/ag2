@@ -7,7 +7,7 @@ from typing import Any
 from nlip_sdk.nlip import NLIP_Message
 
 from ag2.agent import Agent
-from ag2.context import ConversationContext
+from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
 from ag2.stream import MemoryStream
 from ag2.tools.final.client_tool import ClientTool
@@ -50,7 +50,8 @@ class NlipExecutor:
         text = response.message.content if response.message else ""
         return build_response_message(
             text,
-            context_update=final_variables or None,
+            context_update=strip_reserved_variables(final_variables, source="an outgoing NLIP response", warn=False)
+            or None,
             tool_calls=response.tool_calls.calls if response.tool_calls else (),
         )
 
@@ -77,7 +78,10 @@ class NlipExecutor:
             raise RuntimeError("Agent.config is not set; cannot serve via NLIP")
         client = agent.config.create()
 
-        merged_variables = {**dict(agent._agent_variables), **incoming_variables}
+        merged_variables = {
+            **dict(agent._agent_variables),
+            **strip_reserved_variables(incoming_variables, source="an inbound NLIP request"),
+        }
         ctx = ConversationContext(
             stream,
             prompt=list(agent._system_prompt),

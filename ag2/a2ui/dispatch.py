@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from ag2.agent import Agent
-from ag2.context import ConversationContext
+from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.events import BaseEvent, ModelRequest, TextInput, UsageEvent
 from ag2.stream import MemoryStream
 from ag2.usage import collect_usage_events
@@ -145,7 +145,10 @@ async def stream_turn(
     caps_prompt = runtime.capabilities_prompt(request.client_capabilities)
     extra_prompt = [runtime.system_prompt_section, *([caps_prompt] if caps_prompt else [])]
 
-    merged_variables = {**dict(agent._agent_variables), **request.variables}
+    merged_variables = {
+        **dict(agent._agent_variables),
+        **strip_reserved_variables(request.variables, source="an inbound A2UI request"),
+    }
     ctx = ConversationContext(
         stream,
         prompt=[*agent._system_prompt, *extra_prompt, *request.prompt],
