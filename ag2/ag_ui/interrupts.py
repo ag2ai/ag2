@@ -330,7 +330,7 @@ class ServedTurns:
             # a registry swept only by later traffic would hold an unanswered
             # question for as long as the process stayed quiet.
             return await asyncio.wait_for(answer, seconds)
-        except TimeoutError as error:
+        except asyncio.TimeoutError as error:  # a separate class from the builtin on Python 3.10
             # The same exception `context.input(timeout=)` raises, because it is
             # the same event: `deadline()` advertised whichever bound fell first,
             # and the caller should not have to tell them apart.
