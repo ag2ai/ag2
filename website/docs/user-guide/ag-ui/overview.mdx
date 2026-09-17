@@ -37,6 +37,7 @@ Verified AG-UI features are supported in AG2:
 * [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state){.external-link target="_blank"} (`STATE_SNAPSHOT`) from context and agent state
 * [x] [Human input checkpoints](https://docs.copilotkit.ai/ag2/human-in-the-loop){.external-link target="_blank"} (`input_required` surfaced as user-visible message events)
 * [x] Run interrupts: an agent pauses on a question and a later run on the same thread answers it (`RUN_FINISHED` with an `interrupt` outcome, resumed through `resume`) — see [Asking the human a question](#asking-the-human-a-question)
+* [x] Tool-call approval: a gated tool puts the call itself to the client before it runs, over the same interrupt lifecycle — see [Gating a tool call instead of asking a question](#gating-a-tool-call-instead-of-asking-a-question)
 
 ## Installation
 
@@ -85,16 +86,21 @@ uvicorn run_ag_ui:app --reload --port 8000
 ```
 
 !!! note "Simpler way"
-    If you want to use ASGI endpoint without additional logic, you can use the `AGUIStream.build_asgi()` method to build an ASGI endpoint and mount it to your ASGI application.
+    If you want the endpoint without any logic of your own around it, `AGUIStream.build_asgi()` builds the whole thing — an ASGI endpoint class you add as a route:
 
-    ```python linenums="1" hl_lines="5-6"
+    ```python linenums="1" hl_lines="6-7"
     from ag2.ag_ui import AGUIStream
     from fastapi import FastAPI
+    from starlette.routing import Route
 
     app = FastAPI()
     stream = AGUIStream(agent)
-    app.mount("/chat", stream.build_asgi())
+    app.routes.append(Route("/chat", stream.build_asgi()))
     ```
+
+    Added as a route rather than mounted: `app.mount("/chat", ...)` serves the
+    endpoint at `/chat/` and answers `/chat` with a `307` redirect, which the
+    curl below — and many HTTP clients — will not follow on a `POST`.
 
 ### Test the endpoint
 
@@ -249,6 +255,46 @@ extending its deadline.
 
 A runnable version of this exchange — server and client in one script — is in
 `examples/ag_ui/human_input.py`.
+
+### Gating a tool call instead of asking a question
+
+A tool wrapped in [`approval_required()`](/docs/user-guide/tools/approval_required)
+pauses the same way, over the same `resume`. But the client is being asked to
+approve a call rather than to type an answer, and it should not have to read the
+prose to tell the two apart — so the interrupt says which it is:
+
+| Field | A question (`context.input`) | A tool call awaiting approval |
+| --- | --- | --- |
+| `reason` | `input_required` | `tool_call` |
+| `toolCallId` | absent | the `toolCallId` of this run's `TOOL_CALL_START` |
+| `responseSchema` | `{"type": "string"}` | `{"type": ["string", "boolean"]}` |
+
+```text
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
+       "outcome":{"type":"interrupt","interrupts":[
+         {"id":"9236...","reason":"tool_call",
+          "message":"Agent wants to call the tool:\n`delete_account`, {\"user_id\": \"abc-123\"}\n...",
+          "toolCallId":"7880...",
+          "responseSchema":{"type":["string","boolean"],"title":"Approval"},
+          "expiresAt":"2026-01-01T12:15:00+00:00",
+          "metadata":{"ag2":{"proof":"g7Qk..."}}}]}}
+```
+
+Answer it with `true` or `false` — a client that drew a pair of buttons should
+not have to know which words this server accepts:
+
+```json
+{"threadId": "thread-1", "runId": "run-2", "messages": [],
+ "resume": [{"interruptId": "9236...", "status": "resolved", "payload": true,
+             "metadata": {"ag2": {"proof": "g7Qk..."}}}]}
+```
+
+`false` **refuses the call without failing the turn**: the model is handed the
+middleware's refusal as the tool's result and carries on, and the run still
+finishes with a success outcome. Because a gated call is a paused tool call, it
+splits across the two exchanges exactly as above — `toolCallId` names the
+`TOOL_CALL_START` the first exchange already emitted, so a client has something
+to attach the prompt to.
 
 ### With a hook, nothing changes
 

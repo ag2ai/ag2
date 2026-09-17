@@ -51,7 +51,9 @@ Y/N?
 Typing **y** lets the tool run. Any other input denies it — the agent receives the denied message and can adjust.
 
 !!! note
-    `approval_required()` relies on the agent's `#!python hitl_hook` to collect user input. With no `hitl_hook` configured there is nobody to ask, so `#!python context.input()` raises `#!python HumanInputNotProvidedError` and **the turn ends** — the gated tool does not run, and the model is not handed a tool failure it could route around. Read more about [Human in the Loop](/docs/user-guide/context/human_in_the_loop) to learn how to configure a HITL hook.
+    `approval_required()` relies on the agent's `#!python hitl_hook` to collect user input. With no `#!python hitl_hook` configured there is nobody to ask, so `#!python context.input()` raises `#!python HumanInputNotProvidedError` and **the turn ends** — the gated tool does not run, and the model is not handed a tool failure it could route around. Read more about [Human in the Loop](/docs/user-guide/context/human_in_the_loop) to learn how to configure a HITL hook.
+
+    An agent **served over AG-UI** is the exception: with no hook, the call is put to the connected client as an interrupt instead of ending the turn, and the client approves or refuses it. See [Gating a tool call](/docs/user-guide/ag-ui/overview#gating-a-tool-call-instead-of-asking-a-question).
 
 ## Waiting for the answer
 
