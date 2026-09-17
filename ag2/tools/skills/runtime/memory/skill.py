@@ -76,7 +76,9 @@ class MemorySkill:
         self.version = version
         self._resources: dict[str, _MemoryResource] = {}
         self._scripts: dict[str, _MemoryScript] = {}
-        self.instructions(instructions)
+        # Not via ``instructions()``: there ``None`` means "used as a decorator",
+        # which would leave the body unset instead of rejecting a bad argument.
+        self._set_instructions(instructions)
 
     @overload
     def instructions(self, value: Callable[P, T]) -> Callable[P, T]: ...
@@ -102,19 +104,22 @@ class MemorySkill:
         """
 
         def register(body: "str | Callable[..., Any]") -> "str | Callable[..., Any]":
-            if isinstance(body, str):
-                self._instructions = body
-            elif callable(body):
-                # Wrap eagerly, so the tool can never drift from the value it renders
-                # and a bad signature surfaces here rather than at load_skill. The
-                # explicit name keeps the wrap working for callables without
-                # ``__name__`` (a partial, a callable object) and is never surfaced.
-                self._instructions = tool(body, name=f"{self.name}_instructions")
-            else:
-                raise TypeError(f"instructions must be a string or a callable, got {type(body).__name__}")
+            self._set_instructions(body)
             return body
 
         return register(value) if value is not None else register
+
+    def _set_instructions(self, body: "str | Callable[..., Any]") -> None:
+        if isinstance(body, str):
+            self._instructions = body
+        elif callable(body):
+            # Wrap eagerly, so the tool can never drift from the value it renders
+            # and a bad signature surfaces here rather than at load_skill. The
+            # explicit name keeps the wrap working for callables without
+            # ``__name__`` (a partial, a callable object) and is never surfaced.
+            self._instructions = tool(body, name=f"{self.name}_instructions")
+        else:
+            raise TypeError(f"instructions must be a string or a callable, got {type(body).__name__}")
 
     @overload
     def resource(self, func: Callable[P, T]) -> Callable[P, T]: ...

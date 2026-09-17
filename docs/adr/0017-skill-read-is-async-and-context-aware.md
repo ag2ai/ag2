@@ -82,6 +82,13 @@ every read through the same `FunctionTool` path as a resource.**
   `LocalRuntime.read_resource` since 0006. The alternative, letting each runtime
   pick its own colour, pushes the union back into the caller.
 
+- **An async runtime method must offload its blocking work itself.** A sync tool
+  function is threadpooled for free by `tool()` (`sync_to_thread=True`); an async
+  one is not, so `LocalRuntime.read` and `read_resource` wrap their filesystem work
+  in `run_in_threadpool`. This is not micro-optimising one small file read:
+  `SkillLoader.get_skill` rescans the whole skills tree whenever the discovery
+  cache is cold, which is exactly what an install or `invalidate()` leaves behind.
+
 - **A dynamic body is not capped, while a resource read is** (`_RESOURCE_READ_CAP`,
   100k chars). The body is symmetric with `LocalRuntime`'s `SKILL.md` read, which
   is likewise uncapped: a skill's own instructions are authored content, not

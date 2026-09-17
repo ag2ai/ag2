@@ -155,9 +155,12 @@ class TestInstructionsRegistration:
 
         assert isinstance(skill.get_instructions(), FunctionTool)
 
-    def test_non_string_non_callable_rejected(self) -> None:
+    # ``None`` is the decorator's "no argument yet" marker, so the constructor must
+    # not route through it — that would store no body and fail only at load_skill.
+    @pytest.mark.parametrize("value", [42, None])
+    def test_non_string_non_callable_rejected(self, value: object) -> None:
         with pytest.raises(TypeError, match="must be a string or a callable"):
-            MemorySkill(name="s", description="d", instructions=42)  # type: ignore[arg-type]
+            MemorySkill(name="s", description="d", instructions=value)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

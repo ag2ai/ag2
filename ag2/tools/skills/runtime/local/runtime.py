@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from fast_depends.utils import run_in_threadpool
+
 from ag2.tools.sandbox import Sandbox, SandboxFactory
 from ag2.tools.sandbox.adapter import ShellAdapter
 from ag2.tools.sandbox.local import LocalSandbox
@@ -106,6 +108,11 @@ class LocalRuntime(SkillRuntime):
 
         Raises ``SkillNotFoundError`` (via the loader) when *name* is unknown.
         """
+        # Discovery may scan the whole skills tree on a cold cache, so the
+        # filesystem work stays off the event loop.
+        return await run_in_threadpool(self._read, name)
+
+    def _read(self, name: str) -> str:
         skill = self._loader.get_skill(name)
         skill_dir = self._loader.get_path(name)
         # Body only: the frontmatter is already surfaced via the catalog.
@@ -118,6 +125,9 @@ class LocalRuntime(SkillRuntime):
         *context* is part of the runtime protocol (used by callable-backed runtimes
         for dependency injection); a filesystem read ignores it.
         """
+        return await run_in_threadpool(self._read_resource, name, resource)
+
+    def _read_resource(self, name: str, resource: str) -> str:
         skill = self._loader.get_skill(name)
         skill_dir = self._loader.get_path(name)
         resolved = _resolve_within(skill_dir / resource, skill_dir)
