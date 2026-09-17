@@ -13,8 +13,7 @@ from a2a.utils.constants import PROTOCOL_VERSION_1_0, TransportProtocol
 from packaging.version import InvalidVersion, Version
 
 from ..errors import A2AIncompatibleProtocolVersionError, A2AInvalidCardError
-from . import TransportName
-from .grpc import default_grpc_channel_factory
+from . import TransportName, default_grpc_channel_factory
 
 if TYPE_CHECKING:
     import grpc.aio
@@ -136,9 +135,10 @@ def make_a2a_client(  # type: ignore[no-any-unimported]
 
     The SDK factory negotiates streaming vs. polling automatically based on
     ``card.capabilities.streaming`` and ``ClientConfig.streaming``.
-    Importing ``default_grpc_channel_factory`` lazily would keep HTTP-only
-    deployments from pulling ``grpcio`` — currently eager since the cycle
-    avoidance is handled via ``_common.py``.
+
+    ``default_grpc_channel_factory`` is the package-level guarded binding, so an
+    HTTP-only client never pulls ``grpcio``; it is only ever called on the gRPC
+    branch below, where a missing ``grpcio`` raises with the install hint.
     """
     if transport == "grpc" and grpc_channel_factory is None:
         grpc_channel_factory = default_grpc_channel_factory

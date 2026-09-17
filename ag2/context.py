@@ -148,6 +148,15 @@ class ConversationContext:
         catch site downstream is what keeps the distinction from evaporating —
         the alternative, tagging whatever the hook threw, is lost the moment
         anything in between re-raises it as its own error.
+
+        *timeout* covers whoever is actually answering, which is not always
+        someone in this process. When the agent is served over a protocol that
+        routes the question to the calling client — ``ag2.mcp`` does, and on
+        the 2026-07-28 revision the question goes back as the result of the
+        call — the wait spans the client's side of a round trip: the network,
+        and a human reading the question in another application. Size it for
+        that, not for a local prompt. It stays independent of any lifetime the
+        transport puts on the pause; whichever elapses first ends the turn.
         """
         request_msg = HumanInputRequest(message)
         async with self.stream.get(HumanMessage.parent_id == request_msg.id) as response:

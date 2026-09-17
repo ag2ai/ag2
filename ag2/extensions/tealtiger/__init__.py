@@ -17,6 +17,7 @@ from ag2.extensions.tealtiger.types import (
     GovernancePolicy,
     InjectionFinding,
     InjectionPattern,
+    OutputAction,
     TEECReceipt,
 )
 
@@ -29,6 +30,7 @@ __all__ = [
     "GovernancePolicy",
     "InjectionFinding",
     "InjectionPattern",
+    "OutputAction",
     "TEECReceipt",
     "TealTigerMiddleware",
 ]

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar, overload
 
@@ -14,6 +14,9 @@ from ag2.tools.skills.skill_types import Resource, Script, Skill, SkillMetadata
 
 P = ParamSpec("P")
 T = TypeVar("T")
+
+#: A skill body: static text, or a callable rendering it on every read.
+Instructions = str | Callable[..., str | Awaitable[str]]
 
 
 class MemorySkill:
@@ -34,29 +37,89 @@ class MemorySkill:
         def convert(value: float, factor: float) -> str:
             return str(value * factor)
 
+    The body is a string used as-is, or a callable rendered on every
+    ``load_skill``. Pass it to the constructor, or register it with the
+    ``@skill.instructions`` decorator, which takes precedence::
+
+        skill = MemorySkill(name="deploy", description="Deploy the service")
+
+
+        @skill.instructions
+        async def body(region: Annotated[str, Variable("region")]) -> str:
+            return f"Deploy to {region}."
+
     A Resource callable runs every read (so it may return live data). A Script
     callable runs in-process when invoked via ``run_skill_script``; its JSON
     Schema is generated from the signature and disclosed inside the loaded skill
-    content. Owned by a :class:`MemoryRuntime`; pass one (or several) straight to
-    ``SkillPlugin`` / ``SkillsToolkit`` and it is wrapped automatically.
+    content. Instructions, Resources, and Scripts are all invoked through the
+    same ``FunctionTool`` path, so any of them may use ``Context`` /
+    ``Variable`` / ``Inject`` dependency injection. Owned by a
+    :class:`MemoryRuntime`; pass one (or several) straight to ``SkillPlugin`` /
+    ``SkillsToolkit`` and it is wrapped automatically.
     """
 
-    __slots__ = ("name", "description", "instructions", "version", "_resources", "_scripts")
+    __slots__ = ("name", "description", "version", "_instructions", "_resources", "_scripts")
+
+    # Static text, or the FunctionTool that renders it — never both.
+    _instructions: "str | FunctionTool"
 
     def __init__(
         self,
         *,
         name: str,
         description: str,
-        instructions: str = "",
+        instructions: "Instructions" = "",
         version: str | None = None,
     ) -> None:
         self.name = name
         self.description = description
-        self.instructions = instructions
         self.version = version
         self._resources: dict[str, _MemoryResource] = {}
         self._scripts: dict[str, _MemoryScript] = {}
+        # Not via ``instructions()``: there ``None`` means "used as a decorator",
+        # which would leave the body unset instead of rejecting a bad argument.
+        self._set_instructions(instructions)
+
+    @overload
+    def instructions(self, value: Callable[P, T]) -> Callable[P, T]: ...
+
+    @overload
+    def instructions(self, value: str) -> str: ...
+
+    @overload
+    def instructions(self, value: None = None) -> Callable[[Callable[P, T]], Callable[P, T]]: ...
+
+    def instructions(self, value: "str | Callable[..., Any] | None" = None) -> Any:
+        """Set the skill body — static text, or a callable that renders it.
+
+        Usable as a decorator (``@skill.instructions``, bare or called) or as a
+        plain setter (``skill.instructions("text")``). Returns its argument
+        unchanged, so a decorated function stays callable in its own right::
+
+            @skill.instructions
+            async def body(region: Annotated[str, Variable("region")]) -> str:
+                return f"Deploy to {region}."
+
+        A callable body is rendered on every read; a string is used as-is.
+        """
+
+        def register(body: "str | Callable[..., Any]") -> "str | Callable[..., Any]":
+            self._set_instructions(body)
+            return body
+
+        return register(value) if value is not None else register
+
+    def _set_instructions(self, body: "str | Callable[..., Any]") -> None:
+        if isinstance(body, str):
+            self._instructions = body
+        elif callable(body):
+            # Wrap eagerly, so the tool can never drift from the value it renders
+            # and a bad signature surfaces here rather than at load_skill. The
+            # explicit name keeps the wrap working for callables without
+            # ``__name__`` (a partial, a callable object) and is never surfaced.
+            self._instructions = tool(body, name=f"{self.name}_instructions")
+        else:
+            raise TypeError(f"instructions must be a string or a callable, got {type(body).__name__}")
 
     @overload
     def resource(self, func: Callable[P, T]) -> Callable[P, T]: ...
@@ -134,6 +197,15 @@ class MemorySkill:
             resources=tuple(Resource(name=r.name) for r in sorted(self._resources.values(), key=lambda r: r.name)),
             location=None,
         )
+
+    def get_instructions(self) -> "str | FunctionTool":
+        """The body: static text, or the ``FunctionTool`` that renders it per read.
+
+        Wrapping a callable body with ``tool()`` puts it on the same
+        FastDepends-validated invocation path as a resource or a script, so it can
+        use ``Context`` / ``Variable`` / ``Inject`` dependency injection.
+        """
+        return self._instructions
 
     def get_resource(self, resource: str) -> "_MemoryResource | None":
         return self._resources.get(resource)

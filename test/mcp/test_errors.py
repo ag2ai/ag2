@@ -11,7 +11,8 @@ from ag2 import Agent
 from ag2.mcp import MCPFunctionTool, MCPServer
 from ag2.mcp.testing import connect
 from ag2.mcp.tools import ToolContext
-from ag2.testing import TestConfig
+
+from ._helpers import first_text, greeter
 
 
 class _SilentError(Exception):
@@ -25,7 +26,7 @@ async def _raises_silently(_args: dict[str, Any], _ctx: ToolContext) -> Any:
 @pytest.mark.asyncio
 class TestErrors:
     async def test_missing_message_argument(self) -> None:
-        server = MCPServer(Agent("greeter", config=TestConfig("hi")))
+        server = MCPServer(greeter())
 
         async with connect(server, raise_exceptions=False) as session:
             result = await session.call_tool("ask", {})
@@ -33,7 +34,7 @@ class TestErrors:
         assert result.is_error is True
 
     async def test_unknown_tool(self) -> None:
-        server = MCPServer(Agent("greeter", config=TestConfig("hi")))
+        server = MCPServer(greeter())
 
         async with connect(server, raise_exceptions=False) as session:
             result = await session.call_tool("nope", {"message": "hi"})
@@ -52,24 +53,18 @@ class TestErrors:
 @pytest.mark.asyncio
 class TestToolErrorsAreLegible:
     async def test_a_message_less_exception_still_names_itself(self) -> None:
-        """``str(exc)`` is empty for a bare ``raise``, which would ship an empty
-        text block; the class name is the least the client can act on.
-        """
-        server = MCPServer(
-            Agent("g", config=TestConfig("hi")), tools=[MCPFunctionTool("boom", "Boom", _raises_silently)]
-        )
+        """``str(exc)`` is empty for a bare ``raise``; the class name is the least a client can act on."""
+        server = MCPServer(greeter(), tools=[MCPFunctionTool("boom", "Boom", _raises_silently)])
 
         async with connect(server, raise_exceptions=False) as session:
             result = await session.call_tool("boom", {})
 
         assert result.is_error is True
-        assert result.content[0].text == "_SilentError"
+        assert first_text(result) == "_SilentError"
 
     async def test_the_traceback_is_logged_server_side(self, caplog: pytest.LogCaptureFixture) -> None:
         """The wire carries only the message, so without a log the stack is lost."""
-        server = MCPServer(
-            Agent("g", config=TestConfig("hi")), tools=[MCPFunctionTool("boom", "Boom", _raises_silently)]
-        )
+        server = MCPServer(greeter(), tools=[MCPFunctionTool("boom", "Boom", _raises_silently)])
 
         with caplog.at_level(logging.ERROR, logger="ag2.mcp.server"):
             async with connect(server, raise_exceptions=False) as session:

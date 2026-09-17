@@ -207,13 +207,16 @@ async def test_plugin_with_dependencies_and_variables(provider_config) -> None:
 
 async def test_multiple_plugins_compose(provider_config) -> None:
     """Multiple plugins compose without overwriting each other's contributions."""
+    tool_calls: list[str] = []
 
     def tool_a() -> str:
-        """Returns 'a'."""
+        """Return the result for A."""
+        tool_calls.append("tool_a")
         return "result_a"
 
     def tool_b() -> str:
-        """Returns 'b'."""
+        """Return the result for B."""
+        tool_calls.append("tool_b")
         return "result_b"
 
     plugin_a = Plugin(prompt="If asked for A, call tool_a.", tools=[tool_a])
@@ -222,6 +225,4 @@ async def test_multiple_plugins_compose(provider_config) -> None:
     agent = Agent("composed", config=provider_config, plugins=[plugin_a, plugin_b])
     reply = await agent.ask("Get me both A and B by calling the tools.")
     assert reply.body is not None
-    body = reply.body.lower()
-    assert "result_a" in body
-    assert "result_b" in body
+    assert set(tool_calls) == {"tool_a", "tool_b"}
