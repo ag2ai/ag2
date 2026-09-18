@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import threading
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path, PurePosixPath
+from unittest.mock import patch
 
 import pytest
 from dirty_equals import IsPartialDict
@@ -18,6 +20,7 @@ from ag2.tools.sandbox import ExecResult, Sandbox
 from ag2.tools.sandbox.adapter import ShellAdapter
 from ag2.tools.sandbox.local import LocalSandbox
 from ag2.tools.skills import LocalRuntime
+from ag2.tools.skills.runtime.local.loader import SkillLoader
 
 
 def _write_script_skill(base: Path, name: str, script_body: str | None = None) -> Path:
@@ -165,6 +168,25 @@ async def test_load_skill_wraps_content_with_resources(skill_tree: Path, context
     # Body only: the YAML frontmatter is stripped before wrapping (spec Step 4).
     assert "description: Best practices for React development" not in content
     assert "version: 1.2.0" not in content
+
+
+@pytest.mark.asyncio
+async def test_filesystem_reads_stay_off_the_event_loop(skill_tree: Path, context: Context) -> None:
+    # read/read_resource are async, so their blocking filesystem work — which
+    # includes a full tree scan on a cold discovery cache — must run in a thread.
+    runtime = LocalRuntime(dir=skill_tree)
+    threads: list[int] = []
+    original = SkillLoader.get_skill
+
+    def record(self: SkillLoader, name: str) -> object:
+        threads.append(threading.get_ident())
+        return original(self, name)
+
+    with patch.object(SkillLoader, "get_skill", record):
+        await runtime.read("react-best-practices", context)
+        await runtime.read_resource("react-best-practices", "references/guide.md", context)
+
+    assert threads and all(t != threading.get_ident() for t in threads)
 
 
 @pytest.mark.asyncio

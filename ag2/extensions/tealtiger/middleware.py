@@ -10,11 +10,11 @@ per-turn _TealTigerPerTurn instances that share a reference to the factory state
 No external dependencies beyond AG2 and the standard library.
 """
 
+import asyncio
 import fnmatch
 import hashlib
-import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -22,37 +22,26 @@ if TYPE_CHECKING:
     from ag2.events import BaseEvent, ToolCallEvent
     from ag2.middleware.base import ToolExecution
 
-from ag2.events import ToolErrorEvent
+from ag2.events import ToolErrorEvent, ToolResultEvent
+from ag2.events.input_events import DataInput, TextInput
 from ag2.extensions.tealtiger.types import (
     ARG_TYPES_BY_NAME,
     DEFAULT_INJECTION_CONFIDENCE_THRESHOLD,
     INJECTION_PATTERNS,
     INJECTION_TECHNIQUES,
+    PII_PATTERNS,
+    SECRET_PATTERNS,
     GovernanceDecision,
     GovernanceMode,
     GovernancePolicy,
     InjectionFinding,
+    OutputAction,
     TEECReceipt,
+    most_restrictive,
 )
 from ag2.middleware import BaseMiddleware
 from ag2.middleware.base import ToolResultType
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
-
-_PII_PATTERNS: dict[str, re.Pattern[str]] = {
-    "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
-    "credit_card": re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b"),
-    "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
-    "phone": re.compile(r"\b(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
-}
-
-_SECRET_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\b(sk-[a-zA-Z0-9]{20,})\b"),
-    re.compile(r"\b(ghp_[a-zA-Z0-9]{36,})\b"),
-    re.compile(r"\b(AKIA[0-9A-Z]{16})\b"),
-    re.compile(r"\b(xox[bpors]-[a-zA-Z0-9-]+)\b"),
-    re.compile(r"(?i)(?:api[_-]?key|apikey)\s*[:=]\s*['\"]?[a-zA-Z0-9_\-]{20,}"),
-    re.compile(r"-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----"),
-]
 
 # Injection findings keep a snippet of the match as evidence, not the whole argument.
 _MAX_MATCHED_TEXT_CHARS = 100
@@ -60,6 +49,72 @@ _MAX_MATCHED_TEXT_CHARS = 100
 # Stands in for the argument name in an arg_validation reason code when the call's
 # arguments were not a mapping and the hit cannot be attributed to one argument.
 _UNNAMED_ARG = "*"
+
+
+def _string_leaves(value: Any) -> list[str]:
+    """Every string inside a structured tool result, in traversal order.
+
+    Non-string scalars are skipped: they cannot be rewritten in place, so matching one
+    would mean withholding results over numeric ids that merely look like a phone number.
+    """
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Mapping):
+        return [leaf for item in value.values() for leaf in _string_leaves(item)]
+    if isinstance(value, (list, tuple, set)):
+        return [leaf for item in value for leaf in _string_leaves(item)]
+    return []
+
+
+def _rewrite_string_leaves(value: Any, rewrite: Callable[[str], str]) -> Any:
+    """`value` with `rewrite` applied to every string `_string_leaves` would collect."""
+    if isinstance(value, str):
+        return rewrite(value)
+    if isinstance(value, Mapping):
+        return {key: _rewrite_string_leaves(item, rewrite) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_rewrite_string_leaves(item, rewrite) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_rewrite_string_leaves(item, rewrite) for item in value)
+    if isinstance(value, set):
+        return {_rewrite_string_leaves(item, rewrite) for item in value}
+    return value
+
+
+def _scannable_text(part: Any) -> str | None:
+    """The text an output scan reads from one result part, or `None` if it has none.
+
+    A tool that returns a `dict` hands back a `DataInput`, not a `TextInput` — an
+    SSN in `{"ssn": "123-45-6789"}` leaks just as readily as one in a sentence, so
+    structured parts are scanned through their strings.
+    """
+    if isinstance(part, TextInput) and isinstance(part.content, str):
+        return part.content
+    if isinstance(part, DataInput):
+        leaves = _string_leaves(part.data)
+        return "\n".join(leaves) if leaves else None
+    return None
+
+
+def _rewrite_part(part: Any, rewrite: Callable[[str], str]) -> None:
+    """Apply `rewrite` in place to whatever `_scannable_text` reads from `part`."""
+    if isinstance(part, TextInput):
+        part.content = rewrite(part.content)
+    elif isinstance(part, DataInput):
+        part.data = _rewrite_string_leaves(part.data, rewrite)
+
+
+def _reconstructable(exc: BaseException) -> bool:
+    """Whether `type(exc)(message)` is safe to construct.
+
+    Custom exceptions can take extra required constructor args; for those we fall
+    back to a plain `Exception` rather than risk a TypeError while sanitizing.
+    """
+    try:
+        type(exc)(str(exc))
+    except Exception:
+        return False
+    return True
 
 
 def _matches_blocked_terms(text: str, spec: dict[str, Any]) -> bool:
@@ -181,6 +236,13 @@ class TealTigerMiddleware:
         self._receipts: list[TEECReceipt] = []
         self._frozen_agents: set[str] = set()
         self._cumulative_cost: float = 0.0
+        # Rolling ``time.monotonic()`` call timestamps for each rate_limit policy,
+        # keyed by the policy's index in ``policies``. Each policy owns its own
+        # list so policies that share a tool scope but use different windows never
+        # prune or count one another's timestamps. A monotonic clock keeps a
+        # window immune to wall-clock steps (NTP, manual changes), which would
+        # otherwise resurrect or silently erase calls. Survives across turns.
+        self._call_history: dict[int, list[float]] = {}
 
         # Compute policy digest for receipts
         policy_str = str(sorted((p.type, str(p.config)) for p in self.policies))
@@ -230,6 +292,7 @@ class TealTigerMiddleware:
         self._receipts.clear()
         self._frozen_agents.clear()
         self._cumulative_cost = 0.0
+        self._call_history.clear()
 
 
 class _TealTigerPerTurn(BaseMiddleware):
@@ -294,7 +357,11 @@ class _TealTigerPerTurn(BaseMiddleware):
         event: "ToolCallEvent",
         context: "Context",
     ) -> "ToolResultType":
-        """Evaluate governance policies before tool execution."""
+        """Govern a tool call on both sides of its execution.
+
+        Policies over the call's *arguments* are evaluated before it runs and can
+        deny it; `output_scan` policies then scan the *result* on the way back.
+        """
         start_time = time.perf_counter()
         tool_name = event.name
         tool_args = event.serialized_arguments
@@ -321,6 +388,16 @@ class _TealTigerPerTurn(BaseMiddleware):
 
         # MONITOR and ENFORCE: evaluate policies
         decision = self._evaluate(tool_name, tool_args)
+
+        # Rate limits run after the argument policies, so a call those already deny
+        # never consumes window budget. They are applied here rather than inside
+        # ``_evaluate`` because in ENFORCE the answer may be "wait", which needs to
+        # await — and waiting, not refusing, is what actually slows a runaway loop:
+        # a refusal goes back to the model as a tool error and a looping agent
+        # simply calls again, spending a model round-trip per refusal.
+        if decision.action != "DENY":
+            await self._apply_rate_limits(decision, tool_name)
+
         decision.evaluation_time_ms = round((time.perf_counter() - start_time) * 1000, 3)
 
         # Record decision
@@ -345,6 +422,12 @@ class _TealTigerPerTurn(BaseMiddleware):
         decision.cost_tracked = self._factory.cost_per_call
         decision.cumulative_cost = self._factory._cumulative_cost
 
+        # In ENFORCE the slot was already reserved while the limits were applied.
+        # Everything that reaches here in MONITOR really runs — including a call
+        # whose would-be denial was only recorded — so it counts too.
+        if self._factory.mode != GovernanceMode.ENFORCE:
+            self._record_rate_limit_calls(tool_name)
+
         # Execute the tool
         result = await call_next(event, context)
 
@@ -352,7 +435,10 @@ class _TealTigerPerTurn(BaseMiddleware):
         outcome = "error" if isinstance(result, ToolErrorEvent) else "executed"
         self._emit_receipt(decision, execution_outcome=outcome)
 
-        return result
+        # Post-tool defense: scan the RESULT for PII/secrets before it flows back
+        # into agent context. Applies to successful and error results alike, and
+        # only if an output_scan policy is configured.
+        return self._scan_result(event, tool_name, result)
 
     def _evaluate(self, tool_name: str, tool_args: Any) -> GovernanceDecision:
         """Evaluate governance policies deterministically."""
@@ -453,6 +539,300 @@ class _TealTigerPerTurn(BaseMiddleware):
             cumulative_cost=self._factory._cumulative_cost,
         )
 
+    def _scan_result(self, event: "ToolCallEvent", tool_name: str, result: "ToolResultType") -> "ToolResultType":
+        """Scan a tool result for PII/secrets, and redact, withhold, or flag it.
+
+        Applies to both successful results and error results (``ToolErrorEvent``),
+        whose exception message and traceback reach the model just like a returned
+        value. Each detector resolves its own action across the configured
+        ``output_scan`` policies, taking the most restrictive one asked for. An
+        error stays an error: a blocked error result is replaced with a sanitized
+        governance error, never turned into a success.
+        """
+        is_error = isinstance(result, ToolErrorEvent)
+        # ToolResultEvent covers both successful results and ToolErrorEvent
+        # (a subclass): a tool that raises with an SSN or credential in its
+        # message leaks it into model context just as a returned value would,
+        # so error results are scanned too. Non-result types have nothing to scan.
+        if not isinstance(result, ToolResultEvent):
+            return result
+
+        policies = [p for p in self._factory.policies if p.type == "output_scan"]
+        if not policies:
+            return result
+
+        scannable = [part for part in result.result.parts if _scannable_text(part) is not None]
+        if not scannable:
+            return result
+
+        combined = "\n".join(_scannable_text(part) or "" for part in scannable)
+
+        # Resolve each detector independently: which categories actually hit, and
+        # the most restrictive action any policy that scanned them asked for.
+        pii_hits: list[str] = []
+        pii_actions: list[OutputAction] = []
+        secret_actions: list[OutputAction] = []
+
+        for policy in policies:
+            cfg = policy.config
+            if cfg.get("scan_pii", True):
+                found = self._detect_pii(combined, cfg.get("categories", []))
+                if found:
+                    pii_hits.extend(found)
+                    pii_actions.append(OutputAction(cfg.get("pii_action", OutputAction.REDACT)))
+            if cfg.get("scan_secrets", True) and self._detect_secrets(combined):
+                secret_actions.append(OutputAction(cfg.get("secret_action", OutputAction.BLOCK)))
+
+        pii_categories = list(dict.fromkeys(pii_hits))
+        secret_hit = bool(secret_actions)
+        if not pii_categories and not secret_hit:
+            return result
+
+        pii_action = most_restrictive(pii_actions, default=OutputAction.FLAG)
+        secret_action = most_restrictive(secret_actions, default=OutputAction.FLAG)
+
+        reason_codes = [f"OUTPUT_PII_DETECTED:{cat}" for cat in pii_categories]
+        if secret_hit:
+            reason_codes.append("OUTPUT_SECRET_DETECTED")
+        risk_score = 90 if secret_hit else 60
+        agent_name = self._agent_name or "unknown"
+
+        enforcing = self._factory.mode == GovernanceMode.ENFORCE
+        triggered = [pii_action] if pii_categories else []
+        if secret_hit:
+            triggered.append(secret_action)
+
+        # BLOCK (ENFORCE only) — withhold the whole result.
+        if OutputAction.BLOCK in triggered and enforcing:
+            return self._withhold_result(event, tool_name, reason_codes, risk_score, agent_name)
+
+        # A BLOCK outside ENFORCE degrades to redaction so the value still never leaks.
+        redact_pii = bool(pii_categories) and pii_action in (OutputAction.REDACT, OutputAction.BLOCK)
+        redact_secrets = secret_hit and secret_action in (OutputAction.REDACT, OutputAction.BLOCK)
+
+        action_value = "ALLOW"
+        if redact_pii or redact_secrets:
+            reason_codes.append("OUTPUT_REDACTED")
+            categories = pii_categories if redact_pii else []
+            for part in scannable:
+                _rewrite_part(part, lambda text: self._redact(text, categories, redact_secrets))
+            # An error result also carries the exception itself; `str(error)` reaches
+            # the model independently of the parts, so redact it in place too.
+            if is_error:
+                self._redact_error(result, categories, redact_secrets)
+
+            # Detection runs over the joined parts, redaction over each part alone, so a
+            # value straddling two parts can be found but not removed. Rather than let it
+            # through, withhold the result (or, outside ENFORCE, the offending parts).
+            residual = "\n".join(_scannable_text(part) or "" for part in scannable)
+            if self._detect_pii(residual, categories) or (redact_secrets and self._detect_secrets(residual)):
+                reason_codes.append("OUTPUT_REDACTION_INCOMPLETE")
+                if enforcing:
+                    return self._withhold_result(event, tool_name, reason_codes, risk_score, agent_name)
+                for part in scannable:
+                    _rewrite_part(part, lambda _text: "[REDACTED:unredactable]")
+
+            # `action` carries only ALLOW/DENY/MONITOR; a rewritten-but-delivered result
+            # is an ALLOW, and `OUTPUT_REDACTED` in the reason codes is what says it was
+            # rewritten. MONITOR keeps its own marker, as it does for a call it let past.
+            action_value = "MONITOR" if self._factory.mode == GovernanceMode.MONITOR else "ALLOW"
+
+        self._record_decision(
+            action=action_value,
+            agent_name=agent_name,
+            tool_name=tool_name,
+            reason_codes=reason_codes,
+            risk_score=risk_score,
+            execution_outcome="executed",
+        )
+        return result
+
+    def _withhold_result(
+        self,
+        event: "ToolCallEvent",
+        tool_name: str,
+        reason_codes: list[str],
+        risk_score: int,
+        agent_name: str,
+    ) -> "ToolErrorEvent":
+        """Replace a result carrying sensitive data with a governance error."""
+        reason_codes = [*reason_codes, "OUTPUT_BLOCKED"]
+        decision = self._record_decision(
+            action="DENY",
+            agent_name=agent_name,
+            tool_name=tool_name,
+            reason_codes=reason_codes,
+            risk_score=risk_score,
+            execution_outcome="blocked",
+        )
+        reason = ", ".join(reason_codes)
+        return ToolErrorEvent.from_call(
+            event,
+            error=Exception(
+                f"[GOVERNANCE DENIED] Result of tool '{tool_name}' withheld — "
+                f"sensitive data detected. Reason: {reason}. Decision ID: {decision.decision_id}"
+            ),
+        )
+
+    @staticmethod
+    def _rate_limit_covers(tool_name: str, config: dict[str, Any]) -> bool:
+        """Whether a rate_limit policy's scope covers `tool_name`.
+
+        A global policy (``tool`` is None) covers every call; a scoped one covers
+        only names matching its ``fnmatch`` pattern.
+        """
+        pattern = config.get("tool")
+        return pattern is None or fnmatch.fnmatch(tool_name, pattern)
+
+    def _rate_limit_delay(self, config: dict[str, Any], policy_index: int) -> float:
+        """Seconds until this policy has room for another call — 0.0 if it has room now.
+
+        A pure query: it reads the timestamps still inside this policy's own window
+        (keyed by ``policy_index``) without rewriting them, so asking one policy
+        never disturbs the history another policy is counting. When the window is
+        full, the wait is until the oldest call that still counts ages out of it.
+        """
+        now = time.monotonic()
+        max_calls = int(config["max_calls"])
+        window = float(config["window_seconds"])
+        recent = sorted(t for t in self._factory._call_history.get(policy_index, []) if t > now - window)
+        if len(recent) < max_calls:
+            return 0.0
+        # Dropping everything up to and including this entry leaves max_calls - 1
+        # in the window, which is exactly enough room for one more call.
+        frees_at = recent[len(recent) - max_calls] + window
+        return max(0.0, frees_at - now)
+
+    def _rate_limit_wait(self, tool_name: str) -> float | None:
+        """How long `tool_name` must wait before every policy covering it has room.
+
+        0.0 means it may proceed now. ``None`` means it must not proceed at all —
+        some policy covering it is over its limit and either asked to deny outright
+        or would hold the call longer than its `max_wait_seconds` allows.
+        """
+        wait = 0.0
+        for policy_index, policy in enumerate(self._factory.policies):
+            if policy.type != "rate_limit" or not self._rate_limit_covers(tool_name, policy.config):
+                continue
+            delay = self._rate_limit_delay(policy.config, policy_index)
+            if delay <= 0.0:
+                continue
+            if policy.config["on_exceeded"] == "deny" or delay > policy.config["max_wait_seconds"]:
+                return None
+            wait = max(wait, delay)
+        return wait
+
+    async def _apply_rate_limits(self, decision: GovernanceDecision, tool_name: str) -> None:
+        """Hold `tool_name` until its rate limits have room, or mark the decision denied.
+
+        In ENFORCE this both waits and *reserves* the slot: the final check and the
+        recording that follows it are not separated by an await, so under asyncio
+        the pair is atomic and concurrent tool calls in one turn cannot all slip
+        past the same check. MONITOR never waits — it records the would-be denial
+        and lets the call through, and the call is counted once it has run.
+        """
+        if self._factory.mode != GovernanceMode.ENFORCE:
+            if self._rate_limit_wait(tool_name) != 0.0:
+                self._deny_for_rate_limit(decision)
+            return
+
+        while True:
+            wait = self._rate_limit_wait(tool_name)
+            if wait is None:
+                self._deny_for_rate_limit(decision)
+                return
+            if wait <= 0.0:
+                # No await since the check above: the reservation is atomic.
+                self._record_rate_limit_calls(tool_name)
+                return
+            decision.reason_codes.append(f"RATE_LIMIT_WAIT:{wait:.3f}s")
+            await asyncio.sleep(wait)
+
+    @staticmethod
+    def _deny_for_rate_limit(decision: GovernanceDecision) -> None:
+        """Turn `decision` into a rate-limit denial.
+
+        The argument policies had already marked it ``POLICY_ALLOW``; that code
+        stands for "nothing objected" and would otherwise be reported alongside
+        the denial it is now contradicted by, both in the audit trail and in the
+        error the model is handed.
+        """
+        decision.action = "DENY"
+        decision.reason_codes = [c for c in decision.reason_codes if c != "POLICY_ALLOW"]
+        decision.reason_codes.append("RATE_LIMIT_EXCEEDED")
+        decision.risk_score = max(decision.risk_score, 70)
+
+    def _record_rate_limit_calls(self, tool_name: str) -> None:
+        """Record `now` against every rate_limit policy `tool_name` falls under.
+
+        Called only for calls that were allowed to run, so a call blocked in
+        ENFORCE never consumes the window budget. Each policy owns its own
+        timestamp list (keyed by its index), so one real call adds exactly one
+        timestamp per matching policy — two policies sharing a tool scope each
+        count it once against their own window, never twice. This is the only
+        place the history is mutated: entries that have aged out of a policy's
+        own window are dropped here as it appends.
+        """
+        now = time.monotonic()
+        for policy_index, policy in enumerate(self._factory.policies):
+            if policy.type != "rate_limit" or not self._rate_limit_covers(tool_name, policy.config):
+                continue
+            cutoff = now - policy.config["window_seconds"]
+            history = [t for t in self._factory._call_history.get(policy_index, []) if t > cutoff]
+            history.append(now)
+            self._factory._call_history[policy_index] = history
+
+    def _record_decision(
+        self,
+        action: str,
+        agent_name: str,
+        tool_name: str,
+        reason_codes: list[str],
+        risk_score: int,
+        execution_outcome: str,
+    ) -> GovernanceDecision:
+        """Record a decision on the factory, notify `on_decision`, and emit its receipt."""
+        decision = GovernanceDecision(
+            action=action,
+            mode=self._factory.mode.value,
+            agent_name=agent_name,
+            tool_name=tool_name,
+            reason_codes=reason_codes,
+            risk_score=risk_score,
+            cumulative_cost=self._factory._cumulative_cost,
+        )
+        self._factory._decisions.append(decision)
+        if self._factory.on_decision:
+            self._factory.on_decision(decision)
+        self._emit_receipt(decision, execution_outcome=execution_outcome)
+        return decision
+
+    def _redact_error(self, result: "ToolErrorEvent", categories: list[str], redact_secrets: bool) -> None:
+        """Sanitize the exception carried by an error result, in place.
+
+        `ToolErrorEvent.error` is a separate `Exception` whose rendered string
+        reaches the model alongside `result.parts`. Redacting the parts alone
+        would leave the credential/PII visible via `str(error)`, so the error is
+        replaced with one carrying the redacted message.
+        """
+        original = str(result.error)
+        redacted = self._redact(original, categories, redact_secrets)
+        if redacted != original:
+            result.error = type(result.error)(redacted) if _reconstructable(result.error) else Exception(redacted)
+
+    @staticmethod
+    def _redact(text: str, categories: list[str], redact_secrets: bool) -> str:
+        """Replace PII (in ``categories``) and, if requested, secrets with markers."""
+        redacted = text
+        for cat in categories:
+            pattern = PII_PATTERNS.get(cat)
+            if pattern is not None:
+                redacted = pattern.sub(f"[REDACTED:{cat}]", redacted)
+        if redact_secrets:
+            for pattern in SECRET_PATTERNS:
+                redacted = pattern.sub("[REDACTED:secret]", redacted)
+        return redacted
+
     def _emit_receipt(self, decision: GovernanceDecision, execution_outcome: str) -> None:
         """Emit a TEEC receipt for the governance decision."""
         receipt = TEECReceipt(
@@ -474,7 +854,7 @@ class _TealTigerPerTurn(BaseMiddleware):
         """Detect PII patterns in text."""
         found = []
         for cat in categories:
-            pattern = _PII_PATTERNS.get(cat)
+            pattern = PII_PATTERNS.get(cat)
             if pattern and pattern.search(text):
                 found.append(cat)
         return found
@@ -482,7 +862,7 @@ class _TealTigerPerTurn(BaseMiddleware):
     @staticmethod
     def _detect_secrets(text: str) -> bool:
         """Detect secret patterns in text."""
-        return any(p.search(text) for p in _SECRET_PATTERNS)
+        return any(p.search(text) for p in SECRET_PATTERNS)
 
     @staticmethod
     def _validate_args(tool_args: Any, args_str: str, constraints: dict[str, dict[str, Any]]) -> str | None:

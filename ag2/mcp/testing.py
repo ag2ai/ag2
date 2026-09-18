@@ -28,15 +28,9 @@ async def connect(
     """Yield an in-process, initialized MCP ``ClientSession`` talking to ``mcp_server``.
 
     Dispatches directly into the wrapped low-level server over in-memory streams
-    (no sockets, no subprocess) — the MCP analog of the A2A ``ASGITransport``
-    test factory. Extra keyword arguments (e.g. ``logging_callback`` /
-    ``message_handler``) are forwarded to the underlying client session, which is
-    how tests observe progress / log notifications.
-
-    Built on the memory-stream primitive rather than on ``mcp``'s own
-    connected-server helper, which 2.0 removed in favour of a differently-shaped
-    client object. A testing helper exists to absorb that kind of churn, so the
-    contract here — an initialized ``ClientSession`` — is held steady across it.
+    (no sockets, no subprocess). Extra keyword arguments (e.g.
+    ``logging_callback`` / ``message_handler``) are forwarded to the underlying
+    client session, which is how tests observe progress and log notifications.
     """
     async with (
         _served_streams(mcp_server.server, raise_exceptions) as streams,
@@ -55,18 +49,9 @@ async def connect_modern(
 ) -> AsyncGenerator[ClientSession]:
     """Yield an in-process ``ClientSession`` talking to ``mcp_server`` at revision 2026-07-28.
 
-    The modern-era counterpart of :func:`connect` — same shape, same yielded
-    contract, but the connection is pinned to the modern revision instead of
-    negotiating the newest handshake one, so a test reads the same either way.
-
-    The transport is the same in-memory duplex stream pair :func:`connect` uses,
-    which is the shape a stdio client takes; the low-level server picks its era
-    from the client's first request, so this reaches the modern era's *stream*
-    semantics and not only its HTTP ones.
-
-    A thin wrapper over the SDK's own ``Client`` with the revision forced, rather
-    than that client imported into test modules: absorbing this kind of SDK churn
-    is what this module is for.
+    The modern-era counterpart of :func:`connect`: same shape and same yielded
+    contract, with the connection pinned to the modern revision instead of
+    negotiating the newest handshake one, over the same in-memory streams.
     """
     async with Client(
         _MemoryTransport(mcp_server.server, raise_exceptions=raise_exceptions),
@@ -80,9 +65,8 @@ async def connect_modern(
 class _MemoryTransport:
     """An ``mcp.client.Transport`` serving a low-level server over memory streams.
 
-    The stream pair :func:`connect` builds inline, repackaged as the transport
-    object ``Client`` takes — the SDK's own in-memory transport is private, and
-    this keeps :func:`connect` and :func:`connect_modern` on one wire shape.
+    The SDK's own in-memory transport is private, and this keeps :func:`connect`
+    and :func:`connect_modern` on one wire shape.
     """
 
     __slots__ = ("_server", "_raise_exceptions", "_stack")
@@ -128,9 +112,8 @@ async def serve(server: MCPServer, *, base_url: str = "http://test") -> AsyncGen
     """Yield an ``httpx.AsyncClient`` bound to ``server`` over the in-memory ASGI transport.
 
     Drives the ASGI ``lifespan`` protocol so the streamable-HTTP session manager
-    is running (``httpx.ASGITransport`` does not manage lifespan itself), the way
-    ``uvicorn`` would. Use it to exercise the HTTP transport — POST to ``path``,
-    GET the protected-resource metadata, assert status codes — without sockets.
+    is running, the way ``uvicorn`` would (``httpx.ASGITransport`` does not).
+    Use it to exercise the HTTP transport without sockets.
     """
     receive_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
     send_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()

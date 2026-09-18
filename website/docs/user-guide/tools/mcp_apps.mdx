@@ -1,0 +1,343 @@
+---
+title: MCP Apps
+sidebarTitle: MCP Apps
+---
+
+# MCP Apps
+
+[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview){.external-link target="_blank"} — the `io.modelcontextprotocol/ui` extension — lets a served agent hand a host a **real interface** instead of a wall of text. `ag2.mcp.apps` serves one as an **app**: a document plus the tools that render it.
+
+## The constraint that shapes everything
+
+**The host reads the document in parallel with the call that references it.** It does not wait for your handler; it fetches the `ui://` resource as soon as it sees the tool being called, often before.
+
+So the document **cannot be built from the call's arguments**. It is a static body, registered as a resource and read by URI. The per-call data reaches it afterwards, as the result's `structuredContent`, which the host redelivers into the frame as a `ui/notifications/tool-result` notification.
+
+Everything below follows from that one fact: why the HTML is declared next to the tool rather than returned by it, why your return type matters so much, and why a document that serves two tools needs to be told which result just arrived.
+
+!!! warning "MCP Apps and MCP-UI are alternatives — pick one"
+    [`ag2.mcp_ui`](/docs/user-guide/tools/mcp_ui) teaches the **opposite** pattern: its handler builds HTML from the arguments it was given and returns it inside the call result. That is exactly what a host implementing MCP Apps will not render, and the parallel read is why.
+
+    The two modules coexist and neither replaces the other. `ag2.mcp_ui` targets [MCP-UI](https://mcpui.dev/){.external-link target="_blank"} clients and ships as the `ag2[mcp-ui]` extra; `ag2.mcp.apps` targets MCP Apps hosts and needs nothing beyond `ag2[mcp]`. Choose by the host you are serving.
+
+## A first app
+
+`ag2ui` in the HTML below is not imported and not a package you install. It is a global that `ag2.mcp` itself injects: the server places a `<script>` at the head of the document before serving it — inside `<head>` when there is one, after `<html>` when there is not, at the very front of a fragment like the one below — so by the time your own script runs the global exists. What it is and what it exposes is [below](#inside-the-document-ag2ui).
+
+```python linenums="1"
+import asyncio
+from dataclasses import dataclass
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPApp, MCPServer
+
+CARD = """<div id="name">Loading…</div>
+<script>
+  ag2ui.onToolResult(function (result) {
+    document.getElementById("name").textContent = result.structuredContent.name;
+  });
+</script>"""
+
+shop = MCPApp("ui://shop/card", CARD)
+
+@dataclass
+class Item:
+    name: str
+    price: int
+
+    def __str__(self) -> str:
+        return f"{self.name} costs ${self.price}."
+
+@shop.tool
+async def show_item(item_id: str) -> Item:
+    """Show a product card."""
+    return Item(name="Espresso cup", price=12)
+
+agent = Agent(name="shopkeeper", config=AnthropicConfig(model="claude-sonnet-5"))
+server = MCPServer(agent, apps=[shop])
+
+if __name__ == "__main__":
+    asyncio.run(server.run_stdio())
+```
+
+That is the whole thing. `MCPServer(agent, apps=[shop])` registers the document as a resource served with `text/html;profile=mcp-app` (the only MIME type a host will render a `ui://` resource under), advertises `_meta.ui.resourceUri` on `show_item`, and injects the document runtime that makes `ag2ui` exist.
+
+`examples/mcp/server_apps.py` is the runnable version, with a button that calls a second tool.
+
+## The return type does three jobs
+
+`Item` above is doing more work than it looks. From one annotation the framework derives all three of the things MCP wants:
+
+| From `-> Item` | Becomes | Read by |
+|---|---|---|
+| its JSON schema | the tool's `outputSchema` | the client, to validate |
+| its dump | the result's `structuredContent` | your document |
+| its `__str__` | the result's text content | the model, and a text-only client |
+
+Which is why `__str__` is worth writing: a text-only client gets *"Espresso cup costs $12."* rather than a JSON dump.
+
+Both pydantic models and dataclasses work. This applies to any custom tool, not only a UI-bound one — see [Structured output](/docs/user-guide/tools/serving_mcp#structured-output).
+
+### Three levels of control
+
+A handler returns whichever of these fits, in increasing order of control:
+
+```python linenums="1"
+from mcp.types import CallToolResult, TextContent
+
+@shop.tool
+async def typed() -> Item:
+    """A typed value: schema, structured content and text all derived."""
+    return Item(name="Espresso cup", price=12)
+
+@shop.tool
+async def mapping() -> dict:
+    """A mapping: structured content verbatim, text a JSON rendering, no schema."""
+    return {"name": "Espresso cup", "price": 12}
+
+@shop.tool
+async def explicit() -> CallToolResult:
+    """A full result: nothing derived. Also how you state text and data separately."""
+    return CallToolResult(
+        content=[TextContent(type="text", text="One espresso cup, $12.")],
+        structuredContent={"name": "Espresso cup", "price": 12},
+    )
+```
+
+!!! note "The schema follows the annotation, not the value"
+    `outputSchema` is decided once, when the tool is declared. Annotating `-> CallToolResult` is what opts a tool out of an advertised schema; returning one from a handler annotated `-> Item` still advertises `Item`'s schema, and MCP requires your `structuredContent` to conform to it.
+
+## Inside the document: `ag2ui`
+
+A host **discards every message from a view that has not completed the `ui/initialize` handshake**, and tells it nothing. A hand-written button on a document without that handshake is silently dead — which is why the runtime is injected by default.
+
+It defines one global, `ag2ui`:
+
+```javascript
+await ag2ui.ready;                       // the handshake completed
+
+ag2ui.onToolResult(fn);                  // every result for this document
+ag2ui.onToolResult("show_item", fn);     // only that tool's results
+ag2ui.onToolInput(fn);                   // the call's arguments
+ag2ui.onToolInputPartial(fn);            // arguments while the model is still writing them
+ag2ui.onHostContextChanged(fn);          // theme, display mode, styles, locale…
+ag2ui.onCancelled(fn);
+
+await ag2ui.callTool("add_to_cart", { item_id: "42" });
+await ag2ui.sendMessage("Show me the kettle");   // into the conversation
+await ag2ui.openLink("https://example.com");
+await ag2ui.readResource("ui://shop/card");
+await ag2ui.updateContext({ content: [{ type: "text", text: "Viewing item 42" }] });
+await ag2ui.requestDisplayMode("fullscreen");
+await ag2ui.downloadFile(contents);
+await ag2ui.sampling({ messages: [...] });
+ag2ui.log("info", "rendered");
+ag2ui.reportSize();                      // force a size report; it is automatic otherwise
+
+ag2ui.host.capabilities;     // what the host advertised
+ag2ui.host.context;          // theme, styles, display mode, container size
+ag2ui.host.protocolVersion;  // the dialect revision the host answered with
+ag2ui.host.info;             // the host's name and version
+```
+
+Each subscription returns an unsubscribe function. The document's size is reported automatically via a `ResizeObserver`, so the host can size the frame without your writing one.
+
+**Subscribe whenever you like; call only after `ag2ui.ready`.** Registering a handler is local and is safe the moment the document parses — which is why the card above awaits nothing. Everything that *talks* to the host is refused until the handshake completes, so `await ag2ui.ready` before the first `callTool`, `sendMessage` or `readResource`; calling earlier throws rather than posting into a channel the host is still discarding.
+
+Errors arrive on the **same** channel as results — a failed call is a result carrying `isError`, matching how `ag2.mcp` already treats a tool error as a result rather than an exception.
+
+Calling something the host did not advertise **throws in JavaScript before anything is sent**, because a host's own answer to an unadvertised method is silence:
+
+```javascript
+try {
+  await ag2ui.downloadFile(contents);
+} catch (e) {
+  // "the host did not advertise 'downloadFile'" — rather than a button that does nothing.
+}
+```
+
+`requestDisplayMode` refuses locally in the same way, against `ag2ui.host.context.availableDisplayModes` rather than against a capability: asking for a mode the host never offered throws instead of hanging on an answer that will not come.
+
+### Which tool answered
+
+MCP Apps gives the document nothing to correlate with: the notification carrying a result names neither the call nor the tool. With one tool per document that does not matter. With two — a card that renders itself *and* updates after an action — it does.
+
+The server therefore stamps the answering tool's name into the result's `_meta` under `ai.ag2/tool`, and `ag2ui.onToolResult(name, fn)` routes on it:
+
+```javascript
+ag2ui.onToolResult("show_item", renderCard);
+ag2ui.onToolResult("add_to_cart", showConfirmation);
+```
+
+Set that key yourself and your value travels instead, so you can route by your own scheme. This is the one respect in which a `CallToolResult` you assembled yourself is modified; every other key you set travels untouched alongside the stamp.
+
+### Who may call a tool
+
+A tool the document calls through `ag2ui.callTool` need not be one the model can call. `visibility=` says where the host surfaces it — `"model"` in the model's tool list, `"app"` to the document:
+
+```python linenums="1" hl_lines="8 13"
+@dataclass
+class CartLine:
+    status: str
+
+    def __str__(self) -> str:
+        return self.status
+
+@shop.tool
+async def show_item(item_id: str) -> Item:
+    """Show a product card."""
+    return Item(name="Espresso cup", price=12)
+
+@shop.tool(visibility=["app"])
+async def add_to_cart(item_id: str) -> CartLine:
+    """Add an item to the cart. Called by the card's button, not by the model."""
+    return CartLine(status="Added to your cart")
+```
+
+Omit it and no `visibility` is advertised at all, leaving the host to its own default. It is a hint about where to *surface* a tool, not an authorization boundary: the tool is served and dispatched exactly like any other, so anything that must not be called by the model has to refuse in the handler.
+
+### Bringing your own bundle
+
+`inject_runtime=False` turns injection off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself.
+
+```python linenums="1"
+shop = MCPApp("ui://shop/card", BUNDLED_HTML, inject_runtime=False)
+```
+
+## Where the body comes from
+
+`content` takes four forms, told apart **by type alone** — never by looking at the filesystem, so a string is always literal HTML and never a filename:
+
+```python linenums="1"
+from pathlib import Path
+
+from ag2 import Variable
+
+MCPApp("ui://shop/card", CARD)                          # inline HTML
+MCPApp("ui://shop/card", Path("dist/card.html"))        # a built bundle, reread per read
+MCPApp("ui://shop/card", Variable("card"))              # a request-scoped variable
+MCPApp("ui://shop/card", render_card)                   # a sync or async callable
+```
+
+There is an overload per form, so an IDE shows you which one you are using.
+
+**A path-like value is reread on every resource read.** Rebuild the bundle and the next read serves it; there is no cache to invalidate and no server to restart. A file that has gone missing fails that read with a message naming the path, rather than at construction — the document is only promised at read time.
+
+```python linenums="1"
+shop = MCPApp("ui://shop/card", Path(__file__).parent / "dist" / "card.html", inject_runtime=False)
+```
+
+### Request-scoped bodies and metadata
+
+An app resolves runtime values from the same `context_provider` the conversational path uses, so a document is not a second dependency system. `content` may be a `Variable`, and a callable body may declare `Variable`, `Depends`/`Inject` and `MCPRequestContext` parameters exactly as a tool does:
+
+```python linenums="1"
+from typing import Annotated
+
+from ag2 import Inject, Variable
+from ag2.mcp import AskContext, MCPApp, MCPRequestContext, MCPServer
+
+async def provider(access) -> AskContext:
+    return AskContext(variables={"tenant": "north"}, dependencies={"branding": BRANDING})
+
+async def card(
+    tenant: Annotated[str, Variable("tenant")],
+    branding: Annotated[Branding, Inject("branding")],
+    ctx: MCPRequestContext,
+) -> str:
+    return render(tenant, branding)
+
+shop = MCPApp("ui://shop/card", card, title=Variable("tenant"), listed=True)
+server = MCPServer(agent, apps=[shop], context_provider=provider)
+```
+
+`title`, `description`, `inject_runtime`, the sandbox fields and the values inside `meta=` may each be a `Variable` too, resolved per request for the listing and the read.
+
+!!! warning "The context is request-scoped, not turn-scoped"
+    The host's document read and its tool call are **two separate MCP requests**, made in parallel. Each one calls your provider again and gets its own context; they share no mutable state. Do not use a variable to pass something from the call to the document — that is what `structuredContent` is for.
+
+An ordinary `Resource` and an `@mcp_tool` resolve the same way, which is what keeps [taking an app apart](#taking-an-app-apart) honest.
+
+## Degradation
+
+**The UI binding is withheld from a client that did not advertise the extension.** It is a promise that the client can read the document and render it; to a client that cannot, it is a promise about a document it will never fetch. There is no switch — this is correctness, not policy.
+
+That client sees the same tool without `_meta.ui`, calls it successfully, and gets the text your `__str__` produced. Because a UI-bound tool always returns text alongside its data, you usually need no branch at all. When you want to word an answer differently:
+
+```python linenums="1"
+from ag2.mcp import MCPRequestContext, client_supports_apps
+
+@shop.tool
+async def show_item(item_id: str, ctx: MCPRequestContext) -> Item:
+    """Show a product card."""
+    item = Item(name="Espresso cup", price=12)
+    if not client_supports_apps(ctx):
+        ...  # a fuller sentence, since there will be no card
+    return item
+```
+
+A client that advertised the identifier but not the `text/html;profile=mcp-app` MIME type counts as unable to render — advertising the extension alone says nothing about being able to display the one format a document arrives in.
+
+A server holding at least one app also advertises the extension itself, with empty settings. Be clear-eyed about what that is worth: the specification defines only the client direction and says nothing about servers advertising at all, and a handshake-era client never receives it — see [the two directions are not symmetric](/docs/user-guide/tools/serving_mcp#the-two-directions-are-not-symmetric). It is visible in discovery and inert otherwise.
+
+## The document
+
+```python linenums="1"
+from ag2.mcp import AppSandbox, MCPApp, ResourceCsp, ResourcePermissions
+
+shop = MCPApp(
+    "ui://shop/card",
+    CARD,
+    title="Product card",
+    description="A product card that can add its item to the cart.",
+    listed=False,
+    sandbox=AppSandbox(
+        csp=ResourceCsp(connect_domains=["https://api.example.com"]),
+        permissions=ResourcePermissions(camera={}),
+        domain="https://shop.example.com",
+    ),
+    prefers_border=True,
+)
+```
+
+- **`ui://` is required.** A host discards any other scheme, so a URI that is not `ui://` raises when the `MCPApp` is constructed, and two apps claiming one URI raise when the server is.
+- **`listed` defaults to `False`.** The document stays out of `resources/list` — a person browsing a server's resources should not meet a file that is not one — while remaining readable by URI, which is how the host gets it. Set `listed=True` for a document meant to be discoverable.
+- **The body has four forms** — inline HTML, a path-like bundle, a `Variable`, or a sync/async callable invoked per read. See [where the body comes from](#where-the-body-comes-from).
+- **Sandbox policy is typed and grouped.** `csp`, `permissions` and `domain` travel together in `sandbox=AppSandbox(...)` and use the SDK's own models, so the wire spelling is never guessed at. They are also accepted as bare keywords for a one-field policy. `prefers_border` stays separate — it is a presentation hint, not a sandbox rule. `meta=` is a raw passthrough merged alongside, for whatever the specification adds next.
+- **The `ui` slot behaves differently on a document and on a tool.** On the document it is shared, so a `ui` key inside `meta=` *merges over* the typed parameters above rather than being refused — the typed parameters are the spelling aid, not the authority. On a tool it is not shared: `@app.tool`'s `meta=` **rejects** a `ui` key outright, because the only thing in that slot is the binding the decorator itself writes. Pass `visibility=` instead, or declare the tool with `@mcp_tool` if it should not be bound to this document at all.
+
+## Taking an app apart
+
+An app is not a special kind of registration. `app.tools` are ordinary `MCPFunctionTool`s and `app.resource` is an ordinary `Resource`, so this:
+
+```python linenums="1"
+server = MCPServer(agent, apps=[shop])
+```
+
+is defined as shorthand for this:
+
+```python linenums="1"
+server = MCPServer(agent, tools=shop.tools, resources=[shop.resource])
+```
+
+Both produce the same tool list, the same resource listing, the same document and the same results — a test in the suite holds that equivalence so it cannot rot into a lie. Reach for the long form when you need an unusual arrangement; it is a rearrangement, not a rewrite.
+
+Ordinary tools are unaffected throughout. A tool declared with `@mcp_tool` and passed in `tools=` behaves exactly as it did before apps existed, alongside any number of them.
+
+**Registration closes the app's tool list.** Constructing the server is what reads `app.tools`, so a tool declared after that would exist and never be served. Declaring one raises `MCPAppFrozenError` naming the tool, instead of leaving you to find it missing on the wire:
+
+```python linenums="1"
+server = MCPServer(agent, apps=[shop])
+
+@shop.tool                      # MCPAppFrozenError: 'restock' cannot be declared on 'ui://shop/card'
+async def restock() -> str: ...
+```
+
+The app itself stays reusable — registering the same one with a second server is fine; it is the composition that is closed, not the object.
+
+## See also
+
+- [Serving an Agent as an MCP Server](/docs/user-guide/tools/serving_mcp) — transports, conversations, security, and protocol extensions.
+- [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) — the other mechanism, for MCP-UI clients.
+- [MCP Servers](/docs/user-guide/tools/mcp_servers) — the inverse direction, consuming an MCP server as tools.

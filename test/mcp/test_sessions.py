@@ -15,15 +15,11 @@ from ag2.mcp.executor import AgentExecutor, _session_id
 from ag2.mcp.sessions import STDIO_SESSION, SessionConfig, SessionStore
 from ag2.testing import TestConfig
 
-from ._helpers import RecordingConfig
+from ._helpers import Clock, RecordingConfig
 
 
 def _request_context(session_id: str | None) -> SimpleNamespace:
-    """A minimal stand-in for the transport's RequestContext (HTTP shape).
-
-    Carries a handshake-era protocol version, the era in which an MCP session
-    exists at all and so the only one in which it can key a conversation.
-    """
+    """A minimal stand-in for the transport's RequestContext, on a handshake-era protocol version."""
     headers = {"mcp-session-id": session_id} if session_id is not None else {}
     return SimpleNamespace(request=SimpleNamespace(headers=headers), protocol_version=LATEST_HANDSHAKE_VERSION)
 
@@ -104,11 +100,11 @@ class TestSessionStore:
         assert revived != original
 
     async def test_ttl_expiry_resets_history(self) -> None:
-        clock = {"t": 0.0}
-        store = SessionStore(ttl=10.0, clock=lambda: clock["t"])
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
 
         original = (await store.acquire("a")).id
-        clock["t"] = 20.0
+        clock.advance(20.0)
         revived = (await store.acquire("a")).id
 
         assert revived != original
@@ -132,11 +128,11 @@ class TestSessionStore:
         )
 
     async def test_ttl_kept_within_window(self) -> None:
-        clock = {"t": 0.0}
-        store = SessionStore(ttl=10.0, clock=lambda: clock["t"])
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
 
         original = (await store.acquire("a")).id
-        clock["t"] = 5.0
+        clock.advance(5.0)
         assert (await store.acquire("a")).id == original
 
 
@@ -182,13 +178,13 @@ class TestHandleNamedConversations:
             assert continued.stream.id == stream_id
 
     async def test_idle_expiry_drops_a_handle_named_conversation(self) -> None:
-        clock = {"t": 0.0}
-        store = SessionStore(ttl=10.0, clock=lambda: clock["t"])
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
 
         async with store.fresh() as minted:
             handle = minted.handle
         assert handle is not None
-        clock["t"] = 20.0
+        clock.advance(20.0)
 
         with pytest.raises(UnknownConversationError):
             async with store.by_handle(handle):
@@ -221,12 +217,7 @@ class TestHandleNamedConversations:
                 pass
 
     async def test_acquire_records_the_principal_of_the_handle_it_mints(self) -> None:
-        """A conversation first created through ``acquire`` is reachable by its creator.
-
-        ``acquire`` mints a handle like every other entry point does; recording
-        no principal for it would leave that handle nameable by nobody at all
-        once authentication is configured.
-        """
+        """A conversation first created through ``acquire`` is reachable by its creator."""
         store = SessionStore()
 
         await store.acquire("s", principal="alice")
