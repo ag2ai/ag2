@@ -17,6 +17,7 @@ from ag2.events import (
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
     ModelRequest,
+    ModelResponse,
     TextInput,
 )
 from ag2.tools.schemas import ToolSchema
@@ -116,9 +117,9 @@ async def ask(
     *,
     stream: MemoryStream,
     tools: list[ToolSchema] | None = None,
-) -> None:
+) -> ModelResponse:
     """One turn against `model_config`, with everything it emits landing on `stream`."""
-    await model_config.create()(
+    return await model_config.create()(
         messages=[ModelRequest([TextInput("go")])],
         context=Context(stream=stream),
         tools=tools or [],
