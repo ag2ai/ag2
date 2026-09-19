@@ -27,6 +27,7 @@ from mcp.types import (
     InputRequiredResult,
     InputResponse,
     InputResponses,
+    PaginatedRequestParams,
     ResourceLink,
     TextContent,
     TextResourceContents,
@@ -343,7 +344,15 @@ class MCPToolkit(Toolkit):
             resolved = _resolve_config(self.config, context)
 
             async with _mcp_session(resolved) as session:
-                raw_tools = (await session.list_tools()).tools
+                page = await session.list_tools()
+                raw_tools = list(page.tools)
+                seen_cursors: set[str] = set()
+                while (cursor := page.next_cursor) is not None:
+                    if cursor in seen_cursors:
+                        raise RuntimeError("MCP server returned a repeated pagination cursor while listing tools")
+                    seen_cursors.add(cursor)
+                    page = await session.list_tools(params=PaginatedRequestParams(cursor=cursor))
+                    raw_tools.extend(page.tools)
 
             # All already resolved (Variable -> concrete) by _resolve_config above.
             allowed = resolved.allowed_tools
