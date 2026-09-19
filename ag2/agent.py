@@ -18,6 +18,7 @@ or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
 import asyncio
 import json
 import logging
+import threading
 import types
 import weakref
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
@@ -751,12 +752,13 @@ class Agent(PluginTarget, Generic[TResult]):
         else:
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
-        # Created on first use, and re-created whenever the running loop
-        # changes: an asyncio.Semaphore binds to the first loop that awaits on
-        # it while contended, so a cached one would raise on a later loop (the
-        # same hazard called out in ag2/extensions/docker/sandbox.py).
-        self._task_slots: asyncio.Semaphore | None = None
-        self._task_slots_loop: asyncio.AbstractEventLoop | None = None
+        # One Semaphore per running loop: sharing one raises once a second loop
+        # awaits it contended (the hazard ag2/extensions/docker/sandbox.py also
+        # calls out). Provisioned by ``_task_slots_for``.
+        self._task_slots: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+            weakref.WeakKeyDictionary()
+        )
+        self._task_slots_lock = threading.Lock()
 
         # Knowledge store + compaction/aggregation strategies
         if knowledge:
@@ -1487,13 +1489,27 @@ class Agent(PluginTarget, Generic[TResult]):
         if tc is None:
             return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
         if tc.max_concurrency is not None:
-            loop = asyncio.get_running_loop()
-            if self._task_slots is None or self._task_slots_loop is not loop:
-                self._task_slots = asyncio.Semaphore(tc.max_concurrency)
-                self._task_slots_loop = loop
-            async with self._task_slots:
+            async with self._task_slots_for(tc.max_concurrency):
                 return await self._run_subtask(task, ctx, tc)
         return await self._run_subtask(task, ctx, tc)
+
+    def _task_slots_for(self, max_concurrency: int) -> asyncio.Semaphore:
+        """The subtask semaphore for the running loop, created on first use.
+
+        A ``threading.Lock`` because several OS threads can drive one Agent, and
+        two racing creators would leave the loser capped by a semaphore nothing
+        else holds. Closed loops are dropped on the way past: a contended
+        ``asyncio.Semaphore`` caches its loop, keeping its own weak key alive.
+        """
+        loop = asyncio.get_running_loop()
+        with self._task_slots_lock:
+            slots = self._task_slots.get(loop)
+            if slots is None:
+                for closed in [cached for cached in self._task_slots if cached.is_closed()]:
+                    del self._task_slots[closed]
+                slots = asyncio.Semaphore(max_concurrency)
+                self._task_slots[loop] = slots
+            return slots
 
     async def _run_subtask(self, task: str, ctx: Context, tc: TaskConfig) -> str:
         # Inherit only the parent's user-supplied tools — never the
