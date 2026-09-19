@@ -3,6 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import gc
+import sys
+import threading
+import weakref
 from collections.abc import Iterable
 from typing import Annotated
 from unittest.mock import MagicMock
@@ -1049,6 +1053,107 @@ def test_max_concurrency_agent_is_reusable_across_event_loops() -> None:
         body, peak = asyncio.run(turn())
         assert body == "done"
         assert peak == 1
+
+
+def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
+    """Two OS threads driving one capped Agent each see the cap on their own loop.
+
+    A fresh Agent per round, because the cap can only go missing while its
+    semaphore is first provisioned, and a tightened switch interval so CPython
+    interleaves the two threads inside that window.
+    """
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(0.00001)
+
+    def make_parent() -> Agent:
+        return Agent(
+            "parent",
+            config=TestConfig(
+                [
+                    ToolCallEvent(name="run_subtask", arguments='{"task": "do A"}'),
+                    ToolCallEvent(name="run_subtask", arguments='{"task": "do B"}'),
+                    ToolCallEvent(name="run_subtask", arguments='{"task": "do C"}'),
+                ],
+                "done",
+            ),
+            tasks=TaskConfig(
+                config=TestConfig(ModelResponse(ModelMessage("subtask done."))),
+                max_concurrency=1,
+            ),
+        )
+
+    async def turn(parent: Agent) -> int:
+        stream = MemoryStream()
+        active = 0
+        peak = 0
+
+        @stream.where(TaskStarted).subscribe
+        async def track(_: TaskStarted) -> None:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            await asyncio.sleep(0)
+            active -= 1
+
+        await parent.ask("go", stream=stream)
+        return peak
+
+    peaks: list[int | BaseException] = [0, 0]
+
+    def worker(parent: Agent, index: int) -> None:
+        try:
+            peaks[index] = asyncio.run(turn(parent))
+        except BaseException as exc:  # surfaced by the assertions below
+            peaks[index] = exc
+
+    try:
+        for _round in range(10):
+            parent = make_parent()
+            threads = [threading.Thread(target=worker, args=(parent, i)) for i in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=10)
+            assert not any(thread.is_alive() for thread in threads), "a worker thread hung"
+
+            assert peaks == [1, 1], f"each thread's own loop should have capped at 1: {peaks!r}"
+    finally:
+        sys.setswitchinterval(old_interval)
+
+
+def test_max_concurrency_does_not_retain_finished_loops() -> None:
+    """Finished loops are not pinned by the semaphores provisioned for them.
+
+    A contended ``asyncio.Semaphore`` caches its loop, so weak keys alone never
+    reclaim these entries.
+    """
+    parent = Agent(
+        "parent",
+        config=TestConfig(
+            [
+                ToolCallEvent(name="run_subtask", arguments='{"task": "do A"}'),
+                ToolCallEvent(name="run_subtask", arguments='{"task": "do B"}'),
+            ],
+            "done",
+        ),
+        tasks=TaskConfig(
+            config=TestConfig(ModelResponse(ModelMessage("subtask done."))),
+            max_concurrency=1,
+        ),
+    )
+
+    loops: list[weakref.ref[asyncio.AbstractEventLoop]] = []
+
+    async def turn() -> None:
+        loops.append(weakref.ref(asyncio.get_running_loop()))
+        await parent.ask("go")
+
+    for _ in range(5):
+        asyncio.run(turn())
+    gc.collect()
+
+    alive = [loop for loop in loops[:-1] if loop() is not None]
+    assert not alive, f"{len(alive)} finished event loop(s) still retained by the Agent"
 
 
 @pytest.mark.asyncio

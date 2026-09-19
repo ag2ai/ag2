@@ -73,4 +73,4 @@ Sub-modules:
 | `#!python ag2.a2a.testing` | In-process test helpers — `#!python make_test_client_factory`, `#!python make_test_rest_client_factory`, `#!python pick_free_port` |
 
 !!! note
-    The A2A integration depends on [`a2a-sdk`](https://pypi.org/project/a2a-sdk/){.external-link target="_blank"}. Install with the `a2a` extras: `#!bash pip install "ag2[a2a]"`. gRPC is an additional optional dependency — install with `#!bash pip install "ag2[a2a-grpc]"`.
+    The A2A integration depends on [`a2a-sdk`](https://pypi.org/project/a2a-sdk/){.external-link target="_blank"}. Install with the `a2a` extras: `#!bash pip install "ag2[a2a]"` — that covers the A2A **client**. Serving needs the SDK's own transport extras on top, installed directly: `#!bash pip install "a2a-sdk[http-server]"` for `#!python build_jsonrpc` / `#!python build_rest`, and `#!bash pip install "a2a-sdk[grpc]"` for `#!python build_grpc`.
