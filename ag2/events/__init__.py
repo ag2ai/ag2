@@ -61,6 +61,7 @@ from .types import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
+    ToolApprovalRequest,
     Usage,
     UsageEvent,
 )
@@ -123,6 +124,7 @@ __all__ = (
     "TaskProgress",
     "TaskStarted",
     "TextInput",
+    "ToolApprovalRequest",
     "ToolCallEvent",
     "ToolCallsEvent",
     "ToolErrorEvent",
