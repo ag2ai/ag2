@@ -93,9 +93,37 @@ agent = Agent(
 | `blocked_domains` | ✓ | ✗ |
 | `citations` | ✓ | ✗ |
 | `max_content_tokens` | ✓ | ✗ |
+| `strict` | ✓ | ✗ |
+| `use_cache` | ✓ (from `web_fetch_20260309`) | ✗ |
+| `response_inclusion` | ✓ (`web_fetch_20260318` only) | ✗ |
+
+Two of those options arrived with later tool versions. Setting one on a `version` that predates it
+raises `WebFetchOptionUnsupportedError` while the request is built, naming the option and the
+version it arrived in. The API refuses the same pairing with a 400, so this costs you the round
+trip and tells you which version to ask for:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import WebFetchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[
+        # Asking this agent anything raises: `use_cache` needs web_fetch_20260309 or later,
+        # and no request is sent.
+        WebFetchTool(use_cache=False, version="web_fetch_20250910"),
+    ],
+)
+```
 
 !!! note
     OpenAI does not support web fetch. Using `WebFetchTool` with an OpenAI config will raise an error.
+
+!!! note
+    Gemini maps `WebFetchTool` to `url_context` and honors none of these options. It ignores them
+    rather than refusing them, including the version-gated ones.
 
 ## Google Maps
 
