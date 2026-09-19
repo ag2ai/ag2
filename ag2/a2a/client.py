@@ -68,6 +68,7 @@ from .extension import (
     MIME_TOOL_CALL,
     TENANT_VARIABLE_KEY,
     extension_call_context,
+    sanitize_context_update,
     validate_extension_activation,
 )
 from .mappers import (
@@ -686,7 +687,7 @@ class A2AClient(LLMClient):
     def _merge_context_update(context: ConversationContext, payload: Mapping[str, Any]) -> None:
         if not payload:
             return
-        context.variables.update(payload)
+        context.variables.update(sanitize_context_update(payload))
 
 
 def _ensure_stream_response(event: StreamResponse | Task | Message) -> StreamResponse:

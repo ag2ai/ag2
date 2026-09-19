@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from a2a.client import ClientCallContext
 from a2a.client.service_parameters import ServiceParametersFactory, with_a2a_extensions
@@ -22,6 +23,30 @@ MIME_HISTORY = "application/vnd.ag2.history+json"
 
 # Bidirectional context-variables sync rides on Message.metadata under this key.
 CONTEXT_UPDATE_METADATA_KEY = "ag2.context_update"
+
+# Variable namespaces reserved for AG2 and A2A control-plane state: keys under
+# these prefixes must only ever be authored locally, so they are stripped from
+# wire-originated context_update payloads before the variables are merged.
+RESERVED_VARIABLE_PREFIXES = ("ag:", "a2a:")
+
+
+def sanitize_context_update(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the payload without control-plane keys, for wire-originated merges.
+
+    Approval bypass state (``ag:approval_required:always``), the A2A context-id
+    bookkeeping and the tenant override (``a2a:tenant``) live in
+    ``context.variables`` but are control-plane state a remote peer must not be
+    able to author, so any key under a reserved prefix arriving from the wire is
+    dropped instead of merged.
+    """
+    if not payload:
+        return {}
+    return {
+        key: value
+        for key, value in payload.items()
+        if not str(key).startswith(RESERVED_VARIABLE_PREFIXES)
+    }
+
 
 # Dependency key for splicing extra A2A ``Part``s onto the outgoing message.
 EXTRA_PARTS_DEPENDENCY_KEY = "a2a:extra_parts"
