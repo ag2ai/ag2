@@ -146,7 +146,7 @@ class TestMeasuredZero:
 
     async def test_a_measured_zero_reaches_the_usage_report_as_a_zero(self) -> None:
         """A zero that reached ``Usage`` still has to reach the report: ``UsageReport``
-        skips falsy usage (ADR 0017), and a zero cache count is falsy on its own."""
+        skips falsy usage, and a zero cache count is falsy on its own."""
         usage = await _usage_of(
             _message({
                 "input_tokens": 12,
@@ -173,8 +173,8 @@ class TestMeasuredZero:
 
 async def test_request_counts_and_routing_labels_do_not_enter_usage() -> None:
     """``server_tool_use`` counts tool *requests*; ``service_tier`` and ``inference_geo``
-    are labels. Folding either into a token total is the derivation ADR 0017 forbids, so
-    the payload carrying them changes nothing."""
+    are labels. ``Usage`` carries token counts only, so the payload carrying them changes
+    nothing."""
     payload = {
         "input_tokens": 12,
         "output_tokens": 8,

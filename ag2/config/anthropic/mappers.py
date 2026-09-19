@@ -555,8 +555,9 @@ def convert_messages(
 def _count_or_absent(value: Any) -> float | None:
     """A count the provider supplied, or ``None`` where it supplied nothing.
 
-    Presence decides rather than truthiness, because ``0`` is a measurement and
-    absence is the lack of one (ADR 0017).
+    Presence decides rather than truthiness: ``0`` is a measurement, absence is the
+    lack of one, and a consumer that cannot tell them apart cannot tell "no cache hit"
+    from "cache never measured".
     """
     return None if value is None else float(value)
 
