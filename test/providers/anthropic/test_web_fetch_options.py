@@ -12,13 +12,27 @@ model here is one that does.
 import os
 
 import pytest
+from dirty_equals import IsPartialDict
 
-from ag2 import Agent
+from ag2 import Agent, AgentReply
 from ag2.config import AnthropicConfig
-from ag2.tools import WebFetchTool
+from ag2.events import BuiltinToolResultEvent
+from ag2.tools import tool
+from ag2.tools.builtin.web_fetch import OnlyTools, UrlSources, WebFetchTool
 
 MODEL = "claude-sonnet-5"
-PROMPT = "Fetch https://example.com and quote its first sentence verbatim. Use the web_fetch tool."
+URL = "https://example.com"
+PROMPT = f"Fetch {URL} and quote its first sentence verbatim. Use the web_fetch tool."
+TOOL_PROMPT = (
+    "Call `find_source` to get a URL, then fetch that URL and quote its first sentence verbatim. "
+    "Use the web_fetch tool."
+)
+
+
+@tool
+async def find_source() -> str:
+    """Return the URL of the document to read."""
+    return URL
 
 
 @pytest.fixture()
@@ -61,3 +75,95 @@ async def test_every_option_is_accepted_on_the_newest_version(config: AnthropicC
 
     assert reply.body is not None
     assert "domain" in reply.body.lower()
+
+
+async def _fetch_outcomes(reply: AgentReply) -> list[dict[str, object]]:
+    """What the provider did with each web fetch, read off the result events rather than the prose."""
+    return [
+        e.result.metadata
+        for e in await reply.history.get_events()
+        if isinstance(e, BuiltinToolResultEvent) and e.name == "web_fetch"
+    ]
+
+
+@pytest.mark.anthropic
+@pytest.mark.asyncio()
+async def test_a_url_sources_policy_is_honoured(config: AnthropicConfig) -> None:
+    """Shutting user input out leaves the model no URL it is allowed to fetch.
+
+    The URL is only ever in the prompt, so `user_input="none"` removes the one source that could
+    supply it and the provider refuses the fetch with `url_not_in_prior_context`.
+    """
+    agent = Agent(
+        "fetcher",
+        config=config,
+        tools=[WebFetchTool(max_uses=1, url_sources=UrlSources(user_input="none"))],
+    )
+
+    reply = await agent.ask(PROMPT)
+
+    outcomes = await _fetch_outcomes(reply)
+    assert outcomes[0] == IsPartialDict({"error": True, "error_code": "url_not_in_prior_context"})
+    assert all(o.get("error") for o in outcomes)
+
+
+@pytest.mark.anthropic
+@pytest.mark.asyncio()
+async def test_url_sources_admitting_user_input_still_fetches(config: AnthropicConfig) -> None:
+    """The other half of the pair: with the source admitted, the same request fetches."""
+    agent = Agent(
+        "fetcher",
+        config=config,
+        tools=[WebFetchTool(max_uses=1, url_sources=UrlSources(user_input="all"))],
+    )
+
+    reply = await agent.ask(PROMPT)
+
+    assert any("retrieved_at" in o for o in await _fetch_outcomes(reply))
+
+
+@pytest.mark.anthropic
+@pytest.mark.asyncio()
+async def test_an_only_filter_admits_the_tool_it_names(config: AnthropicConfig) -> None:
+    """The `only` form is what the name validation exists for, so the API resolves it live.
+
+    `find_source` is the sole route to the URL — the prompt never carries it — and naming that
+    tool under `client_tool_results` is what makes the fetch legal.
+    """
+    agent = Agent(
+        "fetcher",
+        config=config,
+        tools=[
+            find_source,
+            WebFetchTool(
+                max_uses=1,
+                url_sources=UrlSources(
+                    user_input="none",
+                    client_tool_results=OnlyTools(["find_source"]),
+                ),
+            ),
+        ],
+    )
+
+    reply = await agent.ask(TOOL_PROMPT)
+
+    assert any("retrieved_at" in o for o in await _fetch_outcomes(reply))
+
+
+@pytest.mark.anthropic
+@pytest.mark.asyncio()
+async def test_shutting_the_client_tool_out_refuses_the_same_fetch(config: AnthropicConfig) -> None:
+    """The other half of the pair: the same run with that source closed is refused."""
+    agent = Agent(
+        "fetcher",
+        config=config,
+        tools=[
+            find_source,
+            WebFetchTool(max_uses=1, url_sources=UrlSources(client_tool_results="none")),
+        ],
+    )
+
+    reply = await agent.ask(TOOL_PROMPT)
+
+    outcomes = await _fetch_outcomes(reply)
+    assert outcomes[0] == IsPartialDict({"error": True, "error_code": "url_not_in_prior_context"})
