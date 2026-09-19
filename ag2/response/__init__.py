@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .callable import response_schema
-from .prompted import PromptedSchema
+from .prompted import LastMessagePromptedSchema, PromptedSchema
 from .proto import ResponseProto
 from .schema import ResponseSchema
 
 __all__ = (
+    "LastMessagePromptedSchema",
     "PromptedSchema",
     "ResponseProto",
     "ResponseSchema",
