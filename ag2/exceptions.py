@@ -70,6 +70,24 @@ class ClientExecutedShellUnsupportedError(ToolExecutionError):
         )
 
 
+class WebFetchOptionUnsupportedError(ToolExecutionError):
+    """Raised when a web fetch option the selected tool version cannot carry is set.
+
+    Refused rather than dropped: a silently ignored option turns a caching or payload
+    decision into a no-op the caller has no way to detect.
+    """
+
+    def __init__(self, option: str, version: str, since: str) -> None:
+        self.option = option
+        self.version = version
+        self.since = since
+        super().__init__(
+            f"WebFetchTool option `{option}` is not available on `{version}`: "
+            f"it arrived in `{since}`. Pass WebFetchTool(version=...) with `{since}` "
+            f"or later, or drop `{option}`."
+        )
+
+
 class UnsupportedInputError(AG2Error):
     """Raised when an input type is not supported by a provider."""
 

@@ -34,7 +34,7 @@ from ag2.events import (
 
 logger = logging.getLogger(__name__)
 
-from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.exceptions import UnsupportedInputError, UnsupportedToolError, WebFetchOptionUnsupportedError
 from ag2.files import FileProvider
 from ag2.response import ResponseProto
 from ag2.tools.builtin.anthropic_bash import ANTHROPIC_BASH_TOOL_NAME, AnthropicBashToolSchema
@@ -44,10 +44,13 @@ from ag2.tools.builtin.memory import MemoryToolSchema
 from ag2.tools.builtin.shell import ShellToolSchema
 from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.builtin.tool_search import ToolSearchToolSchema
-from ag2.tools.builtin.web_fetch import WebFetchToolSchema
+from ag2.tools.builtin.web_fetch import WebFetchToolSchema, WebFetchVersions
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
+
+WEB_FETCH_USE_CACHE_SINCE: WebFetchVersions = "web_fetch_20260309"
+WEB_FETCH_RESPONSE_INCLUSION_SINCE: WebFetchVersions = "web_fetch_20260318"
 
 
 def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any]:
@@ -106,6 +109,22 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
+def _reject_unsupported_web_fetch_options(t: WebFetchToolSchema) -> None:
+    """Refuse a web fetch option the selected tool version predates.
+
+    Measured 2026-09-19: the API rejects the same pairing with
+    ``Extra inputs are not permitted``, naming no version that would take it. Refusing here
+    spends no request and says which version the option arrived in.
+    """
+    if t.use_cache is not None and t.web_fetch_version < WEB_FETCH_USE_CACHE_SINCE:
+        raise WebFetchOptionUnsupportedError("use_cache", t.web_fetch_version, WEB_FETCH_USE_CACHE_SINCE)
+
+    if t.response_inclusion is not None and t.web_fetch_version < WEB_FETCH_RESPONSE_INCLUSION_SINCE:
+        raise WebFetchOptionUnsupportedError(
+            "response_inclusion", t.web_fetch_version, WEB_FETCH_RESPONSE_INCLUSION_SINCE
+        )
+
+
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     if isinstance(t, FunctionToolSchema):
         fn_tool: dict[str, Any] = {
@@ -143,6 +162,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         return {"type": t.version, "name": "code_execution"}
 
     elif isinstance(t, WebFetchToolSchema):
+        _reject_unsupported_web_fetch_options(t)
         result = {"type": t.web_fetch_version, "name": "web_fetch"}
         if t.max_uses is not None:
             result["max_uses"] = t.max_uses
@@ -154,6 +174,12 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             result["citations"] = {"enabled": t.citations}
         if t.max_content_tokens is not None:
             result["max_content_tokens"] = t.max_content_tokens
+        if t.strict is not None:
+            result["strict"] = t.strict
+        if t.use_cache is not None:
+            result["use_cache"] = t.use_cache
+        if t.response_inclusion is not None:
+            result["response_inclusion"] = t.response_inclusion
         return result
 
     elif isinstance(t, MemoryToolSchema):
