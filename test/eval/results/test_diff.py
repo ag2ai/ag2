@@ -105,6 +105,55 @@ class TestDiff:
         assert diff.mean_deltas["cost"] == (15.0, 5.0)
         assert diff.regressions == ()  # numeric moves aren't pass/fail flips
 
+    @pytest.mark.parametrize("unpaired", [(), (Feedback(key="check"),), (Feedback(key="check", score=1),)])
+    def test_pass_rate_uses_only_paired_boolean_scores(self, unpaired: tuple[Feedback, ...]) -> None:
+        baseline = _run(
+            _tr("t1", (Feedback(key="check", score=True),)),
+            _tr("t2", (Feedback(key="check", score=False),)),
+        )
+        current = _run(_tr("t1", (Feedback(key="check", score=False),)), _tr("t2", unpaired))
+
+        diff = current.diff(baseline, strict=False)
+        reverse = baseline.diff(current, strict=False)
+
+        assert diff.pass_rate_deltas == {"check": (1.0, 0.0)}
+        assert reverse.pass_rate_deltas == {"check": (0.0, 1.0)}
+        assert diff.mean_deltas == reverse.mean_deltas == {}
+        assert diff.regressions == (("check", "t1"),)
+
+    @pytest.mark.parametrize("unpaired", [(), (Feedback(key="cost"),), (Feedback(key="cost", score=True),)])
+    def test_mean_uses_only_paired_numeric_scores(self, unpaired: tuple[Feedback, ...]) -> None:
+        baseline = _run(
+            _tr("t1", (Feedback(key="cost", score=10),)),
+            _tr("t2", (Feedback(key="cost", score=30),)),
+        )
+        current = _run(_tr("t1", (Feedback(key="cost", score=5),)), _tr("t2", unpaired))
+
+        diff = current.diff(baseline, strict=False)
+        reverse = baseline.diff(current, strict=False)
+
+        assert diff.mean_deltas == {"cost": (10.0, 5.0)}
+        assert reverse.mean_deltas == {"cost": (5.0, 10.0)}
+        assert diff.pass_rate_deltas == reverse.pass_rate_deltas == {}
+        assert diff.regressions == ()
+
+    @pytest.mark.parametrize("score", [True, 10])
+    def test_no_paired_scores_produce_no_aggregate_delta(self, score: bool | int) -> None:
+        baseline = _run(
+            _tr("t1", (Feedback(key="check", score=score),)),
+            _tr("t2", (Feedback(key="check"),)),
+        )
+        current = _run(
+            _tr("t1", (Feedback(key="check"),)),
+            _tr("t2", (Feedback(key="check", score=score),)),
+        )
+
+        diff = current.diff(baseline)
+
+        assert diff.pass_rate_deltas == {}
+        assert diff.mean_deltas == {}
+        assert diff.regressions == ()
+
     def test_strict_raises_on_extra_task(self) -> None:
         baseline = _run(_tr("t1", (Feedback(key="check", score=True),)))
         current = _run(
