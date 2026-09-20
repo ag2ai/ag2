@@ -20,7 +20,9 @@ from fast_depends.use import SerializerCls
 from ag2 import Context, MemoryStream
 from ag2.config.anthropic import AnthropicClient, AnthropicConfig
 from ag2.events import ModelRequest, TextInput
+from ag2.exceptions import WebFetchOptionUnsupportedError
 from ag2.tools.builtin.mcp_server import MCPServerTool
+from ag2.tools.builtin.web_fetch import WebFetchTool
 
 _MESSAGE = {
     "id": "msg_1",
@@ -318,3 +320,86 @@ async def test_a_direct_client_caller_without_sampling_leaves_the_body_alone() -
     body = captured["body"]
     assert isinstance(body, dict)
     assert not {"temperature", "top_p", "top_k"} & body.keys()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool", "expected"),
+    [
+        (
+            WebFetchTool(strict=True, version="web_fetch_20250910"),
+            {"type": "web_fetch_20250910", "name": "web_fetch", "strict": True},
+        ),
+        (
+            WebFetchTool(use_cache=False, version="web_fetch_20260309"),
+            {"type": "web_fetch_20260309", "name": "web_fetch", "use_cache": False},
+        ),
+        (
+            WebFetchTool(
+                strict=True,
+                use_cache=False,
+                response_inclusion="excluded",
+                version="web_fetch_20260318",
+            ),
+            {
+                "type": "web_fetch_20260318",
+                "name": "web_fetch",
+                "strict": True,
+                "use_cache": False,
+                "response_inclusion": "excluded",
+            },
+        ),
+    ],
+)
+async def test_web_fetch_options_reach_the_wire(
+    context: Context, tool: WebFetchTool, expected: dict[str, object]
+) -> None:
+    """The SDK types the tool entry, so an option only counts once it survives serialization."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+
+    await _ask(config, tools=await tool.schemas(context))
+
+    assert captured["body"] == IsPartialDict({"tools": [expected]})
+
+
+@pytest.mark.asyncio
+async def test_an_accepted_configuration_sends_what_it_sent_before_the_gate(context: Context) -> None:
+    """The refusal costs a caller who does not trip it nothing: same entry, no extra keys."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    schemas = await WebFetchTool(max_uses=3, citations=True, version="web_fetch_20260318").schemas(context)
+
+    await _ask(config, tools=schemas)
+
+    assert captured["body"] == IsPartialDict({
+        "tools": [
+            {
+                "type": "web_fetch_20260318",
+                "name": "web_fetch",
+                "max_uses": 3,
+                "citations": {"enabled": True},
+            }
+        ]
+    })
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool", "option"),
+    [
+        (WebFetchTool(use_cache=True, version="web_fetch_20250910"), "use_cache"),
+        (WebFetchTool(response_inclusion="full", version="web_fetch_20260309"), "response_inclusion"),
+    ],
+)
+async def test_an_option_the_version_cannot_carry_is_refused_before_anything_is_sent(
+    context: Context, tool: WebFetchTool, option: str
+) -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    schemas = await tool.schemas(context)
+
+    with pytest.raises(WebFetchOptionUnsupportedError, match=option):
+        await _ask(config, tools=schemas)
+
+    assert captured == {}
