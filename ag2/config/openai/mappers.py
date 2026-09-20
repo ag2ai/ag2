@@ -518,12 +518,12 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         if t.allowed_domains is not None:
             web_search["filters"] = {"allowed_domains": t.allowed_domains}
 
-        entry = dict(web_search)
+        web_search_entry = dict(web_search)
         if t.max_uses is not None:
             # `max_uses` is Anthropic's cap. The SDK's WebSearchToolParam has no such field and
             # OpenAI documents none, but ag2 has always sent it, so this refactor keeps sending it.
-            entry["max_uses"] = t.max_uses
-        return entry
+            web_search_entry["max_uses"] = t.max_uses
+        return web_search_entry
 
     elif isinstance(t, FileSearchToolSchema):
         # https://developers.openai.com/api/docs/guides/tools-file-search
