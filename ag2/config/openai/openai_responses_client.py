@@ -25,6 +25,7 @@ from openai.types.responses import (
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
 )
+from openai.types.responses.response_create_params import PromptCacheOptions
 from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
 
@@ -75,6 +76,8 @@ class CreateOptions(TypedDict, total=False):
     top_logprobs: int | None | Omit
     store: bool | None
     metadata: dict[str, str] | None | Omit
+    prompt_cache_key: str | Omit
+    prompt_cache_options: PromptCacheOptions | Omit
     service_tier: str | None | Omit
     user: str
     stream: bool
@@ -222,6 +225,7 @@ class OpenAIResponsesClient(LLMClient):
             model=response.model,
             provider="openai",
             finish_reason=response.status,
+            response_id=response.id,
             files=files,
         )
 
@@ -235,6 +239,7 @@ class OpenAIResponsesClient(LLMClient):
         files: list[BinaryResult] = []
         finish_reason: str | None = None
         resolved_model: str | None = None
+        response_id: str | None = None
         usage = Usage()
         shell_calls = ShellCallTracker()
 
@@ -307,6 +312,7 @@ class OpenAIResponsesClient(LLMClient):
 
                 finish_reason = event.response.status
                 resolved_model = event.response.model
+                response_id = event.response.id
 
         message: ModelMessage | None = None
         if full_content:
@@ -320,5 +326,6 @@ class OpenAIResponsesClient(LLMClient):
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
+            response_id=response_id,
             files=files,
         )

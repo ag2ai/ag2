@@ -17,16 +17,22 @@ from ag2.events import ModelResponse, Usage
 def _make_usage(
     input_tokens: int = 0,
     output_tokens: int = 0,
-    cache_creation_input_tokens: int = 0,
-    cache_read_input_tokens: int = 0,
+    cache_creation_input_tokens: int | None = None,
+    cache_read_input_tokens: int | None = None,
 ) -> MagicMock:
-    """Create a mock Anthropic Usage object with model_dump()."""
+    """Create a mock Anthropic Usage object with model_dump().
+
+    A cache key is omitted unless asked for, because the mapper distinguishes a
+    count the provider measured from one it never reported, and a mock that always
+    emits the key can only ever exercise the first case. Payload-shaped assertions
+    live in ``test_usage_from_provider_json.py``, where the SDK parses real JSON.
+    """
     usage = MagicMock()
     usage.model_dump.return_value = {
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
-        "cache_creation_input_tokens": cache_creation_input_tokens,
-        "cache_read_input_tokens": cache_read_input_tokens,
+        **({} if cache_creation_input_tokens is None else {"cache_creation_input_tokens": cache_creation_input_tokens}),
+        **({} if cache_read_input_tokens is None else {"cache_read_input_tokens": cache_read_input_tokens}),
     }
     return usage
 

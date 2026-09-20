@@ -720,16 +720,33 @@ def convert_messages(
     return result
 
 
+def _count_or_absent(value: Any) -> float | None:
+    """A count the provider supplied, or ``None`` where it supplied nothing.
+
+    Presence decides rather than truthiness: ``0`` is a measurement, absence is the
+    lack of one, and a consumer that cannot tell them apart cannot tell "no cache hit"
+    from "cache never measured".
+    """
+    return None if value is None else float(value)
+
+
 def normalize_usage(raw: dict[str, Any]) -> Usage:
-    """Normalize Anthropic's native usage keys to standard format."""
-    cc = raw.get("cache_creation_input_tokens")
-    cr = raw.get("cache_read_input_tokens")
+    """Normalize Anthropic's native usage keys to standard format.
+
+    ``server_tool_use`` (a count of tool *requests*), the ``service_tier`` and
+    ``inference_geo`` labels and ``cache_creation``'s per-lifetime breakdown are
+    deliberately unmapped: ``Usage`` carries whole-call token counts only.
+    """
+    details = raw.get("output_tokens_details") or {}
     prompt = float(raw.get("input_tokens", 0))
     completion = float(raw.get("output_tokens", 0))
     return Usage(
         prompt_tokens=prompt,
         completion_tokens=completion,
         total_tokens=prompt + completion,
-        cache_creation_input_tokens=float(cc) if cc else None,
-        cache_read_input_tokens=float(cr) if cr else None,
+        cache_creation_input_tokens=_count_or_absent(raw.get("cache_creation_input_tokens")),
+        cache_read_input_tokens=_count_or_absent(raw.get("cache_read_input_tokens")),
+        # Output tokens spent on internal reasoning — a decomposition of
+        # ``output_tokens``, not an addition to it, matching the OpenAI mapper.
+        thinking_tokens=_count_or_absent(details.get("thinking_tokens")),
     )

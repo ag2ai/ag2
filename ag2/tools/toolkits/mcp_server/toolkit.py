@@ -8,7 +8,7 @@ from collections.abc import AsyncGenerator, Iterable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import replace
 from functools import partial
-from typing import Any, get_args
+from typing import Any, TypeAlias, get_args
 
 import httpx2
 from mcp import ClientSession
@@ -27,6 +27,7 @@ from mcp.types import (
     InputRequiredResult,
     InputResponse,
     InputResponses,
+    PaginatedRequestParams,
     ResourceLink,
     TextContent,
     TextResourceContents,
@@ -67,7 +68,9 @@ from ag2.types import (
 from .answering import InputRequestAnswerer, MCPAnswerPolicy
 from .types import MCPServerConfig, MCPStdioServerConfig, ProtocolMode
 
-AnyMCPConfig = MCPServerConfig | MCPStdioServerConfig
+AnyMCPConfig: TypeAlias = MCPServerConfig | MCPStdioServerConfig
+
+_MAX_TOOL_PAGES = 1000
 
 
 @asynccontextmanager
@@ -343,7 +346,23 @@ class MCPToolkit(Toolkit):
             resolved = _resolve_config(self.config, context)
 
             async with _mcp_session(resolved) as session:
-                raw_tools = (await session.list_tools()).tools
+                page = await session.list_tools()
+                raw_tools = list(page.tools)
+                seen_cursors: set[str] = set()
+                runaway: str | None = None
+                while (cursor := page.next_cursor) is not None:
+                    if cursor in seen_cursors:
+                        runaway = "MCP server returned a repeated pagination cursor while listing tools"
+                        break
+                    if len(seen_cursors) + 1 >= _MAX_TOOL_PAGES:
+                        runaway = f"MCP server did not end tools/list pagination within {_MAX_TOOL_PAGES} pages"
+                        break
+                    seen_cursors.add(cursor)
+                    page = await session.list_tools(params=PaginatedRequestParams(cursor=cursor))
+                    raw_tools.extend(page.tools)
+
+            if runaway is not None:
+                raise RuntimeError(runaway)
 
             # All already resolved (Variable -> concrete) by _resolve_config above.
             allowed = resolved.allowed_tools
