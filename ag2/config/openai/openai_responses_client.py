@@ -25,6 +25,7 @@ from openai.types.responses import (
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
 )
+from openai.types.responses.response_create_params import PromptCacheOptions
 from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
 
@@ -75,6 +76,8 @@ class CreateOptions(TypedDict, total=False):
     top_logprobs: int | None | Omit
     store: bool | None
     metadata: dict[str, str] | None | Omit
+    prompt_cache_key: str | Omit
+    prompt_cache_options: PromptCacheOptions | Omit
     service_tier: str | None | Omit
     user: str
     stream: bool
