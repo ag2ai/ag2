@@ -96,6 +96,7 @@ agent = Agent(
 | `strict` | ✓ | ✗ |
 | `use_cache` | ✓ (from `web_fetch_20260309`) | ✗ |
 | `response_inclusion` | ✓ (`web_fetch_20260318` only) | ✗ |
+| `url_sources` | ✓ | ✗ |
 
 Two of those options arrived with later tool versions. Setting one on a `version` that predates it
 raises `WebFetchOptionUnsupportedError` while the request is built, naming the option and the
@@ -117,6 +118,52 @@ agent = Agent(
     ],
 )
 ```
+
+### Which sources may supply a URL
+
+`url_sources` says, per source, which URLs the model is allowed to fetch. It is a policy control
+rather than a tuning knob: an agent that fetches URLs out of user text is reachable by anyone who
+can type into the conversation, and `allowed_domains` cannot stand in for it because that filters
+by host, not by who proposed the URL.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import tool
+from ag2.tools.builtin.web_fetch import OnlyTools, UrlSources, WebFetchTool
+
+
+@tool
+async def search_docs(query: str) -> list[str]:
+    """Return the URLs of documents matching the query."""
+    return ["https://docs.example.com/guide"]
+
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[
+        search_docs,
+        WebFetchTool(
+            # Fetch only what `search_docs` returned — never a link a user pasted.
+            url_sources=UrlSources(
+                user_input="none",
+                client_tool_results=OnlyTools(["search_docs"]),
+            ),
+        ),
+    ],
+)
+```
+
+`user_input` is `"all"` or `"none"`. `client_tool_results` and `server_tool_results` take those
+two as well as `OnlyTools([...])` and `ExceptTools([...])`, which name tools. A name must belong
+to a tool the same request declares; one that does not raises
+`WebFetchUrlSourceToolNotFoundError` before the request is sent, because the API resolves those
+names against `tools[]` and a policy naming a tool that is not there covers nothing.
+
+A source you leave unset is not sent, and the API's default applies to it. Measured 2026-09-19,
+that default is permissive: with `url_sources` omitted, a URL reaching the model only through a
+user message is fetched, and so is one reaching it only through a client tool's result.
 
 !!! note
     OpenAI does not support web fetch. Using `WebFetchTool` with an OpenAI config will raise an error.
