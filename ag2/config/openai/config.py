@@ -194,6 +194,7 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     metadata: dict[str, str] | None | Omit
     prompt_cache_key: str | Omit
     prompt_cache_options: ResponsePromptCacheOptions | Omit
+    prompt_cache_diagnostics: bool
     service_tier: str | None | Omit
     user: str
     truncation: str | None | Omit
@@ -230,6 +231,12 @@ class OpenAIResponsesConfig(ModelConfig):
     # per-block ``prompt_cache_breakpoint`` for it to write. The deprecated
     # ``prompt_cache_retention`` and the ``prewarm`` flag are not exposed at all.
     prompt_cache_options: ResponsePromptCacheOptions | Omit = omit
+    # Diagnose each call against the one before it, so an application learns which change
+    # broke the prefix without tracking response ids itself. The chain spans one client:
+    # a turn's tool loop, and any conversation continued through `reply.ask(...)`, which
+    # reuses the originating turn's client. A fresh `agent.ask(...)` builds a new one and
+    # starts over. An explicit `prompt_cache_options["comparison_response_id"]` outranks it.
+    prompt_cache_diagnostics: bool = False
     service_tier: str | None | Omit = omit
     user: str = ""
     truncation: str | None | Omit = omit
@@ -276,6 +283,7 @@ class OpenAIResponsesConfig(ModelConfig):
             default_query=self.default_query,
             http_client=self.http_client,
             create_options=options,
+            prompt_cache_diagnostics=self.prompt_cache_diagnostics,
         )
 
     def create_files_client(self) -> OpenAIFilesClient:

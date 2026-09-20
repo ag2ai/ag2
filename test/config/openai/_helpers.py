@@ -68,9 +68,10 @@ def message(text: str) -> dict[str, Any]:
     }
 
 
-def response(*output: dict[str, Any]) -> dict[str, Any]:
+def response(*output: dict[str, Any], response_id: str = "resp_1", **extra: Any) -> dict[str, Any]:
+    """One Responses payload. `extra` adds fields the SDK may not model, such as diagnostics."""
     return {
-        "id": "resp_1",
+        "id": response_id,
         "object": "response",
         "created_at": 0,
         "model": "gpt-5",
@@ -80,7 +81,52 @@ def response(*output: dict[str, Any]) -> dict[str, Any]:
         "tools": [],
         "output": list(output),
         "usage": USAGE,
+        **extra,
     }
+
+
+def sse(events: list[dict[str, Any]]) -> bytes:
+    """`events` as one SSE stream body."""
+    return "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
+
+
+def recording(stream: MemoryStream) -> list[BaseEvent]:
+    """Every event sent on `stream`, transient ones included — history keeps none of those."""
+    captured: list[BaseEvent] = []
+
+    async def capture(event: BaseEvent) -> None:
+        captured.append(event)
+
+    stream.subscribe(capture)
+    return captured
+
+
+def capturing_config(
+    *turns: dict[str, Any],
+    stream: bool = False,
+) -> tuple[OpenAIResponsesConfig, list[dict[str, Any]]]:
+    """A config replaying one payload per call, and the list its request bodies land in."""
+    remaining = list(turns)
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        bodies.append(json.loads(request.content))
+        payload = remaining.pop(0) if len(remaining) > 1 else remaining[0]
+        if stream:
+            events = [
+                {"type": "response.created", "sequence_number": 0, "response": payload},
+                {"type": "response.completed", "sequence_number": 1, "response": payload},
+            ]
+            return httpx2.Response(200, content=sse(events), headers={"content-type": "text/event-stream"})
+        return httpx2.Response(200, json=payload)
+
+    config = OpenAIResponsesConfig(
+        model="gpt-5",
+        api_key="test",
+        streaming=stream,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+    )
+    return config, bodies
 
 
 def config(*turns: dict[str, Any]) -> OpenAIResponsesConfig:
@@ -99,7 +145,7 @@ def config(*turns: dict[str, Any]) -> OpenAIResponsesConfig:
 
 def streaming_config(events: list[dict[str, Any]]) -> OpenAIResponsesConfig:
     """A streaming config whose transport replays `events` as one SSE stream."""
-    body = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
+    body = sse(events)
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(200, content=body, headers={"content-type": "text/event-stream"})
@@ -119,9 +165,19 @@ async def ask(
     tools: list[ToolSchema] | None = None,
 ) -> ModelResponse:
     """One turn against `model_config`, with everything it emits landing on `stream`."""
-    return await model_config.create()(
+    return await ask_client(model_config.create(), stream=stream, tools=tools)
+
+
+async def ask_client(
+    client: Any,
+    *,
+    stream: MemoryStream | None = None,
+    tools: list[ToolSchema] | None = None,
+) -> ModelResponse:
+    """One turn against an already-built `client`, so several turns can share its state."""
+    return await client(
         messages=[ModelRequest([TextInput("go")])],
-        context=Context(stream=stream),
+        context=Context(stream=stream or MemoryStream()),
         tools=tools or [],
         response_schema=None,
         serializer=SerializerCls,
