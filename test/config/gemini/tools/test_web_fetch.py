@@ -14,7 +14,7 @@ from ag2 import Context, MemoryStream
 from ag2.config.gemini import GeminiClient
 from ag2.config.gemini.mappers import build_tools
 from ag2.events import ModelRequest, TextInput
-from ag2.tools.builtin.web_fetch import WebFetchTool
+from ag2.tools.builtin.web_fetch import OnlyTools, UrlSources, WebFetchTool
 
 
 @pytest.mark.asyncio
@@ -76,6 +76,41 @@ async def test_a_run_carrying_version_gated_options_still_reaches_the_api() -> N
         response_inclusion="excluded",
         version="web_fetch_20250910",
     ).schemas(run_context)
+
+    await client(
+        messages=[ModelRequest([TextInput("hi")])],
+        context=run_context,
+        tools=schemas,
+        response_schema=None,
+        serializer=SerializerCls,
+    )
+
+    assert captured["body"]["tools"] == [{"urlContext": {}}]
+
+
+@pytest.mark.asyncio
+async def test_url_sources_is_ignored(context: Context) -> None:
+    """A policy Gemini cannot enforce still maps to `url_context` rather than refusing."""
+    tool = WebFetchTool(url_sources=UrlSources(user_input="none", client_tool_results=OnlyTools(["search_docs"])))
+
+    [schema] = await tool.schemas(context)
+
+    assert build_tools([schema]) == [
+        types.Tool(url_context=types.UrlContext()),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_run_carrying_url_sources_still_goes_out() -> None:
+    captured: dict[str, Any] = {}
+    run_context = Context(stream=MemoryStream())
+    client = GeminiClient(
+        model="gemini-3.6-flash",
+        api_key="test",
+        vertexai=False,
+        http_client=_capturing_client(captured),
+    )
+    schemas = await WebFetchTool(url_sources=UrlSources(user_input="none")).schemas(run_context)
 
     await client(
         messages=[ModelRequest([TextInput("hi")])],

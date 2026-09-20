@@ -7,7 +7,14 @@ import pytest
 from ag2 import Context
 from ag2.config.anthropic.mappers import tool_to_api
 from ag2.exceptions import WebFetchOptionUnsupportedError
-from ag2.tools.builtin.web_fetch import WEB_FETCH_VERSIONS, WebFetchTool, WebFetchVersions
+from ag2.tools.builtin.web_fetch import (
+    WEB_FETCH_VERSIONS,
+    ExceptTools,
+    OnlyTools,
+    UrlSources,
+    WebFetchTool,
+    WebFetchVersions,
+)
 
 
 @pytest.mark.asyncio
@@ -168,3 +175,64 @@ async def test_the_refusal_names_the_version_the_option_arrived_in(context: Cont
 
     with pytest.raises(WebFetchOptionUnsupportedError, match="web_fetch_20260309"):
         tool_to_api(schema)
+
+
+@pytest.mark.asyncio
+async def test_url_sources_shuts_user_input_out(context: Context) -> None:
+    tool = WebFetchTool(url_sources=UrlSources(user_input="none"))
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_api(schema) == {
+        "type": "web_fetch_20250910",
+        "name": "web_fetch",
+        "url_sources": {"user_input": {"type": "none"}},
+    }
+
+
+@pytest.mark.asyncio
+async def test_url_sources_names_the_tools_a_filter_lists(context: Context) -> None:
+    tool = WebFetchTool(
+        url_sources=UrlSources(
+            user_input="all",
+            client_tool_results=OnlyTools(["search_docs"]),
+            server_tool_results=ExceptTools(["web_search"]),
+        )
+    )
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_api(schema) == {
+        "type": "web_fetch_20250910",
+        "name": "web_fetch",
+        "url_sources": {
+            "user_input": {"type": "all"},
+            "client_tool_results": {
+                "type": "only",
+                "tools": [{"type": "tool_reference", "name": "search_docs"}],
+            },
+            "server_tool_results": {
+                "type": "except",
+                "tools": [{"type": "tool_reference", "name": "web_search"}],
+            },
+        },
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", WEB_FETCH_VERSIONS)
+async def test_url_sources_is_carried_by_every_version(context: Context, version: WebFetchVersions) -> None:
+    tool = WebFetchTool(url_sources=UrlSources(client_tool_results="none"), version=version)
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_api(schema)["url_sources"] == {"client_tool_results": {"type": "none"}}
+
+
+@pytest.mark.asyncio
+async def test_a_url_sources_that_sets_nothing_is_not_a_setting(context: Context) -> None:
+    tool = WebFetchTool(url_sources=UrlSources())
+
+    [schema] = await tool.schemas(context)
+
+    assert tool_to_api(schema) == {"type": "web_fetch_20250910", "name": "web_fetch"}
