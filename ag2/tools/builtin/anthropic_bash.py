@@ -5,7 +5,7 @@
 from collections.abc import Iterable
 from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from ag2.annotations import Context
 from ag2.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 # schema ``type``, so ``known_tools`` (which stores ``schema.type`` for
 # non-function schemas) matches the incoming ``ToolCallEvent.name`` and the
 # executor below is reached instead of the not-found guard.
-ANTHROPIC_BASH_TOOL_NAME = "bash"
+ANTHROPIC_BASH_TOOL_NAME: Final = "bash"
 
 
 @dataclass(slots=True)

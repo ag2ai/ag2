@@ -236,7 +236,7 @@ types = [
     "mypy==2.3.1",
     "types-PyYAML",
     { include-group = "test" },
-    "ag2[openai, a2a, ag-ui]",
+    "ag2[openai, anthropic, a2a, ag-ui]",
 ]
 
 lint = ["ruff==0.16.6", "codespell==2.4.3", "zizmor==1.30.0"]
@@ -391,6 +391,8 @@ python_version = "3.10"
 # that already pass under `strict = true`.
 files = [
     "ag2/_import_utils.py",
+    "ag2/config/anthropic/mappers.py",
+    "ag2/config/openai/mappers.py",
 ]
 
 strict = true
