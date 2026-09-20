@@ -6,8 +6,17 @@ import base64
 import json
 import logging
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import Any, Literal, TypeAlias, cast
 
+from anthropic.types import (
+    WebFetchTool20260318Param,
+    WebFetchURLSourceAllParam,
+    WebFetchURLSourceExceptParam,
+    WebFetchURLSourceNoneParam,
+    WebFetchURLSourceOnlyParam,
+    WebFetchURLSourceToolReferenceParam,
+    WebFetchURLSourcesParam,
+)
 from fast_depends.library.serializer import SerializerProto
 
 from ag2.compact import CompactionSummary
@@ -50,6 +59,7 @@ from ag2.tools.builtin.shell import ShellToolSchema
 from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_fetch import (
+    WEB_FETCH_TOOL_NAME,
     ExceptTools,
     OnlyTools,
     ToolResultSources,
@@ -60,6 +70,12 @@ from ag2.tools.builtin.web_fetch import (
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
+
+#: What a source with no tools to name may contribute: everything or nothing.
+UnfilteredUrlSourceParam: TypeAlias = WebFetchURLSourceAllParam | WebFetchURLSourceNoneParam
+
+#: One entry of ``url_sources``: what a single source may contribute, as the API discriminates it.
+UrlSourceParam: TypeAlias = UnfilteredUrlSourceParam | WebFetchURLSourceOnlyParam | WebFetchURLSourceExceptParam
 
 WEB_FETCH_USE_CACHE_SINCE: WebFetchVersions = "web_fetch_20260309"
 WEB_FETCH_RESPONSE_INCLUSION_SINCE: WebFetchVersions = "web_fetch_20260318"
@@ -137,24 +153,79 @@ def _reject_unsupported_web_fetch_options(t: WebFetchToolSchema) -> None:
         )
 
 
-def _url_source_to_api(source: ToolResultSources) -> dict[str, Any]:
+def _tool_references(names: Iterable[str]) -> list[WebFetchURLSourceToolReferenceParam]:
+    """Name each tool the way a `url_sources` filter refers to it."""
+    return [{"type": "tool_reference", "name": n} for n in names]
+
+
+def _unfiltered_source_to_api(source: Literal["all", "none"]) -> UnfilteredUrlSourceParam:
+    """Tag a source that names no tools: everything it supplies, or nothing.
+
+    ``UrlSources`` validates nothing, so a value outside the pair is sent as written: this is a
+    policy control, and a 400 naming the typo beats quietly substituting the closed policy.
+    """
+    if source == "all":
+        return {"type": "all"}
+
+    if source == "none":
+        return {"type": "none"}
+
+    return cast(UnfilteredUrlSourceParam, {"type": source})
+
+
+def _url_source_to_api(source: ToolResultSources) -> UrlSourceParam:
     """Tag one `url_sources` entry the way the API discriminates it."""
-    if isinstance(source, (OnlyTools, ExceptTools)):
-        tag = "only" if isinstance(source, OnlyTools) else "except"
-        return {"type": tag, "tools": [{"type": "tool_reference", "name": n} for n in source.tools]}
+    if isinstance(source, OnlyTools):
+        return {"type": "only", "tools": _tool_references(source.tools)}
 
-    return {"type": source}
+    if isinstance(source, ExceptTools):
+        return {"type": "except", "tools": _tool_references(source.tools)}
+
+    return _unfiltered_source_to_api(source)
 
 
-def _url_sources_to_api(url_sources: UrlSources) -> dict[str, Any]:
+def _url_sources_to_api(url_sources: UrlSources) -> WebFetchURLSourcesParam:
     """Map the sources that were set. One left unset is the API's default, not a decision to send."""
-    result: dict[str, Any] = {}
+    result: WebFetchURLSourcesParam = {}
     if url_sources.user_input is not None:
-        result["user_input"] = {"type": url_sources.user_input}
+        result["user_input"] = _unfiltered_source_to_api(url_sources.user_input)
     if url_sources.client_tool_results is not None:
         result["client_tool_results"] = _url_source_to_api(url_sources.client_tool_results)
     if url_sources.server_tool_results is not None:
         result["server_tool_results"] = _url_source_to_api(url_sources.server_tool_results)
+    return result
+
+
+def _web_fetch_tool_to_api(t: WebFetchToolSchema) -> WebFetchTool20260318Param:
+    """Build the web fetch entry against the newest version's param, whichever version is sent.
+
+    Its fields are a superset of every older one's, and the gate above has already refused any
+    option the selected version predates.
+    """
+    result: WebFetchTool20260318Param = {
+        # The four params differ only in this literal, so the newest stands in as their
+        # superset and the version is carried through unchecked.
+        "type": cast(Literal["web_fetch_20260318"], t.web_fetch_version),
+        "name": WEB_FETCH_TOOL_NAME,
+    }
+    if t.max_uses is not None:
+        result["max_uses"] = t.max_uses
+    if t.allowed_domains is not None:
+        result["allowed_domains"] = t.allowed_domains
+    if t.blocked_domains is not None:
+        result["blocked_domains"] = t.blocked_domains
+    if t.citations is not None:
+        result["citations"] = {"enabled": t.citations}
+    if t.max_content_tokens is not None:
+        result["max_content_tokens"] = t.max_content_tokens
+    if t.strict is not None:
+        result["strict"] = t.strict
+    if t.use_cache is not None:
+        result["use_cache"] = t.use_cache
+    if t.response_inclusion is not None:
+        result["response_inclusion"] = t.response_inclusion
+    if t.url_sources is not None and (sources := _url_sources_to_api(t.url_sources)):
+        result["url_sources"] = sources
     return result
 
 
@@ -196,26 +267,8 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 
     elif isinstance(t, WebFetchToolSchema):
         _reject_unsupported_web_fetch_options(t)
-        result = {"type": t.web_fetch_version, "name": "web_fetch"}
-        if t.max_uses is not None:
-            result["max_uses"] = t.max_uses
-        if t.allowed_domains is not None:
-            result["allowed_domains"] = t.allowed_domains
-        if t.blocked_domains is not None:
-            result["blocked_domains"] = t.blocked_domains
-        if t.citations is not None:
-            result["citations"] = {"enabled": t.citations}
-        if t.max_content_tokens is not None:
-            result["max_content_tokens"] = t.max_content_tokens
-        if t.strict is not None:
-            result["strict"] = t.strict
-        if t.use_cache is not None:
-            result["use_cache"] = t.use_cache
-        if t.response_inclusion is not None:
-            result["response_inclusion"] = t.response_inclusion
-        if t.url_sources is not None and (sources := _url_sources_to_api(t.url_sources)):
-            result["url_sources"] = sources
-        return result
+        # A TypedDict is a plain dict at runtime; the copy only widens the static type.
+        return dict(_web_fetch_tool_to_api(t))
 
     elif isinstance(t, MemoryToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool

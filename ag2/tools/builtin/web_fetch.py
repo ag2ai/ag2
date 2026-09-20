@@ -5,7 +5,7 @@
 from collections.abc import Iterable
 from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias, get_args
+from typing import Final, Literal, TypeAlias, get_args
 
 from ag2.annotations import Context, Variable
 from ag2.events import BuiltinToolCallEvent, ToolCallEvent
@@ -15,7 +15,7 @@ from ag2.tools.tool import Tool
 
 from ._resolve import resolve_variable
 
-WEB_FETCH_TOOL_NAME = "web_fetch"
+WEB_FETCH_TOOL_NAME: Final = "web_fetch"
 
 WebFetchVersions: TypeAlias = Literal[
     "web_fetch_20250910",

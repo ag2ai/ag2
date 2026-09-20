@@ -525,3 +525,83 @@ async def test_a_filter_naming_a_tool_an_mcp_toolset_blocks_is_refused(context: 
         await _ask(config, tools=[*fetch, *mcp])
 
     assert "body" not in captured
+
+
+@pytest.mark.asyncio
+async def test_every_web_fetch_option_together_pins_the_whole_tool_entry(context: Context) -> None:
+    """Every option ag2 exposes, set at once, compared by exact equality.
+
+    Typing the mapper through the SDK's ``TypedDict``s must not move the wire, and only a whole
+    entry asserted whole can show that. The search and MCP tools are here solely so the two
+    filters have declared names to resolve against.
+    """
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    fetch = await WebFetchTool(
+        max_uses=3,
+        allowed_domains=["example.com"],
+        blocked_domains=["evil.example"],
+        citations=True,
+        max_content_tokens=1024,
+        strict=True,
+        use_cache=False,
+        response_inclusion="excluded",
+        url_sources=UrlSources(
+            user_input="none",
+            client_tool_results=ExceptTools(["read_page"]),
+            server_tool_results=OnlyTools(["web_search"]),
+        ),
+        version="web_fetch_20260318",
+    ).schemas(context)
+    search = await WebSearchTool().schemas(context)
+    mcp = await MCPServerTool(
+        server_url="https://mcp.example.com/x",
+        server_label="x",
+        allowed_tools=["read_page"],
+    ).schemas(context)
+
+    await _ask(config, tools=[*fetch, *search, *mcp])
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert body["tools"][0] == {
+        "type": "web_fetch_20260318",
+        "name": "web_fetch",
+        "max_uses": 3,
+        "allowed_domains": ["example.com"],
+        "blocked_domains": ["evil.example"],
+        "citations": {"enabled": True},
+        "max_content_tokens": 1024,
+        "strict": True,
+        "use_cache": False,
+        "response_inclusion": "excluded",
+        "url_sources": {
+            "user_input": {"type": "none"},
+            "client_tool_results": {
+                "type": "except",
+                "tools": [{"type": "tool_reference", "name": "read_page"}],
+            },
+            "server_tool_results": {
+                "type": "only",
+                "tools": [{"type": "tool_reference", "name": "web_search"}],
+            },
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_source_outside_the_pair_is_sent_as_written(context: Context) -> None:
+    """``UrlSources`` validates nothing, so the mapper must not quietly read a typo as a policy.
+
+    Matching the value against ``all`` and falling through to ``none`` would send the closed
+    policy under a name the caller never wrote. Sending it verbatim buys a 400 that names it.
+    """
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    schemas = await WebFetchTool(url_sources=UrlSources(user_input="All")).schemas(context)  # type: ignore[arg-type]
+
+    await _ask(config, tools=schemas)
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert body["tools"][0]["url_sources"] == {"user_input": {"type": "All"}}
