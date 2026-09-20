@@ -313,6 +313,7 @@ class AnthropicClient(LLMClient):
             model=response.model,
             provider="anthropic",
             finish_reason=response.stop_reason,
+            response_id=response.id,
         )
 
     async def _process_stream(
@@ -417,6 +418,7 @@ class AnthropicClient(LLMClient):
             model=final_message.model,
             provider="anthropic",
             finish_reason=final_message.stop_reason,
+            response_id=final_message.id,
         )
 
 
