@@ -167,6 +167,7 @@ class OpenAIClient(LLMClient):
                 model=completion.model,
                 provider="openai",
                 finish_reason=choice.finish_reason,
+                response_id=completion.id,
             )
 
     async def _process_stream(
@@ -178,6 +179,7 @@ class OpenAIClient(LLMClient):
         usage = Usage()
         finish_reason: str | None = None
         resolved_model: str | None = None
+        response_id: str | None = None
 
         # Accumulate tool calls by index (streaming sends partial updates per index)
         full_tool_calls: list[dict[str, str]] = []
@@ -189,6 +191,8 @@ class OpenAIClient(LLMClient):
 
             if chunk.model:
                 resolved_model = chunk.model
+
+            response_id = chunk.id
 
             for choice in chunk.choices:
                 if choice.finish_reason:
@@ -242,4 +246,5 @@ class OpenAIClient(LLMClient):
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
+            response_id=response_id,
         )
