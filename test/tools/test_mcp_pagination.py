@@ -59,6 +59,19 @@ class Catalog:
         return CallToolResult(content=[TextContent(type="text", text=f"called {params.name}")])
 
 
+class EndlessCatalog(Catalog):
+    """A server with one more page every time, each behind a cursor never served before."""
+
+    def __init__(self) -> None:
+        super().__init__({})
+
+    async def list_tools(
+        self, ctx: ServerRequestContext[Any, Any], params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        self.cursors.append(params.cursor if params else None)
+        return page(f"tool{len(self.cursors)}", next_cursor=f"page{len(self.cursors)}")
+
+
 @asynccontextmanager
 async def serve_catalog(catalog: Catalog) -> AsyncGenerator[str]:
     manager = StreamableHTTPSessionManager(catalog.server, json_response=True)
@@ -149,10 +162,21 @@ async def test_repeated_cursor_does_not_loop(context: Context, mode: ProtocolMod
     })
     async with serve_catalog(catalog) as url:
         toolkit = MCPToolkit(MCPServerConfig(server_url=url, protocol_mode=mode))
-        with pytest.RaisesGroup(
-            pytest.RaisesExc(RuntimeError, match="repeated pagination cursor"), flatten_subgroups=True
-        ):
+        with pytest.raises(RuntimeError, match="repeated pagination cursor"):
             await toolkit.schemas(context)
         assert list(toolkit.tools) == []
 
     assert catalog.cursors == ([None, "a", "b"] if cycle else [None, "a"])
+
+
+@pytest.mark.asyncio
+async def test_endless_fresh_cursors_stop_at_the_page_cap(context: Context) -> None:
+    catalog = EndlessCatalog()
+    async with serve_catalog(catalog) as url:
+        toolkit = MCPToolkit(MCPServerConfig(server_url=url))
+        with pytest.raises(RuntimeError, match="did not end tools/list pagination"):
+            await toolkit.schemas(context)
+        assert list(toolkit.tools) == []
+
+    # No cursor ever repeats, so only the cap ends the walk.
+    assert len(set(catalog.cursors)) == len(catalog.cursors)
