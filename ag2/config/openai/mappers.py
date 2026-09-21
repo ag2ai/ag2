@@ -4,11 +4,32 @@
 
 import base64
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import Any, cast
 
 from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
-from openai.types.responses import ResponseFunctionShellToolCall, ResponseUsage, SkillReferenceParam
+from openai.types.chat import ChatCompletionFunctionToolParam
+from openai.types.responses import (
+    FileSearchToolParam,
+    FunctionShellToolParam,
+    ResponseFunctionShellToolCall,
+    ResponseUsage,
+    SkillReferenceParam,
+    ToolSearchToolParam,
+    WebSearchToolParam,
+)
+from openai.types.responses.container_auto_param import ContainerAutoParam
+from openai.types.responses.container_reference_param import ContainerReferenceParam
+from openai.types.responses.file_search_tool_param import Filters as FileSearchFilters
+from openai.types.responses.function_shell_tool_param import Environment as ShellEnvironmentParam
+from openai.types.responses.local_environment_param import LocalEnvironmentParam
+from openai.types.responses.tool_param import (
+    CodeInterpreter,
+    CodeInterpreterContainerCodeInterpreterToolAuto,
+    ImageGeneration,
+    Mcp,
+)
+from openai.types.responses.web_search_tool_param import UserLocation as WebSearchUserLocation
 
 from ag2.compact import CompactionSummary
 from ag2.config.openai.events import (
@@ -44,11 +65,12 @@ from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.shell import (
     ContainerAutoEnvironment,
     ContainerReferenceEnvironment,
+    ShellEnvironment,
     ShellToolSchema,
 )
 from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.builtin.tool_search import ToolSearchToolSchema
-from ag2.tools.builtin.web_search import WebSearchToolSchema
+from ag2.tools.builtin.web_search import UserLocation, WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
@@ -68,7 +90,7 @@ def _kind_label(kind: BinaryType | str) -> str:
 def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] | None:
     """Convert a ResponseProto to Chat Completions response_format."""
     if not response or not response.json_schema:
-        return
+        return None
 
     strict_schema = _strictify_schema(response.json_schema)
     schema: dict[str, Any] = {
@@ -113,7 +135,7 @@ def response_proto_to_text_config(
 ) -> dict[str, Any] | None:
     """Convert a ResponseProto to Responses API text config."""
     if not response or not response.json_schema:
-        return
+        return None
 
     strict_schema = _strictify_schema(response.json_schema)
 
@@ -329,20 +351,20 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                parts: list[dict[str, Any]] = []
+                result_parts: list[dict[str, Any]] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
-                        parts.append({"type": "text", "text": part.content})
+                        result_parts.append({"type": "text", "text": part.content})
                     elif isinstance(part, DataInput):
-                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                        result_parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
                     else:
                         raise UnsupportedInputError(type(part).__name__, "openai-completions")
 
                 # Simple string content for a single plain-text turn (most common case)
-                if len(parts) == 1 and parts[0]["type"] == "text":
-                    result.append({"role": "tool", "tool_call_id": r.parent_id, "content": parts[0]["text"]})
+                if len(result_parts) == 1 and result_parts[0]["type"] == "text":
+                    result.append({"role": "tool", "tool_call_id": r.parent_id, "content": result_parts[0]["text"]})
                 else:
-                    result.append({"role": "tool", "tool_call_id": r.parent_id, "content": parts})
+                    result.append({"role": "tool", "tool_call_id": r.parent_id, "content": result_parts})
 
         elif isinstance(message, ModelRequest):
             parts: list[dict[str, Any]] = []
@@ -423,7 +445,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             # instead of silently sending the tool eagerly (which would defeat
             # defer_loading and give no error). Use the Responses API instead.
             raise UnsupportedToolError("function with defer_loading (use the Responses API)", "openai-completions")
-        return {
+        fn_tool: ChatCompletionFunctionToolParam = {
             "type": "function",
             "function": {
                 "name": t.function.name,
@@ -431,13 +453,52 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
                 "parameters": _ensure_object_schema(t.function.parameters),
             },
         }
+        return dict(fn_tool)
 
     raise UnsupportedToolError(t.type, "openai-completions")
+
+
+def _user_location_to_api(location: UserLocation) -> WebSearchUserLocation:
+    """Tag the location the way the API discriminates it; only the fields that were set travel."""
+    result: WebSearchUserLocation = {"type": "approximate"}
+    if location.city is not None:
+        result["city"] = location.city
+    if location.region is not None:
+        result["region"] = location.region
+    if location.country is not None:
+        result["country"] = location.country
+    if location.timezone is not None:
+        result["timezone"] = location.timezone
+    return result
+
+
+def _shell_environment_to_api(environment: ShellEnvironment) -> ShellEnvironmentParam:
+    """Map the container the hosted shell runs in. An unrecognised environment runs locally."""
+    if isinstance(environment, ContainerAutoEnvironment):
+        container_auto: ContainerAutoParam = {"type": "container_auto"}
+        if environment.network_policy is not None:
+            container_auto["network_policy"] = {
+                "type": "allowlist",
+                "allowed_domains": environment.network_policy.allowed_domains,
+            }
+        return container_auto
+
+    if isinstance(environment, ContainerReferenceEnvironment):
+        container_reference: ContainerReferenceParam = {
+            "type": "container_reference",
+            "container_id": environment.container_id,
+        }
+        return container_reference
+
+    local: LocalEnvironmentParam = {"type": "local"}
+    return local
 
 
 def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     """Responses API tool format — name/description at top level."""
     if isinstance(t, FunctionToolSchema):
+        # Built by hand, unlike its neighbours: the SDK's `FunctionToolParam` makes `strict`
+        # required-but-nullable, and ag2 omits the key so the API applies its own default.
         fn_tool: dict[str, Any] = {
             "type": "function",
             "name": t.function.name,
@@ -449,98 +510,81 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         return fn_tool
 
     elif isinstance(t, WebSearchToolSchema):
-        result: dict[str, Any] = {"type": "web_search"}
+        web_search: WebSearchToolParam = {"type": "web_search"}
         if t.search_context_size is not None:
-            result["search_context_size"] = t.search_context_size
-        if t.max_uses is not None:
-            result["max_uses"] = t.max_uses
+            web_search["search_context_size"] = t.search_context_size
         if t.user_location is not None:
-            loc: dict[str, str] = {"type": "approximate"}
-            if t.user_location.city is not None:
-                loc["city"] = t.user_location.city
-            if t.user_location.region is not None:
-                loc["region"] = t.user_location.region
-            if t.user_location.country is not None:
-                loc["country"] = t.user_location.country
-            if t.user_location.timezone is not None:
-                loc["timezone"] = t.user_location.timezone
-            result["user_location"] = loc
+            web_search["user_location"] = _user_location_to_api(t.user_location)
         if t.allowed_domains is not None:
-            result["filters"] = {"allowed_domains": t.allowed_domains}
-        return result
+            web_search["filters"] = {"allowed_domains": t.allowed_domains}
+
+        web_search_entry = dict(web_search)
+        if t.max_uses is not None:
+            # `max_uses` is Anthropic's cap. The SDK's WebSearchToolParam has no such field and
+            # OpenAI documents none, but ag2 has always sent it, so this refactor keeps sending it.
+            web_search_entry["max_uses"] = t.max_uses
+        return web_search_entry
 
     elif isinstance(t, FileSearchToolSchema):
         # https://developers.openai.com/api/docs/guides/tools-file-search
-        result_fs: dict[str, Any] = {"type": "file_search", "vector_store_ids": t.vector_store_ids}
+        file_search: FileSearchToolParam = {"type": "file_search", "vector_store_ids": t.vector_store_ids}
         if t.max_num_results is not None:
-            result_fs["max_num_results"] = t.max_num_results
+            file_search["max_num_results"] = t.max_num_results
         if t.filters is not None:
-            result_fs["filters"] = t.filters
-        return result_fs
+            # A comparison or compound filter, authored as JSON by the caller.
+            file_search["filters"] = cast(FileSearchFilters, t.filters)
+        return dict(file_search)
 
     elif isinstance(t, CodeExecutionToolSchema):
         # https://developers.openai.com/api/docs/guides/tools-code-interpreter
-        return {"type": "code_interpreter", "container": {"type": "auto"}}
+        container: CodeInterpreterContainerCodeInterpreterToolAuto = {"type": "auto"}
+        code_interpreter: CodeInterpreter = {"type": "code_interpreter", "container": container}
+        return dict(code_interpreter)
 
     elif isinstance(t, ShellToolSchema):
         # https://developers.openai.com/api/docs/guides/tools-shell
-        result_shell: dict[str, Any] = {"type": "shell"}
+        shell: FunctionShellToolParam = {"type": "shell"}
         if t.environment is not None:
-            env: dict[str, Any]
-            if isinstance(t.environment, ContainerAutoEnvironment):
-                env = {"type": "container_auto"}
-                if t.environment.network_policy is not None:
-                    env["network_policy"] = {
-                        "type": "allowlist",
-                        "allowed_domains": t.environment.network_policy.allowed_domains,
-                    }
-            elif isinstance(t.environment, ContainerReferenceEnvironment):
-                env = {
-                    "type": "container_reference",
-                    "container_id": t.environment.container_id,
-                }
-            else:
-                env = {"type": "local"}
-            result_shell["environment"] = env
-        return result_shell
+            shell["environment"] = _shell_environment_to_api(t.environment)
+        return dict(shell)
 
     elif isinstance(t, ImageGenerationToolSchema):
-        result: dict[str, Any] = {"type": "image_generation"}
+        image_generation: ImageGeneration = {"type": "image_generation"}
         if t.quality is not None:
-            result["quality"] = t.quality
+            image_generation["quality"] = t.quality
         if t.size is not None:
-            result["size"] = t.size
+            image_generation["size"] = t.size
         if t.background is not None:
-            result["background"] = t.background
+            image_generation["background"] = t.background
         if t.output_format is not None:
-            result["output_format"] = t.output_format
+            image_generation["output_format"] = t.output_format
         if t.output_compression is not None:
-            result["output_compression"] = t.output_compression
+            image_generation["output_compression"] = t.output_compression
         if t.partial_images is not None:
-            result["partial_images"] = t.partial_images
-        return result
+            image_generation["partial_images"] = t.partial_images
+        return dict(image_generation)
 
     elif isinstance(t, MCPServerToolSchema):
         if t.blocked_tools is not None:
             raise BlockedToolsUnsupportedError("the OpenAI Responses API", t.server_label)
 
         # https://platform.openai.com/docs/guides/tools-remote-mcp
-        result = {
+        mcp: Mcp = {
             "type": "mcp",
             "server_label": t.server_label,
             "server_url": t.server_url,
             "require_approval": "never",
         }
         if t.description is not None:
-            result["server_description"] = t.description
+            mcp["server_description"] = t.description
 
         if t.allowed_tools is not None:
-            result["allowed_tools"] = t.allowed_tools
+            mcp["allowed_tools"] = t.allowed_tools
         if t.headers is not None:
-            result["headers"] = t.headers
+            mcp["headers"] = t.headers
         elif t.authorization_token is not None:
-            result["headers"] = {"Authorization": f"Bearer {t.authorization_token}"}
-        return result
+            mcp["headers"] = {"Authorization": f"Bearer {t.authorization_token}"}
+        return dict(mcp)
 
     elif isinstance(t, SkillsToolSchema):
         # Skills never appear directly in tools[] — the Responses client extracts
@@ -551,7 +595,8 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
     elif isinstance(t, ToolSearchToolSchema):
         # https://developers.openai.com/api/docs/guides/tools-tool-search
         # OpenAI exposes a single server-side tool-search tool; mode is Anthropic-only.
-        return {"type": "tool_search"}
+        tool_search: ToolSearchToolParam = {"type": "tool_search"}
+        return dict(tool_search)
 
     raise UnsupportedToolError(t.type, "openai-responses")
 

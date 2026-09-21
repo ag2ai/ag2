@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import faulthandler
 import gc
 import sys
 import threading
@@ -1109,12 +1110,21 @@ def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
     try:
         for _round in range(10):
             parent = make_parent()
-            threads = [threading.Thread(target=worker, args=(parent, i)) for i in range(2)]
+            # Daemon threads: a worker that fails to finish is the very thing the
+            # assertion below reports, and a non-daemon one would then keep
+            # `threading._shutdown` — and so the whole pytest process — waiting
+            # on it forever after the session ends.
+            threads = [threading.Thread(target=worker, args=(parent, i), daemon=True) for i in range(2)]
             for thread in threads:
                 thread.start()
             for thread in threads:
                 thread.join(timeout=10)
-            assert not any(thread.is_alive() for thread in threads), "a worker thread hung"
+            hung = [thread for thread in threads if thread.is_alive()]
+            if hung:
+                # Seen on Windows CI only. Dump every thread's stack so the next
+                # occurrence says *where* a worker is stuck, not merely that it is.
+                faulthandler.dump_traceback()
+            assert not hung, "a worker thread hung"
 
             assert peaks == [1, 1], f"each thread's own loop should have capped at 1: {peaks!r}"
     finally:

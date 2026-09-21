@@ -9,6 +9,13 @@ from collections.abc import Iterable, Sequence
 from typing import Any, Literal, TypeAlias, cast
 
 from anthropic.types import (
+    CodeExecutionTool20260521Param,
+    MemoryTool20250818Param,
+    ToolBash20250124Param,
+    ToolParam,
+    ToolSearchToolBm25_20251119Param,
+    ToolSearchToolRegex20251119Param,
+    UserLocationParam,
     WebFetchTool20260318Param,
     WebFetchURLSourceAllParam,
     WebFetchURLSourceExceptParam,
@@ -16,6 +23,7 @@ from anthropic.types import (
     WebFetchURLSourceOnlyParam,
     WebFetchURLSourceToolReferenceParam,
     WebFetchURLSourcesParam,
+    WebSearchTool20260318Param,
 )
 from fast_depends.library.serializer import SerializerProto
 
@@ -67,7 +75,7 @@ from ag2.tools.builtin.web_fetch import (
     WebFetchToolSchema,
     WebFetchVersions,
 )
-from ag2.tools.builtin.web_search import WebSearchToolSchema
+from ag2.tools.builtin.web_search import UserLocation, WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
@@ -76,6 +84,9 @@ UnfilteredUrlSourceParam: TypeAlias = WebFetchURLSourceAllParam | WebFetchURLSou
 
 #: One entry of ``url_sources``: what a single source may contribute, as the API discriminates it.
 UrlSourceParam: TypeAlias = UnfilteredUrlSourceParam | WebFetchURLSourceOnlyParam | WebFetchURLSourceExceptParam
+
+#: The two tool search variants, each carrying its own ``name``/``type`` pairing.
+ToolSearchParam: TypeAlias = ToolSearchToolRegex20251119Param | ToolSearchToolBm25_20251119Param
 
 WEB_FETCH_USE_CACHE_SINCE: WebFetchVersions = "web_fetch_20260309"
 WEB_FETCH_RESPONSE_INCLUSION_SINCE: WebFetchVersions = "web_fetch_20260318"
@@ -229,41 +240,83 @@ def _web_fetch_tool_to_api(t: WebFetchToolSchema) -> WebFetchTool20260318Param:
     return result
 
 
+def _user_location_to_api(location: UserLocation) -> UserLocationParam:
+    """Tag the location the way the API discriminates it; only the fields that were set travel."""
+    result: UserLocationParam = {"type": "approximate"}
+    if location.city is not None:
+        result["city"] = location.city
+    if location.region is not None:
+        result["region"] = location.region
+    if location.country is not None:
+        result["country"] = location.country
+    if location.timezone is not None:
+        result["timezone"] = location.timezone
+    return result
+
+
+def _web_search_tool_to_api(t: WebSearchToolSchema) -> WebSearchTool20260318Param:
+    """Build the web search entry against the newest version's param, whichever version is sent."""
+    result: WebSearchTool20260318Param = {
+        # The three params differ only in this literal, so the newest stands in as their
+        # superset and the version is carried through unchecked.
+        "type": cast(Literal["web_search_20260318"], t.web_search_version),
+        "name": "web_search",
+    }
+    if t.max_uses is not None:
+        result["max_uses"] = t.max_uses
+    if t.user_location is not None:
+        result["user_location"] = _user_location_to_api(t.user_location)
+    if t.allowed_domains is not None:
+        result["allowed_domains"] = t.allowed_domains
+    if t.blocked_domains is not None:
+        result["blocked_domains"] = t.blocked_domains
+    return result
+
+
+def _tool_search_tool_to_api(t: ToolSearchToolSchema) -> ToolSearchParam:
+    """Build the tool search entry from the variant's own param.
+
+    The ``name`` is the variant id — the API rejects a generic "tool_search", and this is the
+    name it puts on the ``server_tool_use`` block it sends back. The SDK's ``type`` also accepts
+    the undated form (``tool_search_tool_regex``); the dated one is what ag2 has always sent.
+    """
+    if t.mode == "bm25":
+        bm25: ToolSearchToolBm25_20251119Param = {
+            "type": "tool_search_tool_bm25_20251119",
+            "name": "tool_search_tool_bm25",
+        }
+        return bm25
+
+    regex: ToolSearchToolRegex20251119Param = {
+        "type": "tool_search_tool_regex_20251119",
+        "name": "tool_search_tool_regex",
+    }
+    return regex
+
+
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     if isinstance(t, FunctionToolSchema):
-        fn_tool: dict[str, Any] = {
+        fn_tool: ToolParam = {
             "name": t.function.name,
             "description": t.function.description,
             "input_schema": _ensure_object_schema(t.function.parameters),
         }
         if t.defer_loading:
             fn_tool["defer_loading"] = True
-        return fn_tool
+        return dict(fn_tool)
 
     elif isinstance(t, WebSearchToolSchema):
-        result: dict[str, Any] = {"type": t.web_search_version, "name": "web_search"}
-        if t.max_uses is not None:
-            result["max_uses"] = t.max_uses
-        if t.user_location is not None:
-            loc: dict[str, str] = {"type": "approximate"}
-            if t.user_location.city is not None:
-                loc["city"] = t.user_location.city
-            if t.user_location.region is not None:
-                loc["region"] = t.user_location.region
-            if t.user_location.country is not None:
-                loc["country"] = t.user_location.country
-            if t.user_location.timezone is not None:
-                loc["timezone"] = t.user_location.timezone
-            result["user_location"] = loc
-        if t.allowed_domains is not None:
-            result["allowed_domains"] = t.allowed_domains
-        if t.blocked_domains is not None:
-            result["blocked_domains"] = t.blocked_domains
-        return result
+        return dict(_web_search_tool_to_api(t))
 
     elif isinstance(t, CodeExecutionToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool
-        return {"type": t.version, "name": "code_execution"}
+        # The versioned params differ only in the `type` literal, so the newest stands in
+        # for all of them and the version is carried through unchecked.
+        code_execution: CodeExecutionTool20260521Param = {
+            "type": cast(Literal["code_execution_20260521"], t.version),
+            "name": "code_execution",
+        }
+        return dict(code_execution)
 
     elif isinstance(t, WebFetchToolSchema):
         _reject_unsupported_web_fetch_options(t)
@@ -272,14 +325,16 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 
     elif isinstance(t, MemoryToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
-        return {"type": t.version, "name": "memory"}
+        memory: MemoryTool20250818Param = {"type": t.version, "name": "memory"}
+        return dict(memory)
 
     elif isinstance(t, AnthropicBashToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
         # Client-executed: Anthropic returns a plain tool_use block and waits for
         # a tool_result. AnthropicBashTool registers the executor under the same
         # name, so the call is answered instead of raising ToolNotFound.
-        return {"type": t.version, "name": ANTHROPIC_BASH_TOOL_NAME}
+        bash: ToolBash20250124Param = {"type": t.version, "name": ANTHROPIC_BASH_TOOL_NAME}
+        return dict(bash)
 
     elif isinstance(t, ShellToolSchema):
         # Anthropic's bash tool is client-side — it ships a typed schema but the
@@ -296,7 +351,9 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 
     elif isinstance(t, MCPServerToolSchema):
         # https://platform.claude.com/docs/en/docs/agents-and-tools/mcp-connector
-        result = {
+        # The one entry built by hand: `anthropic` ships no param type for an
+        # mcp_toolset, so there is nothing to check this shape against.
+        result: dict[str, Any] = {
             "type": "mcp_toolset",
             "mcp_server_name": t.server_label,
         }
@@ -311,11 +368,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
 
     elif isinstance(t, ToolSearchToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool
-        # The `name` must be the variant id without the date suffix (e.g.
-        # "tool_search_tool_regex"); the API rejects a generic "tool_search"
-        # name, and this matches the server_tool_use block name on the response.
-        variant = "tool_search_tool_bm25" if t.mode == "bm25" else "tool_search_tool_regex"
-        return {"type": f"{variant}_20251119", "name": variant}
+        return dict(_tool_search_tool_to_api(t))
 
     raise UnsupportedToolError(t.type, "anthropic")
 
@@ -694,10 +747,10 @@ def convert_messages(
 
             if content_parts:
                 if len(content_parts) == 1 and (part := content_parts[0])["type"] == "text":
-                    content: str | list[dict[str, Any]] = part["text"]
+                    user_content: str | list[dict[str, Any]] = part["text"]
                 else:
-                    content = content_parts
-                result.append({"role": "user", "content": content})
+                    user_content = content_parts
+                result.append({"role": "user", "content": user_content})
 
         elif isinstance(message, CompactionSummary):
             # Surface the summary as a user turn so it stays visible and gives a valid opening turn
