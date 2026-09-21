@@ -506,7 +506,7 @@ To configure a model, import the specific provider's configuration class and ini
     )
     ```
 
-    `ag2[anthropic]` requires `anthropic>=1.2.0,<2`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and the sampling parameters (`temperature`, `top_p`, `top_k`).
+    `ag2[anthropic]` requires `anthropic>=1.6.0,<2`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and the sampling parameters (`temperature`, `top_p`, `top_k`).
 
 === "Gemini"
     ```python linenums="1"
@@ -612,7 +612,7 @@ config = OpenAIConfig(model="gpt-5")
 
 ### Anthropic Configuration
 
-`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview) through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.2.0,<2`.
+`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview) through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.6.0,<2`.
 
 If `api_key` is not passed explicitly, it is resolved from the `ANTHROPIC_API_KEY` environment variable.
 
@@ -2272,6 +2272,32 @@ project = MemorySkill(name="project-info", description="Project status and confi
 def environment(region: Annotated[str, Variable("region")]) -> str:
     return f"Region: {region}"
 ```
+
+### A dynamic body
+
+The body accepts a **callable** as well as a string. Pass one and it is rendered on every `load_skill` instead of being fixed when the skill is constructed - so the instructions the model reads can reflect the live run. Register it with the `@skill.instructions` decorator, alongside the resource and script decorators:
+
+```python
+from typing import Annotated
+from ag2 import Variable
+from ag2.tools import MemorySkill
+
+deploy = MemorySkill(
+    name="deploy",
+    description="Deploy the service. Use when asked to ship or roll out a release.",
+)
+
+@deploy.instructions
+async def deploy_body(region: Annotated[str, Variable("region")]) -> str:
+    return f"Deploy to {region}. Run the health check before switching traffic."
+```
+
+The callable may be sync or async, and supports the same dependency injection as a resource or script. Use it when the *always-needed* part of the instructions varies; a resource still fits better for bulk data the model should fetch only when it turns out to need it.
+
+A callable can also go straight to the constructor - `MemorySkill(..., instructions=deploy_body)` - which is handy when the same body is shared by several skills. When both are given, the decorator wins.
+
+!!! note
+    Only the body is dynamic. A skill's catalog entry - the name and description in `<available_skills>` - is a snapshot taken when the plugin is built, so it stays in lockstep with the set of skills the activation tools accept.
 
 ### Composing with file-based skills
 
@@ -6352,6 +6378,61 @@ app = MCPServer(
 !!! warning "A shared backend does not make a handle portable"
     The registry is per-process, so a shared `Storage` shares the stored history but not the mapping from a name to it. Cross-replica continuity still needs the caller pinned to one replica.
 
+### Configuring the HTTP transport
+
+`transport=` groups every streamable-HTTP setting that has no other route onto the server. The values below are **AG2's own defaults**, passed through explicitly - not whatever the resolved `mcp` release happens to use, so a deployment's behaviour does not move under you when a patch release retunes one.
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer, TransportConfig, TransportSecuritySettings
+
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(
+    agent,
+    transport=TransportConfig(
+        max_request_body_size=16 * 1024 * 1024,
+        security_settings=TransportSecuritySettings(
+            allowed_hosts=["agent.example.com"],
+            allowed_origins=["https://agent.example.com"],
+        ),
+    ),
+)
+```
+
+Omitting `transport=` is exactly passing `TransportConfig()`.
+
+#### DNS rebinding protection is derived, not guessed
+
+Leave `security_settings` alone and AG2 puts the protection up itself - provided you configured `security=`. `security.resource_url` is the endpoint you declared this server answers on, so it is not a guess about your topology; `allowed_hosts` and `allowed_origins` come straight from it. A URL that names no port allows any, so a proxy forwarding `Host: agent.example.com:8443` still reaches you.
+
+!!! danger "Two cases still serve with no protection at all"
+    - **No authorization requirement.** Without `security=` there is no declared URL to derive from, so the protection stays off - the meaning an absent value has always had to the SDK.
+    - **An explicit refusal.** `TransportSecuritySettings(enable_dns_rebinding_protection=False)` turns it off deliberately, and wins over the derived settings.
+
+    A *default-constructed* `TransportSecuritySettings()` is not a safe middle ground either: it enables the protection with **empty** allow-lists, so every request is refused. Pass your own lists when your deployment answers on names `resource_url` does not cover (`"agent.example.com:*"` allows any port).
+
+#### Two different session bounds in one call
+
+`SessionConfig(max_sessions=...)` and `TransportConfig(max_mcp_sessions=...)` sit side by side and bound different things:
+
+- `max_sessions` caps **conversation** sessions - how much history the server remembers. Overflowing it drops the least-recently-used conversation; nothing is refused.
+- `max_mcp_sessions` caps concurrent **MCP** sessions - the transport's own handshake-era sessions. A request that would open one beyond the cap is answered `503`.
+
+### Stateless transports and the idle timeout
+
+A stateless transport issues no `mcp-session-id`, so there are no MCP sessions to reap. Asking for reaping anyway is refused at construction rather than silently ignored:
+
+```python
+MCPServer(agent, stateless=True, transport=TransportConfig(mcp_session_idle_timeout=60.0))
+# ValueError: stateless=True issues no mcp-session-id, so transport.mcp_session_idle_timeout (60.0) ...
+```
+
+What counts is the value, not how it arrived. Two things are not asking, and both serve stateless happily:
+
+- **the default `1800.0`** - whether you left the field alone or typed the number, it says what the default already says;
+- **`mcp_session_idle_timeout=None`** - that asks the transport *not* to reap, which a stateless transport cannot contradict.
+
 ### What `stateless` governs
 
 `stateless=True` stops the **HTTP transport** issuing an `mcp-session-id`. That is a *handshake-era* switch: modern-era requests are self-contained single exchanges that never carry a session id in the first place, so the flag does not reach them.
@@ -6405,6 +6486,24 @@ app = MCPServer(
 ```
 
 With authentication configured, a conversation records the principal that created it - the access token's subject, falling back to its client id - and revalidates that on **every** call, not only at creation. A handle presented under a different principal gets the same error as an unknown one, so the error does not disclose that the handle exists.
+
+#### Refusing a token minted for another service
+
+`validate_token_resource=True` turns on the RFC 8707 check: the server then accepts only a token whose resource indicator (`AccessToken.resource`) names `resource_url`, so a token issued for a different service cannot be replayed against your agent.
+
+```python
+security = require(
+    oauth2_scheme(url="https://auth.example.com"),
+    resource_url="https://agent.example.com/mcp",
+    verifier=my_token_verifier,
+    validate_token_resource=True,
+)
+```
+
+It ships **off**. The resource field is optional on the token your own verifier builds, and an absent value fails the check - so turning it on for everyone would answer `401` to every deployment whose verifier does not populate it. Enable it when your authorization server binds tokens to the `resource` the client asked for; leave it off when your verifier checks the audience itself.
+
+!!! note "The SDK makes this its default in 3.0"
+    `mcp` defaults the same check off through 2.x and on in 3.0. AG2 flips its default when that release lands, so enable it deliberately now rather than meeting it as a surprise then.
 
 !!! warning "Without `security`, the handle is the only credential"
     With no authentication there is no principal to bind to, so anyone holding a handle can continue the conversation it names. The handle travels through readable content - the model's context, client logs, tracing in between - so decide whether that is acceptable for your deployment before serving unauthenticated.
@@ -6460,6 +6559,7 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `path` | `"/mcp"` | the HTTP endpoint path |
 | `stateless` | `False` | stop the HTTP transport issuing an `mcp-session-id` |
 | `json_response` | `False` | answer with JSON rather than SSE |
+| `transport` | `None` | a `TransportConfig` of streamable-HTTP settings; omitting it is a default-constructed one |
 | `security` | `None` | OAuth 2.1 Resource Server requirements |
 | `request_state_security` | `None` | advanced: replace the ephemeral request-state policy |
 
@@ -6471,13 +6571,26 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `ttl` | `None` | idle expiry, in seconds |
 | `storage` | `None` | the history backend; in-memory when unset |
 
+### `TransportConfig`
+
+| field | default | what it is for |
+|---|---|---|
+| `mcp_session_idle_timeout` | `1800.0` | seconds an MCP session may idle before the transport closes it; its next request gets `404`. `None` never reaps |
+| `max_mcp_sessions` | `10_000` | concurrent MCP sessions; one beyond the cap is answered `503`. `None` removes the cap |
+| `max_request_body_size` | `4 MiB` | a larger body is refused `413`, before it is parsed and before a session is created |
+| `security_settings` | `None` | DNS rebinding protection. **`None` disables it**; a default-constructed `TransportSecuritySettings()` refuses everything |
+| `sse_retry_interval` | `None` | milliseconds to suggest a client waits before reconnecting a dropped SSE stream. Carried on the priming event, so it does nothing without an `event_store` and a client on 2025-11-25 or later |
+| `event_store` | `None` | makes connections resumable: a client reconnecting with `Last-Event-ID` receives what it missed. Bring your own; what is proven is one end-to-end test over a real socket (`test/mcp/test_resumability.py`) |
+
+Non-positive bounds are refused when the `TransportConfig` is constructed.
+
 ### `MCPFunctionTool`
 
 Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `description`, `handler`, `input_schema`, `title`, `annotations`, `output_schema`, and `meta` - and nothing else; resolver metadata is the decorator's own state, not a constructor argument.
 
 ### Names re-exported from `ag2.mcp`
 
-`MCPServer`, `SessionConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
+`MCPServer`, `SessionConfig`, `TransportConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
 
 Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the last: `MCPAgentConfigError`, `MCPToolNameConflictError`, `UnknownConversationError` (a handle naming no live conversation, reported to the caller as a tool error), `MCPResourceNotFoundError`, `MCPPromptNotFoundError`, and `MCPSamplingUnavailableError` / `MCPSamplingRefusedError` (both `MCPSamplingError`). `MCPElicitationDeclinedError` subclasses core's `HumanInputNotProvidedError` instead, so a question the client refused is the same failure as one nobody was there to answer.
 
@@ -6488,6 +6601,12 @@ Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the la
 - **Structured custom tools** - a pydantic model or dataclass return annotation supplies `outputSchema`; its value is returned as `structuredContent`, while `__str__` supplies readable text. `output_schema=` can override derivation and `meta=` adds extension metadata.
 - **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`.
 - **Protocol extensions** are advertised with `extensions=` and inspected per request with `client_extension()`.
+
+!!! note "`ResourceTemplate` readers receive decoded variables"
+
+    Variable values are percent-decoded once as UTF-8, so reading `files:///hello%20world.txt` through `files:///{name}` passes `{"name": "hello world.txt"}` to the reader. Use these values directly: `%2520` becomes the literal `%20`, and a literal `+` stays `+`. Decoding happens after template matching, and the returned resource URI keeps the original encoding.
+
+    Decoding never widens what a form matches. A `{name}` value is still one path segment after decoding, so `files:///a%2Fb` matches no `files:///{name}` template - serving it would hand the reader the separator the form promised to keep out. A `{+name}` value may span `/` and may contain `..`, so a reader behind the reserved form owns its own containment checks. A URI whose escapes are not valid UTF-8 matches no template rather than decoding to replacement characters.
 
 ---
 
@@ -7118,9 +7237,82 @@ agent = Agent(
 | `blocked_domains` | ✓ | ✗ |
 | `citations` | ✓ | ✗ |
 | `max_content_tokens` | ✓ | ✗ |
+| `strict` | ✓ | ✗ |
+| `use_cache` | ✓ (from `web_fetch_20260309`) | ✗ |
+| `response_inclusion` | ✓ (`web_fetch_20260318` only) | ✗ |
+| `url_sources` | ✓ | ✗ |
+
+Two of those options arrived with later tool versions. Setting one on a `version` that predates it
+raises `WebFetchOptionUnsupportedError` while the request is built, naming the option and the
+version it arrived in. The API refuses the same pairing with a 400, so this costs you the round
+trip and tells you which version to ask for:
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import WebFetchTool
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[
+        # Asking this agent anything raises: `use_cache` needs web_fetch_20260309 or later,
+        # and no request is sent.
+        WebFetchTool(use_cache=False, version="web_fetch_20250910"),
+    ],
+)
+```
+
+### Which sources may supply a URL
+
+`url_sources` says, per source, which URLs the model is allowed to fetch. It is a policy control
+rather than a tuning knob: an agent that fetches URLs out of user text is reachable by anyone who
+can type into the conversation, and `allowed_domains` cannot stand in for it because that filters
+by host, not by who proposed the URL.
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.tools import tool
+from ag2.tools.builtin.web_fetch import OnlyTools, UrlSources, WebFetchTool
+
+@tool
+async def search_docs(query: str) -> list[str]:
+    """Return the URLs of documents matching the query."""
+    return ["https://docs.example.com/guide"]
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[
+        search_docs,
+        WebFetchTool(
+            # Fetch only what `search_docs` returned - never a link a user pasted.
+            url_sources=UrlSources(
+                user_input="none",
+                client_tool_results=OnlyTools(["search_docs"]),
+            ),
+        ),
+    ],
+)
+```
+
+`user_input` is `"all"` or `"none"`. `client_tool_results` and `server_tool_results` take those
+two as well as `OnlyTools([...])` and `ExceptTools([...])`, which name tools. A name must belong
+to a tool the same request declares; one that does not raises
+`WebFetchUrlSourceToolNotFoundError` before the request is sent, because the API resolves those
+names against `tools[]` and a policy naming a tool that is not there covers nothing.
+
+A source you leave unset is not sent, and the API's default applies to it. Measured 2026-09-19,
+that default is permissive: with `url_sources` omitted, a URL reaching the model only through a
+user message is fetched, and so is one reaching it only through a client tool's result.
 
 !!! note
     OpenAI does not support web fetch. Using `WebFetchTool` with an OpenAI config will raise an error.
+
+!!! note
+    Gemini maps `WebFetchTool` to `url_context` and honors none of these options. It ignores them
+    rather than refusing them, including the version-gated ones.
 
 ## Google Maps
 
@@ -14059,7 +14251,7 @@ Sub-modules:
 | `ag2.a2a.testing` | In-process test helpers - `make_test_client_factory`, `make_test_rest_client_factory`, `pick_free_port` |
 
 !!! note
-    The A2A integration depends on [`a2a-sdk`](https://pypi.org/project/a2a-sdk/). Install with the `a2a` extras: `#!bash pip install "ag2[a2a]"`. gRPC is an additional optional dependency - install with `#!bash pip install "ag2[a2a-grpc]"`.
+    The A2A integration depends on [`a2a-sdk`](https://pypi.org/project/a2a-sdk/). Install with the `a2a` extras: `#!bash pip install "ag2[a2a]"` - that covers the A2A **client**. Serving needs the SDK's own transport extras on top, installed directly: `#!bash pip install "a2a-sdk[http-server]"` for `build_jsonrpc` / `build_rest`, and `#!bash pip install "a2a-sdk[grpc]"` for `build_grpc`.
 
 ---
 
@@ -24989,10 +25181,10 @@ flowchart LR
 | Hook | Stage | What It Does |
 |------|-------|-------------|
 | `on_turn` | Turn defense | Kill switch enforcement - frozen agents cannot take turns |
-| `on_tool_execution` | Pre-tool defense | Tool allowlist/blocklist, argument validation, PII scan, secret scan, cost limit check |
+| `on_tool_execution` | Pre-tool defense | Tool allowlist/blocklist, argument validation, PII scan, secret scan, cost limit check, rate limit |
 | `on_tool_execution` | Post-tool defense | Output scan - PII and secrets in the tool's *result*, before it re-enters the model's context |
 
-All three stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents) alive across turns.
+All three stages activate from a single middleware instance. The **middleware factory** pattern keeps state (decisions, receipts, cost, frozen agents, rate-limit windows) alive across turns.
 
 !!! note "Receipts come from the tool stage"
 
@@ -25002,9 +25194,9 @@ All three stages activate from a single middleware instance. The **middleware fa
 
 | Mode | Behavior | Use Case |
 |------|----------|----------|
-| **ENFORCE** | Evaluates all policies. Blocks violations with `ToolErrorEvent`. | Production |
-| **MONITOR** | Evaluates all policies, records decisions, but **never blocks**. | Staging / shadow testing |
-| **OBSERVE** | Skips policy evaluation. Passes through, still tracks cost and records an `OBSERVE_PASSTHROUGH` decision. | Initial rollout / lowest overhead |
+| **ENFORCE** | Evaluates all policies. Blocks violations with `ToolErrorEvent`, and holds calls that a rate limit is throttling. | Production |
+| **MONITOR** | Evaluates all policies, records decisions, but **never blocks** - and never waits, since a wait blocks too. | Staging / shadow testing |
+| **OBSERVE** | Skips policy evaluation. Passes through, still tracks cost and records an `OBSERVE_PASSTHROUGH` decision, but does not fill rate-limit windows. | Initial rollout / lowest overhead |
 
 `mode` accepts either a `GovernanceMode` member or its string name, and defaults to `GovernanceMode.ENFORCE`. Start with `MONITOR` in staging to see what would be blocked, then switch to `ENFORCE` in production:
 
@@ -25223,6 +25415,67 @@ GovernancePolicy.cost_limit(max_per_session=5.0)
 
 Cumulative cost is tracked across all tool calls using `cost_per_call` (configurable, defaults to `0.002`). Once the limit is reached, further calls are denied with `BUDGET_EXCEEDED` and risk score 70.
 
+### Rate Limiting
+
+Cap how fast tool calls happen within a rolling time window - the defence against a runaway loop that keeps calling a tool and burns provider rate limits, side effects, and budget:
+
+```python
+# Global: throttle to 30 tool calls per minute, across all tools
+GovernancePolicy.rate_limit(30, window_seconds=60)
+# Per-tool: at most 5 emails per minute, refused rather than delayed
+GovernancePolicy.rate_limit(5, window_seconds=60, tool="send_email", on_exceeded="deny")
+# Pattern: the whole db_* family shares one budget, held at most 30s
+GovernancePolicy.rate_limit(100, window_seconds=3600, tool="db_*", max_wait_seconds=30)
+```
+
+It is a **sliding window**: only the calls in the last `window_seconds` count, so the allowance refills continuously rather than resetting on a fixed boundary. Omit `tool` for a global limit that every governed call shares; pass a tool name or `fnmatch` pattern to scope the limit to matching calls. Combine several - a generous global ceiling plus tighter per-tool caps - and an over-limit call waits for (or is refused by) the first limit it trips.
+
+What happens at the limit is `on_exceeded`:
+
+| `on_exceeded` | Behaviour |
+|---|---|
+| `"wait"` (default) | The call is **held** until the window has room, then runs. Nothing is denied. |
+| `"deny"` | The call is **refused** with `RATE_LIMIT_EXCEEDED` and risk score 70. |
+
+!!! warning "Prefer waiting - a refusal can cost more than the call it blocked"
+
+    A refused call goes back to the model as a tool error, and an agent stuck in a loop answers it by calling again. Each refusal therefore spends a model round-trip, so refusing a runaway loop burns tokens *faster* than the tool calls it replaced - while stopping only the tool-side damage. Holding the call actually slows the loop to the configured rate, which is what the limit is for.
+
+    Reach for `on_exceeded="deny"` where a late call is worse than no call, or where stalling the turn is unacceptable.
+
+A wait is bounded by `max_wait_seconds`, which defaults to `window_seconds` - the longest a sliding window can ever need before a slot frees. A call facing a longer wait is denied instead of held, so a turn cannot stall indefinitely. Each wait is recorded on the decision as `RATE_LIMIT_WAIT:{seconds}s`, so throttling shows up in the audit trail rather than as unexplained latency.
+
+Only calls that actually ran count toward the window, so a call blocked in `ENFORCE` never consumes the budget. In `MONITOR` a call over the limit is recorded as a denial but still executes - and therefore still counts, so the window keeps measuring real load; `MONITOR` never waits, since waiting is itself a form of blocking. `OBSERVE` skips policy evaluation entirely and records nothing, so windows stay empty in that mode.
+
+`max_calls` must be a positive integer, and `window_seconds` and `max_wait_seconds` positive numbers, validated at construction so a policy that could never allow a call fails where it is written.
+
+Wired into an agent, a generous global ceiling and a tight per-tool cap compose - the agent is throttled to 30 tool calls a minute overall, while a sixth email in the same minute is refused outright rather than delayed:
+
+```python
+from ag2 import Agent
+from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTigerMiddleware
+
+governance = TealTigerMiddleware(
+    policies=[
+        GovernancePolicy.rate_limit(30, window_seconds=60),
+        GovernancePolicy.rate_limit(5, window_seconds=60, tool="send_email", on_exceeded="deny"),
+    ],
+    mode=GovernanceMode.ENFORCE,
+)
+
+def send_email(to: str, body: str) -> str:
+    """Sends an email and returns the delivery status."""
+    return f"sent to {to}"
+
+agent = Agent("assistant", tools=[send_email], middleware=[governance])
+```
+
+!!! note "Window state lives on the middleware instance"
+
+    Call timestamps are held on the `TealTigerMiddleware` factory and shared across turns for the life of that instance (cleared by `reset()`). A limit therefore spans a whole session, not a single turn - but it does not persist across process restarts or share state between separate middleware instances, so it cannot protect a provider quota shared by several workers.
+
+    Timing uses a monotonic clock, so a window is unaffected by wall-clock changes such as an NTP correction.
+
 ### Prompt Injection Detection
 
 Block tool calls containing adversarial prompt injection patterns in their arguments:
@@ -25345,7 +25598,7 @@ for decision in governance.decisions:
 | `mode` | `str` | Mode the decision was made under: `OBSERVE`, `MONITOR`, or `ENFORCE` |
 | `agent_name` | `str` | Agent that made the call, or `unknown` |
 | `tool_name` | `str` | Tool that was evaluated (`*` for turn-level denials) |
-| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `OUTPUT_PII_DETECTED:{category}`, `OUTPUT_SECRET_DETECTED`, `OUTPUT_REDACTED`, `OUTPUT_REDACTION_INCOMPLETE`, `OUTPUT_BLOCKED`, `BUDGET_EXCEEDED`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
+| `reason_codes` | `list[str]` | Machine-readable codes: `TOOL_NOT_ALLOWED`, `TOOL_BLOCKED`, `ARG_VALIDATION:{argument}:{check}` (`{argument}` is `*` when the call's arguments were not a mapping), `PROMPT_INJECTION:{technique}/{pattern}`, `PII_DETECTED:{category}`, `SECRET_DETECTED`, `OUTPUT_PII_DETECTED:{category}`, `OUTPUT_SECRET_DETECTED`, `OUTPUT_REDACTED`, `OUTPUT_REDACTION_INCOMPLETE`, `OUTPUT_BLOCKED`, `BUDGET_EXCEEDED`, `RATE_LIMIT_EXCEEDED`, `RATE_LIMIT_WAIT:{seconds}s`, `AGENT_FROZEN`, `POLICY_ALLOW`, `OBSERVE_PASSTHROUGH` |
 | `risk_score` | `int` | 0 (safe) to 100 (critical) |
 | `evaluation_time_ms` | `float` | Governance latency for this decision |
 | `cost_tracked` | `float` | Cost attributed to this call in USD |
@@ -25388,7 +25641,7 @@ The factory exposes the accumulated state directly:
 | `total_cost` | Cumulative tracked cost in USD |
 | `deny_count` | Number of decisions with `action == "DENY"` |
 | `is_frozen(name)` | Whether that agent is currently frozen |
-| `reset()` | Clear decisions, receipts, cost, and frozen agents |
+| `reset()` | Clear decisions, receipts, cost, frozen agents, and rate-limit windows |
 
 ## Callbacks
 
@@ -25561,6 +25814,7 @@ Each policy type carries its own risk score when it denies:
 | Tool allowlist | `TOOL_NOT_ALLOWED` | 80 |
 | Tool blocklist | `TOOL_BLOCKED` | 80 |
 | Cost limit / factory budget | `BUDGET_EXCEEDED` | 70 |
+| Rate limit | `RATE_LIMIT_EXCEEDED` | 70 |
 | Output scan (post-tool, on the result) | `OUTPUT_SECRET_DETECTED` / `OUTPUT_PII_DETECTED:{category}` | 90 / 60 |
 
 !!! warning "Policy order is yours to choose"
