@@ -175,6 +175,7 @@ dev = [
     { name = "tenki" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'" },
     { name = "typer" },
+    { name = "types-boto3", extra = ["bedrock-runtime"] },
     { name = "types-pyyaml" },
     { name = "watchdog" },
     { name = "websockets" },
@@ -254,6 +255,7 @@ types = [
     { name = "pytest-timeout" },
     { name = "python-dotenv" },
     { name = "respx" },
+    { name = "types-boto3", extra = ["bedrock-runtime"] },
     { name = "types-pyyaml" },
 ]
 
@@ -347,6 +349,7 @@ dev = [
     { name = "tenki", specifier = ">=0.5.4,<2" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
     { name = "typer", specifier = ">=0.22,<0.28" },
+    { name = "types-boto3", extras = ["bedrock-runtime"] },
     { name = "types-pyyaml" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
@@ -460,6 +463,7 @@ types = [
     { name = "pytest-timeout", specifier = ">=2.4.0,<3" },
     { name = "python-dotenv" },
     { name = "respx", specifier = ">=0.23.0,<0.24.0" },
+    { name = "types-boto3", extras = ["bedrock-runtime"] },
     { name = "types-pyyaml" },
 ]
 
@@ -873,6 +877,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/36/5e/8d655aeaae195b9856a554e724322092b4cc1b8bb58a29167bea80bf800c/botocore-1.43.98.tar.gz", hash = "sha256:6135dd639ea6d1b3b49381bc253c8a139d61f7d44cb5f7dae8e7cd1791758572", size = 16127750, upload-time = "2026-09-18T20:10:00.892Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/65/ca/c7617e99c3247f545233ab2181840d142c5f72034e22864172866fb1369a/botocore-1.43.98-py3-none-any.whl", hash = "sha256:84b35b10402c2fc0c265f634fbf86336eecc6489ee23f55074b329924b2cfd6f", size = 15817751, upload-time = "2026-09-18T20:09:57.566Z" },
+]
+
+[[package]]
+name = "botocore-stubs"
+version = "1.43.67"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/45/53d662227dc4787b2c854445ee7eb4751cb5d74cfb5c686a6ecbe1f94c17/botocore_stubs-1.43.67.tar.gz", hash = "sha256:853e74014a1f557055c4ffae5fb38d7c65c7c0520e1aab366cac41d5428f419d", size = 42846, upload-time = "2026-08-08T14:57:53.412Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4e/5e/bdbf19967898a032292da65a47d6e25b2eee55865db4e687f861d80b5602/botocore_stubs-1.43.67-py3-none-any.whl", hash = "sha256:c51262bac3341c1cda71f05fa01141fffd3990d7a92c7960e3b755c1bc830373", size = 67244, upload-time = "2026-08-08T14:57:52.01Z" },
 ]
 
 [[package]]
@@ -5617,12 +5630,52 @@ wheels = [
 ]
 
 [[package]]
+name = "types-boto3"
+version = "1.43.98"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "botocore-stubs" },
+    { name = "types-s3transfer" },
+    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1b/d5/757b9ca97575edefb8d694a303c5ca5afc1033867f4e8ef8b0deeb777b3a/types_boto3-1.43.98.tar.gz", hash = "sha256:3daf7572508e610dda99084eb70d4147d5f7dd388655f88fd397064708d0ef2c", size = 104923, upload-time = "2026-09-18T22:36:24.272Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/d5/19f58b169ad8ef1d517df1ef83f29a60a673120bcf97efa792496262c760/types_boto3-1.43.98-py3-none-any.whl", hash = "sha256:a28e0481acd55ecc210757c602467460318d41b0cfab2114e789438ba3744395", size = 71415, upload-time = "2026-09-18T22:36:21.174Z" },
+]
+
+[package.optional-dependencies]
+bedrock-runtime = [
+    { name = "types-boto3-bedrock-runtime" },
+]
+
+[[package]]
+name = "types-boto3-bedrock-runtime"
+version = "1.43.62"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/82/e153b5d139b01be37e80cd74638fb9165dc427d0bbf4d05f5f88fe45ad65/types_boto3_bedrock_runtime-1.43.62.tar.gz", hash = "sha256:cb2627c2462d319548c0d83aa84fb7ae04362bb8c42a1057134a76b29a76daf7", size = 31519, upload-time = "2026-07-31T19:54:06.284Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/15/89b13796738f1cc9db27f8e564fa0420b1fde0f610be7d5b20d39d890c35/types_boto3_bedrock_runtime-1.43.62-py3-none-any.whl", hash = "sha256:7239a03d01eed4f6a99934f8228fb52d427443a487eff4eda312b29c9a4b0d26", size = 37841, upload-time = "2026-07-31T19:54:05.174Z" },
+]
+
+[[package]]
 name = "types-pyyaml"
 version = "6.0.12.20260906"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/90/6e/abec85b9013db5b934b0280a6dd104904d84f7bcbaab2e2f3def87ac7463/types_pyyaml-6.0.12.20260906.tar.gz", hash = "sha256:f59c1cc05010b833d2d72287bbaa72610106b28d42d89a907313117faba85212", size = 18649, upload-time = "2026-09-06T06:35:35.362Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/15/c0/fc0644b7ddcfb969e95845837143cb5173ddd6e06ee4ba5fc493cd9329b7/types_pyyaml-6.0.12.20260906-py3-none-any.whl", hash = "sha256:bca893ff0d51df5c9053137d5d0e6ccd36e939a196356f1d5c16372422f5137b", size = 21282, upload-time = "2026-09-06T06:35:34.372Z" },
+]
+
+[[package]]
+name = "types-s3transfer"
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/64/42689150509eb3e6e82b33ee3d89045de1592488842ddf23c56957786d05/types_s3transfer-0.16.0.tar.gz", hash = "sha256:b4636472024c5e2b62278c5b759661efeb52a81851cde5f092f24100b1ecb443", size = 13557, upload-time = "2025-12-08T08:13:09.928Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/27/e88220fe6274eccd3bdf95d9382918716d312f6f6cef6a46332d1ee2feff/types_s3transfer-0.16.0-py3-none-any.whl", hash = "sha256:1c0cd111ecf6e21437cb410f5cddb631bfb2263b77ad973e79b9c6d0cb24e0ef", size = 19247, upload-time = "2025-12-08T08:13:08.426Z" },
 ]
 
 [[package]]
