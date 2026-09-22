@@ -220,8 +220,7 @@ class _MCPProxyTool(Tool):
             result = await execution(event, context)
             await context.send(result)
 
-        # ``Event.field == value`` builds a Condition at runtime; mypy sees ``bool``.
-        stack.enter_context(context.stream.where(ToolCallEvent.name == self.name).sub_scope(execute))  # type: ignore[arg-type]
+        stack.enter_context(context.stream.where(ToolCallEvent.name == self.name).sub_scope(execute))
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent | ToolErrorEvent":
         try:

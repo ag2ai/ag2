@@ -370,6 +370,11 @@ ignore = [
     "ASYNC240",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# The condition DSL fixture is input to the type checker, never imported; its
+# `reveal_type` calls are how the expected types are written down.
+"test/typing/fixtures/*" = ["F821"]
+
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
 max-complexity = 10
@@ -399,7 +404,7 @@ strict = true
 ignore_missing_imports = true
 install_types = true
 non_interactive = true
-plugins = ["pydantic.mypy"]
+plugins = ["pydantic.mypy", "ag2.mypy"]
 
 # remove after all files in the repo are fixed
 follow_imports = "silent"
