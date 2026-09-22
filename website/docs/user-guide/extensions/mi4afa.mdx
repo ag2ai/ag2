@@ -5,7 +5,7 @@ sidebarTitle: mi4afa Probing
 
 The `ag2.extensions.mi4afa` module attributes failed multi-agent runs to their **decisive step** and **responsible agent** by reading an open-weight model's internal activations. It is the white-box counterpart of the core [`failure_attribution`](/docs/user-guide/evaluation/scorers#failure-attribution-failure_attribution) scorer: instead of asking a judge model which step went wrong, it trains a small linear probe on labelled failures and reads the answer out of the model's hidden states.
 
-It comes from the [mi4afa](https://github.com/wendyzheng22/mi4afa){.external-link target="_blank"} study of mechanistic interpretability for Automated Failure Attribution, which found that models asked to name the failing step usually answer wrongly, yet the correct step is often linearly decodable from their activations while they read the transcript.
+It targets the setting of the [Who&When](https://arxiv.org/abs/2505.00212){.external-link target="_blank"} benchmark, where judge models asked to name the failing step usually answer wrongly, yet the correct step is often linearly decodable from a model's activations while it reads the transcript.
 
 ## Installation
 
