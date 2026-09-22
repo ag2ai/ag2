@@ -389,15 +389,38 @@ docstring-code-format = true
 convention = "google"
 
 [tool.mypy]
+# The project's declared floor is `requires-python = ">=3.10"`. Checking against
+# the floor — not against whatever interpreter happens to be installed — is what
+# catches a construct that only works on a newer runtime.
 python_version = "3.10"
 
-# The `ag2` tree is not yet strict-clean. Strict mypy coverage is being
-# (re)introduced module-by-module; until then mypy is scoped to modules
-# that already pass under `strict = true`.
+# === The ratchet ===
+#
+# Everything listed here is checked under the strict settings below: locally via
+# bare `mypy`, in the pre-commit hook, and on every pull request across three
+# operating systems. The list only ever grows, and its length is the measure of
+# progress. Anything absent is absent because it has not been cleaned yet, with
+# two deliberate exceptions noted at the end of the list.
+#
+# Two tiers of guarantee. The pull-request job installs the `types` dependency
+# group, which pulls a handful of extras; the nightly matrix installs
+# twenty-seven, across five Python versions. A module behind an extra the
+# pull-request job does not install is checked against `Any` there and only
+# really checked overnight — an entry in that position says so on its own line.
+# See website/docs/contributor-guide/type-checking.mdx.
 files = [
+    # Import machinery behind the optional-dependency fallbacks. No extras needed.
     "ag2/_import_utils.py",
+
+    # Provider mappers. `openai` and `anthropic` are in the `types` group, so
+    # these are really checked on every pull request.
     "ag2/config/anthropic/mappers.py",
     "ag2/config/openai/mappers.py",
+
+    # Deliberately absent, and not on their way in:
+    #   - the demo scripts at the repository root, which are examples rather
+    #     than shipped code;
+    #   - the website documentation code samples, which are prose.
 ]
 
 strict = true
