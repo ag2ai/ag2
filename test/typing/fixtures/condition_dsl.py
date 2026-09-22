@@ -8,12 +8,16 @@ Checked by ``test/typing/test_condition_dsl_plugin.py``; not imported by the
 suite. ``reveal_type`` lines are the assertions — mypy reports them as notes.
 """
 
-from ag2.events import BaseEvent, Condition, Field, ToolCallEvent
+from ag2.events import BaseEvent, BuiltinToolCallEvent, Condition, Field, ToolCallEvent
 
 
 class Order(BaseEvent):
     total: int = Field(default=0)
     label: str = Field(default="")
+
+
+class Sub(Order):
+    """Adds nothing: its fields are all inherited."""
 
 
 def takes_condition(condition: Condition) -> bool:
@@ -37,6 +41,14 @@ reveal_type(Order.label.is_(None))  # N: Revealed type is "ag2.events.conditions
 
 # The form the user guide teaches, against a shipped event.
 takes_condition(ToolCallEvent.name == "search")
+
+# A field reached through a base class is still a field. `BuiltinToolCallEvent`
+# declares nothing of its own; every builtin tool filters on this exact form.
+reveal_type(BuiltinToolCallEvent.name)  # N: Revealed type is "ag2.events.base.FieldInfo"
+takes_condition(BuiltinToolCallEvent.name == "code_execution")
+reveal_type(Sub.total)  # N: Revealed type is "ag2.events.base.FieldInfo"
+takes_condition(Sub.total > 0)
+reveal_type(Sub(total=1).total)  # N: Revealed type is "int"
 
 # Composition: operators and their method spellings.
 takes_condition((Order.total > 0) & (Order.total < 10))
