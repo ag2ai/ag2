@@ -6,7 +6,7 @@ import operator
 import time
 from collections.abc import Callable
 from types import EllipsisType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from typing_extensions import dataclass_transform
 
@@ -82,7 +82,7 @@ class ProviderReplay:
             )
 
 
-class Field:
+class FieldInfo:
     def __init__(
         self,
         default: Any = Ellipsis,
@@ -141,6 +141,27 @@ class Field:
         return OpCondition(operator.is_, self.name, other, self.event_class)
 
 
+if TYPE_CHECKING:
+    # A field's declared type is the type of its *value*, not of the descriptor
+    # that stands in for it, so a checker that saw ``FieldInfo`` here would reject
+    # every declaration. Declaring the specifier as a function returning ``Any`` is
+    # the shape ``dataclasses.field`` and pydantic's ``Field`` use in their stubs,
+    # for the same reason.
+    def Field(  # noqa: N802 - the public name of the specifier; lowercase would rename the API
+        default: Any = Ellipsis,
+        *,
+        default_factory: Callable[[], Any] | EllipsisType = Ellipsis,
+        init: bool = True,
+        repr: bool = True,
+        compare: bool = True,
+        hash: bool | None = None,
+        kw_only: bool = True,
+    ) -> Any: ...
+
+else:
+    Field = FieldInfo
+
+
 class _ConditionMeta(type):
     """Metaclass providing class-level condition operators (~, |, or_, not_)."""
 
@@ -166,7 +187,7 @@ _MISSING = object()
 
 def _process_fields(cls: type) -> None:
     """Process annotations and set up Field descriptors for a class."""
-    fields: dict[str, Field] = {}
+    fields: dict[str, FieldInfo] = {}
 
     # Get annotations in a Python 3.14+ compatible way (PEP 649: lazy annotation evaluation
     # means __annotations__ is no longer eagerly populated in the class namespace dict).
@@ -179,11 +200,11 @@ def _process_fields(cls: type) -> None:
     for field_name in annotations:
         raw = own_namespace.get(field_name, _MISSING)
         if raw is _MISSING:
-            field = Field()
-        elif isinstance(raw, Field):
+            field = FieldInfo()
+        elif isinstance(raw, FieldInfo):
             field = raw
         else:
-            field = Field(raw)
+            field = FieldInfo(raw)
 
         if not field.name:
             field.name = field_name
