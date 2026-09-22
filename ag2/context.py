@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeAlias, cast, overload, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
 from uuid import UUID
 
 from fast_depends import Provider
@@ -18,6 +18,10 @@ from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, ModelRequ
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
+if TYPE_CHECKING:
+    # `history` imports this module, so the declaration below is type-time only.
+    from .history import History
+
 logger = logging.getLogger(__name__)
 
 StreamId: TypeAlias = UUID
@@ -27,6 +31,10 @@ SubId: TypeAlias = UUID
 @runtime_checkable
 class Stream(Protocol):
     id: StreamId
+
+    history: "History"
+    """Every event sent on this stream, and the storage backing them. A filtered
+    stream is a view, so it shares its parent's."""
 
     pending_messages: list[ModelRequest]
     """Inbox of follow-up turns produced asynchronously (e.g. by background
