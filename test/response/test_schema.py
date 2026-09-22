@@ -551,3 +551,7 @@ class TestValidation:
 
         with pytest.raises(Exception):
             await schema.validate("not a number", context=None)  # type: ignore[arg-type]
+
+
+def test_types_is_kept() -> None:
+    assert ResponseSchema(int).types is int

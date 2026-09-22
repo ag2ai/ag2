@@ -1,0 +1,217 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+import ast
+import inspect
+import json
+import textwrap
+from collections.abc import Iterable, Mapping, Sequence
+from enum import Enum
+from functools import cache
+from typing import Any
+
+from fast_depends.library.serializer import SerializerProto
+from typesafe_sdk import Answer, Choice, ChoiceAnswer, Noul, NoulAnswer, Question, Score
+from typesafe_sdk import Usage as TypeSafeUsage
+
+from ag2.compact import CompactionSummary
+from ag2.events import (
+    BaseEvent,
+    DataInput,
+    Input,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolResultsEvent,
+    Usage,
+)
+from ag2.exceptions import AG2Error, UnsupportedInputError, UnsupportedToolError
+from ag2.response import ResponseProto, ResponseSchema
+from ag2.tools.schemas import ToolSchema
+
+PROVIDER = "typesafe"
+
+ANSWER_KEY = "answer"
+"""Name of the single question sent per request; one ``ask()`` maps to one question."""
+
+
+class UnsupportedResponseSchemaError(AG2Error):
+    """Raised when a ``response_schema`` cannot be expressed as a TypeSafe question.
+
+    Jev is decision-only: it answers yes/no, choice and score questions and never
+    generates free text.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            f"{reason} TypeSafe Jev is decision-only: use `bool`, a probability `float` (ge=0, le=1), "
+            "a `Literal`/`Enum` of strings, or a documented `IntEnum` as `response_schema`."
+        )
+
+
+def tool_to_api(t: ToolSchema) -> None:
+    """Jev does not call tools, so every tool is rejected."""
+    raise UnsupportedToolError(t.type, PROVIDER)
+
+
+def convert_state(messages: Iterable[BaseEvent], serializer: SerializerProto) -> list[dict[str, Any]]:
+    """Serialise the conversation into Jev ``state``: a JSON array of ``{role, content}``."""
+    state: list[dict[str, Any]] = []
+
+    for message in messages:
+        if isinstance(message, ModelRequest):
+            state.append({"role": "user", "content": _parts_content(message.parts, serializer)})
+
+        elif isinstance(message, CompactionSummary):
+            state.append({"role": "user", "content": f"[Summary of earlier conversation]\n{message.summary}"})
+
+        elif isinstance(message, ModelResponse):
+            if message.message and message.message.content:
+                state.append({"role": "assistant", "content": message.message.content})
+
+        elif isinstance(message, ToolResultsEvent):
+            # Batch only. History also holds each constituent ToolResultEvent;
+            # mapping those too would send every result twice.
+            for r in message.results:
+                state.append({"role": "tool", "content": _parts_content(r.result.parts, serializer)})
+
+    return state
+
+
+def _parts_content(parts: Sequence[Input], serializer: SerializerProto) -> Any:
+    values = [_part_value(p, serializer) for p in parts]
+    return values[0] if len(values) == 1 else values
+
+
+def _part_value(part: Input, serializer: SerializerProto) -> Any:
+    if isinstance(part, TextInput):
+        return part.content
+    if isinstance(part, DataInput):
+        # `state` is JSON, so structured data goes in as-is rather than as a string.
+        return json.loads(serializer.encode(part.data))
+    raise UnsupportedInputError(type(part).__name__, PROVIDER)
+
+
+def response_proto_to_question(
+    response: ResponseProto[Any] | None,
+    *,
+    instructions: str | None,
+    criteria: Mapping[str, str] | None = None,
+) -> Question:
+    """Pick the Jev primitive for a ``response_schema`` from its JSON schema.
+
+    ``instructions`` (the agent prompt) frames the question; the type's own description,
+    such as an Enum docstring, is the question itself. The docstring under each Enum
+    member describes that option; ``criteria`` overrides them, keyed by choice label, by
+    score level (as a string), or by ``"true"`` / ``"false"`` for a yes/no question.
+    """
+    node, _ = _decision_node(response)
+    instructions = "\n\n".join(s for s in (instructions, node.get("description")) if s) or None
+    criteria = criteria or {}
+    values = node.get("enum")
+    docs = _option_docs(response)
+
+    if node.get("type") == "boolean" and (values is None or set(values) == {True, False}):
+        noul_criteria = {k: criteria[k] for k in ("true", "false") if k in criteria}
+        return Noul(instructions=instructions, criteria=noul_criteria or None)
+    if node.get("type") == "number" and node.get("minimum") == 0 and node.get("maximum") == 1:
+        return Noul(instructions=instructions)
+    if values and all(isinstance(v, str) for v in values):
+        return Choice(instructions=instructions, criteria={v: criteria.get(v) or docs.get(v) for v in values})
+    if values and all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+        # A rubric is levels 0..n-1 in numeric order, each saying what it means.
+        levels = [criteria.get(str(v)) or docs.get(v) for v in range(len(values))]
+        if sorted(values) != list(range(len(values))) or not 2 <= len(values) <= 10 or not all(levels):
+            raise UnsupportedResponseSchemaError(
+                "A score needs 2-10 levels numbered from 0, each described by a docstring under "
+                "the member or by `criteria`."
+            )
+        return Score(instructions=instructions, criteria=levels)
+
+    raise UnsupportedResponseSchemaError("`response_schema` is not a decision type.")
+
+
+def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, boolean_threshold: float = 0.5) -> str:
+    """Render a Jev answer as the JSON the ``response_schema`` validates."""
+    node, embedded = _decision_node(response)
+
+    value: Any
+    if isinstance(answer, NoulAnswer):
+        value = answer.noul >= boolean_threshold if node.get("type") == "boolean" else answer.noul
+    elif isinstance(answer, ChoiceAnswer):
+        value = answer.choice
+    else:
+        # `score` is the expected value on the 0..n-1 rubric; snap to the nearest level.
+        value = min(max(round(answer.score), 0), len(node["enum"]) - 1)
+
+    return json.dumps({"data": value} if embedded else value)
+
+
+def _option_docs(response: ResponseProto[Any] | None) -> dict[Any, str]:
+    if isinstance(response, ResponseSchema) and isinstance(response.types, type) and issubclass(response.types, Enum):
+        return _member_docstrings(response.types)
+    return {}
+
+
+@cache
+def _member_docstrings(enum_type: type[Enum]) -> dict[Any, str]:
+    """Map each member's value to the string literal under its ``NAME = value`` line.
+
+    Python discards that string at runtime, so it is read back from the class source;
+    with no source available (REPL, frozen app) the options stay undescribed.
+    """
+    try:
+        tree = ast.parse(textwrap.dedent(inspect.getsource(enum_type)))
+    except (OSError, TypeError, SyntaxError):
+        return {}
+
+    body = tree.body[0].body if tree.body and isinstance(tree.body[0], ast.ClassDef) else []
+    docs = {
+        stmt.targets[0].id: inspect.cleandoc(doc.value.value)
+        for stmt, doc in zip(body, body[1:])
+        if isinstance(stmt, ast.Assign)
+        and len(stmt.targets) == 1
+        and isinstance(stmt.targets[0], ast.Name)
+        and isinstance(doc, ast.Expr)
+        and isinstance(doc.value, ast.Constant)
+        and isinstance(doc.value.value, str)
+    }
+    return {member.value: docs[member.name] for member in enum_type if member.name in docs}
+
+
+def _decision_node(response: ResponseProto[Any] | None) -> tuple[Mapping[str, Any], bool]:
+    """Return the schema node to decide on, and whether ``ResponseSchema`` wrapped it as ``{"data": ...}``."""
+    if response is None:
+        raise UnsupportedResponseSchemaError("A `response_schema` is required.")
+    if not (root := response.json_schema):
+        raise UnsupportedResponseSchemaError(f"`response_schema` {response.name!r} has no JSON schema.")
+
+    node: Mapping[str, Any] = root
+    properties = root.get("properties")
+    embedded = root.get("type") == "object" and isinstance(properties, Mapping) and set(properties) == {"data"}
+    if embedded:
+        # The envelope's description is ag2 boilerplate, not a question for Jev.
+        node = {k: v for k, v in properties["data"].items() if k != "description"}  # type: ignore[index]
+
+    ref = node.get("$ref")
+    if isinstance(ref, str) and ref.startswith("#/$defs/"):
+        node = root.get("$defs", {}).get(ref.removeprefix("#/$defs/"), node)
+    return node, embedded
+
+
+def normalize_usage(raw: TypeSafeUsage | None) -> Usage:
+    """Normalise TypeSafe's ``Usage`` (either count may be unreported) to AG2 ``Usage``."""
+    if raw is None:
+        return Usage()
+
+    prompt = float(raw.input_tokens) if raw.input_tokens is not None else None
+    completion = float(raw.output_tokens) if raw.output_tokens is not None else None
+    total = (prompt or 0) + (completion or 0) if prompt is not None or completion is not None else None
+
+    return Usage(prompt_tokens=prompt, completion_tokens=completion, total_tokens=total)
+
+
+def answer_metadata(answer: Answer) -> dict[str, Any]:
+    """The SDK answer (confidence, probabilities, ...) kept on ``ModelMessage.metadata``."""
+    return answer.model_dump(exclude={"type"})

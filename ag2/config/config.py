@@ -21,6 +21,7 @@ class ModelProvider(str, Enum):
     MISTRAL = "mistral"
     OLLAMA = "ollama"
     OPENAI = "openai"
+    TYPESAFE = "typesafe"
     VERTEXAI = "vertexai"
     XAI = "xai"
     ZAI = "zai"
