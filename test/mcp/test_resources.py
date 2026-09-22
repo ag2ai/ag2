@@ -15,6 +15,7 @@ from ag2.mcp import MCPServer, Resource, ResourceTemplate
 from ag2.mcp.errors import MCPResourceNotFoundError
 from ag2.mcp.resources import ResourceProvider
 from ag2.mcp.testing import connect, connect_modern
+from ag2.mcp.tools import MCPExecutionContext
 
 from ._helpers import greeter
 
@@ -40,6 +41,18 @@ class TestResourceRead:
         [contents] = await provider.read("config://app")
 
         assert contents.content == "async-body"
+
+    async def test_request_context_does_not_bind_to_a_reader_parameter(self) -> None:
+        """A defaulted parameter keeps its default when the read carries a request context."""
+
+        async def _read(limit: int = 5) -> str:
+            return f"limit={limit}"
+
+        provider = ResourceProvider([Resource(uri="config://app", name="app", read=_read)], [])
+
+        [contents] = await provider.read("config://app", MCPExecutionContext())
+
+        assert contents.content == "limit=5"
 
     async def test_matches_template_and_extracts_vars(self) -> None:
         provider = ResourceProvider(

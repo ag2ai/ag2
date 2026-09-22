@@ -116,7 +116,6 @@ async def call_with_context(fn: Callable[..., Any], context: "MCPExecutionContex
     call_model = build_model(fn, serialize_result=False)
     async with AsyncExitStack() as stack:
         return await call_model.asolve(
-            context,
             **{CONTEXT_OPTION_NAME: context},
             stack=stack,
             cache_dependencies={},
