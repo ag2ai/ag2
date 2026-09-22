@@ -15,8 +15,7 @@ data and names the decisive step. :func:`probe_failure_attribution` exposes it
 as an ``ag2.eval`` scorer, the white-box counterpart of
 :func:`ag2.eval.scorers.failure_attribution`.
 
-Based on the mi4afa study of mechanistic interpretability for failure
-attribution (https://github.com/wendyzheng22/mi4afa), by Wendy Zheng.
+Based on research by Wendy Zheng.
 
 Maintainer: Liang Wu (@wuliang211)
 Docs: https://docs.ag2.ai/latest/docs/user-guide/extensions/mi4afa
