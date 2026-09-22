@@ -212,6 +212,8 @@ Out of the box it runs **deterministic detectors** (a crash/exception, no final 
 failure_attribution(OpenAIConfig(model="gpt-4o-mini"), key="failure_mode")
 ```
 
+To locate the decisive step of multi-agent failures without an LLM judge, the [mi4afa extension](/docs/user-guide/extensions/mi4afa) reads it from an open-weight model's activations with a trained probe.
+
 ## Exception handling
 
 A scorer that raises does NOT fail the run. The framework catches the exception, records a `Feedback` with `#!python score=None` and a comment explaining what blew up, logs a warning, and moves on:
