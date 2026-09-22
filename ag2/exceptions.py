@@ -54,6 +54,17 @@ class BlockedToolsUnsupportedError(ToolExecutionError):
         )
 
 
+class ToolMiddlewareUnsupportedError(ToolExecutionError):
+    """Raised when tool middleware is attached to a tool the agent does not execute."""
+
+    def __init__(self, tool_name: str):
+        super().__init__(
+            f"Tool middleware cannot wrap `{tool_name}`: it is executed by the provider or the "
+            "client, not by the agent, so the middleware would never run. Put it on the tools "
+            "the agent executes, or drop it from the toolkit and build the toolkit without it."
+        )
+
+
 class ClientExecutedShellUnsupportedError(ToolExecutionError):
     """Raised when a hosted shell would be executed by the client instead of the provider.
 
