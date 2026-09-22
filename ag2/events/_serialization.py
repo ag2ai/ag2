@@ -8,7 +8,7 @@ import base64
 import importlib
 from dataclasses import fields, is_dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, TypeGuard
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -17,11 +17,17 @@ if TYPE_CHECKING:
     from .base import BaseEvent
 
 
+class EventRegistry(Protocol):
+    """A lookup from a serialized event's type name to the class that carries it."""
+
+    def resolve(self, type_name: str) -> "type[BaseEvent] | None": ...
+
+
 def _is_event_instance(value: Any) -> bool:
     return hasattr(type(value), "_event_fields_")
 
 
-def _is_event_class(obj: Any) -> bool:
+def _is_event_class(obj: Any) -> TypeGuard["type[BaseEvent]"]:
     return isinstance(obj, type) and hasattr(obj, "_event_fields_")
 
 
@@ -81,7 +87,7 @@ def serialize_value(value: Any) -> Any:
 
 def deserialize_payload(
     payload: dict[str, Any],
-    event_registry: Any | None = None,
+    event_registry: "EventRegistry | None" = None,
 ) -> dict[str, Any]:
     """Recursively reconstruct nested events and special types in a payload."""
     result: dict[str, Any] = {}
@@ -90,7 +96,7 @@ def deserialize_payload(
     return result
 
 
-def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
+def deserialize_value(value: Any, event_registry: "EventRegistry | None" = None) -> Any:
     """Recursively deserialize a value from wire format."""
     if isinstance(value, dict):
         if "__event__" in value:
@@ -150,7 +156,7 @@ def _resolve_class(type_path: str) -> type:
     raise ImportError(f"Could not resolve class {type_path!r}")
 
 
-def _resolve_event_type(type_name: str, event_registry: Any | None = None) -> "type[BaseEvent] | None":
+def _resolve_event_type(type_name: str, event_registry: "EventRegistry | None" = None) -> "type[BaseEvent] | None":
     """Resolve an event type name to a class.
 
     Tries the registry first (if provided), then falls back to import-based resolution.

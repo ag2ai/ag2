@@ -423,6 +423,10 @@ files = [
     # pull-request job really checks this.
     "ag2/mcp_ui/",
 
+    # Event vocabulary. Imported by everything else, so its types are what make
+    # the packages after it cheap. No extras needed.
+    "ag2/events/",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;

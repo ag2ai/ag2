@@ -95,7 +95,7 @@ class BinaryResult:
 
     @property
     def name(self) -> str:
-        return self.metadata.get("filename", "generated_file")
+        return str(self.metadata.get("filename", "generated_file"))
 
     async def content(self) -> bytes:
         return self.data
@@ -144,7 +144,7 @@ class ModelResponse(ModelEvent):
         return f"ModelResponse({text})"
 
     def to_api(self) -> dict[str, Any]:
-        msg = {
+        msg: dict[str, Any] = {
             "content": self.message.content if self.message else None,
             "role": "assistant",
         }
