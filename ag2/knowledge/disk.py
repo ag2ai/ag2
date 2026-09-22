@@ -15,6 +15,19 @@ from watchdog.observers.polling import PollingObserver
 from .base import ChangeCallback, ChangeSubscription, NoopChangeSubscription, _normalize
 
 
+async def _invoke(callback: ChangeCallback, path: str) -> None:
+    """Call ``callback`` from inside a coroutine.
+
+    ``ChangeCallback`` returns an ``Awaitable``, which need not be a coroutine,
+    and :func:`asyncio.run_coroutine_threadsafe` accepts nothing else. Wrapping
+    here makes what is scheduled a coroutine by construction — and one that has
+    the ``close()`` the cleanup path calls. Calling ``callback`` inside the
+    wrapper also keeps it off the watchdog thread; nothing is created until the
+    loop runs this, so a scheduling failure leaves no awaitable to strand.
+    """
+    await callback(path)
+
+
 class _DiskChangeHandler:
     """watchdog ``FileSystemEventHandler`` that bridges to an async callback.
 
@@ -58,10 +71,12 @@ class _DiskChangeHandler:
         virtual = self._virtual_path_for(src_path)
         if virtual is None:
             return
-        coro = self._callback(virtual)
+        coro = _invoke(self._callback, virtual)
         try:
             asyncio.run_coroutine_threadsafe(coro, self._loop)
         except RuntimeError:
+            # The loop is gone. Closing an unstarted coroutine is the whole
+            # cleanup: ``callback`` has not been called yet.
             coro.close()
 
     def on_modified(self, event: Any) -> None:

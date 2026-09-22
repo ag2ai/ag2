@@ -25,8 +25,33 @@ from ag2.knowledge import (
     MemoryKnowledgeStore,
     SqliteKnowledgeStore,
 )
+from ag2.knowledge.disk import _DiskChangeHandler
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
+
+
+class _RecordingAwaitable:
+    """An awaitable that is not a coroutine — which is all ``ChangeCallback`` promises."""
+
+    def __init__(self, seen: list[str], done: asyncio.Event, path: str) -> None:
+        self._seen = seen
+        self._done = done
+        self._path = path
+
+    def __await__(self):
+        self._seen.append(self._path)
+        self._done.set()
+        return iter(())
+
+
+class _FileEvent:
+    """The shape of a watchdog file event, as the handler reads it."""
+
+    is_directory = False
+
+    def __init__(self, event_type: str, src_path: str) -> None:
+        self.event_type = event_type
+        self.src_path = src_path
 
 
 class TestMemoryKnowledgeStore:
@@ -390,6 +415,45 @@ class TestDiskKnowledgeStore:
         store = DiskKnowledgeStore(str(root))
         with pytest.raises(ValueError, match="Path traversal"):
             await store.write("/../escape.txt", "x")
+
+    async def test_on_change_accepts_a_non_coroutine_awaitable(self, tmp_path: Path) -> None:
+        """``ChangeCallback`` returns an ``Awaitable``, and not every awaitable is a coroutine.
+
+        The handler used to hand whatever the callback returned straight to
+        ``asyncio.run_coroutine_threadsafe``, which accepts coroutines only, so
+        this dispatch raised from the watchdog thread.
+        """
+        loop = asyncio.get_running_loop()
+        seen: list[str] = []
+        done = asyncio.Event()
+
+        handler = _DiskChangeHandler(
+            root=tmp_path.resolve(),
+            virtual_prefix="/",
+            loop=loop,
+            callback=lambda path: _RecordingAwaitable(seen, done, path),
+        )
+        handler.dispatch(_FileEvent("modified", str(tmp_path / "file.txt")))
+
+        await asyncio.wait_for(done.wait(), timeout=1.0)
+        assert seen == ["/file.txt"]
+
+    async def test_on_change_drops_the_callback_when_the_loop_is_gone(self, tmp_path: Path) -> None:
+        """A dead loop means the callback is never called, and nothing is left unawaited."""
+        dead_loop = asyncio.new_event_loop()
+        dead_loop.close()
+        seen: list[str] = []
+        done = asyncio.Event()
+
+        handler = _DiskChangeHandler(
+            root=tmp_path.resolve(),
+            virtual_prefix="/",
+            loop=dead_loop,
+            callback=lambda path: _RecordingAwaitable(seen, done, path),
+        )
+        handler.dispatch(_FileEvent("modified", str(tmp_path / "file.txt")))
+
+        assert seen == []
 
     async def test_on_change_fires_on_write(self, tmp_path: Path) -> None:
         store = DiskKnowledgeStore(str(tmp_path))
