@@ -2,10 +2,24 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
+
+from zai.core import StreamResponse
+
+
+class FakeStreamResponse(StreamResponse[Any]):
+    """A `StreamResponse` over a fixed list of chunks.
+
+    `ZAIClient` narrows on the SDK's own class to tell a stream from a completion — the SDK
+    answers both from one `create` call — so the double has to be one. Only
+    `_stream_chunks` is read by `__iter__` / `__next__`, so the SSE machinery is skipped.
+    """
+
+    def __init__(self, chunks: Iterable[Any]) -> None:
+        self._stream_chunks: Iterator[Any] = iter(chunks)
 
 
 def make_usage(
@@ -97,7 +111,7 @@ class FakeCompletions:
     def create(self, **kwargs: Any) -> Any:
         self.kwargs = kwargs
         if kwargs.get("stream"):
-            return iter(self.stream_chunks)
+            return FakeStreamResponse(self.stream_chunks)
         return self.response
 
 

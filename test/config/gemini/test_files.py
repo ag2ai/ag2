@@ -43,7 +43,7 @@ class TestGeminiFilesClient:
     ) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client
-        mock_client.aio.files.upload.return_value = SimpleNamespace(name="files/x", size_bytes=3)
+        mock_client.aio.files.upload.return_value = SimpleNamespace(name="files/x", size_bytes=3, create_time=None)
 
         await GeminiFilesClient(gemini_config).upload(b"abc", "blob.unknownext")
 
