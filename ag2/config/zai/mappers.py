@@ -8,6 +8,7 @@ from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 from zai.types.chat.chat_completion import CompletionUsage
+from zai.types.chat.chat_completion_chunk import CompletionUsage as ChunkCompletionUsage
 
 from ag2.compact import CompactionSummary
 from ag2.events import (
@@ -226,7 +227,9 @@ def convert_messages(
     return result
 
 
-def normalize_usage(raw: CompletionUsage | None) -> Usage:
+def normalize_usage(raw: CompletionUsage | ChunkCompletionUsage | None) -> Usage:
+    # The SDK declares the same five fields twice — once for a completion, once for a chunk —
+    # as two unrelated models, so both arms are named here rather than one standing for both.
     if raw is None:
         return Usage()
 

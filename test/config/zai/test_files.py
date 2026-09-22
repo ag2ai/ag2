@@ -3,12 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from types import SimpleNamespace
+from typing import get_args, get_type_hints
 from unittest.mock import MagicMock, patch
 
 import pytest
+from zai.api_resource.files import Files
 
-from ag2.config.zai.files import ZAIFilesClient
+from ag2.config.zai.files import _PURPOSES, ZAIFilesClient
 from ag2.files.types import FileContent, FileProvider, UploadedFile
+
+
+def test_purposes_match_the_sdk() -> None:
+    """`Files.create` declares its purposes inline, so ours are a restatement, not an import."""
+    assert get_args(get_type_hints(Files.create)["purpose"]) == _PURPOSES
 
 
 @patch("ag2.config.zai.files.ZaiClient")
@@ -56,6 +63,29 @@ class TestZAIFilesClient:
         name, buffer = kwargs["file"]
         assert name == "hello.jsonl"
         assert buffer.read() == b"hello"
+
+    @patch("ag2.config.zai.files.ZaiClient")
+    async def test_upload_refuses_a_purpose_zai_does_not_accept(
+        self, mock_zai_client: MagicMock, zai_config: MagicMock
+    ) -> None:
+        mock_client = MagicMock()
+        mock_zai_client.return_value = mock_client
+
+        with pytest.raises(ValueError, match="assistants"):
+            await ZAIFilesClient(zai_config).upload(b"hello", "hello.jsonl", purpose="assistants")
+
+        mock_client.files.create.assert_not_called()
+
+    @patch("ag2.config.zai.files.ZaiClient")
+    async def test_upload_refuses_a_file_with_no_id(self, mock_zai_client: MagicMock, zai_config: MagicMock) -> None:
+        mock_client = MagicMock()
+        mock_zai_client.return_value = mock_client
+        mock_client.files.create.return_value = SimpleNamespace(
+            id=None, filename="hello.jsonl", bytes=5, purpose="batch", created_at=1
+        )
+
+        with pytest.raises(ValueError, match="no id"):
+            await ZAIFilesClient(zai_config).upload(b"hello", "hello.jsonl")
 
     @patch("ag2.config.zai.files.ZaiClient")
     async def test_upload_forwards_retrieval_options(self, mock_zai_client: MagicMock, zai_config: MagicMock) -> None:

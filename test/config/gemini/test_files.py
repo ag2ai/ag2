@@ -54,6 +54,17 @@ class TestGeminiFilesClient:
         }
 
     @patch("ag2.config.gemini.files.genai")
+    async def test_upload_refuses_a_file_with_no_resource_name(
+        self, mock_genai: MagicMock, gemini_config: MagicMock
+    ) -> None:
+        mock_client = AsyncMock()
+        mock_genai.Client.return_value = mock_client
+        mock_client.aio.files.upload.return_value = SimpleNamespace(name=None, size_bytes=3, create_time=None)
+
+        with pytest.raises(ValueError, match="no resource name"):
+            await GeminiFilesClient(gemini_config).upload(b"abc", "blob.bin")
+
+    @patch("ag2.config.gemini.files.genai")
     async def test_read_downloadable(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client

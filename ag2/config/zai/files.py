@@ -4,20 +4,51 @@
 
 import asyncio
 from io import BytesIO
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final, Literal, get_args
 
 from zai import ZaiClient
+from zai.types.files import FileObject
 
 from ag2.files.types import FileContent, FileProvider, UploadedFile, _created_at_to_float
 
 if TYPE_CHECKING:
     from ag2.config.zai.config import ZAIConfig
 
+# The purposes Z.AI's Files API accepts. The SDK declares them inline on `Files.create`
+# rather than as an exported alias, so they are restated here;
+# `test_purposes_match_the_sdk` fails if the SDK's set moves.
+ZAIFilePurpose = Literal["fine-tune", "retrieval", "batch", "voice-clone-input"]
+
+_PURPOSES: Final[tuple[ZAIFilePurpose, ...]] = get_args(ZAIFilePurpose)
+
 # Default upload purpose; see ZAIFilesClient.upload for why "batch".
-_DEFAULT_PURPOSE = "batch"
+_DEFAULT_PURPOSE: Final[ZAIFilePurpose] = "batch"
 
 # Purposes that GET /files can enumerate without extra params; see ZAIFilesClient.list.
-_LISTABLE_PURPOSES = ("batch", "fine-tune", "voice-clone-input")
+_LISTABLE_PURPOSES: Final[tuple[ZAIFilePurpose, ...]] = ("batch", "fine-tune", "voice-clone-input")
+
+
+def _resolve_purpose(purpose: str | None) -> ZAIFilePurpose:
+    """Narrow a requested purpose to the closed set Z.AI accepts.
+
+    An unsupported one is named here rather than sent and answered with a 400.
+    """
+    if purpose is None:
+        return _DEFAULT_PURPOSE
+    if purpose not in _PURPOSES:
+        raise ValueError(f"Z.AI does not accept the file purpose {purpose!r}; expected one of {_PURPOSES}.")
+    return purpose
+
+
+def _file_id(file: FileObject) -> str:
+    """Read the id off a file object, which the SDK declares optional on every field.
+
+    A file with no id cannot be read, sent or deleted, so it is named here rather than
+    carried on as `None` through an `UploadedFile` that promises a `str`.
+    """
+    if file.id is None:
+        raise ValueError("Z.AI answered with a file that has no id.")
+    return file.id
 
 
 class ZAIFilesClient:
@@ -79,11 +110,11 @@ class ZAIFilesClient:
         result = await asyncio.to_thread(
             self._client.files.create,
             file=(filename, BytesIO(data)),
-            purpose=purpose or _DEFAULT_PURPOSE,
+            purpose=_resolve_purpose(purpose),
             **extra,
         )
         return UploadedFile(
-            file_id=result.id,
+            file_id=_file_id(result),
             filename=result.filename,
             provider=FileProvider.ZAI,
             bytes_count=result.bytes,
@@ -111,7 +142,7 @@ class ZAIFilesClient:
         )
         return [
             UploadedFile(
-                file_id=f.id,
+                file_id=_file_id(f),
                 filename=f.filename,
                 provider=FileProvider.ZAI,
                 bytes_count=f.bytes,
