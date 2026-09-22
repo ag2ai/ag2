@@ -242,7 +242,7 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "mcp", "mcp-ui", "metrics", "openai", "redis", "tracing"] },
+    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "ddgs", "mcp", "mcp-ui", "metrics", "openai", "perplexity", "redis", "tavily", "tracing"] },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "httpx2" },
@@ -452,6 +452,7 @@ types = [
     { name = "ag2", extras = ["mcp-ui"] },
     { name = "ag2", extras = ["openai", "anthropic", "a2a", "ag-ui"] },
     { name = "ag2", extras = ["redis", "tracing", "metrics"] },
+    { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },

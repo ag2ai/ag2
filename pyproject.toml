@@ -241,6 +241,9 @@ types = [
     # checks the packages behind them instead of checking them against `Any`.
     "ag2[redis, tracing, metrics]", # ag2.streams, ag2.knowledge.redis, ag2.middleware.builtin
     "watchdog>=4.0,<7",            # ag2.knowledge.disk — an additional dependency, not an extra
+    # `disallow_any_unimported` turns an unresolved import into an error rather
+    # than a silent `Any`, so a checked module's backends have to be installed.
+    "ag2[tavily, ddgs, perplexity]", # ag2.tools.search
 ]
 
 lint = ["ruff==0.16.7", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -456,6 +459,12 @@ files = [
     # is really checked.
     "ag2/streams/",
 
+    # Tools: the `Tool` hierarchy, the executor, the builtins, subagent
+    # delegation and the toolkits. The surface a downstream developer writes
+    # against most often. `ag2[mcp]` comes in via the `test` group and the
+    # search extras are in `types`, so this is really checked.
+    "ag2/tools/",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;
@@ -491,6 +500,13 @@ disallow_any_unimported = true
 # signatures. Following it uses its real types, which stay right when it changes
 # — always preferred over a hand-written boundary. See
 # website/docs/contributor-guide/type-checking.mdx.
+# `perplexity.types` is the SDK's public surface but re-exports its generated
+# names without an `__all__`, which strict mode reads as "not exported". The
+# alternative is importing from `perplexity.generated.*`, which is internal.
+[[tool.mypy.overrides]]
+module = "perplexity.*"
+implicit_reexport = true
+
 [[tool.mypy.overrides]]
 module = "mcp_ui_server.*"
 follow_untyped_imports = true

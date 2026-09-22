@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from types import EllipsisType
 from typing import Any
 
 from ag2.annotations import Variable
@@ -23,7 +24,9 @@ def resolve_variable(
         return context.variables[key]
     if value.default is not Ellipsis:
         return value.default
-    if value.default_factory is not Ellipsis:
+    # `is not Ellipsis` is the same test, but only `isinstance` narrows the
+    # `EllipsisType` out of the union for the call below.
+    if not isinstance(value.default_factory, EllipsisType):
         return value.default_factory()
 
     raise KeyError(f"Context variable {key!r} not found and no default provided")
