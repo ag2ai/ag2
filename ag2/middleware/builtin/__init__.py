@@ -12,9 +12,8 @@ from .logging import LoggingMiddleware
 from .token_limiter import TokenLimiter
 from .tools import ApprovalRequired, approval_required
 
-# The missing-dependency fallback rebinds a name mypy has already bound to a
-# class, which it rejects outright. Showing it only the real import gives the
-# names their true types; the fallback is runtime-only, exactly as it reads.
+# The fallback rebinds a name mypy has bound to a class, which it rejects; it
+# sees only the real import. See website/docs/contributor-guide/type-checking.mdx.
 if TYPE_CHECKING:
     from .metrics import MetricsMiddleware
     from .telemetry import TelemetryMiddleware

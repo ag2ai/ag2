@@ -155,9 +155,11 @@ class BaseObserver(ABC):
         ...
 
 
+# Split on `condition` because the two values are different classes: without one
+# there is nothing to filter on, so a bare `SimpleObserver` comes back.
 @overload
 def observer(
-    condition: ClassInfo | Condition | None = None,
+    condition: None = None,
     callback: None = None,
     *,
     interrupt: bool = False,
@@ -167,12 +169,32 @@ def observer(
 
 @overload
 def observer(
-    condition: ClassInfo | Condition | None,
+    condition: ClassInfo | Condition,
+    callback: None = None,
+    *,
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+) -> Callable[[Callable[..., Any]], StreamObserver]: ...
+
+
+@overload
+def observer(
+    condition: None,
     callback: Callable[..., Any],
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
 ) -> SimpleObserver: ...
+
+
+@overload
+def observer(
+    condition: ClassInfo | Condition,
+    callback: Callable[..., Any],
+    *,
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+) -> StreamObserver: ...
 
 
 def observer(

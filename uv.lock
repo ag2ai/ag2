@@ -52,7 +52,7 @@ wheels = [
 
 [[package]]
 name = "ag2"
-version = "1.0.5"
+version = "1.0.6"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
@@ -242,7 +242,7 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "mcp", "mcp-ui", "openai"] },
+    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "mcp", "mcp-ui", "metrics", "openai", "redis", "tracing"] },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "httpx2" },
@@ -255,6 +255,7 @@ types = [
     { name = "python-dotenv" },
     { name = "respx" },
     { name = "types-pyyaml" },
+    { name = "watchdog" },
 ]
 
 [package.metadata]
@@ -312,6 +313,7 @@ dev = [
     { name = "ag2", extras = ["openai"] },
     { name = "ag2", extras = ["openai", "anthropic", "a2a", "ag-ui"] },
     { name = "ag2", extras = ["redis"] },
+    { name = "ag2", extras = ["redis", "tracing", "metrics"] },
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
@@ -449,6 +451,7 @@ types = [
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
     { name = "ag2", extras = ["openai", "anthropic", "a2a", "ag-ui"] },
+    { name = "ag2", extras = ["redis", "tracing", "metrics"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
@@ -461,6 +464,7 @@ types = [
     { name = "python-dotenv" },
     { name = "respx", specifier = ">=0.23.0,<0.24.0" },
     { name = "types-pyyaml" },
+    { name = "watchdog", specifier = ">=4.0,<7" },
 ]
 
 [[package]]

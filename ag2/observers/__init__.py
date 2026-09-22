@@ -5,7 +5,7 @@
 """Built-in observers for monitoring agent behavior."""
 
 from .loop_detector import LoopDetector
-from .observer import BaseObserver, CompositeObserver, Observer, observer
+from .observer import BaseObserver, CompositeObserver, Observer, SimpleObserver, observer
 from .token_monitor import TokenMonitor
 
 __all__ = (
@@ -13,6 +13,7 @@ __all__ = (
     "CompositeObserver",
     "LoopDetector",
     "Observer",
+    "SimpleObserver",
     "TokenMonitor",
     "observer",
 )

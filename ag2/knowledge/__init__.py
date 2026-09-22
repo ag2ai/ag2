@@ -14,6 +14,8 @@ Filesystem semantics are used because:
 3. Any backend (memory, disk, S3, Redis) can implement path-based key-value
 """
 
+from typing import TYPE_CHECKING
+
 from ag2.exceptions import missing_additional_dependency
 
 from .base import (
@@ -30,10 +32,15 @@ from .memory import MemoryKnowledgeStore
 from .redis import RedisKnowledgeStore
 from .sqlite import SqliteKnowledgeStore
 
-try:
+# The fallback rebinds a name mypy has bound to a class, which it rejects; it
+# sees only the real import. See website/docs/contributor-guide/type-checking.mdx.
+if TYPE_CHECKING:
     from .disk import DiskKnowledgeStore
-except ImportError as e:
-    DiskKnowledgeStore = missing_additional_dependency("DiskKnowledgeStore", "watchdog>=4.0,<7", e)  # type: ignore[misc]
+else:
+    try:
+        from .disk import DiskKnowledgeStore
+    except ImportError as e:
+        DiskKnowledgeStore = missing_additional_dependency("DiskKnowledgeStore", "watchdog>=4.0,<7", e)
 
 __all__ = [
     "CONVERSATIONS_PREFIX",

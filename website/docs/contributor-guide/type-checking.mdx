@@ -110,6 +110,9 @@ else:
 The names keep their true types, and the one duplicated import line is the whole cost. Do this
 rather than suppressing per name — there are over a hundred of these bindings across the tree.
 
+Packages still outside the allowlist have not been converted; `ag2/config/__init__.py` carries a
+`# type: ignore[misc]` per name, which is what this replaces when a package's turn comes.
+
 ## The condition DSL
 
 An event field is declared with the type of its value, so without help a checker reads

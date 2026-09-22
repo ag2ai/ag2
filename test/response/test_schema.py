@@ -138,7 +138,7 @@ class TestEmbeddedTypes:
 
         response_schema = ResponseSchema(Point, embed=False)
         assert not response_schema._embedded_type
-        assert response_schema.json_schema == IsPartialDict(type="array")
+        assert response_schema.json_schema == IsPartialDict({"type": "array"})
 
     def test_str_has_no_schema(self) -> None:
         response_schema = ResponseSchema(str)

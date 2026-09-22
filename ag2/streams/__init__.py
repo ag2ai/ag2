@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from ag2.exceptions import missing_optional_dependency
 
+# The fallback rebinds a name mypy has bound to a class, which it rejects; it
+# sees only the real import. See website/docs/contributor-guide/type-checking.mdx.
 if TYPE_CHECKING:
     from .redis import RedisStorage, RedisStream, Serializer
 else:

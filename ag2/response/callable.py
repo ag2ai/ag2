@@ -156,6 +156,8 @@ def _unwrap_message_to_fast_depends_decorator(
         fields: dict[str, Any] = {i.field_name: (i.field_type, i.default_value) for i in dependant_params}
         # The generated model's fields are the hook's *parameters*, so this schema
         # validates into that model — not into `T`, which is what the hook returns.
+        # The closure below needs that narrower type; `schema` is only returned for
+        # its `json_schema`, so it stays the union of both branches.
         params_schema: ResponseSchema[BaseModel] = ResponseSchema(create_model(name, **fields), embed=embed)
         schema = params_schema
 
