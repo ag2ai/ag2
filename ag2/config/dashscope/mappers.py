@@ -101,7 +101,7 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                blocks: list[dict[str, str]] = []
+                blocks = []
                 has_non_text = False
                 for part in r.result.parts:
                     if isinstance(part, TextInput):

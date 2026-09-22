@@ -248,6 +248,10 @@ types = [
     # against `Any` on every pull request. Weight is not the test; whether the
     # extra can be installed on every runner is.
     "ag2[gemini, zai]", # ag2.config.gemini, ag2.config.zai
+    # xai-sdk reaches grpcio and protobuf, dashscope reaches cryptography; all
+    # three have prebuilt wheels on every runner. xai-sdk is followed rather
+    # than wrapped (see the override below), which only holds if it is installed.
+    "ag2[xai, dashscope]", # ag2.config.xai, ag2.config.dashscope
     # `disallow_any_unimported` turns an unresolved import into an error rather
     # than a silent `Any`, so a checked module's backends have to be installed.
     "ag2[tavily, ddgs, perplexity]", # ag2.tools.search
@@ -446,6 +450,15 @@ files = [
     "ag2/config/gemini/",
     "ag2/config/zai/",
 
+    # The xAI and DashScope providers. `xai-sdk` carries no `py.typed` but is
+    # annotated and ships `.pyi` for its protos, so it is followed (see the
+    # override below) rather than wrapped. `dashscope` ships a bundled stub that
+    # is wrong about the async call's stream arm; the client casts there, once,
+    # with the reason. Both extras are in the `types` group, so these are really
+    # checked on every pull request.
+    "ag2/config/dashscope/",
+    "ag2/config/xai/",
+
     # MCP-UI resource and action builders. `mcp-ui-server` carries no `py.typed`
     # but is fully annotated, so it is followed (see the override below) rather
     # than wrapped. `ag2[mcp-ui]` comes in via the `test` group, so the
@@ -521,7 +534,8 @@ disallow_any_unimported = true
 # would hand us `Any` from every name we import and spread it through our own
 # signatures. Following it uses its real types, which stay right when it changes
 # — always preferred over a hand-written boundary. See
-# website/docs/contributor-guide/type-checking.mdx.
+# website/docs/contributor-guide/type-checking.mdx. `xai-sdk` is the same case:
+# annotated throughout, with `.pyi` for its generated protos, but no marker.
 # `perplexity.types` is the SDK's public surface but re-exports its generated
 # names without an `__all__`, which strict mode reads as "not exported". The
 # alternative is importing from `perplexity.generated.*`, which is internal.
@@ -531,6 +545,10 @@ implicit_reexport = true
 
 [[tool.mypy.overrides]]
 module = "mcp_ui_server.*"
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = "xai_sdk.*"
 follow_untyped_imports = true
 
 [[tool.mypy.overrides]]

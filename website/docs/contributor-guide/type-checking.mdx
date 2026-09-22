@@ -72,11 +72,18 @@ revisits it. Contain it instead, in this order:
    ```
 
    `mcp_ui_server` is the worked example — that one override is the whole of what `ag2/mcp_ui/`
-   needed to enter the allowlist.
+   needed to enter the allowlist. `xai_sdk` is the largest: it ships `.pyi` for its generated
+   protos and annotates the rest, and the override removed 21 of `ag2/config/xai/`'s 24 errors.
+   Check for annotations before writing a boundary, even for an SDK that looks untyped.
 3. **A local boundary.** Only when the dependency genuinely has no types to read: declare what we
    expect of it in the single module that touches it, so every caller past that point sees our
    types and one file changes when the dependency does.
 4. **A suppression**, with its error code and a reason, when none of the above can work.
+
+A dependency's own types can be wrong, too. `dashscope` bundles a stub that declares its async
+call's stream arm as a synchronous `Generator`, and names a response class its runtime package
+does not export — so an `isinstance` on it cannot run. The client casts at the call, once, and
+says which half of the stub is wrong; that is a boundary, not a suppression.
 
 Whichever you pick, confirm the dependency's extra is installed by the pull-request job — via the
 `types` group or a group it includes — or the module is only really checked overnight.

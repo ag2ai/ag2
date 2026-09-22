@@ -242,7 +242,7 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "openai", "perplexity", "redis", "tavily", "tracing", "zai"] },
+    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "httpx2" },
@@ -318,6 +318,7 @@ dev = [
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
+    { name = "ag2", extras = ["xai", "dashscope"] },
     { name = "codespell", specifier = "==2.4.3" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
@@ -455,6 +456,7 @@ types = [
     { name = "ag2", extras = ["openai", "anthropic", "a2a", "ag-ui"] },
     { name = "ag2", extras = ["redis", "tracing", "metrics"] },
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
+    { name = "ag2", extras = ["xai", "dashscope"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },

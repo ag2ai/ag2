@@ -11,7 +11,7 @@ from typing_extensions import Required
 from xai_sdk import AsyncClient
 from xai_sdk.aio.chat import Chat as XAIChat
 from xai_sdk.chat import Response as XAIResponse
-from xai_sdk.proto import chat_pb2, sample_pb2
+from xai_sdk.proto import chat_pb2
 from xai_sdk.types.chat import IncludeOption, ReasoningEffort, ToolMode
 
 from ag2.config.client import LLMClient
@@ -39,7 +39,7 @@ from .mappers import (
     tool_to_api,
 )
 
-__all__ = ["CreateOptions", "IncludeOption", "ReasoningEffort", "XAIClient"]
+__all__ = ["CreateOptions", "IncludeOption", "ReasoningEffort", "ToolMode", "XAIClient"]
 
 
 class CreateOptions(TypedDict, total=False):
@@ -85,7 +85,7 @@ class XAIClient(LLMClient):
             metadata=metadata,
             channel_options=channel_options,
         )
-        self._create_options: dict[str, Any] = {k: v for k, v in (create_options or {}).items() if v is not None}
+        self._create_options = create_options
         self._streaming = streaming
 
     async def __call__(
@@ -102,19 +102,19 @@ class XAIClient(LLMClient):
         else:
             prompt = context.prompt
 
+        if self._create_options is None:
+            raise ValueError("XAIClient was built without create options, so it has no model to call.")
+
         xai_messages, replay_responses = convert_messages(prompt, messages, serializer)
         xai_tools = [tool_to_api(t) for t in tools]
-        response_format = response_proto_to_format(response_schema)
 
-        create_kwargs: dict[str, Any] = dict(self._create_options)
-        if xai_messages:
-            create_kwargs["messages"] = xai_messages
-        if xai_tools:
-            create_kwargs["tools"] = xai_tools
-        if response_format is not None:
-            create_kwargs["response_format"] = response_format
-
-        chat = self._client.chat.create(**create_kwargs)
+        # Every option defaults to `None` in the SDK, so an unset one is the same as an absent one.
+        chat = self._client.chat.create(
+            **self._create_options,
+            messages=xai_messages or None,
+            tools=xai_tools or None,
+            response_format=response_proto_to_format(response_schema),
+        )
         for resp in replay_responses:
             chat.append(resp)
 
@@ -148,13 +148,7 @@ class XAIClient(LLMClient):
 
         await context.send(XAIAssistantEvent.from_response(response))
 
-        # xai-sdk returns finish_reason as either a string (e.g. "FINISH_REASON_STOP")
-        # or a proto enum int — strip the prefix and lowercase to match openai's "stop".
-        fr = response.finish_reason
-        finish_reason: str | None = None
-        if fr:
-            name = sample_pb2.FinishReason.Name(fr) if isinstance(fr, int) else str(fr)
-            finish_reason = name.removeprefix("FINISH_REASON_").removeprefix("REASON_").lower() or None
+        finish_reason = _normalize_finish_reason(response.finish_reason)
 
         return ModelResponse(
             message=model_msg,
@@ -172,7 +166,7 @@ class XAIClient(LLMClient):
     ) -> ModelResponse:
         full_content: str = ""
         usage: Usage = Usage()
-        finish_reason_raw: str | int | sample_pb2.FinishReason.ValueType | None = None
+        finish_reason_raw: str | None = None
         resolved_model: str | None = None
         last_response: XAIResponse | None = None
         # tool_calls accumulate by id; the SDK delivers whole calls per chunk.
@@ -223,16 +217,7 @@ class XAIClient(LLMClient):
             if finish_reason_raw is None:
                 finish_reason_raw = last_response.finish_reason
 
-        # xai-sdk returns finish_reason as either a string (e.g. "FINISH_REASON_STOP")
-        # or a proto enum int — strip the prefix and lowercase to match openai's "stop".
-        finish_reason: str | None = None
-        if finish_reason_raw is not None:
-            name = (
-                sample_pb2.FinishReason.Name(finish_reason_raw)
-                if isinstance(finish_reason_raw, int)
-                else str(finish_reason_raw)
-            )
-            finish_reason = name.removeprefix("FINISH_REASON_").removeprefix("REASON_").lower() or None
+        finish_reason = _normalize_finish_reason(finish_reason_raw)
 
         return ModelResponse(
             message=message,
@@ -242,3 +227,13 @@ class XAIClient(LLMClient):
             provider=PROVIDER,
             finish_reason=finish_reason,
         )
+
+
+def _normalize_finish_reason(name: str | None) -> str | None:
+    """Strip the proto enum prefix and lowercase, so ``REASON_STOP`` reads as OpenAI's ``stop``.
+
+    ``Response.finish_reason`` answers the enum's name, never its number.
+    """
+    if not name:
+        return None
+    return name.removeprefix("FINISH_REASON_").removeprefix("REASON_").lower() or None

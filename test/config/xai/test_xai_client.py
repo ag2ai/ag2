@@ -11,7 +11,7 @@ from xai_sdk.chat import chat_pb2
 from xai_sdk.proto import usage_pb2
 
 from ag2 import Context
-from ag2.config.xai import XAIConfig
+from ag2.config.xai import XAIClient, XAIConfig
 from ag2.config.xai.events import XAIAssistantEvent
 from ag2.events import (
     ModelMessageChunk,
@@ -249,3 +249,18 @@ async def test_response_format_passed_to_chat_create() -> None:
     assert "response_format" in create_kwargs
     assert isinstance(create_kwargs["response_format"], chat_pb2.ResponseFormat)
     assert create_kwargs["response_format"].format_type == chat_pb2.FORMAT_TYPE_JSON_SCHEMA
+
+
+@pytest.mark.asyncio
+async def test_client_without_create_options_says_so_when_called() -> None:
+    with patch("ag2.config.xai.xai_client.AsyncClient"):
+        client = XAIClient(api_key="t")
+
+    with pytest.raises(ValueError, match="without create options"):
+        await client(
+            messages=[ModelRequest([TextInput("hi")])],
+            context=Context(stream=MemoryStream()),
+            tools=[],
+            response_schema=None,
+            serializer=SerializerCls,
+        )
