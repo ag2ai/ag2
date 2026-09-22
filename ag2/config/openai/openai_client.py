@@ -11,6 +11,7 @@ from fast_depends.library.serializer import SerializerProto
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai.types.chat.chat_completion_message_function_tool_call import ChatCompletionMessageFunctionToolCall
 from openai.types.chat.completion_create_params import PromptCacheOptions
 from typing_extensions import Required
 
@@ -26,6 +27,7 @@ from ag2.events import (
     ToolCallsEvent,
     Usage,
 )
+from ag2.exceptions import UnsupportedToolError
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
@@ -140,35 +142,45 @@ class OpenAIClient(LLMClient):
         completion: ChatCompletion,
         context: "ConversationContext",
     ) -> ModelResponse:
-        for choice in completion.choices or ():
+        model_msg: ModelMessage | None = None
+        calls: list[ToolCallEvent] = []
+        finish_reason: str | None = None
+
+        # A completion can arrive with no choices — a content filter answers that way.
+        # The turn still spent tokens and still has to come back as a response.
+        if completion.choices:
+            choice = completion.choices[0]
             msg = choice.message
+            finish_reason = choice.finish_reason
 
             if r := getattr(msg, "reasoning", None):
                 await context.send(ModelReasoning(r))
 
-            model_msg: ModelMessage | None = None
             if c := msg.content:
                 model_msg = ModelMessage(c)
                 await context.send(model_msg)
 
-            calls = [
-                ToolCallEvent(
-                    id=c.id,
-                    name=c.function.name,
-                    arguments=c.function.arguments,
+            for call in msg.tool_calls or ():
+                if not isinstance(call, ChatCompletionMessageFunctionToolCall):
+                    # ag2 sends function tools only, so there is nothing else to call back.
+                    raise UnsupportedToolError(call.type, "openai-completions")
+                calls.append(
+                    ToolCallEvent(
+                        id=call.id,
+                        name=call.function.name,
+                        arguments=call.function.arguments,
+                    )
                 )
-                for c in (msg.tool_calls or ())
-            ]
 
-            return ModelResponse(
-                message=model_msg,
-                tool_calls=ToolCallsEvent(calls),
-                usage=normalize_usage(completion.usage) if completion.usage else Usage(),
-                model=completion.model,
-                provider="openai",
-                finish_reason=choice.finish_reason,
-                response_id=completion.id,
-            )
+        return ModelResponse(
+            message=model_msg,
+            tool_calls=ToolCallsEvent(calls),
+            usage=normalize_usage(completion.usage) if completion.usage else Usage(),
+            model=completion.model,
+            provider="openai",
+            finish_reason=finish_reason,
+            response_id=completion.id,
+        )
 
     async def _process_stream(
         self,
