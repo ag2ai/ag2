@@ -70,6 +70,10 @@ from .mappers import (
     tool_to_responses_api,
 )
 
+# The closed set the Responses API takes, restated as a literal so a value it does not
+# accept is rejected here rather than by the API.
+Truncation = Literal["auto", "disabled"]
+
 
 class CreateOptions(TypedDict, total=False):
     model: Required[ChatModel | str]
@@ -87,7 +91,7 @@ class CreateOptions(TypedDict, total=False):
     service_tier: ServiceTier | None | Omit
     user: str
     stream: bool
-    truncation: Literal["auto", "disabled"] | None | Omit
+    truncation: Truncation | None | Omit
 
 
 def _generated_images(result_event: OpenAIServerToolResultEvent) -> list[BinaryResult]:

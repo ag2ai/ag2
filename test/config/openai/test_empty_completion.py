@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""A completion with no choices is still a response.
+"""What the chat client does with a completion it cannot read as a normal turn.
 
-The Chat Completions API can answer with an empty `choices` list — a content filter
-does — and the turn has still spent tokens. The client owes the agent loop a
-`ModelResponse` either way, because everything downstream reads one.
+The API can answer with an empty `choices` list — a content filter does — and the
+turn has still spent tokens, so the client owes the agent loop a `ModelResponse`
+either way. A tool call of a kind ag2 never asked for is the opposite case: there
+is no reading of it, so it is refused by name.
 """
 
 import json
@@ -19,6 +20,7 @@ from fast_depends.use import SerializerCls
 from ag2 import Context, MemoryStream
 from ag2.config.openai import OpenAIClient
 from ag2.events import ModelRequest, ModelResponse, TextInput
+from ag2.exceptions import UnsupportedToolError
 
 _EMPTY: dict[str, Any] = {
     "id": "chatcmpl_1",
@@ -59,3 +61,38 @@ async def test_a_completion_with_no_choices_answers_a_response() -> None:
     assert result.usage.prompt_tokens == 7
     assert result.model == "gpt-4o"
     assert result.response_id == "chatcmpl_1"
+
+
+_CUSTOM_TOOL_CALL: dict[str, Any] = {
+    **_EMPTY,
+    "choices": [
+        {
+            "index": 0,
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "custom",
+                        "custom": {"name": "grep", "input": "-rn needle"},
+                    }
+                ],
+            },
+        }
+    ],
+}
+
+
+@pytest.mark.asyncio
+async def test_a_tool_call_of_a_kind_ag2_never_sent_is_refused_by_name() -> None:
+    """ag2 sends function tools only, so a custom call has no `function` to read."""
+    with pytest.raises(UnsupportedToolError, match="custom"):
+        await _client(_CUSTOM_TOOL_CALL)(
+            messages=[ModelRequest([TextInput("hi")])],
+            context=Context(stream=MemoryStream()),
+            tools=[],
+            response_schema=None,
+            serializer=SerializerCls,
+        )

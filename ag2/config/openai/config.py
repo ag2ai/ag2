@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import Any, Literal, TypedDict
+from typing import Any, TypedDict
 
 import httpx2
 from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
@@ -22,7 +22,7 @@ from ag2.config.config import ModelConfig, ModelProvider
 from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, Modality, OpenAIClient, ReasoningEffort, ServiceTier, Verbosity
 from .openai_responses_client import CreateOptions as ResponseCreateOptions
-from .openai_responses_client import OpenAIResponsesClient
+from .openai_responses_client import OpenAIResponsesClient, Truncation
 
 
 class OpenAIConfigOverrides(TypedDict, total=False):
@@ -202,7 +202,7 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     prompt_cache_diagnostics: bool
     service_tier: ResponseServiceTier | None | Omit
     user: str
-    truncation: Literal["auto", "disabled"] | None | Omit
+    truncation: Truncation | None | Omit
 
 
 @dataclass(slots=True)
@@ -244,7 +244,7 @@ class OpenAIResponsesConfig(ModelConfig):
     prompt_cache_diagnostics: bool = False
     service_tier: ResponseServiceTier | None | Omit = omit
     user: str = ""
-    truncation: Literal["auto", "disabled"] | None | Omit = omit
+    truncation: Truncation | None | Omit = omit
 
     @property
     def provider(self) -> ModelProvider:
