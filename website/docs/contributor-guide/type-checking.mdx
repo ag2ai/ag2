@@ -53,6 +53,34 @@ run. Prefer adding the extra to the `types` group so the pull-request job really
 an extra is too heavy to install on every pull request, the module's entry in `files` says it is
 nightly-only, so nobody mistakes the weaker guarantee for the stronger one.
 
+## Containing an untyped dependency
+
+An unstubbed dependency hands mypy `Any`, and that `Any` spreads out through the signatures of
+*our* functions — which is precisely what AG2's `py.typed` marker promises a downstream project
+will not get. Suppressing at each leak site says "we gave up here" once per site and nobody ever
+revisits it. Contain it instead, in this order:
+
+1. **Published stubs.** If the package ships a typed release or there is a `types-…` distribution,
+   add it to the `types` dependency group. Nothing else to do.
+2. **Follow it.** Many packages are fully annotated but ship no `py.typed` marker. Tell mypy to
+   read them anyway and you get their real types, which keep working when the dependency changes:
+
+   ```toml
+   [[tool.mypy.overrides]]
+   module = "some_package.*"
+   follow_untyped_imports = true
+   ```
+
+   `mcp_ui_server` is the worked example — that one override is the whole of what `ag2/mcp_ui/`
+   needed to enter the allowlist.
+3. **A local boundary.** Only when the dependency genuinely has no types to read: declare what we
+   expect of it in the single module that touches it, so every caller past that point sees our
+   types and one file changes when the dependency does.
+4. **A suppression**, with its error code and a reason, when none of the above can work.
+
+Whichever you pick, confirm the dependency's extra is installed by the pull-request job — via the
+`types` group or a group it includes — or the module is only really checked overnight.
+
 ## The condition DSL
 
 An event field is declared with the type of its value, so without help a checker reads

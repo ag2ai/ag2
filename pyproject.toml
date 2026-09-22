@@ -417,6 +417,12 @@ files = [
     "ag2/config/anthropic/mappers.py",
     "ag2/config/openai/mappers.py",
 
+    # MCP-UI resource and action builders. `mcp-ui-server` carries no `py.typed`
+    # but is fully annotated, so it is followed (see the override below) rather
+    # than wrapped. `ag2[mcp-ui]` comes in via the `test` group, so the
+    # pull-request job really checks this.
+    "ag2/mcp_ui/",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;
@@ -447,6 +453,15 @@ disallow_any_unimported = true
 
 # numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
 # under python_version = "3.10"; skip analysing numpy entirely (it is not our code).
+# `mcp-ui-server` is fully annotated but ships no `py.typed` marker, so mypy
+# would hand us `Any` from every name we import and spread it through our own
+# signatures. Following it uses its real types, which stay right when it changes
+# — always preferred over a hand-written boundary. See
+# website/docs/contributor-guide/type-checking.mdx.
+[[tool.mypy.overrides]]
+module = "mcp_ui_server.*"
+follow_untyped_imports = true
+
 [[tool.mypy.overrides]]
 module = "numpy.*"
 follow_imports = "skip"
