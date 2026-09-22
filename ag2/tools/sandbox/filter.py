@@ -15,6 +15,7 @@ import fnmatch
 import posixpath
 import shlex
 from pathlib import Path, PurePath, PurePosixPath
+from typing import NamedTuple
 
 # Commands that only read state and never modify the filesystem.
 # Used when ``ShellAdapter.readonly=True`` and no explicit ``allowed``
@@ -81,6 +82,37 @@ def contains_shell_operator(command: str) -> bool:
     return any(op in command for op in _SHELL_OPERATORS)
 
 
+class _Candidate(NamedTuple):
+    """A command token as a path, and whether we managed to resolve it."""
+
+    path: PurePath
+    resolved: bool
+
+
+def _resolve_on_host(workdir: Path, tokens: list[str]) -> list[_Candidate]:
+    """Resolve each token against the real filesystem, symlinks included."""
+    out = []
+    for token in tokens:
+        try:
+            out.append(_Candidate((workdir / token).resolve(), True))
+        except Exception:
+            # Unresolvable: a symlink loop, an unreadable parent, a name the
+            # platform rejects. Reported as a candidate we could not judge, and
+            # denied by the caller.
+            out.append(_Candidate(workdir / token, False))
+    return out
+
+
+def _resolve_lexically(workdir: PurePath, tokens: list[str]) -> list[_Candidate]:
+    """Normalise each token against *workdir* without touching any filesystem.
+
+    Used for remote and container backends, where the host has no such paths.
+    Lexical normalisation cannot fail, so every candidate is resolved.
+    """
+    base = str(workdir)
+    return [_Candidate(PurePosixPath(posixpath.normpath(posixpath.join(base, token))), True) for token in tokens]
+
+
 def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) -> str | None:
     """Return ``"Access denied: <path>"`` if any literal path in *command* matches *patterns*.
 
@@ -92,27 +124,29 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
     :class:`~pathlib.PurePosixPath` (remote/container backend). For a host path
     tokens are resolved against the real filesystem (symlinks included); for a
     pure path they are normalised lexically (``posixpath.normpath``) so the
-    filter works on remote backends without touching the host filesystem.
+    filter works on remote backends without touching the host filesystem. Which
+    of the two applies is decided once, by type, so a path the filter has no way
+    to resolve can never reach the resolving branch.
+
+    A token the host filesystem refuses to resolve is **denied**. This is a
+    sandbox boundary: a path we could not judge is not a path we may permit.
     """
     try:
         tokens = shlex.split(command)
     except ValueError:
         tokens = command.split()
 
-    host_backed = isinstance(workdir, Path)
-    if host_backed:
+    if isinstance(workdir, Path):
         resolved_workdir: PurePath = workdir.resolve()
+        candidates = _resolve_on_host(workdir, tokens)
     else:
         resolved_workdir = PurePosixPath(posixpath.normpath(str(workdir)))
+        candidates = _resolve_lexically(workdir, tokens)
 
-    for token in tokens:
-        if host_backed:
-            try:
-                resolved: PurePath = (workdir / token).resolve()
-            except Exception:
-                continue
-        else:
-            resolved = PurePosixPath(posixpath.normpath(posixpath.join(str(workdir), token)))
+    for candidate in candidates:
+        resolved = candidate.path
+        if not candidate.resolved:
+            return f"Access denied: {resolved}"
 
         try:
             rel = str(resolved.relative_to(resolved_workdir)).replace("\\", "/")
