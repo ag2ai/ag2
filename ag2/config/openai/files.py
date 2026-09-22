@@ -3,14 +3,33 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from io import BytesIO
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final, get_args
 
 from openai import AsyncOpenAI
+from openai.types import FilePurpose
 
 from ag2.files.types import FileContent, FileProvider, UploadedFile, _created_at_to_float
 
 if TYPE_CHECKING:
     from ag2.config.openai.config import OpenAIConfig, OpenAIResponsesConfig
+
+# The purposes OpenAI's Files API accepts, taken from the SDK rather than restated, so
+# the set follows the SDK when it grows. ``get_args`` hands back ``Any``; the annotation
+# is what states the shape, and it is what narrows ``purpose`` below.
+_PURPOSES: Final[tuple[FilePurpose, ...]] = get_args(FilePurpose)
+_DEFAULT_PURPOSE: Final[FilePurpose] = "assistants"
+
+
+def _resolve_purpose(purpose: str | None) -> FilePurpose:
+    """Narrow a requested purpose to the closed set OpenAI accepts.
+
+    An unsupported one is named here rather than sent and answered with a 400.
+    """
+    if purpose is None:
+        return _DEFAULT_PURPOSE
+    if purpose not in _PURPOSES:
+        raise ValueError(f"OpenAI does not accept the file purpose {purpose!r}; expected one of {_PURPOSES}.")
+    return purpose
 
 
 class OpenAIFilesClient:
@@ -34,7 +53,7 @@ class OpenAIFilesClient:
     async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:
         result = await self._client.files.create(
             file=(filename, BytesIO(data)),
-            purpose=purpose or "assistants",
+            purpose=_resolve_purpose(purpose),
         )
         return UploadedFile(
             file_id=result.id,

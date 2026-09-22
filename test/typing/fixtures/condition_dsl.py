@@ -65,3 +65,8 @@ takes_condition(Order.or_(ToolCallEvent))
 
 # A field that does not exist is an error, not a silent Any.
 takes_condition(Order.missing == 1)  # E: "type[Order]" has no attribute "missing"  [attr-defined]
+
+# ``created_at`` is declared on ``BaseEvent`` itself, so a subclass's constructor
+# takes it with its declared type. Every provider's Files client passes one.
+reveal_type(Order(total=1, created_at=0.0).created_at)  # N: Revealed type is "float"
+Order(created_at="x")  # E: Argument "created_at" to "Order" has incompatible type "str"; expected "float"  [arg-type]

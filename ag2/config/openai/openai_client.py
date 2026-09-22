@@ -10,9 +10,16 @@ import httpx2
 from fast_depends.library.serializer import SerializerProto
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
-from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai.types.chat import (
+    ChatCompletion,
+    ChatCompletionChunk,
+    ChatCompletionPredictionContentParam,
+    ChatCompletionStreamOptionsParam,
+    ChatCompletionToolChoiceOptionParam,
+    ChatCompletionToolUnionParam,
+)
 from openai.types.chat.chat_completion_message_function_tool_call import ChatCompletionMessageFunctionToolCall
-from openai.types.chat.completion_create_params import PromptCacheOptions
+from openai.types.chat.completion_create_params import PromptCacheOptions, WebSearchOptions
 from typing_extensions import Required
 
 from ag2.config.client import LLMClient
@@ -34,6 +41,11 @@ from ag2.tools.schemas import ToolSchema
 from .mappers import convert_messages, normalize_usage, response_proto_to_schema, tool_to_api
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
+# The closed sets the Chat Completions API takes for these options, restated as literals
+# so a value it does not accept is rejected here rather than by the API.
+Modality = Literal["text", "audio"]
+ServiceTier = Literal["auto", "default", "flex", "scale", "priority", "fast"]
+Verbosity = Literal["low", "medium", "high"]
 
 
 class CreateOptions(TypedDict, total=False):
@@ -51,21 +63,21 @@ class CreateOptions(TypedDict, total=False):
     user: str | Omit
     logprobs: bool | None | Omit
     top_logprobs: int | None | Omit
-    tool_choice: str | dict[str, Any] | Omit
+    tool_choice: ChatCompletionToolChoiceOptionParam | Omit
     parallel_tool_calls: bool | Omit
     logit_bias: dict[str, int] | None | Omit
     metadata: dict[str, str] | None | Omit
-    modalities: list[str] | None | Omit
-    prediction: dict[str, Any] | None | Omit
+    modalities: list[Modality] | None | Omit
+    prediction: ChatCompletionPredictionContentParam | None | Omit
     prompt_cache_key: str | Omit
     prompt_cache_options: PromptCacheOptions | Omit
     safety_identifier: str | Omit
-    service_tier: str | None | Omit
+    service_tier: ServiceTier | None | Omit
     store: bool | None | Omit
-    verbosity: str | None | Omit
-    web_search_options: dict[str, Any] | Omit
+    verbosity: Verbosity | None | Omit
+    web_search_options: WebSearchOptions | Omit
     stream: bool
-    stream_options: dict[str, Any] | Omit
+    stream_options: ChatCompletionStreamOptionsParam | None | Omit
     reasoning_effort: ReasoningEffort | None | Omit
     extra_body: dict[str, Any] | None
 
@@ -98,8 +110,10 @@ class OpenAIClient(LLMClient):
             http_client=http_client,
         )
 
-        self._create_options = create_options or {}
-        self._streaming = self._create_options.get("stream", False)
+        # Left as ``None`` rather than widened to an empty mapping: ``model`` is
+        # required, so there is no such thing as an empty set of create options.
+        self._create_options = create_options
+        self._streaming = bool(create_options and create_options.get("stream", False))
 
     async def __call__(
         self,
@@ -115,27 +129,23 @@ class OpenAIClient(LLMClient):
         else:
             prompt = context.prompt
 
+        if self._create_options is None:
+            raise ValueError("OpenAIClient was built without create options, so it has no model to call.")
+
         openai_messages = convert_messages(prompt, messages, serializer)
 
-        openai_tools = [tool_to_api(t) for t in tools]
-
-        kwargs = {}
-        if r := response_proto_to_schema(response_schema):
-            kwargs["response_format"] = r
+        openai_tools: list[ChatCompletionToolUnionParam] = [tool_to_api(t) for t in tools]
 
         response = await self._client.chat.completions.create(
             **self._create_options,
-            **kwargs,
+            response_format=response_proto_to_schema(response_schema) or omit,
             messages=openai_messages,
             tools=openai_tools or omit,
         )
 
-        if self._streaming:
-            result = await self._process_stream(response, context)
-        else:
-            result = await self._process_completion(response, context)
-
-        return result
+        if isinstance(response, AsyncStream):
+            return await self._process_stream(response, context)
+        return await self._process_completion(response, context)
 
     async def _process_completion(
         self,
@@ -232,10 +242,10 @@ class OpenAIClient(LLMClient):
                     acc = full_tool_calls[ix]
                     if tc.id is not None:
                         acc["id"] = tc.id
-                    if getattr(tc.function, "name", None):
-                        acc["name"] = tc.function.name
-                    args_chunk = getattr(tc.function, "arguments", None) or ""
-                    acc["arguments"] += args_chunk
+                    if tc.function is not None:
+                        if tc.function.name:
+                            acc["name"] = tc.function.name
+                        acc["arguments"] += tc.function.arguments or ""
 
         message: ModelMessage | None = None
         if full_content:

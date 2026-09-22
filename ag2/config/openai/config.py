@@ -3,19 +3,24 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import httpx2
 from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
 from openai.types import ChatModel
-from openai.types.chat.completion_create_params import PromptCacheOptions
+from openai.types.chat import (
+    ChatCompletionPredictionContentParam,
+    ChatCompletionToolChoiceOptionParam,
+)
+from openai.types.chat.completion_create_params import PromptCacheOptions, WebSearchOptions
+from openai.types.responses import ServiceTier as ResponseServiceTier
 from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
 from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
 
 from .files import OpenAIFilesClient
-from .openai_client import CreateOptions, OpenAIClient, ReasoningEffort
+from .openai_client import CreateOptions, Modality, OpenAIClient, ReasoningEffort, ServiceTier, Verbosity
 from .openai_responses_client import CreateOptions as ResponseCreateOptions
 from .openai_responses_client import OpenAIResponsesClient
 
@@ -45,20 +50,20 @@ class OpenAIConfigOverrides(TypedDict, total=False):
     user: str | Omit
     logprobs: bool | None | Omit
     top_logprobs: int | None | Omit
-    tool_choice: str | dict[str, Any] | Omit
+    tool_choice: ChatCompletionToolChoiceOptionParam | Omit
     parallel_tool_calls: bool | Omit
     reasoning_effort: ReasoningEffort | None | Omit
     logit_bias: dict[str, int] | None | Omit
     metadata: dict[str, str] | None | Omit
-    modalities: list[str] | None | Omit
-    prediction: dict[str, Any] | None | Omit
+    modalities: list[Modality] | None | Omit
+    prediction: ChatCompletionPredictionContentParam | None | Omit
     prompt_cache_key: str | Omit
     prompt_cache_options: PromptCacheOptions | Omit
     safety_identifier: str | Omit
-    service_tier: str | None | Omit
+    service_tier: ServiceTier | None | Omit
     store: bool | None | Omit
-    verbosity: str | None | Omit
-    web_search_options: dict[str, Any] | Omit
+    verbosity: Verbosity | None | Omit
+    web_search_options: WebSearchOptions | Omit
     extra_body: dict[str, Any] | None
 
 
@@ -88,13 +93,13 @@ class OpenAIConfig(ModelConfig):
     user: str | Omit = omit
     logprobs: bool | None | Omit = omit
     top_logprobs: int | None | Omit = omit
-    tool_choice: str | dict[str, Any] | Omit = omit
+    tool_choice: ChatCompletionToolChoiceOptionParam | Omit = omit
     parallel_tool_calls: bool | Omit = omit
     reasoning_effort: ReasoningEffort | None | Omit = omit
     logit_bias: dict[str, int] | None | Omit = omit
     metadata: dict[str, str] | None | Omit = omit
-    modalities: list[str] | None | Omit = omit
-    prediction: dict[str, Any] | None | Omit = omit
+    modalities: list[Modality] | None | Omit = omit
+    prediction: ChatCompletionPredictionContentParam | None | Omit = omit
     # A routing hint, not a partition, and best effort in both directions: a second key
     # has been measured reading a prefix the first one wrote, and one key has been
     # measured not reading back its own.
@@ -105,10 +110,10 @@ class OpenAIConfig(ModelConfig):
     # ``prompt_cache_retention`` and the ``prewarm`` flag are not exposed at all.
     prompt_cache_options: PromptCacheOptions | Omit = omit
     safety_identifier: str | Omit = omit
-    service_tier: str | None | Omit = omit
+    service_tier: ServiceTier | None | Omit = omit
     store: bool | None | Omit = omit
-    verbosity: str | None | Omit = omit
-    web_search_options: dict[str, Any] | Omit = omit
+    verbosity: Verbosity | None | Omit = omit
+    web_search_options: WebSearchOptions | Omit = omit
     extra_body: dict[str, Any] | None = None
 
     @property
@@ -195,9 +200,9 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     prompt_cache_key: str | Omit
     prompt_cache_options: ResponsePromptCacheOptions | Omit
     prompt_cache_diagnostics: bool
-    service_tier: str | None | Omit
+    service_tier: ResponseServiceTier | None | Omit
     user: str
-    truncation: str | None | Omit
+    truncation: Literal["auto", "disabled"] | None | Omit
 
 
 @dataclass(slots=True)
@@ -237,9 +242,9 @@ class OpenAIResponsesConfig(ModelConfig):
     # reuses the originating turn's client. A fresh `agent.ask(...)` builds a new one and
     # starts over. An explicit `prompt_cache_options["comparison_response_id"]` outranks it.
     prompt_cache_diagnostics: bool = False
-    service_tier: str | None | Omit = omit
+    service_tier: ResponseServiceTier | None | Omit = omit
     user: str = ""
-    truncation: str | None | Omit = omit
+    truncation: Literal["auto", "disabled"] | None | Omit = omit
 
     @property
     def provider(self) -> ModelProvider:

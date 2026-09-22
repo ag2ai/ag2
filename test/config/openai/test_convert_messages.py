@@ -189,6 +189,13 @@ class TestAudioBinaryInput:
             "content": [{"type": "input_audio", "input_audio": {"data": expected_b64, "format": "mp3"}}],
         }
 
+    def test_completions_refuses_a_format_the_api_does_not_take(self) -> None:
+        """ag2 accepts more audio types than this API does; the extra ones stop here."""
+        with pytest.raises(UnsupportedInputError):
+            convert_messages(
+                [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/ogg")])], SerializerCls
+            )
+
 
 class TestBinaryInput:
     SAMPLE_BYTES = b"\x89PNG\r\n\x1a\nfake"

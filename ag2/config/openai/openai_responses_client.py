@@ -5,7 +5,7 @@
 
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict, cast
 
 import httpx2
 from fast_depends.library.serializer import SerializerProto
@@ -17,6 +17,7 @@ from openai.types.responses import (
     ResponseFunctionShellToolCall,
     ResponseFunctionShellToolCallOutput,
     ResponseFunctionToolCall,
+    ResponseInputParam,
     ResponseOutputItemDoneEvent,
     ResponseOutputMessage,
     ResponseReasoningItem,
@@ -24,15 +25,19 @@ from openai.types.responses import (
     ResponseShellCallOutputContentDeltaEvent,
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
+    ServiceTier,
+    ToolParam,
 )
 from openai.types.responses.response_create_params import PromptCacheOptions
 from openai.types.responses.response_output_item import ImageGenerationCall
+from openai.types.shared_params import Metadata
 from typing_extensions import Required
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
 from ag2.events import (
     BaseEvent,
+    BinaryInput,
     BinaryResult,
     ModelMessage,
     ModelMessageChunk,
@@ -76,13 +81,22 @@ class CreateOptions(TypedDict, total=False):
     parallel_tool_calls: bool
     top_logprobs: int | None | Omit
     store: bool | None
-    metadata: dict[str, str] | None | Omit
+    metadata: Metadata | None | Omit
     prompt_cache_key: str | Omit
     prompt_cache_options: PromptCacheOptions | Omit
-    service_tier: str | None | Omit
+    service_tier: ServiceTier | None | Omit
     user: str
     stream: bool
-    truncation: str | None | Omit
+    truncation: Literal["auto", "disabled"] | None | Omit
+
+
+def _generated_images(result_event: OpenAIServerToolResultEvent) -> list[BinaryResult]:
+    """The images an image-generation result carries, as files of the turn."""
+    return [
+        BinaryResult(part.data, metadata=result_event.result.metadata)
+        for part in result_event.result.parts
+        if isinstance(part, BinaryInput)
+    ]
 
 
 class OpenAIResponsesClient(LLMClient):
@@ -114,24 +128,23 @@ class OpenAIResponsesClient(LLMClient):
             http_client=http_client,
         )
 
-        self._create_options = create_options or {}
-        self._streaming = self._create_options.get("stream", False)
+        # Left as ``None`` rather than widened to an empty mapping: ``model`` is
+        # required, so there is no such thing as an empty set of create options.
+        self._create_options = create_options
+        self._streaming = bool(create_options and create_options.get("stream", False))
         self._prompt_cache_diagnostics = prompt_cache_diagnostics
         self._last_response_id: str | None = None
 
-    def _request_options(self) -> dict[str, Any]:
+    def _request_options(self, create_options: CreateOptions) -> CreateOptions:
         """The create options for this call, diagnosing against the last response if asked to.
 
         Only the comparison id varies between calls; everything else is fixed at construction.
-        Returns a plain mapping rather than ``CreateOptions`` because that TypedDict declares
-        ``service_tier`` and ``truncation`` as ``str`` where the SDK wants a ``Literal``;
-        spreading it as a typed mapping fails on those fields, which are not this change's.
         """
-        options = dict(self._create_options)
+        options = create_options.copy()
         if not self._prompt_cache_diagnostics or self._last_response_id is None:
             return options
 
-        configured = self._create_options.get("prompt_cache_options")
+        configured = create_options.get("prompt_cache_options")
         if configured and "comparison_response_id" in configured:
             # The caller named a response to compare against; that choice outranks the chain.
             return options
@@ -141,7 +154,7 @@ class OpenAIResponsesClient(LLMClient):
         return options
 
     @staticmethod
-    def _comparison_id(options: dict[str, Any]) -> str | None:
+    def _comparison_id(options: CreateOptions) -> str | None:
         """The response this request asked to be compared against, if it asked at all."""
         configured: PromptCacheOptions | None = options.get("prompt_cache_options") or None
         return configured.get("comparison_response_id") if configured else None
@@ -164,6 +177,9 @@ class OpenAIResponsesClient(LLMClient):
         response_schema: ResponseProto | None,
         serializer: "SerializerProto",
     ) -> ModelResponse:
+        if self._create_options is None:
+            raise ValueError("OpenAIResponsesClient was built without create options, so it has no model to call.")
+
         input_items = events_to_responses_input(messages, serializer)
 
         if response_schema and response_schema.system_prompt:
@@ -182,30 +198,32 @@ class OpenAIResponsesClient(LLMClient):
         )
         reject_client_executed_shell(openai_tools)
 
-        kwargs: dict[str, Any] = {}
-        if r := response_proto_to_text_config(response_schema):
-            kwargs["text"] = r
-
         includes = responses_api_includes(tools_list)
         if self._create_options.get("store") is False:
             # Stateless mode: the API persists nothing, so replaying a reasoning item
             # by id on a later turn (a tool loop always does) will fail. Asking
             # for the encrypted payload makes those items self-contained.
             includes.append("reasoning.encrypted_content")
-        if includes:
-            kwargs["include"] = includes
 
-        options = self._request_options()
+        options = self._request_options(self._create_options)
         response = await self._client.responses.create(
             **options,
-            **kwargs,
-            input=input_items,
+            text=response_proto_to_text_config(response_schema) or omit,
+            include=includes or omit,
+            # `events_to_responses_input` replays two things the SDK's input params do
+            # not model: an assistant turn carrying `output_text`, which the API takes
+            # but `EasyInputMessageParam` does not describe, and hosted items round-
+            # tripped through `model_dump()` from their output models.
+            input=cast(ResponseInputParam, input_items),
             instructions=instructions,
-            tools=openai_tools or omit,
+            # `tool_to_responses_api` deliberately answers plain mappings: two of its
+            # branches carry a field the SDK's `ToolParam` does not declare, and the
+            # skills path mutates a finished entry. This is where they meet the SDK.
+            tools=cast(list[ToolParam], openai_tools) or omit,
         )
 
         comparison_id = self._comparison_id(options)
-        if self._streaming:
+        if isinstance(response, AsyncStream):
             result = await self._process_stream(response, context, comparison_id=comparison_id)
         else:
             result = await self._process_response(response, context, comparison_id=comparison_id)
@@ -260,8 +278,7 @@ class OpenAIResponsesClient(LLMClient):
                 if result_event:
                     await context.send(result_event)
                     if isinstance(item, ImageGenerationCall) and item.result:
-                        binary = result_event.result.parts[0]
-                        files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
+                        files.extend(_generated_images(result_event))
 
             elif isinstance(item, ResponseFunctionShellToolCallOutput):
                 if shell_result := shell_calls.close(item):
@@ -353,8 +370,7 @@ class OpenAIResponsesClient(LLMClient):
                     if result_event:
                         await context.send(result_event)
                         if isinstance(event.item, ImageGenerationCall) and event.item.result:
-                            binary = result_event.result.parts[0]
-                            files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
+                            files.extend(_generated_images(result_event))
 
                 elif isinstance(event.item, ResponseFunctionShellToolCallOutput):
                     if shell_result := shell_calls.close(event.item):

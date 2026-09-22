@@ -162,6 +162,15 @@ else:
     Field = FieldInfo
 
 
+# On the metaclass rather than on ``BaseEvent``: the decorator applied to a class
+# transforms that class's *subclasses*, so ``BaseEvent``'s own fields — ``created_at``
+# — never reached a subclass's synthesised ``__init__`` and every ``created_at=`` was
+# read as an unexpected keyword. Applied to the metaclass it transforms every class
+# built from it, ``BaseEvent`` included.
+@dataclass_transform(
+    kw_only_default=True,
+    field_specifiers=(Field,),
+)
 class _ConditionMeta(type):
     """Metaclass providing class-level condition operators (~, |, or_, not_)."""
 
@@ -215,10 +224,6 @@ def _process_fields(cls: type) -> None:
     cls._event_fields_ = fields  # type: ignore[attr-defined]
 
 
-@dataclass_transform(
-    kw_only_default=True,
-    field_specifiers=(Field,),
-)
 class BaseEvent(metaclass=_ConditionMeta):
     # Subclasses may set ``__transient__ = True`` to mark themselves as
     # ephemeral streaming / lifecycle artifacts that should NOT be persisted

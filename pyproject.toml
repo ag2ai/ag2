@@ -419,10 +419,19 @@ files = [
     # Import machinery behind the optional-dependency fallbacks. No extras needed.
     "ag2/_import_utils.py",
 
-    # Provider mappers. `openai` and `anthropic` are in the `types` group, so
-    # these are really checked on every pull request.
-    "ag2/config/anthropic/mappers.py",
-    "ag2/config/openai/mappers.py",
+    # Provider configuration core: the `ModelConfig` and `LLMClient` protocols
+    # every provider is built against. No extras needed.
+    "ag2/config/__init__.py",
+    "ag2/config/client.py",
+    "ag2/config/config.py",
+
+    # The OpenAI and Anthropic providers — configs, clients, mappers, hosted-tool
+    # events and Files clients. The reference implementations the other providers
+    # copy, so their shapes are what tickets 12-14 build on. `openai` and
+    # `anthropic` are in the `types` group, so these are really checked on every
+    # pull request.
+    "ag2/config/anthropic/",
+    "ag2/config/openai/",
 
     # MCP-UI resource and action builders. `mcp-ui-server` carries no `py.typed`
     # but is fully annotated, so it is followed (see the override below) rather

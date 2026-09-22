@@ -36,11 +36,11 @@ class AnthropicFilesClient:
         )
         return UploadedFile(
             file_id=result.id,
-            filename=result.filename if hasattr(result, "filename") else filename,
+            filename=result.filename,
             provider=FileProvider.ANTHROPIC,
-            bytes_count=result.size_bytes if hasattr(result, "size_bytes") else None,
+            bytes_count=result.size_bytes,
             purpose=purpose,
-            created_at=_created_at_to_float(result.created_at if hasattr(result, "created_at") else None),
+            created_at=_created_at_to_float(result.created_at),
         )
 
     async def read(self, file_id: str) -> FileContent:
@@ -59,11 +59,11 @@ class AnthropicFilesClient:
         return [
             UploadedFile(
                 file_id=f.id,
-                filename=f.filename if hasattr(f, "filename") else None,
+                filename=f.filename,
                 provider=FileProvider.ANTHROPIC,
-                bytes_count=f.size_bytes if hasattr(f, "size_bytes") else None,
+                bytes_count=f.size_bytes,
                 purpose=None,
-                created_at=_created_at_to_float(f.created_at if hasattr(f, "created_at") else None),
+                created_at=_created_at_to_float(f.created_at),
             )
             for f in result.data
         ]
