@@ -17,18 +17,18 @@ if TYPE_CHECKING:
 # The purposes Z.AI's Files API accepts. The SDK declares them inline on `Files.create`
 # rather than as an exported alias, so they are restated here;
 # `test_purposes_match_the_sdk` fails if the SDK's set moves.
-ZAIFilePurpose = Literal["fine-tune", "retrieval", "batch", "voice-clone-input"]
+_ZAIFilePurpose = Literal["fine-tune", "retrieval", "batch", "voice-clone-input"]
 
-_PURPOSES: Final[tuple[ZAIFilePurpose, ...]] = get_args(ZAIFilePurpose)
+_PURPOSES: Final[tuple[_ZAIFilePurpose, ...]] = get_args(_ZAIFilePurpose)
 
 # Default upload purpose; see ZAIFilesClient.upload for why "batch".
-_DEFAULT_PURPOSE: Final[ZAIFilePurpose] = "batch"
+_DEFAULT_PURPOSE: Final[_ZAIFilePurpose] = "batch"
 
 # Purposes that GET /files can enumerate without extra params; see ZAIFilesClient.list.
-_LISTABLE_PURPOSES: Final[tuple[ZAIFilePurpose, ...]] = ("batch", "fine-tune", "voice-clone-input")
+_LISTABLE_PURPOSES: Final[tuple[_ZAIFilePurpose, ...]] = ("batch", "fine-tune", "voice-clone-input")
 
 
-def _resolve_purpose(purpose: str | None) -> ZAIFilePurpose:
+def _resolve_purpose(purpose: str | None) -> _ZAIFilePurpose:
     """Narrow a requested purpose to the closed set Z.AI accepts.
 
     An unsupported one is named here rather than sent and answered with a 400.

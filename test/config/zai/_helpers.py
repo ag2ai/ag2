@@ -14,12 +14,18 @@ class FakeStreamResponse(StreamResponse[Any]):
     """A `StreamResponse` over a fixed list of chunks.
 
     `ZAIClient` narrows on the SDK's own class to tell a stream from a completion — the SDK
-    answers both from one `create` call — so the double has to be one. Only
-    `_stream_chunks` is read by `__iter__` / `__next__`, so the SSE machinery is skipped.
+    answers both from one `create` call — so the double has to be one. Iteration is overridden
+    rather than fed through the SSE machinery, so nothing here depends on the SDK's internals.
     """
 
     def __init__(self, chunks: Iterable[Any]) -> None:
-        self._stream_chunks: Iterator[Any] = iter(chunks)
+        self._chunks: Iterator[Any] = iter(chunks)
+
+    def __iter__(self) -> Iterator[Any]:
+        return self._chunks
+
+    def __next__(self) -> Any:
+        return next(self._chunks)
 
 
 def make_usage(

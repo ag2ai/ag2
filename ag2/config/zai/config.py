@@ -7,6 +7,8 @@ from typing import Any, TypedDict
 
 import httpx
 from typing_extensions import Unpack
+from zai.types.chat.code_geex.code_geex_params import CodeGeexExtra
+from zai.types.sensitive_word_check import SensitiveWordCheckRequest
 
 from ag2.config.config import ModelConfig, ModelProvider
 
@@ -35,8 +37,8 @@ class ZAIConfigOverrides(TypedDict, total=False):
     user_id: str | None
     do_sample: bool | None
     meta: dict[str, str] | None
-    sensitive_word_check: Any | None
-    extra: Any | None
+    sensitive_word_check: SensitiveWordCheckRequest | None
+    extra: CodeGeexExtra | None
     request_timeout: float | httpx.Timeout | None
     watermark_enabled: bool | None
     tool_stream: bool | None
@@ -68,8 +70,9 @@ class ZAIConfig(ModelConfig):
     user_id: str | None = None
     do_sample: bool | None = None
     meta: dict[str, str] | None = None
-    sensitive_word_check: Any | None = None
-    extra: Any | None = None
+    # The SDK's own TypedDicts, so an unsupported key is a type error rather than a 400.
+    sensitive_word_check: SensitiveWordCheckRequest | None = None
+    extra: CodeGeexExtra | None = None
     request_timeout: float | httpx.Timeout | None = None
     watermark_enabled: bool | None = None
     tool_stream: bool | None = None

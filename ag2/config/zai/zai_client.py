@@ -16,6 +16,8 @@ from zai import ZaiClient
 from zai.core import StreamResponse
 from zai.types.chat.chat_completion import Completion
 from zai.types.chat.chat_completion_chunk import ChatCompletionChunk
+from zai.types.chat.code_geex.code_geex_params import CodeGeexExtra
+from zai.types.sensitive_word_check import SensitiveWordCheckRequest
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
@@ -73,8 +75,8 @@ class CreateOptions(TypedDict, total=False):
     user_id: str | None
     do_sample: bool | None
     meta: dict[str, str] | None
-    sensitive_word_check: Any
-    extra: Any
+    sensitive_word_check: SensitiveWordCheckRequest | None
+    extra: CodeGeexExtra | None
     timeout: float | httpx.Timeout | None
     watermark_enabled: bool | None
     tool_stream: bool | None

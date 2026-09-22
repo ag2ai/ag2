@@ -240,8 +240,14 @@ types = [
     # Small, pure-Python and fully annotated, so the pull-request job really
     # checks the packages behind them instead of checking them against `Any`.
     "ag2[redis, tracing, metrics]", # ag2.streams, ag2.knowledge.redis, ag2.middleware.builtin
-    "ag2[gemini, zai]",             # ag2.config.gemini, ag2.config.zai — both SDKs ship py.typed
     "watchdog>=4.0,<7",            # ag2.knowledge.disk — an additional dependency, not an extra
+    # google-genai is neither small nor pure-Python — it is ~8MB and reaches
+    # `cryptography` through google-auth — but all three of google-genai,
+    # google-auth and zai-sdk ship `py.typed`, the wheels are prebuilt on all
+    # three runners, and the alternative is checking two whole provider packages
+    # against `Any` on every pull request. Weight is not the test; whether the
+    # extra can be installed on every runner is.
+    "ag2[gemini, zai]", # ag2.config.gemini, ag2.config.zai
     # `disallow_any_unimported` turns an unresolved import into an error rather
     # than a silent `Any`, so a checked module's backends have to be installed.
     "ag2[tavily, ddgs, perplexity]", # ag2.tools.search
