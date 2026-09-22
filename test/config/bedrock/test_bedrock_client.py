@@ -248,3 +248,8 @@ async def test_streaming_missing_metadata_yields_empty_usage() -> None:
     result = await _ask(client)
 
     assert result.usage == Usage()
+
+
+def test_client_without_create_options_says_so() -> None:
+    with pytest.raises(ValueError, match="needs create options"):
+        BedrockClient(session=StubSession(FakeBedrockRuntime()))

@@ -118,7 +118,7 @@ def response_proto_to_format(response: ResponseProto | None) -> ResponseFormat |
     )
 
 
-def tool_to_api(t: ToolSchema) -> Tool:
+def tool_to_api(t: ToolSchema) -> Tool | ImageGenerationTool:
     """Convert an AG2 ``ToolSchema`` to a Mistral tool.
 
     Function tools plus ``image_generation``. Mistral's other server-side tools

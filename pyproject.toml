@@ -252,6 +252,8 @@ types = [
     # three have prebuilt wheels on every runner. xai-sdk is followed rather
     # than wrapped (see the override below), which only holds if it is installed.
     "ag2[xai, dashscope]", # ag2.config.xai, ag2.config.dashscope
+    # Pure-Python and shipping `py.typed` (mistralai under `mistralai.client`).
+    "ag2[mistral, ollama]", # ag2.config.mistral, ag2.config.ollama
     # `disallow_any_unimported` turns an unresolved import into an error rather
     # than a silent `Any`, so a checked module's backends have to be installed.
     "ag2[tavily, ddgs, perplexity]", # ag2.tools.search
@@ -458,6 +460,18 @@ files = [
     # checked on every pull request.
     "ag2/config/dashscope/",
     "ag2/config/xai/",
+
+    # The Mistral and Ollama providers. `mistralai` and `ollama` ship `py.typed`
+    # and are in the `types` group, so these are really checked on every pull
+    # request.
+    "ag2/config/mistral/",
+    "ag2/config/ollama/",
+
+    # The Bedrock provider. boto3 is data-driven and ships no types, so the
+    # boto3 client is `Any` by our own declaration on every job; installing the
+    # extra would change nothing. The service's own types come from
+    # `types-boto3[bedrock-runtime]`, which the Bedrock SDK-types change adds.
+    "ag2/config/bedrock/",
 
     # MCP-UI resource and action builders. `mcp-ui-server` carries no `py.typed`
     # but is fully annotated, so it is followed (see the override below) rather
