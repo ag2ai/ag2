@@ -9,12 +9,24 @@ from collections.abc import Iterable, Sequence
 from typing import Any, Literal, TypeAlias, cast
 
 from anthropic.types import (
+    CacheControlEphemeralParam,
+    CitationsConfigParam,
     CodeExecutionTool20260521Param,
+    ContentBlockParam,
+    DirectCallerParam,
+    DocumentBlockParam,
+    ImageBlockParam,
     MemoryTool20250818Param,
+    MessageParam,
+    ServerToolCaller20260120Param,
+    ServerToolCallerParam,
+    TextBlockParam,
     ToolBash20250124Param,
     ToolParam,
+    ToolResultBlockParam,
     ToolSearchToolBm25_20251119Param,
     ToolSearchToolRegex20251119Param,
+    ToolUseBlockParam,
     UserLocationParam,
     WebFetchTool20260318Param,
     WebFetchURLSourceAllParam,
@@ -25,6 +37,8 @@ from anthropic.types import (
     WebFetchURLSourcesParam,
     WebSearchTool20260318Param,
 )
+from anthropic.types.tool_result_block_param import Content as ToolResultContent
+from anthropic.types.tool_use_block_param import Caller
 from fast_depends.library.serializer import SerializerProto
 
 from ag2.compact import CompactionSummary
@@ -478,78 +492,161 @@ def merge_sampling_into_extra_body(
 
 _IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp"})
 
-# Anthropic content block keys that are safe to pass through from vendor_metadata.
-_ANTHROPIC_VENDOR_KEYS = frozenset({"cache_control", "citations"})
+_IMAGE_MEDIA_TYPES: dict[str, Literal["image/jpeg", "image/png", "image/gif", "image/webp"]] = {
+    "image/jpeg": "image/jpeg",
+    "image/png": "image/png",
+    "image/gif": "image/gif",
+    "image/webp": "image/webp",
+}
+"""The only image media types the API accepts inline; anything else is answered with a 400."""
+
+_CACHE_TTLS: dict[object, Literal["5m", "1h"]] = {"5m": "5m", "1h": "1h"}
+
+_Role: TypeAlias = Literal["user", "assistant"]
 
 
-def _file_id_block_type(filename: str | None) -> str:
-    """Infer Anthropic content block type from filename extension."""
-    if filename:
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        if f".{ext}" in _IMAGE_EXTENSIONS:
-            return "image"
-    return "document"
+def _file_id_block(file_id: str, filename: str | None) -> ImageBlockParam | DocumentBlockParam:
+    """Reference an uploaded file; the block kind is inferred from the filename extension."""
+    if filename and "." in filename and f".{filename.rsplit('.', 1)[-1].lower()}" in _IMAGE_EXTENSIONS:
+        image: ImageBlockParam = {"type": "image", "source": {"type": "file", "file_id": file_id}}
+        return image
+    document: DocumentBlockParam = {"type": "document", "source": {"type": "file", "file_id": file_id}}
+    return document
+
+
+def _url_block(inp: UrlInput) -> ImageBlockParam | DocumentBlockParam:
+    if inp.kind is BinaryType.IMAGE:
+        image: ImageBlockParam = {"type": "image", "source": {"type": "url", "url": inp.url}}
+        return image
+    if inp.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
+        document: DocumentBlockParam = {"type": "document", "source": {"type": "url", "url": inp.url}}
+        return document
+    raise UnsupportedInputError(f"UrlInput({inp.kind.value})", "anthropic")
+
+
+def _image_block(inp: BinaryInput) -> ImageBlockParam:
+    if (media_type := _IMAGE_MEDIA_TYPES.get(inp.media_type)) is None:
+        raise UnsupportedInputError(f"BinaryInput(image, media_type={inp.media_type})", "anthropic")
+    b64 = base64.b64encode(inp.data).decode()
+    return {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}}
+
+
+def _document_block(inp: BinaryInput) -> DocumentBlockParam:
+    """Inline a document: a PDF as base64, plain text as text. The API refuses base64 for anything but a PDF."""
+    if inp.media_type == "application/pdf":
+        b64 = base64.b64encode(inp.data).decode()
+        return {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}}
+    if inp.media_type == "text/plain":
+        try:
+            text = inp.data.decode("utf-8")
+        except UnicodeDecodeError:
+            raise UnsupportedInputError(
+                "BinaryInput(document, media_type=text/plain, not UTF-8)", "anthropic"
+            ) from None
+        return {"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": text}}
+    raise UnsupportedInputError(f"BinaryInput(document, media_type={inp.media_type})", "anthropic")
+
+
+def _cache_control(inp: BinaryInput) -> CacheControlEphemeralParam | None:
+    """The ``cache_control`` a caller set in ``vendor_metadata``, in the shape the API accepts."""
+    value = inp.vendor_metadata.get("cache_control")
+    if value is None:
+        return None
+    if isinstance(value, dict) and value.get("type") == "ephemeral" and set(value) <= {"type", "ttl"}:
+        cache_control: CacheControlEphemeralParam = {"type": "ephemeral"}
+        if "ttl" not in value:
+            return cache_control
+        if (ttl := _CACHE_TTLS.get(value["ttl"])) is not None:
+            cache_control["ttl"] = ttl
+            return cache_control
+    raise UnsupportedInputError(f"BinaryInput(cache_control={value!r})", "anthropic")
+
+
+def _citations(inp: BinaryInput) -> CitationsConfigParam | None:
+    """The ``citations`` a caller set in ``vendor_metadata``, in the shape the API accepts."""
+    value = inp.vendor_metadata.get("citations")
+    if value is None:
+        return None
+    if isinstance(value, dict) and set(value) <= {"enabled"}:
+        citations: CitationsConfigParam = {}
+        if "enabled" not in value:
+            return citations
+        if isinstance(enabled := value["enabled"], bool):
+            citations["enabled"] = enabled
+            return citations
+    raise UnsupportedInputError(f"BinaryInput(citations={value!r})", "anthropic")
+
+
+def _caller(value: object) -> Caller:
+    """A ``caller`` recorded on a tool call, rebuilt as one of the kinds the SDK models."""
+    if isinstance(value, dict):
+        kind = value.get("type")
+        if kind == "direct" and set(value) == {"type"}:
+            direct: DirectCallerParam = {"type": "direct"}
+            return direct
+        if set(value) == {"type", "tool_id"} and isinstance(tool_id := value["tool_id"], str):
+            if kind == "code_execution_20250825":
+                caller: ServerToolCallerParam = {"type": "code_execution_20250825", "tool_id": tool_id}
+                return caller
+            if kind == "code_execution_20260120":
+                caller_20260120: ServerToolCaller20260120Param = {"type": "code_execution_20260120", "tool_id": tool_id}
+                return caller_20260120
+    raise UnsupportedInputError(f"ToolCallEvent(caller={value!r})", "anthropic")
+
+
+def _toolset_name(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    raise UnsupportedInputError(f"ToolCallEvent(toolset_name={value!r})", "anthropic")
 
 
 def _tool_result_block(
     result: "ToolResultEvent",
-    serializer: Any,
-    toolset_name: str | None = None,
-) -> dict[str, Any]:
+    serializer: SerializerProto,
+    toolset_name: object = None,
+) -> ToolResultBlockParam:
     """Render one tool result as an Anthropic ``tool_result`` block.
 
     Shared by the wrapped (``ToolResultsEvent``) and loose paths so a result
     renders identically whichever one carries it.
     """
-    parts: list[dict[str, Any]] = []
+    parts: list[ToolResultContent] = []
     for part in result.result.parts:
         if isinstance(part, TextInput):
-            parts.append({"type": "text", "text": part.content})
+            parts.append(_text_block(part.content))
         elif isinstance(part, DataInput):
-            parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+            parts.append(_text_block(serializer.encode(part.data).decode()))
         elif isinstance(part, BinaryInput):
             if part.kind is BinaryType.IMAGE:
-                b64 = base64.b64encode(part.data).decode()
-                parts.append({
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": part.media_type, "data": b64},
-                })
+                parts.append(_image_block(part))
             elif part.kind is BinaryType.DOCUMENT:
-                b64 = base64.b64encode(part.data).decode()
-                parts.append({
-                    "type": "document",
-                    "source": {"type": "base64", "media_type": part.media_type, "data": b64},
-                })
+                parts.append(_document_block(part))
             else:
                 raise UnsupportedInputError(f"BinaryInput({part.kind.value})", "anthropic")
         elif isinstance(part, UrlInput):
-            if part.kind is BinaryType.IMAGE:
-                parts.append({"type": "image", "source": {"type": "url", "url": part.url}})
-            elif part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
-                parts.append({"type": "document", "source": {"type": "url", "url": part.url}})
-            else:
-                raise UnsupportedInputError(f"UrlInput({part.kind.value})", "anthropic")
+            parts.append(_url_block(part))
         elif isinstance(part, FileIdInput):
-            parts.append({
-                "type": _file_id_block_type(part.filename),
-                "source": {"type": "file", "file_id": part.file_id},
-            })
+            parts.append(_file_id_block(part.file_id, part.filename))
         else:
             raise UnsupportedInputError(type(part).__name__, "anthropic")
 
-    if len(parts) == 1 and (only := parts[0])["type"] == "text":
-        content: str | list[dict[str, Any]] = only["text"]
-    else:
-        content = parts
-    block: dict[str, Any] = {"type": "tool_result", "tool_use_id": result.parent_id, "content": content}
+    block: ToolResultBlockParam = {
+        "type": "tool_result",
+        "tool_use_id": result.parent_id,
+        "content": only["text"] if len(parts) == 1 and (only := parts[0])["type"] == "text" else parts,
+    }
     if isinstance(result, ToolErrorEvent):
         # Without this the model reads a traceback as a successful result.
         block["is_error"] = True
     if toolset_name is not None:
         # The API refuses a tool_result answering a member tool_use that does not
         # repeat the paired tool_use's toolset_name.
-        block["toolset_name"] = toolset_name
+        block["toolset_name"] = _toolset_name(toolset_name)
     return block
+
+
+def _text_block(text: str) -> TextBlockParam:
+    return {"type": "text", "text": text}
 
 
 def has_file_id_references(messages: Iterable[BaseEvent]) -> bool:
@@ -571,7 +668,7 @@ def has_file_id_references(messages: Iterable[BaseEvent]) -> bool:
 def convert_messages(
     messages: Iterable[BaseEvent],
     serializer: SerializerProto,
-) -> list[dict[str, Any]]:
+) -> list[MessageParam]:
     event_list = list(messages)
 
     # Collect all tool_use IDs present in the conversation so we can
@@ -579,7 +676,8 @@ def convert_messages(
     # trimmed by a reduction policy (SlidingWindow, TokenBudget, etc.).
     valid_tool_ids: set[str] = set()
     # A member tool_use's toolset_name has to be repeated on its tool_result.
-    toolset_names: dict[str, str] = {}
+    # Checked only where it is echoed, so an orphan tool_use is still dropped rather than refused.
+    toolset_names: dict[str, object] = {}
     for message in event_list:
         if isinstance(message, ModelResponse):
             for call in message.tool_calls.calls:
@@ -614,7 +712,9 @@ def convert_messages(
             if parent:
                 resolved_tool_ids.add(parent)
 
-    result: list[dict[str, Any]] = []
+    # Content is gathered per turn and each message is built once at the end: the SDK
+    # declares `content` as an `Iterable`, so a built message cannot be appended to.
+    turns: list[tuple[_Role, str | list[ContentBlockParam]]] = []
     # Track tool_use_ids we've emitted tool_result blocks for, so the
     # individual-ToolResultEvent fallback below doesn't double-emit when
     # both the wrapper and the leaves are present. Pre-populate from any
@@ -630,11 +730,11 @@ def convert_messages(
                 if r.parent_id in valid_tool_ids:
                     emitted_result_ids.add(r.parent_id)
 
-    for message in messages:
+    for message in event_list:
         if isinstance(message, ModelResponse):
-            content: list[dict[str, Any]] = []
+            content: list[ContentBlockParam] = []
             if message.message:
-                content.append({"type": "text", "text": message.message.content})
+                content.append(_text_block(message.message.content))
             # Skip tool_use blocks whose matching tool_result is missing
             # from the event list. See the `resolved_tool_ids` block above
             # for why this asymmetry exists. Keeping the assistant's text
@@ -649,18 +749,19 @@ def convert_messages(
                         call.name,
                     )
                     continue
-                use_block: dict[str, Any] = {
+                use_block: ToolUseBlockParam = {
                     "type": "tool_use",
                     "id": call.id,
                     "name": call.name,
                     "input": json.loads(call.arguments or "{}"),
                 }
-                for key in ("caller", "toolset_name"):
-                    if (value := call.vendor_metadata.get(key)) is not None:
-                        use_block[key] = value
+                if (caller := call.vendor_metadata.get("caller")) is not None:
+                    use_block["caller"] = _caller(caller)
+                if (toolset_name := call.vendor_metadata.get("toolset_name")) is not None:
+                    use_block["toolset_name"] = _toolset_name(toolset_name)
                 content.append(use_block)
             if content:
-                result.append({"role": "assistant", "content": content})
+                turns.append(("assistant", content))
 
         # AnthropicRedactedThinkingEvent rides along: Anthropic requires the block
         # echoed back unchanged. AnthropicContainerUploadEvent deliberately has no
@@ -669,14 +770,16 @@ def convert_messages(
             message,
             (AnthropicServerToolCallEvent, AnthropicServerToolResultEvent, AnthropicRedactedThinkingEvent),
         ):
-            block = message.block.model_dump(exclude_none=True, mode="json")
-            if result and result[-1]["role"] == "assistant":
-                result[-1]["content"].append(block)
+            # The one untyped boundary: the dump of the SDK's own response block, which
+            # pydantic validated on the way in, is the param block of the same kind.
+            block = cast(ContentBlockParam, message.block.model_dump(exclude_none=True, mode="json"))
+            if turns and turns[-1][0] == "assistant" and isinstance(open_turn := turns[-1][1], list):
+                open_turn.append(block)
             else:
-                result.append({"role": "assistant", "content": [block]})
+                turns.append(("assistant", [block]))
 
         elif isinstance(message, ToolResultsEvent):
-            tool_results = []
+            tool_results: list[ContentBlockParam] = []
             for r in message.results:
                 # Drop orphan tool_result whose matching tool_use was
                 # trimmed by a reduction policy (SlidingWindow, etc.).
@@ -686,18 +789,18 @@ def convert_messages(
                 if valid_tool_ids and r.parent_id not in valid_tool_ids:
                     continue
                 tool_results.append(_tool_result_block(r, serializer, toolset_names.get(r.parent_id)))
+                emitted_result_ids.add(r.parent_id)
             if tool_results:
-                emitted_result_ids.update(r["tool_use_id"] for r in tool_results)
-                result.append({"role": "user", "content": tool_results})
+                turns.append(("user", tool_results))
 
         elif isinstance(message, ModelRequest):
-            content_parts: list[dict[str, Any]] = []
+            content_parts: list[ContentBlockParam] = []
             for inp in message.parts:
                 if isinstance(inp, TextInput):
-                    content_parts.append({"type": "text", "text": inp.content})
+                    content_parts.append(_text_block(inp.content))
 
                 elif isinstance(inp, DataInput):
-                    content_parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
+                    content_parts.append(_text_block(serializer.encode(inp.data).decode()))
 
                 elif isinstance(inp, FileIdInput):
                     if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.ANTHROPIC:
@@ -705,39 +808,28 @@ def convert_messages(
                             f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.ANTHROPIC.value}'",
                             "anthropic",
                         )
-
-                    block_type = _file_id_block_type(inp.filename)
-                    content_parts.append({"type": block_type, "source": {"type": "file", "file_id": inp.file_id}})
+                    content_parts.append(_file_id_block(inp.file_id, inp.filename))
 
                 elif isinstance(inp, UrlInput):
-                    if inp.kind is BinaryType.IMAGE:
-                        content_parts.append({"type": "image", "source": {"type": "url", "url": inp.url}})
-
-                    elif inp.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
-                        content_parts.append({"type": "document", "source": {"type": "url", "url": inp.url}})
-
-                    else:
-                        raise UnsupportedInputError(f"UrlInput({inp.kind.value})", "anthropic")
+                    content_parts.append(_url_block(inp))
 
                 elif isinstance(inp, BinaryInput):
-                    extra = {k: v for k, v in inp.vendor_metadata.items() if k in _ANTHROPIC_VENDOR_KEYS}
                     if inp.kind is BinaryType.IMAGE:
-                        b64 = base64.b64encode(inp.data).decode()
-                        item: dict[str, Any] = {
-                            "type": "image",
-                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
-                            **extra,
-                        }
-                        content_parts.append(item)
+                        image = _image_block(inp)
+                        if inp.vendor_metadata.get("citations") is not None:
+                            # The API answers `image.citations: Extra inputs are not permitted`.
+                            raise UnsupportedInputError("BinaryInput(image, citations)", "anthropic")
+                        if (cache_control := _cache_control(inp)) is not None:
+                            image["cache_control"] = cache_control
+                        content_parts.append(image)
 
                     elif inp.kind is BinaryType.DOCUMENT:
-                        b64 = base64.b64encode(inp.data).decode()
-                        item = {
-                            "type": "document",
-                            "source": {"type": "base64", "media_type": inp.media_type, "data": b64},
-                            **extra,
-                        }
-                        content_parts.append(item)
+                        document = _document_block(inp)
+                        if (cache_control := _cache_control(inp)) is not None:
+                            document["cache_control"] = cache_control
+                        if (citations := _citations(inp)) is not None:
+                            document["citations"] = citations
+                        content_parts.append(document)
 
                     else:
                         raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "anthropic")
@@ -747,14 +839,13 @@ def convert_messages(
 
             if content_parts:
                 if len(content_parts) == 1 and (part := content_parts[0])["type"] == "text":
-                    user_content: str | list[dict[str, Any]] = part["text"]
+                    turns.append(("user", part["text"]))
                 else:
-                    user_content = content_parts
-                result.append({"role": "user", "content": user_content})
+                    turns.append(("user", content_parts))
 
         elif isinstance(message, CompactionSummary):
             # Surface the summary as a user turn so it stays visible and gives a valid opening turn
-            result.append({"role": "user", "content": f"[Summary of earlier conversation]\n{message.summary}"})
+            turns.append(("user", f"[Summary of earlier conversation]\n{message.summary}"))
 
         elif isinstance(message, (ToolResultEvent, ToolErrorEvent)):
             # Fallback path — an individual result event without a
@@ -765,12 +856,32 @@ def convert_messages(
             parent = getattr(message, "parent_id", None)
             if parent and parent in valid_tool_ids and parent not in emitted_result_ids:
                 emitted_result_ids.add(parent)
-                result.append({
-                    "role": "user",
-                    "content": [_tool_result_block(message, serializer, toolset_names.get(parent))],
-                })
+                turns.append(("user", [_tool_result_block(message, serializer, toolset_names.get(parent))]))
 
-    return result
+    return [{"role": role, "content": content} for role, content in turns]
+
+
+def inject_cache_breakpoint(messages: list[MessageParam]) -> None:
+    """Mark the end of the last user turn as the end of the cacheable prefix."""
+    for message in reversed(messages):
+        if message["role"] != "user":
+            continue
+        content = message["content"]
+        if isinstance(content, str):
+            message["content"] = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
+            return
+        blocks = list(content)
+        # A user turn built by `convert_messages` ends in a text, media or tool_result block;
+        # the SDK's response models and the thinking blocks cannot carry a breakpoint.
+        if (
+            blocks
+            and isinstance(last := blocks[-1], dict)
+            and last["type"] != "thinking"
+            and last["type"] != "redacted_thinking"
+        ):
+            last["cache_control"] = {"type": "ephemeral"}
+        message["content"] = blocks
+        return
 
 
 def _count_or_absent(value: Any) -> float | None:

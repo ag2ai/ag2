@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -66,6 +67,10 @@ def _matching_tool_result(content: str = "ok") -> ToolResultsEvent:
             )
         ],
     )
+
+
+def _tool_results(result: ToolResult) -> ToolResultsEvent:
+    return ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t", result=result)])
 
 
 class TestConvertMessagesEmptyArguments:
@@ -181,6 +186,60 @@ class TestImageBinaryInput:
             })
         ]
 
+    @pytest.mark.parametrize("media_type", ["image/bmp", "image/tiff", "image/heic", "image/svg+xml"])
+    def test_rejects_media_type_the_api_refuses(self, media_type: str) -> None:
+        # The API answers these with `media_type: Input should be 'image/jpeg', 'image/png', 'image/gif' or 'image/webp'`.
+        with pytest.raises(UnsupportedInputError, match=f"media_type={re.escape(media_type)}.*anthropic"):
+            convert_messages([ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type=media_type)])], SerializerCls)
+
+    def test_rejects_citations(self) -> None:
+        # The API answers `image.citations: Extra inputs are not permitted`.
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="image/png",
+            vendor_metadata={"citations": {"enabled": True}},
+            kind=BinaryType.IMAGE,
+        )
+
+        with pytest.raises(UnsupportedInputError, match="citations.*anthropic"):
+            convert_messages([ModelRequest([image])], SerializerCls)
+
+    def test_citations_none_reads_as_unset(self) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"citations": None}, kind=BinaryType.IMAGE
+        )
+
+        result = convert_messages([ModelRequest([image])], SerializerCls)
+
+        assert result == [{"role": "user", "content": [IsPartialDict({"type": "image"})]}]
+
+    def test_rejects_cache_control_the_api_refuses(self) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="image/png",
+            vendor_metadata={"cache_control": {"type": "persistent"}},
+            kind=BinaryType.IMAGE,
+        )
+
+        with pytest.raises(UnsupportedInputError, match="cache_control.*anthropic"):
+            convert_messages([ModelRequest([image])], SerializerCls)
+
+    def test_cache_control_ttl_passes_through(self) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="image/png",
+            vendor_metadata={"cache_control": {"type": "ephemeral", "ttl": "1h"}},
+            kind=BinaryType.IMAGE,
+        )
+
+        result = convert_messages([ModelRequest([image])], SerializerCls)
+
+        assert result == [
+            IsPartialDict({
+                "content": [IsPartialDict({"type": "image", "cache_control": {"type": "ephemeral", "ttl": "1h"}})],
+            })
+        ]
+
     def test_vendor_metadata_filename_filtered_out(self) -> None:
         result = convert_messages(
             [
@@ -264,6 +323,48 @@ class TestDocumentBinaryInput:
                 "content": [IsPartialDict({"type": "document", "cache_control": {"type": "ephemeral"}})],
             })
         ]
+
+    def test_citations_pass_through(self) -> None:
+        document = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="application/pdf",
+            vendor_metadata={"citations": {"enabled": True}},
+            kind=BinaryType.DOCUMENT,
+        )
+
+        result = convert_messages([ModelRequest([document])], SerializerCls)
+
+        assert result == [
+            IsPartialDict({"content": [IsPartialDict({"type": "document", "citations": {"enabled": True}})]})
+        ]
+
+    def test_plain_text_travels_as_a_text_source(self) -> None:
+        # A base64 `text/plain` source is answered `media_type: Input should be 'application/pdf'`.
+        result = convert_messages(
+            [ModelRequest([DocumentInput(data=b"The word is PELICAN.", media_type="text/plain")])],
+            SerializerCls,
+        )
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {"type": "text", "media_type": "text/plain", "data": "The word is PELICAN."},
+                    }
+                ],
+            }
+        ]
+
+    def test_plain_text_that_is_not_utf8_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="text/plain.*anthropic"):
+            convert_messages([ModelRequest([DocumentInput(data=b"\xff\xfe", media_type="text/plain")])], SerializerCls)
+
+    @pytest.mark.parametrize("media_type", ["text/csv", "text/markdown", "application/json"])
+    def test_rejects_media_type_the_api_refuses(self, media_type: str) -> None:
+        with pytest.raises(UnsupportedInputError, match=f"media_type={re.escape(media_type)}.*anthropic"):
+            convert_messages([ModelRequest([DocumentInput(data=b"x", media_type=media_type)])], SerializerCls)
 
 
 class TestFileIdInput:
@@ -568,6 +669,33 @@ class TestToolResult:
                 ],
             }
         ]
+
+    def test_plain_text_document_travels_as_a_text_source(self) -> None:
+        result = convert_messages(
+            [_tool_results(ToolResult(DocumentInput(data=b"PELICAN", media_type="text/plain")))], SerializerCls
+        )
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "tc_1",
+                        "content": [
+                            {
+                                "type": "document",
+                                "source": {"type": "text", "media_type": "text/plain", "data": "PELICAN"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+
+    def test_image_media_type_the_api_refuses_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="media_type=image/bmp.*anthropic"):
+            convert_messages([_tool_results(ToolResult(ImageInput(data=b"BM", media_type="image/bmp")))], SerializerCls)
 
     def test_audio_in_tool_result_raises(self) -> None:
         event = ToolResultsEvent(
@@ -1023,6 +1151,23 @@ class TestToolUseVendorMetadata:
                 "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok", "toolset_name": "browser"}],
             },
         ]
+
+    def test_caller_the_sdk_does_not_model_raises(self) -> None:
+        events = [self._response(caller={"type": "somebody_else"}), _matching_tool_result()]
+
+        with pytest.raises(UnsupportedInputError, match="caller.*anthropic"):
+            convert_messages(events, SerializerCls)
+
+    def test_toolset_name_that_is_not_a_string_raises(self) -> None:
+        events = [self._response(toolset_name=["browser"]), _matching_tool_result()]
+
+        with pytest.raises(UnsupportedInputError, match="toolset_name.*anthropic"):
+            convert_messages(events, SerializerCls)
+
+    def test_orphan_with_a_bad_toolset_name_is_still_dropped(self) -> None:
+        orphan = self._response(toolset_name=["browser"])
+
+        assert convert_messages([orphan], SerializerCls) == []
 
     def test_nothing_added_when_absent(self) -> None:
         events = [self._response(), _matching_tool_result()]
