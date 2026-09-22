@@ -81,6 +81,35 @@ revisits it. Contain it instead, in this order:
 Whichever you pick, confirm the dependency's extra is installed by the pull-request job — via the
 `types` group or a group it includes — or the module is only really checked overnight.
 
+## The optional-dependency fallback
+
+Every public `__init__.py` behind an extra rebinds a name when its import fails, so a user gets
+an install hint instead of a bare `ImportError`:
+
+```python
+try:
+    from .redis import RedisStream
+except ImportError as e:
+    RedisStream = missing_optional_dependency("RedisStream", "redis", e)
+```
+
+mypy has already bound `RedisStream` to a class by then and rejects the rebind outright —
+`Cannot assign to a type`. Show it only the real import; the fallback is runtime behaviour, and
+reads as such:
+
+```python
+if TYPE_CHECKING:
+    from .redis import RedisStream
+else:
+    try:
+        from .redis import RedisStream
+    except ImportError as e:
+        RedisStream = missing_optional_dependency("RedisStream", "redis", e)
+```
+
+The names keep their true types, and the one duplicated import line is the whole cost. Do this
+rather than suppressing per name — there are over a hundred of these bindings across the tree.
+
 ## The condition DSL
 
 An event field is declared with the type of its value, so without help a checker reads

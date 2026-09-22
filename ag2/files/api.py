@@ -8,11 +8,16 @@ from typing import Any
 
 from ag2.config.config import ModelConfig
 
-from .protocol import FilesClient
 from .types import FileContent, UploadedFile
 
 
-class FilesAPI(FilesClient):
+class FilesAPI:
+    """User-facing facade over a provider's :class:`FilesClient`.
+
+    Not a ``FilesClient`` itself: ``upload`` takes a path or bytes and
+    forwards provider options, where a client takes bytes only.
+    """
+
     __slots__ = ("_client",)
 
     def __init__(self, config: ModelConfig) -> None:

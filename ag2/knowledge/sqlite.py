@@ -9,10 +9,12 @@ import os
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TypeVar
 
 from .base import ChangeCallback, ChangeSubscription, _normalize
 from .polling import PollingChangeWatcher
+
+R = TypeVar("R")
 
 
 class SqliteKnowledgeStore:
@@ -75,7 +77,7 @@ class SqliteKnowledgeStore:
         self._version_counter += 1
         return self._version_counter
 
-    async def _run(self, func: Callable[[], Any]) -> Any:
+    async def _run(self, func: Callable[[], R]) -> R:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, func)
 
@@ -85,7 +87,9 @@ class SqliteKnowledgeStore:
         row = cur.fetchone()
         if row is None:
             return None
-        return row[0].decode("utf-8")
+        # `fetchone` is typed `Any`; the schema stores `content` as a BLOB.
+        content: bytes = row[0]
+        return content.decode("utf-8")
 
     def _sync_write(self, normalized: str, payload: bytes, version: int) -> None:
         conn = self._ensure_connected()

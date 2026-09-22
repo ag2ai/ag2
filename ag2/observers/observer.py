@@ -38,6 +38,7 @@ __all__ = (
     "BaseObserver",
     "CompositeObserver",
     "Observer",
+    "SimpleObserver",
     "StreamObserver",
     "observer",
 )
@@ -161,7 +162,7 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
-) -> Callable[[Callable[..., Any]], StreamObserver]: ...
+) -> Callable[[Callable[..., Any]], SimpleObserver]: ...
 
 
 @overload
@@ -171,7 +172,7 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
-) -> StreamObserver: ...
+) -> SimpleObserver: ...
 
 
 def observer(
@@ -180,7 +181,7 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
-) -> StreamObserver | Callable[[Callable[..., Any]], StreamObserver]:
+) -> SimpleObserver | Callable[[Callable[..., Any]], SimpleObserver]:
     if condition is None:
         cond: Condition | None = None
     elif isinstance(condition, Condition):
@@ -188,7 +189,7 @@ def observer(
     else:
         cond = TypeCondition(condition)
 
-    def decorator(func: Callable[..., Any]) -> StreamObserver:
+    def decorator(func: Callable[..., Any]) -> SimpleObserver:
         if cond is None:
             return SimpleObserver(
                 callback=func,
