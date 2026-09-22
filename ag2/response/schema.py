@@ -160,8 +160,8 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
     if types is str:
         return None, True
 
-    if _is_safe_subclass(types, (list, tuple)):
-        # Process `T1, T2]` and `(T1, T2)`
+    if isinstance(types, (list, tuple)):
+        # Process `[T1, T2]` and `(T1, T2)`
         _final_type = Union[tuple(types)]  # noqa: UP007
 
     elif origin and origin in (Union, UnionType):
