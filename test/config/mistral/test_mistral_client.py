@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -36,6 +35,7 @@ from test.config.mistral._helpers import (
     make_response,
     make_stream_chunk,
     make_tool_call,
+    make_turn,
     make_usage,
 )
 
@@ -219,13 +219,7 @@ class TestServerExecutedTools:
         assert response.tool_calls.calls == []
 
     async def test_client_side_call_without_a_result_is_still_dispatched(self) -> None:
-        turns = [
-            SimpleNamespace(
-                content="",
-                tool_call_id=None,
-                tool_calls=[make_tool_call("tc_1", "search_docs", '{"query": "x"}')],
-            )
-        ]
+        turns = [make_turn(tool_calls=[("tc_1", "search_docs", '{"query": "x"}')])]
         chat = FakeChat(make_agentic_response(turns=turns, finish_reason="tool_calls"))
 
         response = await _ask(_make_client(chat))

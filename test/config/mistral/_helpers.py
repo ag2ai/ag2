@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
+from mistralai.client.models import DeltaMessage, FunctionCall, ToolCall
+
 
 def make_usage(
     prompt_tokens: int | None = None,
@@ -35,18 +37,34 @@ def make_tool_call(
     )
 
 
+def make_turn(
+    content: str = "",
+    *,
+    tool_call_id: str | None = None,
+    tool_calls: list[tuple[str, str, str]] | None = None,
+) -> DeltaMessage:
+    """One turn of `ChatCompletionChoice.messages`, which the SDK parses as a `DeltaMessage`."""
+    return DeltaMessage(
+        content=content,
+        tool_call_id=tool_call_id,
+        tool_calls=[ToolCall(id=i, function=FunctionCall(name=n, arguments=a)) for i, n, a in tool_calls]
+        if tool_calls
+        else None,
+    )
+
+
 def make_server_tool_turns(
     call_id: str = "gen_1",
     name: str = "generate_image",
     arguments: str = '{"prompt": "a red circle"}',
     url: str = "https://example.com/generated.jpg",
     text: str = "Here is your image.",
-) -> list[SimpleNamespace]:
+) -> list[DeltaMessage]:
     """The `messages` trace a server-executed tool produces: call, result, answer."""
     return [
-        SimpleNamespace(content="", tool_call_id=None, tool_calls=[make_tool_call(call_id, name, arguments)]),
-        SimpleNamespace(content=f'{{"url": "{url}"}}', tool_call_id=call_id, tool_calls=None),
-        SimpleNamespace(content=text, tool_call_id=None, tool_calls=None),
+        make_turn(tool_calls=[(call_id, name, arguments)]),
+        make_turn(f'{{"url": "{url}"}}', tool_call_id=call_id),
+        make_turn(text),
     ]
 
 
@@ -80,7 +98,7 @@ def make_response(
     return SimpleNamespace(
         choices=[
             SimpleNamespace(
-                message=SimpleNamespace(content=content, tool_calls=tool_calls or [], tool_call_id=None),
+                message=SimpleNamespace(content=content, tool_calls=tool_calls or []),
                 messages=None,
                 finish_reason=finish_reason,
             )
