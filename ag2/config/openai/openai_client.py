@@ -113,7 +113,6 @@ class OpenAIClient(LLMClient):
         # Left as ``None`` rather than widened to an empty mapping: ``model`` is
         # required, so there is no such thing as an empty set of create options.
         self._create_options = create_options
-        self._streaming = bool(create_options and create_options.get("stream", False))
 
     async def __call__(
         self,
