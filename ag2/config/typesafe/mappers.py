@@ -102,21 +102,29 @@ def response_proto_to_question(
     """Pick the Jev primitive for a ``response_schema`` from its JSON schema.
 
     ``instructions`` (the agent prompt) frames the question; the type's own description,
-    such as an Enum docstring, is the question itself. The docstring under each Enum
+    an explicit ``description=`` or an Enum docstring, is the question itself. The docstring under each Enum
     member describes that option; ``criteria`` overrides them, keyed by choice label, by
     score level (as a string), or by ``"true"`` / ``"false"`` for a yes/no question.
     """
     node, _ = _decision_node(response)
-    instructions = "\n\n".join(s for s in (instructions, node.get("description")) if s) or None
+    question = _explicit_description(response) or node.get("description")
+    instructions = "\n\n".join(s for s in (instructions, question) if s) or None
     criteria = criteria or {}
     values = node.get("enum")
     docs = _option_docs(response)
 
-    if node.get("type") == "boolean" and (values is None or set(values) == {True, False}):
+    is_bool = node.get("type") == "boolean" and (values is None or set(values) == {True, False})
+    is_probability = node.get("type") == "number" and node.get("minimum") == 0 and node.get("maximum") == 1
+    if is_bool or is_probability:
         noul_criteria = {k: criteria[k] for k in ("true", "false") if k in criteria}
+        if not instructions and not noul_criteria:
+            # The API rejects a bare yes/no question; fail before the request with a way out.
+            raise ValueError(
+                "A yes/no question needs asking: set the agent prompt, pass "
+                "`ResponseSchema(bool, description=...)`, or describe the outcomes with "
+                "`TypeSafeConfig(criteria={'true': ..., 'false': ...})`."
+            )
         return Noul(instructions=instructions, criteria=noul_criteria or None)
-    if node.get("type") == "number" and node.get("minimum") == 0 and node.get("maximum") == 1:
-        return Noul(instructions=instructions)
     if values and all(isinstance(v, str) for v in values):
         return Choice(instructions=instructions, criteria={v: criteria.get(v) or docs.get(v) for v in values})
     if values and all(isinstance(v, int) and not isinstance(v, bool) for v in values):
@@ -146,6 +154,15 @@ def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, bo
         value = min(max(round(answer.score), 0), len(node["enum"]) - 1)
 
     return json.dumps({"data": value} if embedded else value)
+
+
+def _explicit_description(response: ResponseProto[Any] | None) -> str | None:
+    """A ``description=`` the user gave, ignoring ``ResponseSchema``'s fallback to the type's docstring."""
+    if response is None or (
+        isinstance(response, ResponseSchema) and response.description == getattr(response.types, "__doc__", None)
+    ):
+        return None
+    return response.description
 
 
 def _option_docs(response: ResponseProto[Any] | None) -> dict[Any, str]:

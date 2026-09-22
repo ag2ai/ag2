@@ -68,6 +68,19 @@ def test_bool_criteria_override() -> None:
     assert question == Noul(criteria={"true": "Billing issue", "false": "Anything else"})
 
 
+def test_bool_needs_a_question() -> None:
+    with pytest.raises(ValueError, match="yes/no question needs asking"):
+        response_proto_to_question(ResponseSchema(bool), instructions=None)
+
+
+def test_explicit_description_is_the_question() -> None:
+    schema = ResponseSchema(bool, description="Was 'good' mentioned?")
+
+    assert response_proto_to_question(schema, instructions="You read chat messages.") == Noul(
+        instructions="You read chat messages.\n\nWas 'good' mentioned?"
+    )
+
+
 def test_bool_threshold() -> None:
     schema = ResponseSchema(bool)
     answer = NoulAnswer(type="noul", noul=0.6)
@@ -81,9 +94,11 @@ def test_unembedded_bool_returns_bare_json() -> None:
 
 
 def test_probability_float_maps_to_raw_noul() -> None:
-    schema = ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="p")
+    schema = ResponseSchema.from_schema(
+        {"type": "number", "minimum": 0, "maximum": 1}, name="p", description="How likely is churn?"
+    )
 
-    assert response_proto_to_question(schema, instructions=None) == Noul()
+    assert response_proto_to_question(schema, instructions=None) == Noul(instructions="How likely is churn?")
     assert answer_to_content(schema, NoulAnswer(type="noul", noul=0.25)) == "0.25"
 
 
