@@ -47,9 +47,11 @@ class AnthropicFilesClient:
         response = await self._client.beta.files.download(file_id)
         metadata = await self._client.beta.files.retrieve_metadata(file_id)
         return FileContent(
-            name=metadata.filename if hasattr(metadata, "filename") else None,
-            data=response.content if hasattr(response, "content") else bytes(response),
-            media_type=metadata.mime_type if hasattr(metadata, "mime_type") else None,
+            name=metadata.filename,
+            # `download` answers a binary response, not a model: the bytes are behind
+            # `read()`. Nothing else on it carries them.
+            data=await response.read(),
+            media_type=metadata.mime_type,
         )
 
     async def list(self) -> list[UploadedFile]:
