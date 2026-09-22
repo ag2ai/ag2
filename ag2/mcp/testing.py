@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
 from types import TracebackType
+from typing import TYPE_CHECKING, Any
 
 import anyio
 import httpx
@@ -17,13 +18,16 @@ from mcp_types.version import LATEST_MODERN_VERSION
 
 from .server import MCPServer
 
+if TYPE_CHECKING:
+    from starlette.types import Message
+
 
 @asynccontextmanager
 async def connect(
     mcp_server: MCPServer,
     *,
     raise_exceptions: bool = True,
-    **session_kwargs: object,
+    **session_kwargs: Any,
 ) -> AsyncGenerator[ClientSession]:
     """Yield an in-process, initialized MCP ``ClientSession`` talking to ``mcp_server``.
 
@@ -34,7 +38,7 @@ async def connect(
     """
     async with (
         _served_streams(mcp_server.server, raise_exceptions) as streams,
-        ClientSession(*streams, **session_kwargs) as session,  # type: ignore[arg-type]
+        ClientSession(*streams, **session_kwargs) as session,
     ):
         await session.initialize()
         yield session
@@ -45,7 +49,7 @@ async def connect_modern(
     mcp_server: MCPServer,
     *,
     raise_exceptions: bool = True,
-    **client_kwargs: object,
+    **client_kwargs: Any,
 ) -> AsyncGenerator[ClientSession]:
     """Yield an in-process ``ClientSession`` talking to ``mcp_server`` at revision 2026-07-28.
 
@@ -57,7 +61,7 @@ async def connect_modern(
         _MemoryTransport(mcp_server.server, raise_exceptions=raise_exceptions),
         mode=LATEST_MODERN_VERSION,
         raise_exceptions=raise_exceptions,
-        **client_kwargs,  # type: ignore[arg-type]
+        **client_kwargs,
     ) as client:
         yield client.session
 
@@ -115,13 +119,14 @@ async def serve(server: MCPServer, *, base_url: str = "http://test") -> AsyncGen
     is running, the way ``uvicorn`` would (``httpx.ASGITransport`` does not).
     Use it to exercise the HTTP transport without sockets.
     """
-    receive_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
-    send_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+    # This plays the ASGI server, so `send` takes whatever message the app sends.
+    receive_queue: asyncio.Queue[Message] = asyncio.Queue()
+    send_queue: asyncio.Queue[Message] = asyncio.Queue()
 
-    async def receive() -> dict[str, object]:
+    async def receive() -> "Message":
         return await receive_queue.get()
 
-    async def send(message: dict[str, object]) -> None:
+    async def send(message: "Message") -> None:
         await send_queue.put(message)
 
     scope = {"type": "lifespan", "asgi": {"spec_version": "2.0", "version": "3.0"}}

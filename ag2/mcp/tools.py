@@ -114,9 +114,11 @@ async def call_with_context(fn: Callable[..., Any], context: "MCPExecutionContex
     annotations ask for.
     """
     call_model = build_model(fn, serialize_result=False)
+    # `asolve` annotates each keyword as a `dict[str, Any]`; the values really are arbitrary.
+    options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}
     async with AsyncExitStack() as stack:
         return await call_model.asolve(
-            **{CONTEXT_OPTION_NAME: context},
+            **options,
             stack=stack,
             cache_dependencies={},
         )

@@ -142,12 +142,13 @@ zai = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "codespell" },
     { name = "daytona" },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "exa-py" },
+    { name = "grpcio" },
     { name = "httpx2" },
     { name = "jinja2" },
     { name = "mcp" },
@@ -175,6 +176,9 @@ dev = [
     { name = "tenki" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'" },
     { name = "typer" },
+    { name = "types-grpcio" },
+    { name = "types-jsonschema" },
+    { name = "types-protobuf" },
     { name = "types-pyyaml" },
     { name = "watchdog" },
     { name = "websockets" },
@@ -242,9 +246,10 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "dirty-equals" },
     { name = "docker" },
+    { name = "grpcio" },
     { name = "httpx2" },
     { name = "mypy" },
     { name = "pillow" },
@@ -254,6 +259,9 @@ types = [
     { name = "pytest-timeout" },
     { name = "python-dotenv" },
     { name = "respx" },
+    { name = "types-grpcio" },
+    { name = "types-jsonschema" },
+    { name = "types-protobuf" },
     { name = "types-pyyaml" },
     { name = "watchdog" },
 ]
@@ -301,6 +309,7 @@ provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini
 [package.metadata.requires-dev]
 dev = [
     { name = "ag2", extras = ["a2a"] },
+    { name = "ag2", extras = ["acp", "a2ui"] },
     { name = "ag2", extras = ["ag-ui"] },
     { name = "ag2", extras = ["anthropic"] },
     { name = "ag2", extras = ["dashscope"] },
@@ -310,6 +319,7 @@ dev = [
     { name = "ag2", extras = ["mcp-ui"] },
     { name = "ag2", extras = ["metrics"] },
     { name = "ag2", extras = ["mistral"] },
+    { name = "ag2", extras = ["mistral", "ollama"] },
     { name = "ag2", extras = ["ollama"] },
     { name = "ag2", extras = ["openai"] },
     { name = "ag2", extras = ["openai", "anthropic", "a2a", "ag-ui"] },
@@ -318,13 +328,13 @@ dev = [
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
-    { name = "ag2", extras = ["mistral", "ollama"] },
     { name = "ag2", extras = ["xai", "dashscope"] },
     { name = "codespell", specifier = "==2.4.3" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
+    { name = "grpcio", specifier = ">=1.60" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
@@ -352,6 +362,9 @@ dev = [
     { name = "tenki", specifier = ">=0.5.4,<2" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
     { name = "typer", specifier = ">=0.22,<0.28" },
+    { name = "types-grpcio" },
+    { name = "types-jsonschema" },
+    { name = "types-protobuf", specifier = ">=6.32,<7" },
     { name = "types-pyyaml" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
@@ -451,16 +464,18 @@ test-core = [
     { name = "pytest-timeout", specifier = ">=2.4.0,<3" },
 ]
 types = [
+    { name = "ag2", extras = ["acp", "a2ui"] },
     { name = "ag2", extras = ["gemini", "zai"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
+    { name = "ag2", extras = ["mistral", "ollama"] },
     { name = "ag2", extras = ["openai", "anthropic", "a2a", "ag-ui"] },
     { name = "ag2", extras = ["redis", "tracing", "metrics"] },
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
-    { name = "ag2", extras = ["mistral", "ollama"] },
     { name = "ag2", extras = ["xai", "dashscope"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
+    { name = "grpcio", specifier = ">=1.60" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
     { name = "mypy", specifier = "==2.3.1" },
     { name = "pillow" },
@@ -470,6 +485,9 @@ types = [
     { name = "pytest-timeout", specifier = ">=2.4.0,<3" },
     { name = "python-dotenv" },
     { name = "respx", specifier = ">=0.23.0,<0.24.0" },
+    { name = "types-grpcio" },
+    { name = "types-jsonschema" },
+    { name = "types-protobuf", specifier = ">=6.32,<7" },
     { name = "types-pyyaml" },
     { name = "watchdog", specifier = ">=4.0,<7" },
 ]
@@ -5625,6 +5643,36 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/16/f7/57713ba479fd405eb76de31404b2c744c289e336b2d999511ebf51e496f7/typer-0.27.2.tar.gz", hash = "sha256:269b7eb9d3c202ca84b4bc9618cb04ebb43d3d4d1e567e4c768607232c05f945", size = 204045, upload-time = "2026-08-28T10:26:55.046Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/bf/205d0004930ede8f542fb58f601526fccf4ae7626075ca1e6c4de5d3d652/typer-0.27.2-py3-none-any.whl", hash = "sha256:b3a5fc4342d5fc8fda8fc3010b1cf117e9249aab7fae800c2eff62fd3842d97d", size = 123130, upload-time = "2026-08-28T10:26:53.752Z" },
+]
+
+[[package]]
+name = "types-grpcio"
+version = "1.83.0.20260730"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/b7/65a3ebc728ddcdfa3ac6b8872956c14193e5b95e9b43ae5d988d29f41202/types_grpcio-1.83.0.20260730.tar.gz", hash = "sha256:e2b0532526a563dbb39aa6ee39fe0961488116ac1afec3065607532c93299b64", size = 15455, upload-time = "2026-07-30T04:44:31.863Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/1f/6bd33dd7cfb782669c25e669abe0058d9dc4e1c25f34b8e6b97845c531ca/types_grpcio-1.83.0.20260730-py3-none-any.whl", hash = "sha256:400e0517d088e90ecfe302a96f09728cb9c72508d835fa0793fce552cd4e1477", size = 15917, upload-time = "2026-07-30T04:44:31.027Z" },
+]
+
+[[package]]
+name = "types-jsonschema"
+version = "4.26.0.20260518"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "referencing" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dd/46/73b6a5d61a61015c4248030a8cb07e5bdddb4041430fae9e585a68692578/types_jsonschema-4.26.0.20260518.tar.gz", hash = "sha256:e1dd53dc97a64f5eccdd6fa9839666e09bb500a8ebba2db6fdaf1789faea81a6", size = 16638, upload-time = "2026-05-18T06:06:44.106Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/d5/134f8a147dcecda10db7f60cfc6af0578a25a5c53c87b3907a64385e0184/types_jsonschema-4.26.0.20260518-py3-none-any.whl", hash = "sha256:30b30a518c7fe335df85c919fcbcc631b69c03d4a4b5b632fa916bea03065307", size = 16072, upload-time = "2026-05-18T06:06:43.264Z" },
+]
+
+[[package]]
+name = "types-protobuf"
+version = "6.32.1.20260221"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/e2/9aa4a3b2469508bd7b4e2ae11cbedaf419222a09a1b94daffcd5efca4023/types_protobuf-6.32.1.20260221.tar.gz", hash = "sha256:6d5fb060a616bfb076cbb61b4b3c3969f5fc8bec5810f9a2f7e648ee5cbcbf6e", size = 64408, upload-time = "2026-02-21T03:55:13.916Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/e8/1fd38926f9cf031188fbc5a96694203ea6f24b0e34bd64a225ec6f6291ba/types_protobuf-6.32.1.20260221-py3-none-any.whl", hash = "sha256:da7cdd947975964a93c30bfbcc2c6841ee646b318d3816b033adc2c4eb6448e4", size = 77956, upload-time = "2026-02-21T03:55:12.894Z" },
 ]
 
 [[package]]

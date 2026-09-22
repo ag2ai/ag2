@@ -4,9 +4,9 @@
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import jsonschema
 from referencing.exceptions import Unresolvable
@@ -222,7 +222,8 @@ class A2UIResponseParser:
         for i, op in enumerate(operations):
             try:
                 if validator is not None:
-                    validator.validate(op)
+                    # A TypedDict is never a `Mapping[str, <JSON>]` to mypy, though every envelope is one.
+                    validator.validate(cast("Mapping[str, Any]", op))
                 else:
                     jsonschema.validate(instance=op, schema=self._schema)
             except jsonschema.ValidationError as e:

@@ -89,12 +89,15 @@ from .transports._http import make_a2a_client, make_httpx_client, select_interfa
 # ``ag2[a2a]`` install — the SDK ships PyJWT behind its own ``signing`` extra.
 # Without that extra no verifier can be constructed either, so the stand-in below
 # is never matched in practice; it only keeps the branch in ``_verify_card`` typed.
-try:
+if TYPE_CHECKING:
     from a2a.utils.signing import SignatureVerificationError
-except ImportError:  # pragma: no cover — needs an env without a2a-sdk[signing]
+else:
+    try:
+        from a2a.utils.signing import SignatureVerificationError
+    except ImportError:  # pragma: no cover — needs an env without a2a-sdk[signing]
 
-    class SignatureVerificationError(Exception):  # type: ignore[no-redef]
-        """Stand-in for the SDK error when ``a2a-sdk[signing]`` is not installed."""
+        class SignatureVerificationError(Exception):
+            """Stand-in for the SDK error when ``a2a-sdk[signing]`` is not installed."""
 
 
 if TYPE_CHECKING:
@@ -169,7 +172,7 @@ class A2AClient(LLMClient):
     stateless on AG2 history (see ``mappers/history.py``).
     """
 
-    def __init__(  # type: ignore[no-any-unimported]
+    def __init__(
         self,
         *,
         card_url: str,

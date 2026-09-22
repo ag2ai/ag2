@@ -41,7 +41,7 @@ def _strip_scheme(url: str, prefixes: Sequence[str]) -> str:
     return url
 
 
-def default_grpc_channel_factory(url: str) -> grpc.aio.Channel:  # type: ignore[no-any-unimported]
+def default_grpc_channel_factory(url: str) -> grpc.aio.Channel:
     """Build a gRPC channel whose security is selected by the URL scheme.
 
     ``grpcs://`` and ``grpc+tls://`` use TLS with system CA roots. Existing
@@ -54,7 +54,7 @@ def default_grpc_channel_factory(url: str) -> grpc.aio.Channel:  # type: ignore[
     return grpc.aio.insecure_channel(_strip_scheme(url, _INSECURE_PREFIXES))
 
 
-def secure_grpc_channel_factory(  # type: ignore[no-any-unimported]
+def secure_grpc_channel_factory(
     credentials: grpc.ChannelCredentials | None = None,
     options: Sequence[tuple[str, Any]] = (),
 ) -> Callable[[str], grpc.aio.Channel]:
@@ -65,7 +65,7 @@ def secure_grpc_channel_factory(  # type: ignore[no-any-unimported]
     """
     resolved_credentials = credentials if credentials is not None else grpc.ssl_channel_credentials()
 
-    def factory(url: str) -> grpc.aio.Channel:  # type: ignore[no-any-unimported]
+    def factory(url: str) -> grpc.aio.Channel:
         target = _strip_scheme(url, (*_TLS_PREFIXES, *_INSECURE_PREFIXES))
         return grpc.aio.secure_channel(
             target,
@@ -76,7 +76,7 @@ def secure_grpc_channel_factory(  # type: ignore[no-any-unimported]
     return factory
 
 
-def build_grpc_server(  # type: ignore[no-any-unimported]
+def build_grpc_server(
     *,
     agent_executor: AgentExecutor,
     agent_card: AgentCard,
@@ -114,6 +114,7 @@ def build_grpc_server(  # type: ignore[no-any-unimported]
         push_sender=push_sender,
     )
     server = grpc.aio.server(options=list(options) if options else None)
+    # grpc's codegen annotates nothing, and a2a-sdk ships `.pyi` for `a2a_pb2` but not for `a2a_pb2_grpc`.
     a2a_pb2_grpc.add_A2AServiceServicer_to_server(GrpcHandler(handler), server)  # type: ignore[no-untyped-call]
     if server_credentials is not None:
         server.add_secure_port(bind, server_credentials)

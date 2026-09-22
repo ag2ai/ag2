@@ -42,8 +42,10 @@ from .tool_gateway import GATEWAY_SERVER_NAME, ToolGateway, partition_tools
 from .transport import ACPTransportError
 
 if TYPE_CHECKING:
+    from ag2.hitl import ElicitationPolicy
+
     from .bridge import BridgeState
-    from .config import ACPConfig, ElicitationPolicy
+    from .config import ACPConfig
 
 logger = logging.getLogger(__name__)
 

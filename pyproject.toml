@@ -254,6 +254,14 @@ types = [
     "ag2[xai, dashscope]", # ag2.config.xai, ag2.config.dashscope
     # Pure-Python and shipping `py.typed` (mistralai under `mistralai.client`).
     "ag2[mistral, ollama]", # ag2.config.mistral, ag2.config.ollama
+    # The protocol bridges. `agent-client-protocol` ships `py.typed`; grpc,
+    # protobuf and jsonschema ship none, and typeshed publishes all three.
+    # protobuf's stubs are held to the major a2a-sdk pins (`protobuf<7`).
+    "ag2[acp, a2ui]",          # ag2.acp, ag2.a2ui
+    "grpcio>=1.60",            # ag2.a2a's gRPC transport; a2a-sdk's own floor, without its codegen tools
+    "types-grpcio",            # ag2.a2a
+    "types-protobuf>=6.32,<7", # ag2.a2a
+    "types-jsonschema",        # ag2.mcp, ag2.a2ui
     # `disallow_any_unimported` turns an unresolved import into an error rather
     # than a silent `Any`, so a checked module's backends have to be installed.
     "ag2[tavily, ddgs, perplexity]", # ag2.tools.search
@@ -466,6 +474,17 @@ files = [
     # request.
     "ag2/config/mistral/",
     "ag2/config/ollama/",
+
+    # The protocol bridges: ACP, MCP, AG-UI, A2A and A2UI serve an agent over a
+    # published specification, so an error here is usually one we are not
+    # honouring. Every extra they reach, the gRPC transport and the stubs for
+    # grpc, protobuf and jsonschema are in the `types` group, so these are
+    # really checked on every pull request.
+    "ag2/a2a/",
+    "ag2/a2ui/",
+    "ag2/acp/",
+    "ag2/ag_ui/",
+    "ag2/mcp/",
 
     # The Bedrock provider. boto3 is data-driven and ships no types, so the
     # boto3 client is `Any` by our own declaration on every job; installing the

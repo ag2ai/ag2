@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from math import isfinite
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from ag_ui.core import (
@@ -62,11 +62,8 @@ from ag2.usage import UsageRecord, UsageReport
 
 from .events import AGUIEvent
 
-try:
+if TYPE_CHECKING:
     from starlette.endpoints import HTTPEndpoint
-except ImportError:
-    # Fallback to Any until Starlette is installed
-    HTTPEndpoint = Any  # type: ignore[misc,assignment]
 
 
 class AGUIStream:
@@ -114,8 +111,8 @@ class AGUIStream:
                 write_events_stream,
             )
 
-            # EventEncoder typed incompletely, so we need to ignore the type error
-            encoder = EventEncoder(accept=accept)  # type: ignore[arg-type]
+            # The SDK defaults `accept` to None under a `str` annotation, so omit it rather than pass None.
+            encoder = EventEncoder() if accept is None else EventEncoder(accept=accept)
 
             async with read_events_stream:
                 async for event in read_events_stream:
@@ -495,6 +492,7 @@ def map_agui_content_to_input(content: InputContent) -> events.Input:
             raise ValueError(f"Unexpected content type: {type(content).__name__}")
 
     source = content.source
+    inp: events.BinaryInput | events.UrlInput
     if isinstance(source, InputContentDataSource):
         inp = events.BinaryInput(
             b64decode(source.value),
@@ -523,7 +521,8 @@ def map_agui_messages_to_events(
     it as the loop's initial event — putting the current turn there gives the
     LLM a meaningful ``messages[-1]`` instead of an empty placeholder.
     """
-    prompt, messages = [], []
+    prompt: list[str] = []
+    messages: list[events.BaseEvent] = []
 
     input_buffer: list[events.Input] = []
     for m in command.incoming.messages:

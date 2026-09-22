@@ -20,13 +20,13 @@ if TYPE_CHECKING:
 
 # Short transport names ↔ SDK protocol-binding strings (used in
 # ``ClientConfig.supported_protocol_bindings`` and ``AgentInterface.protocol_binding``).
-_TRANSPORT_BINDINGS: dict[str, str] = {
+_TRANSPORT_BINDINGS: dict[TransportName, str] = {
     "jsonrpc": TransportProtocol.JSONRPC.value,
     "rest": TransportProtocol.HTTP_JSON.value,
     "grpc": TransportProtocol.GRPC.value,
 }
 
-_BINDING_TO_TRANSPORT: dict[str, TransportName] = {v: k for k, v in _TRANSPORT_BINDINGS.items()}  # type: ignore[misc]
+_BINDING_TO_TRANSPORT: dict[str, TransportName] = {v: k for k, v in _TRANSPORT_BINDINGS.items()}
 
 
 def binding_to_transport(binding: str) -> TransportName | None:
@@ -122,7 +122,7 @@ def make_httpx_client(
     return httpx.AsyncClient(headers=dict(headers) if headers else None, timeout=timeout)
 
 
-def make_a2a_client(  # type: ignore[no-any-unimported]
+def make_a2a_client(
     *,
     card: AgentCard,
     httpx_client: httpx.AsyncClient,

@@ -2,16 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Mapping
 from types import EllipsisType
-from typing import Any
+from typing import Any, Protocol
 
 from ag2.annotations import Variable
-from ag2.context import ConversationContext
+
+
+class HasVariables(Protocol):
+    """Anything a ``Variable`` resolves against: a conversation, or one MCP request."""
+
+    @property
+    def variables(self) -> Mapping[str, Any]: ...
 
 
 def resolve_variable(
     value: Any,
-    context: ConversationContext,
+    context: HasVariables,
     *,
     param_name: str = "",
 ) -> Any:
