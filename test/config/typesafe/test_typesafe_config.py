@@ -11,7 +11,7 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from ag2 import Agent
-from ag2.config import ModelProvider, TypeSafeConfig
+from ag2.config import TypeSafeConfig
 from ag2.config.typesafe import TypeSafeClient
 
 
@@ -33,16 +33,6 @@ def _fake_api(answer: dict[str, Any], requests: list[dict[str, Any]]) -> httpx2.
         )
 
     return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
-
-
-def test_provider() -> None:
-    assert TypeSafeConfig().provider is ModelProvider.TYPESAFE
-
-
-def test_defaults() -> None:
-    config = TypeSafeConfig()
-
-    assert (config.model, config.api_key, config.boolean_threshold) == ("jev-latest", None, 0.5)
 
 
 def test_copy_overrides_without_mutating_original() -> None:

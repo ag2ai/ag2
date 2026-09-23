@@ -538,7 +538,7 @@ There is no free-text path, so an agent on `TypeSafeConfig` **must** set `respon
 | `response_schema` | Jev asks | `#!python await reply.content()` returns |
 | :--- | :--- | :--- |
 | `bool` | a yes/no question | `True` once the yes-probability reaches `boolean_threshold` (default `0.5`) |
-| a number schema bounded to `0..1`, e.g. `#!python ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | a yes/no question | the raw yes-probability as a `float` |
+| a number schema bounded to `0..1`, e.g. `#!python ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | a yes/no question | the yes-probability as JSON text, unparsed (`from_schema` schemas are not validated); `reply.response.metadata["noul"]` has it as a `float` |
 | an `Enum` of strings | a choice between its members | the selected member |
 | an `IntEnum` numbered `0..n-1` with 2–10 levels | a score on that rubric | the member nearest Jev's expected score |
 
@@ -587,7 +587,7 @@ config = TypeSafeConfig(
 
 #### Confidence and probabilities
 
-The SDK answer, minus its `type`, is kept on `reply.response.metadata`: `confidence` and `probabilities` for every primitive, plus the raw `choice`, `noul` (the yes-probability) or `score` (the expected value on the rubric, before snapping) with its `legend`.
+The SDK answer, minus its `type`, is kept on `reply.response.metadata`. A yes/no answer is just `noul`, the yes-probability. A choice carries `choice`, `confidence` and `probabilities` per label. A score carries `score` (the expected value on the rubric, before snapping), `confidence`, the rubric `legend` and `probabilities` per level.
 
 #### What Jev does not do
 
@@ -598,7 +598,13 @@ The SDK answer, minus its `type`, is kept on `reply.response.metadata`: `confide
 
 `retry` takes a `typesafe_sdk.RetryPolicy` and `http_client` an `#!python httpx2.AsyncClient`; both are forwarded to the SDK untouched. Token counts land on `ModelResponse.usage` as `prompt_tokens` / `completion_tokens` when the API reports them.
 
-See `examples/typesafe/` for a ticket router, a yes/no gate in front of a generative agent, and a severity rubric.
+Runnable scripts under `examples/typesafe/`:
+
+- `answer_kinds.py` — all three answer kinds on one message, printing what each puts on `reply.response.metadata`
+- `docstrings_matter.py` — the same `Enum` with and without member docstrings, side by side
+- `ticket_router.py` — an `Enum` choice with confidence
+- `yes_no_guard.py` — a `bool` gate with `criteria` and `boolean_threshold` in front of a generative agent
+- `severity_score.py` — an `IntEnum` rubric
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
