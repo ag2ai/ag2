@@ -50,7 +50,7 @@ class ABCStream(Stream):
         async def write_events(event: BaseEvent) -> None:
             await queue.put(event)
 
-        if max_events:
+        if max_events is not None:
 
             async def listen_events() -> AsyncIterator[BaseEvent]:
                 for _ in range(max_events):
@@ -322,3 +322,4 @@ class SubStream(ABCStream):
 
     def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         return self._parent.spawn_background(coro)
+
