@@ -22,8 +22,6 @@ from ag2.config.typesafe.mappers import (
 from ag2.events import DataInput, ModelMessage, ModelRequest, ModelResponse, TextInput, Usage
 from ag2.response import PromptedSchema, ResponseSchema
 
-pytestmark = pytest.mark.typesafe
-
 
 class Department(Enum):
     """Which team should handle this ticket?"""

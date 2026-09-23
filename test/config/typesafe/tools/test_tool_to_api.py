@@ -9,7 +9,7 @@ from ag2.config.typesafe.mappers import tool_to_api
 from ag2.exceptions import UnsupportedToolError
 from ag2.tools import tool
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.typesafe]
+pytestmark = pytest.mark.asyncio
 
 
 @tool

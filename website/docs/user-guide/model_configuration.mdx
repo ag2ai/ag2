@@ -24,6 +24,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[xAI](https://docs.x.ai/docs/overview)** | `XAIConfig` | `pip install "ag2[xai]"` |
 | **[Z.AI](https://docs.z.ai)** | `ZAIConfig` | `pip install "ag2[zai]"` |
 | **[Mistral](https://docs.mistral.ai)** | `MistralConfig` | `pip install "ag2[mistral]"` |
+| **[TypeSafe (Jev)](https://docs.typesafe.ai)** | `TypeSafeConfig` | `pip install "ag2[typesafe]"` |
 
 *(Note: `OpenAIConfig` is also available for OpenAI-compatible endpoints).*
 
@@ -169,6 +170,20 @@ config = MistralConfig(
 ```
   </Tab>
 
+  <Tab title="TypeSafe">
+```python linenums="1"
+from ag2.config import TypeSafeConfig
+
+# Configure TypeSafe's Jev decision model (non-streaming)
+config = TypeSafeConfig(
+    model="jev-latest",
+    api_key="...",
+)
+```
+
+Jev answers a typed question instead of generating text, so the agent must set a decision `response_schema`. See [TypeSafe (Jev) Configuration](#typesafe-jev-configuration).
+  </Tab>
+
 </Tabs>
 
 !!! tip
@@ -179,7 +194,7 @@ config = MistralConfig(
 
 For security and convenience, you don't need to hardcode your API keys. If `api_key` is not explicitly provided, the configuration will automatically attempt to load it from your environment variables.
 
-The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `ZAI_API_KEY`).
+The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `ZAI_API_KEY`, `TYPESAFE_API_KEY`).
 
 ```python linenums="1"
 from ag2.config import OpenAIConfig
@@ -478,6 +493,112 @@ The image URL is a short-lived signed link, so download it promptly if you need 
     ```bash
     pip install "mistralai>=2.8.0" "opentelemetry-api>=1.43" "opentelemetry-sdk>=1.43" "opentelemetry-semantic-conventions>=0.64b0"
     ```
+
+### TypeSafe (Jev) Configuration
+
+`TypeSafeConfig` connects to [TypeSafe AI's](https://docs.typesafe.ai){.external-link target="_blank"} Jev decision model through the official `typesafe-sdk`. Install the optional dependency with `pip install "ag2[typesafe]"`.
+
+Jev is not a text generator. It answers **one typed question** about the conversation so far — yes or no, one label out of several, or a level on a rubric — and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
+
+If `api_key`, `base_url` and `model` are not passed explicitly, the SDK resolves them from the `TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL` and `TYPESAFE_DEFAULT_MODEL` environment variables; `model` otherwise defaults to `jev-latest`.
+
+```python linenums="1" hl_lines="7-13 18-19"
+from enum import Enum
+
+from ag2 import Agent
+from ag2.config import TypeSafeConfig
+
+
+class Department(Enum):
+    """Which team should handle this ticket?"""
+
+    BILLING = "billing"
+    """Payments, invoicing, refunds."""
+    TECHNICAL = "technical"
+    """Bugs, outages, integrations."""
+
+
+router = Agent(
+    "router",
+    prompt="You triage customer support tickets.",
+    config=TypeSafeConfig(),  # auth resolved from TYPESAFE_API_KEY
+    response_schema=Department,
+)
+
+reply = await router.ask("My webhook integration has been down for 3 days.")
+department = await reply.content()        # Department.TECHNICAL
+reply.response.metadata["confidence"]     # e.g. 0.93
+reply.response.metadata["probabilities"]  # {"billing": 0.07, "technical": 0.93}
+```
+
+#### The response schema is the question
+
+There is no free-text path, so an agent on `TypeSafeConfig` **must** set `response_schema`, and the schema picks which of Jev's three primitives is asked:
+
+| `response_schema` | Jev asks | `#!python await reply.content()` returns |
+| :--- | :--- | :--- |
+| `bool` | a yes/no question | `True` once the yes-probability reaches `boolean_threshold` (default `0.5`) |
+| a number schema bounded to `0..1`, e.g. `#!python ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | a yes/no question | the raw yes-probability as a `float` |
+| an `Enum` of strings | a choice between its members | the selected member |
+| an `IntEnum` numbered `0..n-1` with 2–10 levels | a score on that rubric | the member nearest Jev's expected score |
+
+Anything else — `str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema` — raises `UnsupportedResponseSchemaError` before any request is sent.
+
+The agent `prompt` frames the question; the schema's own description asks it. For an `Enum` that is the class docstring, and for everything else an explicit `ResponseSchema(..., description=...)`. The two are joined, so the router above asks *"You triage customer support tickets. Which team should handle this ticket?"*.
+
+!!! warning "A yes/no question has to be asked"
+
+    `response_schema=bool` with no prompt, no description and no `criteria` raises `ValueError` locally. The API rejects a bare yes/no question, and failing before the request keeps the error actionable.
+
+#### Describing the options
+
+The string literal under each `Enum` / `IntEnum` member describes that option to Jev. Python discards those strings at runtime, so AG2 reads them back from the class source.
+
+```python linenums="1"
+from enum import IntEnum
+
+
+class Severity(IntEnum):
+    LOW = 0
+    """Cosmetic; nothing is blocked."""
+    MEDIUM = 1
+    """Degraded but usable."""
+    HIGH = 2
+    """An outage or data loss."""
+```
+
+A score rubric **requires** a description for every level; a choice works without them. `criteria` on the config overrides or supplies descriptions without touching the type — keyed by choice label, by score level as a string, or by `"true"` / `"false"` for a yes/no question:
+
+```python linenums="1" hl_lines="4-8"
+from ag2.config import TypeSafeConfig
+
+config = TypeSafeConfig(
+    boolean_threshold=0.8,
+    criteria={
+        "true": "The customer is asking for money back.",
+        "false": "Anything else, including questions about pricing.",
+    },
+)
+```
+
+!!! note "Member docstrings need the source file"
+
+    Docstrings are read with `inspect.getsource`, so an `Enum` defined in a REPL, a notebook cell or a frozen app has none. Pass `criteria` there.
+
+#### Confidence and probabilities
+
+The SDK answer, minus its `type`, is kept on `reply.response.metadata`: `confidence` and `probabilities` for every primitive, plus the raw `choice`, `noul` (the yes-probability) or `score` (the expected value on the rubric, before snapping) with its `legend`.
+
+#### What Jev does not do
+
+- **Tools.** Passing any tool raises `UnsupportedToolError`; keep tools on the generative agent Jev routes to.
+- **Streaming.** Requests are non-streaming; there is no `streaming` field, and the answer arrives as one `ModelMessage`.
+- **Files and media.** `create_files_client()` raises `NotImplementedError`, and only text and structured `DataInput` parts are sent — anything else raises `UnsupportedInputError`.
+- **Free text.** `reply.body` is the answer as JSON, not prose.
+
+`retry` takes a `typesafe_sdk.RetryPolicy` and `http_client` an `#!python httpx2.AsyncClient`; both are forwarded to the SDK untouched. Token counts land on `ModelResponse.usage` as `prompt_tokens` / `completion_tokens` when the API reports them.
+
+See `examples/typesafe/` for a ticket router, a yes/no gate in front of a generative agent, and a severity rubric.
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 

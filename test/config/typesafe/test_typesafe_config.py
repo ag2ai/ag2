@@ -14,8 +14,6 @@ from ag2 import Agent
 from ag2.config import ModelProvider, TypeSafeConfig
 from ag2.config.typesafe import TypeSafeClient
 
-pytestmark = pytest.mark.typesafe
-
 
 class Department(Enum):
     BILLING = "billing"
