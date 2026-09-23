@@ -374,6 +374,22 @@ class TestCompactionWiredOnAgent:
     on the stream and shrinks history once the trigger threshold is crossed."""
 
     @pytest.mark.asyncio
+    async def test_a_strategy_without_a_trigger_never_fires(self) -> None:
+        stream = MemoryStream()
+        started: list[CompactionStarted] = []
+        stream.where(CompactionStarted).subscribe(lambda e: started.append(e))
+        agent = Agent(
+            "compactor",
+            config=TestConfig("a", "b"),
+            knowledge=KnowledgeConfig(store=MemoryKnowledgeStore(), compact=TailWindowCompact(target=1)),
+        )
+
+        reply = await agent.ask("first", stream=stream)
+        await reply.ask("second")
+
+        assert started == []
+
+    @pytest.mark.asyncio
     async def test_fires_when_threshold_crossed(self) -> None:
         store = MemoryKnowledgeStore()
         stream = MemoryStream()

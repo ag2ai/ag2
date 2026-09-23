@@ -287,6 +287,21 @@ class TestAggregationWiredOnAgent:
     """End-to-end behaviour of the aggregation middleware on an Agent."""
 
     @pytest.mark.asyncio
+    async def test_a_trigger_without_a_strategy_is_not_wired(self) -> None:
+        stream = MemoryStream()
+        started: list[AggregationStarted] = []
+        stream.where(AggregationStarted).subscribe(lambda e: started.append(e))
+        agent = Agent(
+            "roller",
+            config=TestConfig("done"),
+            knowledge=KnowledgeConfig(store=MemoryKnowledgeStore(), aggregate_trigger=AggregateTrigger(on_end=True)),
+        )
+
+        await agent.ask("go", stream=stream)
+
+        assert started == []
+
+    @pytest.mark.asyncio
     async def test_on_end_fires_once_per_ask(self) -> None:
         store = MemoryKnowledgeStore()
         strategy = _RecordingAggregate()

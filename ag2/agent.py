@@ -790,12 +790,29 @@ class Agent(PluginTarget, Generic[TResult]):
                 self._additional_tools.append(_make_knowledge_tool(knowledge.store))
 
             if knowledge.compact:
-                self.add_middleware(_CompactionMiddlewareFactory(self.name, knowledge))
+                self.add_middleware(
+                    _CompactionMiddlewareFactory(
+                        self.name,
+                        strategy=knowledge.compact,
+                        store=knowledge.store,
+                        # No trigger means every threshold disabled, as the user guide says.
+                        trigger=knowledge.compact_trigger or CompactTrigger(),
+                    )
+                )
 
-            if (trigger := knowledge.aggregate_trigger) and (
-                trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end
+            if (
+                (strategy := knowledge.aggregate)
+                and (trigger := knowledge.aggregate_trigger)
+                and (trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end)
             ):
-                self.add_middleware(_AggregationMiddlewareFactory(self.name, knowledge))
+                self.add_middleware(
+                    _AggregationMiddlewareFactory(
+                        self.name,
+                        strategy=strategy,
+                        store=knowledge.store,
+                        trigger=trigger,
+                    )
+                )
         else:
             self._knowledge_context = _FakeKnowledgeContext()
 
@@ -2082,18 +2099,27 @@ def _with_usage_events(
 class _CompactionMiddlewareFactory:
     """Factory for _CompactionMiddleware."""
 
-    def __init__(self, actor_name: str, config: KnowledgeConfig) -> None:
+    def __init__(
+        self,
+        actor_name: str,
+        *,
+        strategy: CompactStrategy,
+        store: KnowledgeStore,
+        trigger: CompactTrigger,
+    ) -> None:
         self._actor_name = actor_name
-        self.config = config
+        self._strategy = strategy
+        self._store = store
+        self._trigger = trigger
 
     def __call__(self, event: BaseEvent, context: Context) -> _CompactionMiddleware:
         return _CompactionMiddleware(
             event,
             context,
             actor_name=self._actor_name,
-            strategy=self.config.compact,
-            store=self.config.store,
-            trigger=self.config.compact_trigger,
+            strategy=self._strategy,
+            store=self._store,
+            trigger=self._trigger,
         )
 
 
@@ -2202,11 +2228,18 @@ class _AggregationMiddleware(BaseMiddleware):
 class _AggregationMiddlewareFactory:
     """Factory for _AggregationMiddleware."""
 
-    def __init__(self, actor_name: str, config: "KnowledgeConfig") -> None:
+    def __init__(
+        self,
+        actor_name: str,
+        *,
+        strategy: AggregateStrategy,
+        store: KnowledgeStore,
+        trigger: AggregateTrigger,
+    ) -> None:
         self._actor_name = actor_name
-        self._strategy = config.aggregate
-        self._store = config.store
-        self._trigger = config.aggregate_trigger
+        self._strategy = strategy
+        self._store = store
+        self._trigger = trigger
 
     def __call__(self, event: BaseEvent, context: Context) -> _AggregationMiddleware:
         return _AggregationMiddleware(
