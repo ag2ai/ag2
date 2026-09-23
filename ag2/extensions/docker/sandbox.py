@@ -14,7 +14,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import docker
+from docker import DockerClient
 from docker.errors import APIError, NotFound
+from docker.models.containers import Container
 
 from ag2.annotations import Variable
 from ag2.tools.sandbox import ExecResult, SandboxBase
@@ -71,8 +73,8 @@ class DockerSandbox(SandboxBase):
         self._host_path = Path(host_path).resolve() if host_path is not None else None
         self._workdir = PurePosixPath(workdir)
 
-        self._client: Any = None
-        self._container: Any = None
+        self._client: DockerClient | None = None
+        self._container: Container | None = None
         # A threading.Lock (not asyncio.Lock) guards container creation so a
         # cached sandbox stays usable across the throw-away event loops that
         # the sync shell path spins up via asyncio.run. asyncio.Lock binds to
@@ -100,7 +102,7 @@ class DockerSandbox(SandboxBase):
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
-    def __deepcopy__(self, memo: dict) -> "DockerSandbox":  # type: ignore[type-arg]
+    def __deepcopy__(self, memo: dict[int, Any]) -> "DockerSandbox":
         # A live container handle holding a threading.Lock — not deepcopy-able
         # and not meaningfully duplicable. Sharing on copy is the only sane
         # semantics (lets a bare DockerSandbox be attached to a tool).
@@ -150,7 +152,7 @@ class DockerSandbox(SandboxBase):
             raise ValueError(f"Absolute paths are not allowed in put_file/get_file: {path}")
         return self._workdir / path
 
-    async def _ensure_container(self) -> Any:
+    async def _ensure_container(self) -> Container:
         if self._closed:
             raise RuntimeError("DockerSandbox has been closed.")
         if self._container is not None:
@@ -160,7 +162,7 @@ class DockerSandbox(SandboxBase):
         # creators regardless of which event loop (or thread) drives them.
         return await asyncio.to_thread(self._create_container_sync)
 
-    def _create_container_sync(self) -> Any:
+    def _create_container_sync(self) -> Container:
         with self._create_lock:
             if self._closed:
                 raise RuntimeError("DockerSandbox has been closed.")
@@ -169,7 +171,6 @@ class DockerSandbox(SandboxBase):
 
             kwargs: dict[str, Any] = {
                 "command": ["sh", "-c", f"mkdir -p {self._workdir} && sleep infinity"],
-                "detach": True,
                 "network_mode": self._network_mode,
                 "mem_limit": self._mem_limit,
                 "cpu_quota": self._cpu_quota,
@@ -182,7 +183,8 @@ class DockerSandbox(SandboxBase):
                 kwargs["volumes"] = {str(self._host_path): {"bind": str(self._workdir), "mode": "rw"}}
 
             client = docker.from_env()
-            container = client.containers.run(self._image, **kwargs)
+            # `detach` stays a keyword here: it is what picks the overload that returns a `Container`.
+            container = client.containers.run(self._image, detach=True, **kwargs)
             self._client = client
             self._container = container
             if not self._atexit_registered:

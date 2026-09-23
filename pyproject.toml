@@ -267,6 +267,16 @@ types = [
     # `disallow_any_unimported` turns an unresolved import into an error rather
     # than a silent `Any`, so a checked module's backends have to be installed.
     "ag2[tavily, ddgs, perplexity]", # ag2.tools.search
+    # Extensions are not shipped as extras, so their packages are listed here
+    # directly, pinned as the `optionals` group pins them. All have prebuilt
+    # wheels on every runner; tinyfish is 3.11+ only, like everywhere else.
+    "daytona>=0.171.0,<1",                            # ag2.extensions.daytona
+    "tenki>=0.5.4,<2",                                # ag2.extensions.tenki
+    "types-docker",                                   # ag2.extensions.docker; docker itself comes in via `test`
+    "nlip-sdk>=0.1.0,<1",                             # ag2.extensions.nlip
+    "nlip-server>=0.1.3,<1",                          # ag2.extensions.nlip
+    "exa-py>=2.12.1,<3",                              # ag2.extensions.tools.search.exa
+    "tinyfish>=0.5,<0.6; python_version>='3.11'",     # ag2.extensions.tools.search.tinyfish
 ]
 
 lint = ["ruff==0.16.7", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -497,6 +507,16 @@ files = [
     # Offline evaluation: datasets, scorers, the runner and persistence. httpx and
     # pydantic are core dependencies, so this is really checked.
     "ag2/eval/",
+    # Extensions: the Daytona, Docker and Tenki sandboxes, the NLIP bridge, the
+    # TealTiger governance middleware and the Exa, Serply, TinyFish and Xquik
+    # search toolkits. Their packages are additional dependencies, not extras, so
+    # they are in the `types` group directly. `nlip-sdk` and `nlip-server` carry
+    # no `py.typed` but are annotated, so they are followed (see the override
+    # below) rather than wrapped; `docker` is typed by `types-docker`. `tinyfish`
+    # needs Python 3.11 and the pull-request job runs 3.10, so
+    # `tools/search/tinyfish.py` is checked against `Any` there and only really
+    # checked by the nightly matrix.
+    "ag2/extensions/",
 
     # Live voice: the realtime agent, the STT/LLM/TTS cascade and the OpenAI,
     # Gemini and ElevenLabs sessions, whose extras are all in the `types` group.
@@ -581,6 +601,8 @@ disallow_any_unimported = true
 # — always preferred over a hand-written boundary. See
 # website/docs/contributor-guide/type-checking.mdx. `xai-sdk` is the same case:
 # annotated throughout, with `.pyi` for its generated protos, but no marker.
+# `nlip-sdk` and `nlip-server` are the same again, minus a few methods left
+# unannotated; those are called at one place each, with the reason.
 # `perplexity.types` is the SDK's public surface but re-exports its generated
 # names without an `__all__`, which strict mode reads as "not exported". The
 # alternative is importing from `perplexity.generated.*`, which is internal.
@@ -594,6 +616,10 @@ follow_untyped_imports = true
 
 [[tool.mypy.overrides]]
 module = "xai_sdk.*"
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["nlip_sdk.*", "nlip_server.*"]
 follow_untyped_imports = true
 
 [[tool.mypy.overrides]]

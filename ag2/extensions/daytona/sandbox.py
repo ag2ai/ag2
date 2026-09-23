@@ -12,6 +12,9 @@ from typing import Any
 
 from daytona import (
     AsyncDaytona,
+    AsyncSandbox,
+    CreateSandboxFromImageParams,
+    CreateSandboxFromSnapshotParams,
     DaytonaError,
     DaytonaNotFoundError,
     DaytonaRateLimitError,
@@ -39,7 +42,7 @@ class DaytonaSandbox(SandboxBase):
         self,
         *,
         client: AsyncDaytona,
-        params: Any,
+        params: CreateSandboxFromSnapshotParams | CreateSandboxFromImageParams,
         timeout: int = 60,
         workdir: str = "/workspace",
     ) -> None:
@@ -53,11 +56,11 @@ class DaytonaSandbox(SandboxBase):
         if timeout < 1:
             raise ValueError("`timeout` must be >= 1 second.")
 
-        self._client = client
+        self._client: AsyncDaytona | None = client
         self._params = params
         self._default_timeout = timeout
         self._workdir = PurePosixPath(workdir)
-        self._sandbox: Any = None
+        self._sandbox: AsyncSandbox | None = None
         # See DockerSandbox for the cross-loop rationale. Daytona's create is
         # async (can't be pushed to a worker thread cleanly), so we keep a
         # per-loop asyncio.Lock that only guards the one-time creation; once
@@ -93,7 +96,7 @@ class DaytonaSandbox(SandboxBase):
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
-    def __deepcopy__(self, memo: dict) -> "DaytonaSandbox":  # type: ignore[type-arg]
+    def __deepcopy__(self, memo: dict[int, Any]) -> "DaytonaSandbox":
         # A live cloud-sandbox handle holding loop-bound async state — not
         # deepcopy-able and not meaningfully duplicable. Sharing on copy is the
         # only sane semantics (lets a bare DaytonaSandbox be attached to a tool).
@@ -139,13 +142,13 @@ class DaytonaSandbox(SandboxBase):
         with suppress(DaytonaNotFoundError):
             await sandbox.fs.delete_file(str(target))
 
-    async def _ensure_sandbox(self) -> Any:
+    async def _ensure_sandbox(self) -> AsyncSandbox:
         if self._closed:
             raise RuntimeError("DaytonaSandbox has been closed.")
         if self._sandbox is not None:
             return self._sandbox
         async with self._creation_lock():
-            if self._closed:
+            if self._closed or self._client is None:
                 raise RuntimeError("DaytonaSandbox has been closed.")
             if self._sandbox is not None:
                 return self._sandbox
@@ -171,10 +174,11 @@ class DaytonaSandbox(SandboxBase):
             self._sandbox = None
         if self._client is not None:
             try:
+                # daytona leaves `AsyncDaytona.close` unannotated; it returns nothing.
                 await self._client.close()  # type: ignore[no-untyped-call]
             except Exception as e:
                 logger.debug("Suppressed exception during client close: %s", e)
-            self._client = None  # type: ignore[assignment]
+            self._client = None
 
     def _atexit_close(self) -> None:
         if self._sandbox is None:

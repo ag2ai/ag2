@@ -10,6 +10,7 @@ from nlip_sdk.nlip import NLIP_Factory, NLIP_Message
 
 from ag2.events import (
     BaseEvent,
+    Input,
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -310,7 +311,7 @@ def _dict_to_event(entry: Mapping[str, Any]) -> BaseEvent | None:
     kind = entry.get("kind")
     if kind == _KIND_USER_INPUT:
         parts = entry.get("parts") or []
-        inputs = [TextInput(str(p.get("text", ""))) for p in parts if isinstance(p, Mapping)]
+        inputs: list[Input] = [TextInput(str(p.get("text", ""))) for p in parts if isinstance(p, Mapping)]
         return ModelRequest(inputs)
     if kind == _KIND_TOOL_CALL:
         return payload_to_call(entry)

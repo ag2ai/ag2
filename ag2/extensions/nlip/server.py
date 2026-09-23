@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+from collections.abc import MutableMapping
 from typing import Any
 
 from nlip_sdk.nlip import NLIP_Message
@@ -25,15 +26,13 @@ class _AgentNlipSession(NLIP_Session):
         self._executor = NlipExecutor(agent)
 
     async def start(self) -> None:
-        await super().start()
+        # nlip-server leaves `NLIP_Session.start` unannotated; it only logs.
+        await super().start()  # type: ignore[no-untyped-call]
         logger.info(f"Started NLIP session for agent: {self._agent.name}")
 
     async def execute(self, msg: NLIP_Message) -> NLIP_Message:
         logger.info(f"Executing agent {self._agent.name} with NLIP message")
         return await self._executor.execute(msg)
-
-    async def stop(self) -> None:
-        await super().stop()
 
 
 class NlipServer:
@@ -99,7 +98,7 @@ class NlipServer:
             await shutdown_requested.wait()
             return {"type": "lifespan.shutdown"}
 
-        async def send(message: dict[str, Any]) -> None:
+        async def send(message: MutableMapping[str, Any]) -> None:
             if message["type"] in ("lifespan.startup.complete", "lifespan.startup.failed"):
                 self._lifespan_started.set()
 

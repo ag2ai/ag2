@@ -548,7 +548,6 @@ class _TealTigerPerTurn(BaseMiddleware):
         error stays an error: a blocked error result is replaced with a sanitized
         governance error, never turned into a success.
         """
-        is_error = isinstance(result, ToolErrorEvent)
         # ToolResultEvent covers both successful results and ToolErrorEvent
         # (a subclass): a tool that raises with an SSN or credential in its
         # message leaks it into model context just as a returned value would,
@@ -617,7 +616,7 @@ class _TealTigerPerTurn(BaseMiddleware):
                 _rewrite_part(part, lambda text: self._redact(text, categories, redact_secrets))
             # An error result also carries the exception itself; `str(error)` reaches
             # the model independently of the parts, so redact it in place too.
-            if is_error:
+            if isinstance(result, ToolErrorEvent):
                 self._redact_error(result, categories, redact_secrets)
 
             # Detection runs over the joined parts, redaction over each part alone, so a

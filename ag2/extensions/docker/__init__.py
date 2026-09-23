@@ -2,11 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import TYPE_CHECKING
+
 from ag2.exceptions import missing_additional_dependency
 
-try:
+# Imported twice on purpose: the checker is shown only the real import, because
+# rebinding a name it has already bound to a class is an error, and the install hint
+# is runtime behaviour. See website/docs/contributor-guide/type-checking.mdx.
+if TYPE_CHECKING:
     from .environment import DockerEnvironment
-except ImportError as e:
-    DockerEnvironment = missing_additional_dependency("DockerEnvironment", "docker>=6.0.0,<8", e)  # type: ignore[misc]
+else:
+    try:
+        from .environment import DockerEnvironment
+    except ImportError as e:
+        DockerEnvironment = missing_additional_dependency("DockerEnvironment", "docker>=6.0.0,<8", e)
 
 __all__ = ("DockerEnvironment",)
