@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 _DEFAULT_PURPOSE: Final[FilePurpose] = "ocr"
 
 # The purposes the SDK names, taken from its own literal rather than restated.
+# `FilePurpose` is `Union[Literal[...], UnrecognizedStr]`; the literal is its first arm.
 _KNOWN_PURPOSES: Final[tuple[FilePurpose, ...]] = get_args(get_args(FilePurpose)[0])
 
 # The list endpoint paginates; 100 is the SDK's own page ceiling.
@@ -28,6 +29,7 @@ def _resolve_purpose(purpose: str | None) -> FilePurpose:
     """Mistral's purposes are an open enum, so one the SDK does not name is sent as ``UnrecognizedStr``."""
     if not purpose:
         return _DEFAULT_PURPOSE
+    # A loop rather than `in`, so the match narrows to the SDK's literal.
     for known in _KNOWN_PURPOSES:
         if purpose == known:
             return known
