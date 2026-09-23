@@ -156,7 +156,7 @@ class _HumanInline:
         self, *, task: Task, trace_a: Trace, trace_b: Trace, reference_outputs: dict[str, Any] | None
     ) -> PairwiseOutcome:
         answer_a, answer_b = _final_text(trace_a), _final_text(trace_b)
-        first_variant = self._rng.choice(["a", "b"])
+        first_variant: Literal["a", "b"] = self._rng.choice(("a", "b"))
         response_1, response_2 = (answer_a, answer_b) if first_variant == "a" else (answer_b, answer_a)
         preferred = self._ask(task, response_1, response_2)
         if inspect.isawaitable(preferred):
@@ -168,8 +168,8 @@ class _HumanInline:
         )
 
 
-def _deblind(preferred: Any, first_variant: str) -> str:
-    other = "b" if first_variant == "a" else "a"
+def _deblind(preferred: Any, first_variant: Literal["a", "b"]) -> Literal["a", "b", "tie"]:
+    other: Literal["a", "b"] = "b" if first_variant == "a" else "a"
     if str(preferred) == "1":
         return first_variant
     if str(preferred) == "2":

@@ -41,7 +41,7 @@ class EvalEvent(BaseEvent):
     """Base for eval lifecycle events — carries the run id and optional user label."""
 
     run_id: str
-    label: str | None = Field(None)
+    label: str | None = Field(default=None)
 
 
 class EvalStarted(EvalEvent):
@@ -60,7 +60,7 @@ class TaskEvaluated(EvalEvent):
 
     task_id: str
     feedback: tuple[Feedback, ...] = Field(default_factory=tuple)
-    variant: str | None = Field(None)  # set when produced inside a variant run
+    variant: str | None = Field(default=None)  # set when produced inside a variant run
 
 
 class EvalCompleted(EvalEvent):

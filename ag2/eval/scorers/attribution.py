@@ -187,7 +187,7 @@ def _mech(
 
 
 async def _llm_attribute(
-    attributor: Agent,
+    attributor: Agent[_AttributionVerdict],
     inputs: dict[str, Any],
     outputs: dict[str, Any],
     reference_outputs: dict[str, Any] | None,

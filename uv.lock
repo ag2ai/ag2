@@ -142,7 +142,7 @@ zai = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "codespell" },
     { name = "daytona" },
     { name = "dirty-equals" },
@@ -246,7 +246,7 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "grpcio" },
@@ -313,6 +313,7 @@ dev = [
     { name = "ag2", extras = ["ag-ui"] },
     { name = "ag2", extras = ["anthropic"] },
     { name = "ag2", extras = ["dashscope"] },
+    { name = "ag2", extras = ["elevenlabs"] },
     { name = "ag2", extras = ["gemini"] },
     { name = "ag2", extras = ["gemini", "zai"] },
     { name = "ag2", extras = ["mcp"] },
@@ -465,6 +466,7 @@ test-core = [
 ]
 types = [
     { name = "ag2", extras = ["acp", "a2ui"] },
+    { name = "ag2", extras = ["elevenlabs"] },
     { name = "ag2", extras = ["gemini", "zai"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },

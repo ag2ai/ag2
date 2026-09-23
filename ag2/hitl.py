@@ -22,6 +22,10 @@ HumanHook: TypeAlias = (
 
 HitlExecution: TypeAlias = Callable[[HumanInputRequest, Context], Awaitable[None]]
 
+# A `HumanHook` once `wrap_hitl` has taken it: bound to a run's middleware, it
+# answers the handler that stream subscribes to `HumanInputRequest`.
+HitlFactory: TypeAlias = Callable[[Iterable[BaseMiddleware]], HitlExecution]
+
 # Whether a protocol peer that can put a question to *our* human may be asked, or
 # is refused outright. Deliberately two-valued, unlike a permission policy: a
 # permission request carries an allow option a peer can pick blind, whereas an
@@ -36,9 +40,7 @@ HitlExecution: TypeAlias = Callable[[HumanInputRequest, Context], Awaitable[None
 ElicitationPolicy = Literal["ask", "decline"]
 
 
-def wrap_hitl(
-    func: HumanHook,
-) -> Callable[[Iterable["BaseMiddleware"]], HitlExecution]:
+def wrap_hitl(func: HumanHook) -> HitlFactory:
     call_model = build_model(func)
 
     async def _call_model(event: HumanInputRequest, context: Context) -> HumanMessage:

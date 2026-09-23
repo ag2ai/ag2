@@ -254,6 +254,8 @@ types = [
     "ag2[xai, dashscope]", # ag2.config.xai, ag2.config.dashscope
     # Pure-Python and shipping `py.typed` (mistralai under `mistralai.client`).
     "ag2[mistral, ollama]", # ag2.config.mistral, ag2.config.ollama
+    # Pure-Python and shipping `py.typed`.
+    "ag2[elevenlabs]", # ag2.live.elevenlabs
     # The protocol bridges. `agent-client-protocol` ships `py.typed`; grpc,
     # protobuf and jsonschema ship none, and typeshed publishes all three.
     # protobuf's stubs are held to the major a2a-sdk pins (`protobuf<7`).
@@ -491,6 +493,16 @@ files = [
     # extra would change nothing. The service's own types come from
     # `types-boto3[bedrock-runtime]`, which the Bedrock SDK-types change adds.
     "ag2/config/bedrock/",
+
+    # Offline evaluation: datasets, scorers, the runner and persistence. httpx and
+    # pydantic are core dependencies, so this is really checked.
+    "ag2/eval/",
+
+    # Live voice: the realtime agent, the STT/LLM/TTS cascade and the OpenAI,
+    # Gemini and ElevenLabs sessions, whose extras are all in the `types` group.
+    # `sounddevice` has no types at all and numpy is skipped (below), so
+    # `sound_device.py` declares what it uses of both as local protocols.
+    "ag2/live/",
 
     # MCP-UI resource and action builders. `mcp-ui-server` carries no `py.typed`
     # but is fully annotated, so it is followed (see the override below) rather
