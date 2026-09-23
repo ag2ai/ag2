@@ -83,7 +83,7 @@ from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
+from .tools.final import ClientTool, FunctionTool, FunctionToolSchema, Toolkit, tool
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
@@ -1793,21 +1793,22 @@ def _build_subtask_toolkit(agent: "Agent[Any]") -> Toolkit:
 
 
 def _filter_subtask_tools(
-    tools: Iterable[FunctionTool],
+    tools: Iterable[Tool],
     include: Iterable[str] | None,
     exclude: Iterable[str],
-) -> list[FunctionTool]:
+) -> list[Tool]:
     """Apply ``include_tools`` / ``exclude_tools`` filters to ``tools``.
 
     ``include`` is an allowlist of tool names — ``None`` (the default) lets
     every tool through. ``exclude`` is always applied as a blocklist after
-    the allowlist. Tool identity is by ``schema.function.name``.
+    the allowlist. Tool identity is by ``schema.function.name``; a tool with
+    no function name (a builtin, a ``Toolkit``) matches neither list.
     """
     include_set = set(include) if include is not None else None
     exclude_set = set(exclude)
-    result: list[FunctionTool] = []
+    result: list[Tool] = []
     for t in tools:
-        name = t.schema.function.name
+        name = t.schema.function.name if isinstance(t, FunctionTool | ClientTool) else None
         if include_set is not None and name not in include_set:
             continue
         if name in exclude_set:

@@ -8,8 +8,8 @@ import gc
 import sys
 import threading
 import weakref
-from collections.abc import Iterable
-from typing import Annotated
+from collections.abc import Iterable, Sequence
+from typing import Annotated, Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -35,8 +35,10 @@ from ag2.events import (
 )
 from ag2.history import MemoryStorage, Storage
 from ag2.middleware import BaseMiddleware
-from ag2.testing import TestConfig
-from ag2.tools import Toolkit
+from ag2.testing import TestClient, TestConfig, Turn
+from ag2.tools import Toolkit, WebSearchTool
+from ag2.tools.final import FunctionToolSchema
+from ag2.tools.schemas import ToolSchema
 from ag2.tools.subagents import background_agent_tool, subagent_tool
 from ag2.tools.subagents import run_task as run_task_mod
 from ag2.tools.subagents.run_task import _rollup_usage, run_task
@@ -58,6 +60,34 @@ def _tool_names(tools: list) -> set[str]:
         else:
             names.add(t.schema.function.name)
     return names
+
+
+class _ToolRecordingConfig(TestConfig):
+    """A ``TestConfig`` that records the tool names each model call was offered."""
+
+    def __init__(self, *events: Turn) -> None:
+        super().__init__(*events)
+        self.seen: list[list[str]] = []
+
+    def create(self) -> TestClient:
+        return _ToolRecordingClient(self, *self.events)
+
+
+class _ToolRecordingClient(TestClient):
+    def __init__(self, config: _ToolRecordingConfig, *events: Turn) -> None:
+        super().__init__(*events)
+        self._config = config
+
+    async def __call__(
+        self,
+        messages: Sequence[BaseEvent],
+        context: Context,
+        *,
+        tools: Iterable[ToolSchema] = (),
+        **kwargs: Any,
+    ) -> ModelResponse:
+        self._config.seen.append([t.function.name if isinstance(t, FunctionToolSchema) else t.type for t in tools])
+        return await super().__call__(messages, context, tools=tools, **kwargs)
 
 
 class _BreakableStorage(Storage):
@@ -784,6 +814,57 @@ class TestSubtaskInheritance:
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
         # The extra tool was actually invoked in the subtask.
         assert any(isinstance(e, ToolCallEvent) and e.name == "subtask_only" for e in sub_events)
+
+    async def test_subtask_inherits_a_builtin_tool(self) -> None:
+        """A provider-executed tool has no function name, and is inherited by default."""
+        sub_config = _ToolRecordingConfig(ModelResponse(ModelMessage("Done.")))
+        parent = Agent(
+            "parent",
+            config=TestConfig(
+                ToolCallEvent(name="run_subtask", arguments='{"task": "Search"}'),
+                ModelResponse(ModelMessage("OK.")),
+            ),
+            tools=[WebSearchTool(), noop],
+            tasks=TaskConfig(config=sub_config, exclude_tools=["noop"]),
+        )
+
+        await parent.ask("go")
+
+        assert sub_config.seen == [["web_search"]]
+
+    async def test_subtask_inherits_a_toolkit(self) -> None:
+        """A ``Toolkit`` has no function name either; its members reach the subtask."""
+        sub_config = _ToolRecordingConfig(ModelResponse(ModelMessage("Done.")))
+        parent = Agent(
+            "parent",
+            config=TestConfig(
+                ToolCallEvent(name="run_subtask", arguments='{"task": "Work"}'),
+                ModelResponse(ModelMessage("OK.")),
+            ),
+            tools=[Toolkit(noop)],
+            tasks=TaskConfig(config=sub_config),
+        )
+
+        await parent.ask("go")
+
+        assert sub_config.seen == [["noop"]]
+
+    async def test_subtask_allowlist_drops_a_builtin_tool(self) -> None:
+        """``include_tools`` names function tools, so a builtin one is never on it."""
+        sub_config = _ToolRecordingConfig(ModelResponse(ModelMessage("Done.")))
+        parent = Agent(
+            "parent",
+            config=TestConfig(
+                ToolCallEvent(name="run_subtask", arguments='{"task": "Search"}'),
+                ModelResponse(ModelMessage("OK.")),
+            ),
+            tools=[WebSearchTool(), noop],
+            tasks=TaskConfig(config=sub_config, include_tools=["noop"]),
+        )
+
+        await parent.ask("go")
+
+        assert sub_config.seen == [["noop"]]
 
 
 @pytest.mark.asyncio
