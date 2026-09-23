@@ -59,6 +59,13 @@ class TestStreamSend:
         assert mock.call_count == 2
 
     @pytest.mark.asyncio
+    async def test_iter_subscriber_zero_max_events(self) -> None:
+        stream = MemoryStream()
+
+        with stream.join(max_events=0) as events, pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(anext(events), timeout=1.0)
+
+    @pytest.mark.asyncio
     async def test_iter_substream(self, signal: asyncio.Event, mock: MagicMock) -> None:
         stream = MemoryStream()
 
