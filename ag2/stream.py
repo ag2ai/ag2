@@ -322,4 +322,3 @@ class SubStream(ABCStream):
 
     def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         return self._parent.spawn_background(coro)
-
