@@ -40,7 +40,7 @@ class Inject(CustomField):
                 kwargs[self.param_name] = opt
             elif self.default is not Ellipsis:
                 kwargs[self.param_name] = ctx.dependencies[name] = self.default
-            elif self.default_factory is not Ellipsis:
+            elif not isinstance(self.default_factory, EllipsisType):
                 kwargs[self.param_name] = ctx.dependencies[name] = self.default_factory()
         return kwargs
 
@@ -73,7 +73,7 @@ class Variable(CustomField):
                 kwargs[self.param_name] = opt
             elif self.default is not Ellipsis:
                 kwargs[self.param_name] = ctx.variables[name] = self.default
-            elif self.default_factory is not Ellipsis:
+            elif not isinstance(self.default_factory, EllipsisType):
                 kwargs[self.param_name] = ctx.variables[name] = self.default_factory()
         return kwargs
 

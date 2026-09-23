@@ -565,6 +565,34 @@ files = [
     # search extras are in `types`, so this is really checked.
     "ag2/tools/",
 
+    # The top-level runtime: the stream, context, history, plugins, HITL, tasks,
+    # compaction and aggregation, replay, the spec loader and the `ag2` namespace
+    # itself — the names a downstream developer imports first. No extras needed.
+    # `agent.py` is not here yet; `textual.py` cannot be imported at all (see
+    # .scratch/mypy-full-coverage/issues/41).
+    "ag2/__init__.py",
+    "ag2/_replay.py",
+    "ag2/_telemetry_consts.py",
+    "ag2/aggregate.py",
+    "ag2/annotations.py",
+    "ag2/assembly.py",
+    "ag2/compact.py",
+    "ag2/context.py",
+    "ag2/exceptions.py",
+    "ag2/history.py",
+    "ag2/hitl.py",
+    "ag2/mypy.py",
+    "ag2/plugin.py",
+    "ag2/spec.py",
+    "ag2/stream.py",
+    "ag2/task.py",
+    "ag2/testing.py",
+    "ag2/types.py",
+    "ag2/usage.py",
+    "ag2/utils.py",
+    "ag2/version.py",
+    "ag2/watch.py",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;

@@ -13,7 +13,7 @@ Compaction removes. Aggregation creates. They are separate concerns.
 """
 
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from fast_depends.pydantic import PydanticSerializer
 
@@ -23,6 +23,7 @@ from ag2.context import ConversationContext
 from ag2.events import (
     BaseEvent,
     ModelRequest,
+    Usage,
     UsageEvent,
     is_conversational,
     render_for_prompt,
@@ -146,7 +147,7 @@ class SummarizeCompact:
             pydantic_config={"arbitrary_types_allowed": True},
             use_fastdepends_errors=False,
         )
-        self.last_usage: dict = {}
+        self.last_usage: Usage | dict[str, Any] = {}
 
     async def compact(
         self,

@@ -67,7 +67,8 @@ class TaskCompleted(TaskEvent):
 
 
 class TaskFailed(TaskEvent):
-    error: Exception
+    # A task exited by cancellation or an interrupt fails with that, not only with an `Exception`.
+    error: BaseException
 
     _content: str = Field(
         default_factory=str,

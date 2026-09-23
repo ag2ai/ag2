@@ -704,6 +704,27 @@ class Agent(PluginTarget, Generic[TResult]):
         assembly: Iterable[AssemblyPolicy] = ...,
     ) -> None: ...
 
+    # A schema whose shape the caller does not know, e.g. one forwarded from a spec.
+    @overload
+    def __init__(
+        self: "Agent[Any]",
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        response_schema: ResponseProto[Any] | type | types.UnionType | None,
+        plugins: Iterable["Plugin"] = ...,
+        knowledge: KnowledgeConfig | None = ...,
+        tasks: TaskConfig | Literal[False] = ...,
+        assembly: Iterable[AssemblyPolicy] = ...,
+    ) -> None: ...
+
     def __init__(
         self,
         name: str,

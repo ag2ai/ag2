@@ -32,15 +32,19 @@ SubId: TypeAlias = UUID
 class Stream(Protocol):
     id: StreamId
 
-    history: "History"
-    """Every event sent on this stream, and the storage backing them. A filtered
-    stream is a view, so it shares its parent's."""
+    @property
+    def history(self) -> "History":
+        """Every event sent on this stream, and the storage backing them. A filtered
+        stream is a view, so it shares its parent's."""
+        ...
 
-    pending_messages: list[ModelRequest]
-    """Inbox of follow-up turns produced asynchronously (e.g. by background
-    tasks). The agent loop drains this before each model call; whatever lands
-    here while no ``ask`` is running is consumed by the next ``ask`` on this
-    stream and merged into its initial request."""
+    @property
+    def pending_messages(self) -> list[ModelRequest]:
+        """Inbox of follow-up turns produced asynchronously (e.g. by background
+        tasks). The agent loop drains this before each model call; whatever lands
+        here while no ``ask`` is running is consumed by the next ``ask`` on this
+        stream and merged into its initial request."""
+        ...
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None: ...
 
@@ -181,8 +185,10 @@ class ConversationContext:
 
             except asyncio.TimeoutError as exc:
                 # Only ``wait_for`` can reach this: anything the channel raised,
-                # timeouts included, left _ask_human as a HumanInputError.
-                raise HumanInputTimeoutError(timeout) from exc  # type: ignore[arg-type]
+                # timeouts included, left _ask_human as a HumanInputError. And
+                # ``wait_for`` times out only when given a timeout.
+                assert timeout is not None
+                raise HumanInputTimeoutError(timeout) from exc
 
         return result.content
 

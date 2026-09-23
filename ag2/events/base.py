@@ -6,7 +6,7 @@ import operator
 import time
 from collections.abc import Callable
 from types import EllipsisType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, get_args
 
 from typing_extensions import dataclass_transform
 
@@ -49,7 +49,8 @@ def is_conversational(event: Any) -> bool:
     return not getattr(cls, "__transient__", False) and getattr(cls, "__conversational__", True)
 
 
-_REPLAY_ROLES = frozenset({"anchor", "turn"})
+_ReplayRole: TypeAlias = Literal["anchor", "turn"]
+_REPLAY_ROLES = frozenset(get_args(_ReplayRole))
 
 
 class ProviderReplay:
@@ -65,6 +66,9 @@ class ProviderReplay:
     assistant turn. Declared rather than inferred from the bases, so a turn carrier
     that happens to subclass ``ModelReasoning`` is not filed as an anchor.
     """
+
+    # Annotation only, so a subclass that forgets it still fails the check below.
+    __replay_role__: ClassVar[_ReplayRole]
 
     # No ``__transient__`` here on purpose: ``ModelReasoning`` is transient and would
     # shadow it under the natural base order, so subclasses declare their own.

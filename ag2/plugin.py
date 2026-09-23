@@ -258,7 +258,7 @@ class PluginTarget(PromptObserverMixin):
     """
 
     name: str
-    tools: list[FunctionTool]
+    tools: list[Tool]
     dependency_provider: Provider
     _serializer: SerializerProto
     _tool_executor: ToolExecutor
@@ -363,13 +363,17 @@ def _wrap_prompt_hook(
     # yields something nameable rather than a row of anonymous `wrapper`s.
     @wraps(func)
     async def wrapper(event: ModelRequest, context: Context) -> str:
+        # `asolve` annotates each positional as a tuple and each keyword as a
+        # `dict[str, Any]`; the values really are arbitrary.
+        args: tuple[Any, ...] = (event,)
+        options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}
         async with AsyncExitStack() as stack:
-            r = await call_model.asolve(
-                event,
+            r: str = await call_model.asolve(
+                *args,
                 stack=stack,
                 cache_dependencies={},
                 dependency_provider=context.dependency_provider,
-                **{CONTEXT_OPTION_NAME: context},
+                **options,
             )
         return r
 
