@@ -25,7 +25,7 @@ import json
 import random
 from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ag2.events import ModelResponse
 
@@ -135,7 +135,8 @@ class _HumanLabels:
         entry = self._labels().get(task.task_id)
         if entry is None or entry[1] is None:
             return PairwiseOutcome(winner="tie", reasoning="no human label", detail={"missing": True})
-        first_variant, preferred = entry
+        raw_variant, preferred = entry
+        first_variant = _first_variant(raw_variant, task.task_id)
         return PairwiseOutcome(
             winner=_deblind(preferred, first_variant),
             reasoning="human label",
@@ -174,6 +175,15 @@ def _deblind(preferred: Any, first_variant: str) -> str:
     if str(preferred) == "2":
         return other
     return "tie"
+
+
+def _first_variant(value: Any, task_id: str) -> Literal["a", "b"]:
+    """Read a manifest row's de-blinding key, which a labelling UI may have mangled."""
+    if value == "a":
+        return "a"
+    if value == "b":
+        return "b"
+    raise ValueError(f"Task {task_id!r} has first_variant {value!r}; expected 'a' or 'b'.")
 
 
 def _final_text(trace: Trace) -> str:
