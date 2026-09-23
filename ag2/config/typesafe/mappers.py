@@ -32,8 +32,7 @@ from ag2.tools.schemas import ToolSchema
 
 PROVIDER = "typesafe"
 
-ANSWER_KEY = "answer"
-"""Name of the single question sent per request; one ``ask()`` maps to one question."""
+ANSWER_KEY = "answer"  # Name of the single question sent per request
 
 
 class UnsupportedResponseSchemaError(AG2Error):
@@ -71,8 +70,6 @@ def convert_state(messages: Iterable[BaseEvent], serializer: SerializerProto) ->
                 state.append({"role": "assistant", "content": message.message.content})
 
         elif isinstance(message, ToolResultsEvent):
-            # Batch only. History also holds each constituent ToolResultEvent;
-            # mapping those too would send every result twice.
             for r in message.results:
                 state.append({"role": "tool", "content": _parts_content(r.result.parts, serializer)})
 
@@ -88,7 +85,6 @@ def _part_value(part: Input, serializer: SerializerProto) -> Any:
     if isinstance(part, TextInput):
         return part.content
     if isinstance(part, DataInput):
-        # `state` is JSON, so structured data goes in as-is rather than as a string.
         return json.loads(serializer.encode(part.data))
     raise UnsupportedInputError(type(part).__name__, PROVIDER)
 
@@ -99,7 +95,8 @@ def response_proto_to_question(
     instructions: str | None,
     criteria: Mapping[str, str] | None = None,
 ) -> Question:
-    """Pick the Jev primitive for a ``response_schema`` from its JSON schema.
+    """
+    Pick the Jev primitive for a ``response_schema`` from its JSON schema.
 
     ``instructions`` (the agent prompt) frames the question; the type's own description,
     an explicit ``description=`` or an Enum docstring, is the question itself. The docstring under each Enum
@@ -173,7 +170,8 @@ def _option_docs(response: ResponseProto[Any] | None) -> dict[Any, str]:
 
 @cache
 def _member_docstrings(enum_type: type[Enum]) -> dict[Any, str]:
-    """Map each member's value to the string literal under its ``NAME = value`` line.
+    """
+    Map each member's value to the string literal under its ``NAME = value`` line.
 
     Python discards that string at runtime, so it is read back from the class source;
     with no source available (REPL, frozen app) the options stay undescribed.
@@ -230,5 +228,4 @@ def normalize_usage(raw: TypeSafeUsage | None) -> Usage:
 
 
 def answer_metadata(answer: Answer) -> dict[str, Any]:
-    """The SDK answer (confidence, probabilities, ...) kept on ``ModelMessage.metadata``."""
     return answer.model_dump(exclude={"type"})

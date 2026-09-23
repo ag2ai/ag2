@@ -30,8 +30,7 @@ __all__ = ["TypeSafeClient"]
 
 
 class TypeSafeClient(LLMClient):
-    """TypeSafe client adapter for Jev's System One API (``typesafe-sdk``).
-
+    """
     Non-streaming only: each call sends one question derived from
     ``response_schema`` and returns its answer as schema JSON.
     """

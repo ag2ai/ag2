@@ -598,13 +598,18 @@ The SDK answer, minus its `type`, is kept on `reply.response.metadata`. A yes/no
 
 `retry` takes a `typesafe_sdk.RetryPolicy` and `http_client` an `#!python httpx2.AsyncClient`; both are forwarded to the SDK untouched. Token counts land on `ModelResponse.usage` as `prompt_tokens` / `completion_tokens` when the API reports them.
 
-Runnable scripts under `examples/typesafe/`:
+Runnable scripts under `examples/typesafe/`, one per decision shape from [TypeSafe's docs](https://docs.typesafe.ai){.external-link target="_blank"}:
 
-- `answer_kinds.py` — all three answer kinds on one message, printing what each puts on `reply.response.metadata`
+- `classification.py` — one known category should win (`Enum` choice)
+- `detection.py` — a probability that one property is present (`bool`, tuned with `boolean_threshold`)
+- `scoring.py` — the answer belongs on an ordered rubric (`IntEnum` score)
+- `routing.py` — a category selects the next code path: Jev's choice picks the handler function, and a low-confidence pick falls back to a person
+- `ranking.py` — order candidates by relevance with one question per candidate, asked in parallel; search and retrieval are the same loop
+- `verification.py` — check an artifact for specific failure modes, passing it and its source as structured state
+- `features.py` — yes/no probabilities as features for a downstream ML model
 - `docstrings_matter.py` — the same `Enum` with and without member docstrings, side by side
-- `ticket_router.py` — an `Enum` choice with confidence
-- `yes_no_guard.py` — a `bool` gate with `criteria` and `boolean_threshold` in front of a generative agent
-- `severity_score.py` — an `IntEnum` rubric
+
+Structured data extraction is the one shape in that table this provider cannot express: an object schema is rejected, since Jev answers one decision per question.
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 

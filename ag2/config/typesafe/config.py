@@ -33,14 +33,11 @@ class TypeSafeConfigOverrides(TypedDict, total=False):
 
 @dataclass(slots=True)
 class TypeSafeConfig(ModelConfig):
-    """Configuration for TypeSafe AI's Jev decision model (``typesafe-sdk``).
-
-    Jev answers typed questions instead of generating text, so the agent's
-    ``response_schema`` must be a decision type (``bool``, a probability ``float``,
-    a string ``Literal``/``Enum`` or an ``IntEnum``).
-
-    ``api_key``, ``base_url`` and ``model`` fall back to the ``TYPESAFE_API_KEY``,
-    ``TYPESAFE_BASE_URL`` and ``TYPESAFE_DEFAULT_MODEL`` environment variables.
+    """
+    fallback env vars:
+    api_key - TYPESAFE_API_KEY
+    base_url - TYPESAFE_BASE_URL
+    model - TYPESAFE_DEFAULT_MODEL
     """
 
     model: str = DEFAULT_MODEL
