@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from ag2.annotations import Context
 from ag2.middleware.base import ToolMiddleware
@@ -20,7 +20,7 @@ StreamOrFactory: TypeAlias = Stream | StreamFactory
 
 
 def subagent_tool(
-    agent: "Agent",
+    agent: "Agent[Any]",
     *,
     description: str,
     name: str | None = None,

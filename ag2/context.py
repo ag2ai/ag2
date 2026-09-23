@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, TypeVar, cast, overload, runtime_checkable
 from uuid import UUID
 
 from fast_depends import Provider
@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 StreamId: TypeAlias = UUID
 SubId: TypeAlias = UUID
+
+TEvent = TypeVar("TEvent", bound=BaseEvent)
 
 
 @runtime_checkable
@@ -110,10 +112,22 @@ class Stream(Protocol):
         sync_to_thread: bool = True,
     ) -> AbstractContextManager[None]: ...
 
+    @overload
+    def get(
+        self,
+        condition: type[TEvent],
+    ) -> AbstractAsyncContextManager[asyncio.Future[TEvent]]: ...
+
+    @overload
     def get(
         self,
         condition: ClassInfo | Condition,
     ) -> AbstractAsyncContextManager[asyncio.Future[BaseEvent]]: ...
+
+    def get(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> AbstractAsyncContextManager[asyncio.Future[Any]]: ...
 
 
 @dataclass(slots=True)

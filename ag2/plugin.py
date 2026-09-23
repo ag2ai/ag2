@@ -16,7 +16,7 @@ from typing_extensions import Self
 from .annotations import Context
 from .assembly import AssemblyPolicy
 from .events import (
-    ModelRequest,
+    BaseEvent,
 )
 from .events.conditions import Condition
 from .hitl import HitlFactory, HumanHook, wrap_hitl
@@ -51,7 +51,8 @@ class PromptObserverMixin:
     """
 
     _system_prompt: list[str]
-    _dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]]
+    # Called with the turn's trigger: a `ModelRequest`, or whatever event `resume` re-enters with.
+    _dynamic_prompt: list[Callable[[BaseEvent, Context], Awaitable[str]]]
     _observers: list[Observer]
     _middleware: list[MiddlewareFactory]
     _policies: list[AssemblyPolicy]
@@ -356,13 +357,13 @@ class PluginTarget(PromptObserverMixin):
 
 def _wrap_prompt_hook(
     func: PromptHook,
-) -> Callable[[ModelRequest, Context], Awaitable[str]]:
+) -> Callable[[BaseEvent, Context], Awaitable[str]]:
     call_model = build_model(func)
 
     # Carry the hook's identity onto the wrapper, so `Agent.dynamic_prompt`
     # yields something nameable rather than a row of anonymous `wrapper`s.
     @wraps(func)
-    async def wrapper(event: ModelRequest, context: Context) -> str:
+    async def wrapper(event: BaseEvent, context: Context) -> str:
         # `asolve` annotates each positional as a tuple and each keyword as a
         # `dict[str, Any]`; the values really are arbitrary.
         args: tuple[Any, ...] = (event,)

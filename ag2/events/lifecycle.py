@@ -14,6 +14,7 @@ Task-subagent lifecycle events live in ``ag2.events``
 from typing import Any
 
 from .base import BaseEvent, Field
+from .types import Usage
 
 
 class ObserverStarted(BaseEvent):
@@ -58,7 +59,8 @@ class CompactionCompleted(BaseEvent):
     events_before: int
     events_after: int
     llm_calls: int = 0
-    usage: dict[str, Any] = Field(default_factory=dict)
+    # The strategy's `last_usage`: a `Usage` when the call reported one, else empty.
+    usage: Usage | dict[str, Any] = Field(default_factory=dict)
 
 
 class CompactionFailed(BaseEvent):
@@ -101,7 +103,8 @@ class AggregationCompleted(BaseEvent):
     strategy: str
     event_count: int
     llm_calls: int = 0
-    usage: dict[str, Any] = Field(default_factory=dict)
+    # The strategy's `last_usage`: a `Usage` when the call reported one, else empty.
+    usage: Usage | dict[str, Any] = Field(default_factory=dict)
 
 
 class AggregationFailed(BaseEvent):

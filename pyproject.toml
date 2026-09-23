@@ -568,8 +568,8 @@ files = [
     # The top-level runtime: the stream, context, history, plugins, HITL, tasks,
     # compaction and aggregation, replay, the spec loader and the `ag2` namespace
     # itself — the names a downstream developer imports first. No extras needed.
-    # `agent.py` is not here yet; `textual.py` cannot be imported at all (see
-    # .scratch/mypy-full-coverage/issues/41).
+    # `agent.py` has its own entry below; `textual.py` cannot be imported at all
+    # (see .scratch/mypy-full-coverage/issues/41).
     "ag2/__init__.py",
     "ag2/_replay.py",
     "ag2/_telemetry_consts.py",
@@ -592,6 +592,11 @@ files = [
     "ag2/utils.py",
     "ag2/version.py",
     "ag2/watch.py",
+
+    # The agent: `Agent`, `AgentReply`, `AgentRun` — `ask`, `run`, `resume` and
+    # the registration surface. It imports nearly everything above, so it went
+    # in last of the runtime. No extras needed.
+    "ag2/agent.py",
 
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather

@@ -26,6 +26,7 @@ from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
+from types import TracebackType
 from typing import Any, Generic, Literal, TypeVar, overload
 from uuid import uuid4
 
@@ -40,11 +41,13 @@ from .annotations import Context
 from .assembly import AssemblerMiddleware, AssemblyPolicy
 from .compact import CompactStrategy, CompactTrigger
 from .config import LLMClient, ModelConfig
+from .context import StreamId
 from .events import (
     BaseEvent,
     DrainedModelRequest,
     HumanInputRequest,
     Input,
+    ModelMessage,
     ModelRequest,
     ModelResponse,
     ToolCallsEvent,
@@ -53,6 +56,7 @@ from .events import (
     estimated_tokens,
     is_conversational,
 )
+from .events.alert import HaltEvent
 from .events.lifecycle import (
     AggregationCompleted,
     AggregationFailed,
@@ -80,7 +84,7 @@ from .middleware.describe import DescribedMiddleware
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
-from .stream import MemoryStream, Stream, StreamId
+from .stream import MemoryStream, Stream
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import ClientTool, FunctionTool, FunctionToolSchema, Toolkit, tool
@@ -88,7 +92,7 @@ from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
 from .tools.tool import Tool
-from .types import Omittable, SendableMessage, omit
+from .types import Omit, Omittable, SendableMessage, omit
 from .usage import UsageReport, collect_usage_events
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
@@ -151,6 +155,8 @@ class AgentReply(Generic[TResult, TAgent]):
     ) -> TResult | None:
         schema = self.__schema
         if schema is None:
+            # No schema only ever pairs with `TResult = str` (every `ask`/`run` overload and
+            # `Agent`'s default say so), but the class cannot tie the two together.
             return self.body  # type: ignore[return-value]
 
         max_retries = max(retries, 0)
@@ -537,8 +543,8 @@ class AgentRun(Generic[TResult, TAgent]):
         self,
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
-        tb: Any,
-    ) -> bool:
+        tb: TracebackType | None,
+    ) -> Literal[False]:
         task = self.__task
         if task is not None:
             if not task.done():
@@ -586,7 +592,7 @@ def _get_stream_turn_lock(stream: Stream) -> asyncio.Lock:
     # ``_STREAM_TURN_LOCK_ATTR`` is ours, not part of the ``Stream`` protocol,
     # so it has to be read defensively — unlike ``id``, which the protocol
     # guarantees.
-    lock = getattr(stream, _STREAM_TURN_LOCK_ATTR, None)
+    lock: asyncio.Lock | None = getattr(stream, _STREAM_TURN_LOCK_ATTR, None)
     if lock is not None:
         return lock
 
@@ -784,7 +790,7 @@ class Agent(PluginTarget, Generic[TResult]):
         # Knowledge store + compaction/aggregation strategies
         if knowledge:
             self._agent_dependencies[KnowledgeStore] = knowledge.store
-            self._knowledge_context = _KnowledgeContext(knowledge, self.name)
+            self._knowledge_context: _KnowledgeContext | _FakeKnowledgeContext = _KnowledgeContext(knowledge, self.name)
 
             if knowledge.expose_tool:
                 self._additional_tools.append(_make_knowledge_tool(knowledge.store))
@@ -959,6 +965,7 @@ class Agent(PluginTarget, Generic[TResult]):
     async def ask(
         self,
         msg: SendableMessage | Input,
+        /,
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
@@ -976,6 +983,7 @@ class Agent(PluginTarget, Generic[TResult]):
     async def ask(
         self,
         msg: SendableMessage | Input,
+        /,
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
@@ -993,6 +1001,7 @@ class Agent(PluginTarget, Generic[TResult]):
     async def ask(
         self,
         msg: SendableMessage | Input,
+        /,
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
@@ -1056,6 +1065,7 @@ class Agent(PluginTarget, Generic[TResult]):
     def run(
         self,
         msg: SendableMessage | Input,
+        /,
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
@@ -1073,6 +1083,7 @@ class Agent(PluginTarget, Generic[TResult]):
     def run(
         self,
         msg: SendableMessage | Input,
+        /,
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
@@ -1090,6 +1101,7 @@ class Agent(PluginTarget, Generic[TResult]):
     def run(
         self,
         msg: SendableMessage | Input,
+        /,
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
@@ -1205,6 +1217,69 @@ class Agent(PluginTarget, Generic[TResult]):
             hitl_hook=hitl_hook,
             client=client,
         )
+
+    @overload
+    async def resume(
+        self,
+        *events: BaseEvent,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: type[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[T2, TResult]": ...
+
+    @overload
+    async def resume(
+        self,
+        *events: BaseEvent,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: ResponseProto[T2],
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[T2, TResult]": ...
+
+    @overload
+    async def resume(
+        self,
+        *events: BaseEvent,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        response_schema: None,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[str, TResult]": ...
+
+    @overload
+    async def resume(
+        self,
+        *events: BaseEvent,
+        stream: Stream | None = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: dict[Any, Any] | None = ...,
+        prompt: Iterable[str] = ...,
+        config: ModelConfig | None = ...,
+        tools: Iterable[Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        hitl_hook: HumanHook | None = ...,
+    ) -> "AgentReply[TResult, TResult]": ...
 
     async def resume(
         self,
@@ -1375,7 +1450,7 @@ class Agent(PluginTarget, Generic[TResult]):
         """
         stream_lock = _get_stream_turn_lock(context.stream)
         async with stream_lock, self._knowledge_context.enter(context):
-            if response_schema is omit:
+            if isinstance(response_schema, Omit):
                 final_schema = self._response_schema
             else:
                 final_schema = ResponseSchema.ensure_schema(response_schema)
@@ -1439,7 +1514,8 @@ class Agent(PluginTarget, Generic[TResult]):
                 if merged is not None:
                     await context.send(DrainedModelRequest(merged.parts))
 
-                messages = await context.stream.history.get_events()
+                # `Storage` answers any iterable; the client indexes it, so take a snapshot.
+                messages = list(await context.stream.history.get_events())
                 result = await llm_call(messages, context)
                 # Emit usage at the point it is spent, decoupled from the
                 # response, so token accounting never depends on a response
@@ -1619,7 +1695,7 @@ class _KnowledgeContext:
         self._agent_name = agent_name
 
         self.__lock: asyncio.Lock | None = None
-        self.__bootstrapped = None
+        self.__bootstrapped = False
 
     @asynccontextmanager
     async def enter(self, context: "Context") -> AsyncGenerator[None]:
@@ -1899,12 +1975,10 @@ class _HaltCheckMiddleware(BaseMiddleware):
 
     async def on_turn(
         self,
-        call_next: Callable[..., Any],
+        call_next: AgentTurn,
         event: BaseEvent,
         context: Context,
-    ) -> Any:
-        from .events.alert import HaltEvent
-
+    ) -> ModelResponse:
         async def _on_halt(evt: HaltEvent) -> None:
             self._halted = True
             self._halt_reason = evt.reason
@@ -1917,13 +1991,11 @@ class _HaltCheckMiddleware(BaseMiddleware):
 
     async def on_llm_call(
         self,
-        call_next: Callable[..., Any],
-        events: Any,
+        call_next: LLMCall,
+        events: Sequence[BaseEvent],
         context: Context,
     ) -> ModelResponse:
         if self._halted:
-            from ag2.events import ModelMessage
-
             return ModelResponse(
                 message=ModelMessage(content=f"HALTED: {self._halt_reason}"),
             )

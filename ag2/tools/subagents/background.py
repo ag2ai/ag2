@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from ag2.annotations import Context
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 def background_agent_tool(
-    agent: "Agent",
+    agent: "Agent[Any]",
     *,
     description: str,
     name: str | None = None,
@@ -73,7 +73,7 @@ def background_agent_tool(
 
 
 async def _run_and_deliver(
-    agent: "Agent",
+    agent: "Agent[Any]",
     objective: str,
     *,
     context: str,

@@ -4,7 +4,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
-from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, contextmanager
 from functools import partial
 from typing import Any, overload
 from uuid import uuid4
@@ -14,7 +14,7 @@ from fast_depends.core import CallModel
 from ag2.types import ClassInfo, SendableMessage
 
 from .annotations import Context as AnnotatedContext
-from .context import ConversationContext, Stream, StreamId, SubId, drop_background_task
+from .context import ConversationContext, Stream, StreamId, SubId, TEvent, drop_background_task
 from .events import BaseEvent, Input, ModelRequest
 from .events.conditions import Condition, TypeCondition
 from .history import History, MemoryStorage, Storage
@@ -73,11 +73,23 @@ class ABCStream(Stream):
             condition = TypeCondition(condition)
         return SubStream(self, condition)
 
+    @overload
+    def get(
+        self,
+        condition: type[TEvent],
+    ) -> AbstractAsyncContextManager[asyncio.Future[TEvent]]: ...
+
+    @overload
+    def get(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> AbstractAsyncContextManager[asyncio.Future[BaseEvent]]: ...
+
     @asynccontextmanager
     async def get(
         self,
         condition: ClassInfo | Condition,
-    ) -> AsyncGenerator[asyncio.Future[BaseEvent]]:
+    ) -> AsyncGenerator[asyncio.Future[Any]]:
         result = asyncio.Future[BaseEvent]()
 
         async def wait_result(event: BaseEvent) -> None:

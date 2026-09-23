@@ -4,7 +4,7 @@
 
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from ag2.annotations import Context
@@ -113,7 +113,7 @@ def _sole_pair(incurred: Iterable[UsageEvent]) -> tuple[str | None, str | None]:
 
 
 async def run_task(
-    agent: "Agent",
+    agent: "Agent[Any]",
     objective: str,
     *,
     parent_context: Context,
