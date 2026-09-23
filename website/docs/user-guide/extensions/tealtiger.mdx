@@ -480,7 +480,7 @@ for name in ("researcher", "analyst", "writer"):
 
 The kill switch is enforced at both the **turn level** (`on_turn`) and the **tool level** (`on_tool_execution`):
 
-- **ENFORCE mode**: returns `ToolErrorEvent`, blocking the entire turn or tool call
+- **ENFORCE mode**: a frozen agent's turn raises `GovernanceDeniedError` (a `PermissionError` carrying the `decision`) before the model is called; a tool call returns `ToolErrorEvent`
 - **MONITOR mode**: records a DENY decision but allows the action through
 - **OBSERVE mode**: not evaluated (passthrough)
 

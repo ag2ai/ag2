@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ag2.events import ToolCallEvent, ToolErrorEvent
-from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTigerMiddleware
+from ag2.events import ModelRequest, TextInput, ToolCallEvent, ToolErrorEvent
+from ag2.extensions.tealtiger import GovernanceDeniedError, GovernanceMode, GovernancePolicy, TealTigerMiddleware
 from ag2.extensions.tealtiger.types import TEECReceipt
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
@@ -494,20 +494,19 @@ class TestReset:
 class TestOnTurn:
     @pytest.mark.asyncio
     async def test_frozen_agent_blocked_enforce(self):
-        """ENFORCE mode: frozen agent's turn is blocked with ToolErrorEvent."""
+        """ENFORCE mode: frozen agent's turn is blocked with GovernanceDeniedError."""
         mw = TealTigerMiddleware(mode=GovernanceMode.ENFORCE)
         mw.freeze("assistant")
 
         ctx = _make_context("assistant")
         per_turn = mw(MagicMock(), ctx)
         call_next = AsyncMock()
-        event = MagicMock()
 
-        result = await per_turn.on_turn(call_next, event, ctx)
+        with pytest.raises(GovernanceDeniedError, match="frozen") as exc_info:
+            await per_turn.on_turn(call_next, ModelRequest([TextInput("hi")]), ctx)
 
-        assert isinstance(result, ToolErrorEvent)
-        assert "AGENT_FROZEN" in str(result.error) or "frozen" in str(result.error).lower()
         call_next.assert_not_awaited()
+        assert exc_info.value.decision is mw.decisions[0]
         assert len(mw.decisions) == 1
         assert mw.decisions[0].action == "DENY"
         assert "AGENT_FROZEN" in mw.decisions[0].reason_codes
@@ -573,9 +572,9 @@ class TestOnTurn:
         ctx = _make_context("assistant")
         per_turn = mw(MagicMock(), ctx)
         call_next = AsyncMock()
-        event = MagicMock()
 
-        await per_turn.on_turn(call_next, event, ctx)
+        with pytest.raises(GovernanceDeniedError):
+            await per_turn.on_turn(call_next, ModelRequest([TextInput("hi")]), ctx)
 
         assert len(received) == 1
         assert received[0].action == "DENY"

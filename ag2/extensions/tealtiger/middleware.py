@@ -32,6 +32,7 @@ from ag2.extensions.tealtiger.types import (
     PII_PATTERNS,
     SECRET_PATTERNS,
     GovernanceDecision,
+    GovernanceDeniedError,
     GovernanceMode,
     GovernancePolicy,
     InjectionFinding,
@@ -316,7 +317,7 @@ class _TealTigerPerTurn(BaseMiddleware):
     ) -> Any:
         """Kill switch enforcement at the turn level.
 
-        ENFORCE mode: frozen agent's turn is blocked with ToolErrorEvent.
+        ENFORCE mode: frozen agent's turn is blocked with GovernanceDeniedError.
         MONITOR mode: frozen agent is logged but allowed through.
         OBSERVE mode: no evaluation, pass through.
         """
@@ -341,11 +342,9 @@ class _TealTigerPerTurn(BaseMiddleware):
                 self._factory.on_decision(decision)
 
             if self._factory.mode == GovernanceMode.ENFORCE:
-                return ToolErrorEvent.from_call(
-                    event,
-                    error=Exception(
-                        f"[GOVERNANCE DENIED] Agent '{agent_name}' is frozen (kill switch active). All actions blocked."
-                    ),
+                raise GovernanceDeniedError(
+                    f"[GOVERNANCE DENIED] Agent '{agent_name}' is frozen (kill switch active). All actions blocked.",
+                    decision,
                 )
             # MONITOR: record but allow through
 
