@@ -119,8 +119,8 @@ class PromptObserverMixin:
             return wrapper(callback)
         return wrapper
 
-    def add_tool(self, t: FunctionTool) -> None:
-        """Store a freshly built tool. Subclasses choose eager vs deferred."""
+    def add_tool(self, t: Callable[..., Any] | Tool) -> Self:
+        """Store a tool. Subclasses choose eager vs deferred."""
         raise NotImplementedError
 
     @overload
@@ -239,9 +239,10 @@ class Plugin(PromptObserverMixin):
         self._hitl_hook = func
         return func
 
-    def add_tool(self, t: FunctionTool) -> None:
+    def add_tool(self, t: Callable[..., Any] | Tool) -> Self:
         """Defer the tool; it is applied to an agent later via ``_apply_plugin``."""
         self._tools.append(t)
+        return self
 
 
 class PluginTarget(PromptObserverMixin):
