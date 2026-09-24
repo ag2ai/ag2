@@ -23,12 +23,12 @@ Two responsibilities:
 
 import json
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.propagate import inject
-from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.sdk.trace import Span as RecordingSpan
 from opentelemetry.trace import Link, SpanContext, SpanKind, Status, StatusCode
 
 from ag2._telemetry_consts import (
@@ -52,8 +52,7 @@ from ag2._telemetry_consts import (
 from .layout import spans_path
 
 if TYPE_CHECKING:
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.trace import Span
+    from opentelemetry.trace import Span, TracerProvider
 
     from ag2.knowledge import KnowledgeStore
 
@@ -93,7 +92,7 @@ def iso_to_ns(iso: "str | None") -> "int | None":
     return int(datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1_000_000_000)
 
 
-def span_to_record(span: "ReadableSpan") -> dict:
+def span_to_record(span: RecordingSpan) -> dict[str, Any]:
     """Flatten an ended span into the hub-native JSONL record (see design §4.1).
 
     Hex trace/span ids are W3C-compatible, so the disk record and the
@@ -132,20 +131,20 @@ def span_to_record(span: "ReadableSpan") -> dict:
     }
 
 
-def serialize_span(span: "ReadableSpan") -> "tuple[dict, str]":
+def serialize_span(span: RecordingSpan) -> "tuple[dict[str, Any], str]":
     """Return ``(record, jsonl_line)`` for an ended span — shared by Hub and listener."""
     record = span_to_record(span)
     line = json.dumps(record, default=str, sort_keys=True) + "\n"
     return record, line
 
 
-async def write_span(store: "KnowledgeStore", span: "ReadableSpan") -> int:
+async def write_span(store: "KnowledgeStore", span: "Span") -> int:
     """Serialise an ended span to one JSONL line and append it. Returns bytes written.
 
     Non-recording spans (a ``NonRecordingSpan`` from a no-op provider or a
-    dropped sample) are not ``ReadableSpan``s and write nothing (returns 0).
+    dropped sample) are not recording spans and write nothing (returns 0).
     """
-    if not isinstance(span, ReadableSpan):
+    if not isinstance(span, RecordingSpan):
         return 0
     _, line = serialize_span(span)
     await store.append(spans_path(), line)
@@ -198,7 +197,7 @@ class EnvelopeTracer:
         if caller.is_valid:
             links.append(Link(caller, attributes={ATTR_LINK_KIND: LINK_TRIGGERED_BY}))
 
-        attributes: dict = {
+        attributes: dict[str, Any] = {
             **self._stamp,
             ATTR_SPAN_TYPE: SPAN_TYPE_ENVELOPE,
             ATTR_NET_CHANNEL_ID: envelope.channel_id,

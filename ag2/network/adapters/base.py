@@ -30,7 +30,7 @@ Three layers of surface per adapter:
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from ag2.events import Input
 
@@ -45,13 +45,13 @@ if TYPE_CHECKING:
     from ag2.tools import Tool
 
     from ..client.agent_client import AgentClient
-    from ..hub.core import Hub
 
 __all__ = (
     "AdapterResult",
     "AdapterState",
     "ChannelAdapter",
     "ExpectedTurn",
+    "NameDirectory",
     "default_build_packet_envelope",
     "default_build_round_envelope",
     "default_build_text_envelope",
@@ -60,6 +60,8 @@ __all__ = (
     "default_render_envelope",
     "default_tools_for",
 )
+
+TState = TypeVar("TState")
 
 
 class AdapterState(Protocol):
@@ -99,22 +101,33 @@ class ExpectedTurn:
     triggering_envelope_id: str | None = None
 
 
-class ChannelAdapter(Protocol):
+class NameDirectory(Protocol):
+    """The ``name → agent_id`` lookup an adapter may resolve a round's routing against.
+
+    Both ``Hub`` and ``HubClient`` provide it; the notify handler passes the latter.
+    """
+
+    def name_to_id_map(self) -> dict[str, str]: ...
+
+
+class ChannelAdapter(Protocol[TState]):
     """Code half of the manifest/adapter split.
 
     Adapters are looked up at channel-create time by
     ``(manifest.type, manifest.version)``. Re-registering an adapter
     at a new version does not retroactively change in-flight channels
     — they keep their original manifest snapshot.
+
+    Generic over the state class it folds; the hub holds ``ChannelAdapter[Any]``.
     """
 
     manifest: ChannelManifest
 
-    def initial_state(self, metadata: ChannelMetadata) -> AdapterState:
+    def initial_state(self, metadata: ChannelMetadata) -> TState:
         """Empty state for a fresh channel."""
         ...
 
-    def fold(self, envelope: Envelope, state: AdapterState) -> AdapterState:
+    def fold(self, envelope: Envelope, state: TState) -> TState:
         """Append ``envelope`` into the derived state. Pure function.
 
         Called once per WAL append by the hub. Must be deterministic so
@@ -130,7 +143,7 @@ class ChannelAdapter(Protocol):
         self,
         metadata: ChannelMetadata,
         envelope: Envelope,
-        state: AdapterState,
+        state: TState,
     ) -> None:
         """Raise if this envelope is not allowed by the protocol at this point.
 
@@ -142,7 +155,7 @@ class ChannelAdapter(Protocol):
         self,
         metadata: ChannelMetadata,
         envelope: Envelope,
-        state: AdapterState,
+        state: TState,
     ) -> AdapterResult:
         """Decide post-accept transitions.
 
@@ -153,7 +166,7 @@ class ChannelAdapter(Protocol):
     def expected_next(
         self,
         metadata: ChannelMetadata,
-        state: AdapterState,
+        state: TState,
     ) -> "ExpectedTurn | None":
         """Identify the participant the protocol expects to act next.
 
@@ -194,8 +207,8 @@ class ChannelAdapter(Protocol):
         sender_id: str,
         reply: "AgentReply",
         events: "list[BaseEvent]",
-        state: AdapterState,
-        hub: "Hub",
+        state: TState,
+        hub: NameDirectory,
     ) -> Envelope | None:
         """Build the envelope that captures one ``Agent.ask`` round.
 
@@ -229,7 +242,7 @@ class ChannelAdapter(Protocol):
         self,
         client: "AgentClient",
         metadata: ChannelMetadata,
-        state: AdapterState,
+        state: TState,
         participant_id: str,
     ) -> "list[Tool]":
         """Return the LLM tools this adapter offers a participant.
@@ -273,7 +286,7 @@ class ChannelAdapter(Protocol):
         body: str,
         *,
         handoff: "Handoff | None" = None,
-        context_set: dict | None = None,
+        context_set: dict[str, Any] | None = None,
         audience: list[str] | None = None,
         causation_id: str | None = None,
     ) -> Envelope:
@@ -305,7 +318,7 @@ def default_build_round_envelope(
     reply: "AgentReply",
     events: "list[BaseEvent]",
     state: AdapterState,
-    hub: "Hub",
+    hub: NameDirectory,
 ) -> Envelope | None:
     """Default ``build_round_envelope``: emit ``EV_TEXT(body)`` or
     ``None``.

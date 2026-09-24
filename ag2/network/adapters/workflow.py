@@ -65,6 +65,7 @@ from ..views.builtin import NamedWindowedSummary
 from .base import (
     AdapterResult,
     ExpectedTurn,
+    NameDirectory,
     default_build_packet_envelope,
     default_build_text_envelope,
     default_render_envelope,
@@ -73,8 +74,6 @@ from .base import (
 
 if TYPE_CHECKING:
     from ag2.agent import AgentReply
-
-    from ..hub.core import Hub
 
 __all__ = ("WORKFLOW_TYPE", "WorkflowAdapter", "WorkflowState")
 
@@ -378,7 +377,7 @@ class WorkflowAdapter:
         reply: "AgentReply",
         events: list[BaseEvent],
         state: "WorkflowState | None",
-        hub: "Hub",
+        hub: NameDirectory,
     ) -> Envelope | None:
         """Build the ``EV_PACKET`` envelope capturing this round.
 

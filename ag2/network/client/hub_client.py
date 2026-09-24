@@ -91,7 +91,7 @@ def _error_from_code(code: str, message: str) -> NetworkError:
     return _ERROR_CLASSES.get(code, NetworkError)(message)
 
 
-def _default_adapters() -> list[ChannelAdapter]:
+def _default_adapters() -> list[ChannelAdapter[Any]]:
     """Construct the built-in adapters for the client-side registry.
 
     Stateless instances — every routing decision derives from channel
@@ -155,7 +155,7 @@ class HubClient:
         # notify handler can resolve adapters and fold state locally.
         # Harmless in-process (adapter resolution still delegates to the
         # hub there for authoritative behaviour).
-        self._adapters: dict[tuple[str, int], ChannelAdapter] = {}
+        self._adapters: dict[tuple[str, int], ChannelAdapter[Any]] = {}
         for adapter in _default_adapters():
             self._adapters[(adapter.manifest.type, adapter.manifest.version)] = adapter
 
@@ -944,7 +944,7 @@ class HubClient:
 
     # — Adapter / view / name resolution (client-side) —
 
-    def register_adapter(self, adapter: ChannelAdapter) -> None:
+    def register_adapter(self, adapter: ChannelAdapter[Any]) -> None:
         """Register a custom ``ChannelAdapter`` in the client-side registry.
 
         Required cross-process for any non-built-in channel type, so the
@@ -954,7 +954,7 @@ class HubClient:
         """
         self._adapters[(adapter.manifest.type, adapter.manifest.version)] = adapter
 
-    def adapter_for_metadata(self, metadata: ChannelMetadata) -> ChannelAdapter:
+    def adapter_for_metadata(self, metadata: ChannelMetadata) -> ChannelAdapter[Any]:
         """Resolve the adapter for an already-fetched ``ChannelMetadata``.
 
         Synchronous — no I/O. In-process it delegates to the hub's
@@ -969,7 +969,7 @@ class HubClient:
             raise NotFoundError(f"no adapter registered for {key[0]!r}@v{key[1]}")
         return adapter
 
-    def adapter_for(self, channel_id: str) -> ChannelAdapter:
+    def adapter_for(self, channel_id: str) -> ChannelAdapter[Any]:
         """Resolve the adapter for ``channel_id``.
 
         In-process delegates to the hub. Cross-process resolves from the

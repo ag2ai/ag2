@@ -21,7 +21,7 @@ so user-supplied overrides can replace only the parts they care about.
 
 import contextlib
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ag2._telemetry_consts import TRACEPARENT_DEP_KEY
 from ag2.events import BaseEvent, ModelMessage, ModelRequest, TextInput
@@ -60,7 +60,7 @@ def _is_task_event(event_type: str) -> bool:
 async def _render_current_input(
     view: ViewPolicy,
     envelope: Envelope,
-    adapter: "ChannelAdapter",
+    adapter: "ChannelAdapter[Any]",
     participant_id: str,
     metadata: ChannelMetadata,
     name_for: NameResolver,

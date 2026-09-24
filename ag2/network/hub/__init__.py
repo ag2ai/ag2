@@ -12,6 +12,8 @@ modules — the trust boundary runs through ``HubClient`` /
 ``AgentClient`` (see ``client/``).
 """
 
+from typing import TYPE_CHECKING
+
 from ag2.exceptions import missing_optional_dependency
 
 from .arbiter import Allow, BaseHubArbiter, Decision, Deny, HubArbiter, RuleBasedArbiter
@@ -72,10 +74,13 @@ from .layout import (
 )
 from .listener import BaseHubListener, HubListener
 
-try:
+if TYPE_CHECKING:
     from .telemetry import HubTelemetryListener
-except ImportError as e:
-    HubTelemetryListener = missing_optional_dependency("HubTelemetryListener", "tracing", e)
+else:
+    try:
+        from .telemetry import HubTelemetryListener
+    except ImportError as e:
+        HubTelemetryListener = missing_optional_dependency("HubTelemetryListener", "tracing", e)
 
 __all__ = (
     "AUDIT_KIND_AGENT_REGISTERED",

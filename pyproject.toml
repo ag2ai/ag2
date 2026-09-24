@@ -598,6 +598,13 @@ files = [
     # in last of the runtime. No extras needed.
     "ag2/agent.py",
 
+    # The network hub: the core, its listeners (the audit log and the
+    # telemetry listener), the arbiter, expectations and sweepers. The client
+    # and the adapters are written against its envelope, listener and adapter
+    # types, so it is the first of the network package in. `ag2[tracing]` is in
+    # the `types` group, so the tracing path is really checked.
+    "ag2/network/hub/",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;

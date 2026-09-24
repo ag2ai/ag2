@@ -34,7 +34,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ag2.knowledge import KnowledgeStore
 from ag2.task import TERMINAL_TASK_STATES, TaskMetadata, TaskState
@@ -48,6 +48,7 @@ from ..auth import AuthRegistry
 from ..channel import (
     ChannelMetadata,
     ChannelState,
+    Expectation,
     Participant,
     ParticipantRole,
     is_terminal_channel_state,
@@ -94,6 +95,7 @@ from .audit import AuditLog
 from .expectations import (
     ExpectationContext,
     ExpectationEvaluator,
+    Violation,
     ViolationHandler,
     default_evaluators,
     default_handlers,
@@ -116,14 +118,19 @@ from .layout import (
 from .listener import HubListener
 from .sweepers import _IntervalSweeper
 
-try:
-    # Tracing stays fully opt-in: the Hub is OTel-free unless a
-    # ``tracer_provider`` is passed.
+if TYPE_CHECKING:
     from ._envelope_tracing import EnvelopeTracer
-except ImportError:
-    EnvelopeTracer = None
+else:
+    try:
+        # Tracing stays fully opt-in: the Hub is OTel-free unless a
+        # ``tracer_provider`` is passed.
+        from ._envelope_tracing import EnvelopeTracer
+    except ImportError:
+        EnvelopeTracer = None
 
 if TYPE_CHECKING:
+    from opentelemetry.trace import SpanContext, TracerProvider
+
     # Annotation-only — the hub forwards these to ``HubClient`` and never
     # touches a tenant ``Agent`` at runtime, preserving the trust boundary.
     from ag2.agent import Agent
@@ -216,7 +223,7 @@ class Hub:
         ttl_sweep_interval: float = 30.0,
         expectation_sweep_interval: float = 10.0,
         invite_ack_timeout: float = 30.0,
-        tracer_provider: object | None = None,
+        tracer_provider: "TracerProvider | None" = None,
     ) -> None:
         # __init__ stores params; side effects deferred to start()/hydrate().
         self._store = store
@@ -230,7 +237,7 @@ class Hub:
         # append + dispatch in a span and injects its W3C traceparent into
         # ``envelope.trace_id`` before WAL (so the WAL is the source of
         # truth).
-        self._envelope_tracer = None
+        self._envelope_tracer: EnvelopeTracer | None = None
         if tracer_provider is not None:
             if EnvelopeTracer is None:
                 raise ImportError(
@@ -265,7 +272,7 @@ class Hub:
         self._capability_index: dict[str, set[str]] = {}
 
         # Adapter registry.
-        self._adapters: dict[tuple[str, int], ChannelAdapter] = {}
+        self._adapters: dict[tuple[str, int], ChannelAdapter[Any]] = {}
 
         # Channel caches.
         self._channels: dict[str, ChannelMetadata] = {}
@@ -376,7 +383,7 @@ class Hub:
         ttl_sweep_interval: float = 30.0,
         expectation_sweep_interval: float = 10.0,
         invite_ack_timeout: float = 30.0,
-        tracer_provider: object | None = None,
+        tracer_provider: "TracerProvider | None" = None,
         register_default_adapters: bool = True,
     ) -> "Hub":
         """Construct + hydrate from disk + start sweepers. Production entry point.
@@ -579,7 +586,7 @@ class Hub:
 
     # ── Adapter registry ────────────────────────────────────────────────────
 
-    def register_adapter(self, adapter: ChannelAdapter) -> None:
+    def register_adapter(self, adapter: ChannelAdapter[Any]) -> None:
         """Register a ``ChannelAdapter`` keyed by ``(type, version)``.
 
         Re-registering at the same key replaces the prior adapter; the
@@ -589,7 +596,7 @@ class Hub:
         key = (adapter.manifest.type, adapter.manifest.version)
         self._adapters[key] = adapter
 
-    def _adapter_for(self, manifest_type: str, manifest_version: int) -> ChannelAdapter:
+    def _adapter_for(self, manifest_type: str, manifest_version: int) -> ChannelAdapter[Any]:
         adapter = self._adapters.get((manifest_type, manifest_version))
         if adapter is None:
             raise NotFoundError(f"no adapter registered for {manifest_type!r}@v{manifest_version}")
@@ -640,7 +647,7 @@ class Hub:
         self,
         task_id: str,
         kind: str,
-        payload: dict,
+        payload: dict[str, Any],
     ) -> None:
         """Fan out an ``on_task_event`` to every listener.
 
@@ -725,7 +732,7 @@ class Hub:
         """Read-only lookup against the proxy registry."""
         return self._remote_proxies.get(scheme)
 
-    def health(self) -> dict:
+    def health(self) -> dict[str, Any]:
         """Return an operational snapshot of hub state.
 
         Cheap to compute (in-memory only). Wire to a ``/health``
@@ -781,7 +788,7 @@ class Hub:
                 total += written
         return total
 
-    def _channel_span_context(self, channel_id: str) -> object | None:
+    def _channel_span_context(self, channel_id: str) -> "SpanContext | None":
         """Resolve an open channel span's context from a telemetry listener.
 
         Lets the Hub attach an envelope→channel SpanLink without coupling
@@ -792,7 +799,7 @@ class Hub:
             getter = getattr(listener, "channel_span_context", None)
             if getter is None:
                 continue
-            ctx = getter(channel_id)
+            ctx: SpanContext | None = getter(channel_id)
             if ctx is not None:
                 return ctx
         return None
@@ -853,13 +860,15 @@ class Hub:
     ) -> None:  # noqa: ARG002
         return None
 
-    async def on_channel_event(self, channel_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+    async def on_channel_event(self, channel_id: str, kind: str, payload: dict[str, Any]) -> None:  # noqa: ARG002
         return None
 
-    async def on_agent_event(self, agent_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+    async def on_agent_event(self, agent_id: str, kind: str, payload: dict[str, Any]) -> None:  # noqa: ARG002
         return None
 
-    async def on_expectation_fired(self, channel_id: str, expectation: object, violation: object) -> None:  # noqa: ARG002
+    async def on_expectation_fired(  # noqa: ARG002
+        self, channel_id: str, expectation: "Expectation", violation: "Violation"
+    ) -> None:
         return None
 
     async def on_turn_failed(
@@ -871,7 +880,7 @@ class Hub:
     ) -> None:  # noqa: ARG002
         return None
 
-    async def on_task_event(self, task_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+    async def on_task_event(self, task_id: str, kind: str, payload: dict[str, Any]) -> None:  # noqa: ARG002
         return None
 
     async def on_inbox_pressure(self, agent_id: str, pending: int, cap: int) -> None:  # noqa: ARG002
@@ -1628,7 +1637,7 @@ class Hub:
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
         return adapter.default_view_policy(metadata, participant_id)
 
-    def adapter_for(self, channel_id: str) -> ChannelAdapter:
+    def adapter_for(self, channel_id: str) -> ChannelAdapter[Any]:
         """Return the adapter resolved from ``channel_id``'s manifest.
 
         Public surface so callers (notably the default notify handler)
@@ -1819,7 +1828,8 @@ class Hub:
         raw = await self._store.read(task_checkpoint_path(task_id))
         if raw is None:
             return None
-        return json.loads(raw)
+        state: dict[str, object] = json.loads(raw)
+        return state
 
     # ── Sweeper hook ────────────────────────────────────────────────────────
 
@@ -1840,10 +1850,10 @@ class Hub:
 
         # Expire standalone tasks (those not under an expiring channel).
         expired_tasks: list[str] = []
-        for task_id, metadata in list(self._tasks.items()):
-            if metadata.state in TERMINAL_TASK_STATES:
+        for task_id, task_metadata in list(self._tasks.items()):
+            if task_metadata.state in TERMINAL_TASK_STATES:
                 continue
-            if metadata.expires_at and metadata.expires_at <= now:
+            if task_metadata.expires_at and task_metadata.expires_at <= now:
                 expired_tasks.append(task_id)
         for task_id in expired_tasks:
             await self._transition_task(task_id, TaskState.EXPIRED, "ttl_expired")
@@ -2007,7 +2017,7 @@ class Hub:
         finally:
             # End the envelope span (and mirror it to disk). An escaped
             # exception or per-recipient delivery failures mark it ERROR.
-            if envelope_span is not None:
+            if envelope_span is not None and self._envelope_tracer is not None:
                 await self._envelope_tracer.finish_envelope_span(
                     envelope_span, dispatch_failures=dispatch_failures, error=dispatch_error
                 )
@@ -2359,7 +2369,7 @@ class Hub:
             return
         await endpoint.send_frame(ResponseFrame(request_id=frame.request_id, ok=True, result=result))
 
-    async def _dispatch_request_op(self, endpoint: LinkEndpoint, op: str, params: dict) -> object:
+    async def _dispatch_request_op(self, endpoint: LinkEndpoint, op: str, params: dict[str, Any]) -> object:
         """Map one control-plane ``op`` to its hub method + (de)serialisation.
 
         Long but flat by design: one place to see the entire wire
@@ -2380,6 +2390,7 @@ class Hub:
             )
             # Bind the calling connection to the freshly-stamped identity
             # so dispatched notifies route back to this endpoint.
+            assert registered.agent_id is not None  # register_identity stamps it
             self.bind_endpoint(endpoint.endpoint_id, registered.agent_id)
             return registered.to_dict()
         if op == "get_agent":
