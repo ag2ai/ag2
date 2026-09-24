@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from dirty_equals import IsPartialDict
 
 pytest.importorskip("mcp")
 
@@ -342,6 +343,19 @@ class TestLendingTheAgentsModel:
         [round_one] = server.received
         assert round_one["s"]["content"] == {"type": "text", "text": "a summary"}
         assert round_one["s"]["role"] == "assistant"
+
+    async def test_a_config_naming_no_model_is_reported_as_unknown(self, calling_agent: CallingAgent) -> None:
+        """The wire field is not optional, so a config that names no model still reports one."""
+        server = ThirdPartyServer({"s": sampling("Summarise this.")})
+
+        result = await calling_agent.call(
+            server,
+            answering=MCPAnswerPolicy(sampling=True),
+            config=TestConfig("a summary"),
+        )
+
+        assert isinstance(result, ToolResultEvent), f"the call did not complete: {result}"
+        assert server.received == [{"s": IsPartialDict({"model": "unknown"})}]
 
     async def test_sampling_is_advertised_only_when_enabled(self, calling_agent: CallingAgent) -> None:
         server = ThirdPartyServer()

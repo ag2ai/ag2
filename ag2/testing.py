@@ -119,7 +119,7 @@ class TrackingConfig(ModelConfig):
         return self.config.provider
 
     @property
-    def model(self) -> str:
+    def model(self) -> str | None:
         return self.config.model
 
     def copy(self) -> Self:
@@ -169,9 +169,7 @@ class TestConfig(ModelConfig):
         return self._provider
 
     @property
-    def model(self) -> str:
-        if not self._model:
-            raise NotImplementedError
+    def model(self) -> str | None:
         return self._model
 
     def copy(self) -> Self:

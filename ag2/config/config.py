@@ -32,7 +32,7 @@ class ModelConfig(Protocol):
         raise NotImplementedError
 
     @property
-    def model(self) -> str:
+    def model(self) -> str | None:
         raise NotImplementedError
 
     def copy(self) -> Self: ...

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 
 from typing_extensions import Self
 
+from ag2.config.config import ModelConfig, ModelProvider
 from ag2.hitl import ElicitationPolicy
 
 from .tool_gateway import GatewayAddress
@@ -55,7 +56,7 @@ PermissionPolicy = Literal["ask", "auto", "deny"]
 
 
 @dataclass(slots=True)
-class ACPConfig:
+class ACPConfig(ModelConfig):
     """Drive a CLI coding agent over ACP, launching it as a local subprocess.
 
     Also the base every other ACP config extends:
@@ -193,6 +194,10 @@ class ACPConfig:
         needs and nothing a remote one can reach.
         """
         return GatewayAddress()
+
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError("An ACP agent has no AG2 provider.")
 
     def copy(self, /, **overrides: object) -> Self:
         # dataclasses.replace can't statically check dynamic **overrides against

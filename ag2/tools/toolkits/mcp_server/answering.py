@@ -279,11 +279,12 @@ def _decode(data: str) -> bytes:
 def _model_name(config: "ModelConfig") -> str:
     """The model name to report back.
 
-    ``ModelConfig.model`` may raise for a config naming none, and the wire field
-    is not optional, so this reports what it can.
+    ``ModelConfig.model`` may raise or be ``None`` for a config naming none, and
+    the wire field is not optional, so this reports what it can.
     """
     with contextlib.suppress(NotImplementedError):
-        return config.model
+        if (model := config.model) is not None:
+            return model
     return "unknown"
 
 

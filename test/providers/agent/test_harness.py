@@ -88,7 +88,7 @@ async def test_sliding_window_trims_long_history(provider_config) -> None:
             return self._inner.provider
 
         @property
-        def model(self) -> str:
+        def model(self) -> str | None:
             return self._inner.model
 
         def copy(self) -> Self:
