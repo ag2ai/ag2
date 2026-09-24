@@ -601,25 +601,14 @@ files = [
     # in last of the runtime. No extras needed.
     "ag2/agent.py",
 
-    # The network hub: the core, its listeners (the audit log and the
-    # telemetry listener), the arbiter, expectations and sweepers. The client
-    # and the adapters are written against its envelope, listener and adapter
-    # types, so it is the first of the network package in. `ag2[tracing]` is in
-    # the `types` group, so the tracing path is really checked.
-    "ag2/network/hub/",
-
-    # The network client: `HubClient`, `AgentClient`, `HumanClient`, the
-    # per-participant `Channel`, the default notify handler, the plugin and the
-    # identity-level LLM tools. It is what a downstream developer holds to join
-    # a hub, so its signatures are the ones their checker follows. No extras
-    # needed; `ag2[tracing]` (checkpoint span events) is in the `types` group.
-    "ag2/network/client/",
-
-    # The transport: frames, the `Link` protocol, `LocalLink` and the WebSocket
-    # `WsLink`. `websockets` ships `py.typed` and is an additional dependency,
-    # not an extra, so it is in the `types` group directly and `ws.py` is
+    # The agent network, the whole package: the hub, the client, the transport,
+    # the channel adapters, the workflow transition graph, the views, and the
+    # envelope, channel and identity types they share. The client is what a
+    # downstream developer holds to join a hub, so its signatures are the ones
+    # their checker follows. `ag2[tracing]` and `websockets` (an additional
+    # dependency, not an extra) are both in the `types` group, so all of it is
     # really checked on every pull request.
-    "ag2/network/transport/",
+    "ag2/network/",
 
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather

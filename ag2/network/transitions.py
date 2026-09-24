@@ -30,7 +30,7 @@ under a unique ``name``.
 """
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
 from .envelope import EV_PACKET, Envelope
@@ -237,7 +237,8 @@ class ContextEquals:
     name: ClassVar[str] = "context_equals"
 
     def evaluate(self, state: "WorkflowState", envelope: Envelope) -> bool:
-        return state.context_vars.get(self.key) == self.value
+        matches: bool = state.context_vars.get(self.key) == self.value
+        return matches
 
 
 # ── Registry ────────────────────────────────────────────────────────────────
@@ -373,14 +374,13 @@ class TransitionGraph:
         when you need isolation (e.g. multi-tenant tests) or a registry
         seeded with custom targets / conditions.
         """
-        if isinstance(data, str):
-            data = json.loads(data)
+        parsed: dict[str, Any] = json.loads(data) if isinstance(data, str) else data
         reg = registry if registry is not None else TransitionRegistry.default()
         return cls(
-            initial_speaker=data["initial_speaker"],
-            transitions=[_transition_from_dict(t, reg) for t in data.get("transitions", [])],
-            default_target=reg.target_from_dict(data.get("default_target")),
-            max_turns=data.get("max_turns"),
+            initial_speaker=parsed["initial_speaker"],
+            transitions=[_transition_from_dict(t, reg) for t in parsed.get("transitions", [])],
+            default_target=reg.target_from_dict(parsed.get("default_target")),
+            max_turns=parsed.get("max_turns"),
         )
 
     # ── Convenience factories ──────────────────────────────────────
@@ -453,6 +453,8 @@ def _transition_from_dict(data: dict[str, Any], registry: TransitionRegistry) ->
 def _dataclass_args(obj: object) -> dict[str, Any]:
     """``asdict`` for the instance fields only — ``ClassVar``s are skipped
     automatically by ``dataclasses.fields``."""
-    if not hasattr(obj, "__dataclass_fields__"):
+    if not is_dataclass(obj):
         return {}
+    if isinstance(obj, type):
+        raise TypeError("asdict() should be called on dataclass instances")
     return asdict(obj)

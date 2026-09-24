@@ -20,6 +20,9 @@ non-respondent send.
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+from ag2.tools.final import FunctionTool
 
 from ..channel import (
     ChannelManifest,
@@ -41,17 +44,26 @@ from ..envelope import (
     Envelope,
 )
 from ..errors import ProtocolError
+from ..handoff import Handoff
 from ..views.base import ViewPolicy
 from ..views.builtin import FullTranscript
 from .base import (
     AdapterResult,
     ExpectedTurn,
+    NameDirectory,
     default_build_packet_envelope,
     default_build_round_envelope,
     default_build_text_envelope,
     default_extract_turn_input,
     default_render_envelope,
 )
+
+if TYPE_CHECKING:
+    from ag2.agent import AgentReply
+    from ag2.events import BaseEvent
+    from ag2.tools.tool import Tool
+
+    from ..client.agent_client import AgentClient
 
 __all__ = ("CONSULTING_TYPE", "ConsultingAdapter", "ConsultingState")
 
@@ -110,7 +122,7 @@ class ConsultingAdapter:
         # unregister + re-register yields a new agent_id, so the dead
         # entry from the prior generation is leaked memory bounded by
         # the total registration count — acceptable for V1.
-        self._say_tool_cache: dict[str, object] = {}
+        self._say_tool_cache: dict[str, FunctionTool] = {}
         self.manifest = ChannelManifest(
             type=CONSULTING_TYPE,
             version=1,
@@ -256,16 +268,30 @@ class ConsultingAdapter:
     ) -> ViewPolicy:
         return FullTranscript()
 
-    def extract_turn_input(self, envelope):
+    def extract_turn_input(self, envelope: Envelope) -> str | None:
         return default_extract_turn_input(envelope)
 
-    def build_round_envelope(self, metadata, sender_id, reply, events, state, hub):
+    def build_round_envelope(
+        self,
+        metadata: ChannelMetadata,
+        sender_id: str,
+        reply: "AgentReply",
+        events: "list[BaseEvent]",
+        state: ConsultingState,
+        hub: NameDirectory,
+    ) -> Envelope | None:
         return default_build_round_envelope(metadata, sender_id, reply, events, state, hub)
 
-    def render_envelope(self, envelope):
+    def render_envelope(self, envelope: Envelope) -> str | None:
         return default_render_envelope(envelope)
 
-    def tools_for(self, client, metadata, state, participant_id):
+    def tools_for(
+        self,
+        client: "AgentClient",
+        metadata: ChannelMetadata,
+        state: ConsultingState,
+        participant_id: str,
+    ) -> "list[Tool]":
         """Consulting offers ``say`` to the participant whose turn it is.
 
         State gating: the initiator has the floor until they send the
@@ -287,7 +313,7 @@ class ConsultingAdapter:
             return [self._cached_say_tool(client)]
         return []
 
-    def _cached_say_tool(self, client):
+    def _cached_say_tool(self, client: "AgentClient") -> FunctionTool:
         """Memoize the per-client ``say`` tool.
 
         The ``fast_depends`` schema build inside the ``@tool`` decorator
@@ -302,20 +328,28 @@ class ConsultingAdapter:
         self._say_tool_cache[client.agent_id] = tool
         return tool
 
-    def build_text_envelope(self, channel_id, sender_id, text, *, audience=None, causation_id=None):
+    def build_text_envelope(
+        self,
+        channel_id: str,
+        sender_id: str,
+        text: str,
+        *,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
         return default_build_text_envelope(channel_id, sender_id, text, audience=audience, causation_id=causation_id)
 
     def build_packet_envelope(
         self,
-        channel_id,
-        sender_id,
-        body,
+        channel_id: str,
+        sender_id: str,
+        body: str,
         *,
-        handoff=None,
-        context_set=None,
-        audience=None,
-        causation_id=None,
-    ):
+        handoff: Handoff | None = None,
+        context_set: dict[str, Any] | None = None,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
         return default_build_packet_envelope(
             channel_id,
             sender_id,

@@ -29,7 +29,7 @@ from ag2.task import TERMINAL_TASK_STATES, TaskMetadata, TaskSpec, TaskState
 from .errors import NotFoundError
 
 if TYPE_CHECKING:
-    from ag2.context import Stream
+    from ag2.context import Stream, SubId
 
     from .client.hub_client import HubClient
     from .hub import Hub
@@ -134,7 +134,7 @@ class TaskMirror:
                 task_id=task_id,
             )
 
-    def attach(self, stream: "Stream") -> list[object]:
+    def attach(self, stream: "Stream") -> "list[SubId]":
         """Subscribe to ``Task*`` events; returns sub ids for ``detach``."""
         return [
             stream.where(TaskStarted).subscribe(self._on_started, sync_to_thread=False),
@@ -145,11 +145,11 @@ class TaskMirror:
             stream.where(TaskCancelled).subscribe(self._on_cancelled, sync_to_thread=False),
         ]
 
-    def detach(self, stream: "Stream", sub_ids: list[object]) -> None:
+    def detach(self, stream: "Stream", sub_ids: "list[SubId]") -> None:
         """Unsubscribe the previously-attached subscriptions."""
         for sid in sub_ids:
             with contextlib.suppress(Exception):
-                stream.unsubscribe(sid)  # type: ignore[arg-type]
+                stream.unsubscribe(sid)
 
     async def _escalate(self, task_id: str, op: str, exc: BaseException) -> None:
         """Report a mirror-side failure without crashing the agent turn.

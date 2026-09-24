@@ -42,7 +42,7 @@ from ..views.base import ViewPolicy
 if TYPE_CHECKING:
     from ag2.agent import AgentReply
     from ag2.events import BaseEvent
-    from ag2.tools import Tool
+    from ag2.tools.tool import Tool
 
     from ..client.agent_client import AgentClient
 
@@ -405,7 +405,7 @@ def default_build_packet_envelope(
     body: str,
     *,
     handoff: "Handoff | None" = None,
-    context_set: dict | None = None,
+    context_set: dict[str, Any] | None = None,
     audience: list[str] | None = None,
     causation_id: str | None = None,
 ) -> Envelope:
