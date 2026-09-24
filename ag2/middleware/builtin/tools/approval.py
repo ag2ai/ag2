@@ -4,7 +4,7 @@
 
 from ag2.annotations import Context
 from ag2.events import ToolCallEvent, ToolResultEvent
-from ag2.middleware.base import ToolExecution, ToolMiddleware, ToolResultType
+from ag2.middleware.base import ToolExecution, ToolResultType
 from ag2.middleware.describe import MiddlewareDescription
 
 _DEFAULT_MESSAGE = (
@@ -83,7 +83,7 @@ def approval_required(
     *,
     timeout: float | None = None,
     allow_always: bool = True,
-) -> ToolMiddleware:
+) -> ApprovalRequired:
     """Tool middleware that requests human approval before executing a tool call.
 
     Args:
