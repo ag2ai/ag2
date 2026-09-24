@@ -33,46 +33,6 @@ from .utils import (
 pytestmark = pytest.mark.asyncio
 
 
-class _ReasoningClient(LLMClient):
-    """Emits a fixed sequence of ``ModelReasoning`` events followed by a
-    final ``ModelMessage`` — used to drive the outbound subscriber under
-    test. ``TestConfig`` cannot inject ``ModelReasoning`` events, so a
-    custom client is required (mirrors the streaming pattern in
-    ``test_empty_chunks.py``)."""
-
-    def __init__(self, *chunks: str, final: str = "Done") -> None:
-        self.chunks = chunks
-        self.final = final
-
-    async def __call__(
-        self,
-        messages: Sequence[BaseEvent],
-        context: Context,
-        **kwargs: Any,
-    ) -> ModelResponse:
-        for chunk in self.chunks:
-            await context.send(ModelReasoning(chunk))
-
-        message = ModelMessage(self.final)
-        await context.send(message)
-        return ModelResponse(message=message, tool_calls=ToolCallsEvent([]))
-
-
-class _ReasoningConfig(ModelConfig):
-    def __init__(self, *chunks: str, final: str = "Done") -> None:
-        self.chunks = chunks
-        self.final = final
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _ReasoningClient:
-        return _ReasoningClient(*self.chunks, final=self.final)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
 class _CapturingClient(LLMClient):
     """Stores the full ``messages`` sequence handed to the LLM so the test
     can assert on the entire pre-LLM history. ``TrackingConfig`` only
@@ -146,7 +106,7 @@ class TestInboundReasoning:
 
 class TestOutboundReasoning:
     async def test_reasoning_chunks_emit_full_session(self) -> None:
-        agent = Agent("test_agent", config=_ReasoningConfig("Thinking", " more"))
+        agent = Agent("test_agent", config=TestConfig(ModelReasoning("Thinking"), ModelReasoning(" more"), "Done"))
         stream = AGUIStream(agent)
         run_input = create_run_input(UserMessage(id="m1", content="hi"))
 
@@ -171,7 +131,7 @@ class TestOutboundReasoning:
         })
 
     async def test_reasoning_session_closes_before_text_message(self) -> None:
-        agent = Agent("test_agent", config=_ReasoningConfig("thinking", final="Final answer"))
+        agent = Agent("test_agent", config=TestConfig(ModelReasoning("thinking"), "Final answer"))
         stream = AGUIStream(agent)
         run_input = create_run_input(UserMessage(id="m1", content="hi"))
 
@@ -183,7 +143,7 @@ class TestOutboundReasoning:
         assert reasoning_end_idx < first_text_idx
 
     async def test_empty_reasoning_chunk_skipped(self) -> None:
-        agent = Agent("test_agent", config=_ReasoningConfig("", "real thought"))
+        agent = Agent("test_agent", config=TestConfig(ModelReasoning(""), ModelReasoning("real thought"), "Done"))
         stream = AGUIStream(agent)
         run_input = create_run_input(UserMessage(id="m1", content="hi"))
 
@@ -194,7 +154,7 @@ class TestOutboundReasoning:
         ]
 
     async def test_no_reasoning_emits_no_reasoning_events(self) -> None:
-        agent = Agent("test_agent", config=_ReasoningConfig(final="Hello"))
+        agent = Agent("test_agent", config=TestConfig("Hello"))
         stream = AGUIStream(agent)
         run_input = create_run_input(UserMessage(id="m1", content="hi"))
 

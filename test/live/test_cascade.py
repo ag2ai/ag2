@@ -120,33 +120,6 @@ class RecordingConfig(ModelConfig):
         return client
 
 
-class ChunkingConfig(ModelConfig):
-    """Emits `ModelMessageChunk` the way a streaming provider config does,
-    which `TestConfig` (whole-message only) cannot express."""
-
-    def __init__(self, *chunks: str) -> None:
-        self.chunks = chunks
-
-    @property
-    def provider(self) -> ModelProvider:
-        return ModelProvider.OPENAI
-
-    @property
-    def model(self) -> str:
-        return "test-model"
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> LLMClient:
-        async def client(messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-            for chunk in self.chunks:
-                await context.send(ModelMessageChunk(chunk))
-            return ModelResponse(ModelMessage("".join(self.chunks)))
-
-        return client
-
-
 def cascade(model: ModelConfig, stt: FakeSTT, tts: FakeTTS, **kwargs: Any) -> CascadeConfig:
     return CascadeConfig(
         stt=stt,
@@ -246,9 +219,10 @@ class TestCascadeSession:
         """With a streaming TTS config, synthesis happens at sentence
         boundaries as the model produces text, not after the whole reply."""
         stt, tts = FakeSTT(), FakeStreamingTTS()
-        model = ChunkingConfig(
-            "The weather today is sunny and warm. ",
-            "You will not need a coat.",
+        model = TestConfig(
+            ModelMessageChunk("The weather today is sunny and warm. "),
+            ModelMessageChunk("You will not need a coat."),
+            ModelResponse(ModelMessage("The weather today is sunny and warm. You will not need a coat.")),
         )
         context = ConversationContext(stream=MemoryStream())
 
@@ -299,7 +273,18 @@ class TestBargeIn:
         stt, tts = FakeSTT(), FakeTTS()
         started = asyncio.Event()
 
-        class SlowConfig(ChunkingConfig):
+        class SlowConfig(ModelConfig):
+            @property
+            def provider(self) -> ModelProvider:
+                return ModelProvider.OPENAI
+
+            @property
+            def model(self) -> str:
+                return "test-model"
+
+            def copy(self) -> Self:
+                return self
+
             def create(self) -> LLMClient:
                 async def client(messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
                     started.set()

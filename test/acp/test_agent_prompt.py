@@ -64,36 +64,6 @@ class _RecordingConfig(ModelConfig):
         raise NotImplementedError
 
 
-class _StreamingClient(LLMClient):
-    """Emits the reply as chunks first, the way a streaming provider does."""
-
-    def __init__(self, client: LLMClient, chunks: Sequence[str]) -> None:
-        self.client = client
-        self.chunks = chunks
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        for chunk in self.chunks:
-            await context.send(ModelMessageChunk(chunk))
-        return await self.client(messages, context=context, **kwargs)
-
-
-class _StreamingConfig(ModelConfig):
-    """Streams ``chunks`` and then returns their concatenation as the final reply."""
-
-    def __init__(self, *chunks: str) -> None:
-        self.chunks = chunks
-        self.config = TestConfig("".join(chunks))
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _StreamingClient:
-        return _StreamingClient(self.config.create(), self.chunks)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
 def _agent(*turns: object) -> Agent:
     return Agent("workie", config=TestConfig(*(turns or ("ok",))))
 
@@ -223,17 +193,9 @@ class TestPromptTurn:
     async def test_a_config_failure_reaches_the_client(self) -> None:
         """The common real-world case: the model rejected the request."""
 
-        class _Exploding(ModelConfig):
-            def copy(self) -> Self:
-                return self
-
-            def create(self) -> LLMClient:
-                raise RuntimeError("Could not resolve authentication method.")
-
-            def create_files_client(self) -> None:
-                raise NotImplementedError
-
-        async with connect(ACPAgent(Agent("workie", config=_Exploding()))) as (conn, _):
+        async with connect(
+            ACPAgent(Agent("workie", config=TestConfig(RuntimeError("Could not resolve authentication method."))))
+        ) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError) as caught:
                 await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
@@ -338,7 +300,15 @@ class TestUpdateProjection:
         assert _texts(recorder.updates_for(session.session_id)) == ["just once"]
 
     async def test_streamed_chunks_reach_the_client_in_order(self) -> None:
-        agent = Agent("workie", config=_StreamingConfig("Paris is ", "the capital ", "of France."))
+        agent = Agent(
+            "workie",
+            config=TestConfig(
+                ModelMessageChunk("Paris is "),
+                ModelMessageChunk("the capital "),
+                ModelMessageChunk("of France."),
+                "Paris is the capital of France.",
+            ),
+        )
 
         async with connect(ACPAgent(agent)) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
@@ -352,7 +322,15 @@ class TestUpdateProjection:
 
     async def test_a_streamed_reply_is_not_repeated_at_the_end(self) -> None:
         """The final response echoes the whole answer; re-sending it would double it."""
-        agent = Agent("workie", config=_StreamingConfig("Paris is ", "the capital ", "of France."))
+        agent = Agent(
+            "workie",
+            config=TestConfig(
+                ModelMessageChunk("Paris is "),
+                ModelMessageChunk("the capital "),
+                ModelMessageChunk("of France."),
+                "Paris is the capital of France.",
+            ),
+        )
 
         async with connect(ACPAgent(agent)) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
@@ -627,50 +605,17 @@ class TestDynamicPrompt:
         assert over_acp == config.prompts[-1]
 
 
-class _MultiCallConfig(ModelConfig):
-    """Streams a different script on each model call of one turn.
-
-    A tool-using turn makes two LLM calls; a chatty model may stream text in both
-    (a "let me check..." preamble, then the answer).
-    """
-
-    def __init__(self, *scripts: Sequence[str], inner: ModelConfig) -> None:
-        self.scripts = scripts
-        self.inner = inner
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> LLMClient:
-        return _MultiCallClient(self.inner.create(), self.scripts)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class _MultiCallClient(LLMClient):
-    def __init__(self, client: LLMClient, scripts: Sequence[Sequence[str]]) -> None:
-        self.client = client
-        self.scripts = scripts
-        self.call = 0
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        for chunk in self.scripts[min(self.call, len(self.scripts) - 1)]:
-            await context.send(ModelMessageChunk(chunk))
-        self.call += 1
-        return await self.client(messages, context=context, **kwargs)
-
-
 @pytest.mark.asyncio
 class TestStreamingToolTurns:
     """De-dup must compare against the final model call, not the whole turn."""
 
     @staticmethod
     def _agent_streaming_both_calls() -> Agent:
-        config = _MultiCallConfig(
-            ["Let me calculate. "],
-            ["The answer is 4."],
-            inner=TestConfig(ToolCallEvent(name="add", arguments='{"a": 2, "b": 2}'), "The answer is 4."),
+        config = TestConfig(
+            ModelMessageChunk("Let me calculate. "),
+            ToolCallEvent(name="add", arguments='{"a": 2, "b": 2}'),
+            ModelMessageChunk("The answer is 4."),
+            "The answer is 4.",
         )
         agent = Agent("workie", config=config)
 
@@ -700,10 +645,10 @@ class TestStreamingToolTurns:
 
     async def test_a_silent_first_call_still_delivers_the_answer(self) -> None:
         """The common shape: the tool-selection call streams nothing."""
-        config = _MultiCallConfig(
-            [],
-            ["The answer is 4."],
-            inner=TestConfig(ToolCallEvent(name="add", arguments='{"a": 2, "b": 2}'), "The answer is 4."),
+        config = TestConfig(
+            ToolCallEvent(name="add", arguments='{"a": 2, "b": 2}'),
+            ModelMessageChunk("The answer is 4."),
+            "The answer is 4.",
         )
         agent = Agent("workie", config=config)
 

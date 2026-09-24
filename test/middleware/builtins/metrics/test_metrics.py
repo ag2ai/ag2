@@ -3,19 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import Sequence
-from typing import Any
 
 import pytest
 from dirty_equals import IsFloat
 from prometheus_client import CollectorRegistry
-from typing_extensions import Self
 
 from ag2 import Agent
 from ag2.annotations import Context
-from ag2.config import LLMClient, ModelConfig, ModelProvider
+from ag2.config import ModelProvider
 from ag2.events import (
-    BaseEvent,
     HumanInputRequest,
     HumanMessage,
     ModelMessage,
@@ -25,7 +21,7 @@ from ag2.events import (
 )
 from ag2.exceptions import HumanInputFailedError
 from ag2.middleware import MetricsMiddleware, RetryMiddleware
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 
 
 @pytest.fixture
@@ -121,7 +117,7 @@ async def test_records_llm_call_and_token_success_metrics(
 async def test_records_llm_call_error_metrics(registry: CollectorRegistry) -> None:
     agent = Agent(
         "llm-error-agent",
-        config=_FailOnceConfig(ValueError),
+        config=TestConfig(ValueError("Fail"), provider=ModelProvider.OPENAI, model="test-model"),
         middleware=[MetricsMiddleware(registry=registry)],
     )
 
@@ -152,7 +148,14 @@ async def test_records_llm_call_error_metrics(registry: CollectorRegistry) -> No
 
 @pytest.mark.asyncio()
 async def test_retries_record_each_llm_attempt(registry: CollectorRegistry) -> None:
-    config = _FailOnceConfig(model="retry-model", provider=ModelProvider.OPENAI, exception_type=_TransientError)
+    config = TrackingConfig(
+        TestConfig(
+            _TransientError("Fail"),
+            ModelResponse(ModelMessage("Hello!"), finish_reason="stop"),
+            provider=ModelProvider.OPENAI,
+            model="retry-model",
+        )
+    )
     agent = Agent(
         "retry-agent",
         config=config,
@@ -164,7 +167,7 @@ async def test_retries_record_each_llm_attempt(registry: CollectorRegistry) -> N
 
     await agent.ask("Hi")
 
-    assert config.client.call_count == 2
+    assert config.mock.call_count == 2
     assert (
         registry.get_sample_value(
             "ag2_llm_calls_total",
@@ -197,7 +200,14 @@ async def test_retries_record_each_llm_attempt(registry: CollectorRegistry) -> N
 
 @pytest.mark.asyncio()
 async def test_no_retry_record_each_llm_attempt_if_retry_middleware_after_metrics(registry: CollectorRegistry) -> None:
-    config = _FailOnceConfig(model="retry-model", provider=ModelProvider.OPENAI, exception_type=_TransientError)
+    config = TrackingConfig(
+        TestConfig(
+            _TransientError("Fail"),
+            ModelResponse(ModelMessage("Hello!"), finish_reason="stop"),
+            provider=ModelProvider.OPENAI,
+            model="retry-model",
+        )
+    )
     agent = Agent(
         "retry-agent",
         config=config,
@@ -209,7 +219,7 @@ async def test_no_retry_record_each_llm_attempt_if_retry_middleware_after_metric
 
     await agent.ask("Hi")
 
-    assert config.client.call_count == 2
+    assert config.mock.call_count == 2
     assert (
         registry.get_sample_value(
             "ag2_llm_calls_total",
@@ -300,7 +310,7 @@ async def test_records_agent_turn_success_metrics(registry: CollectorRegistry) -
 async def test_records_agent_turn_error_metrics(registry: CollectorRegistry) -> None:
     agent = Agent(
         "agent-turn-error-agent",
-        config=_FailOnceConfig(ValueError),
+        config=TestConfig(ValueError("Fail"), provider=ModelProvider.OPENAI, model="test-model"),
         middleware=[MetricsMiddleware(registry=registry)],
     )
 
@@ -466,49 +476,6 @@ async def test_records_tool_error_metrics(registry: CollectorRegistry) -> None:
 
 class _TransientError(Exception):
     pass
-
-
-class _FailOnceClient(LLMClient):
-    def __init__(self, exception_type: type[Exception]) -> None:
-        self.call_count = 0
-        self._exception_type = exception_type
-
-    async def __call__(
-        self,
-        messages: Sequence[BaseEvent],
-        context: Context,
-        **kwargs: Any,
-    ) -> ModelResponse:
-        self.call_count += 1
-        if self.call_count == 1:
-            raise self._exception_type("Fail")
-        return ModelResponse(ModelMessage("Hello!"), finish_reason="stop")
-
-
-class _FailOnceConfig(ModelConfig):
-    def __init__(
-        self,
-        exception_type: type[Exception],
-        provider: ModelProvider = ModelProvider.OPENAI,
-        model: str = "test-model",
-    ) -> None:
-        self.client = _FailOnceClient(exception_type)
-        self._provider = provider
-        self._model = model
-
-    @property
-    def provider(self) -> ModelProvider:
-        return self._provider
-
-    @property
-    def model(self) -> str:
-        return self._model
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _FailOnceClient:
-        return self.client
 
 
 async def _collect_human_input(context: Context) -> str:

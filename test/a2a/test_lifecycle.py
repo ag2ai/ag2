@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Callable, Sequence
-from typing import Any
+from collections.abc import Callable
 from uuid import uuid4
 
 import httpx
@@ -14,16 +13,13 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import InMemoryPushNotificationConfigStore, TaskUpdater
 from a2a.types import Task, TaskState, TaskStatus
 from fast_depends.pydantic import PydanticSerializer
-from typing_extensions import Self
 
 from ag2 import Agent, Context, MemoryStream
 from ag2.a2a import A2AConfig, A2AServer, build_card
 from ag2.a2a.client import A2AClient
 from ag2.a2a.errors import A2ATaskFailedError
 from ag2.a2a.testing import make_test_client_factory
-from ag2.config.client import LLMClient
-from ag2.config.config import ModelConfig
-from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelRequest, ModelResponse, TextInput
+from ag2.events import ModelMessage, ModelMessageChunk, ModelRequest, ModelResponse, TextInput
 from ag2.testing import TestConfig
 
 # What an ``Agent`` hands its ``LLMClient``, built the same way.
@@ -138,39 +134,14 @@ class TestHttpxLifecycle:
         assert _SpyAsyncClient.aclose_count == 1
 
 
-class _ChunkingScript(ModelConfig):
-    def __init__(self, chunks: Sequence[str]) -> None:
-        self._chunks = list(chunks)
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "_ChunkingScriptClient":
-        return _ChunkingScriptClient(self._chunks)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class _ChunkingScriptClient(LLMClient):
-    def __init__(self, chunks: Sequence[str]) -> None:
-        self._chunks = list(chunks)
-
-    async def __call__(
-        self,
-        messages: Sequence[BaseEvent],
-        context: Context,
-        **_: Any,
-    ) -> ModelResponse:
-        for chunk in self._chunks:
-            await context.send(ModelMessageChunk(chunk))
-        full = "".join(self._chunks)
-        return ModelResponse(message=ModelMessage(full))
-
-
 @pytest.mark.asyncio
 async def test_streamed_chunks_not_duplicated_in_final_message() -> None:
-    server = A2AServer(Agent("server", config=_ChunkingScript(["he", "llo"])))
+    server = A2AServer(
+        Agent(
+            "server",
+            config=TestConfig(ModelMessageChunk("he"), ModelMessageChunk("llo"), ModelResponse(ModelMessage("hello"))),
+        )
+    )
     url = "http://test"
     factory = make_test_client_factory(server, url=url)
     client = Agent(
