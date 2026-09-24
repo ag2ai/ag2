@@ -40,4 +40,8 @@ class ModelConfig(Protocol):
     def create(self) -> LLMClient: ...
 
     def create_files_client(self) -> "FilesClient":
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        # A default a config without a Files client inherits, not an abstract member.
+        # The checker reads a protocol method whose body only raises as abstract, so
+        # the message is bound first.
+        message = f"{type(self).__name__} does not support Files API."
+        raise NotImplementedError(message)
