@@ -46,7 +46,7 @@ class TaskProgress(TaskEvent):
 
     __transient__ = True
 
-    content: str = Field("")
+    content: str = Field(default="")
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -54,7 +54,7 @@ class TaskCompleted(TaskEvent):
     # Widened from ``str | None`` to ``Any`` so framework-core ``Task``
     # owners can return structured results. ``run_task`` still passes a
     # string, so existing callers are unaffected.
-    result: Any = Field(None)
+    result: Any = Field(default=None)
     # Stream reference for inspection. Resolves against the parent's storage
     # only when the sub-task's stream shares it, as `stream=None` builds it to.
     task_stream: "StreamId"
@@ -109,4 +109,4 @@ class TaskCancelled(TaskEvent):
     the cancellation alongside the other terminal events.
     """
 
-    reason: str = Field("")
+    reason: str = Field(default="")

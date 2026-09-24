@@ -150,10 +150,12 @@ if TYPE_CHECKING:
     # that stands in for it, so a checker that saw ``FieldInfo`` here would reject
     # every declaration. Declaring the specifier as a function returning ``Any`` is
     # the shape ``dataclasses.field`` and pydantic's ``Field`` use in their stubs,
-    # for the same reason.
+    # for the same reason. ``default`` is keyword-only here although the runtime
+    # takes it positionally: a checker reads a field specifier's default by name
+    # only, so ``Field("")`` would silently make the field required.
     def Field(  # noqa: N802 - the public name of the specifier; lowercase would rename the API
-        default: Any = Ellipsis,
         *,
+        default: Any = Ellipsis,
         default_factory: Callable[[], Any] | EllipsisType = Ellipsis,
         init: bool = True,
         repr: bool = True,

@@ -49,8 +49,8 @@ class EvalStarted(EvalEvent):
 
     __transient__ = True
 
-    suite: str = Field("")
-    total: int = Field(0)  # number of task-runs to execute (tasks x repeats)
+    suite: str = Field(default="")
+    total: int = Field(default=0)  # number of task-runs to execute (tasks x repeats)
 
 
 class TaskEvaluated(EvalEvent):
@@ -77,8 +77,8 @@ class VariantStarted(EvalEvent):
     __transient__ = True
 
     variant: str
-    index: int = Field(0)
-    total: int = Field(0)
+    index: int = Field(default=0)
+    total: int = Field(default=0)
 
 
 class VariantCompleted(EvalEvent):
@@ -95,9 +95,9 @@ class PairwiseStarted(EvalEvent):
 
     __transient__ = True
 
-    variant_a: str = Field("")
-    variant_b: str = Field("")
-    total: int = Field(0)  # number of task_id-matched pairs to compare
+    variant_a: str = Field(default="")
+    variant_b: str = Field(default="")
+    total: int = Field(default=0)  # number of task_id-matched pairs to compare
 
 
 class PairwiseCompared(EvalEvent):
@@ -107,7 +107,7 @@ class PairwiseCompared(EvalEvent):
 
     task_id: str
     key: str
-    winner: str = Field("tie")  # "a" / "b" / "tie"
+    winner: str = Field(default="tie")  # "a" / "b" / "tie"
 
 
 class PairwiseCompleted(EvalEvent):

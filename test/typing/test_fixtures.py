@@ -25,7 +25,8 @@ pytest.importorskip("mypy")
 REPO_ROOT = Path(__file__).parents[2]
 FIXTURES = sorted(p for p in (Path(__file__).parent / "fixtures").glob("*.py") if p.name != "__init__.py")
 
-_EXPECTATION = re.compile(r"#\s(?P<kind>[NE]):\s(?P<message>.+?)\s*$")
+# Several may share a line — an error and the note mypy attaches to it.
+_EXPECTATION = re.compile(r"#\s(?P<kind>[NE]):\s(?P<message>.+?)\s*(?=#\s[NE]:\s|$)")
 _REPORTED = re.compile(r"^(?P<path>.+?):(?P<line>\d+): (?P<kind>note|error): (?P<message>.+?)\s*$")
 
 _KINDS = {"N": "note", "E": "error"}
@@ -34,8 +35,7 @@ _KINDS = {"N": "note", "E": "error"}
 def _expected(fixture: Path) -> set[tuple[int, str, str]]:
     out = set()
     for lineno, line in enumerate(fixture.read_text().splitlines(), start=1):
-        match = _EXPECTATION.search(line)
-        if match:
+        for match in _EXPECTATION.finditer(line):
             out.add((lineno, _KINDS[match["kind"]], match["message"]))
     return out
 
