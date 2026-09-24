@@ -9,6 +9,8 @@ Covers standalone usage with no hub or network — pure
 for ``TaskInject``, and TTL field population.
 """
 
+import asyncio
+
 import pytest
 
 from ag2 import Agent, TaskSpec
@@ -314,3 +316,47 @@ class TestMetadata:
         agent = _agent()
         async with agent.task("payload-test", payload={"capability": "search"}) as task:
             assert task.metadata.spec.payload == {"capability": "search"}
+
+
+class TestConcurrentSiblingTasks:
+    @pytest.mark.asyncio
+    async def test_concurrent_siblings_keep_own_task_dependency(self) -> None:
+        """Sibling tasks entered concurrently on one context must not pop or
+        resurrect each other's ``ag2.task`` dependency entry."""
+        agent = _agent()
+        ctx = ConversationContext(stream=MemoryStream())
+        entered_a, entered_b = asyncio.Event(), asyncio.Event()
+        proceed_a, proceed_b = asyncio.Event(), asyncio.Event()
+
+        async def run(name: str, entered: asyncio.Event, proceed: asyncio.Event):
+            async with agent.task(name, context=ctx):
+                entered.set()
+                await proceed.wait()
+
+        a = asyncio.create_task(run("A", entered_a, proceed_a))
+        b = asyncio.create_task(run("B", entered_b, proceed_b))
+        await asyncio.gather(entered_a.wait(), entered_b.wait())
+
+        # A exits first while B is still active: B's entry must survive.
+        proceed_a.set()
+        await a
+        assert ctx.dependencies.get("ag2.task") is not None
+
+        seen_by_b = ctx.dependencies.get("ag2.task")
+        proceed_b.set()
+        await b
+        # B's exit removes the entry; it must not resurrect the exited A.
+        assert ctx.dependencies.get("ag2.task") is None
+        assert seen_by_b is not None
+
+    @pytest.mark.asyncio
+    async def test_sequential_nested_task_dependency_restored(self) -> None:
+        agent = _agent()
+        ctx = ConversationContext(stream=MemoryStream())
+
+        async with agent.task("outer", context=ctx):
+            outer = ctx.dependencies.get("ag2.task")
+            async with agent.task("inner", context=ctx):
+                assert ctx.dependencies.get("ag2.task") is not outer
+            # inner's exit restores the still-active outer task
+            assert ctx.dependencies.get("ag2.task") is outer
