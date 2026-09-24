@@ -20,7 +20,7 @@ from ag2.a2a.executor import AgentExecutor
 from ag2.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
 from ag2.a2a.mappers import ParsedMessage, struct_to_dict, task_state_to_status_update
 from ag2.agent import Agent
-from ag2.context import ConversationContext
+from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.events import BaseEvent, ClientToolCallEvent
 from ag2.stream import MemoryStream
 
@@ -365,12 +365,13 @@ class A2UIAgentExecutor(AgentExecutor):
         if a2ui_messages:
             parts.extend(create_a2ui_parts(a2ui_messages))
 
-        if not parts and not final_variables:
+        outgoing = strip_reserved_variables(final_variables, source="an outgoing A2UI response", warn=False)
+        if not parts and not outgoing:
             return None
 
         metadata: dict[str, Any] | None = None
-        if final_variables:
-            metadata = {CONTEXT_UPDATE_METADATA_KEY: final_variables}
+        if outgoing:
+            metadata = {CONTEXT_UPDATE_METADATA_KEY: outgoing}
 
         return updater.new_agent_message(parts=parts, metadata=metadata)
 

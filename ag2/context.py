@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine, Mapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeAlias, cast, overload, runtime_checkable
@@ -109,7 +109,9 @@ class ConversationContext:
     stream: Stream = field(repr=False)
     dependency_provider: "Provider | None" = field(default=None, repr=False)
 
-    # store Context Variables as separated serializable field
+    # store Context Variables as separated serializable field. Keys under
+    # ``RESERVED_VARIABLE_PREFIXES`` are the framework's own control-plane state
+    # and are never authored by a remote peer — see ``strip_reserved_variables``.
     variables: dict[str, Any] = field(default_factory=dict)
 
     dependencies: dict[Any, Any] = field(default_factory=dict)
@@ -220,3 +222,33 @@ def drop_background_task(tasks: set[asyncio.Task[None]], task: asyncio.Task[Any]
     exc = task.exception()
     if exc is not None:
         logger.exception("Background task raised", exc_info=exc)
+
+
+# Variable namespaces the framework reserves for its own control-plane state:
+# the ``approval_required`` allow-always bypass (``ag:approval_required:always``),
+# the A2A context-id bookkeeping and the per-call tenant override
+# (``a2a:tenant``) all live in ``ConversationContext.variables``. A transport
+# that syncs variables with a peer must not let that peer author them — a caller
+# able to write the bypass key pre-approves a gated tool and the human is never
+# asked. Every wire-originated merge goes through ``strip_reserved_variables``.
+RESERVED_VARIABLE_PREFIXES = ("ag:", "a2a:")
+
+
+def strip_reserved_variables(payload: Mapping[str, Any], *, source: str, warn: bool = True) -> dict[str, Any]:
+    """Return *payload* without the framework's reserved variable keys.
+
+    Transports call this on every variables payload that arrives from — or
+    leaves for — a remote peer, so control-plane state stays locally authored;
+    ``warn`` is off on the outbound side, where stripping is routine rather
+    than a peer overstepping.
+    """
+    if not payload:
+        return {}
+    kept = {key: value for key, value in payload.items() if not str(key).startswith(RESERVED_VARIABLE_PREFIXES)}
+    if warn and len(kept) != len(payload):
+        logger.warning(
+            "Dropped reserved context variables from %s: %s",
+            source,
+            sorted(str(key) for key in payload if key not in kept),
+        )
+    return kept
