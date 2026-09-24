@@ -458,6 +458,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[xAI](https://docs.x.ai/docs/overview)** | `XAIConfig` | `pip install "ag2[xai]"` |
 | **[Z.AI](https://docs.z.ai)** | `ZAIConfig` | `pip install "ag2[zai]"` |
 | **[Mistral](https://docs.mistral.ai)** | `MistralConfig` | `pip install "ag2[mistral]"` |
+| **[TypeSafe (Jev)](https://docs.typesafe.ai)** | `TypeSafeConfig` | `pip install "ag2[typesafe]"` |
 
 *(Note: `OpenAIConfig` is also available for OpenAI-compatible endpoints).*
 
@@ -593,15 +594,28 @@ To configure a model, import the specific provider's configuration class and ini
     )
     ```
 
+=== "TypeSafe"
+    ```python linenums="1"
+    from ag2.config import TypeSafeConfig
+
+    # Configure TypeSafe's Jev decision model (non-streaming)
+    config = TypeSafeConfig(
+        model="jev-latest",
+        api_key="...",
+    )
+    ```
+
+    Jev answers a typed question instead of generating text, so the agent must set a decision `response_schema`. See [TypeSafe (Jev) Configuration](#typesafe-jev-configuration).
+
 !!! tip
 
-    **AG2** is designed to be async and streaming-first, so for the best user experience it is recommended to enable streaming on the model provider configurations for models that support it. As shown above, `Streaming` has been set to `True` in each config.
+    **AG2** is designed to be async and streaming-first, so for the best user experience it is recommended to enable streaming on the model provider configurations for models that support it. As shown above, `Streaming` has been set to `True` in each config that supports it; TypeSafe's Jev answers in a single response and has no streaming option.
 
 ### Using Environment Variables
 
 For security and convenience, you don't need to hardcode your API keys. If `api_key` is not explicitly provided, the configuration will automatically attempt to load it from your environment variables.
 
-The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `ZAI_API_KEY`).
+The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `ZAI_API_KEY`, `TYPESAFE_API_KEY`).
 
 ```python
 from ag2.config import OpenAIConfig
@@ -895,6 +909,109 @@ The image URL is a short-lived signed link, so download it promptly if you need 
     ```bash
     pip install "mistralai>=2.8.0" "opentelemetry-api>=1.43" "opentelemetry-sdk>=1.43" "opentelemetry-semantic-conventions>=0.64b0"
     ```
+
+### TypeSafe (Jev) Configuration
+
+`TypeSafeConfig` connects to [TypeSafe AI's](https://docs.typesafe.ai) Jev decision model through the official `typesafe-sdk`. Install the optional dependency with `pip install "ag2[typesafe]"`.
+
+Jev is not a text generator. It answers **one typed question** about the conversation so far - yes or no, one label out of several, or a level on a rubric - and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
+
+If `api_key` and `base_url` are not passed explicitly, the SDK resolves them from the `TYPESAFE_API_KEY` and `TYPESAFE_BASE_URL` environment variables. `model` defaults to `jev-latest`.
+
+```python
+from enum import Enum
+
+from ag2 import Agent
+from ag2.config import TypeSafeConfig
+
+class Department(Enum):
+    """Which team should handle this ticket?"""
+
+    BILLING = "billing"
+    """Payments, invoicing, refunds."""
+    TECHNICAL = "technical"
+    """Bugs, outages, integrations."""
+
+router = Agent(
+    "router",
+    prompt="You triage customer support tickets.",
+    config=TypeSafeConfig(),  # auth resolved from TYPESAFE_API_KEY
+    response_schema=Department,
+)
+
+reply = await router.ask("My webhook integration has been down for 3 days.")
+department = await reply.content()        # Department.TECHNICAL
+reply.response.metadata["confidence"]     # e.g. 0.93
+reply.response.metadata["probabilities"]  # {"billing": 0.07, "technical": 0.93}
+```
+
+#### The response schema is the question
+
+There is no free-text path, so an agent on `TypeSafeConfig` **must** set `response_schema`, and the schema picks which of Jev's three primitives is asked:
+
+| `response_schema` | Jev asks | `await reply.content()` returns |
+| :--- | :--- | :--- |
+| `bool` | a yes/no question | `True` once the yes-probability reaches `boolean_threshold` (default `0.5`) |
+| a number schema bounded to `0..1`, e.g. `ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | a yes/no question | the yes-probability as JSON text, unparsed (`from_schema` schemas are not validated); `reply.response.metadata["noul"]` has it as a `float` |
+| an `Enum` of strings | a choice between its members | the selected member |
+| an `IntEnum` numbered `0..n-1` with 2-10 levels | a score on that rubric | the member nearest Jev's expected score |
+
+Anything else - `str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema` - raises `UnsupportedResponseSchemaError` before any request is sent.
+
+The agent `prompt` frames the question; the schema's own description asks it. For an `Enum` that is the class docstring, and for everything else an explicit `ResponseSchema(..., description=...)`. The two are joined, so the router above asks *"You triage customer support tickets. Which team should handle this ticket?"*.
+
+!!! warning "A yes/no question has to be asked"
+
+    `response_schema=bool` with no prompt, no description and no `criteria` raises `ValueError` locally. The API rejects a bare yes/no question, and failing before the request keeps the error actionable.
+
+#### Describing the options
+
+The string literal under each `Enum` / `IntEnum` member describes that option to Jev. Python discards those strings at runtime, so AG2 reads them back from the class source.
+
+```python
+from enum import IntEnum
+
+class Severity(IntEnum):
+    LOW = 0
+    """Cosmetic; nothing is blocked."""
+    MEDIUM = 1
+    """Degraded but usable."""
+    HIGH = 2
+    """An outage or data loss."""
+```
+
+A score rubric **requires** a description for every level; a choice works without them. `criteria` on the config overrides or supplies descriptions without touching the type - keyed by choice label, by score level as a string, or by `"true"` / `"false"` for a yes/no question:
+
+```python
+from ag2.config import TypeSafeConfig
+
+config = TypeSafeConfig(
+    boolean_threshold=0.8,
+    criteria={
+        "true": "The customer is asking for money back.",
+        "false": "Anything else, including questions about pricing.",
+    },
+)
+```
+
+!!! note "Member docstrings need the source file"
+
+    Docstrings are read with `inspect.getsource`, so an `Enum` defined in a REPL, a notebook cell or a frozen app has none. Pass `criteria` there.
+
+#### Confidence and probabilities
+
+The SDK answer, minus its `type`, is kept on `reply.response.metadata`. A yes/no answer is just `noul`, the yes-probability. A choice carries `choice`, `confidence` and `probabilities` per label. A score carries `score` (the expected value on the rubric, before snapping), `confidence`, the rubric `legend` and `probabilities` per level.
+
+#### What Jev does not do
+
+- **Tools.** Passing any tool raises `UnsupportedToolError`; keep tools on the generative agent Jev routes to.
+- **Streaming.** Requests are non-streaming; there is no `streaming` field, and the answer arrives as one `ModelMessage`.
+- **Files and media.** `create_files_client()` raises `NotImplementedError`, and only text and structured `DataInput` parts are sent - anything else raises `UnsupportedInputError`.
+- **Free text.** `reply.body` is the answer as JSON, not prose.
+
+`retry` takes a `typesafe_sdk.RetryPolicy` and `http_client` an `httpx2.AsyncClient`; both are forwarded to the SDK untouched. Token counts land on `ModelResponse.usage` as `prompt_tokens` / `completion_tokens` when the API reports them.
+
+Structured data extraction, one of the decision shapes in [TypeSafe's docs](https://docs.typesafe.ai), is the one this provider cannot express: an object schema is rejected, since Jev answers one decision per question.
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
@@ -1353,6 +1470,10 @@ reply = await agent.ask(
 )
 stars = await reply.content()
 ```
+
+!!! tip "Decision models"
+
+    On `TypeSafeConfig` the response schema is not a format hint but the question itself: `bool`, an `Enum` or an `IntEnum` rubric is put to the Jev decision model, which answers with a confidence and per-option probabilities instead of text. See [TypeSafe (Jev) Configuration](model_configuration.md#typesafe-jev-configuration).
 
 ---
 
@@ -4015,7 +4136,7 @@ It means that subagent has no information about previous calls or results. It ju
 | What | Behavior | Why |
 |---|---|---|
 | **Dependencies** | Copied | Isolated - child mutations don't affect parent |
-| **Variables** | Copied; synced back on success | Concurrent-safe - user variable mutations propagate back |
+| **Variables** | Copied; not synced back. `approval_required` "always" answers are not inherited | Concurrent-safe - child mutations stay scoped to the child; the sub-task asks for approval again |
 | **History** | Fresh stream | Clean context - the LLM passes relevant info via `context` parameter |
 | **Depth counter** | Incremented in child; excluded from sync-back | Internal bookkeeping - never leaks to parent |
 | **Agent prompt, tools, config** | Inherited | The sub-agent brings its own capabilities |
@@ -6101,7 +6222,7 @@ It is off unless you ask for it, and a server that has not enabled it never send
 !!! warning "This moves three things to the caller"
     **Cost** - every turn the agent takes spends their budget. **Capability** - which model answers is a fact about the client, so the same agent gives different answers to different callers and its quality is no longer yours to control. **Reproducibility** - a trace cannot be re-run against a known model, because the model was the peer's.
 
-A client that advertised no sampling capability is never asked. What happens then is read off the agent, not off a second switch: one with a `config` of its own falls back to it, and one without fails the turn with `MCPSamplingUnavailableError`. So `client_model=` decides only whether the caller's budget may be spent at all - a deployment holding credentials it would rather not spend keeps them as the fallback simply by configuring them.
+A client that advertised no sampling capability is never asked. What happens then is read off the agent, not off a second switch: one with a `config` of its own falls back to it, and one without fails the call with `MCPSamplingUnavailableError` - a JSON-RPC error `-32021` whose `data.requiredCapabilities` names `sampling`, not a tool result, since no rewording by the model supplies a capability the client lacks. So `client_model=` decides only whether the caller's budget may be spent at all - a deployment holding credentials it would rather not spend keeps them as the fallback simply by configuring them.
 
 A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here, and so does a completion that comes back carrying no text at all - read as an empty reply it would report success while the agent answered with nothing.
 
@@ -6593,6 +6714,8 @@ Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `descript
 `MCPServer`, `SessionConfig`, `TransportConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
 
 Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the last: `MCPAgentConfigError`, `MCPToolNameConflictError`, `UnknownConversationError` (a handle naming no live conversation, reported to the caller as a tool error), `MCPResourceNotFoundError`, `MCPPromptNotFoundError`, and `MCPSamplingUnavailableError` / `MCPSamplingRefusedError` (both `MCPSamplingError`). `MCPElicitationDeclinedError` subclasses core's `HumanInputNotProvidedError` instead, so a question the client refused is the same failure as one nobody was there to answer.
+
+`MCPResourceNotFoundError`, `MCPPromptNotFoundError` and `MCPSamplingUnavailableError` are also the SDK's `MCPError`, so each reaches the caller as a JSON-RPC protocol error rather than a tool result: `-32602` (Invalid params) for an unknown resource URI - with the URI in `data.uri` - or prompt name, and `-32021` for a missing client capability. A `tools/call` naming a tool the server does not have, and a `prompts/get` omitting an argument its prompt declares `required`, are answered `-32602` the same way, before any handler or renderer runs.
 
 ## Beyond the conversational tool
 
@@ -8350,6 +8473,8 @@ Y/N?
 
 Typing **y** lets the tool run. Any other input denies it - the agent receives the denied message and can adjust.
 
+With `allow_always=True` (the default), typing **always** approves this call and every later call of the same tool in this agent's conversation. It does not carry across [sub-task delegation](../subagents.md) in either direction: a sub-task asks again, and its "always" does not reach the parent.
+
 !!! note
     `approval_required()` relies on the agent's `hitl_hook` to collect user input. With no `hitl_hook` configured there is nobody to ask, so `context.input()` raises `HumanInputNotProvidedError` and **the turn ends** - the gated tool does not run, and the model is not handed a tool failure it could route around. Read more about [Human in the Loop](../context/human_in_the_loop.md) to learn how to configure a HITL hook.
 
@@ -8383,6 +8508,14 @@ approval_required(timeout=5, allow_always=False).describe().config
 ```
 
 Approval state (which tools the user answered "always" for) lives in `context.variables`, not on the instance, so it never appears in the description. See [Describing middleware](../middleware.md#describing-middleware).
+
+!!! note "Only your human writes it"
+
+    The "always" answer is stored under a reserved `ag:` variable key. When the agent is
+    served over a protocol that syncs variables with a peer - A2A, NLIP, A2UI, AG-UI -
+    reserved keys are stripped from the payload in both directions, so a remote caller
+    can neither pre-approve a gated tool nor read what your human approved. See
+    [Variables over a protocol connection](../context/variables.md#variables-over-a-protocol-connection).
 
 ## Customizing the prompt
 
@@ -8565,6 +8698,29 @@ def fetch_secure_data(
         return "Error: Not authenticated."
     return f"Data fetched with token {auth_token}"
 ```
+
+## Variables Over a Protocol Connection
+
+When an agent is served over - or delegates through - A2A, NLIP, A2UI or AG-UI, the
+conversation's variables are synced with the peer on every message. An inbound payload
+is merged into the turn's variables before the agent runs, and the turn's variables are
+sent back to the peer with the reply.
+
+That makes variables a channel, not just local state: the peer reads what you put there,
+and writes what the turn sees.
+
+!!! warning "Reserved namespaces are never authored by a peer"
+
+    Variable keys beginning with `ag:` or `a2a:` are the framework's own control-plane
+    state - the [`approval_required()`](../tools/approval_required.md) allow-always bypass, the A2A context-id
+    bookkeeping, the per-call tenant override. They are stripped from every payload
+    crossing a protocol boundary, in both directions: a caller cannot pre-approve a
+    gated tool by sending one, and a peer is not shown yours. Do not use those prefixes
+    for your own variables; they will not survive the wire.
+
+Everything else round-trips. Treat a variable as readable by the peer and writable by it:
+keep secrets in [dependencies](inject.md) instead, which are never synced, and do not let
+a variable a peer can set decide something the peer should not control.
 
 ---
 
@@ -14565,6 +14721,15 @@ Duplicate URIs raise `ValueError`, including redeclaring `urn:ag2:client-tools:v
 
 See [Extensions](client.md#extensions) for activating them on the client.
 
+## Conversation Variables
+
+The caller's message can carry a variables payload, which is merged into the served turn's
+variables before the agent runs, and the turn's variables travel back on the reply. Treat
+them as caller-writable and caller-readable: anything the caller should not set or see
+belongs in `dependencies`, which are never synced. Keys under the reserved
+`ag:` / `a2a:` prefixes are stripped in both directions. See
+[Variables over a protocol connection](../context/variables.md#variables-over-a-protocol-connection).
+
 ## Adding Cross-cutting Middleware
 
 A2A doesn't define server-side middleware. Attach CORS, auth or tracing directly to the returned transport object:
@@ -14681,6 +14846,15 @@ print(reply.response.content)
 ```
 
 The remote agent recovers the entire prior context on every turn - there is no server-side session id to manage.
+
+## Conversation Variables
+
+Every request also carries the conversation's variables to the server, and the server's
+reply carries its own back - merged into the calling turn before the local tools run. So
+a variable is readable and writable by the remote end; keep anything the peer should not
+see or set in `dependencies`, which are never synced. Keys under the reserved
+`ag:` / `a2a:` prefixes are stripped in both directions. See
+[Variables over a protocol connection](../context/variables.md#variables-over-a-protocol-connection).
 
 ## Local Tools (forwarded from the server)
 
