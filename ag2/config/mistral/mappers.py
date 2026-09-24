@@ -10,6 +10,7 @@ from typing import Any
 from fast_depends.library.serializer import SerializerProto
 from mistralai.client.models import (
     AssistantMessage,
+    ChatCompletionRequestTool,
     ContentChunk,
     DocumentURLChunk,
     FileChunk,
@@ -25,6 +26,7 @@ from mistralai.client.models import (
     Tool,
     ToolCall,
     ToolMessage,
+    UsageInfo,
     UserMessage,
 )
 
@@ -118,7 +120,7 @@ def response_proto_to_format(response: ResponseProto | None) -> ResponseFormat |
     )
 
 
-def tool_to_api(t: ToolSchema) -> Tool:
+def tool_to_api(t: ToolSchema) -> ChatCompletionRequestTool:
     """Convert an AG2 ``ToolSchema`` to a Mistral tool.
 
     Function tools plus ``image_generation``. Mistral's other server-side tools
@@ -319,22 +321,20 @@ def json_arguments(arguments: Any) -> str:
     return json.dumps(arguments)
 
 
-def normalize_usage(raw: Any | None) -> Usage:
+def normalize_usage(raw: UsageInfo | None) -> Usage:
     """Normalise Mistral's ``UsageInfo`` to AG2 ``Usage``.
 
-    ``prompt_tokens_details`` is a pydantic extra, so it is read defensively.
+    The token counts are declared fields. ``prompt_tokens_details`` is not: it is a
+    pydantic extra, absent from the model unless the response carried it, so it alone
+    is read defensively — and it arrives as either a dict or an object.
     """
     if raw is None:
         return Usage()
 
-    prompt = getattr(raw, "prompt_tokens", None)
-    completion = getattr(raw, "completion_tokens", None)
-    total = getattr(raw, "total_tokens", None)
-
-    prompt_value = float(prompt) if isinstance(prompt, (int, float)) else None
-    completion_value = float(completion) if isinstance(completion, (int, float)) else None
-    if isinstance(total, (int, float)):
-        total_value: float | None = float(total)
+    prompt_value = float(raw.prompt_tokens) if raw.prompt_tokens is not None else None
+    completion_value = float(raw.completion_tokens) if raw.completion_tokens is not None else None
+    if raw.total_tokens is not None:
+        total_value: float | None = float(raw.total_tokens)
     elif prompt_value is not None or completion_value is not None:
         total_value = (prompt_value or 0) + (completion_value or 0)
     else:

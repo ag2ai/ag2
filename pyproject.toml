@@ -241,7 +241,7 @@ types = [
     # `disallow_any_unimported`. Type-check only — never a published constraint.
     "types-boto3[bedrock-runtime]",
     { include-group = "test" },
-    "ag2[openai, anthropic, a2a, ag-ui]",
+    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui]",
 ]
 
 lint = ["ruff==0.16.7", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -399,7 +399,13 @@ files = [
     "ag2/config/bedrock/bedrock_client.py",
     "ag2/config/bedrock/mappers.py",
     "ag2/config/anthropic/mappers.py",
+    "ag2/config/dashscope/mappers.py",
+    "ag2/config/gemini/mappers.py",
+    "ag2/config/mistral/mappers.py",
+    "ag2/config/ollama/mappers.py",
     "ag2/config/openai/mappers.py",
+    "ag2/config/xai/mappers.py",
+    "ag2/config/zai/mappers.py",
 ]
 
 strict = true
@@ -423,6 +429,10 @@ warn_unused_ignores = false
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 disallow_any_unimported = true
+
+[[tool.mypy.overrides]]
+module = "xai_sdk.*"
+follow_untyped_imports = true
 
 # numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
 # under python_version = "3.10"; skip analysing numpy entirely (it is not our code).

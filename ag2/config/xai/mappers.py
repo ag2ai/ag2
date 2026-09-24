@@ -14,7 +14,6 @@ from xai_sdk.chat import (
 )
 from xai_sdk.chat import (
     assistant,
-    chat_pb2,
     system,
     tool_result,
     user,
@@ -31,7 +30,7 @@ from xai_sdk.chat import (
 from xai_sdk.chat import (
     tool as xai_tool,
 )
-from xai_sdk.proto import usage_pb2
+from xai_sdk.proto import chat_pb2, usage_pb2
 
 from ag2.compact import CompactionSummary
 from ag2.events import (
