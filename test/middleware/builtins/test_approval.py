@@ -142,3 +142,16 @@ async def test_always_ignored_when_disabled(tool_call: ToolCallEvent) -> None:
 
     call_next.assert_not_awaited()
     assert result == ToolResultEvent.from_call(tool_call, result="User denied the tool call request")
+
+
+@pytest.mark.asyncio()
+async def test_always_replaces_the_bypass_dict(tool_call: ToolCallEvent) -> None:
+    hook = approval_required(allow_always=True)
+    shared = {"other_tool": True}
+    context = make_context("always", variables={BYPASS_KEY: shared})
+
+    await hook(AsyncMock(), tool_call, context)
+
+    assert context.variables[BYPASS_KEY] is not shared
+    assert context.variables[BYPASS_KEY] == {"other_tool": True, "calculator": True}
+    assert shared == {"other_tool": True}

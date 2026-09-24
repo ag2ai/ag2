@@ -63,6 +63,7 @@ from .mappers import (
     extract_mcp_servers,
     extract_skills_for_container,
     has_file_id_references,
+    inject_cache_breakpoint,
     merge_sampling_into_extra_body,
     normalize_usage,
     response_proto_to_output_config,
@@ -141,7 +142,7 @@ class AnthropicClient(LLMClient):
         )
 
         if self._prompt_caching and anthropic_messages:
-            self._inject_cache_control(anthropic_messages)
+            inject_cache_breakpoint(anthropic_messages)
 
         tools_schemas = list(tools)
         tools_without_skills = [t for t in tools_schemas if not isinstance(t, SkillsToolSchema)]
@@ -241,17 +242,6 @@ class AnthropicClient(LLMClient):
         if self._prompt_caching:
             return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
         return text
-
-    @staticmethod
-    def _inject_cache_control(messages: list[dict[str, Any]]) -> None:
-        for msg in reversed(messages):
-            if msg.get("role") == "user":
-                content = msg.get("content")
-                if isinstance(content, str):
-                    msg["content"] = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
-                elif isinstance(content, list) and content:
-                    content[-1]["cache_control"] = {"type": "ephemeral"}
-                break
 
     async def _process_response(
         self,
