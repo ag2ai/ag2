@@ -16,6 +16,7 @@ from ..envelope import EV_TEXT, Envelope
 
 if TYPE_CHECKING:
     from .agent_client import AgentClient
+    from .human_client import HumanClient
 
 __all__ = ("Channel",)
 
@@ -32,7 +33,7 @@ class Channel:
         self,
         *,
         metadata: ChannelMetadata,
-        client: "AgentClient",
+        client: "AgentClient | HumanClient",
     ) -> None:
         # __init__ stores params; no side effects.
         self._metadata = metadata

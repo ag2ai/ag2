@@ -274,6 +274,7 @@ types = [
     { name = "types-protobuf" },
     { name = "types-pyyaml" },
     { name = "watchdog" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -512,6 +513,7 @@ types = [
     { name = "types-protobuf", specifier = ">=6.32,<7" },
     { name = "types-pyyaml" },
     { name = "watchdog", specifier = ">=4.0,<7" },
+    { name = "websockets", specifier = ">=14.0,<17" },
 ]
 
 [[package]]

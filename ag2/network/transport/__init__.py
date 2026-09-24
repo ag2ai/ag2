@@ -10,6 +10,8 @@ the names are replaced with a stub that raises a descriptive
 ``ImportError`` on use.
 """
 
+from typing import TYPE_CHECKING
+
 from ag2.exceptions import missing_additional_dependency
 
 from .frames import (
@@ -29,13 +31,18 @@ from .frames import (
 from .link import LinkClient, LinkEndpoint, LinkFactory
 from .local import LocalLink, LocalLinkClient, LocalLinkEndpoint
 
-try:
+# The fallback rebinds a name mypy has bound to a class, which it rejects; it
+# sees only the real import. See website/docs/contributor-guide/type-checking.mdx.
+if TYPE_CHECKING:
     from .ws import WsLink, WsLinkClient, WsLinkEndpoint, serve_ws
-except ImportError as e:
-    WsLink = missing_additional_dependency("WsLink", "websockets>=14.0,<17", e)  # type: ignore[misc, assignment]
-    WsLinkClient = missing_additional_dependency("WsLinkClient", "websockets>=14.0,<17", e)  # type: ignore[misc, assignment]
-    WsLinkEndpoint = missing_additional_dependency("WsLinkEndpoint", "websockets>=14.0,<17", e)  # type: ignore[misc, assignment]
-    serve_ws = missing_additional_dependency("serve_ws", "websockets>=14.0,<17", e)  # type: ignore[misc, assignment]
+else:
+    try:
+        from .ws import WsLink, WsLinkClient, WsLinkEndpoint, serve_ws
+    except ImportError as e:
+        WsLink = missing_additional_dependency("WsLink", "websockets>=14.0,<17", e)
+        WsLinkClient = missing_additional_dependency("WsLinkClient", "websockets>=14.0,<17", e)
+        WsLinkEndpoint = missing_additional_dependency("WsLinkEndpoint", "websockets>=14.0,<17", e)
+        serve_ws = missing_additional_dependency("serve_ws", "websockets>=14.0,<17", e)
 
 __all__ = (
     "ErrorFrame",

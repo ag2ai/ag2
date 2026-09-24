@@ -31,6 +31,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any, Literal
 
 from ag2.tools import tool
+from ag2.tools.final import FunctionTool
 
 from ...envelope import EV_TASK_CANCEL_REQUEST, Envelope
 from ..inject import AgentClientInject, TaskInject
@@ -59,14 +60,14 @@ def _task_summary(meta: Any) -> dict[str, Any]:
     }
 
 
-def make_tasks_tool(agent_client: "AgentClient") -> object:
+def make_tasks_tool(agent_client: "AgentClient") -> FunctionTool:
     """Return a closure-bound ``tasks`` tool."""
 
     @tool
     async def tasks(
         action: Literal["progress", "complete", "list", "status", "wait", "cancel"],
         *,
-        payload: dict | None = None,
+        payload: dict[str, Any] | None = None,
         result: Any | None = None,
         task_id: str | None = None,
         reason: str = "",
@@ -77,7 +78,7 @@ def make_tasks_tool(agent_client: "AgentClient") -> object:
         limit: int = 20,
         client: AgentClientInject = None,
         active_task: TaskInject = None,
-    ) -> dict | list[dict] | str:
+    ) -> dict[str, Any] | list[dict[str, Any]] | str:
         """Task lifecycle.
 
         Active-task actions (require an open ``agent.task(...)`` block):
@@ -117,7 +118,7 @@ def make_tasks_tool(agent_client: "AgentClient") -> object:
             owner_filter = actual.agent_id if scope == "own" else None
             metas = await hub.list_tasks(agent_id=owner_filter, limit=limit * 4)
             terminal = {"completed", "failed", "expired", "cancelled"}
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
             for meta in metas:
                 if state == "active" and meta.state.value in terminal:
                     continue

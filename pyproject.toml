@@ -243,6 +243,7 @@ types = [
     # checks the packages behind them instead of checking them against `Any`.
     "ag2[redis, tracing, metrics]", # ag2.streams, ag2.knowledge.redis, ag2.middleware.builtin
     "watchdog>=4.0,<7",            # ag2.knowledge.disk — an additional dependency, not an extra
+    "websockets>=14.0,<17",        # ag2.network.transport.ws — an additional dependency, not an extra
     # google-genai is neither small nor pure-Python — it is ~8MB and reaches
     # `cryptography` through google-auth — but all three of google-genai,
     # google-auth and zai-sdk ship `py.typed`, the wheels are prebuilt on all
@@ -606,6 +607,19 @@ files = [
     # types, so it is the first of the network package in. `ag2[tracing]` is in
     # the `types` group, so the tracing path is really checked.
     "ag2/network/hub/",
+
+    # The network client: `HubClient`, `AgentClient`, `HumanClient`, the
+    # per-participant `Channel`, the default notify handler, the plugin and the
+    # identity-level LLM tools. It is what a downstream developer holds to join
+    # a hub, so its signatures are the ones their checker follows. No extras
+    # needed; `ag2[tracing]` (checkpoint span events) is in the `types` group.
+    "ag2/network/client/",
+
+    # The transport: frames, the `Link` protocol, `LocalLink` and the WebSocket
+    # `WsLink`. `websockets` ships `py.typed` and is an additional dependency,
+    # not an extra, so it is in the `types` group directly and `ws.py` is
+    # really checked on every pull request.
+    "ag2/network/transport/",
 
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather

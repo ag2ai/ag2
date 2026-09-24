@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 from ag2._telemetry_consts import TRACEPARENT_DEP_KEY
 from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, TextInput
 from ag2.stream import MemoryStream
+from ag2.tools.tool import Tool
 
 from ..channel import ChannelMetadata, ChannelState
 from ..envelope import (
@@ -258,7 +259,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         # consulting / discussion). Resolution is cached on the adapter
         # so the schema build cost is paid once per (adapter, client)
         # — see ``ChannelAdapter.tools_for`` default implementation.
-        adapter_tools: list = []
+        adapter_tools: list[Tool] = []
         try:
             adapter_tools = list(adapter.tools_for(client, metadata, state, client.agent_id))
         except Exception:

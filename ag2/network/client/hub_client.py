@@ -140,7 +140,7 @@ class HubClient:
         self._rpc_timeout = rpc_timeout
         self._client_link: LinkClient | None = None
         self._receive_task: asyncio.Task[None] | None = None
-        self._clients: dict[str, AgentClient] = {}
+        self._clients: dict[str, AgentClient | HumanClient] = {}
         self._closed = False
         # Notify handlers spawned off the receive loop (remote mode only —
         # see ``_receive_loop``). Tracked so ``close`` can drain them.
@@ -272,9 +272,9 @@ class HubClient:
             if not fut.done():
                 fut.set_exception(exc)
         self._pending.clear()
-        for fut in self._handshake_waiters:
-            if not fut.done():
-                fut.set_exception(exc)
+        for waiter in self._handshake_waiters:
+            if not waiter.done():
+                waiter.set_exception(exc)
         self._handshake_waiters.clear()
 
     async def _dispatch_notify(self, frame: NotifyFrame) -> None:
@@ -301,7 +301,7 @@ class HubClient:
 
     async def _deliver_and_ack(
         self,
-        client: AgentClient,
+        client: AgentClient | HumanClient,
         envelope: Envelope,
         recipient_id: str,
     ) -> None:
@@ -662,7 +662,7 @@ class HubClient:
         )
         # ``_clients`` is identity-keyed; ``HumanClient.receive`` matches
         # the signature the demuxer calls, so dispatch needs no branch.
-        self._clients[passport.agent_id] = human  # type: ignore[assignment]
+        self._clients[passport.agent_id] = human
         return human
 
     # ── Hub passthrough ──────────────────────────────────────────────────────
@@ -689,7 +689,8 @@ class HubClient:
     async def get_skill(self, agent_id: str) -> str | None:
         if self._hub is not None:
             return await self._hub.get_skill(agent_id)
-        return await self._rpc("get_skill", {"agent_id": agent_id})
+        skill: str | None = await self._rpc("get_skill", {"agent_id": agent_id})
+        return skill
 
     def find_agent_id(self, name: str) -> str | None:
         """Non-raising name → agent_id lookup.
@@ -845,7 +846,8 @@ class HubClient:
     async def post_envelope(self, envelope: Envelope) -> str:
         if self._hub is not None:
             return await self._hub.post_envelope(envelope)
-        return await self._rpc("post_envelope", {"envelope": envelope.to_dict()})
+        envelope_id: str = await self._rpc("post_envelope", {"envelope": envelope.to_dict()})
+        return envelope_id
 
     async def report_turn_failure(
         self,
@@ -873,7 +875,7 @@ class HubClient:
                 {"channel_id": channel_id, "agent_id": agent_id, "envelope_id": envelope_id, "error": str(exc)},
             )
 
-    async def fire_task_event(self, task_id: str, kind: str, payload: dict) -> None:
+    async def fire_task_event(self, task_id: str, kind: str, payload: dict[str, Any]) -> None:
         """Fan out an ``on_task_event`` through the hub's listener chain."""
         if self._hub is not None:
             await self._hub.fire_task_event(task_id, kind, payload)
@@ -1000,7 +1002,7 @@ class HubClient:
         if metadata is None:
             metadata = await self.get_channel(channel_id)
         adapter = self.adapter_for_metadata(metadata)
-        state = adapter.initial_state(metadata)
+        state: object | None = adapter.initial_state(metadata)
         for envelope in await self.read_wal(channel_id):
             state = adapter.fold(envelope, state)
         return state
@@ -1140,7 +1142,8 @@ class HubClient:
         """Read back a task checkpoint, or ``None`` if none is stored."""
         if self._hub is not None:
             return await self._hub.read_task_checkpoint(task_id)
-        return await self._rpc("read_task_checkpoint", {"task_id": task_id})
+        checkpoint: dict[str, object] | None = await self._rpc("read_task_checkpoint", {"task_id": task_id})
+        return checkpoint
 
     # ── Cache helpers ──────────────────────────────────────────────────────────
 
@@ -1188,6 +1191,10 @@ class HubClient:
     async def shutdown(self) -> None:
         """Unregister every ``AgentClient`` then ``close()``."""
         for client in list(self._clients.values()):
+            # A ``HumanClient`` has no ``unregister``, so a human stays
+            # registered and its pull consumers are not woken.
+            if not isinstance(client, AgentClient):
+                continue
             with contextlib.suppress(Exception):
                 await client.unregister()
         self._clients.clear()
