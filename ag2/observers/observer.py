@@ -187,6 +187,17 @@ def observer(
 ) -> SimpleObserver: ...
 
 
+# `observer(callback=f)`: the overload above cannot default `condition` while a
+# required `callback` follows it positionally.
+@overload
+def observer(
+    *,
+    callback: Callable[..., Any],
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+) -> SimpleObserver: ...
+
+
 @overload
 def observer(
     condition: ClassInfo | Condition,
