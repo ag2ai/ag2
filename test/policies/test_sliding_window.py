@@ -6,6 +6,7 @@ import pytest
 
 from ag2 import Context, ToolResult
 from ag2.events import (
+    BaseEvent,
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -33,7 +34,7 @@ def _tool_results(parent_id: str = "tc_1", name: str = "get") -> ToolResultsEven
 class TestNoTrimming:
     @pytest.mark.asyncio
     async def test_events_within_limit_are_unchanged(self, context: Context) -> None:
-        events = [ModelRequest([TextInput("a")]), ModelRequest([TextInput("b")])]
+        events: list[BaseEvent] = [ModelRequest([TextInput("a")]), ModelRequest([TextInput("b")])]
         policy = SlidingWindowPolicy(max_events=5)
 
         prompts, result = await policy.apply([], events, context)
@@ -43,7 +44,7 @@ class TestNoTrimming:
 
     @pytest.mark.asyncio
     async def test_events_at_exact_limit(self, context: Context) -> None:
-        events = [ModelRequest([TextInput("a")]), ModelRequest([TextInput("b")])]
+        events: list[BaseEvent] = [ModelRequest([TextInput("a")]), ModelRequest([TextInput("b")])]
         policy = SlidingWindowPolicy(max_events=2)
 
         _, result = await policy.apply([], events, context)
@@ -54,18 +55,16 @@ class TestNoTrimming:
 class TestTrimming:
     @pytest.mark.asyncio
     async def test_keeps_last_n_events(self, context: Context) -> None:
-        events = [ModelRequest([TextInput(str(i))]) for i in range(5)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(str(i))]) for i in range(5)]
         policy = SlidingWindowPolicy(max_events=2)
 
         _, result = await policy.apply([], events, context)
 
-        assert len(result) == 2
-        assert result[0].parts[0].content == "3"
-        assert result[1].parts[0].content == "4"
+        assert result == events[3:]
 
     @pytest.mark.asyncio
     async def test_transparent_adds_prompt(self, context: Context) -> None:
-        events = [ModelRequest([TextInput(str(i))]) for i in range(5)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(str(i))]) for i in range(5)]
         policy = SlidingWindowPolicy(max_events=2, transparent=True)
 
         prompts, result = await policy.apply(["existing"], events, context)
@@ -93,8 +92,7 @@ class TestOrphanedToolResults:
 
         # The ToolResultsEvent should be dropped, leaving 2 events
         assert len(result) == 2
-        assert isinstance(result[0], ModelRequest)
-        assert result[0].parts[0].content == "next"
+        assert result[0] == ModelRequest([TextInput("next")])
 
     @pytest.mark.asyncio
     async def test_multiple_leading_orphaned_tool_results_are_skipped(self, context: Context) -> None:
@@ -161,9 +159,7 @@ class TestOrphanedToolResults:
 
         _, result = await policy.apply([], events, context)
 
-        assert len(result) == 2
-        assert all(not isinstance(e, ToolResultsEvent) for e in result)
-        assert [e.parts[0].content for e in result] == ["a", "b"]
+        assert result == [ModelRequest([TextInput("a")]), ModelRequest([TextInput("b")])]
 
     @pytest.mark.asyncio
     async def test_paired_tool_call_and_result_within_window_are_kept(self, context: Context) -> None:
@@ -198,5 +194,4 @@ class TestOrphanedToolResults:
 
         _, result = await policy.apply([], events, context)
 
-        assert all(not isinstance(e, ToolResultsEvent) for e in result)
-        assert [e.parts[0].content for e in result] == ["a", "b"]
+        assert result == [ModelRequest([TextInput("a")]), ModelRequest([TextInput("b")])]

@@ -428,6 +428,7 @@ class TestNameDescription:
 
         schema = ResponseSchema(MyModel)
 
+        assert schema.json_schema is not None
         assert "title" not in schema.json_schema
         assert "description" not in schema.json_schema
 
@@ -540,13 +541,14 @@ class TestValidation:
         assert result == expected
 
     async def test_validate_union(self) -> None:
-        schema = ResponseSchema(int | str)
+        # Annotated: a union is not a `type[T]`, so nothing infers `T` from it.
+        schema: ResponseSchema[int | str] = ResponseSchema(int | str)
 
         assert await schema.validate('{"data": 42}', context=None) == 42  # type: ignore[arg-type]
         assert await schema.validate('{"data": "hello"}', context=None) == "hello"  # type: ignore[arg-type]
 
     async def test_validate_not_embedded_union(self) -> None:
-        schema = ResponseSchema(int | str, embed=False)
+        schema: ResponseSchema[int | str] = ResponseSchema(int | str, embed=False)
 
         assert await schema.validate("42", context=None) == 42  # type: ignore[arg-type]
         assert await schema.validate('"hello"', context=None) == "hello"  # type: ignore[arg-type]

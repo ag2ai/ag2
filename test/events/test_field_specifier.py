@@ -9,8 +9,7 @@ at runtime it is an alias for ``FieldInfo``. Only the alias is exercised here â€
 the aliasing is what an import order nobody exercises could break.
 """
 
-from ag2.events import BaseEvent, Field, FieldInfo
-from ag2.events.base import Condition
+from ag2.events import BaseEvent, Condition, Field, FieldInfo
 
 
 class TestFieldSpecifierAlias:

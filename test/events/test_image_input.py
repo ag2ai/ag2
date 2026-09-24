@@ -43,7 +43,7 @@ class TestData:
 
     def test_missing_media_type_raises(self) -> None:
         with pytest.raises(ValueError, match="media_type"):
-            ImageInput(data=b"raw")
+            ImageInput(data=b"raw")  # type: ignore[call-overload]  # the misuse under test
 
 
 def test_accepts_gemini_image_formats() -> None:
@@ -118,4 +118,4 @@ class TestPath:
 
 def test_no_args_raises() -> None:
     with pytest.raises(ValueError, match="requires one of"):
-        ImageInput()
+        ImageInput()  # type: ignore[call-overload]  # the misuse under test

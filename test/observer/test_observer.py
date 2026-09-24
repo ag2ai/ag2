@@ -49,7 +49,7 @@ class TestBaseObserver:
         ctx = Context(stream=stream)
         obs = DummyObserver()
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
 
         @stream.where(ObserverAlert).subscribe()
         def on_alert(e: ObserverAlert) -> None:
@@ -81,7 +81,7 @@ class TestBaseObserver:
         ctx = Context(stream=stream)
         obs = NullObserver()
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
 
         @stream.where(ObserverAlert).subscribe()
         def on_alert(e: ObserverAlert) -> None:

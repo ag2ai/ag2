@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from ag2.events import (
     ClientToolCallEvent,
+    TextInput,
     ToolCallEvent,
     ToolErrorEvent,
 )
@@ -37,7 +38,9 @@ class TestToolErrorEventContent:
         except Exception as e:
             event = ToolErrorEvent.from_call(call, e)
 
-        traceback_text = event.result.parts[0].content  # type: ignore[union-attr]
+        part = event.result.parts[0]
+        assert isinstance(part, TextInput)
+        traceback_text = part.content
         assert "ValueError" in traceback_text
         assert "test error message" in traceback_text
 
@@ -48,7 +51,9 @@ class TestToolErrorEventContent:
         except Exception as e:
             event = ToolErrorEvent.from_call(call, e)
 
-        assert "NoneType" not in event.result.parts[0].content  # type: ignore[union-attr]
+        part = event.result.parts[0]
+        assert isinstance(part, TextInput)
+        assert "NoneType" not in part.content
 
 
 class TestSerializedArgumentsCache:
@@ -79,7 +84,8 @@ class TestSerializedArgumentsEmptyInput:
         assert tc.serialized_arguments == {}
 
     def test_none_returns_empty_dict(self) -> None:
-        tc = ToolCallEvent(name="tool", arguments=None)
+        # A provider may send null arguments; the declaration says what a well-formed call carries.
+        tc = ToolCallEvent(name="tool", arguments=None)  # type: ignore[arg-type]
         assert tc.serialized_arguments == {}
 
     def test_setter_updates_cache(self) -> None:

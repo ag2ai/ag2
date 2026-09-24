@@ -5,7 +5,7 @@
 import pytest
 
 from ag2 import Agent
-from ag2.events import ModelRequest, ModelResponse
+from ag2.events import ModelRequest, ModelResponse, TextInput
 from ag2.testing import TestConfig
 
 
@@ -28,8 +28,12 @@ async def test_repeated_user_message_is_persisted_each_time() -> None:
 
     events = list(await reply.context.stream.history.get_events())
 
-    user_inputs = [e.parts[0].content for e in events if isinstance(e, ModelRequest)]
-    assert user_inputs == ["repeating question", "different question", "repeating question"]
+    user_inputs = [e for e in events if isinstance(e, ModelRequest)]
+    assert user_inputs == [
+        ModelRequest([TextInput("repeating question")]),
+        ModelRequest([TextInput("different question")]),
+        ModelRequest([TextInput("repeating question")]),
+    ]
 
     assert isinstance(events[-1], ModelResponse)
     assert events[-1].message is not None and events[-1].message.content == "third answer"

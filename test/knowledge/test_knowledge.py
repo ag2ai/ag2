@@ -7,15 +7,16 @@
 import asyncio
 import json
 import sys
+from collections.abc import Coroutine
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import pytest
 
 pytest.importorskip("watchdog")
 
-from ag2 import Agent
-from ag2.agent import KnowledgeConfig
+from ag2 import Agent, KnowledgeConfig
 from ag2.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TextInput, UnknownEvent
 from ag2.knowledge import (
     DefaultBootstrap,
@@ -145,10 +146,7 @@ class TestEventLogWriter:
         await writer.persist(stream_id, events)
 
         loaded = await writer.load(stream_id)
-        assert len(loaded) == 2
-        assert loaded[0].parts[0].content == "hello"
-        assert loaded[1].agent_name == "analyzer"
-        assert loaded[1].result == "done"
+        assert loaded == events
 
     @pytest.mark.asyncio
     async def test_persist_dropped_segments(self) -> None:
@@ -167,10 +165,7 @@ class TestEventLogWriter:
 
         # Load should return all in order: dropped-1, dropped-2, final
         loaded = await writer.load(stream_id)
-        assert len(loaded) == 3
-        assert loaded[0].parts[0].content == "old-1"
-        assert loaded[1].parts[0].content == "old-2"
-        assert loaded[2].parts[0].content == "recent"
+        assert loaded == [*dropped1, *dropped2, *final]
 
     @pytest.mark.asyncio
     async def test_persist_dropped_multiple_writers_no_overwrite(self) -> None:
@@ -196,10 +191,11 @@ class TestEventLogWriter:
 
         # All three segments must be present and loadable
         loaded = await EventLogWriter(store).load(stream_id)
-        assert len(loaded) == 3
-        assert loaded[0].parts[0].content == "batch-1"
-        assert loaded[1].parts[0].content == "batch-2"
-        assert loaded[2].parts[0].content == "final"
+        assert loaded == [
+            ModelRequest([TextInput("batch-1")]),
+            ModelRequest([TextInput("batch-2")]),
+            ModelRequest([TextInput("final")]),
+        ]
 
     @pytest.mark.asyncio
     async def test_load_empty(self) -> None:
@@ -239,6 +235,7 @@ class TestDefaultBootstrap:
         assert await store.exists("/memory/SKILL.md")
 
         root_skill = await store.read("/SKILL.md")
+        assert root_skill is not None
         assert "test-agent" in root_skill
 
     @pytest.mark.asyncio
@@ -624,7 +621,7 @@ class TestSqliteKnowledgeStore:
         """
         store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
         try:
-            ops = []
+            ops: list[Coroutine[Any, Any, object]] = []
             for i in range(50):
                 path = f"/t/{i}"
                 ops.append(store.write(path, f"value-{i}"))

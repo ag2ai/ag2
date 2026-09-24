@@ -22,7 +22,7 @@ from ag2.events import (
     TaskProgress,
     TaskStarted,
 )
-from ag2.stream import MemoryStream
+from ag2.stream import MemoryStream, Stream
 from ag2.task import TERMINAL_TASK_STATES, TaskState
 
 
@@ -31,8 +31,8 @@ def _agent() -> Agent:
     return Agent(name="researcher", config=AnthropicConfig(model="claude-sonnet-5"))
 
 
-async def _persisted(stream: MemoryStream) -> list[BaseEvent]:
-    """Read durably-persisted events from a MemoryStream's storage.
+async def _persisted(stream: Stream) -> list[BaseEvent]:
+    """Read durably-persisted events from a stream's storage.
 
     Note: transient events (``TaskProgress``, ``ModelMessageChunk``) are
     not persisted — use ``_subscribe`` to capture them live.
@@ -86,7 +86,8 @@ class TestStandaloneLifecycle:
             assert task.metadata.spec.title == "research X"
             stream = task.context.stream
 
-        assert task.state == TaskState.COMPLETED
+        # Leaving the block completes the task; the checker keeps the narrowing from inside it.
+        assert task.state == TaskState.COMPLETED  # type: ignore[comparison-overlap]
         events = await _persisted(stream)
         types = [type(e) for e in events]
         assert TaskStarted in types

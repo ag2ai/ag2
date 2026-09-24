@@ -5,6 +5,7 @@
 import asyncio
 import contextlib
 from collections import defaultdict
+from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -60,7 +61,7 @@ class MockRedis:
 class MockPipeline:
     def __init__(self, redis: MockRedis) -> None:
         self._redis = redis
-        self._ops: list[tuple[str, tuple]] = []
+        self._ops: list[tuple[str, tuple[Any, ...]]] = []
 
     async def __aenter__(self) -> "MockPipeline":
         return self
@@ -84,7 +85,7 @@ class MockPubSub:
     def __init__(self, redis: MockRedis) -> None:
         self._redis = redis
         self._channels: list[str] = []
-        self._queue: asyncio.Queue[dict] = asyncio.Queue()
+        self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
     async def subscribe(self, channel: str) -> None:
         self._channels.append(channel)
@@ -120,7 +121,7 @@ async def redis_stream(mock_redis, request):
     from ag2.streams.redis import RedisStream
 
     serializer = request.param
-    streams: list = []
+    streams: list[RedisStream] = []
 
     def _make(**kwargs):
         kwargs.setdefault("prefix", f"ag2:test:{uuid4()}")

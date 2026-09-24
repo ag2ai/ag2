@@ -34,7 +34,7 @@ class TestFieldBasics:
             count: int = 0
             flag: bool = False
             label: str = ""
-            items: tuple = ()
+            items: tuple[int, ...] = ()
 
         obj = Event()
         assert obj.count == 0
@@ -50,9 +50,11 @@ class TestFieldBasics:
 
     def test_event_with_default_field(self):
         class Event(BaseEvent):
-            a: str = Field("1")
+            # The runtime takes a positional default; the checker refuses it and so
+            # sees no default at the construction below (see `Field`).
+            a: str = Field("1")  # type: ignore[call-arg]
 
-        obj = Event()
+        obj = Event()  # type: ignore[call-arg]
         assert obj.a == "1"
 
     def test_event_with_default_factory(self):
@@ -82,14 +84,14 @@ class TestFieldInit:
 
     def test_init_false_with_default_factory(self):
         class Event(BaseEvent):
-            items: list = Field(default_factory=list, init=False)
+            items: list[int] = Field(default_factory=list, init=False)
 
         obj = Event()
         assert obj.items == []
 
     def test_init_false_separate_instances(self):
         class Event(BaseEvent):
-            items: list = Field(default_factory=list, init=False)
+            items: list[int] = Field(default_factory=list, init=False)
 
         a = Event()
         b = Event()
@@ -229,14 +231,14 @@ class TestFieldPositionalArgs:
             a: str = Field(kw_only=False)
 
         with pytest.raises(TypeError, match="1 positional argument"):
-            Event("hello", "extra")
+            Event("hello", "extra")  # type: ignore[call-arg, arg-type]  # the misuse under test
 
     def test_duplicate_positional_and_kwarg_raises(self):
         class Event(BaseEvent):
             a: str = Field(kw_only=False)
 
         with pytest.raises(TypeError, match="multiple values"):
-            Event("hello", a="world")
+            Event("hello", a="world")  # type: ignore[misc]  # the misuse under test
 
     def test_inherited_positional(self):
         class Parent(BaseEvent):

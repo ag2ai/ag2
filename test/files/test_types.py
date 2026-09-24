@@ -43,7 +43,7 @@ class TestUploadedFile:
             provider=None,
             bytes_count=None,
             purpose=None,
-            created_at=IsFloat(),
+            created_at=IsFloat(),  # type: ignore[arg-type]  # a dirty-equals matcher stands in for the timestamp
         )
 
 

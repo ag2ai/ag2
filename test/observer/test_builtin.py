@@ -15,6 +15,7 @@ from ag2.events import (
     ObserverStarted,
     Severity,
     ToolCallEvent,
+    ToolCallsEvent,
     Usage,
     UsageEvent,
 )
@@ -71,7 +72,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         monitor.register(ExitStack(), ctx)
@@ -87,7 +88,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         monitor.register(ExitStack(), ctx)
@@ -103,7 +104,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         monitor.register(ExitStack(), ctx)
@@ -120,7 +121,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         monitor.register(ExitStack(), ctx)
@@ -142,7 +143,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         monitor.register(ExitStack(), ctx)
@@ -158,7 +159,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         monitor.register(ExitStack(), ctx)
@@ -174,7 +175,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         monitor.register(ExitStack(), ctx)
@@ -205,7 +206,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=500)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         monitor.register(ExitStack(), ctx)
@@ -227,7 +228,9 @@ class TestTokenMonitor:
         worker = Agent(
             "worker",
             config=TestConfig(
-                ModelResponse(usage=_BILLED, tool_calls=[{"id": "1", "name": "flaky", "arguments": "{}"}]),
+                ModelResponse(
+                    usage=_BILLED, tool_calls=ToolCallsEvent([ToolCallEvent(id="1", name="flaky", arguments="{}")])
+                ),
             ),
             tools=[_flaky],
         )
@@ -243,14 +246,16 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=500)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
         monitor.register(ExitStack(), ctx)
 
         worker = Agent(
             "worker",
             config=TestConfig(
-                ModelResponse(usage=_BILLED, tool_calls=[{"id": "1", "name": "flaky", "arguments": "{}"}]),
+                ModelResponse(
+                    usage=_BILLED, tool_calls=ToolCallsEvent([ToolCallEvent(id="1", name="flaky", arguments="{}")])
+                ),
             ),
             tools=[_flaky],
         )
@@ -309,7 +314,7 @@ class TestTokenMonitor:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=200)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
         monitor.register(ExitStack(), ctx)
 
@@ -359,7 +364,7 @@ class TestTokenMonitorTotalFallback:
         ctx = Context(stream=stream)
         monitor = TokenMonitor(warn_threshold=100, alert_threshold=500)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
         monitor.register(ExitStack(), ctx)
 
@@ -405,7 +410,7 @@ class TestLoopDetector:
         ctx = Context(stream=stream)
         detector = LoopDetector(repeat_threshold=3)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         detector.register(ExitStack(), ctx)
@@ -421,7 +426,7 @@ class TestLoopDetector:
         ctx = Context(stream=stream)
         detector = LoopDetector(repeat_threshold=3)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         detector.register(ExitStack(), ctx)
@@ -439,7 +444,7 @@ class TestLoopDetector:
         ctx = Context(stream=stream)
         detector = LoopDetector(repeat_threshold=3)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         detector.register(ExitStack(), ctx)
@@ -456,7 +461,7 @@ class TestLoopDetector:
         ctx = Context(stream=stream)
         detector = LoopDetector(repeat_threshold=3)
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
         stream.where(ObserverAlert).subscribe(lambda e: signals.append(e))
 
         detector.register(ExitStack(), ctx)

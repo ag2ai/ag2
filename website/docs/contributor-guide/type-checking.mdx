@@ -129,6 +129,30 @@ repository's `plugins`, and shipped for downstream projects to register in their
 class-level field access to the field descriptor, whose comparison operators return a
 `Condition`. `test/typing/` checks a fixture of every form the user guide teaches.
 
+Bound to a name, `A | B` of two event classes is a type alias to the checker, not a value, and
+no plugin hook reaches that decision. Annotate the name — `either: Condition = A | B` — and it
+stays a condition.
+
+## The test tree
+
+Tests are checked too, under a relaxed profile — the `test.*` override in `pyproject.toml`. It
+turns off only the settings that demand declarations (untyped and incomplete definitions,
+untyped decorators and calls, `Any` from unimported dependencies): a test that takes nothing and
+returns nothing gains nothing from saying so. Everything substantive stays on, `check_untyped_defs`
+above all, so an unannotated test body is still checked.
+
+That is what the profile is for: when a test double no longer satisfies the type it stands in
+for, the checker says so, instead of the test quietly exercising something else. When a test
+reports an error, fix the double before reaching for a suppression.
+
+A test directory joins `files` only after the package directory it covers is clean, so the
+package's corrected types do the work rather than being fought at every test-double boundary.
+
+A guarantee about the public types themselves — an overload's return type, a form the checker
+must refuse — goes in `test/typing/fixtures/` as a fixture with its expectations inline
+(`# N: <note>`, `# E: <error>`). `test/typing/test_fixtures.py` runs mypy over each fixture and
+compares.
+
 ## Suppressions
 
 A `# type: ignore[...]` carries its error code and a reason a later reader can act on. A

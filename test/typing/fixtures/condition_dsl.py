@@ -62,6 +62,16 @@ takes_condition((Order.label == "x").not_())
 takes_condition(~Order)
 takes_condition(Order.not_())
 takes_condition(Order.or_(ToolCallEvent))
+takes_condition(Order | ToolCallEvent)
+
+# Bound to a name, ``A | B`` of classes is a type alias to the checker, not a value;
+# annotating the name is what keeps it a condition. No plugin hook reaches that decision.
+either: Condition = Order | ToolCallEvent
+reveal_type(either)  # N: Revealed type is "ag2.events.conditions.Condition"
+alias = Order | ToolCallEvent
+# fmt: off
+reveal_type(alias)  # N: Revealed type is "types.UnionType[test.typing.fixtures.condition_dsl.Order, ag2.events.tool_events.ToolCallEvent]"
+# fmt: on
 
 # A field that does not exist is an error, not a silent Any.
 takes_condition(Order.missing == 1)  # E: "type[Order]" has no attribute "missing"  [attr-defined]

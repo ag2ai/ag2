@@ -6,6 +6,7 @@ import pytest
 
 from ag2 import Context, ToolResult
 from ag2.events import (
+    BaseEvent,
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -33,7 +34,7 @@ def _tool_results(parent_id: str = "tc_1", name: str = "get") -> ToolResultsEven
 class TestNoTrimming:
     @pytest.mark.asyncio
     async def test_events_within_budget_are_unchanged(self, context: Context) -> None:
-        events = [ModelRequest([TextInput("hi")])]
+        events: list[BaseEvent] = [ModelRequest([TextInput("hi")])]
         policy = TokenBudgetPolicy(max_tokens=100_000)
 
         prompts, result = await policy.apply([], events, context)
@@ -47,17 +48,17 @@ class TestTrimming:
     async def test_retains_most_recent_events(self, context: Context) -> None:
         # Use a very tight budget so only the last event fits
         last = ModelRequest([TextInput("z")])
-        events = [ModelRequest([TextInput("a" * 200)]), last]
+        events: list[BaseEvent] = [ModelRequest([TextInput("a" * 200)]), last]
         budget_tokens = (len(str(last)) // 4) + 1
         policy = TokenBudgetPolicy(max_tokens=budget_tokens)
 
         _, result = await policy.apply([], events, context)
 
-        assert result[-1].parts[0].content == "z"
+        assert result[-1] == last
 
     @pytest.mark.asyncio
     async def test_transparent_adds_prompt(self, context: Context) -> None:
-        events = [ModelRequest([TextInput("a" * 200)]), ModelRequest([TextInput("b")])]
+        events: list[BaseEvent] = [ModelRequest([TextInput("a" * 200)]), ModelRequest([TextInput("b")])]
         budget_tokens = (len(str(events[-1])) // 4) + 1
         policy = TokenBudgetPolicy(max_tokens=budget_tokens, transparent=True)
 
@@ -152,4 +153,4 @@ class TestOrphanedToolResults:
         _, result = await policy.apply([], events, context)
 
         assert all(not isinstance(e, ToolResultsEvent) for e in result)
-        assert [e.parts[0].content for e in result if isinstance(e, ModelRequest)] == ["a", "b"]
+        assert [e for e in result if isinstance(e, ModelRequest)] == [req_a, req_b]

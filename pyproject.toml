@@ -610,6 +610,39 @@ files = [
     # really checked on every pull request.
     "ag2/network/",
 
+    # === The test tree ===
+    #
+    # Checked under the relaxed profile in the `test.*` override below. A test
+    # directory goes in only after the package directory it covers is clean, so
+    # the package's corrected types do the work rather than being fought at every
+    # test-double boundary. What this buys: a double that no longer satisfies the
+    # type it stands in for is reported, instead of the test silently exercising
+    # something else.
+
+    # The test-tree root: the agent's composition, assembly, compaction,
+    # aggregation, tasks, watches and history, plus the shared helpers and
+    # `conftest.py` every directory below imports. No extras needed.
+    "test/*.py",
+
+    # Type-level guarantees, tested through mypy's own output; the harness runs
+    # each fixture under `fixtures/` separately, so the fixtures stay out of here.
+    "test/typing/__init__.py",
+    "test/typing/test_fixtures.py",
+
+    # The events, stream, response, files, knowledge, policies, observers, spec
+    # and MCP-UI tests: the packages the first sweep tickets cleaned. The Redis
+    # stream and disk-knowledge tests need `ag2[redis]` and `watchdog`, both in
+    # the `types` group, so all of it is really checked on every pull request.
+    "test/events/",
+    "test/files/",
+    "test/knowledge/",
+    "test/mcp_ui/",
+    "test/observer/",
+    "test/policies/",
+    "test/response/",
+    "test/spec/",
+    "test/stream/",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;
@@ -666,6 +699,21 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = ["nlip_sdk.*", "nlip_server.*"]
 follow_untyped_imports = true
+
+# The test tree is not a published surface: nobody reads a test's signature to
+# learn an API, and a test that takes nothing and returns nothing gains nothing
+# from saying so. So the settings that only demand declarations are off here —
+# about nine hundred edits' worth, none carrying information. Everything
+# substantive stays on, `check_untyped_defs` above all: an unannotated test body
+# is still checked, so a double that no longer satisfies the protocol it stands
+# in for is reported rather than silently testing nothing.
+[[tool.mypy.overrides]]
+module = "test.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_decorators = false
+disallow_untyped_calls = false
+disallow_any_unimported = false
 
 [[tool.mypy.overrides]]
 module = "numpy.*"
