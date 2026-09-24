@@ -4,6 +4,7 @@
 
 import asyncio
 import base64
+import logging
 from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
@@ -31,7 +32,10 @@ from openai.types.realtime.realtime_conversation_item_user_message_param import 
 
 from ag2.context import ConversationContext
 from ag2.events import (
+    BinaryInput,
     DataInput,
+    DrainedModelRequest,
+    Input,
     ModelMessage,
     ModelMessageChunk,
     ModelRequest,
@@ -43,9 +47,11 @@ from ag2.events import (
     ToolResultEvent,
     TranscriptionChunkEvent,
     TranscriptionCompletedEvent,
+    UrlInput,
     Usage,
     UsageEvent,
 )
+from ag2.exceptions import UnsupportedInputError
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
@@ -61,6 +67,9 @@ if TYPE_CHECKING:
 
     from ag2.annotations import Context
 
+logger = logging.getLogger(__name__)
+
+_PROVIDER = "openai realtime"
 
 RealtimeVoice = Literal[
     "alloy",
@@ -310,7 +319,7 @@ class RealTimeConfig(RealtimeConfig):
                 await _send_tool_result(conn, gate, event, serializer)
 
             async def _forward_request(event: ModelRequest) -> None:
-                await _send_request(conn, gate, event)
+                await _send_request(conn, gate, event, serializer)
 
             with (
                 context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
@@ -426,26 +435,48 @@ async def _send_request(
     conn: AsyncRealtimeConnection,
     gate: _ResponseGate,
     event: ModelRequest,
+    serializer: SerializerProto,
 ) -> None:
     """Add the request to the conversation as one user message, then ask the gate for a response.
 
     A request with no content to send adds nothing and asks for nothing.
     """
-    content = _user_message_content(event)
+    content = _user_message_content(event, serializer)
     if not content:
         return
     await conn.conversation.item.create(item={"type": "message", "role": "user", "content": content})
     await gate.request()
 
 
-def _user_message_content(event: ModelRequest) -> list[UserMessageContent]:
+def _user_message_content(event: ModelRequest, serializer: SerializerProto) -> list[UserMessageContent]:
+    """Convert the request's parts to user message content.
+
+    `TextInput` is sent as is and `DataInput` as text encoded by `serializer`.
+    Any other part raises `UnsupportedInputError`, except in a
+    `DrainedModelRequest`, where it is logged and dropped so the rest of the
+    drained inbox still reaches the model.
+    """
     content: list[UserMessageContent] = []
     for part in event.parts:
         if isinstance(part, TextInput):
             content.append({"type": "input_text", "text": part.content})
+        elif isinstance(part, DataInput):
+            content.append({"type": "input_text", "text": serializer.encode(part.data).decode()})
+        elif isinstance(event, DrainedModelRequest):
+            logger.warning(
+                "Dropped %s from an inbox message: input type not supported by provider `%s`",
+                _input_kind(part),
+                _PROVIDER,
+            )
         else:
-            raise NotImplementedError(f"OpenAI realtime does not support {type(part).__name__} input")
+            raise UnsupportedInputError(_input_kind(part), _PROVIDER)
     return content
+
+
+def _input_kind(part: Input) -> str:
+    if isinstance(part, (UrlInput, BinaryInput)):
+        return f"{type(part).__name__}({part.kind.value})"
+    return type(part).__name__
 
 
 def normalize_realtime_usage(usage: "RealtimeResponseUsage | None") -> Usage:

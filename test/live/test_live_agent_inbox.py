@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import ANY, MagicMock
@@ -13,7 +14,16 @@ from dirty_equals import IsStr
 pytest.importorskip("openai")
 
 from ag2 import Agent, Context, observer
-from ag2.events import MessageEnqueued, ModelMessage, ModelRequest, ModelResponse, TextInput, ToolCallEvent
+from ag2.events import (
+    DrainedModelRequest,
+    ImageInput,
+    MessageEnqueued,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolCallEvent,
+)
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 from ag2.tools.subagents import background_agent_tool
@@ -96,7 +106,7 @@ class TestLiveAgentInbox:
         seen = MagicMock()
 
         async with agent.run(observers=[observer(ModelRequest, seen)]):
-            seen.assert_called_once_with(ModelRequest([TextInput("left over")]), __ctx__=ANY)
+            seen.assert_called_once_with(DrainedModelRequest([TextInput("left over")]), __ctx__=ANY)
 
     async def test_enqueue_during_session_reaches_connection_and_history(self) -> None:
         stream = MemoryStream()
@@ -135,6 +145,26 @@ class TestLiveAgentInbox:
                 await announcements.wait(1)
 
             assert await model_requests(stream) == []
+
+    async def test_enqueued_media_is_dropped_with_a_warning_and_the_text_delivered(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        agent, conn = live_agent()
+
+        async with agent.run() as context:
+            announcements = Announcements()
+            with (
+                caplog.at_level(logging.WARNING),
+                context.stream.where(MessageEnqueued).sub_scope(announcements.on_enqueued),
+            ):
+                context.enqueue("look", ImageInput("https://example.com/cat.png"))
+                await announcements.wait(1)
+                context.enqueue("still here")
+                await announcements.wait(2)
+
+            assert user_texts(conn.created_items()) == [["look"], ["still here"]]
+            assert any("UrlInput(image)" in r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
 
     @pytest.mark.parametrize("note", [sync_note, async_note], ids=["sync", "async"])
     async def test_tool_enqueue_reaches_connection(self, note: Callable[..., Any]) -> None:

@@ -6,7 +6,8 @@ import pytest
 
 pytest.importorskip("openai")
 
-from ag2.events import ModelRequest, TextInput
+from ag2.events import DataInput, ImageInput, ModelRequest, TextInput
+from ag2.exceptions import UnsupportedInputError
 from test.live._helpers import created, done, live_agent
 
 
@@ -59,3 +60,18 @@ class TestPushedModelRequest:
             await context.send(ModelRequest([]))
 
             assert conn.calls == calls_before
+
+    async def test_pushed_data_input_is_sent_serialized(self) -> None:
+        agent, conn = live_agent()
+
+        async with agent.run() as context:
+            await context.send(ModelRequest([DataInput({"city": "Paris"})]))
+
+            assert conn.created_items()[0]["content"] == [{"type": "input_text", "text": '{"city":"Paris"}'}]
+
+    async def test_pushed_media_input_raises_to_the_caller(self) -> None:
+        agent, _ = live_agent()
+
+        async with agent.run() as context:
+            with pytest.raises(UnsupportedInputError, match=r"UrlInput\(image\)"):
+                await context.send(ModelRequest([TextInput("look"), ImageInput("https://example.com/cat.png")]))

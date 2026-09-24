@@ -11,7 +11,15 @@ from fast_depends.library.serializer import SerializerProto
 from ag2.agent import HumanHook, Plugin, PluginTarget, PromptType, wrap_hitl
 from ag2.annotations import Context
 from ag2.context import ConversationContext, Stream
-from ag2.events import HumanInputRequest, Input, MessageEnqueued, ModelRequest, ObserverCompleted, ObserverStarted
+from ag2.events import (
+    DrainedModelRequest,
+    HumanInputRequest,
+    Input,
+    MessageEnqueued,
+    ModelRequest,
+    ObserverCompleted,
+    ObserverStarted,
+)
 from ag2.middleware.base import BaseMiddleware, MiddlewareFactory
 from ag2.observers import Observer
 from ag2.stream import MemoryStream
@@ -40,6 +48,16 @@ class RealtimeConfig(Protocol):
     reaches its connection. A provider that publishes a `ModelRequest` of its
     own (such as a transcript of captured audio) publishes a marker subclass
     and skips it in this subscription.
+
+    A session accepts at least `TextInput` and `DataInput` parts, sending
+    `DataInput` encoded by the `serializer` passed to `session()`. Any part it
+    cannot send is treated according to where the request came from:
+
+    - a `DrainedModelRequest` (the inbox `LiveAgent` drained): log a warning,
+      drop that part and send the rest, so one bad attachment never fails the
+      drain or the session;
+    - any other `ModelRequest` (pushed directly on the stream): raise
+      `UnsupportedInputError`, which reaches the caller of `context.send`.
 
     `LiveAgent` needs no separate STT/LLM/TTS parts. For a cascade of
     separate providers, see `STTConfig.pipe` and `TTSObserver`.
@@ -77,8 +95,8 @@ class LiveAgent(PluginTarget):
     caller, a tool, or a background task. The agent drains the stream's inbox
     once the provider's session is open (delivering anything left on a shared
     stream) and again on every `MessageEnqueued`, whether or not the model is
-    responding, and publishes what it drained as one `ModelRequest`. The
-    provider's session takes it from there and decides when to answer.
+    responding, and publishes what it drained as one `DrainedModelRequest`.
+    The provider's session takes it from there and decides when to answer.
     """
 
     def __init__(
@@ -227,7 +245,7 @@ async def _on_message_enqueued(event: MessageEnqueued, context: Context) -> None
 
 
 async def _publish_inbox(context: ConversationContext) -> None:
-    """Publish the inbox as one `ModelRequest`, removing only the messages it published.
+    """Publish the inbox as one `DrainedModelRequest`, removing only the messages it published.
 
     Assumes only the event loop removes from the inbox; other threads only append.
     """
@@ -238,4 +256,4 @@ async def _publish_inbox(context: ConversationContext) -> None:
     drained = inbox[:count]
     del inbox[:count]
     parts: list[Input] = [part for request in drained for part in request.parts]
-    await context.send(ModelRequest(parts))
+    await context.send(DrainedModelRequest(parts))

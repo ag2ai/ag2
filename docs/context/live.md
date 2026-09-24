@@ -25,7 +25,9 @@ A user turn handed to a running live session by anyone other than the provider �
 typing next to the voice channel, or a program — through the **Inbox** or straight onto the
 stream. It enters the provider's conversation at once; the provider answers it at the next
 response boundary, or immediately if the model is idle. Several pushes waiting on one boundary get one
-answer.
+answer. A provider accepts at least text and data; media it cannot send (image, audio, video,
+document, file) is refused — an error to whoever pushed it directly, or a logged, dropped part
+when it came through the Inbox.
 _Avoid_: injected message, side input
 
 **Voice turn**:
