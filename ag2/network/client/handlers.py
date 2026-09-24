@@ -24,7 +24,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from ag2._telemetry_consts import TRACEPARENT_DEP_KEY
-from ag2.events import BaseEvent, ModelMessage, ModelRequest, TextInput
+from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, TextInput
 from ag2.stream import MemoryStream
 
 from ..channel import ChannelMetadata, ChannelState
@@ -64,7 +64,7 @@ async def _render_current_input(
     participant_id: str,
     metadata: ChannelMetadata,
     name_for: NameResolver,
-) -> str | None:
+) -> "str | Input | list[Input] | None":
     """Render the current-turn envelope through the view.
 
     Calls ``view.project([envelope])`` so named views apply consistent
@@ -279,8 +279,11 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         )
         sub_ids = mirror.attach(stream)
         try:
+            # An adapter may hand back several inputs (text plus an image,
+            # say); each is its own part of the request, not one list.
+            turn_input = current_input if isinstance(current_input, list) else [current_input]
             reply = await client.agent.ask(
-                current_input,
+                *turn_input,
                 stream=stream,
                 dependencies=dependencies,
                 tools=adapter_tools,
