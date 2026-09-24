@@ -148,7 +148,7 @@ class DiskKnowledgeStore:
         """Map virtual path to real filesystem path."""
         normalized = _normalize(path).lstrip("/")
         resolved = (self._root / normalized).resolve() if normalized else self._root.resolve()
-        if not str(resolved).startswith(str(self._root.resolve())):
+        if not resolved.is_relative_to(self._root.resolve()):
             raise ValueError(f"Path traversal blocked: {path}")
         return resolved
 
