@@ -4,7 +4,7 @@
 
 from typing import Any
 
-from anthropic.types import Message, Usage
+from anthropic.types import Message, StopReason, Usage
 
 
 class FakeStream:
@@ -15,7 +15,7 @@ class FakeStream:
     the final message.
     """
 
-    def __init__(self, events: list[Any], *, stop_reason: str = "end_turn") -> None:
+    def __init__(self, events: list[Any], *, stop_reason: StopReason = "end_turn") -> None:
         self._events = events
         self._stop_reason = stop_reason
 

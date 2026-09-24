@@ -2,7 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
+
 import pytest
+from openai.types.responses import SkillReferenceParam
 
 from ag2 import Context
 from ag2.config.openai.mappers import (
@@ -31,7 +34,7 @@ async def test_extract_skill_references(context: Context) -> None:
 
 def test_merge_into_existing_shell_tool() -> None:
     tools = [{"type": "shell"}]
-    skills = [{"type": "skill_reference", "skill_id": "skill_abc"}]
+    skills: list[SkillReferenceParam] = [{"type": "skill_reference", "skill_id": "skill_abc"}]
 
     merged = merge_skills_into_shell_tools(tools, skills)
 
@@ -41,7 +44,7 @@ def test_merge_into_existing_shell_tool() -> None:
 
 
 def test_merge_preserves_container_auto_options() -> None:
-    tools = [
+    tools: list[dict[str, Any]] = [
         {"type": "web_search"},
         {
             "type": "shell",
@@ -51,7 +54,7 @@ def test_merge_preserves_container_auto_options() -> None:
             },
         },
     ]
-    skills = [{"type": "skill_reference", "skill_id": "skill_abc"}]
+    skills: list[SkillReferenceParam] = [{"type": "skill_reference", "skill_id": "skill_abc"}]
 
     merged = merge_skills_into_shell_tools(tools, skills)
 
@@ -64,7 +67,7 @@ def test_merge_preserves_container_auto_options() -> None:
 
 def test_merge_appends_shell_when_absent() -> None:
     tools = [{"type": "web_search"}]
-    skills = [{"type": "skill_reference", "skill_id": "skill_abc"}]
+    skills: list[SkillReferenceParam] = [{"type": "skill_reference", "skill_id": "skill_abc"}]
 
     merged = merge_skills_into_shell_tools(tools, skills)
 
@@ -76,7 +79,7 @@ def test_merge_appends_shell_when_absent() -> None:
 
 def test_merge_rejects_container_reference() -> None:
     tools = [{"type": "shell", "environment": {"type": "container_reference", "container_id": "cont_1"}}]
-    skills = [{"type": "skill_reference", "skill_id": "skill_abc"}]
+    skills: list[SkillReferenceParam] = [{"type": "skill_reference", "skill_id": "skill_abc"}]
 
     with pytest.raises(ValueError, match="container"):
         merge_skills_into_shell_tools(tools, skills)

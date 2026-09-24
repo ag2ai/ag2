@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 from dirty_equals import IsPartialDict
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Agent, MemoryStream, tool
 from ag2.config.openai.mappers import events_to_responses_input
@@ -181,7 +181,7 @@ class TestTheToolExecutorAbsorbsThem:
 
 async def _replayed(*output: dict[str, Any]) -> list[dict[str, Any]]:
     """The next request's input items, after a turn whose response carried `output`."""
-    return events_to_responses_input(await events_of(*output), SerializerCls)
+    return events_to_responses_input(await events_of(*output), PydanticSerializer())
 
 
 @pytest.mark.asyncio

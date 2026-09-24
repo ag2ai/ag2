@@ -6,7 +6,7 @@ import base64
 
 import pytest
 from dirty_equals import IsPartialDict
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import ToolResult
 from ag2.compact import CompactionSummary
@@ -32,12 +32,12 @@ from ag2.files.types import FileProvider, UploadedFile
 
 class TestTextInput:
     def test_completions(self) -> None:
-        result = convert_messages([], [ModelRequest([TextInput("hello")])], SerializerCls)
+        result = convert_messages([], [ModelRequest([TextInput("hello")])], PydanticSerializer())
 
         assert result[1] == {"role": "user", "content": "hello"}
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([TextInput("hello")])], SerializerCls)
+        result = events_to_responses_input([ModelRequest([TextInput("hello")])], PydanticSerializer())
 
         assert result == [{"role": "user", "content": [{"type": "input_text", "text": "hello"}]}]
 
@@ -49,7 +49,7 @@ class TestTextInput:
             [
                 ModelRequest([TextInput("describe this"), ImageInput(url=image_url)]),
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [
@@ -68,7 +68,7 @@ class TestImageUrlInput:
     IMAGE_URL = "https://example.com/image.png"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [ModelRequest([ImageInput(url=self.IMAGE_URL)])], SerializerCls)
+        result = convert_messages([], [ModelRequest([ImageInput(url=self.IMAGE_URL)])], PydanticSerializer())
 
         assert result[1] == {
             "role": "user",
@@ -76,7 +76,7 @@ class TestImageUrlInput:
         }
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([ImageInput(url=self.IMAGE_URL)])], SerializerCls)
+        result = events_to_responses_input([ModelRequest([ImageInput(url=self.IMAGE_URL)])], PydanticSerializer())
 
         assert result == [
             {
@@ -90,7 +90,7 @@ class TestFileIdInput:
     FILE_ID = "file-6F2ksmvXxt4VdoqmHRw6kL"
 
     def test_completions(self) -> None:
-        result = convert_messages([], [ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
+        result = convert_messages([], [ModelRequest([FileIdInput(file_id=self.FILE_ID)])], PydanticSerializer())
 
         assert result[1] == {
             "role": "user",
@@ -100,7 +100,7 @@ class TestFileIdInput:
     def test_completions_filename_forbidden_with_file_id(self) -> None:
         """Chat Completions API rejects `filename` when `file_id` is present."""
         result = convert_messages(
-            [], [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], SerializerCls
+            [], [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], PydanticSerializer()
         )
 
         assert result[1] == {
@@ -109,7 +109,7 @@ class TestFileIdInput:
         }
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
+        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID)])], PydanticSerializer())
 
         assert result == [
             {
@@ -121,7 +121,7 @@ class TestFileIdInput:
     def test_responses_with_filename_ignores_filename(self) -> None:
         # OpenAI Responses API rejects file_id + filename together (mutually exclusive).
         result = events_to_responses_input(
-            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], SerializerCls
+            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], PydanticSerializer()
         )
 
         assert result == [
@@ -135,13 +135,13 @@ class TestFileIdInput:
         with pytest.raises(UnsupportedInputError, match="'anthropic'.*openai"):
             events_to_responses_input(
                 [ModelRequest([UploadedFile(file_id="file_011CNha8", provider=FileProvider.ANTHROPIC)])],
-                SerializerCls,
+                PydanticSerializer(),
             )
 
     def test_responses_matching_provider_passes(self) -> None:
         result = events_to_responses_input(
             [ModelRequest([UploadedFile(file_id=self.FILE_ID, provider=FileProvider.OPENAI)])],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [
@@ -157,11 +157,11 @@ class TestAudioUrlInput:
 
     def test_completions_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*openai-completions"):
-            convert_messages([], [ModelRequest([AudioInput(url=self.AUDIO_URL)])], SerializerCls)
+            convert_messages([], [ModelRequest([AudioInput(url=self.AUDIO_URL)])], PydanticSerializer())
 
     def test_responses_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*openai-responses"):
-            events_to_responses_input([ModelRequest([AudioInput(url=self.AUDIO_URL)])], SerializerCls)
+            events_to_responses_input([ModelRequest([AudioInput(url=self.AUDIO_URL)])], PydanticSerializer())
 
 
 class TestAudioBinaryInput:
@@ -169,7 +169,7 @@ class TestAudioBinaryInput:
 
     def test_completions(self) -> None:
         result = convert_messages(
-            [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])], SerializerCls
+            [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/wav")])], PydanticSerializer()
         )
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
@@ -180,7 +180,7 @@ class TestAudioBinaryInput:
 
     def test_completions_mp3(self) -> None:
         result = convert_messages(
-            [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])], SerializerCls
+            [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/mpeg")])], PydanticSerializer()
         )
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
@@ -193,7 +193,7 @@ class TestAudioBinaryInput:
         """ag2 accepts more audio types than this API does; the extra ones stop here."""
         with pytest.raises(UnsupportedInputError):
             convert_messages(
-                [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/ogg")])], SerializerCls
+                [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type="audio/ogg")])], PydanticSerializer()
             )
 
 
@@ -202,7 +202,7 @@ class TestBinaryInput:
 
     def test_completions(self) -> None:
         result = convert_messages(
-            [], [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])], SerializerCls
+            [], [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])], PydanticSerializer()
         )
 
         expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
@@ -224,7 +224,7 @@ class TestBinaryInput:
                     )
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
@@ -238,9 +238,11 @@ class TestBinaryInput:
         png = tmp_path / "plot.png"
         png.write_bytes(self.SAMPLE_BYTES)
 
-        result = convert_messages([], [ModelRequest([ImageInput(path=str(png))])], SerializerCls)
+        result = convert_messages([], [ModelRequest([ImageInput(path=str(png))])], PydanticSerializer())
 
-        image_block = result[1]["content"][0]
+        content = result[1]["content"]
+        assert isinstance(content, list)
+        image_block = content[0]
         assert image_block == {
             "type": "image_url",
             "image_url": {"url": f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"},
@@ -249,7 +251,7 @@ class TestBinaryInput:
     def test_responses(self) -> None:
         result = events_to_responses_input(
             [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
@@ -264,7 +266,7 @@ class TestBinaryInput:
         """Logs persisted before #3084 hold ``kind`` as a raw string; it must still map."""
         part = BinaryInput(data=self.SAMPLE_BYTES, media_type="image/png", kind="image")
 
-        result = events_to_responses_input([ModelRequest([part])], SerializerCls)
+        result = events_to_responses_input([ModelRequest([part])], PydanticSerializer())
 
         expected_url = f"data:image/png;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
         assert result == [
@@ -279,7 +281,7 @@ class TestBinaryInput:
         png = tmp_path / "plot.png"
         png.write_bytes(self.SAMPLE_BYTES)
 
-        result = events_to_responses_input([ModelRequest([ImageInput(path=str(png))])], SerializerCls)
+        result = events_to_responses_input([ModelRequest([ImageInput(path=str(png))])], PydanticSerializer())
 
         assert result == [
             {
@@ -306,7 +308,7 @@ class TestBinaryInput:
                     )
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result[0]["content"][0] == IsPartialDict({"type": "input_image", "detail": "high"})
@@ -322,7 +324,7 @@ class TestBinaryInput:
                     )
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [
@@ -338,10 +340,10 @@ class TestDocumentUrlInput:
 
     def test_completions_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="UrlInput.*document.*openai-completions"):
-            convert_messages([], [ModelRequest([DocumentInput(url=self.DOC_URL)])], SerializerCls)
+            convert_messages([], [ModelRequest([DocumentInput(url=self.DOC_URL)])], PydanticSerializer())
 
     def test_responses(self) -> None:
-        result = events_to_responses_input([ModelRequest([DocumentInput(url=self.DOC_URL)])], SerializerCls)
+        result = events_to_responses_input([ModelRequest([DocumentInput(url=self.DOC_URL)])], PydanticSerializer())
 
         assert result == [
             {
@@ -358,7 +360,7 @@ class TestDocumentBinaryInput:
         result = convert_messages(
             [],
             [ModelRequest([DocumentInput(data=self.SAMPLE_BYTES, media_type="application/pdf")])],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         expected_data = f"data:application/pdf;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
@@ -380,7 +382,7 @@ class TestDocumentBinaryInput:
                     )
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         expected_data = f"data:application/pdf;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
@@ -392,7 +394,7 @@ class TestDocumentBinaryInput:
 
 def test_data_input_in_model_request_becomes_input_text() -> None:
     """DataInput must be serialized to input_text in Responses API ModelRequest."""
-    result = events_to_responses_input([ModelRequest([DataInput({"key": "value"})])], SerializerCls)
+    result = events_to_responses_input([ModelRequest([DataInput({"key": "value"})])], PydanticSerializer())
 
     assert result == [
         {
@@ -407,7 +409,7 @@ class TestResponsesToolResult:
 
     def test_text_only_stays_string(self) -> None:
         event = ToolResultsEvent(results=[ToolResultEvent(parent_id="c1", name="t", result=ToolResult("hello"))])
-        result = events_to_responses_input([event], SerializerCls)
+        result = events_to_responses_input([event], PydanticSerializer())
 
         assert result == [{"type": "function_call_output", "call_id": "c1", "output": "hello"}]
 
@@ -422,7 +424,7 @@ class TestResponsesToolResult:
                 )
             ]
         )
-        result = events_to_responses_input([event], SerializerCls)
+        result = events_to_responses_input([event], PydanticSerializer())
 
         expected_url = f"data:image/png;base64,{base64.b64encode(png).decode()}"
         assert result == [
@@ -443,7 +445,7 @@ class TestResponsesToolResult:
                 )
             ]
         )
-        result = events_to_responses_input([event], SerializerCls)
+        result = events_to_responses_input([event], PydanticSerializer())
 
         assert result == [
             {
@@ -464,7 +466,7 @@ class TestResponsesToolResult:
                 )
             ]
         )
-        result = events_to_responses_input([event], SerializerCls)
+        result = events_to_responses_input([event], PydanticSerializer())
 
         assert result == [
             {
@@ -485,7 +487,7 @@ class TestResponsesToolResult:
                 )
             ]
         )
-        result = events_to_responses_input([event], SerializerCls)
+        result = events_to_responses_input([event], PydanticSerializer())
 
         expected_data = f"data:application/pdf;base64,{base64.b64encode(b'%PDF-1.4').decode()}"
         assert result == [
@@ -514,7 +516,7 @@ class TestResponsesToolResult:
                 )
             ]
         )
-        result = events_to_responses_input([event], SerializerCls)
+        result = events_to_responses_input([event], PydanticSerializer())
 
         assert result == [
             IsPartialDict({
@@ -535,7 +537,7 @@ class TestResponsesToolResult:
                 )
             ]
         )
-        result = events_to_responses_input([event], SerializerCls)
+        result = events_to_responses_input([event], PydanticSerializer())
 
         assert result == [
             {
@@ -558,7 +560,7 @@ class TestResponsesToolResult:
                 )
             ]
         )
-        result = events_to_responses_input([event], SerializerCls)
+        result = events_to_responses_input([event], PydanticSerializer())
 
         expected_url = f"data:image/png;base64,{base64.b64encode(png).decode()}"
         assert result == [
@@ -585,7 +587,7 @@ class TestResponsesToolResult:
                 )
             ]
         )
-        result = events_to_responses_input([event], SerializerCls)
+        result = events_to_responses_input([event], PydanticSerializer())
 
         assert result == [
             {
@@ -609,7 +611,7 @@ class TestResponsesToolResult:
             ]
         )
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*openai-responses"):
-            events_to_responses_input([event], SerializerCls)
+            events_to_responses_input([event], PydanticSerializer())
 
 
 def _hallucinated_tool_call() -> ToolResultsEvent:
@@ -619,7 +621,7 @@ def _hallucinated_tool_call() -> ToolResultsEvent:
 
 
 def test_responses_hallucinated_tool_call_maps_with_error_text() -> None:
-    result = events_to_responses_input([_hallucinated_tool_call()], SerializerCls)
+    result = events_to_responses_input([_hallucinated_tool_call()], PydanticSerializer())
 
     assert result == [
         {
@@ -631,7 +633,7 @@ def test_responses_hallucinated_tool_call_maps_with_error_text() -> None:
 
 
 def test_completions_hallucinated_tool_call_maps_with_error_text() -> None:
-    result = convert_messages([], [_hallucinated_tool_call()], SerializerCls)
+    result = convert_messages([], [_hallucinated_tool_call()], PydanticSerializer())
 
     assert result == [
         {"content": "", "role": "system"},
@@ -647,8 +649,8 @@ def test_compaction_summary_renders_as_user_turn() -> None:
     summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
     text = "[Summary of earlier conversation]\nLooked up Paris and Tokyo."
 
-    completions = convert_messages([], [summary], SerializerCls)
+    completions = convert_messages([], [summary], PydanticSerializer())
     assert completions[-1] == {"role": "user", "content": text}
 
-    responses = events_to_responses_input([summary], SerializerCls)
+    responses = events_to_responses_input([summary], PydanticSerializer())
     assert responses == [{"role": "user", "content": [{"type": "input_text", "text": text}]}]

@@ -8,10 +8,11 @@ import json
 from typing import Any
 
 import httpx2
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config import OpenAIResponsesConfig
+from ag2.config.client import LLMClient
 from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
@@ -169,7 +170,7 @@ async def ask(
 
 
 async def ask_client(
-    client: Any,
+    client: LLMClient,
     *,
     stream: MemoryStream | None = None,
     tools: list[ToolSchema] | None = None,
@@ -180,7 +181,7 @@ async def ask_client(
         context=Context(stream=stream or MemoryStream()),
         tools=tools or [],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 

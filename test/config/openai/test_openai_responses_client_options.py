@@ -6,10 +6,12 @@ import json
 
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
+from typing_extensions import Unpack
 
 from ag2 import Context, MemoryStream
 from ag2.config.openai import OpenAIResponsesConfig
+from ag2.config.openai.config import OpenAIResponsesConfigOverrides
 from ag2.events import ModelRequest, TextInput
 
 # Optional generation params that must never be serialized as an explicit
@@ -27,7 +29,9 @@ NULLABLE_OPTIONS = (
 )
 
 
-def _capturing_config(captured: dict[str, object], **overrides: object) -> OpenAIResponsesConfig:
+def _capturing_config(
+    captured: dict[str, object], **overrides: Unpack[OpenAIResponsesConfigOverrides]
+) -> OpenAIResponsesConfig:
     def handler(request: httpx2.Request) -> httpx2.Response:
         captured["body"] = json.loads(request.content)
         return httpx2.Response(
@@ -54,20 +58,23 @@ def _capturing_config(captured: dict[str, object], **overrides: object) -> OpenA
         api_key="test",
         base_url="http://test/v1",
         http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
-        **overrides,
-    )
+    ).copy(**overrides)
 
 
-async def _request_body(captured: dict[str, object], **overrides: object) -> dict[str, object]:
+async def _request_body(
+    captured: dict[str, object], **overrides: Unpack[OpenAIResponsesConfigOverrides]
+) -> dict[str, object]:
     client = _capturing_config(captured, **overrides).create()
     await client(
         messages=[ModelRequest([TextInput("capital of France?")])],
         context=Context(stream=MemoryStream(), prompt=["You are a helpful assistant."]),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
-    return captured["body"]  # type: ignore[return-value]
+    body = captured["body"]
+    assert isinstance(body, dict)
+    return body
 
 
 @pytest.mark.asyncio

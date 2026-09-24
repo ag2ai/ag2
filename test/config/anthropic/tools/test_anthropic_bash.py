@@ -48,7 +48,7 @@ async def test_shell_tool_is_still_rejected(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_middleware_wraps_execution(tmp_path) -> None:  # type: ignore[no-untyped-def]
+async def test_middleware_wraps_execution(tmp_path) -> None:
     # The tool runs model-authored shell commands, so a governance/telemetry
     # middleware must see the call. Ignoring the argument silently bypassed it.
     seen: list[str] = []
@@ -72,4 +72,5 @@ async def test_middleware_wraps_execution(tmp_path) -> None:  # type: ignore[no-
             result = await pending
 
     assert seen == ["bash"]
+    assert isinstance(result, ToolResultEvent)
     assert result.result == ToolResult("denied by policy")

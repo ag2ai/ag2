@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config.openai import OpenAIClient
@@ -50,7 +50,7 @@ async def test_a_completion_with_no_choices_answers_a_response() -> None:
         context=Context(stream=MemoryStream()),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert isinstance(result, ModelResponse)
@@ -94,5 +94,5 @@ async def test_a_tool_call_of_a_kind_ag2_never_sent_is_refused_by_name() -> None
             context=Context(stream=MemoryStream()),
             tools=[],
             response_schema=None,
-            serializer=SerializerCls,
+            serializer=PydanticSerializer(),
         )

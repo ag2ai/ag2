@@ -643,6 +643,14 @@ files = [
     "test/spec/",
     "test/stream/",
 
+    # The OpenAI and Anthropic provider tests, with the `test/config` root they
+    # share with the other providers' tests (package marker, helpers, conftest).
+    # `openai` and `anthropic` are in the `types` group, so these are really
+    # checked on every pull request.
+    "test/config/*.py",
+    "test/config/anthropic/",
+    "test/config/openai/",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;

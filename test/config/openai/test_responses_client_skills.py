@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from typing import Any
 
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config.openai import OpenAIResponsesConfig
@@ -14,6 +15,8 @@ from ag2.events import ModelRequest, TextInput
 from ag2.tools.builtin.file_search import FileSearchTool
 from ag2.tools.builtin.shell import ShellTool
 from ag2.tools.builtin.skills import Skill, SkillsTool
+from ag2.tools.schemas import ToolSchema
+from ag2.tools.tool import Tool
 
 
 def _capturing_config(captured: dict[str, object]) -> OpenAIResponsesConfig:
@@ -46,9 +49,9 @@ def _capturing_config(captured: dict[str, object]) -> OpenAIResponsesConfig:
     )
 
 
-async def _request_body(captured: dict[str, object], tools: list) -> dict[str, object]:
+async def _request_body(captured: dict[str, object], tools: list[Tool]) -> dict[str, Any]:
     context = Context(stream=MemoryStream())
-    schemas = []
+    schemas: list[ToolSchema] = []
     for t in tools:
         schemas.extend(await t.schemas(context))
     client = _capturing_config(captured).create()
@@ -57,9 +60,11 @@ async def _request_body(captured: dict[str, object], tools: list) -> dict[str, o
         context=context,
         tools=schemas,
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
-    return captured["body"]  # type: ignore[return-value]
+    body = captured["body"]
+    assert isinstance(body, dict)
+    return body
 
 
 @pytest.mark.asyncio

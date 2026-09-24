@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
-from dirty_equals import IsPartialDict
+from dirty_equals import IsDict, IsPartialDict
+from openai.types.responses import ResponseTextConfigParam
 from pydantic import BaseModel, Field
 
 from ag2.config.openai.mappers import response_proto_to_text_config
@@ -14,7 +15,15 @@ from ag2.response import ResponseSchema
 from ag2.response.schema import RawSchema
 
 
-def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
+def _json_schema(result: ResponseTextConfigParam | None) -> dict[str, Any]:
+    """The JSON schema a ``json_schema`` text format carries."""
+    assert result is not None
+    text_format = result["format"]
+    assert text_format["type"] == "json_schema"
+    return text_format["schema"]
+
+
+def _embedded_data_schema(inner: dict[str, Any]) -> dict[str, Any]:
     """JSON schema for a primitive/union wrapped in ``{\"data\": ...}`` (default ``embed=True``)."""
     return {
         "properties": {
@@ -44,19 +53,19 @@ def test_none_returns_none() -> None:
 def test_primitive_type(
     type_: type,
     name: str,
-    expected_inner_schema: dict,  # type: ignore[type-arg]
+    expected_inner_schema: dict[str, Any],
 ) -> None:
     schema = ResponseSchema(type_, name=name)
 
     result = response_proto_to_text_config(schema)
 
-    assert result == {
+    assert result == IsDict({
         "format": IsPartialDict({
             "type": "json_schema",
             "name": name,
             "schema": IsPartialDict({"type": "object", "additionalProperties": False}),
         }),
-    }
+    })
 
 
 class TestDataclassSchemas:
@@ -70,7 +79,7 @@ class TestDataclassSchemas:
 
         result = response_proto_to_text_config(schema)
 
-        assert result == {
+        assert result == IsDict({
             "format": IsPartialDict({
                 "name": "User",
                 "schema": IsPartialDict({
@@ -82,7 +91,7 @@ class TestDataclassSchemas:
                     }),
                 }),
             }),
-        }
+        })
 
     def test_dataclass_with_description(self) -> None:
         @dataclass
@@ -95,9 +104,9 @@ class TestDataclassSchemas:
 
         result = response_proto_to_text_config(schema)
 
-        assert result == {
+        assert result == IsDict({
             "format": IsPartialDict({"description": "Custom desc"}),
-        }
+        })
 
 
 class TestPydanticModelSchemas:
@@ -110,7 +119,7 @@ class TestPydanticModelSchemas:
 
         result = response_proto_to_text_config(schema)
 
-        assert result == {
+        assert result == IsDict({
             "format": IsPartialDict({
                 "name": "Item",
                 "schema": IsPartialDict({
@@ -122,7 +131,7 @@ class TestPydanticModelSchemas:
                     }),
                 }),
             }),
-        }
+        })
 
     def test_model_with_field_constraints(self) -> None:
         class Bounded(BaseModel):
@@ -132,7 +141,7 @@ class TestPydanticModelSchemas:
 
         result = response_proto_to_text_config(schema)
 
-        assert result == {
+        assert result == IsDict({
             "format": IsPartialDict({
                 "schema": IsPartialDict({
                     "properties": IsPartialDict({
@@ -140,7 +149,7 @@ class TestPydanticModelSchemas:
                     }),
                 }),
             }),
-        }
+        })
 
 
 def test_union_type() -> None:
@@ -179,8 +188,7 @@ class TestAdditionalPropertiesFalse:
         schema = ResponseSchema(Outer)
         result = response_proto_to_text_config(schema)
 
-        assert result is not None
-        outer_schema = result["format"]["schema"]
+        outer_schema = _json_schema(result)
         if "$defs" in outer_schema:
             for def_schema in outer_schema["$defs"].values():
                 if def_schema.get("type") == "object":
@@ -191,8 +199,7 @@ class TestAdditionalPropertiesFalse:
         raw = RawSchema({"type": "string"}, name="Simple")
         result = response_proto_to_text_config(raw)
 
-        assert result is not None
-        assert "additionalProperties" not in result["format"]["schema"]
+        assert "additionalProperties" not in _json_schema(result)
 
 
 class TestDescriptionHandling:
@@ -212,12 +219,12 @@ class TestDescriptionHandling:
 
         result = response_proto_to_text_config(schema)
 
-        assert result == {
+        assert result == IsDict({
             "format": IsPartialDict({
                 "name": "WithDesc",
                 "description": "An integer value",
             }),
-        }
+        })
 
 
 def test_raw_schema_maps_correctly() -> None:
@@ -262,6 +269,6 @@ def test_defaulted_fields_are_still_required() -> None:
 
     result = response_proto_to_text_config(ResponseSchema(Outer))
 
-    schema = result["format"]["schema"]
+    schema = _json_schema(result)
     assert schema["required"] == ["title", "items"]
     assert schema["$defs"]["Inner"]["required"] == ["text", "options"]

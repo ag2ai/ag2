@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 from anthropic.types import ContainerUploadBlock, Message, RedactedThinkingBlock, TextBlock, Usage
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config.anthropic import AnthropicClient
@@ -76,11 +76,11 @@ async def test_unrecognized_block_is_logged(caplog: pytest.LogCaptureFixture) ->
 
 
 def test_redacted_thinking_replays_verbatim() -> None:
-    result = convert_messages([AnthropicRedactedThinkingEvent(block=REDACTED)], SerializerCls)
+    result = convert_messages([AnthropicRedactedThinkingEvent(block=REDACTED)], PydanticSerializer())
 
     assert result == [{"role": "assistant", "content": [{"data": "EroBCkYIBBgCKkA...", "type": "redacted_thinking"}]}]
 
 
 def test_container_upload_is_never_replayed() -> None:
     # The API refuses it inside an assistant turn; replaying would 400 the next request.
-    assert convert_messages([AnthropicContainerUploadEvent(block=UPLOAD)], SerializerCls) == []
+    assert convert_messages([AnthropicContainerUploadEvent(block=UPLOAD)], PydanticSerializer()) == []

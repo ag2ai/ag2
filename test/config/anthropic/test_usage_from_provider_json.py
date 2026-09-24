@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config.anthropic import AnthropicConfig
@@ -80,7 +80,7 @@ async def _usage_of(
         context=Context(stream=MemoryStream()),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
     assert isinstance(response, ModelResponse)
     return response.usage
