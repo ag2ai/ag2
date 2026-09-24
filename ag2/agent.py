@@ -964,9 +964,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: SendableMessage | Input,
-        /,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -982,9 +980,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: SendableMessage | Input,
-        /,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -1000,9 +996,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: SendableMessage | Input,
-        /,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -1064,9 +1058,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     def run(
         self,
-        msg: SendableMessage | Input,
-        /,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -1082,9 +1074,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     def run(
         self,
-        msg: SendableMessage | Input,
-        /,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -1100,9 +1090,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     def run(
         self,
-        msg: SendableMessage | Input,
-        /,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,

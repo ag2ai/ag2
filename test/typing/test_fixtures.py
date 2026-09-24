@@ -2,12 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""The condition DSL plugin is tested through the checker's own output.
+"""Type-level guarantees are tested through the checker's own output.
 
-The fixture carries its expectations inline — ``# N: <note>`` and ``# E: <error>``
+Each fixture under ``fixtures/`` carries its expectations inline — ``# N: <note>`` and ``# E: <error>``
 on the line they belong to — so a form the user guide teaches and the type it is
-expected to have are read together. Hooking the plugin's internals instead would
-be testing mypy's API rather than ours.
+expected to have are read together. Hooking the DSL plugin's internals instead
+would be testing mypy's API rather than ours.
 
 mypy runs as a subprocess, under the repository's own ``[tool.mypy]`` settings,
 because that is the configuration the guarantee is about.
@@ -23,7 +23,7 @@ import pytest
 pytest.importorskip("mypy")
 
 REPO_ROOT = Path(__file__).parents[2]
-FIXTURE = Path(__file__).parent / "fixtures" / "condition_dsl.py"
+FIXTURES = sorted(p for p in (Path(__file__).parent / "fixtures").glob("*.py") if p.name != "__init__.py")
 
 _EXPECTATION = re.compile(r"#\s(?P<kind>[NE]):\s(?P<message>.+?)\s*$")
 _REPORTED = re.compile(r"^(?P<path>.+?):(?P<line>\d+): (?P<kind>note|error): (?P<message>.+?)\s*$")
@@ -31,18 +31,18 @@ _REPORTED = re.compile(r"^(?P<path>.+?):(?P<line>\d+): (?P<kind>note|error): (?P
 _KINDS = {"N": "note", "E": "error"}
 
 
-def _expected() -> set[tuple[int, str, str]]:
+def _expected(fixture: Path) -> set[tuple[int, str, str]]:
     out = set()
-    for lineno, line in enumerate(FIXTURE.read_text().splitlines(), start=1):
+    for lineno, line in enumerate(fixture.read_text().splitlines(), start=1):
         match = _EXPECTATION.search(line)
         if match:
             out.add((lineno, _KINDS[match["kind"]], match["message"]))
     return out
 
 
-def _reported() -> set[tuple[int, str, str]]:
+def _reported(fixture: Path) -> set[tuple[int, str, str]]:
     result = subprocess.run(
-        [sys.executable, "-m", "mypy", "--no-error-summary", str(FIXTURE)],
+        [sys.executable, "-m", "mypy", "--no-error-summary", str(fixture)],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -57,6 +57,7 @@ def _reported() -> set[tuple[int, str, str]]:
     return out
 
 
-def test_checker_agrees_with_the_fixture():
-    """Every form the guide teaches checks, and a field that does not exist does not."""
-    assert _reported() == _expected()
+@pytest.mark.parametrize("fixture", FIXTURES, ids=lambda p: p.stem)
+def test_checker_agrees_with_the_fixture(fixture: Path) -> None:
+    """Every form a fixture expects to check does, and every form it expects rejected is."""
+    assert _reported(fixture) == _expected(fixture)

@@ -4,7 +4,7 @@
 
 """Every condition form the user guide teaches, as the checker sees it.
 
-Checked by ``test/typing/test_condition_dsl_plugin.py``; not imported by the
+Checked by ``test/typing/test_fixtures.py``; not imported by the
 suite. ``reveal_type`` lines are the assertions — mypy reports them as notes.
 """
 
