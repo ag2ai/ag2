@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
+from uuid import uuid4
 
 from fast_depends.library.serializer import SerializerProto
 from openai import AsyncOpenAI, Omit, omit
@@ -297,18 +298,19 @@ class RealTimeConfig(RealtimeConfig):
 
         async with self.client.realtime.connect(model=self.model) as conn:
             await conn.session.update(session=final_session)
+            gate = _ResponseGate(conn)
 
             async def _pump_audio(event: RecordedAudioEvent) -> None:
                 await conn.input_audio_buffer.append(audio=base64.b64encode(event.content).decode())
 
             async def _forward_tool_result(event: ToolResultEvent) -> None:
-                await _send_tool_result(conn, event, serializer)
+                await _send_tool_result(conn, gate, event, serializer)
 
             with (
                 context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
                 context.stream.where(ToolResultEvent).sub_scope(_forward_tool_result),
             ):
-                recv_task = asyncio.create_task(_pump_events(conn, context, self.model))
+                recv_task = asyncio.create_task(_pump_events(conn, gate, context, self.model))
 
                 try:
                     yield
@@ -330,8 +332,67 @@ def _tool_schema_to_session_tool(t: ToolSchema) -> RealtimeFunctionToolParam:
     raise NotImplementedError(f"OpenAI realtime does not support tool type {t.type!r}")
 
 
+class _ResponseGate:
+    """The per-session rule for when a response may be requested.
+
+    OpenAI rejects `response.create` while a response is active. The gate
+    counts active responses — including those the server's turn detection
+    starts on its own — and holds its own request as active from the moment
+    it is sent until the server acknowledges or rejects it. A request made
+    while any response is active is deferred to the response boundary
+    (`response.done`), where all deferred requests collapse into one. That one
+    is sent only if no other response is active at the boundary: a response
+    active at the boundary is assumed to include the deferred input. A
+    rejected request is deferred to the next boundary.
+    """
+
+    def __init__(self, conn: AsyncRealtimeConnection) -> None:
+        self._conn = conn
+        self._active = 0
+        self._requested = False
+        self._request_id: str | None = None
+        self._deferred = False
+
+    @property
+    def _busy(self) -> bool:
+        return self._requested or self._active > 0
+
+    async def request(self) -> None:
+        """Ask for a response now, or at the next response boundary if one is active."""
+        if self._busy:
+            self._deferred = True
+        else:
+            await self._create()
+
+    def response_created(self) -> None:
+        """Mark a response active — the gate's own or one turn detection started."""
+        self._requested = False
+        self._active += 1
+
+    async def response_done(self) -> None:
+        """Handle the response boundary: send the deferred request unless a response is still active."""
+        self._active -= 1
+        if self._deferred:
+            self._deferred = False
+            if not self._busy:
+                await self._create()
+
+    def request_rejected(self, client_event_id: str | None) -> None:
+        """Defer the gate's own request to the next boundary if the server rejected it."""
+        if client_event_id is not None and client_event_id == self._request_id:
+            self._requested = False
+            self._request_id = None
+            self._deferred = True
+
+    async def _create(self) -> None:
+        self._requested = True
+        self._request_id = f"ag2_response_{uuid4().hex}"
+        await self._conn.response.create(event_id=self._request_id)
+
+
 async def _send_tool_result(
     conn: AsyncRealtimeConnection,
+    gate: _ResponseGate,
     event: ToolResultEvent,
     serializer: SerializerProto,
 ) -> None:
@@ -351,7 +412,7 @@ async def _send_tool_result(
             "output": "\n".join(chunks),
         },
     )
-    await conn.response.create()
+    await gate.request()
 
 
 def normalize_realtime_usage(usage: "RealtimeResponseUsage | None") -> Usage:
@@ -368,6 +429,7 @@ def normalize_realtime_usage(usage: "RealtimeResponseUsage | None") -> Usage:
 
 async def _pump_events(
     conn: AsyncRealtimeConnection,
+    gate: _ResponseGate,
     context: ConversationContext,
     model: str,
 ) -> None:
@@ -399,6 +461,10 @@ async def _pump_events(
                         arguments=item.arguments or "{}",
                     ),
                 )
+        elif event.type == "response.created":
+            gate.response_created()
+        elif event.type == "error":
+            gate.request_rejected(event.error.event_id)
         elif event.type == "response.done":
             # done event emits after all text and audio chunks are emitted
             # so, we can emit the final message and usage here
@@ -418,3 +484,4 @@ async def _pump_events(
                 )
             )
             text = ""
+            await gate.response_done()
