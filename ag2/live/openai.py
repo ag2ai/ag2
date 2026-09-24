@@ -27,12 +27,14 @@ from openai.types.realtime import (
     RealtimeTracingConfigParam,
 )
 from openai.types.realtime.realtime_audio_config_input_param import NoiseReduction
+from openai.types.realtime.realtime_conversation_item_user_message_param import Content as UserMessageContent
 
 from ag2.context import ConversationContext
 from ag2.events import (
     DataInput,
     ModelMessage,
     ModelMessageChunk,
+    ModelRequest,
     ModelResponse,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
@@ -211,8 +213,9 @@ class RealTimeConfig(RealtimeConfig):
     """Realtime (Speech-to-Speech/S2S) config backed by OpenAI's bidirectional realtime API.
 
     Implements the `RealtimeConfig` protocol — call `session(...)` to open
-    a connection that pumps captured audio into the API and emits transcription
-    events on the supplied context.
+    a connection that pumps captured audio into the API, adds each
+    `ModelRequest` published on the context's stream to the conversation as
+    one user message, and emits transcription events on the supplied context.
     """
 
     def __init__(
@@ -306,9 +309,13 @@ class RealTimeConfig(RealtimeConfig):
             async def _forward_tool_result(event: ToolResultEvent) -> None:
                 await _send_tool_result(conn, gate, event, serializer)
 
+            async def _forward_request(event: ModelRequest) -> None:
+                await _send_request(conn, gate, event)
+
             with (
                 context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
                 context.stream.where(ToolResultEvent).sub_scope(_forward_tool_result),
+                context.stream.where(ModelRequest).sub_scope(_forward_request),
             ):
                 recv_task = asyncio.create_task(_pump_events(conn, gate, context, self.model))
 
@@ -413,6 +420,32 @@ async def _send_tool_result(
         },
     )
     await gate.request()
+
+
+async def _send_request(
+    conn: AsyncRealtimeConnection,
+    gate: _ResponseGate,
+    event: ModelRequest,
+) -> None:
+    """Add the request to the conversation as one user message, then ask the gate for a response.
+
+    A request with no content to send adds nothing and asks for nothing.
+    """
+    content = _user_message_content(event)
+    if not content:
+        return
+    await conn.conversation.item.create(item={"type": "message", "role": "user", "content": content})
+    await gate.request()
+
+
+def _user_message_content(event: ModelRequest) -> list[UserMessageContent]:
+    content: list[UserMessageContent] = []
+    for part in event.parts:
+        if isinstance(part, TextInput):
+            content.append({"type": "input_text", "text": part.content})
+        else:
+            raise NotImplementedError(f"OpenAI realtime does not support {type(part).__name__} input")
+    return content
 
 
 def normalize_realtime_usage(usage: "RealtimeResponseUsage | None") -> Usage:

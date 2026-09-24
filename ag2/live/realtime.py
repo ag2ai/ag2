@@ -29,6 +29,17 @@ class RealtimeConfig(Protocol):
     audio into the provider, and emits transcription events back onto the
     same stream.
 
+    The session also consumes `ModelRequest` from the stream: each one is a
+    user turn pushed into the running conversation (typed text, or messages
+    `LiveAgent` drains from the inbox). The session adds it to the provider's
+    conversation at once and has the model answer it at the next point the
+    provider allows — immediately when the model is silent, otherwise after
+    the current response, without interrupting it. Nothing enforces this
+    subscription, so each provider needs a test that a pushed `ModelRequest`
+    reaches its connection. A provider that publishes a `ModelRequest` of its
+    own (such as a transcript of captured audio) publishes a marker subclass
+    and skips it in this subscription.
+
     `LiveAgent` needs no separate STT/LLM/TTS parts. For a cascade of
     separate providers, see `STTConfig.pipe` and `TTSObserver`.
 
