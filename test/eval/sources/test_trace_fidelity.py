@@ -18,6 +18,8 @@ import pytest
 
 pytest.importorskip("opentelemetry.sdk")
 
+from typing import Any
+
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -30,6 +32,7 @@ from ag2.eval.trace import TokenUsage, Trace
 from ag2.events import (
     ModelMessage,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
@@ -117,7 +120,7 @@ async def test_structured_tool_result_survives_the_span_round_trip(otel_provider
     exporter, provider = otel_provider
 
     @tool
-    def get_weather(city: str) -> dict:
+    def get_weather(city: str) -> dict[str, Any]:
         return {"city": city, "temp_c": 12}
 
     agent = Agent(
@@ -135,9 +138,11 @@ async def test_structured_tool_result_survives_the_span_round_trip(otel_provider
     assert len(results) == 1
     parts = results[0].result.parts
     assert len(parts) == 1
+    [part] = parts
     # One text part holding the JSON: the shape judge/attribution scorers read.
-    assert json.loads(parts[0].content) == {"city": "Oslo", "temp_c": 12}
-    assert parts[0].metadata == {}
+    assert isinstance(part, TextInput)
+    assert json.loads(part.content) == {"city": "Oslo", "temp_c": 12}
+    assert part.metadata == {}
 
 
 @pytest.mark.asyncio()
@@ -145,7 +150,7 @@ async def test_truncated_tool_result_is_flagged_on_the_reconstructed_part(otel_p
     exporter, provider = otel_provider
 
     @tool
-    def dump() -> dict:
+    def dump() -> dict[str, Any]:
         return {"rows": ["x" * 100 for _ in range(50)]}
 
     agent = Agent(
@@ -162,6 +167,7 @@ async def test_truncated_tool_result_is_flagged_on_the_reconstructed_part(otel_p
     await agent.ask("Dump")
 
     part = readable_spans_to_trace(exporter.get_finished_spans()).events_of(ToolResultEvent)[0].result.parts[0]
+    assert isinstance(part, TextInput)
     assert part.content.endswith("...[truncated]")
     assert part.metadata == {"truncated": True}
 

@@ -14,7 +14,6 @@ from ag2.events import (
     HumanMessage,
     ModelResponse,
     ToolCallEvent,
-    ToolResultEvent,
 )
 from ag2.middleware import (
     AgentTurn,
@@ -24,6 +23,7 @@ from ag2.middleware import (
     LLMCall,
     Middleware,
     ToolExecution,
+    ToolResultType,
 )
 from ag2.testing import TestConfig
 
@@ -52,7 +52,7 @@ class TrackingMiddleware(BaseMiddleware):
         call_next: ToolExecution,
         event: ToolCallEvent,
         ctx: Context,
-    ) -> ToolResultEvent:
+    ) -> ToolResultType:
         self.mock.on_tool(event.name)
         return await call_next(event, ctx)
 

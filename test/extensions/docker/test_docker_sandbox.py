@@ -165,4 +165,5 @@ class TestFileIO:
 
 def test_variable_image_rejected_by_constructor() -> None:
     with pytest.raises(TypeError):
+        # A `Variable` where only a value is accepted: the runtime refusal is what is under test.
         DockerSandbox(image=Variable("tenant_image"))  # type: ignore[arg-type]

@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ag2 import Agent, ToolResult, tool
 from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent
 from ag2.testing import TestConfig
+from test._helpers import function_tool
 
 DEFAULT_SCHEMA = {
     "function": {
@@ -48,7 +49,7 @@ def test_agent_with_function(mock: MagicMock) -> None:
 
     agent = Agent("", config=mock, tools=[my_tool])
 
-    assert asdict(list(agent.tools)[0].schema) == DEFAULT_SCHEMA
+    assert asdict(function_tool(list(agent.tools)[0]).schema) == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool(mock: MagicMock) -> None:
@@ -59,7 +60,7 @@ def test_agent_with_tool(mock: MagicMock) -> None:
 
     agent = Agent("", config=mock, tools=[my_tool])
 
-    assert asdict(list(agent.tools)[0].schema) == DEFAULT_SCHEMA
+    assert asdict(function_tool(list(agent.tools)[0]).schema) == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool_decorator(mock: MagicMock) -> None:
@@ -70,7 +71,7 @@ def test_agent_with_tool_decorator(mock: MagicMock) -> None:
         """Tool description."""
         return ""
 
-    assert asdict(list(agent.tools)[0].schema) == DEFAULT_SCHEMA
+    assert asdict(function_tool(list(agent.tools)[0]).schema) == DEFAULT_SCHEMA
 
 
 def test_agent_with_tool_decorator_options_override(mock: MagicMock) -> None:
@@ -81,7 +82,7 @@ def test_agent_with_tool_decorator_options_override(mock: MagicMock) -> None:
         """Tool description."""
         return ""
 
-    assert asdict(list(agent.tools)[0].schema) == {
+    assert asdict(function_tool(list(agent.tools)[0]).schema) == {
         "function": IsPartialDict({
             "description": "another_description",
             "name": "another_name",
@@ -106,6 +107,7 @@ async def test_final_tool() -> None:
     )
 
     result = await agent.ask("Hi!")
+    assert result.body is not None
     assert DataModel.model_validate_json(result.body) == DataModel(data="result")
 
 

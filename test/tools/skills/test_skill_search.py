@@ -19,6 +19,7 @@ from ag2.tools.skills.skill_search.client import SkillsClient
 from ag2.tools.skills.skill_search.extractor import extract_skill
 from ag2.tools.skills.skill_search.lock import SkillsLock
 from ag2.tools.skills.skill_types import SkillMetadata
+from test._helpers import function_schemas, text_of
 
 MONOREPO_SKILL_MD = textwrap.dedent("""\
     ---
@@ -380,9 +381,9 @@ def test_lock_read_nonexistent(tmp_path: Path) -> None:
 async def test_toolkit_exposes_all_tools(tmp_path: Path, context: Context) -> None:
     toolkit = SkillSearchToolkit(runtime=tmp_path / "skills")
 
-    schemas = list(await toolkit.schemas(context))
+    schemas = function_schemas(await toolkit.schemas(context))
 
-    names = {s.function.name for s in schemas}  # type: ignore[union-attr]
+    names = {s.function.name for s in schemas}
     assert names == {
         "search_skills",
         "install_skill",
@@ -407,7 +408,7 @@ async def test_load_skill_name_not_pinned_to_construction_time_skills(tmp_path: 
 
     [schema] = await toolkit.load_skill().schemas(context)
 
-    name_prop = schema.function.parameters["properties"]["name"]  # type: ignore[union-attr]
+    name_prop = schema.function.parameters["properties"]["name"]
     assert name_prop["type"] == "string"
     # No pinning: neither a Literal enum (2+ skills) nor a const (1 skill).
     assert "enum" not in name_prop
@@ -437,7 +438,7 @@ async def test_load_skill_accepts_skill_installed_after_construction(tmp_path: P
     result = await load_tool(event, context)
 
     assert not isinstance(result, ToolErrorEvent)
-    assert "Skill B body" in result.result.parts[0].content
+    assert "Skill B body" in text_of(result.result.parts[0])
 
 
 @pytest.mark.asyncio
@@ -455,4 +456,4 @@ async def test_toolkit_individual_tools_accessible(tmp_path: Path, context: Cont
     )
     for attr in tools:
         [schema] = await getattr(toolkit, attr)().schemas(context)
-        assert schema.function.name == attr  # type: ignore[union-attr]
+        assert schema.function.name == attr

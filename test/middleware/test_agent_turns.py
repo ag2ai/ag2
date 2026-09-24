@@ -77,6 +77,7 @@ class TestAgentTurnMiddleware:
                 if isinstance(event, ModelRequest) and isinstance(event.parts[0], TextInput):
                     event = ModelRequest([TextInput(event.parts[0].content * 2)])
                 result = await call_next(event, ctx)
+                assert result.content is not None
                 return ModelResponse(ModelMessage(result.content * 2))
 
         agent = Agent(

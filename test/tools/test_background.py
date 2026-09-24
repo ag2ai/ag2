@@ -16,6 +16,7 @@ from ag2.events import (
 )
 from ag2.testing import TestConfig
 from ag2.tools.subagents import background_agent_tool
+from test._helpers import text_of
 
 
 @pytest.mark.asyncio
@@ -90,7 +91,7 @@ class TestBackgroundDelivery:
         events = list(await reply.context.stream.history.get_events())
         drained = [e for e in events if isinstance(e, DrainedModelRequest)]
         assert len(drained) == 1
-        assert [p.content for p in drained[0].parts] == ["first part", "second part"]
+        assert [text_of(p) for p in drained[0].parts] == ["first part", "second part"]
 
     async def test_background_does_not_block_ask(self) -> None:
         """spawn_background is fire-and-forget — ask returns without waiting for
@@ -175,7 +176,7 @@ class TestLifecycle:
         ctx.enqueue("hello")
 
         assert len(ctx.pending_messages) == 1
-        assert ctx.pending_messages[0].parts[0].content == "hello"
+        assert text_of(ctx.pending_messages[0].parts[0]) == "hello"
 
     async def test_pending_messages_initialized_empty(self) -> None:
         """After ask() returns, the stream's inbox is an empty list and no
@@ -185,6 +186,7 @@ class TestLifecycle:
         reply = await agent.ask("hi")
 
         assert reply.context.pending_messages == []
+        assert isinstance(reply.context.stream, MemoryStream)
         assert reply.context.stream._background_tasks == set()
 
     async def test_stream_inbox_persists_across_asks(self) -> None:
@@ -221,7 +223,7 @@ class TestLifecycle:
         # Bg runs in the background; wait for it to enqueue post-return.
         await asyncio.wait_for(bg_delivered.wait(), timeout=1.0)
         assert len(stream.pending_messages) == 1
-        assert stream.pending_messages[0].parts[0].content == "late bg result"
+        assert text_of(stream.pending_messages[0].parts[0]) == "late bg result"
 
         # Second ask on the same stream picks up the leftover and merges it
         # into the initial ModelRequest.

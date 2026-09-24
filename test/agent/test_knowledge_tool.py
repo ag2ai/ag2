@@ -11,12 +11,12 @@ These tests exercise each action of that tool.
 
 import pytest
 
-from ag2 import Agent
-from ag2.agent import KnowledgeConfig
+from ag2 import Agent, KnowledgeConfig
 from ag2.events import EventLogFailed, ModelMessage, ModelResponse
 from ag2.knowledge import LOG_PREFIX, DefaultBootstrap, MemoryKnowledgeStore
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
+from ag2.tools.types import FunctionTool
 
 
 def _knowledge_tool_call(agent: Agent):
@@ -25,7 +25,9 @@ def _knowledge_tool_call(agent: Agent):
     Auto-injected tools (the knowledge tool) live in ``_additional_tools``,
     not the public ``agent.tools`` (which holds only user-supplied tools).
     """
-    return agent._additional_tools[0].model.call
+    knowledge_tool = agent._additional_tools[0]
+    assert isinstance(knowledge_tool, FunctionTool)
+    return knowledge_tool.model.call
 
 
 @pytest.mark.asyncio

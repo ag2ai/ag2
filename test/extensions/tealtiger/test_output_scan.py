@@ -14,7 +14,7 @@ import pytest
 
 from ag2 import Agent
 from ag2.events import ToolCallEvent, ToolResultsEvent
-from ag2.events.input_events import TextInput
+from ag2.events.input_events import DataInput, TextInput
 from ag2.events.tool_events import ToolResult
 from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, OutputAction, TealTigerMiddleware
 from ag2.testing import TestConfig, TrackingConfig
@@ -33,11 +33,15 @@ def _results_seen_by_model(tracking: TrackingConfig) -> list[Any]:
     """The tool-result payloads the framework handed the model on its last call."""
     message = tracking.mock.call_args.args[0]
     assert isinstance(message, ToolResultsEvent)
-    return [
-        part.content if isinstance(part, TextInput) else part.data
-        for result in message.results
-        for part in result.result.parts
-    ]
+    payloads: list[Any] = []
+    for result in message.results:
+        for part in result.result.parts:
+            if isinstance(part, TextInput):
+                payloads.append(part.content)
+            else:
+                assert isinstance(part, DataInput)
+                payloads.append(part.data)
+    return payloads
 
 
 def _reason_codes(governance: TealTigerMiddleware) -> list[str]:

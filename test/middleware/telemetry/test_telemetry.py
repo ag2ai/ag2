@@ -4,16 +4,18 @@
 
 import json
 import threading
+from collections.abc import Mapping
 from collections.abc import Sequence as SequenceType
+from typing import Any
 
 import pytest
 from dirty_equals import IsPartialDict
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
+from opentelemetry.util.types import AttributeValue
 from pydantic import BaseModel
 
-from ag2 import Agent, Context
-from ag2.agent import KnowledgeConfig
+from ag2 import Agent, Context, KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact
 from ag2.events import (
     BaseEvent,
@@ -149,9 +151,26 @@ def _usage_after_turn(usage: Usage, kind: str) -> Middleware:
     return Middleware(_UsageAfterTurn, usage=usage, kind=kind)
 
 
+def _attributes(span: ReadableSpan) -> Mapping[str, AttributeValue]:
+    assert span.attributes is not None
+    return span.attributes
+
+
+def _str_attribute(span: ReadableSpan, key: str) -> str:
+    value = _attributes(span)[key]
+    assert isinstance(value, str)
+    return value
+
+
+def _int_attribute(span: ReadableSpan, key: str) -> int:
+    value = _attributes(span)[key]
+    assert isinstance(value, int)
+    return value
+
+
 def _usage_spans(exporter: _InMemorySpanExporter) -> list[ReadableSpan]:
     """The accounting spans only — every test here asserts against these."""
-    return [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "usage"]
+    return [s for s in exporter.get_finished_spans() if _attributes(s).get("ag2.span.type") == "usage"]
 
 
 @pytest.mark.asyncio()
@@ -181,10 +200,10 @@ class TestUsageSpans:
         await agent.ask("Hello")
 
         [span] = _usage_spans(exporter)
-        assert span.attributes["ag2.usage.kind"] == "model_call"
-        assert span.attributes["gen_ai.usage.input_tokens"] == 10
-        assert span.attributes["gen_ai.usage.output_tokens"] == 5
-        assert span.attributes["ag2.usage.total_tokens"] == 15
+        assert _attributes(span)["ag2.usage.kind"] == "model_call"
+        assert _attributes(span)["gen_ai.usage.input_tokens"] == 10
+        assert _attributes(span)["gen_ai.usage.output_tokens"] == 5
+        assert _attributes(span)["ag2.usage.total_tokens"] == 15
 
     async def test_delegated_spend_is_captured_without_instrumenting_the_worker(self, otel_setup):
         """The rollup lands on the parent's stream, so the parent's telemetry sees it.
@@ -213,11 +232,11 @@ class TestUsageSpans:
         await coordinator.ask("Tell me about X")
 
         usage_spans = _usage_spans(exporter)
-        by_kind = {s.attributes["ag2.usage.kind"]: s for s in usage_spans}
+        by_kind = {_attributes(s)["ag2.usage.kind"]: s for s in usage_spans}
         assert set(by_kind) == {"model_call", "subtask"}
-        assert by_kind["subtask"].attributes["ag2.usage.label"] == "worker"
-        assert by_kind["subtask"].attributes["gen_ai.usage.input_tokens"] == 900
-        assert by_kind["subtask"].attributes["gen_ai.usage.output_tokens"] == 90
+        assert _attributes(by_kind["subtask"])["ag2.usage.label"] == "worker"
+        assert _attributes(by_kind["subtask"])["gen_ai.usage.input_tokens"] == 900
+        assert _attributes(by_kind["subtask"])["gen_ai.usage.output_tokens"] == 90
 
     async def test_cache_counts_are_carried(self, otel_setup):
         exporter, provider = otel_setup
@@ -241,8 +260,8 @@ class TestUsageSpans:
         await agent.ask("Hello")
 
         [span] = _usage_spans(exporter)
-        assert span.attributes["gen_ai.usage.cache_creation_input_tokens"] == 7
-        assert span.attributes["gen_ai.usage.cache_read_input_tokens"] == 3
+        assert _attributes(span)["gen_ai.usage.cache_creation_input_tokens"] == 7
+        assert _attributes(span)["gen_ai.usage.cache_read_input_tokens"] == 3
 
     async def test_each_run_records_its_own_spend_once(self, otel_setup):
         """A leaked subscription would re-record spend on every later run.
@@ -264,7 +283,7 @@ class TestUsageSpans:
         await agent.ask("second", stream=stream)
 
         usage_spans = _usage_spans(exporter)
-        assert [s.attributes["gen_ai.usage.input_tokens"] for s in usage_spans] == [10, 10]
+        assert [_attributes(s)["gen_ai.usage.input_tokens"] for s in usage_spans] == [10, 10]
 
     async def test_uninstrumented_run_on_a_shared_stream_records_nothing(self, otel_setup):
         """The watcher outlives its turn, but must not outlive its *run*.
@@ -289,7 +308,7 @@ class TestUsageSpans:
         await plain.ask("second", stream=stream)
 
         usage_spans = _usage_spans(exporter)
-        assert [s.attributes["ag2.usage.kind"] for s in usage_spans] == ["model_call"]
+        assert [_attributes(s)["ag2.usage.kind"] for s in usage_spans] == ["model_call"]
 
     async def test_records_usage_emitted_by_outer_middleware(self, otel_setup):
         """History compaction reports its spend *after* the turn it followed.
@@ -313,7 +332,7 @@ class TestUsageSpans:
         await agent.ask("go", middleware=[telemetry])
 
         usage_spans = _usage_spans(exporter)
-        assert sorted(s.attributes["ag2.usage.kind"] for s in usage_spans) == ["compaction", "model_call"]
+        assert sorted(_str_attribute(s, "ag2.usage.kind") for s in usage_spans) == ["compaction", "model_call"]
 
     async def test_late_usage_stays_in_the_turns_trace(self, otel_setup):
         """A span recorded after the turn closed must not start a new trace.
@@ -362,7 +381,7 @@ class TestUsageSpans:
         await second.ask("two", stream=stream)
 
         usage_spans = _usage_spans(exporter)
-        assert sorted(s.attributes["gen_ai.usage.input_tokens"] for s in usage_spans) == [10, 20]
+        assert sorted(_int_attribute(s, "gen_ai.usage.input_tokens") for s in usage_spans) == [10, 20]
 
     async def test_a_fresh_telemetry_per_ask_does_not_accumulate_watchers(self, otel_setup):
         """Building the middleware per call is ordinary usage, not a leak."""
@@ -495,7 +514,7 @@ async def test_tool_span_records_dict_result_as_json(otel_setup):
     exporter, provider = otel_setup
 
     @tool
-    def weather() -> dict:
+    def weather() -> dict[str, Any]:
         """Report the weather."""
         return {"city": "Oslo", "temp_c": 12, "conditions": ["cloud", "rain"]}
 
@@ -544,7 +563,7 @@ async def test_tool_span_truncates_and_flags_an_oversized_result(otel_setup):
     exporter, provider = otel_setup
 
     @tool
-    def dump() -> dict:
+    def dump() -> dict[str, Any]:
         """Return far too much."""
         return {"rows": ["x" * 100 for _ in range(500)]}
 
@@ -562,7 +581,7 @@ async def test_tool_span_result_cap_is_configurable_per_middleware(otel_setup):
     exporter, provider = otel_setup
 
     @tool
-    def dump() -> dict:
+    def dump() -> dict[str, Any]:
         """Return far too much."""
         return {"rows": ["x" * 100 for _ in range(500)]}
 
@@ -601,7 +620,7 @@ async def test_tool_span_omits_structured_result_without_content_capture(otel_se
     exporter, provider = otel_setup
 
     @tool
-    def weather() -> dict:
+    def weather() -> dict[str, Any]:
         """Report the weather."""
         return {"city": "Oslo"}
 
@@ -728,12 +747,20 @@ async def test_capture_content_true_includes_messages(otel_setup):
 
 
 def _llm_spans_in_order(exporter: _InMemorySpanExporter) -> list[ReadableSpan]:
-    spans = [s for s in exporter.get_finished_spans() if s.attributes.get("ag2.span.type") == "llm"]
-    return sorted(spans, key=lambda s: s.start_time)
+    spans = [s for s in exporter.get_finished_spans() if _attributes(s).get("ag2.span.type") == "llm"]
+    return sorted(spans, key=_start_time)
 
 
-def _messages(span: ReadableSpan, attribute: str) -> list[dict]:
-    return json.loads(span.attributes[attribute])
+def _start_time(span: ReadableSpan) -> int:
+    assert span.start_time is not None
+    return span.start_time
+
+
+def _messages(span: ReadableSpan, attribute: str) -> list[dict[str, Any]]:
+    value = _attributes(span)[attribute]
+    assert isinstance(value, str)
+    messages: list[dict[str, Any]] = json.loads(value)
+    return messages
 
 
 def _weather_agent(provider, *, reply: str, **telemetry_kwargs) -> Agent:
@@ -852,8 +879,8 @@ async def test_capture_content_false_omits_messages_on_tool_call_turn(otel_setup
     llm_spans = _llm_spans_in_order(exporter)
     assert len(llm_spans) == 2
     for span in llm_spans:
-        assert "gen_ai.input.messages" not in span.attributes
-        assert "gen_ai.output.messages" not in span.attributes
+        assert "gen_ai.input.messages" not in _attributes(span)
+        assert "gen_ai.output.messages" not in _attributes(span)
 
 
 @pytest.mark.asyncio()
@@ -1089,8 +1116,8 @@ async def test_a_failure_while_capturing_does_not_fail_the_call(otel_setup, monk
 
     assert await reply.content() == "Hello!"
     (span,) = _llm_spans_in_order(exporter)
-    assert "gen_ai.input.messages" not in span.attributes
-    assert "gen_ai.output.messages" in span.attributes
+    assert "gen_ai.input.messages" not in _attributes(span)
+    assert "gen_ai.output.messages" in _attributes(span)
 
 
 @pytest.mark.asyncio()

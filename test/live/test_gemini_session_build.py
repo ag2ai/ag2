@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+from typing import Any
 
 import pytest
 
@@ -39,7 +40,7 @@ def _build(
     *,
     instructions: tuple[str, ...] = (),
     tools: tuple[FunctionToolSchema, ...] = (),
-) -> dict:
+) -> dict[str, Any]:
     return dict(config._build_session(instructions=instructions, tools=tools))
 
 
@@ -66,7 +67,7 @@ class TestModalities:
         payload = _build(
             gemini.RealTimeConfig(
                 "gemini-2.0-flash-live-001",
-                config={"response_modalities": ["TEXT"]},
+                config={"response_modalities": [Modality.TEXT]},
                 client=gemini_client,
             )
         )

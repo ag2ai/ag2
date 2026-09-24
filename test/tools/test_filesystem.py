@@ -14,6 +14,7 @@ from ag2.events import ToolCallEvent, ToolResultsEvent
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools import FilesystemToolkit
 from ag2.tools.toolkits.filesystem import _resolve_path
+from test._helpers import data_of, function_schemas, text_of
 
 
 def test_path_traversal_blocked(tmp_path: Path) -> None:
@@ -34,7 +35,7 @@ def test_allow_only_dir() -> None:
 @pytest.mark.asyncio
 async def test_schemas(async_mock: AsyncMock) -> None:
     toolkit = FilesystemToolkit()
-    schemas = list(await toolkit.schemas(Context(async_mock)))
+    schemas = function_schemas(await toolkit.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
     assert names == {
@@ -49,7 +50,7 @@ async def test_schemas(async_mock: AsyncMock) -> None:
 @pytest.mark.asyncio
 async def test_read_only(async_mock: AsyncMock) -> None:
     toolkit = FilesystemToolkit(read_only=True)
-    schemas = list(await toolkit.schemas(Context(async_mock)))
+    schemas = function_schemas(await toolkit.schemas(Context(async_mock)))
 
     names = {s.function.name for s in schemas}
     assert names == {"read_file", "find_files"}
@@ -75,7 +76,7 @@ async def test_read_file(tmp_path: Path) -> None:
 
     # Second call receives the tool result; verify the file content was read
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
-    assert "hello world" in tool_result_msg.results[0].result.parts[0].content
+    assert "hello world" in text_of(tool_result_msg.results[0].result.parts[0])
 
 
 @pytest.mark.asyncio
@@ -98,7 +99,7 @@ async def test_read_file_raw(tmp_path: Path) -> None:
     await agent.ask("read binary")
 
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
-    assert base64.b64decode(tool_result_msg.results[0].result.parts[0].content) == binary_content
+    assert base64.b64decode(text_of(tool_result_msg.results[0].result.parts[0])) == binary_content
 
 
 @pytest.mark.asyncio
@@ -184,7 +185,7 @@ async def test_read_file_decodes_as_utf8(tmp_path: Path) -> None:
     await agent.ask("read it")
 
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
-    assert tool_result_msg.results[0].result.parts[0].content == payload
+    assert text_of(tool_result_msg.results[0].result.parts[0]) == payload
 
 
 @pytest.mark.asyncio
@@ -302,15 +303,18 @@ async def test_find_files(tmp_path: Path) -> None:
 
     # "**/*.py" — recursive, matches .py files at any depth
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
-    result_1 = tool_result_msg.results[0].result.parts[0].data
+    result_1 = data_of(tool_result_msg.results[0].result.parts[0])
+    assert isinstance(result_1, list)
     assert sorted(result_1) == ["a.py", str(Path("sub/c.py")), str(Path("sub/sub2/e.py"))]
 
     # "sub/*" — non-recursive, matches all files directly in sub/
-    tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[2][0][0]
-    result_2 = tool_result_msg.results[0].result.parts[0].data
+    tool_result_msg = tracking.mock.call_args_list[2][0][0]
+    result_2 = data_of(tool_result_msg.results[0].result.parts[0])
+    assert isinstance(result_2, list)
     assert sorted(result_2) == [str(Path("sub/c.py")), str(Path("sub/d.txt"))]
 
     # "sub/**" — recursive, matches all files under sub/ at any depth
-    tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[3][0][0]
-    result_3 = tool_result_msg.results[0].result.parts[0].data
+    tool_result_msg = tracking.mock.call_args_list[3][0][0]
+    result_3 = data_of(tool_result_msg.results[0].result.parts[0])
+    assert isinstance(result_3, list)
     assert sorted(result_3) == [str(Path("sub/c.py")), str(Path("sub/d.txt")), str(Path("sub/sub2/e.py"))]

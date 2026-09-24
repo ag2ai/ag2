@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from ag2.config import LLMClient, ModelConfig
+from ag2.config import LLMClient, ModelConfig, ModelProvider
 from ag2.eval.dataset.task import Task
 from ag2.eval.pairwise import PairwiseComparator
 from ag2.eval.scorers import pairwise_judge
@@ -52,14 +52,20 @@ class _PrefersAClient(LLMClient):
 
 
 class _PrefersAConfig(ModelConfig):
+    # What the protocol's own bodies do: this double names no provider or model and has no Files API.
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError
+
+    @property
+    def model(self) -> str:
+        raise NotImplementedError
+
     def copy(self) -> "_PrefersAConfig":
         return self
 
     def create(self) -> _PrefersAClient:
         return _PrefersAClient()
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
 
 
 @pytest.mark.asyncio()

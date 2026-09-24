@@ -4,8 +4,10 @@
 
 import pytest
 
+from ag2 import Context
 from ag2.tools import tool
 from ag2.tools.builtin import ToolSearchTool
+from ag2.tools.types import FunctionToolSchema
 
 
 @tool
@@ -19,14 +21,15 @@ def test_plain_tool_has_defer_loading_false():
 
 
 @pytest.mark.asyncio
-async def test_wrapping_in_tool_search_defers_the_tool():
-    [_search, weather] = await ToolSearchTool(get_weather).schemas(context=None)
+async def test_wrapping_in_tool_search_defers_the_tool(context: Context):
+    [_search, weather] = await ToolSearchTool(get_weather).schemas(context=context)
+    assert isinstance(weather, FunctionToolSchema)
     assert weather.function.name == "get_weather"
     assert weather.defer_loading is True
 
 
 @pytest.mark.asyncio
-async def test_wrapping_does_not_mutate_the_original_schema():
-    await ToolSearchTool(get_weather).schemas(context=None)
+async def test_wrapping_does_not_mutate_the_original_schema(context: Context):
+    await ToolSearchTool(get_weather).schemas(context=context)
     # the source tool's own schema stays eager — only the emitted copy is deferred
     assert get_weather.schema.defer_loading is False

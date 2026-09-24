@@ -5,6 +5,7 @@
 import base64
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from typing import Any, Protocol
 
 import pytest
 from dirty_equals import IsPartialDict
@@ -29,8 +30,15 @@ from ag2.testing import TestConfig
 from ag2.tools import MCPStdioServerConfig, MCPToolkit
 from ag2.tools.toolkits.mcp_server import toolkit as _toolkit_module
 from ag2.tools.types import FunctionToolSchema
+from test._helpers import function_schemas
 
-MCPSessionPatch = Callable[[list[MCPTool], dict[str, CallToolResult] | None], "_FakeMCPSession"]
+
+class MCPSessionPatch(Protocol):
+    def __call__(
+        self,
+        tools: list[MCPTool],
+        call_results: dict[str, CallToolResult] | None = None,
+    ) -> "_FakeMCPSession": ...
 
 
 @pytest.fixture
@@ -74,7 +82,7 @@ async def test_tool_registered_from_http_mcp_server(
     ])
 
     toolkit = MCPToolkit("https://mcp.example.com")
-    [schema] = list(await toolkit.schemas(context))
+    [schema] = function_schemas(await toolkit.schemas(context))
 
     assert schema.function.name == "test_tool_name"
     assert schema.function.description == "test_tool_description"
@@ -107,7 +115,7 @@ async def test_tool_registered_from_stdio_mcp_server(
             args=["--flag"],
         )
     )
-    [schema] = list(await toolkit.schemas(context))
+    [schema] = function_schemas(await toolkit.schemas(context))
 
     assert schema.function.name == "ping"
     assert schema.function.description == "returns pong"
@@ -131,7 +139,7 @@ async def test_allowed_and_blocked_tools_are_filtered(
             blocked_tools=["drop_blocked"],
         )
     )
-    schemas = list(await toolkit.schemas(context))
+    schemas = function_schemas(await toolkit.schemas(context))
 
     assert [s.function.name for s in schemas] == ["keep"]
 
@@ -173,7 +181,7 @@ async def test_tool_name_prefix_namespaces_local_name_but_calls_remote_name(
         },
     )
     toolkit = MCPToolkit(MCPStdioServerConfig(command="x", tool_name_prefix="github_"))
-    [schema] = list(await toolkit.schemas(context))
+    [schema] = function_schemas(await toolkit.schemas(context))
     agent = Agent(
         name="test",
         tools=[toolkit],
@@ -211,7 +219,7 @@ async def test_discovery_filters_match_remote_names_not_prefixed_ones(
             tool_name_prefix="github_",
         )
     )
-    schemas = list(await toolkit.schemas(context))
+    schemas = function_schemas(await toolkit.schemas(context))
 
     assert [s.function.name for s in schemas] == ["github_keep"]
 
@@ -226,7 +234,7 @@ async def test_prefixes_keep_two_servers_exposing_the_same_tool_name_apart(
     github = MCPToolkit(MCPStdioServerConfig(command="github-mcp", tool_name_prefix="github_"))
     docs = MCPToolkit(MCPStdioServerConfig(command="docs-mcp", tool_name_prefix="docs_"))
 
-    schemas = list(await github.schemas(context)) + list(await docs.schemas(context))
+    schemas = function_schemas(await github.schemas(context)) + function_schemas(await docs.schemas(context))
     agent = Agent(
         name="test",
         tools=[github, docs],
@@ -254,7 +262,7 @@ class TestToolNamePrefixVariable:
         ctx = make_context(tenant="acme_")
 
         toolkit = MCPToolkit(MCPStdioServerConfig(command="x", tool_name_prefix=Variable("tenant")))
-        [schema] = list(await toolkit.schemas(ctx))
+        [schema] = function_schemas(await toolkit.schemas(ctx))
 
         assert isinstance(schema, FunctionToolSchema)
         assert schema.function.name == "acme_search"
@@ -327,6 +335,7 @@ async def test_extract_maps_content_blocks_to_typed_inputs(
     mcp = MCPToolkit(MCPStdioServerConfig(command="x"))
     await mcp.schemas(context)
     proxy = next(t for t in mcp.tools if t.name == "multi")
+    assert isinstance(proxy, _toolkit_module._MCPProxyTool)
 
     result = await proxy(ToolCallEvent(name="multi", arguments="{}"), context)
 
@@ -352,12 +361,12 @@ class _FakeMCPSession:
     ) -> None:
         self._tools = tools
         self._call_results = call_results or {}
-        self.calls: list[tuple[str, dict]] = []
+        self.calls: list[tuple[str, dict[str, Any]]] = []
 
     async def list_tools(self) -> ListToolsResult:
         return ListToolsResult(tools=self._tools)
 
-    async def call_tool(self, name: str, arguments: dict, **kwargs: object) -> CallToolResult:
+    async def call_tool(self, name: str, arguments: dict[str, Any], **kwargs: object) -> CallToolResult:
         """The toolkit now passes ``allow_input_required=True`` and, on a retry,
         the answers and echoed state; absorbed here since this double never asks."""
         self.calls.append((name, arguments))

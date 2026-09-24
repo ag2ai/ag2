@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import pytest
+from fast_depends.pydantic import PydanticSerializer
 from typing_extensions import Self
 
 from ag2.annotations import Context
@@ -25,6 +26,7 @@ from ag2.events import (
     ModelResponse,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
+    TextInput,
     ToolCallEvent,
     TranscriptionCompletedEvent,
     Usage,
@@ -115,7 +117,7 @@ class RecordingConfig(ModelConfig):
             self.seen.append(list(messages))
             return await inner(messages, context=context, **kwargs)
 
-        return client  # type: ignore[return-value]
+        return client
 
 
 class ChunkingConfig(ModelConfig):
@@ -142,14 +144,14 @@ class ChunkingConfig(ModelConfig):
                 await context.send(ModelMessageChunk(chunk))
             return ModelResponse(ModelMessage("".join(self.chunks)))
 
-        return client  # type: ignore[return-value]
+        return client
 
 
 def cascade(model: ModelConfig, stt: FakeSTT, tts: FakeTTS, **kwargs: Any) -> CascadeConfig:
     return CascadeConfig(
         stt=stt,
         model=model,
-        tts=tts,  # type: ignore[arg-type]
+        tts=tts,
         turn_detector=detector,
         **kwargs,
     )
@@ -165,11 +167,11 @@ class TestCascadeSession:
 
         heard: list[bytes] = []
         context.stream.where(SynthesizedAudioEvent).subscribe(
-            lambda e: heard.append(e.content),  # type: ignore[arg-type,return-value]
+            lambda e: heard.append(e.content),
         )
 
         config = cascade(TestConfig("It is sunny."), stt, tts)
-        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+        async with config.session(context, serializer=PydanticSerializer()):
             await speak_one_turn(context)
             await asyncio.sleep(0.05)
 
@@ -184,7 +186,7 @@ class TestCascadeSession:
         model = RecordingConfig(TestConfig("First.", "Second."))
         context = ConversationContext(stream=MemoryStream())
 
-        async with cascade(model, stt, tts).session(context, serializer=None):  # type: ignore[arg-type]
+        async with cascade(model, stt, tts).session(context, serializer=PydanticSerializer()):
             await speak_one_turn(context)
             await asyncio.sleep(0.05)
             await speak_one_turn(context)
@@ -192,7 +194,7 @@ class TestCascadeSession:
 
         requests = [e for e in model.seen[-1] if isinstance(e, ModelRequest)]
         responses = [e for e in model.seen[-1] if isinstance(e, ModelResponse)]
-        assert [r.parts[0].content for r in requests] == ["what is the weather"] * 2  # type: ignore[union-attr]
+        assert [r.parts for r in requests] == [[TextInput("what is the weather")]] * 2
         assert [r.content for r in responses] == ["First."]
 
     async def test_raw_audio_never_reaches_the_model(self) -> None:
@@ -202,7 +204,7 @@ class TestCascadeSession:
         model = RecordingConfig(TestConfig("Understood."))
         context = ConversationContext(stream=MemoryStream())
 
-        async with cascade(model, stt, tts).session(context, serializer=None):  # type: ignore[arg-type]
+        async with cascade(model, stt, tts).session(context, serializer=PydanticSerializer()):
             await speak_one_turn(context)
             await asyncio.sleep(0.05)
 
@@ -217,7 +219,7 @@ class TestCascadeSession:
         context = ConversationContext(stream=MemoryStream())
 
         config = cascade(TestConfig("Hi."), stt, tts)
-        async with config.session(context, instructions=["Be brief."], serializer=None):  # type: ignore[arg-type]
+        async with config.session(context, instructions=["Be brief."], serializer=PydanticSerializer()):
             assert context.prompt == ["Be brief."]
 
         assert context.prompt == []
@@ -233,7 +235,7 @@ class TestCascadeSession:
             provider="openai",
         )
         config = cascade(TestConfig(response), stt, tts)
-        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+        async with config.session(context, serializer=PydanticSerializer()):
             await speak_one_turn(context)
             await asyncio.sleep(0.05)
 
@@ -254,7 +256,7 @@ class TestCascadeSession:
         # at the default of 60 the buffer batches both into one request, which
         # is what the threshold is for.
         config = cascade(model, stt, tts, min_chars=20)
-        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+        async with config.session(context, serializer=PydanticSerializer()):
             await speak_one_turn(context)
             await asyncio.sleep(0.05)
 
@@ -267,7 +269,7 @@ class TestCascadeSession:
         stt, tts = FakeSTT(), FakeTTS()
         context = ConversationContext(stream=MemoryStream())
 
-        async with cascade(TestConfig(), stt, tts).session(context, serializer=None):  # type: ignore[arg-type]
+        async with cascade(TestConfig(), stt, tts).session(context, serializer=PydanticSerializer()):
             for _ in range(10):
                 await context.send(RecordedAudioEvent(pcm(0.1, 0)))
             await asyncio.sleep(0.05)
@@ -280,7 +282,7 @@ class TestCascadeSession:
         stt, tts = FakeSTT(), FakeTTS()
         context = ConversationContext(stream=MemoryStream())
 
-        async with cascade(TestConfig(), stt, tts).session(context, serializer=None):  # type: ignore[arg-type]
+        async with cascade(TestConfig(), stt, tts).session(context, serializer=PydanticSerializer()):
             await context.send(RecordedAudioEvent(pcm(0.05, 6000)))
             for _ in range(4):
                 await context.send(RecordedAudioEvent(pcm(0.1, 0)))
@@ -304,16 +306,16 @@ class TestBargeIn:
                     await asyncio.sleep(10)  # outlives the barge-in
                     raise AssertionError("an interrupted turn must not finish")
 
-                return client  # type: ignore[return-value]
+                return client
 
         context = ConversationContext(stream=MemoryStream())
         interrupts: list[AudioInterruptedEvent] = []
         context.stream.where(AudioInterruptedEvent).subscribe(
-            lambda e: interrupts.append(e),  # type: ignore[arg-type,return-value]
+            lambda e: interrupts.append(e),
         )
 
         config = cascade(SlowConfig(), stt, tts, barge_in=True)
-        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+        async with config.session(context, serializer=PydanticSerializer()):
             await speak_one_turn(context)
             await asyncio.wait_for(started.wait(), timeout=1)
 
@@ -329,11 +331,11 @@ class TestBargeIn:
         context = ConversationContext(stream=MemoryStream())
         interrupts: list[AudioInterruptedEvent] = []
         context.stream.where(AudioInterruptedEvent).subscribe(
-            lambda e: interrupts.append(e),  # type: ignore[arg-type,return-value]
+            lambda e: interrupts.append(e),
         )
 
         config = cascade(TestConfig("Done.", "Again."), stt, tts, barge_in=False)
-        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+        async with config.session(context, serializer=PydanticSerializer()):
             await speak_one_turn(context)
             await context.send(RecordedAudioEvent(pcm(0.1, 6000)))
             await asyncio.sleep(0.05)
@@ -351,7 +353,7 @@ class TestHalfDuplex:
         stt, tts = FakeSTT(), FakeTTS()
         context = ConversationContext(stream=MemoryStream())
 
-        async with cascade(TestConfig("Done.", "Again."), stt, tts).session(context, serializer=None):  # type: ignore[arg-type]
+        async with cascade(TestConfig("Done.", "Again."), stt, tts).session(context, serializer=PydanticSerializer()):
             await context.send(AudioPlaybackStartedEvent())
             # The reply, coming back in through the mic as a full utterance.
             await speak_one_turn(context)
@@ -364,7 +366,7 @@ class TestHalfDuplex:
         stt, tts = FakeSTT(), FakeTTS()
         context = ConversationContext(stream=MemoryStream())
 
-        async with cascade(TestConfig("Done.", "Again."), stt, tts).session(context, serializer=None):  # type: ignore[arg-type]
+        async with cascade(TestConfig("Done.", "Again."), stt, tts).session(context, serializer=PydanticSerializer()):
             await context.send(AudioPlaybackStartedEvent())
             await context.send(RecordedAudioEvent(pcm(0.1, 6000)))
             await context.send(AudioPlaybackCompletedEvent())
@@ -380,7 +382,7 @@ class TestHalfDuplex:
         context = ConversationContext(stream=MemoryStream())
 
         config = cascade(TestConfig("Done.", "Again."), stt, tts, barge_in=True)
-        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+        async with config.session(context, serializer=PydanticSerializer()):
             await context.send(AudioPlaybackStartedEvent())
             await speak_one_turn(context)
             await asyncio.sleep(0.05)

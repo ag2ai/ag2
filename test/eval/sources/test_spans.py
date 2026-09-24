@@ -32,9 +32,11 @@ from ag2.eval.sources._spans import (
     spans_to_trace,
 )
 from ag2.events import (
+    BaseEvent,
     HumanInputRequest,
     HumanMessage,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
@@ -50,7 +52,7 @@ _OI_KIND = "openinference.span.kind"
 class _NullConvention:
     """A caller's own reader that recognizes none of these spans."""
 
-    def to_events(self, span: SpanData) -> list | None:
+    def to_events(self, span: SpanData) -> list[BaseEvent] | None:
         return None
 
 
@@ -470,6 +472,7 @@ class TestAG2GenAIConvention:
         trace = spans_to_trace([_agent_span(), span])
 
         part = trace.events_of(ToolResultEvent)[0].result.parts[0]
+        assert isinstance(part, TextInput)
         assert part.content == '{"rows": ["x...[truncated]'
         assert part.metadata == {"truncated": True}
 

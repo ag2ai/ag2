@@ -75,6 +75,7 @@ class TestCodeAdapterLanguages:
 def test_unknown_language_raises_on_construction(tmp_path: Path) -> None:
     sandbox = LocalSandbox(tmp_path)
     with pytest.raises(ValueError, match="LanguageRunner"):
+        # A language outside the declared set: the runtime refusal is what is under test.
         CodeAdapter(sandbox, languages=("ocaml",))  # type: ignore[arg-type]
 
 

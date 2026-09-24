@@ -9,7 +9,7 @@ import pytest
 
 from ag2 import Agent, Context
 from ag2.events import BaseEvent, ModelRequest, ModelResponse, TextInput
-from ag2.middleware import AgentTurn, BaseMiddleware, LLMCall, Middleware
+from ag2.middleware import BaseMiddleware, LLMCall, Middleware
 from ag2.testing import TestConfig, TrackingConfig
 
 
@@ -25,7 +25,7 @@ class MockMiddleware(BaseMiddleware):
 
     async def on_llm_call(
         self,
-        call_next: AgentTurn,
+        call_next: LLMCall,
         events: Sequence[BaseEvent],
         ctx: Context,
     ) -> ModelResponse:
@@ -49,7 +49,7 @@ class OrderingMiddleware(BaseMiddleware):
 
     async def on_llm_call(
         self,
-        call_next: AgentTurn,
+        call_next: LLMCall,
         events: Sequence[BaseEvent],
         ctx: Context,
     ) -> ModelResponse:
@@ -100,7 +100,7 @@ class TestLLMCallMiddleware:
                 last = events[-1]
                 if isinstance(last, ModelRequest) and isinstance(last.parts[0], TextInput):
                     doubled = TextInput(last.parts[0].content * 2)
-                    events[-1] = ModelRequest([doubled])
+                    events = [*events[:-1], ModelRequest([doubled])]
                 return await call_next(events, ctx)
 
         agent = Agent(

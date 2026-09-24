@@ -8,12 +8,14 @@ Uses mock Context/events to test governance logic without a running agent.
 """
 
 import json
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from ag2.events import ModelRequest, TextInput, ToolCallEvent, ToolErrorEvent
 from ag2.extensions.tealtiger import GovernanceDeniedError, GovernanceMode, GovernancePolicy, TealTigerMiddleware
+from ag2.extensions.tealtiger.middleware import _TealTigerPerTurn
 from ag2.extensions.tealtiger.types import TEECReceipt
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
@@ -29,7 +31,7 @@ def _make_context(agent_name: str = "assistant") -> MagicMock:
     return ctx
 
 
-def _make_tool_event(name: str = "search", arguments: dict | None = None) -> MagicMock:
+def _make_tool_event(name: str = "search", arguments: dict[str, Any] | None = None) -> MagicMock:
     """Create a mock ToolCallEvent with serialized_arguments."""
     event = MagicMock(spec=ToolCallEvent)
     event.name = name
@@ -63,6 +65,8 @@ class TestFactoryPattern:
         turn1 = mw(event, ctx)
         turn2 = mw(event, ctx)
 
+        assert isinstance(turn1, _TealTigerPerTurn)
+        assert isinstance(turn2, _TealTigerPerTurn)
         assert turn1._factory is turn2._factory
         assert turn1._factory._decisions is turn2._factory._decisions
 

@@ -4,6 +4,8 @@
 
 """Public-API tests for run comparison — ``load_run`` and ``RunResult.diff``."""
 
+from typing import Any
+
 import pytest
 
 from ag2.eval import (
@@ -19,7 +21,7 @@ from ag2.eval import (
 
 
 def _tr(
-    task_id: str, feedback: tuple[Feedback, ...], *, inputs: dict | None = None, tags: tuple[str, ...] = ()
+    task_id: str, feedback: tuple[Feedback, ...], *, inputs: dict[str, Any] | None = None, tags: tuple[str, ...] = ()
 ) -> TaskResult:
     return TaskResult(
         task=Task(task_id=task_id, inputs=inputs or {"input": "?"}, tags=tags),

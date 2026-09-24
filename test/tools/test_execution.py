@@ -25,8 +25,9 @@ from ag2 import (
 )
 from ag2.events import ToolResultsEvent
 from ag2.exceptions import ToolNotFoundError
-from ag2.middleware import ToolExecution
+from ag2.middleware import ToolExecution, ToolResultType
 from ag2.tools.subagents import subagent_tool
+from test._helpers import text_of
 
 
 @pytest.mark.asyncio
@@ -44,7 +45,7 @@ async def test_execute(async_mock: AsyncMock, mock: AsyncMock) -> None:
         context=Context(async_mock),
     )
 
-    assert result.result.parts[0].content == "tool executed"
+    assert text_of(result.result.parts[0]) == "tool executed"
     mock.assert_called_once_with(a="1", b=1)
 
 
@@ -63,7 +64,7 @@ async def test_execute_sync_without_thread(async_mock: AsyncMock, mock: MagicMoc
         context=Context(async_mock),
     )
 
-    assert result.result.parts[0].content == "tool executed"
+    assert text_of(result.result.parts[0]) == "tool executed"
     mock.assert_called_once_with(a="1", b=1)
 
 
@@ -82,7 +83,7 @@ async def test_execute_async(async_mock: AsyncMock, mock: MagicMock) -> None:
         context=Context(async_mock),
     )
 
-    assert result.result.parts[0].content == "tool executed"
+    assert text_of(result.result.parts[0]) == "tool executed"
     mock.assert_called_once_with(a="1", b=1)
 
 
@@ -118,7 +119,7 @@ async def test_return_result(async_mock: AsyncMock) -> None:
         context=Context(async_mock),
     )
 
-    assert result.result.parts[0].content == "Hi!"
+    assert text_of(result.result.parts[0]) == "Hi!"
 
 
 @pytest.mark.asyncio
@@ -138,7 +139,7 @@ async def test_tool_with_depends(async_mock: AsyncMock) -> None:
         context=Context(async_mock),
     )
 
-    assert result.result.parts[0].content == "111"
+    assert text_of(result.result.parts[0]) == "111"
 
 
 @pytest.mark.asyncio
@@ -155,7 +156,7 @@ async def test_tool_get_context(async_mock: AsyncMock) -> None:
         context=Context(async_mock, prompt=["1"]),
     )
 
-    assert result.result.parts[0].content == "1"
+    assert text_of(result.result.parts[0]) == "1"
 
 
 @pytest.mark.asyncio
@@ -172,7 +173,7 @@ async def test_tool_get_context_by_random_name(async_mock: AsyncMock) -> None:
         context=Context(async_mock, prompt=["1"]),
     )
 
-    assert result.result.parts[0].content == "1"
+    assert text_of(result.result.parts[0]) == "1"
 
 
 @pytest.mark.asyncio
@@ -249,6 +250,7 @@ class TestReturnInput:
         agent = Agent("", config=config, tools=[my_func])
         reply = await agent.ask("Call my func")
 
+        assert reply.body is not None
         assert json.loads(reply.body) == {"a": "1"}
 
     async def test_unsupported_input_type(self, config: testing.TrackingConfig) -> None:
@@ -292,7 +294,7 @@ async def test_unknown_tool_result_is_populated() -> None:
 
     [not_found] = [e for e in await stream.history.get_events() if isinstance(e, events.ToolNotFoundEvent)]
     assert not_found.result is not None
-    assert "missing_tool" in not_found.result.parts[0].content
+    assert "missing_tool" in text_of(not_found.result.parts[0])
 
 
 @pytest.mark.asyncio
@@ -327,7 +329,7 @@ async def test_subagent_tool_surfaces_failure_to_caller() -> None:
 
     # The framework's second LLM turn carries the delegate tool's result back to the parent LLM.
     tool_result: events.ToolResultEvent = parent_config.mock.call_args_list[1][0][0].results[0]
-    out = tool_result.result.parts[0].content
+    out = text_of(tool_result.result.parts[0])
     assert out != "", "sub-task failure must not return empty string to parent LLM"
     assert "boom" in out
 
@@ -368,7 +370,7 @@ async def test_execute_tools_isolates_a_failing_tool() -> None:
     # Both calls represented: one success, one error — nothing silently dropped.
     assert len(results_event.results) == 2
     errors = [r for r in results_event.results if isinstance(r, events.ToolErrorEvent)]
-    assert any(e.result is not None and "tool exploded" in e.result.parts[0].content for e in errors)
+    assert any(e.result is not None and "tool exploded" in text_of(e.result.parts[0]) for e in errors)
 
 
 @pytest.mark.asyncio
@@ -387,7 +389,7 @@ async def test_execute_tools_isolates_a_call_a_middleware_guard_rejects() -> Non
 
     async def refund_authority(
         call_next: ToolExecution, event: events.ToolCallEvent, context: Context
-    ) -> events.ToolResultEvent:
+    ) -> ToolResultType:
         amount = float(event.serialized_arguments.get("amount_usd", 0))
         if amount > auto_approve_limit_usd:
             raise RefundNotAuthorizedError(
@@ -435,7 +437,7 @@ async def test_execute_tools_isolates_a_call_a_middleware_guard_rejects() -> Non
     assert len(results_event.results) == 2
     errors = [r for r in results_event.results if isinstance(r, events.ToolErrorEvent)]
     assert any(
-        e.result is not None and "exceeds the $100 auto-approval limit" in e.result.parts[0].content for e in errors
+        e.result is not None and "exceeds the $100 auto-approval limit" in text_of(e.result.parts[0]) for e in errors
     )
 
 

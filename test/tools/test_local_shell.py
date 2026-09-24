@@ -11,7 +11,7 @@ from pathlib import Path, PurePath, PurePosixPath
 
 import pytest
 
-from ag2 import Agent, MemoryStream
+from ag2 import Agent, Context, MemoryStream
 from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from ag2.testing import TestConfig
 from ag2.tools import LocalEnvironment, SandboxShellTool
@@ -142,6 +142,7 @@ class TestCheckIgnore:
 class TestSandboxShellToolConstruction:
     def test_auto_tempdir_created(self) -> None:
         shell = SandboxShellTool()
+        assert isinstance(shell.workdir, Path)
         assert shell.workdir.exists()
         assert shell.workdir.is_dir()
 
@@ -154,6 +155,7 @@ class TestSandboxShellToolConstruction:
     def test_workdir_is_readonly_property(self, tmp_path: Path) -> None:
         shell = SandboxShellTool(LocalEnvironment(tmp_path))
         with pytest.raises(AttributeError):
+            # Writing the read-only property is what is under test.
             shell.workdir = tmp_path  # type: ignore[misc]
 
 
@@ -397,10 +399,10 @@ class TestShellExecution:
         assert output.exists(), "touch should be allowed when explicit allowed= overrides readonly"
 
     @pytest.mark.asyncio
-    async def test_workdir_in_tool_description(self, tmp_path: Path) -> None:
+    async def test_workdir_in_tool_description(self, tmp_path: Path, context: Context) -> None:
         shell = SandboxShellTool(LocalEnvironment(tmp_path))
 
-        schemas = await shell.schemas(None)  # type: ignore[arg-type]
+        schemas = await shell.schemas(context)
         description = schemas[0].function.description
         assert str(tmp_path) in description, f"workdir not in description: {description!r}"
 

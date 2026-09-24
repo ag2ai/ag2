@@ -23,13 +23,13 @@ async def test_strings_become_skill_objects(context: Context) -> None:
 
 @pytest.mark.asyncio
 async def test_skill_objects_preserved(context: Context) -> None:
-    t = SkillsTool(Skill("openai-spreadsheets"), Skill("skill_abc123", version=2))
+    t = SkillsTool(Skill("openai-spreadsheets"), Skill("skill_abc123", version="2"))
 
     [schema] = await t.schemas(context)
 
     assert schema.skills == [
         Skill(id="openai-spreadsheets", version=None),
-        Skill(id="skill_abc123", version=2),
+        Skill(id="skill_abc123", version="2"),
     ]
 
 

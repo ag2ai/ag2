@@ -8,10 +8,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from ag2 import Agent, Context
-from ag2.events import BaseEvent, ToolCallEvent, ToolResultEvent, ToolResultsEvent
-from ag2.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddleware
+from ag2.events import BaseEvent, TextInput, ToolCallEvent, ToolErrorEvent, ToolResultEvent, ToolResultsEvent
+from ag2.middleware import BaseMiddleware, Middleware, ToolExecution, ToolMiddleware, ToolResultType
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools import Toolkit, tool
+from test._helpers import function_tool
 
 
 class OrderingMiddleware(BaseMiddleware):
@@ -31,7 +32,7 @@ class OrderingMiddleware(BaseMiddleware):
         call_next: ToolExecution,
         event: ToolCallEvent,
         ctx: Context,
-    ) -> ToolResultEvent:
+    ) -> ToolResultType:
         self.mock.enter(self.position)
         result = await call_next(event, ctx)
         self.mock.exit(self.position)
@@ -56,10 +57,13 @@ class TestToolExecutionMiddleware:
                 call_next: ToolExecution,
                 event: ToolCallEvent,
                 ctx: Context,
-            ) -> ToolResultEvent:
+            ) -> ToolResultType:
                 self.mock.enter(event.name)
                 r = await call_next(event, ctx)
-                self.mock.exit(r.result.parts[0].content)
+                assert isinstance(r, ToolResultEvent)
+                part = r.result.parts[0]
+                assert isinstance(part, TextInput)
+                self.mock.exit(part.content)
                 return r
 
         def my_tool() -> str:
@@ -117,8 +121,9 @@ class TestToolExecutionMiddleware:
                 call_next: ToolExecution,
                 event: ToolCallEvent,
                 ctx: Context,
-            ) -> ToolResultEvent:
+            ) -> ToolResultType:
                 r = await call_next(event, ctx)
+                assert isinstance(r, ToolErrorEvent)
                 self.mock.exit(repr(r.error))
                 # suppress the error
                 return ToolResultEvent.from_call(event, result="tool executed")
@@ -140,7 +145,7 @@ class TestToolExecutionMiddleware:
         mock.exit.assert_called_once_with("ValueError('tool execution error')")
 
         tool_results_event: ToolResultsEvent = tracking_config.mock.call_args_list[1].args[0]
-        assert tool_results_event.results[0].result.parts[0].content == "tool executed"
+        assert tool_results_event.results[0].result.parts == [TextInput("tool executed")]
 
     @pytest.mark.asyncio()
     async def test_mutates_arguments_and_result(self) -> None:
@@ -150,10 +155,13 @@ class TestToolExecutionMiddleware:
                 call_next: ToolExecution,
                 event: ToolCallEvent,
                 ctx: Context,
-            ) -> ToolResultEvent:
+            ) -> ToolResultType:
                 event.serialized_arguments["x"] += 1
                 result = await call_next(event, ctx)
-                result.result.parts[0].content += "!"
+                assert isinstance(result, ToolResultEvent)
+                part = result.result.parts[0]
+                assert isinstance(part, TextInput)
+                part.content += "!"
                 return result
 
         recorded_args = MagicMock()
@@ -191,7 +199,7 @@ class TestToolExecutionMiddleware:
                 call_next: ToolExecution,
                 event: ToolCallEvent,
                 ctx: Context,
-            ) -> ToolResultEvent:
+            ) -> ToolResultType:
                 mock.enter(pos)
                 r = await call_next(event, ctx)
                 mock.exit(pos)
@@ -226,7 +234,7 @@ class TestToolMiddlewareRegistration:
             call_next: ToolExecution,
             event: ToolCallEvent,
             ctx: Context,
-        ) -> ToolResultEvent:
+        ) -> ToolResultType:
             mock.tool_middleware()
             return await call_next(event, ctx)
 
@@ -252,7 +260,7 @@ class TestToolMiddlewareRegistration:
             call_next: ToolExecution,
             event: ToolCallEvent,
             ctx: Context,
-        ) -> ToolResultEvent:
+        ) -> ToolResultType:
             mock.tool_middleware()
             return await call_next(event, ctx)
 
@@ -287,7 +295,7 @@ class CountingMiddleware:
         call_next: ToolExecution,
         event: ToolCallEvent,
         ctx: Context,
-    ) -> ToolResultEvent:
+    ) -> ToolResultType:
         self.calls += 1
         return await call_next(event, ctx)
 
@@ -305,7 +313,7 @@ class BudgetMiddleware:
         call_next: ToolExecution,
         event: ToolCallEvent,
         ctx: Context,
-    ) -> ToolResultEvent:
+    ) -> ToolResultType:
         ctx.dependencies[SharedCounter].calls += 1
         return await call_next(event, ctx)
 
@@ -346,7 +354,7 @@ class TestSharedToolMiddleware:
 
         # Registering deep-copies each tool, so neither ran the instance passed in.
         assert shared.calls == 0
-        hooks = [t.middleware[0].middleware for t in agent.tools]
+        hooks = [function_tool(t).middleware[0].middleware for t in agent.tools]
         assert hooks[0] is not hooks[1]
 
     async def test_toolkit_copies_per_tool_too(self) -> None:
@@ -364,7 +372,7 @@ class TestSharedToolMiddleware:
             call_next: ToolExecution,
             event: ToolCallEvent,
             ctx: Context,
-        ) -> ToolResultEvent:
+        ) -> ToolResultType:
             mock.hook()
             return await call_next(event, ctx)
 

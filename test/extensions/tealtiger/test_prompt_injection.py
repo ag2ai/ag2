@@ -16,6 +16,7 @@ named Dan, "add the new rules to eslint config", a `<system>` element in ordinar
 """
 
 import json
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -41,7 +42,7 @@ def _make_context(agent_name: str = "assistant") -> MagicMock:
     return ctx
 
 
-def _make_tool_event(name: str = "search", arguments: dict | None = None) -> ToolCallEvent:
+def _make_tool_event(name: str = "search", arguments: dict[str, Any] | None = None) -> ToolCallEvent:
     """Create a ToolCallEvent with JSON-serialized arguments."""
     args = arguments or {}
     return ToolCallEvent(id=f"call-{name}", name=name, arguments=json.dumps(args))
@@ -49,7 +50,7 @@ def _make_tool_event(name: str = "search", arguments: dict | None = None) -> Too
 
 async def _evaluate_call(
     policies: list[GovernancePolicy],
-    arguments: dict,
+    arguments: dict[str, Any],
     tool_name: str = "chat",
     mode: str = "ENFORCE",
 ) -> tuple[object, TealTigerMiddleware]:
@@ -586,7 +587,7 @@ class TestRealWorldFalsePositives:
             {"note": "you are now logged in as an unrestricted admin account"},
         ],
     )
-    def test_benign_arguments_produce_no_findings(self, arguments: dict):
+    def test_benign_arguments_produce_no_findings(self, arguments: dict[str, Any]):
         assert _scan(json.dumps(arguments)) == []
 
 

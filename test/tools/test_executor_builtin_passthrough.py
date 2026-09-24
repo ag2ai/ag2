@@ -2,13 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Iterable
 from contextlib import ExitStack
 
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream, ToolResult
 from ag2.events import (
+    BaseEvent,
     ToolCallEvent,
     ToolNotFoundEvent,
 )
@@ -16,7 +18,7 @@ from ag2.exceptions import ToolNotFoundError
 from ag2.tools.executor import ToolExecutor
 
 
-def _not_found_events(events: list) -> list[ToolNotFoundEvent]:
+def _not_found_events(events: Iterable[BaseEvent]) -> list[ToolNotFoundEvent]:
     return [e for e in events if isinstance(e, ToolNotFoundEvent)]
 
 
@@ -29,7 +31,7 @@ class TestToolNotFoundFallback:
         context = Context(stream=stream)
 
         with ExitStack() as stack:
-            ToolExecutor(SerializerCls).register(stack, context, tools=[], known_tools={"known_func"})
+            ToolExecutor(PydanticSerializer()).register(stack, context, tools=[], known_tools={"known_func"})
             await context.send(ToolCallEvent(id="tc_1", name="unknown_func", arguments="{}"))
 
         expected_err = ToolNotFoundError("unknown_func")
@@ -37,7 +39,6 @@ class TestToolNotFoundFallback:
             ToolNotFoundEvent(
                 parent_id="tc_1",
                 name="unknown_func",
-                content=repr(expected_err),
                 error=expected_err,
                 result=ToolResult(),
             ),
@@ -48,7 +49,7 @@ class TestToolNotFoundFallback:
         context = Context(stream=stream)
 
         with ExitStack() as stack:
-            ToolExecutor(SerializerCls).register(stack, context, tools=[], known_tools={"known_func"})
+            ToolExecutor(PydanticSerializer()).register(stack, context, tools=[], known_tools={"known_func"})
             await context.send(ToolCallEvent(id="tc_1", name="known_func", arguments="{}"))
 
         assert _not_found_events(list(await stream.history.get_events())) == []

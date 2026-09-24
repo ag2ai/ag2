@@ -5,6 +5,7 @@
 """Test run_pairwise: produce two variants over a suite, then compare them."""
 
 import json
+from typing import Literal
 
 import pytest
 
@@ -19,7 +20,7 @@ from ag2.testing import TestConfig
 class _Scripted:
     """A PairwiseComparator returning a fixed winner per task_id."""
 
-    def __init__(self, key: str, wins: dict[str, str]) -> None:
+    def __init__(self, key: str, wins: dict[str, Literal["a", "b", "tie"]]) -> None:
         self.key = key
         self._wins = wins
 

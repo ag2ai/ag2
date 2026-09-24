@@ -241,5 +241,10 @@ class TestConcurrentDelegationsToOnePersistentWorker:
 
         # The field keeps its documented meaning: the worker's running total on
         # its stream. Whichever delegation went second reads both.
-        readings = sorted([first.usage, second.usage], key=lambda usage: usage.total_tokens)
+        readings = sorted([first.usage, second.usage], key=_total_tokens)
         assert readings == [billed, spent]
+
+
+def _total_tokens(usage: Usage) -> float:
+    assert usage.total_tokens is not None
+    return usage.total_tokens

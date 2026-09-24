@@ -28,6 +28,7 @@ from ag2.extensions.tools.search.tinyfish import (
     _safe_url,
 )
 from ag2.testing import TestConfig, TrackingConfig
+from test._helpers import function_schemas
 
 # tinyfish >= 0.5 sends Search and Fetch to per-product hosts serving at the root path,
 # unless an explicit base_url is configured on the client (then it's {base_url}/v1/{product}).
@@ -128,7 +129,7 @@ class TestSchema:
     async def test_default_schemas(self, context: Context) -> None:
         toolkit = TinyFishSearchToolkit(api_key="test")
 
-        schemas = list(await toolkit.schemas(context))
+        schemas = function_schemas(await toolkit.schemas(context))
 
         names = [s.function.name for s in schemas]
         assert names == ["tinyfish_search", "tinyfish_fetch"]
@@ -136,7 +137,7 @@ class TestSchema:
     async def test_search_schema_has_query_param(self, context: Context) -> None:
         toolkit = TinyFishSearchToolkit(api_key="test")
 
-        schemas = list(await toolkit.schemas(context))
+        schemas = function_schemas(await toolkit.schemas(context))
         search_schema = next(s for s in schemas if s.function.name == "tinyfish_search")
 
         assert search_schema.function.parameters == IsPartialDict({
@@ -147,7 +148,7 @@ class TestSchema:
     async def test_fetch_schema_has_urls_param(self, context: Context) -> None:
         toolkit = TinyFishSearchToolkit(api_key="test")
 
-        schemas = list(await toolkit.schemas(context))
+        schemas = function_schemas(await toolkit.schemas(context))
         fetch_schema = next(s for s in schemas if s.function.name == "tinyfish_fetch")
 
         assert fetch_schema.function.parameters == IsPartialDict({
@@ -313,7 +314,10 @@ class TestFetchExecution:
         await agent.ask("fetch")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        result = tool_results_event.results[0].result.parts[0].data.results[0]
+        part = tool_results_event.results[0].result.parts[0]
+        assert isinstance(part, DataInput)
+        assert isinstance(part.data, TinyFishFetchResponse)
+        result = part.data.results[0]
 
         assert result.links == []
         assert result.image_links == []
@@ -347,7 +351,9 @@ class TestFetchExecution:
         await agent.ask("fetch")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        result = tool_results_event.results[0].result.parts[0].data
+        part = tool_results_event.results[0].result.parts[0]
+        assert isinstance(part, DataInput)
+        result = part.data
 
         assert result == {"error": "Only http/https URLs are supported; rejected: ['file:///etc/passwd']"}
         assert not route.called

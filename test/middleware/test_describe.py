@@ -6,9 +6,10 @@ import pytest
 
 import ag2.middleware as middleware_pkg
 from ag2 import Context
-from ag2.events import ToolCallEvent
+from ag2.events import BaseEvent, ToolCallEvent
 from ag2.middleware import (
     ApprovalRequired,
+    BaseMiddleware,
     ConditionalMiddleware,
     DescribableMiddleware,
     HistoryLimiter,
@@ -31,6 +32,7 @@ def described(middleware: object) -> MiddlewareDescription:
     reaching for internals of its own.
     """
 
+    # Any object at all is what is being described, including ones that are not a factory.
     return ConditionalMiddleware(middleware, ToolCallEvent).describe().inner[0]  # type: ignore[arg-type]
 
 
@@ -41,6 +43,15 @@ async def undescribed_guard(
 ) -> ToolResultType:
     """A user-written closure-style hook that has not opted in."""
     return await call_next(event, context)
+
+
+def undescribed_factory(event: BaseEvent, context: Context) -> BaseMiddleware:
+    """A user-written middleware factory that has not opted in."""
+    return BaseMiddleware(event, context)
+
+
+class Configurable(BaseMiddleware):
+    """A middleware class for `Middleware` to wrap; never instantiated here."""
 
 
 class UndescribedGuard:
@@ -61,6 +72,7 @@ class WrongTypeGuard:
     """Middleware whose describe() returns something that is not a description."""
 
     def describe(self) -> MiddlewareDescription:
+        # A describe() that breaks its own contract is what is under test.
         return {"kind": "WrongTypeGuard"}  # type: ignore[return-value]
 
 
@@ -106,8 +118,8 @@ class TestUndescribedMiddleware:
         )
 
     def test_never_reads_closure_cells(self) -> None:
-        def make_guard(limit: int):  # type: ignore[no-untyped-def]
-            async def guard(call_next, event, context):  # type: ignore[no-untyped-def]
+        def make_guard(limit: int):
+            async def guard(call_next, event, context):
                 return await call_next(event, context)
 
             return guard
@@ -127,15 +139,15 @@ class TestUndescribedMiddleware:
 
 class TestWrappers:
     def test_middleware_wrapper_reports_wrapped_class_and_option_names(self) -> None:
-        assert Middleware(LoggingMiddleware, level=10).describe() == MiddlewareDescription(
-            kind="LoggingMiddleware",
+        assert Middleware(Configurable, level=10).describe() == MiddlewareDescription(
+            kind="Configurable",
             config={"options": ("level",)},
             complete=False,
         )
 
     def test_middleware_wrapper_never_reports_option_values(self) -> None:
         # The wrapper cannot know whether a caller-supplied option is a secret.
-        description = Middleware(LoggingMiddleware, api_key="sk-SECRET-123").describe()
+        description = Middleware(Configurable, api_key="sk-SECRET-123").describe()
 
         assert "sk-SECRET-123" not in repr(description)
         assert description.config == {"options": ("api_key",)}
@@ -151,7 +163,7 @@ class TestWrappers:
         )
 
     def test_conditional_middleware_propagates_incompleteness(self) -> None:
-        assert ConditionalMiddleware(undescribed_guard, ToolCallEvent).describe().complete is False
+        assert ConditionalMiddleware(undescribed_factory, ToolCallEvent).describe().complete is False
 
 
 class TestBrokenDescribe:

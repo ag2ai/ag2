@@ -180,7 +180,7 @@ class TestArgumentConstraintsAreEnforced:
     async def test_a_bool_does_not_satisfy_an_int_constraint(self):
         # bool is a subclass of int in Python, so `True` would pass a naive
         # isinstance check and reach a tool expecting a real count.
-        ran: list[bool] = []
+        ran: list[int] = []
 
         def fetch(limit: int) -> str:
             ran.append(limit)
@@ -493,7 +493,8 @@ class TestAMalformedSpecIsRejectedAtConstruction:
 
     def test_non_dict_spec_raises(self):
         with pytest.raises(ValueError, match="must be a dict, got list"):
-            GovernancePolicy.arg_validation("sql_query", {"query": ["max_length"]})
+            # A list where a spec dict belongs: the runtime rejection is what is under test.
+            GovernancePolicy.arg_validation("sql_query", {"query": ["max_length"]})  # type: ignore[dict-item]
 
     def test_empty_argument_spec_raises(self):
         with pytest.raises(ValueError, match="Constraint spec for argument 'query' must not be empty"):

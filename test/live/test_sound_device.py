@@ -84,10 +84,10 @@ class TestPlaybackEvents:
         context = ConversationContext(stream=MemoryStream())
         edges: list[BaseEvent] = []
         context.stream.where(AudioPlaybackStartedEvent | AudioPlaybackCompletedEvent).subscribe(
-            lambda e: edges.append(e),  # type: ignore[arg-type,return-value]
+            lambda e: edges.append(e),
         )
 
-        async with SoundDevicePlayer(context=context, output_stream=FakeOutputStream()):  # type: ignore[arg-type]
+        async with SoundDevicePlayer(context=context, output_stream=FakeOutputStream()):
             await context.send(SynthesizedAudioEvent(pcm(0.05, 6000)))
             await asyncio.sleep(0.5)  # outlasts the settle window
 
@@ -99,10 +99,10 @@ class TestPlaybackEvents:
         context = ConversationContext(stream=MemoryStream())
         edges: list[BaseEvent] = []
         context.stream.where(AudioPlaybackStartedEvent | AudioPlaybackCompletedEvent).subscribe(
-            lambda e: edges.append(e),  # type: ignore[arg-type,return-value]
+            lambda e: edges.append(e),
         )
 
-        async with SoundDevicePlayer(context=context, output_stream=FakeOutputStream()):  # type: ignore[arg-type]
+        async with SoundDevicePlayer(context=context, output_stream=FakeOutputStream()):
             for _ in range(3):
                 await context.send(SynthesizedAudioEvent(pcm(0.05, 6000)))
                 await asyncio.sleep(0.1)  # shorter than the settle window

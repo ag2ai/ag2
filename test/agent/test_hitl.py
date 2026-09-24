@@ -17,6 +17,7 @@ from ag2.events import (
     HumanInputRequest,
     HumanMessage,
     TaskFailed,
+    TextInput,
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultsEvent,
@@ -476,7 +477,7 @@ async def test_the_unanswered_call_is_closed_and_the_next_turn_works() -> None:
         for result in event.results
         if result.parent_id in called
     )
-    assert stand_in.result.parts[0].content == HUMAN_INPUT_ABANDONED_TOOL_RESULT
+    assert stand_in.result.parts == [TextInput(HUMAN_INPUT_ABANDONED_TOOL_RESULT)]
 
     # A second turn on the same history is served an answered transcript, so
     # it runs to completion instead of dying on the wreckage of the first.
@@ -579,13 +580,9 @@ class TestSiblingToolsStopWithTheTurn:
         # went on to return.
         events = list(await stream.history.get_events())
         stand_ins = [
-            result.result.parts[0].content
-            for event in events
-            if isinstance(event, ToolResultsEvent)
-            for result in event.results
+            result.result.parts for event in events if isinstance(event, ToolResultsEvent) for result in event.results
         ]
-        assert stand_ins == [HUMAN_INPUT_ABANDONED_TOOL_RESULT] * 2
-        assert "done" not in stand_ins
+        assert stand_ins == [[TextInput(HUMAN_INPUT_ABANDONED_TOOL_RESULT)]] * 2
 
 
 @pytest.mark.parametrize(

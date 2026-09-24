@@ -23,12 +23,13 @@ from ag2.extensions.tools.search.exa import (
     ExaToolkit,
 )
 from ag2.testing import TestConfig, TrackingConfig
+from test._helpers import function_schemas
 
 EXA_BASE_URL = "https://api.exa.ai"
 
 
 def _tool_call_config(
-    arguments: dict,
+    arguments: dict[str, Any],
     *,
     tool_name: str,
     final_reply: str = "done",
@@ -67,7 +68,7 @@ class TestSchema:
     async def test_default_schemas(self, context: Context) -> None:
         toolkit = ExaToolkit(api_key="test")
 
-        schemas = list(await toolkit.schemas(context))
+        schemas = function_schemas(await toolkit.schemas(context))
 
         names = [s.function.name for s in schemas]
         assert names == ["exa_search", "exa_find_similar", "exa_get_contents", "exa_answer"]
@@ -75,7 +76,7 @@ class TestSchema:
     async def test_search_schema_has_query_param(self, context: Context) -> None:
         toolkit = ExaToolkit(api_key="test")
 
-        schemas = list(await toolkit.schemas(context))
+        schemas = function_schemas(await toolkit.schemas(context))
         search_schema = next(s for s in schemas if s.function.name == "exa_search")
 
         assert search_schema.function.parameters == IsPartialDict({

@@ -175,12 +175,14 @@ class TestReferenceOutputsCoercion:
     """reference_outputs is normalised to a plain dict; non-mapping values raise."""
 
     def test_pydantic_model_is_coerced_to_dict(self) -> None:
-        task = Task(task_id="t", inputs={"input": "q"}, reference_outputs=_RefModel(answer="Paris"))
+        # Documented and coerced at runtime, but the field declares only the coerced type (ticket 56).
+        task = Task(task_id="t", inputs={"input": "q"}, reference_outputs=_RefModel(answer="Paris"))  # type: ignore[arg-type]
 
         assert task.reference_outputs == {"answer": "Paris", "confidence": 1.0}
 
     def test_dataclass_instance_is_coerced_to_dict(self) -> None:
-        task = Task(task_id="t", inputs={"input": "q"}, reference_outputs=_RefDataclass(answer="Paris"))
+        # Documented and coerced at runtime, but the field declares only the coerced type (ticket 56).
+        task = Task(task_id="t", inputs={"input": "q"}, reference_outputs=_RefDataclass(answer="Paris"))  # type: ignore[arg-type]
 
         assert task.reference_outputs == {"answer": "Paris"}
 
@@ -194,7 +196,8 @@ class TestReferenceOutputsCoercion:
 
     def test_non_mapping_raises_type_error(self) -> None:
         with pytest.raises(TypeError, match="reference_outputs must be a dict"):
-            Task(task_id="t", inputs={"input": "q"}, reference_outputs=["Paris"])
+            # A list where a mapping belongs: the runtime rejection is what is under test.
+            Task(task_id="t", inputs={"input": "q"}, reference_outputs=["Paris"])  # type: ignore[arg-type]
 
     def test_coercion_applies_through_from_list(self) -> None:
         suite = Suite.from_list([{"inputs": {"input": "q"}, "reference_outputs": _RefModel(answer="Paris")}])

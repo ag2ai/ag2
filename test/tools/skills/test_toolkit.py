@@ -4,10 +4,10 @@
 
 import json
 import threading
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -16,11 +16,13 @@ from dirty_equals import IsPartialDict
 from ag2 import Context
 from ag2.events import ToolCallEvent, ToolErrorEvent
 from ag2.tools import SkillsToolkit
-from ag2.tools.sandbox import ExecResult, Sandbox
+from ag2.tools.sandbox import Sandbox
 from ag2.tools.sandbox.adapter import ShellAdapter
 from ag2.tools.sandbox.local import LocalSandbox
 from ag2.tools.skills import LocalRuntime
 from ag2.tools.skills.runtime.local.loader import SkillLoader
+from test._helpers import function_schemas, text_of
+from test.tools.sandbox._helpers import RecordingSandbox
 
 
 def _write_script_skill(base: Path, name: str, script_body: str | None = None) -> Path:
@@ -53,8 +55,8 @@ async def test_run_script_routes_to_last_runtime(tmp_path: Path, context: Contex
     result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
 
     assert not isinstance(result, ToolErrorEvent)
-    assert "PROJECT" in result.result.parts[0].content
-    assert "GLOBAL" not in result.result.parts[0].content
+    assert "PROJECT" in text_of(result.result.parts[0])
+    assert "GLOBAL" not in text_of(result.result.parts[0])
 
 
 @pytest.mark.asyncio
@@ -70,7 +72,7 @@ async def test_run_script_falls_through_on_skill_not_found(tmp_path: Path, conte
     result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
 
     assert not isinstance(result, ToolErrorEvent)
-    assert "HELLO" in result.result.parts[0].content
+    assert "HELLO" in text_of(result.result.parts[0])
 
 
 @pytest.mark.asyncio
@@ -94,7 +96,7 @@ async def test_tool_exposes_all_functions(skill_tree: Path, context: Context) ->
 
     schemas = await tool.schemas(context)
 
-    names = {s.function.name for s in schemas}  # type: ignore[union-attr]
+    names = {s.function.name for s in function_schemas(schemas)}
     assert names == {"list_skills", "load_skill", "read_skill_resource", "run_skill_script"}
 
 
@@ -158,7 +160,7 @@ async def test_load_skill_wraps_content_with_resources(skill_tree: Path, context
     result = await load_tool(event, context)
 
     assert not isinstance(result, ToolErrorEvent)
-    content = result.result.parts[0].content
+    content = text_of(result.result.parts[0])
     assert '<skill_content name="react-best-practices">' in content
     assert "React Best Practices" in content
     assert f"Skill directory: {skill_tree / 'react-best-practices'}" in content
@@ -199,7 +201,7 @@ async def test_read_skill_resource_returns_content(skill_tree: Path, context: Co
     result = await read_tool(ToolCallEvent(name="read_skill_resource", arguments=args), context)
 
     assert not isinstance(result, ToolErrorEvent)
-    assert "Detailed React guidance." in result.result.parts[0].content
+    assert "Detailed React guidance." in text_of(result.result.parts[0])
 
 
 @pytest.mark.asyncio
@@ -244,7 +246,7 @@ async def test_read_skill_resource_allows_in_bounds_symlink(skill_tree: Path, co
     result = await read_tool(ToolCallEvent(name="read_skill_resource", arguments=args), context)
 
     assert not isinstance(result, ToolErrorEvent)
-    assert "Detailed React guidance." in result.result.parts[0].content
+    assert "Detailed React guidance." in text_of(result.result.parts[0])
 
 
 @pytest.mark.asyncio
@@ -275,28 +277,11 @@ async def test_run_skill_script_executes(skill_tree: Path) -> None:
     assert "scaffold" in result
 
 
-class _FakeRemoteSandbox:
-    def __init__(self) -> None:
-        self.execs: list[Sequence[str]] = []
-
-    @property
-    def workdir(self) -> PurePosixPath:
-        return PurePosixPath("/workspace")
-
-    @property
-    def host_workdir(self) -> None:
-        return None
-
-    async def exec(self, argv: Sequence[str], *, env: object = None, timeout: object = None) -> ExecResult:
-        self.execs.append(argv)
-        return ExecResult(output="ran", exit_code=0)
-
-
 class _RemoteFactory:
     """A non-local SandboxFactory (no sync fast path) opened per command."""
 
     def __init__(self) -> None:
-        self.sandbox = _FakeRemoteSandbox()
+        self.sandbox = RecordingSandbox(output="ran")
 
     @asynccontextmanager
     async def open(self, context: object = None) -> AsyncGenerator[Sandbox]:

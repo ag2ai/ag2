@@ -31,6 +31,10 @@ def _fake_sandbox(result: str = "ok", exit_code: int = 0) -> Any:
     )
 
 
+def _params() -> daytona.CreateSandboxFromSnapshotParams:
+    return daytona.CreateSandboxFromSnapshotParams()
+
+
 def _fake_client(sandbox: Any) -> Any:
     return SimpleNamespace(
         create=AsyncMock(return_value=sandbox),
@@ -41,19 +45,20 @@ def _fake_client(sandbox: Any) -> Any:
 class TestConstruction:
     def test_invalid_timeout_rejected(self) -> None:
         with pytest.raises(ValueError, match="timeout"):
-            DaytonaSandbox(client=_fake_client(_fake_sandbox()), params={}, timeout=0)
+            DaytonaSandbox(client=_fake_client(_fake_sandbox()), params=_params(), timeout=0)
 
     def test_workdir_is_posix(self) -> None:
-        sandbox = DaytonaSandbox(client=_fake_client(_fake_sandbox()), params={}, workdir="/srv")
+        sandbox = DaytonaSandbox(client=_fake_client(_fake_sandbox()), params=_params(), workdir="/srv")
         assert sandbox.workdir == PurePosixPath("/srv")
 
     def test_host_workdir_none(self) -> None:
-        sandbox = DaytonaSandbox(client=_fake_client(_fake_sandbox()), params={})
+        sandbox = DaytonaSandbox(client=_fake_client(_fake_sandbox()), params=_params())
         assert sandbox.host_workdir is None
 
     def test_variable_rejected_in_constructor(self) -> None:
         with pytest.raises(TypeError):
-            DaytonaSandbox(client=Variable("c"), params={})  # type: ignore[arg-type]
+            # A `Variable` where only a value is accepted: the runtime refusal is what is under test.
+            DaytonaSandbox(client=Variable("c"), params=_params())  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -61,7 +66,7 @@ class TestExec:
     async def test_argv_is_joined_into_shell_command(self) -> None:
         remote = _fake_sandbox(result="42\n")
         client = _fake_client(remote)
-        sandbox = DaytonaSandbox(client=client, params={})
+        sandbox = DaytonaSandbox(client=client, params=_params())
         result = await sandbox.exec(["python", "-c", "print(40+2)"])
 
         assert result == ExecResult(output="42\n", exit_code=0)
@@ -70,14 +75,14 @@ class TestExec:
         assert cmd.startswith("python -c ")
 
     async def test_empty_argv_returns_failure(self) -> None:
-        sandbox = DaytonaSandbox(client=_fake_client(_fake_sandbox()), params={})
+        sandbox = DaytonaSandbox(client=_fake_client(_fake_sandbox()), params=_params())
         result = await sandbox.exec([])
         assert result.exit_code == 2
 
     async def test_timeout_maps_to_exit_124(self) -> None:
         remote = _fake_sandbox()
         remote.process.exec = AsyncMock(side_effect=daytona.DaytonaTimeoutError("slow"))
-        sandbox = DaytonaSandbox(client=_fake_client(remote), params={})
+        sandbox = DaytonaSandbox(client=_fake_client(remote), params=_params())
         result = await sandbox.exec(["sleep", "5"])
         assert result.exit_code == 124
 
@@ -86,12 +91,12 @@ class TestExec:
 class TestFileIO:
     async def test_put_file_uses_upload_file(self) -> None:
         remote = _fake_sandbox()
-        sandbox = DaytonaSandbox(client=_fake_client(remote), params={}, workdir="/srv")
+        sandbox = DaytonaSandbox(client=_fake_client(remote), params=_params(), workdir="/srv")
         await sandbox.put_file(PurePosixPath("hello.txt"), b"world")
         remote.fs.upload_file.assert_awaited_once_with(b"world", "/srv/hello.txt")
 
     async def test_absolute_path_rejected(self) -> None:
-        sandbox = DaytonaSandbox(client=_fake_client(_fake_sandbox()), params={})
+        sandbox = DaytonaSandbox(client=_fake_client(_fake_sandbox()), params=_params())
         with pytest.raises(ValueError, match="Absolute"):
             await sandbox.put_file(PurePosixPath("/etc/passwd"), b"x")
 
@@ -101,7 +106,7 @@ class TestLifecycle:
     async def test_aenter_creates_sandbox(self) -> None:
         remote = _fake_sandbox()
         client = _fake_client(remote)
-        async with DaytonaSandbox(client=client, params={}):
+        async with DaytonaSandbox(client=client, params=_params()):
             pass
         client.create.assert_awaited_once()
         remote.delete.assert_awaited_once()
@@ -110,7 +115,7 @@ class TestLifecycle:
     async def test_aclose_idempotent(self) -> None:
         remote = _fake_sandbox()
         client = _fake_client(remote)
-        sandbox = DaytonaSandbox(client=client, params={})
+        sandbox = DaytonaSandbox(client=client, params=_params())
         await sandbox.exec(["echo", "hi"])
         await sandbox.aclose()
         await sandbox.aclose()

@@ -19,7 +19,8 @@ def _make_pair(*events: str, server_url: str = "http://test") -> tuple[NlipServe
     factory = make_test_client_factory(server, url=server_url)
     client = Agent(
         "client-agent",
-        config=NlipConfig(url=server_url, httpx_client_factory=factory),
+        # `NlipConfig` declares no `provider`/`model`, so the checker reads it as abstract (ticket 54).
+        config=NlipConfig(url=server_url, httpx_client_factory=factory),  # type: ignore[abstract]
     )
     return server, client, tracking
 

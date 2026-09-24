@@ -15,10 +15,12 @@ Run locally with e.g. ``GEMINI_API_KEY=… pytest test/eval/test_agent_judge_llm
 """
 
 import os
+from typing import Any
 
 import pytest
 
 from ag2.config import AnthropicConfig, GeminiConfig, OpenAIConfig
+from ag2.eval import Feedback, Scorer
 from ag2.eval.dataset.task import Task
 from ag2.eval.scorers import agent_judge
 from ag2.eval.trace import Trace
@@ -54,7 +56,7 @@ def _answer_trace(answer: str) -> Trace:
     return Trace(events=[ModelResponse(message=ModelMessage(answer))], exception=None, duration_ms=0)
 
 
-async def _grade(scorer, *, answer: str, reference: dict | None) -> object:
+async def _grade(scorer: Scorer, *, answer: str, reference: dict[str, Any] | None) -> Feedback:
     [feedback] = await scorer(
         inputs={"input": "What is the capital of France?"},
         outputs={"body": answer},
@@ -78,6 +80,7 @@ async def test_judge_discriminates_correct_from_wrong(judge_config) -> None:
         assert 0.0 <= fb.score <= 1.0
         assert fb.comment
     # and the judge genuinely discriminates
+    assert correct.score is not None and wrong.score is not None
     assert correct.score > wrong.score
 
 

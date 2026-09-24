@@ -27,6 +27,7 @@ from ag2.events import ToolCallEvent
 from ag2.testing import TestConfig
 from ag2.tools import MCPServerConfig, MCPToolkit
 from ag2.tools.toolkits.mcp_server.types import ProtocolMode
+from test._helpers import function_schemas
 from test._serving import serving
 
 
@@ -97,7 +98,9 @@ async def test_discovers_all_pages_and_caches_the_complete_catalog(
         first, concurrent = await asyncio.gather(toolkit.schemas(context), toolkit.schemas(context))
         cached = await toolkit.schemas(context)
 
-    assert [[s.function.name for s in schemas] for schemas in (first, concurrent, cached)] == [names + ["last"]] * 3
+    assert [[s.function.name for s in function_schemas(schemas)] for schemas in (first, concurrent, cached)] == [
+        names + ["last"]
+    ] * 3
     assert catalog.cursors == [None, "opaque:/page+two=", ""]
 
 
@@ -127,7 +130,7 @@ async def test_filters_and_calls_a_tool_from_a_later_page(context: Context, mode
         reply = await agent.ask("Call the allowed tool")
 
     assert reply.body == "done"
-    assert [schema.function.name for schema in schemas] == ["remote_allowed"]
+    assert [schema.function.name for schema in function_schemas(schemas)] == ["remote_allowed"]
     assert catalog.calls == ["allowed"]
 
 
@@ -147,7 +150,7 @@ async def test_failed_later_page_leaves_discovery_retryable(context: Context, mo
         catalog.pages = {None: page("fresh", next_cursor="next"), "next": page("last")}
         schemas = await toolkit.schemas(context)
 
-    assert [schema.function.name for schema in schemas] == ["fresh", "last"]
+    assert [schema.function.name for schema in function_schemas(schemas)] == ["fresh", "last"]
     assert catalog.cursors == [None, "next", None, "next"]
 
 

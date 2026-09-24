@@ -44,6 +44,8 @@ from ag2.mcp import MCPServer, mcp_tool
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 from ag2.tools import MCPAnswerPolicy, MCPServerConfig, MCPToolkit
+from ag2.tools.toolkits.mcp_server.toolkit import _MCPProxyTool
+from test._helpers import function_schemas
 from test._serving import serving
 
 
@@ -127,7 +129,7 @@ def _method_of(body: bytes) -> str:
 @pytest.mark.asyncio
 async def test_tools_are_discovered_over_the_real_transport(context: Context) -> None:
     async with _live_mcp_server() as url:
-        schemas = list(await MCPToolkit(url).schemas(context))
+        schemas = function_schemas(await MCPToolkit(url).schemas(context))
 
     # ``ask`` is the served agent's own conversational tool; ``echo`` is the
     # custom tool. Both arriving means the handshake and ``tools/list`` completed.
@@ -140,6 +142,7 @@ async def test_a_tool_call_round_trips_over_the_real_transport(context: Context)
         toolkit = MCPToolkit(url)
         await toolkit.schemas(context)
         proxy = next(t for t in toolkit.tools if t.name == "echo")
+        assert isinstance(proxy, _MCPProxyTool)
 
         result = await proxy(ToolCallEvent(name="echo", arguments='{"message": "hi"}'), context)
 
@@ -169,7 +172,7 @@ async def test_a_slashless_url_still_reaches_the_server(context: Context) -> Non
     asks for nothing — and this test is the guarantee that it does.
     """
     async with _live_mcp_server() as url:
-        schemas = list(await MCPToolkit(url.rstrip("/")).schemas(context))
+        schemas = function_schemas(await MCPToolkit(url.rstrip("/")).schemas(context))
 
     assert sorted(s.function.name for s in schemas) == ["ask", "echo"]
 
@@ -238,6 +241,7 @@ async def _ask_through_toolkit(url: str, human: "_Human | None", answering: MCPA
     )
     await toolkit.schemas(calling)
     proxy = next(t for t in toolkit.tools if t.name == "ask")
+    assert isinstance(proxy, _MCPProxyTool)
     call = ToolCallEvent(name="ask", arguments='{"message": "pick one"}')
     if human is None:
         return await proxy(call, calling)
@@ -287,6 +291,7 @@ async def test_the_handshake_era_answers_inline_with_no_retry() -> None:
         )
         await toolkit.schemas(calling)
         proxy = next(t for t in toolkit.tools if t.name == "ask")
+        assert isinstance(proxy, _MCPProxyTool)
         with calling.stream.where(HumanInputRequest).sub_scope(human, interrupt=True):
             result = await proxy(ToolCallEvent(name="ask", arguments='{"message": "pick one"}'), calling)
 

@@ -4,11 +4,13 @@
 
 import pytest
 
+from ag2 import Context
 from ag2.exceptions import ToolConflictError
 from ag2.tools import tool
 from ag2.tools.builtin import ToolSearchTool
 from ag2.tools.builtin.tool_search import TOOL_SEARCH_TOOL_NAME, ToolSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
+from test._helpers import function_schemas
 
 
 @tool
@@ -24,16 +26,17 @@ def get_stock_price(ticker: str) -> str:
 
 
 @pytest.mark.asyncio
-async def test_tool_search_default_mode_is_regex():
-    [search, *_] = await ToolSearchTool(get_weather).schemas(context=None)
+async def test_tool_search_default_mode_is_regex(context: Context):
+    [search, *_] = await ToolSearchTool(get_weather).schemas(context=context)
     assert isinstance(search, ToolSearchToolSchema)
     assert search.type == TOOL_SEARCH_TOOL_NAME
     assert search.mode == "regex"
 
 
 @pytest.mark.asyncio
-async def test_tool_search_bm25_mode():
-    [search, *_] = await ToolSearchTool(get_weather, mode="bm25").schemas(context=None)
+async def test_tool_search_bm25_mode(context: Context):
+    [search, *_] = await ToolSearchTool(get_weather, mode="bm25").schemas(context=context)
+    assert isinstance(search, ToolSearchToolSchema)
     assert search.mode == "bm25"
 
 
@@ -47,13 +50,13 @@ def test_tool_search_requires_at_least_one_tool():
 
 
 @pytest.mark.asyncio
-async def test_wrapped_tools_are_marked_deferred():
-    schemas = await ToolSearchTool(get_weather, get_stock_price).schemas(context=None)
+async def test_wrapped_tools_are_marked_deferred(context: Context):
+    schemas = await ToolSearchTool(get_weather, get_stock_price).schemas(context=context)
 
     # first schema is the search tool itself, the rest are the deferred wrapped tools
     assert isinstance(schemas[0], ToolSearchToolSchema)
     wrapped = schemas[1:]
-    assert {s.function.name for s in wrapped} == {"get_weather", "get_stock_price"}
+    assert {s.function.name for s in function_schemas(wrapped)} == {"get_weather", "get_stock_price"}
     assert all(isinstance(s, FunctionToolSchema) and s.defer_loading for s in wrapped)
 
 

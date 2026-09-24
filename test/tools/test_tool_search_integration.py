@@ -7,6 +7,7 @@ import pytest
 pytest.importorskip("anthropic")
 pytest.importorskip("openai")
 
+from ag2 import Context
 from ag2.config.anthropic.mappers import tool_to_api as anthropic_tool_to_api
 from ag2.config.openai.mappers import tool_to_responses_api
 from ag2.tools import tool
@@ -14,7 +15,7 @@ from ag2.tools.builtin import ToolSearchTool
 
 
 @pytest.mark.asyncio
-async def test_full_tool_list_maps_for_both_providers():
+async def test_full_tool_list_maps_for_both_providers(context: Context):
     @tool
     def get_weather(location: str) -> str:
         """Get the weather at a location."""
@@ -27,7 +28,7 @@ async def test_full_tool_list_maps_for_both_providers():
 
     # Build the schema list the way an agent would: get_weather is deferred by
     # wrapping it in the search tool, echo is loaded eagerly.
-    schemas = [*(await ToolSearchTool(get_weather).schemas(None)), echo.schema]
+    schemas = [*(await ToolSearchTool(get_weather).schemas(context)), echo.schema]
 
     anthropic = [anthropic_tool_to_api(s) for s in schemas]
     assert anthropic == [

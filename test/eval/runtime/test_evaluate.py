@@ -7,6 +7,7 @@
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Sequence
+from typing import Any
 
 import pytest
 
@@ -22,11 +23,11 @@ from ag2.eval import (
 )
 from ag2.eval.scorers import final_answer_matches, tool_called
 from ag2.eval.trace import Trace
-from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, Usage, UsageEvent
+from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, Usage, UsageEvent
 
 
 def _trace(answer: str, *, tool_name: str | None = None, in_tok: int = 0, out_tok: int = 0) -> Trace:
-    events: list = []
+    events: list[BaseEvent] = []
     if tool_name is not None:
         events.append(ToolCallEvent(tool_name, arguments="{}"))
     usage = Usage(prompt_tokens=in_tok, completion_tokens=out_tok)
@@ -44,14 +45,14 @@ def has_one_response(trace: Trace) -> bool:
 
 
 @scorer
-def answer_is_paris(outputs: dict) -> bool:
+def answer_is_paris(outputs: dict[str, Any]) -> bool:
     """True iff the parsed ``content`` carries answer == 'Paris'."""
     content = outputs.get("content")
     return isinstance(content, dict) and content.get("answer") == "Paris"
 
 
 @scorer
-def free_text_content_mirrors_body(outputs: dict) -> bool:
+def free_text_content_mirrors_body(outputs: dict[str, Any]) -> bool:
     """For a non-JSON answer, ``content`` is the text itself (mirrors reply.content())."""
     return isinstance(outputs.get("content"), str) and outputs["content"] == outputs.get("body")
 

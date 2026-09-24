@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import daytona
 import pytest
 
 from ag2 import Context, Variable
@@ -134,7 +135,7 @@ class TestDeepcopy:
         assert deepcopy(env) is env
 
     def test_sandbox_deepcopy_returns_same_instance(self) -> None:
-        sandbox = DaytonaSandbox(client=_fake_daytona_client(), params={})
+        sandbox = DaytonaSandbox(client=_fake_daytona_client(), params=daytona.CreateSandboxFromSnapshotParams())
         assert deepcopy(sandbox) is sandbox
 
     def test_tool_backed_by_environment_is_deepcopyable(self) -> None:

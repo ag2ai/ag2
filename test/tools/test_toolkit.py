@@ -13,6 +13,7 @@ from ag2.exceptions import ToolConflictError, ToolMiddlewareUnsupportedError
 from ag2.middleware import ToolExecution, ToolResultType
 from ag2.testing import TestConfig
 from ag2.tools import CodeExecutionTool, Toolkit
+from test._helpers import function_schemas
 
 
 @pytest.mark.asyncio
@@ -28,7 +29,7 @@ async def test_toolkit_schemas(async_mock: AsyncMock) -> None:
         return a * b
 
     toolkit = Toolkit(add, multiply)
-    schemas = list(await toolkit.schemas(Context(async_mock)))
+    schemas = function_schemas(await toolkit.schemas(Context(async_mock)))
 
     assert len(schemas) == 2
     assert schemas[0].function.name == "add"
@@ -341,7 +342,7 @@ async def test_toolkit_middleware_ordering() -> None:
 
 def test_tool_name_conflict() -> None:
     def add(a: int, b: int) -> int:
-        pass
+        return a + b
 
     with pytest.raises(ToolConflictError, match="add"):
         Toolkit(add, add)
@@ -353,7 +354,7 @@ def test_tool_name_conflict() -> None:
 
 def test_unsafe_override() -> None:
     def add(a: int, b: int) -> int:
-        pass
+        return a + b
 
     toolkit = Toolkit(add)
     toolkit._add_tool(add, unsafe=True)
@@ -364,10 +365,10 @@ def test_unsafe_override() -> None:
 class TestMerger:
     def test_merge_toolkits(self) -> None:
         def add1(a: int, b: int) -> int:
-            pass
+            return a + b
 
         def add2(a: int, b: int) -> int:
-            pass
+            return a + b
 
         toolkit = Toolkit(add1) | Toolkit(add2)
 
@@ -375,10 +376,10 @@ class TestMerger:
 
     def test_merge_toolkit_and_tool(self) -> None:
         def add1(a: int, b: int) -> int:
-            pass
+            return a + b
 
         def add2(a: int, b: int) -> int:
-            pass
+            return a + b
 
         toolkit = Toolkit(add1) | add2
 
@@ -386,7 +387,7 @@ class TestMerger:
 
     def test_merged_toolkit_overrides_tool(self) -> None:
         def add1(a: int, b: int) -> int:
-            pass
+            return a + b
 
         toolkit = Toolkit(add1) | add1
 
@@ -412,7 +413,7 @@ class TestToolkitWithProviderExecutedTools:
     def test_toolkit_middleware_on_a_builtin_tool_is_refused_not_dropped(self) -> None:
         """The provider runs it, so the middleware could only be silently skipped."""
 
-        async def audit(event: ToolCallEvent, context: Context, call_next: ToolExecution) -> ToolResultType:
+        async def audit(call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
             return await call_next(event, context)
 
         with pytest.raises(ToolMiddlewareUnsupportedError) as exc:

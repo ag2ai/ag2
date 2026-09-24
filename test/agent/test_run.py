@@ -128,7 +128,7 @@ async def test_events_are_observable_on_stream_while_driving() -> None:
         tools=[tool(lambda: "pong", name="ping")],
     )
 
-    seen: list = []
+    seen: list[BaseEvent] = []
 
     async def capture(event) -> None:
         seen.append(event)

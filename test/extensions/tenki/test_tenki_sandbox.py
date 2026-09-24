@@ -67,6 +67,7 @@ class TestConstruction:
 
     def test_variable_rejected_in_constructor(self) -> None:
         with pytest.raises(TypeError):
+            # A `Variable` where only a value is accepted: the runtime refusal is what is under test.
             TenkiSandbox(client=Variable("client"), create_options={})  # type: ignore[arg-type]
 
 

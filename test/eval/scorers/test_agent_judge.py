@@ -13,7 +13,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from ag2._telemetry_consts import ATTR_SPAN_TYPE, SPAN_TYPE_AGENT, SPAN_TYPE_LLM
-from ag2.eval import InMemoryTraceSource, Suite, TraceRef, evaluate_traces
+from ag2.eval import Feedback, InMemoryTraceSource, Scorer, Suite, TraceRef, evaluate_traces
 from ag2.eval.dataset.task import Task
 from ag2.eval.scorers import agent_judge
 from ag2.eval.trace import Trace
@@ -26,7 +26,7 @@ def _empty_trace() -> Trace:
     return Trace(events=[], exception=None, duration_ms=0)
 
 
-async def _score(scorer, *, outputs, reference_outputs=None, trace=None, inputs=None) -> list:
+async def _score(scorer: Scorer, *, outputs, reference_outputs=None, trace=None, inputs=None) -> list[Feedback]:
     return await scorer(
         inputs=inputs or {},
         outputs=outputs,
@@ -168,6 +168,6 @@ async def test_telemetry_middleware_observes_the_judge() -> None:
 
     await _score(judge, outputs={"body": "a"})
 
-    span_types = {s.attributes.get(ATTR_SPAN_TYPE) for s in exporter.get_finished_spans()}
+    span_types = {(s.attributes or {}).get(ATTR_SPAN_TYPE) for s in exporter.get_finished_spans()}
     assert SPAN_TYPE_AGENT in span_types  # the judge's own invoke_agent span
     assert SPAN_TYPE_LLM in span_types  # the judge's own LLM call -> token usage observable

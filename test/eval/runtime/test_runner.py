@@ -14,6 +14,7 @@ to ``store_dir`` automatically.
 import asyncio
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -22,6 +23,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 pytest.importorskip("opentelemetry.sdk")
 
 from ag2 import Agent, tool
+from ag2.config import ModelConfig
 from ag2.eval import (
     BudgetThresholds,
     Feedback,
@@ -59,7 +61,7 @@ async def cancel() -> str:
     raise asyncio.CancelledError
 
 
-def _build_weather_agent(*, config: object = None) -> Agent:
+def _build_weather_agent(*, config: ModelConfig | None = None) -> Agent:
     return Agent(
         "weather",
         prompt="You are a weather assistant. Use get_weather to answer.",
@@ -74,7 +76,7 @@ def called_get_weather(trace: Trace) -> bool:
 
 
 @scorer
-def city_argument_correct(trace: Trace, reference_outputs: dict) -> bool:
+def city_argument_correct(trace: Trace, reference_outputs: dict[str, Any]) -> bool:
     calls = trace.events_of(ToolCallEvent, name="get_weather")
     if not calls:
         return False
@@ -316,11 +318,11 @@ async def test_budget_violation_recorded_not_aborted(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_inline_list_dataset_is_loaded(tmp_path: Path) -> None:
-    """``suite=[...]`` is sugar for ``Suite.from_list([...])``."""
+    """An inline task list reaches the runner through ``Suite.from_list([...])`` (ADR 0003)."""
     items = [{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}]
 
     result = await run_agent(
-        items,
+        Suite.from_list(items),
         agent=_build_weather_agent(),
         scorers=[called_get_weather],
         store_dir=tmp_path,
@@ -415,7 +417,7 @@ async def test_reply_ask_continuations_are_captured(tmp_path: Path) -> None:
             self._agent = agent
             self.name = agent.name
 
-        async def ask(self, prompt: str, **kwargs: object) -> object:
+        async def ask(self, prompt: str, **kwargs: Any) -> object:
             reply = await self._agent.ask(prompt, **kwargs)
             return await reply.ask("And how warm is it?")
 
@@ -427,6 +429,7 @@ async def test_reply_ask_continuations_are_captured(tmp_path: Path) -> None:
 
     result = await run_agent(
         Suite.from_list([{"task_id": "t1", "inputs": {"input": "Tokyo weather?"}}]),
+        # A duck-typed wrapper where an `Agent` is declared (ADR 0003); the continuation is what is under test.
         agent=agent,  # type: ignore[arg-type]
         scorers=[saw_at_least_two_model_responses],
         model_config={"t1": cassette},

@@ -57,6 +57,7 @@ from ag2.testing import TestConfig
 from ag2.tools import MCPAnswerPolicy, MCPStdioServerConfig, MCPToolkit
 from ag2.tools.toolkits.mcp_server import toolkit as _toolkit_module
 from ag2.tools.toolkits.mcp_server.answering import InputRequestAnswerer
+from ag2.tools.toolkits.mcp_server.toolkit import _MCPProxyTool
 from ag2.utils import MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 TOOL = "needs_input"
@@ -195,6 +196,7 @@ class CallingAgent:
         toolkit = MCPToolkit(MCPStdioServerConfig(command="unused"), answering=answering)
         await toolkit.schemas(context)
         proxy = next(t for t in toolkit.tools if t.name == TOOL)
+        assert isinstance(proxy, _MCPProxyTool)
         call = ToolCallEvent(name=TOOL, arguments="{}")
         if human is None:
             return await proxy(call, context)
@@ -215,6 +217,7 @@ class CallingAgent:
             config=TestConfig(ToolCallEvent(name=TOOL, arguments="{}"), "done"),
         )
         reply = await agent.ask("go")
+        assert reply.body is not None
         return reply.body
 
 
@@ -288,6 +291,7 @@ class TestAnsweringAQuestion:
         answerer = InputRequestAnswerer(MCPAnswerPolicy(elicitation="decline"), Context(stream=MemoryStream()))
 
         answer = await answerer.on_elicitation(
+            # The decline path never reads the session, and no conforming session reaches it.
             ClientRequestContext(session=None, request_id="q", meta=None),  # type: ignore[arg-type]
             ElicitRequestFormParams(
                 message="What colour?",
@@ -430,7 +434,8 @@ class TestReportingRoots:
 @pytest.mark.asyncio
 class TestTheRoundBound:
     async def test_a_server_that_re_asks_forever_is_stopped(self, calling_agent: CallingAgent) -> None:
-        server = ThirdPartyServer(*[{"q": elicitation("Again?")} for _ in range(5)])
+        rounds: list[dict[str, InputRequest]] = [{"q": elicitation("Again?")} for _ in range(5)]
+        server = ThirdPartyServer(*rounds)
 
         result = await calling_agent.call(
             server,
@@ -444,7 +449,8 @@ class TestTheRoundBound:
 
     async def test_the_bound_covers_sampling_and_roots_too(self, calling_agent: CallingAgent, tmp_path: Path) -> None:
         """One bound for the call, not one per request type."""
-        server = ThirdPartyServer(*[{"s": sampling("again"), "r": ListRootsRequest()} for _ in range(5)])
+        rounds: list[dict[str, InputRequest]] = [{"s": sampling("again"), "r": ListRootsRequest()} for _ in range(5)]
+        server = ThirdPartyServer(*rounds)
 
         result = await calling_agent.call(
             server,

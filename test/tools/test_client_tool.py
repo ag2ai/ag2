@@ -10,7 +10,7 @@ import pytest
 
 from ag2 import Agent, Context, MemoryStream, tool
 from ag2.events import ClientToolCallEvent, ModelResponse, ToolCallEvent
-from ag2.middleware import ToolExecution, ToolResultType
+from ag2.middleware import BaseMiddleware, ToolExecution, ToolResultType
 from ag2.testing import TestConfig
 from ag2.tools.final.client_tool import ClientTool
 
@@ -53,7 +53,7 @@ async def test_client_tool_register_execute_sends_to_stream(client_tool: ClientT
         call = ToolCallEvent(name="my_client_tool", arguments="{}")
         await context.send(call)
 
-    events = await stream.history.get_events()
+    events = list(await stream.history.get_events())
 
     assert isinstance(events[-1], ClientToolCallEvent)
     assert events[-1].id == call.id
@@ -66,19 +66,24 @@ async def test_client_tool_register_with_middleware(client_tool: ClientTool) -> 
     stream = MemoryStream()
     context = Context(stream=stream)
 
-    class TagMiddleware:
-        async def on_tool_execution(self, call_next: object, event: object, context: object) -> object:
-            result = await call_next(event, context)  # type: ignore[misc]
-            result._tag = "middleware_ran"  # type: ignore[attr-defined]
+    class TagMiddleware(BaseMiddleware):
+        async def on_tool_execution(
+            self,
+            call_next: ToolExecution,
+            event: ToolCallEvent,
+            context: Context,
+        ) -> ToolResultType:
+            result = await call_next(event, context)
+            result._tag = "middleware_ran"  # type: ignore[union-attr]  # a marker the test reads back; no event declares it
             return result
 
+    call = ToolCallEvent(name="my_client_tool", arguments="{}")
     with ExitStack() as stack:
-        client_tool.register(stack, context, middleware=[TagMiddleware()])
+        client_tool.register(stack, context, middleware=[TagMiddleware(call, context)])
 
-        call = ToolCallEvent(name="my_client_tool", arguments="{}")
         await context.send(call)
 
-    events = await stream.history.get_events()
+    events = list(await stream.history.get_events())
 
     assert isinstance(events[-1], ClientToolCallEvent)
     assert getattr(events[-1], "_tag", None) == "middleware_ran"

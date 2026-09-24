@@ -12,6 +12,7 @@ from pydantic import Field
 from ag2 import Depends, Inject
 from ag2.tools import tool
 from ag2.tools.final import FunctionTool
+from test._helpers import function_tool
 
 DEFAULT_SCHEMA = {
     "function": {
@@ -86,7 +87,7 @@ def test_ensure_tools() -> None:
         """Tool description."""
         return ""
 
-    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == DEFAULT_SCHEMA
+    assert asdict(function_tool(FunctionTool.ensure_tool(my_tool)).schema) == DEFAULT_SCHEMA
 
 
 def test_ensure_tool_from_tool() -> None:
@@ -95,7 +96,7 @@ def test_ensure_tool_from_tool() -> None:
         """Tool description."""
         return ""
 
-    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == DEFAULT_SCHEMA
+    assert asdict(function_tool(FunctionTool.ensure_tool(my_tool)).schema) == DEFAULT_SCHEMA
 
 
 def test_option_description() -> None:
@@ -107,7 +108,7 @@ def test_option_description() -> None:
         """Tool description."""
         return ""
 
-    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == {
+    assert asdict(function_tool(FunctionTool.ensure_tool(my_tool)).schema) == {
         "function": IsPartialDict({
             "parameters": IsPartialDict({
                 "properties": {
@@ -136,7 +137,7 @@ def test_empty_args() -> None:
         """Tool description."""
         return ""
 
-    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == {
+    assert asdict(function_tool(FunctionTool.ensure_tool(my_tool)).schema) == {
         "function": {
             "description": "Tool description.",
             "name": "my_tool",
@@ -176,7 +177,7 @@ def test_create_dynamic_options() -> None:
         """Tool description."""
         return ""
 
-    assert asdict(FunctionTool.ensure_tool(my_tool).schema) == {
+    assert asdict(function_tool(FunctionTool.ensure_tool(my_tool)).schema) == {
         "function": {
             "description": "Tool description.",
             "name": "my_tool",

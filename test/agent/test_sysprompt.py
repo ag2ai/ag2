@@ -7,9 +7,10 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from typing_extensions import Self
 
 from ag2 import Agent, Context, MemoryStream
-from ag2.config import LLMClient
+from ag2.config import LLMClient, ModelConfig, ModelProvider
 from ag2.events import BaseEvent, ModelMessage, ModelResponse
 
 
@@ -17,9 +18,21 @@ class CustomEvent(BaseEvent):
     pass
 
 
-class MockClient(LLMClient):
+class MockClient(LLMClient, ModelConfig):
     def __init__(self, mock: MagicMock) -> None:
         self.mock = mock
+
+    # What the protocol's own bodies do: this double names no provider or model.
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError
+
+    @property
+    def model(self) -> str:
+        raise NotImplementedError
+
+    def copy(self) -> Self:
+        return self
 
     def create(self) -> "MockClient":
         return self
@@ -27,11 +40,11 @@ class MockClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        ctx: Context,
+        context: Context,
         **kwargs: Any,
     ) -> ModelResponse:
-        await ctx.send(CustomEvent())
-        self.mock(ctx.prompt)
+        await context.send(CustomEvent())
+        self.mock(context.prompt)
         return ModelResponse(ModelMessage("Hi, user!"))
 
 

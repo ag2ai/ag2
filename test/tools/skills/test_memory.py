@@ -18,6 +18,7 @@ from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.final.function_tool import FunctionTool
 from ag2.tools.skills import MemoryRuntime, MemorySkill, SkillPlugin
+from test._helpers import text_of
 
 
 def _call(tool: str, **arguments: object) -> ToolCallEvent:
@@ -27,7 +28,7 @@ def _call(tool: str, **arguments: object) -> ToolCallEvent:
 def _tool_result(tracking: TrackingConfig, call: int = 1) -> str:
     """Content of the first tool result fed back to the LLM on the *call*-th turn."""
     msg: ToolResultsEvent = tracking.mock.call_args_list[call][0][0]
-    return msg.results[0].result.parts[0].content
+    return text_of(msg.results[0].result.parts[0])
 
 
 @pytest.mark.asyncio
@@ -163,6 +164,7 @@ class TestInstructionsRegistration:
     @pytest.mark.parametrize("value", [42, None])
     def test_non_string_non_callable_rejected(self, value: object) -> None:
         with pytest.raises(TypeError, match="must be a string or a callable"):
+            # A value outside the declared type: the runtime refusal is what is under test.
             MemorySkill(name="s", description="d", instructions=value)  # type: ignore[arg-type]
 
 
@@ -344,8 +346,9 @@ class TestDependencyInjection:
         skill = MemorySkill(name="s", description="d")
 
         @skill.script
-        def peek(ctx: Context) -> str:  # type: ignore[valid-type]
-            return ctx.variables["k"]
+        def peek(ctx: Context) -> str:
+            value: str = ctx.variables["k"]
+            return value
 
         tracking = TrackingConfig(TestConfig(_call("run_skill_script", name="s", script="peek"), "done"))
         agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])

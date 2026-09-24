@@ -42,7 +42,9 @@ from ag2.tools.schemas import ToolSchema
 from ag2.tools.subagents import background_agent_tool, subagent_tool
 from ag2.tools.subagents import run_task as run_task_mod
 from ag2.tools.subagents.run_task import _rollup_usage, run_task
+from ag2.tools.tool import Tool
 from ag2.usage import UsageReport
+from test._helpers import function_tool, text_of
 
 
 @tool
@@ -51,14 +53,14 @@ def noop() -> str:
     return "ok"
 
 
-def _tool_names(tools: list) -> set[str]:
+def _tool_names(tools: Iterable[Tool]) -> set[str]:
     """Collect tool names, expanding any ``Toolkit`` into its member tools."""
     names: set[str] = set()
     for t in tools:
         if isinstance(t, Toolkit):
-            names |= {inner.schema.function.name for inner in t.tools}
+            names |= {function_tool(inner).schema.function.name for inner in t.tools}
         else:
-            names.add(t.schema.function.name)
+            names.add(function_tool(t).schema.function.name)
     return names
 
 
@@ -127,8 +129,8 @@ def flaky() -> str:
 
 def _make_parent_context(
     *,
-    dependencies: dict | None = None,
-    variables: dict | None = None,
+    dependencies: dict[str, Any] | None = None,
+    variables: dict[str, Any] | None = None,
 ) -> Context:
     """Helper to build a minimal parent Context for run_task tests."""
     return Context(
@@ -163,8 +165,8 @@ class TestRunTask:
         assert result.completed is True
         events = list(await result.stream.history.get_events())
         request = [e for e in events if isinstance(e, ModelRequest)][0]
-        assert "## Context" in request.parts[0].content
-        assert "Here is some data" in request.parts[0].content
+        assert "## Context" in text_of(request.parts[0])
+        assert "Here is some data" in text_of(request.parts[0])
 
     @pytest.mark.asyncio
     async def test_failure(self):
@@ -200,7 +202,8 @@ class TestRunTask:
         @tool
         def get_db_name(ctx: Context) -> str:
             """Get the database name from dependencies."""
-            return ctx.dependencies.get("db_name", "unknown")
+            db_name: str = ctx.dependencies.get("db_name", "unknown")
+            return db_name
 
         config = TestConfig(
             ToolCallEvent(name="get_db_name", arguments="{}"),
@@ -294,7 +297,7 @@ class TestSpecialistDelegation:
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
         request = [e for e in sub_events if isinstance(e, ModelRequest)][0]
-        assert "Focus on recent papers" in request.parts[0].content
+        assert "Focus on recent papers" in text_of(request.parts[0])
 
     @pytest.mark.asyncio
     async def test_with_tools(self):
@@ -546,8 +549,8 @@ class TestStreamFactory:
         events_b = list(await streams_created[1].history.get_events())
         requests_a = [e for e in events_a if isinstance(e, ModelRequest)]
         requests_b = [e for e in events_b if isinstance(e, ModelRequest)]
-        assert "Task A" in requests_a[0].parts[0].content
-        assert "Task B" in requests_b[0].parts[0].content
+        assert "Task A" in text_of(requests_a[0].parts[0])
+        assert "Task B" in text_of(requests_b[0].parts[0])
 
     @pytest.mark.asyncio
     async def test_defaults_to_memory_stream(self):
@@ -583,7 +586,8 @@ class TestVariablesPropagation:
         def read_var(secret: Annotated[str, Variable("secret")], ctx: Context) -> str:
             """Read a variable from context."""
             mock(secret)
-            return ctx.variables["secret"]
+            from_context: str = ctx.variables["secret"]
+            return from_context
 
         worker_config = TestConfig(
             ToolCallEvent(name="read_var", arguments="{}"),
@@ -739,12 +743,12 @@ class TestSubtaskInheritance:
             return await original(agent, *args, **kwargs)
 
         run_task_mod.run_task = capturing_run_task
-        actor_mod._run_task = capturing_run_task
+        actor_mod._run_task = capturing_run_task  # type: ignore[attr-defined]  # patches the agent's private alias of run_task, which is how the spawned subtask is observed
         try:
             await parent.ask("go", stream=MemoryStream())
         finally:
             run_task_mod.run_task = original
-            actor_mod._run_task = original
+            actor_mod._run_task = original  # type: ignore[attr-defined]  # restores the private alias patched above
 
         assert captured, "subtask must have been spawned"
         names = _tool_names(captured[0].tools)
@@ -892,14 +896,14 @@ class TestSubtaskNoRecursion:
         # Monkey-patch both bindings: ``run_task_mod.run_task`` is the import
         # site; ``actor_mod._run_task`` is the ``agent.py`` reference.
         run_task_mod.run_task = capturing_run_task
-        actor_mod._run_task = capturing_run_task
+        actor_mod._run_task = capturing_run_task  # type: ignore[attr-defined]  # patches the agent's private alias of run_task, which is how the spawned subtask is observed
 
         try:
             ctx = _make_parent_context()
             await parent._spawn_subtask("anything", ctx)
         finally:
             run_task_mod.run_task = original
-            actor_mod._run_task = original
+            actor_mod._run_task = original  # type: ignore[attr-defined]  # restores the private alias patched above
 
         assert captured, "subtask must have run"
         child = captured[0]
@@ -1082,7 +1086,8 @@ def test_run_subtask_description_advertises_parallel_invocation() -> None:
     """
     agent = Agent("any", tasks=TaskConfig())
     [toolkit] = agent._additional_tools
-    [run_subtask, run_subtasks] = toolkit.tools
+    assert isinstance(toolkit, Toolkit)
+    [run_subtask, run_subtasks] = map(function_tool, toolkit.tools)
 
     desc = run_subtask.schema.function.description
     assert "parallel" in desc.lower()
@@ -1785,9 +1790,11 @@ class TestAsToolStreamArgument:
         researcher = Agent("researcher", config=researcher_config)
 
         with pytest.raises(TypeError, match="must be a Stream instance"):
+            # A value outside the declared type: the runtime refusal is what is under test.
             researcher.as_tool(description="Research", stream=42)  # type: ignore[arg-type]
 
         with pytest.raises(TypeError, match="must be a Stream instance"):
+            # A value outside the declared type: the runtime refusal is what is under test.
             researcher.as_tool(description="Research", stream="not a stream")  # type: ignore[arg-type]
 
     def test_stream_none_keeps_default_behaviour(self):
@@ -1805,6 +1812,7 @@ class TestAsToolStreamArgument:
         researcher = Agent("researcher", config=TestConfig(ModelResponse(ModelMessage("..."))))
 
         with pytest.raises(TypeError, match="not an instance"):
+            # A `Stream` class where an instance or factory belongs: the refusal is what is under test.
             researcher.as_tool(description="Research", stream=MemoryStream)  # type: ignore[arg-type]
 
     def test_non_stream_factory_class_is_still_accepted(self):
@@ -1815,6 +1823,7 @@ class TestAsToolStreamArgument:
             def __init__(self, agent, ctx) -> None:
                 self.stream = MemoryStream()
 
+        # A non-stream class is what is under test; the checker types a class by its instances, not streams.
         assert researcher.as_tool(description="Research", stream=MakeStream) is not None  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
@@ -1911,7 +1920,7 @@ class TestBackgroundToolStreamArgument:
         # ``background_agent_tool`` runs the subagent fire-and-forget via
         # ``spawn_background``, so ``coordinator.ask`` can return before the
         # subagent's ModelResponse lands in the stream. Poll until it arrives.
-        async def _events_with_response() -> list:
+        async def _events_with_response() -> list[BaseEvent]:
             for _ in range(100):
                 events = list(await sub_stream.history.get_events())
                 if any(isinstance(e, ModelResponse) for e in events):
@@ -1927,9 +1936,11 @@ class TestBackgroundToolStreamArgument:
         researcher = Agent("researcher", config=TestConfig(ModelResponse(ModelMessage("..."))))
 
         with pytest.raises(TypeError, match="must be a Stream instance"):
+            # A value outside the declared type: the runtime refusal is what is under test.
             background_agent_tool(researcher, description="bg", stream=42)  # type: ignore[arg-type]
 
         with pytest.raises(TypeError, match="not an instance"):
+            # A `Stream` class where an instance or factory belongs: the refusal is what is under test.
             background_agent_tool(researcher, description="bg", stream=MemoryStream)  # type: ignore[arg-type]
 
     def test_stream_factory_and_none_still_accepted(self):

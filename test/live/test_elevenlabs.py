@@ -5,12 +5,14 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import ExitStack
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from dirty_equals import IsPartialDict
 
 pytest.importorskip("elevenlabs")
+
+from elevenlabs.client import AsyncElevenLabs
 
 from ag2 import Agent, MemoryStream, events, testing
 from ag2.context import ConversationContext
@@ -71,6 +73,12 @@ class FakeClient:
         self.speech_to_text = FakeSpeechToText(transcript or Transcript("hello there"))
 
 
+def _sdk(client: FakeClient) -> AsyncElevenLabs:
+    # The fake stands in for the two sub-clients ag2 reads off the SDK client; the SDK's own
+    # are concrete classes over an HTTP wrapper, so the stand-in is structural, not a subclass.
+    return cast("AsyncElevenLabs", client)
+
+
 @pytest.fixture
 def client() -> FakeClient:
     return FakeClient([b"one", b"two", b"three"])
@@ -78,7 +86,7 @@ def client() -> FakeClient:
 
 class TestTTSConfig:
     async def test_synthesize_buffers_the_non_streaming_endpoint(self, client: FakeClient) -> None:
-        config = ElevenLabsTTSConfig(client=client)
+        config = ElevenLabsTTSConfig(client=_sdk(client))
 
         assert await config.synthesize("hello there") == b"onetwothree"
         assert client.text_to_speech.convert_calls == [
@@ -92,7 +100,7 @@ class TestTTSConfig:
         assert client.text_to_speech.stream_calls == []
 
     async def test_stream_yields_audio_before_the_full_response(self, client: FakeClient) -> None:
-        config = ElevenLabsStreamingTTSConfig(client=client)
+        config = ElevenLabsStreamingTTSConfig(client=_sdk(client))
 
         async for chunk in config.stream("hello there"):
             assert chunk == b"one"
@@ -110,7 +118,7 @@ class TestTTSConfig:
         assert client.text_to_speech.convert_calls == []
 
     async def test_streaming_config_can_still_buffer_a_complete_clip(self, client: FakeClient) -> None:
-        assert await ElevenLabsStreamingTTSConfig(client=client).synthesize("hello there") == b"onetwothree"
+        assert await ElevenLabsStreamingTTSConfig(client=_sdk(client)).synthesize("hello there") == b"onetwothree"
 
 
 class TestStreamingViaTTSObserver:
@@ -118,7 +126,7 @@ class TestStreamingViaTTSObserver:
         stream = MemoryStream()
         audio: list[bytes] = []
         context = ConversationContext(stream=stream)
-        observer = TTSObserver(ElevenLabsStreamingTTSConfig(client=client))
+        observer = TTSObserver(ElevenLabsStreamingTTSConfig(client=_sdk(client)))
 
         async def collect(event: events.SynthesizedAudioEvent) -> None:
             audio.append(event.content)
@@ -143,7 +151,7 @@ class TestSTTConfig:
             seen.append(event)
 
         stream.where(events.TranscriptionCompletedEvent).subscribe(collect)
-        text = await ElevenLabsTranscriber(client=client).transcribe(VOICE, ConversationContext(stream=stream))
+        text = await ElevenLabsTranscriber(client=_sdk(client)).transcribe(VOICE, ConversationContext(stream=stream))
         await asyncio.sleep(0.01)
 
         assert text == "hello there"
@@ -154,7 +162,7 @@ class TestSTTConfig:
         assert "language_code" not in call
 
     async def test_forwards_explicit_scribe_options(self, client: FakeClient) -> None:
-        await ElevenLabsTranscriber("scribe_v2", language_code="fr", diarize=True, client=client).transcribe(
+        await ElevenLabsTranscriber("scribe_v2", language_code="fr", diarize=True, client=_sdk(client)).transcribe(
             VOICE,
             ConversationContext(stream=MemoryStream()),
         )
@@ -165,14 +173,14 @@ class TestSTTConfig:
 
     async def test_rejects_responses_without_transcript_text(self) -> None:
         with pytest.raises(TypeError, match="no transcript text"):
-            await ElevenLabsTranscriber(client=FakeClient([], transcript=object())).transcribe(
+            await ElevenLabsTranscriber(client=_sdk(FakeClient([], transcript=object()))).transcribe(
                 VOICE,
                 ConversationContext(stream=MemoryStream()),
             )
 
     async def test_pipes_the_transcript_into_an_agent(self, client: FakeClient) -> None:
         tracking = testing.TrackingConfig(testing.TestConfig("Hi!"))
-        reply = await ElevenLabsTranscriber(client=client).pipe(Agent("assistant", config=tracking)).ask(VOICE)
+        reply = await ElevenLabsTranscriber(client=_sdk(client)).pipe(Agent("assistant", config=tracking)).ask(VOICE)
 
         assert reply.body == "Hi!"
         assert tracking.mock.call_args.args[0].parts[0].content == "hello there"

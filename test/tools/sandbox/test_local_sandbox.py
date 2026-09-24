@@ -25,6 +25,7 @@ class TestLocalSandboxExec:
     async def test_legacy_shell_kwarg_rejected(self) -> None:
         sandbox = LocalSandbox()
         with pytest.raises(TypeError):
+            # A keyword `exec` no longer takes: the runtime refusal is what is under test.
             await sandbox.exec(["echo", "x"], shell=True)  # type: ignore[call-arg]
 
     async def test_workdir_is_used_as_cwd(self, tmp_path: Path) -> None:

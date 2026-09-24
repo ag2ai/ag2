@@ -23,7 +23,10 @@ import pytest
 
 pytest.importorskip("opentelemetry.sdk")
 
+from typing import Any
+
 from ag2 import Agent, tool
+from ag2.config import ModelConfig
 from ag2.eval import (
     BudgetThresholds,
     Suite,
@@ -49,7 +52,7 @@ async def get_weather(city: str) -> str:
     return f"Sunny, 72F in {city}"
 
 
-def _build_weather_agent(*, config: object = None) -> Agent:
+def _build_weather_agent(*, config: ModelConfig | None = None) -> Agent:
     return Agent(
         "weather",
         prompt=(
@@ -106,7 +109,7 @@ def _cassette(city: str) -> TestConfig:
     )
 
 
-_CASSETTES = {
+_CASSETTES: dict[str, ModelConfig] = {
     "weather-001": _cassette("Melbourne"),
     "weather-002": _cassette("Tokyo"),
     "weather-003": _cassette("Paris"),
@@ -161,7 +164,7 @@ async def test_smoke_weather_end_to_end(tmp_path: Path) -> None:
     assert data["aggregates"]["pass_rate"]["tool_called[get_weather]"] == 1.0
 
 
-def _assert_schema_0_2(data: dict) -> None:
+def _assert_schema_0_2(data: dict[str, Any]) -> None:
     """Verify the schema-0.2 top-level shape by key presence + types.
 
     Programmatic JSON-schema validation is deferred; for now we check

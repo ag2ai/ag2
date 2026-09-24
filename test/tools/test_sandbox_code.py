@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from ag2 import Agent, MemoryStream
+from ag2 import Agent, Context, MemoryStream
 from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from ag2.testing import TestConfig
 from ag2.tools import SandboxCodeTool
@@ -54,6 +54,7 @@ def _config(code: str, language: str = "python", final_reply: str = "done") -> T
 class TestSandboxCodeToolConstruction:
     def test_environment_is_required(self) -> None:
         with pytest.raises(TypeError, match="environment"):
+            # The missing argument is what is under test.
             SandboxCodeTool()  # type: ignore[call-arg]
 
     def test_environment_preserved(self) -> None:
@@ -62,10 +63,10 @@ class TestSandboxCodeToolConstruction:
         assert sandbox.environment is env
 
     @pytest.mark.asyncio
-    async def test_supported_languages_in_description(self) -> None:
+    async def test_supported_languages_in_description(self, context: Context) -> None:
         env = FakeEnv(languages=("python", "bash"))
         sandbox = SandboxCodeTool(env)
-        [schema] = await sandbox.schemas(None)  # type: ignore[arg-type]
+        [schema] = await sandbox.schemas(context)
         assert "python" in schema.function.description
         assert "bash" in schema.function.description
 

@@ -21,12 +21,13 @@ from ag2.tools.search.perplexity import (
     PerplexitySearchResult,
     PerplexitySearchToolkit,
 )
+from test._helpers import function_schemas
 
 PERPLEXITY_BASE_URL = "https://api.perplexity.ai"
 
 
 def _tool_call_config(
-    arguments: dict,
+    arguments: dict[str, Any],
     *,
     tool_name: str,
     final_reply: str = "done",
@@ -73,7 +74,7 @@ def _chat_response(
     return body
 
 
-SAMPLE_SEARCH_RESULTS = [
+SAMPLE_SEARCH_RESULTS: list[dict[str, Any]] = [
     {
         "title": "AG2 Framework",
         "url": "https://ag2.ai",
@@ -94,7 +95,7 @@ class TestSchema:
     async def test_default_schemas(self, context: Context) -> None:
         toolkit = PerplexitySearchToolkit(api_key="test")
 
-        schemas = list(await toolkit.schemas(context))
+        schemas = function_schemas(await toolkit.schemas(context))
 
         names = [s.function.name for s in schemas]
         assert names == ["perplexity_search", "perplexity_answer"]
@@ -102,7 +103,7 @@ class TestSchema:
     async def test_search_schema_has_query_param(self, context: Context) -> None:
         toolkit = PerplexitySearchToolkit(api_key="test")
 
-        schemas = list(await toolkit.schemas(context))
+        schemas = function_schemas(await toolkit.schemas(context))
         search_schema = next(s for s in schemas if s.function.name == "perplexity_search")
 
         assert search_schema.function.parameters == IsPartialDict({
@@ -113,7 +114,7 @@ class TestSchema:
     async def test_answer_schema_has_query_param(self, context: Context) -> None:
         toolkit = PerplexitySearchToolkit(api_key="test")
 
-        schemas = list(await toolkit.schemas(context))
+        schemas = function_schemas(await toolkit.schemas(context))
         answer_schema = next(s for s in schemas if s.function.name == "perplexity_answer")
 
         assert answer_schema.function.parameters == IsPartialDict({
@@ -125,7 +126,7 @@ class TestSchema:
         toolkit = PerplexitySearchToolkit(api_key="test")
         custom = toolkit.search(name="web_search", description="Custom search.")
 
-        [schema] = list(await custom.schemas(context))
+        [schema] = function_schemas(await custom.schemas(context))
 
         assert schema.function.name == "web_search"
         assert schema.function.description == "Custom search."
@@ -134,7 +135,7 @@ class TestSchema:
         toolkit = PerplexitySearchToolkit(api_key="test")
         custom = toolkit.answer(name="ask_perplexity", description="Custom answer.")
 
-        [schema] = list(await custom.schemas(context))
+        [schema] = function_schemas(await custom.schemas(context))
 
         assert schema.function.name == "ask_perplexity"
         assert schema.function.description == "Custom answer."
