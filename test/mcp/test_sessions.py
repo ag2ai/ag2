@@ -256,3 +256,50 @@ def test_session_config_defaults() -> None:
     assert cfg.max_sessions == 1024
     assert cfg.ttl is None
     assert cfg.storage is None
+
+
+class TestEvictionSkipsActiveTurns:
+    @pytest.mark.asyncio
+    async def test_ttl_eviction_skips_session_with_turn_in_flight(self) -> None:
+        from ag2.context import ConversationContext
+        from ag2.events import ModelRequest, TextInput
+
+        t = {"now": 1000.0}
+        store = SessionStore(max_sessions=1024, ttl=100.0, clock=lambda: t["now"])
+        evicted: list[str] = []
+        store.on_evict = evicted.append
+
+        async with store.session("sess-A") as convo:
+            ctx = ConversationContext(stream=convo.stream)
+            await convo.stream.send(ModelRequest(TextInput("hello")), ctx)
+            t["now"] += 100.01  # the turn is slower than the idle TTL
+
+            # another client's request runs store maintenance
+            async with store.fresh():
+                pass
+
+            events = list(await convo.stream.history.get_events())
+            assert len(events) == 1, "mid-turn history was dropped while the turn lock was held"
+            assert evicted == []
+
+    @pytest.mark.asyncio
+    async def test_overflow_eviction_skips_session_with_turn_in_flight(self) -> None:
+        from ag2.context import ConversationContext
+        from ag2.events import ModelRequest, TextInput
+
+        store = SessionStore(max_sessions=1)
+        evicted: list[str] = []
+        store.on_evict = evicted.append
+
+        async with store.session("sess-A") as convo:
+            ctx = ConversationContext(stream=convo.stream)
+            await convo.stream.send(ModelRequest(TextInput("hello")), ctx)
+            # force LRU overflow while sess-A's turn is still in flight
+            async with store.fresh():
+                pass
+
+            events = list(await convo.stream.history.get_events())
+            assert len(events) == 1, "active conversation was evicted by LRU overflow"
+            # the idle filler session is the one that had to go
+            assert len(evicted) == 1
+            assert evicted != [convo.handle]
