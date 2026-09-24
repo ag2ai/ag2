@@ -224,6 +224,18 @@ class TestImageBinaryInput:
         with pytest.raises(UnsupportedInputError, match="cache_control.*anthropic"):
             convert_messages([ModelRequest([image])], SerializerCls)
 
+    @pytest.mark.parametrize("ttl", ["24h", ["5m"], {"value": "5m"}])
+    def test_rejects_cache_control_ttl_the_api_refuses(self, ttl: object) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="image/png",
+            vendor_metadata={"cache_control": {"type": "ephemeral", "ttl": ttl}},
+            kind=BinaryType.IMAGE,
+        )
+
+        with pytest.raises(UnsupportedInputError, match="cache_control.*anthropic"):
+            convert_messages([ModelRequest([image])], SerializerCls)
+
     def test_cache_control_ttl_passes_through(self) -> None:
         image = BinaryInput(
             data=self.SAMPLE_BYTES,
@@ -1151,6 +1163,14 @@ class TestToolUseVendorMetadata:
                 "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok", "toolset_name": "browser"}],
             },
         ]
+
+    def test_empty_toolset_name_is_read_the_same_on_both_sides(self) -> None:
+        events = [self._response(toolset_name=""), _matching_tool_result()]
+
+        use, result = convert_messages(events, SerializerCls)
+
+        assert use["content"] == [IsPartialDict({"type": "tool_use", "toolset_name": ""})]
+        assert result["content"] == [IsPartialDict({"type": "tool_result", "toolset_name": ""})]
 
     def test_caller_the_sdk_does_not_model_raises(self) -> None:
         events = [self._response(caller={"type": "somebody_else"}), _matching_tool_result()]

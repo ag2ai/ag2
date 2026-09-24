@@ -6,7 +6,7 @@ import base64
 import json
 import logging
 from collections.abc import Iterable, Sequence
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, Literal, TypeAlias, TypeGuard, cast, get_args
 
 from anthropic.types import (
     CacheControlEphemeralParam,
@@ -56,6 +56,7 @@ from ag2.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
+    ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
     ToolResultsEvent,
@@ -492,17 +493,20 @@ def merge_sampling_into_extra_body(
 
 _IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp"})
 
-_IMAGE_MEDIA_TYPES: dict[str, Literal["image/jpeg", "image/png", "image/gif", "image/webp"]] = {
-    "image/jpeg": "image/jpeg",
-    "image/png": "image/png",
-    "image/gif": "image/gif",
-    "image/webp": "image/webp",
-}
+_ImageMediaType: TypeAlias = Literal["image/jpeg", "image/png", "image/gif", "image/webp"]
 """The only image media types the API accepts inline; anything else is answered with a 400."""
 
-_CACHE_TTLS: dict[object, Literal["5m", "1h"]] = {"5m": "5m", "1h": "1h"}
+_CacheTtl: TypeAlias = Literal["5m", "1h"]
 
 _Role: TypeAlias = Literal["user", "assistant"]
+
+
+def _is_image_media_type(media_type: str) -> TypeGuard[_ImageMediaType]:
+    return media_type in get_args(_ImageMediaType)
+
+
+def _is_cache_ttl(value: str) -> TypeGuard[_CacheTtl]:
+    return value in get_args(_CacheTtl)
 
 
 def _file_id_block(file_id: str, filename: str | None) -> ImageBlockParam | DocumentBlockParam:
@@ -525,8 +529,9 @@ def _url_block(inp: UrlInput) -> ImageBlockParam | DocumentBlockParam:
 
 
 def _image_block(inp: BinaryInput) -> ImageBlockParam:
-    if (media_type := _IMAGE_MEDIA_TYPES.get(inp.media_type)) is None:
-        raise UnsupportedInputError(f"BinaryInput(image, media_type={inp.media_type})", "anthropic")
+    media_type = inp.media_type
+    if not _is_image_media_type(media_type):
+        raise UnsupportedInputError(f"BinaryInput(image, media_type={media_type})", "anthropic")
     b64 = base64.b64encode(inp.data).decode()
     return {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}}
 
@@ -556,7 +561,7 @@ def _cache_control(inp: BinaryInput) -> CacheControlEphemeralParam | None:
         cache_control: CacheControlEphemeralParam = {"type": "ephemeral"}
         if "ttl" not in value:
             return cache_control
-        if (ttl := _CACHE_TTLS.get(value["ttl"])) is not None:
+        if isinstance(ttl := value["ttl"], str) and _is_cache_ttl(ttl):
             cache_control["ttl"] = ttl
             return cache_control
     raise UnsupportedInputError(f"BinaryInput(cache_control={value!r})", "anthropic")
@@ -577,8 +582,11 @@ def _citations(inp: BinaryInput) -> CitationsConfigParam | None:
     raise UnsupportedInputError(f"BinaryInput(citations={value!r})", "anthropic")
 
 
-def _caller(value: object) -> Caller:
-    """A ``caller`` recorded on a tool call, rebuilt as one of the kinds the SDK models."""
+def _caller(call: ToolCallEvent) -> Caller | None:
+    """The ``caller`` recorded on a tool call, rebuilt as one of the kinds the SDK models."""
+    value = call.vendor_metadata.get("caller")
+    if value is None:
+        return None
     if isinstance(value, dict):
         kind = value.get("type")
         if kind == "direct" and set(value) == {"type"}:
@@ -594,16 +602,10 @@ def _caller(value: object) -> Caller:
     raise UnsupportedInputError(f"ToolCallEvent(caller={value!r})", "anthropic")
 
 
-def _toolset_name(value: object) -> str:
-    if isinstance(value, str):
-        return value
-    raise UnsupportedInputError(f"ToolCallEvent(toolset_name={value!r})", "anthropic")
-
-
 def _tool_result_block(
     result: "ToolResultEvent",
     serializer: SerializerProto,
-    toolset_name: object = None,
+    toolset_name: str | None = None,
 ) -> ToolResultBlockParam:
     """Render one tool result as an Anthropic ``tool_result`` block.
 
@@ -641,7 +643,7 @@ def _tool_result_block(
     if toolset_name is not None:
         # The API refuses a tool_result answering a member tool_use that does not
         # repeat the paired tool_use's toolset_name.
-        block["toolset_name"] = _toolset_name(toolset_name)
+        block["toolset_name"] = toolset_name
     return block
 
 
@@ -675,15 +677,10 @@ def convert_messages(
     # drop orphaned tool_result blocks whose matching tool_use was
     # trimmed by a reduction policy (SlidingWindow, TokenBudget, etc.).
     valid_tool_ids: set[str] = set()
-    # A member tool_use's toolset_name has to be repeated on its tool_result.
-    # Checked only where it is echoed, so an orphan tool_use is still dropped rather than refused.
-    toolset_names: dict[str, object] = {}
     for message in event_list:
         if isinstance(message, ModelResponse):
             for call in message.tool_calls.calls:
                 valid_tool_ids.add(call.id)
-                if name := call.vendor_metadata.get("toolset_name"):
-                    toolset_names[call.id] = name
 
     # Collect all parent_ids referenced by ToolResultsEvent blocks so we
     # can also drop orphaned tool_use blocks — the mirror case of the
@@ -711,6 +708,18 @@ def convert_messages(
             parent = getattr(message, "parent_id", None)
             if parent:
                 resolved_tool_ids.add(parent)
+
+    # A member tool_use's toolset_name has to be repeated on its tool_result. Read only for
+    # the tool_use blocks that are emitted, so an orphan is still dropped rather than refused.
+    toolset_names: dict[str, str] = {}
+    for message in event_list:
+        if isinstance(message, ModelResponse):
+            for call in message.tool_calls.calls:
+                if call.id not in resolved_tool_ids or (name := call.vendor_metadata.get("toolset_name")) is None:
+                    continue
+                if not isinstance(name, str):
+                    raise UnsupportedInputError(f"ToolCallEvent(toolset_name={name!r})", "anthropic")
+                toolset_names[call.id] = name
 
     # Content is gathered per turn and each message is built once at the end: the SDK
     # declares `content` as an `Iterable`, so a built message cannot be appended to.
@@ -755,10 +764,10 @@ def convert_messages(
                     "name": call.name,
                     "input": json.loads(call.arguments or "{}"),
                 }
-                if (caller := call.vendor_metadata.get("caller")) is not None:
-                    use_block["caller"] = _caller(caller)
-                if (toolset_name := call.vendor_metadata.get("toolset_name")) is not None:
-                    use_block["toolset_name"] = _toolset_name(toolset_name)
+                if (caller := _caller(call)) is not None:
+                    use_block["caller"] = caller
+                if (toolset_name := toolset_names.get(call.id)) is not None:
+                    use_block["toolset_name"] = toolset_name
                 content.append(use_block)
             if content:
                 turns.append(("assistant", content))
