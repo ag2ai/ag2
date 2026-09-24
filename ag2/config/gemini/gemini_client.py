@@ -121,7 +121,7 @@ class GeminiClient(LLMClient):
         context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
         # `list` is invariant, so the SDK's wider element type needs a list of its own; the

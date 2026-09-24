@@ -101,7 +101,7 @@ def _kind_label(kind: BinaryType | str) -> str:
     return kind.value if isinstance(kind, BinaryType) else str(kind)
 
 
-def response_proto_to_schema(response: ResponseProto | None) -> ResponseFormatJSONSchema | None:
+def response_proto_to_schema(response: ResponseProto[Any] | None) -> ResponseFormatJSONSchema | None:
     """Convert a ResponseProto to Chat Completions response_format."""
     if not response or not response.json_schema:
         return None
@@ -144,7 +144,7 @@ def _strictify_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def response_proto_to_text_config(
-    response: ResponseProto | None,
+    response: ResponseProto[Any] | None,
 ) -> ResponseTextConfigParam | None:
     """Convert a ResponseProto to Responses API text config."""
     if not response or not response.json_schema:

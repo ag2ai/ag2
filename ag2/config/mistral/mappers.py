@@ -98,7 +98,7 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def response_proto_to_format(response: ResponseProto | None) -> ResponseFormat | None:
+def response_proto_to_format(response: ResponseProto[Any] | None) -> ResponseFormat | None:
     """Convert an AG2 ``ResponseProto`` to Mistral's ``ResponseFormat``.
 
     Built from the SDK model, not a dict: the schema body is ``schema_definition``,

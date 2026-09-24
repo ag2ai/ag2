@@ -41,7 +41,7 @@ _SCHEMA_INSTRUCTION = (
 )
 
 
-def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] | None:
+def response_proto_to_format(response: ResponseProto[Any] | None) -> dict[str, Any] | None:
     """Map a response schema to Z.AI's ``response_format``.
 
     Z.AI only supports JSON mode via (``{"type": "json_object"}``); it does not
@@ -53,7 +53,7 @@ def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] |
     return {"type": "json_object"}
 
 
-def schema_instruction(response: ResponseProto | None) -> str | None:
+def schema_instruction(response: ResponseProto[Any] | None) -> str | None:
     """System-prompt text describing the JSON schema for Z.AI's JSON mode.
 
     Returns ``None`` when the schema already supplies its own prompt (e.g.

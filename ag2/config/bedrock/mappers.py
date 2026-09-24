@@ -99,7 +99,7 @@ def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any
     return schema
 
 
-def response_proto_to_output_config(response: ResponseProto | None) -> dict[str, Any] | None:
+def response_proto_to_output_config(response: ResponseProto[Any] | None) -> dict[str, Any] | None:
     """Convert a ResponseProto to Converse outputConfig (native structured output).
 
     Converse expects the JSON schema as a serialized string inside

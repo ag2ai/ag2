@@ -177,7 +177,7 @@ class OpenAIResponsesClient(LLMClient):
         context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: "SerializerProto",
     ) -> ModelResponse:
         if self._create_options is None:

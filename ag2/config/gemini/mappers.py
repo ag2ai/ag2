@@ -39,7 +39,7 @@ from ag2.tools.schemas import ToolSchema
 from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
 
 
-def response_proto_to_config(response: ResponseProto | None) -> dict[str, Any]:
+def response_proto_to_config(response: ResponseProto[Any] | None) -> dict[str, Any]:
     """Convert a ResponseProto to Gemini GenerateContentConfig kwargs."""
     if not response or not response.json_schema:
         return {}
