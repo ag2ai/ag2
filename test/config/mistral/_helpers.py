@@ -7,19 +7,29 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
+from mistralai.client.models import UsageInfo
+
 
 def make_usage(
     prompt_tokens: int | None = None,
     completion_tokens: int | None = None,
     total_tokens: int | None = None,
     cached_tokens: int | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        total_tokens=total_tokens,
-        prompt_tokens_details={"cached_tokens": cached_tokens} if cached_tokens is not None else None,
-    )
+) -> UsageInfo:
+    """The SDK's own model, so a renamed field fails here rather than passing silently.
+
+    ``prompt_tokens_details`` is not a declared field but a pydantic extra, so it is
+    carried in the validated payload the way a real response body carries it — omitted
+    entirely when there is none, which is what leaves it absent from the model.
+    """
+    payload: dict[str, Any] = {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+    }
+    if cached_tokens is not None:
+        payload["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+    return UsageInfo.model_validate(payload)
 
 
 def make_tool_call(
