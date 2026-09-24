@@ -228,13 +228,28 @@ class SessionStore:
     async def _evict_expired(self, now: float) -> None:
         if self._ttl is None:
             return
-        expired = [sid for sid, e in self._entries.items() if now - e.last > self._ttl]
+        expired = [
+            sid
+            for sid, e in self._entries.items()
+            # Skip sessions with a turn in flight: `last` is only refreshed at
+            # turn start, so a turn slower than the TTL would otherwise have
+            # its history dropped while it is still running.
+            if now - e.last > self._ttl and not e.turn_lock.locked()
+        ]
         for sid in expired:
             await self._drop(sid)
 
     async def _evict_overflow(self) -> None:
         while len(self._entries) > self._max:
-            await self._drop(next(iter(self._entries)))
+            # Never evict a session with a turn in flight; drop the oldest idle
+            # entry instead.
+            victim = next(
+                (sid for sid, e in self._entries.items() if not e.turn_lock.locked()),
+                None,
+            )
+            if victim is None:
+                break
+            await self._drop(victim)
 
     async def _drop(self, key: str) -> None:
         entry = self._entries.pop(key)
