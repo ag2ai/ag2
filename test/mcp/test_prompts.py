@@ -153,6 +153,22 @@ class TestPromptArguments:
         render.assert_called_once_with({})
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("connect_client", [connect, connect_modern], ids=["handshake", "modern"])
+async def test_unknown_prompt_fails_with_invalid_params(
+    connect_client: Callable[..., AbstractAsyncContextManager[ClientSession]],
+) -> None:
+    render = Mock(return_value="rendered")
+    server = MCPServer(greeter(), prompts=[Prompt(name="review", render=render)])
+
+    async with connect_client(server, raise_exceptions=False) as session:
+        with pytest.raises(MCPError) as caught:
+            await session.get_prompt("missing")
+
+    assert caught.value.error == ErrorData(code=INVALID_PARAMS, message="No prompt named 'missing'.")
+    render.assert_not_called()
+
+
 def test_the_prompt_capability_is_advertised_only_when_prompts_are_present() -> None:
     agent = greeter()
     opts = NotificationOptions()
