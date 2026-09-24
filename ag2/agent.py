@@ -478,7 +478,8 @@ class AgentRun(Generic[TResult, TAgent]):
         consumed by that turn; one enqueued before ``result()`` merges into the
         first model call; one enqueued after the turn completes waits for the
         next turn on this stream. Safe to call from a stream subscriber (inline
-        during the drive) or a concurrent task — it only appends.
+        during the drive) or a concurrent task — it appends at once and
+        announces the message with ``MessageEnqueued`` from a background task.
         """
         self.__context.enqueue(*content)
 
