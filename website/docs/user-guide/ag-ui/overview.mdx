@@ -1,0 +1,398 @@
+---
+sidebarTitle: AG-UI
+title: "AG-UI (Agent-User Interaction) Integration"
+description: "Expose AG2 agents to AG-UI-compatible frontends using AGUIStream."
+---
+
+## Overview
+
+The Agent-User Interaction (AG-UI) protocol standardizes how frontend applications communicate with agents.
+In AG2, `ag2.ag_ui.AGUIStream` bridges an `Agent` to AG-UI event streams.
+
+This solves common integration problems:
+
+- Streaming agent output to UI clients
+- Emitting tool-call lifecycle events
+- Synchronizing shared state snapshots
+- Supporting human-in-the-loop checkpoints through frontend actions and input-required flows
+
+For protocol background, see [AG-UI Protocol introduction](https://docs.ag-ui.com/introduction){.external-link target="_blank"}.
+
+## When to use AG-UI vs direct integration
+
+| Approach | Use it when | Trade-offs |
+| --- | --- | --- |
+| AG-UI integration (`AGUIStream`) | You need streaming UI, tool rendering, shared state sync, and a protocol-compatible client ecosystem | Adds protocol event semantics you need to expose from your endpoint |
+| Direct integration (custom REST/WebSocket contract) | You only need a narrow, app-specific API and will own protocol design end-to-end | You must define and maintain your own streaming/tool/state contract |
+
+Use AG-UI when you want a reusable UI contract across clients and frameworks.
+
+## Supported capabilities
+
+Verified AG-UI features are supported in AG2:
+
+* [x] Streaming text events (`TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END`, `TEXT_MESSAGE_CHUNK`)
+* [x] [Backend tool lifecycle events](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools){.external-link target="_blank"} (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_RESULT`, `TOOL_CALL_END`)
+* [x] [Frontend-tool dispatch](https://docs.copilotkit.ai/ag2/generative-ui/frontend-tools){.external-link target="_blank"} (`TOOL_CALL_CHUNK` for client tools in `RunAgentInput.tools`)
+* [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state){.external-link target="_blank"} (`STATE_SNAPSHOT`) from context and agent state
+* [x] [Human input checkpoints](https://docs.copilotkit.ai/ag2/human-in-the-loop){.external-link target="_blank"} (`input_required` surfaced as user-visible message events)
+* [x] Run interrupts: an agent pauses on a question and a later run on the same thread answers it (`RUN_FINISHED` with an `interrupt` outcome, resumed through `resume`) — see [Asking the human a question](#asking-the-human-a-question)
+* [x] Tool-call approval: a gated tool puts the call itself to the client before it runs, over the same interrupt lifecycle — see [Gating a tool call instead of asking a question](#gating-a-tool-call-instead-of-asking-a-question)
+
+## Installation
+
+Install AG2 with AG-UI support, plus the extra for the model provider your agent uses — `openai` in the examples below:
+
+```bash
+pip install "ag2[ag-ui,openai]"
+```
+
+## Basic server example
+
+Use the manual-dispatch pattern when you want full control over auth, logging, and middleware:
+
+```python title="run_ag_ui.py" linenums="1" hl_lines="14 17-25"
+from fastapi import FastAPI, Header
+from fastapi.responses import StreamingResponse
+
+from ag2 import Agent
+from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.config import OpenAIConfig
+
+agent = Agent(
+    name="support_bot",
+    prompt="You help users with billing questions.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+)
+
+stream = AGUIStream(agent)
+app = FastAPI()
+
+@app.post("/chat")
+async def run_agent(
+    message: RunAgentInput,
+    accept: str | None = Header(None),
+) -> StreamingResponse:
+    return StreamingResponse(
+        stream.dispatch(message, accept=accept),
+        media_type=accept or "text/event-stream",
+    )
+```
+
+Run it:
+
+```bash
+uvicorn run_ag_ui:app --reload --port 8000
+```
+
+!!! note "Simpler way"
+    If you want the endpoint without any logic of your own around it, `AGUIStream.build_asgi()` builds the whole thing — an ASGI endpoint class you add as a route:
+
+    ```python linenums="1" hl_lines="6-7"
+    from ag2.ag_ui import AGUIStream
+    from fastapi import FastAPI
+    from starlette.routing import Route
+
+    app = FastAPI()
+    stream = AGUIStream(agent)
+    app.routes.append(Route("/chat", stream.build_asgi()))
+    ```
+
+    Added as a route rather than mounted: `app.mount("/chat", ...)` serves the
+    endpoint at `/chat/` and answers `/chat` with a `307` redirect, which the
+    curl below — and many HTTP clients — will not follow on a `POST`.
+
+### Test the endpoint
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "thread_id": "thread-1",
+    "run_id": "run-1",
+    "messages": [{"id": "m1", "role": "user", "content": "Hello"}],
+    "state": {},
+    "context": [],
+    "tools": [],
+    "forwardedProps": null
+  }'
+```
+
+Example stream (truncated):
+
+```text
+data: {"type":"RUN_STARTED","threadId":"thread-1","runId":"run-1",...}
+data: {"type":"TEXT_MESSAGE_CHUNK","delta":"Hello! How can I help?",...}
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",...}
+```
+
+## Token usage
+
+Both run-terminating events carry the run's token usage, broken down per
+provider and model configuration:
+
+```text
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
+       "usage":[{"provider":"openai","model":"gpt-5","inputTokens":1284,
+                 "outputTokens":96,"totalTokens":1380,"cachedInputTokens":1024}]}
+```
+
+`RUN_ERROR` carries the same field, reporting what the run had spent before it
+failed, so a crashed run is not accounted for as free. (`RUN_ERROR` has no
+`threadId` / `runId` — the protocol defines neither for it; a client correlates
+the run from `RUN_STARTED` on the same event stream.)
+
+The figures cover every model call in the run — the whole tool loop, delegated
+sub-agents, history compaction and memory aggregation — and agree with
+`AgentReply.usage()` for the same run, because both read the same accounting
+events.
+
+An entry carries `inputTokens`, `outputTokens`, `totalTokens`, `reasoningTokens`
+and `cachedInputTokens`. Any of them may be missing — three properties are worth
+knowing before you sum them:
+
+- **A count the provider did not report is absent, not `0`.** `cachedInputTokens`
+  absent means "never measured"; `0` means the provider measured no cache hit.
+  The same holds for `reasoningTokens`, which most non-reasoning calls omit.
+- **`totalTokens` is never derived.** It appears only when every call behind an
+  entry supplied one, so a client is never handed a computed figure dressed up
+  as a measurement. Sum `inputTokens` and `outputTokens` yourself if you need a
+  figure regardless.
+- **Cache *writes* are not reported at all.** `cachedInputTokens` counts a cache
+  *read*. Tokens spent creating a cache entry have no field in the protocol, and
+  they are omitted rather than folded into a neighbouring count, because
+  providers disagree on whether cached tokens already sit in the prompt figure.
+  A cost model built on these entries alone under-counts a run that primed a
+  cache; read `AgentReply.usage()` server-side if you need that number.
+
+One entry is emitted per distinct provider/model pair, in order of first
+appearance in the run. A delegated sub-agent that used a single configuration is
+attributed to it; one that spanned several arrives with `provider` and `model`
+unset rather than mislabelled. A run that spent nothing omits `usage` entirely.
+
+The A2UI AG-UI transport (`A2UIServer(..., transport=AgUiTransport())`) reports
+the same field on the same two events, so what a client can show does not depend
+on which endpoint it connected to.
+
+## Asking the human a question
+
+An agent can stop mid-run and ask. When a tool calls `context.input(...)`, the
+question leaves as the outcome of the run that raised it, and the turn is held
+in the server — suspended exactly where it stopped — until a later run on the
+same thread answers it.
+
+```python title="ask.py"
+@agent.tool
+async def book_flight(context: Context, flight: str) -> str:
+    """Book a flight, once the traveller confirms it."""
+    answer = await context.input(f"Book {flight}? (yes/no)")
+    return "Booked." if answer.strip().lower() == "yes" else "Cancelled."
+```
+
+The exchange ends normally — not with an error — carrying the question:
+
+```text
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
+       "outcome":{"type":"interrupt","interrupts":[
+         {"id":"e2c1...","reason":"input_required","message":"Book LH441? (yes/no)",
+          "responseSchema":{"type":"string","title":"Answer"},
+          "expiresAt":"2026-01-01T12:15:00+00:00",
+          "metadata":{"ag2":{"proof":"g7Qk..."}}}]}}
+```
+
+The client answers with a **new run id on the same thread**, naming the
+interrupt in `resume`:
+
+```json
+{"threadId": "thread-1", "runId": "run-2", "messages": [],
+ "resume": [{"interruptId": "e2c1...", "status": "resolved", "payload": "yes",
+             "metadata": {"ag2": {"proof": "g7Qk..."}}}]}
+```
+
+`context.input` returns `"yes"` inside the tool, and the turn runs on to
+completion in that second exchange — `RUN_STARTED` for the resuming run, then
+whatever the agent does next. A client that has given up sends
+`"status": "cancelled"` instead; the turn ends and the run finishes with a
+success outcome, having delivered nothing.
+
+!!! warning "A paused tool call's lifecycle spans two runs"
+
+    The tool call that asked the question is still open when its run ends, so
+    its events are split across the two exchanges. The first emits
+    `TOOL_CALL_START` and `TOOL_CALL_ARGS`; the second emits `TOOL_CALL_RESULT`
+    and `TOOL_CALL_END`, under a **different `runId`**:
+
+    ```text
+    run-1:  RUN_STARTED → TOOL_CALL_START → TOOL_CALL_ARGS → RUN_FINISHED (interrupt)
+    run-2:  RUN_STARTED → TOOL_CALL_RESULT → TOOL_CALL_END → TEXT_MESSAGE_CHUNK → RUN_FINISHED
+    ```
+
+    Key open tool calls by `threadId`, not by `runId`. A client that drops that
+    state when a run finishes will see a `TOOL_CALL_RESULT` for a call it has no
+    record of starting, and has nothing to attach the result to.
+
+Two things must travel back untouched: the **interrupt id**, and the
+**`metadata` envelope**. The envelope carries proof that the answer comes from
+whoever the question was put to — an answer attributed to a human is the input an
+agent trusts most, and an interrupt id alone is a bare string in a request body.
+A resume without it is refused. Clients are required to echo an interrupt's
+metadata, so a compliant one already does this.
+
+Every refusal arrives as `RUN_ERROR` with a machine-readable `code`, never as a
+stream that simply stops:
+
+| `code` | What happened |
+| --- | --- |
+| `INTERRUPT_NOT_HELD` | Nothing is held for this thread: unknown id, already answered, or expired |
+| `INTERRUPT_NOT_OUTSTANDING` | Something is held, but it is not waiting on the interrupt this run names |
+| `INTERRUPT_NOT_PROVEN` | The envelope's proof is missing, malformed, or not the one issued |
+| `INTERRUPT_PAYLOAD_REFUSED` | The payload is not what the interrupt asked for |
+
+A refusal that is not the turn's own fault — a bad payload, an id it is not
+waiting on — leaves the held turn resumable by a legitimate answer, without
+extending its deadline.
+
+A runnable version of this exchange — server and client in one script — is in
+`examples/ag_ui/human_input.py`.
+
+### Gating a tool call instead of asking a question
+
+A tool wrapped in [`approval_required()`](/docs/user-guide/tools/approval_required)
+pauses the same way, over the same `resume`. But the client is being asked to
+approve a call rather than to type an answer, and it should not have to read the
+prose to tell the two apart — so the interrupt says which it is:
+
+| Field | A question (`context.input`) | A tool call awaiting approval |
+| --- | --- | --- |
+| `reason` | `input_required` | `tool_call` |
+| `toolCallId` | absent | the `toolCallId` of this run's `TOOL_CALL_START` |
+| `responseSchema` | `{"type": "string"}` | `{"type": ["string", "boolean"]}` |
+
+```text
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
+       "outcome":{"type":"interrupt","interrupts":[
+         {"id":"9236...","reason":"tool_call",
+          "message":"Agent wants to call the tool:\n`delete_account`, {\"user_id\": \"abc-123\"}\n...",
+          "toolCallId":"7880...",
+          "responseSchema":{"type":["string","boolean"],"title":"Approval"},
+          "expiresAt":"2026-01-01T12:15:00+00:00",
+          "metadata":{"ag2":{"proof":"g7Qk..."}}}]}}
+```
+
+Answer it with `true` or `false` — a client that drew a pair of buttons should
+not have to know which words this server accepts:
+
+```json
+{"threadId": "thread-1", "runId": "run-2", "messages": [],
+ "resume": [{"interruptId": "9236...", "status": "resolved", "payload": true,
+             "metadata": {"ag2": {"proof": "g7Qk..."}}}]}
+```
+
+`false` **refuses the call without failing the turn**: the model is handed the
+middleware's refusal as the tool's result and carries on, and the run still
+finishes with a success outcome. Because a gated call is a paused tool call, it
+splits across the two exchanges exactly as above — `toolCallId` names the
+`TOOL_CALL_START` the first exchange already emitted, so a client has something
+to attach the prompt to.
+
+### With a hook, nothing changes
+
+Supplying a human-input hook (`Agent(..., hitl_hook=...)`, or `hitl_hook=` on
+`dispatch`) keeps today's behaviour exactly: the question is answered in
+process, no interrupt is emitted, and the run finishes in one exchange. The
+interrupt path is what a run with *no* hook now does — where it used to fail
+with "nobody could be asked", it now asks the client.
+
+### Retention, and the deadline clients are shown
+
+How long a held turn survives, and how many may be held at once, is
+`Retention` — set where the transport is constructed, on both of them:
+
+```python
+from ag2.ag_ui import AGUIStream, Retention
+from ag2.a2ui import A2UIServer
+from ag2.a2ui.transports import AgUiTransport
+
+retention = Retention(ttl=900.0, max_held=128)  # the defaults
+
+stream = AGUIStream(agent, retention=retention)
+server = A2UIServer(agent, transport=AgUiTransport(retention=retention))
+```
+
+`ttl` is not an internal detail: it is what a client is shown as the interrupt's
+`expiresAt`, so changing it changes what clients are told. The advertised
+deadline is the **earlier** of `ttl` and the deadline implied by any `timeout=`
+passed to `context.input` — the protocol treats an absent deadline as a promise
+that the interrupt never expires, and clients reject late answers locally on the
+strength of it, so the figure on the wire is always the one that will in fact
+apply. Past it the turn is gone and its task cancelled; a `max_held` overflow
+cancels the oldest.
+
+That deadline is kept by the server's own clock, not by the next request to
+arrive: a turn nobody ever answers is released when it expires, on a process
+that has gone quiet as much as on a busy one.
+
+**Memory is proportional to retention.** A held turn is a suspended coroutine
+with its whole conversation history, not a record — `ttl` × arrival rate, capped
+by `max_held`, is roughly what a pausing server holds.
+
+### Deployment: a held turn lives in one process
+
+This is invisible on the wire — the two exchanges look the same either way — and
+it is the constraint that matters most when you deploy:
+
+- **Sticky routing is required.** A resume must reach the process holding the
+  turn. Route by `threadId`; behind a round-robin load balancer, resumes will
+  land on a process that knows nothing and be refused with
+  `INTERRUPT_NOT_HELD`.
+- **A restart drops every held turn.** After a deploy or a crash, a client
+  answering a question asked by the old process gets `RUN_ERROR` /
+  `INTERRUPT_NOT_HELD` — the same code as an expired one. Treat it as "ask
+  again", not as a bug.
+- **Close the stream on the way down.** `A2UIServer` does it for you (it runs
+  `AgUiTransport.aclose()` on ASGI shutdown). `AGUIStream` is not an app, so
+  nothing can hang a shutdown hook on it for you — call `await stream.aclose()`
+  from your own, or use it as an async context manager, so held turns are
+  cancelled rather than left running into the void.
+
+### Why a resume does not replay the run
+
+Because the call is suspended *inside your Python function*. `context.input`
+stopped mid-way through `book_flight`, with its local variables, its loop
+position and whatever it had already done still live. A message history cannot
+rebuild that: replaying the run would re-enter the tool from the top and redo
+whatever it did before it asked.
+
+That is also why held turns cannot be moved to Redis or a database and shared
+across processes: a suspended coroutine is not serialisable. A durable,
+cross-process version of this is a different feature — one where the agent's
+continuation is expressed as resumable state rather than as a paused
+function — not a setting on this one.
+
+## UI clients
+
+Any AG-UI client works with this endpoint.
+
+For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs because it provides:
+
+- Streaming chat components
+- Tool UI rendering hooks/components
+- Shared state patterns for interactive workflows
+
+Start from the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart).
+
+The same endpoint can also power a bot in Slack and other messaging platforms — see [Channels](/docs/user-guide/ag-ui/channels).
+
+## AG-UI Dojo
+
+For protocol-level testing and event inspection, use the AG2 Dojo profile:
+
+- [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat){.external-link target="_blank"}
+
+## Next steps
+
+1. Build the AG-UI endpoint from the minimal example above.
+2. Follow the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart) to connect a React/Next.js client.
+3. Validate runtime behavior with the [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat){.external-link target="_blank"}.
+4. Run the same endpoint as a bot in Slack and other messaging platforms with [Channels](/docs/user-guide/ag-ui/channels).
