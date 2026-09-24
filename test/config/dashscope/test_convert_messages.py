@@ -5,7 +5,7 @@
 import base64
 
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import ToolResult
 from ag2.compact import CompactionSummary
@@ -28,17 +28,17 @@ from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
 
 def test_audio_url_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="UrlInput.*dashscope"):
-        convert_messages([], [ModelRequest([AudioInput(url="https://example.com/audio.wav")])], SerializerCls)
+        convert_messages([], [ModelRequest([AudioInput(url="https://example.com/audio.wav")])], PydanticSerializer())
 
 
 def test_document_url_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="UrlInput.*dashscope"):
-        convert_messages([], [ModelRequest([DocumentInput(url="https://example.com/doc.pdf")])], SerializerCls)
+        convert_messages([], [ModelRequest([DocumentInput(url="https://example.com/doc.pdf")])], PydanticSerializer())
 
 
 def test_file_id_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="FileIdInput.*dashscope"):
-        convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc123")])], SerializerCls)
+        convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc123")])], PydanticSerializer())
 
 
 def test_non_image_binary_raises() -> None:
@@ -47,7 +47,7 @@ def test_non_image_binary_raises() -> None:
         convert_messages(
             [],
             [ModelRequest([BinaryInput(data=b"data", media_type="application/octet-stream")])],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
 
@@ -58,18 +58,18 @@ class TestQwenVLImage:
     PNG = b"\x89PNG\r\n"
 
     def test_text_only_stays_string(self) -> None:
-        result = convert_messages([], [ModelRequest([TextInput("hello")])], SerializerCls)
+        result = convert_messages([], [ModelRequest([TextInput("hello")])], PydanticSerializer())
 
         assert result == [{"role": "user", "content": "hello"}]
 
     def test_image_url(self) -> None:
-        result = convert_messages([], [ModelRequest([ImageInput(url=self.IMG_URL)])], SerializerCls)
+        result = convert_messages([], [ModelRequest([ImageInput(url=self.IMG_URL)])], PydanticSerializer())
 
         assert result == [{"role": "user", "content": [{"image": self.IMG_URL}]}]
 
     def test_image_binary(self) -> None:
         result = convert_messages(
-            [], [ModelRequest([ImageInput(data=self.PNG, media_type="image/png")])], SerializerCls
+            [], [ModelRequest([ImageInput(data=self.PNG, media_type="image/png")])], PydanticSerializer()
         )
 
         b64 = base64.b64encode(self.PNG).decode()
@@ -77,7 +77,7 @@ class TestQwenVLImage:
 
     def test_text_plus_image(self) -> None:
         result = convert_messages(
-            [], [ModelRequest([TextInput("describe"), ImageInput(url=self.IMG_URL)])], SerializerCls
+            [], [ModelRequest([TextInput("describe"), ImageInput(url=self.IMG_URL)])], PydanticSerializer()
         )
 
         assert result == [{"role": "user", "content": [{"text": "describe"}, {"image": self.IMG_URL}]}]
@@ -91,7 +91,7 @@ class TestToolResult:
 
     def test_text_only_stays_string(self) -> None:
         event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("hello"))])
-        result = convert_messages([], [event], SerializerCls)
+        result = convert_messages([], [event], PydanticSerializer())
 
         assert result == [{"role": "tool", "tool_call_id": "tc_1", "content": "hello"}]
 
@@ -99,7 +99,7 @@ class TestToolResult:
         event = ToolResultsEvent(
             results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult(ImageInput(url=self.IMG_URL)))]
         )
-        result = convert_messages([], [event], SerializerCls)
+        result = convert_messages([], [event], PydanticSerializer())
 
         assert result == [{"role": "tool", "tool_call_id": "tc_1", "content": [{"image": self.IMG_URL}]}]
 
@@ -113,7 +113,7 @@ class TestToolResult:
                 )
             ]
         )
-        result = convert_messages([], [event], SerializerCls)
+        result = convert_messages([], [event], PydanticSerializer())
 
         b64 = base64.b64encode(self.PNG).decode()
         assert result == [
@@ -130,7 +130,7 @@ class TestToolResult:
                 )
             ]
         )
-        result = convert_messages([], [event], SerializerCls)
+        result = convert_messages([], [event], PydanticSerializer())
 
         assert result == [
             {
@@ -152,7 +152,7 @@ class TestToolResult:
             ]
         )
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*dashscope"):
-            convert_messages([], [event], SerializerCls)
+            convert_messages([], [event], PydanticSerializer())
 
 
 def test_hallucinated_tool_call_maps_with_error_text() -> None:
@@ -160,7 +160,7 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
     call = ToolCallEvent(id="tc_1", name="ghost_tool")
     event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
 
-    result = convert_messages([], [event], SerializerCls)
+    result = convert_messages([], [event], PydanticSerializer())
 
     assert result == [
         {
@@ -174,6 +174,6 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
 def test_compaction_summary_renders_as_user_turn() -> None:
     summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
 
-    result = convert_messages([], [summary], SerializerCls)
+    result = convert_messages([], [summary], PydanticSerializer())
 
     assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]

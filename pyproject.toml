@@ -651,6 +651,24 @@ files = [
     "test/config/anthropic/",
     "test/config/openai/",
 
+    # The other seven providers' tests. Every SDK they build doubles from is in
+    # the `types` group, so these are really checked on every pull request —
+    # except boto3, which the Bedrock client holds as `Any` on every job, so the
+    # Bedrock tests are checked against ag2's own types and their fakes.
+    "test/config/bedrock/",
+    "test/config/dashscope/",
+    "test/config/gemini/",
+    "test/config/mistral/",
+    "test/config/ollama/",
+    "test/config/xai/",
+    "test/config/zai/",
+
+    # The real-API smoke tests: the agent harness, sessions, workflows and the
+    # network run against each provider. They skip without credentials, so the
+    # checker is what keeps them honest between the runs that have keys. Their
+    # providers, `ag2[tracing]` and `websockets` are all in the `types` group.
+    "test/providers/",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;

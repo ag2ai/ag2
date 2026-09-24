@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from google.genai import types
 
 from ag2 import Context, MemoryStream
@@ -82,7 +82,7 @@ async def test_a_run_carrying_version_gated_options_still_reaches_the_api() -> N
         context=run_context,
         tools=schemas,
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert captured["body"]["tools"] == [{"urlContext": {}}]
@@ -117,7 +117,7 @@ async def test_a_run_carrying_url_sources_still_goes_out() -> None:
         context=run_context,
         tools=schemas,
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert captured["body"]["tools"] == [{"urlContext": {}}]

@@ -35,15 +35,27 @@ class FakeBedrockRuntime:
     ) -> None:
         self.response = response if response is not None else make_converse_response()
         self.stream_events = list(stream_events)
-        self.converse_kwargs: dict[str, Any] | None = None
-        self.converse_stream_kwargs: dict[str, Any] | None = None
+        self._converse_kwargs: dict[str, Any] | None = None
+        self._converse_stream_kwargs: dict[str, Any] | None = None
+
+    @property
+    def converse_kwargs(self) -> dict[str, Any]:
+        """What `converse` was called with; fails the test if it never was."""
+        assert self._converse_kwargs is not None, "converse() was never called"
+        return self._converse_kwargs
+
+    @property
+    def converse_stream_kwargs(self) -> dict[str, Any]:
+        """What `converse_stream` was called with; fails the test if it never was."""
+        assert self._converse_stream_kwargs is not None, "converse_stream() was never called"
+        return self._converse_stream_kwargs
 
     def converse(self, **kwargs: Any) -> dict[str, Any]:
-        self.converse_kwargs = kwargs
+        self._converse_kwargs = kwargs
         return self.response
 
     def converse_stream(self, **kwargs: Any) -> dict[str, Any]:
-        self.converse_stream_kwargs = kwargs
+        self._converse_stream_kwargs = kwargs
         return {"stream": iter(self.stream_events)}
 
 
@@ -52,10 +64,16 @@ class StubSession:
 
     def __init__(self, client: FakeBedrockRuntime) -> None:
         self._client = client
-        self.client_args: tuple[str, dict[str, Any]] | None = None
+        self._client_args: tuple[str, dict[str, Any]] | None = None
+
+    @property
+    def client_args(self) -> tuple[str, dict[str, Any]]:
+        """What `client` was called with; fails the test if it never was."""
+        assert self._client_args is not None, "client() was never called"
+        return self._client_args
 
     def client(self, service_name: str, **kwargs: Any) -> FakeBedrockRuntime:
-        self.client_args = (service_name, kwargs)
+        self._client_args = (service_name, kwargs)
         return self._client
 
 

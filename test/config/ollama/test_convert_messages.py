@@ -6,7 +6,7 @@ import base64
 
 import pytest
 from dirty_equals import IsPartialDict
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2.compact import CompactionSummary
 from ag2.config.ollama.mappers import convert_messages
@@ -27,7 +27,7 @@ from ag2.events import (
 from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
 
 
-def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
+def _model_response_with_tool_call(arguments: str) -> ModelResponse:
     return ModelResponse(
         message=None,
         tool_calls=ToolCallsEvent(
@@ -37,11 +37,10 @@ def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
 
 
 class TestConvertMessagesEmptyArguments:
-    """json.loads must not crash on empty or None tool call arguments."""
+    """json.loads must not crash on empty tool call arguments."""
 
-    @pytest.mark.parametrize("arguments", ["", None])
-    def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
-        result = convert_messages([], [_model_response_with_tool_call(arguments)], SerializerCls)
+    def test_empty_arguments_produce_empty_dict(self) -> None:
+        result = convert_messages([], [_model_response_with_tool_call("")], PydanticSerializer())
 
         assert result[0] == IsPartialDict({
             "role": "assistant",
@@ -49,7 +48,7 @@ class TestConvertMessagesEmptyArguments:
         })
 
     def test_valid_arguments_are_preserved(self) -> None:
-        result = convert_messages([], [_model_response_with_tool_call('{"category": "books"}')], SerializerCls)
+        result = convert_messages([], [_model_response_with_tool_call('{"category": "books"}')], PydanticSerializer())
 
         assert result[0] == IsPartialDict({
             "tool_calls": [IsPartialDict({"function": IsPartialDict({"arguments": {"category": "books"}})})],
@@ -58,27 +57,27 @@ class TestConvertMessagesEmptyArguments:
 
 def test_audio_url_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="UrlInput.*ollama"):
-        convert_messages([], [ModelRequest([AudioInput(url="https://example.com/audio.wav")])], SerializerCls)
+        convert_messages([], [ModelRequest([AudioInput(url="https://example.com/audio.wav")])], PydanticSerializer())
 
 
 def test_image_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="UrlInput.*ollama"):
-        convert_messages([], [ModelRequest([ImageInput(url="https://example.com/img.png")])], SerializerCls)
+        convert_messages([], [ModelRequest([ImageInput(url="https://example.com/img.png")])], PydanticSerializer())
 
 
 def test_document_url_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="UrlInput.*ollama"):
-        convert_messages([], [ModelRequest([DocumentInput(url="https://example.com/doc.pdf")])], SerializerCls)
+        convert_messages([], [ModelRequest([DocumentInput(url="https://example.com/doc.pdf")])], PydanticSerializer())
 
 
 def test_file_id_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="FileIdInput.*ollama"):
-        convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc123")])], SerializerCls)
+        convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc123")])], PydanticSerializer())
 
 
 def test_binary_input_raises() -> None:
     with pytest.raises(UnsupportedInputError, match="BinaryInput.*ollama"):
-        convert_messages([], [ModelRequest([BinaryInput(data=b"data", media_type="image/png")])], SerializerCls)
+        convert_messages([], [ModelRequest([BinaryInput(data=b"data", media_type="image/png")])], PydanticSerializer())
 
 
 class TestImageBinaryInput:
@@ -88,7 +87,7 @@ class TestImageBinaryInput:
 
     def test_image_only(self) -> None:
         result = convert_messages(
-            [], [ModelRequest([ImageInput(data=self.PNG, media_type="image/png")])], SerializerCls
+            [], [ModelRequest([ImageInput(data=self.PNG, media_type="image/png")])], PydanticSerializer()
         )
 
         b64 = base64.b64encode(self.PNG).decode()
@@ -98,7 +97,7 @@ class TestImageBinaryInput:
         result = convert_messages(
             [],
             [ModelRequest([TextInput("what is in this image?"), ImageInput(data=self.PNG, media_type="image/png")])],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         b64 = base64.b64encode(self.PNG).decode()
@@ -116,7 +115,7 @@ class TestImageBinaryInput:
                     ImageInput(data=png2, media_type="image/png"),
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [
@@ -129,7 +128,7 @@ class TestImageBinaryInput:
 
     def test_text_without_image_stays_plain(self) -> None:
         """Regression: text-only message must not acquire an `images` key."""
-        result = convert_messages([], [ModelRequest([TextInput("hello")])], SerializerCls)
+        result = convert_messages([], [ModelRequest([TextInput("hello")])], PydanticSerializer())
 
         assert result == [{"role": "user", "content": "hello"}]
 
@@ -137,7 +136,7 @@ class TestImageBinaryInput:
 def test_multiple_text_inputs_emit_separate_messages() -> None:
     """Multiple TextInput in one turn must not be joined; emit one user message each."""
     result = convert_messages(
-        [], [ModelRequest([TextInput("first"), TextInput("second"), TextInput("third")])], SerializerCls
+        [], [ModelRequest([TextInput("first"), TextInput("second"), TextInput("third")])], PydanticSerializer()
     )
 
     assert result == [
@@ -153,7 +152,7 @@ def test_multiple_text_inputs_with_images_attach_to_last() -> None:
     result = convert_messages(
         [],
         [ModelRequest([TextInput("intro"), TextInput("look at this"), ImageInput(data=png, media_type="image/png")])],
-        SerializerCls,
+        PydanticSerializer(),
     )
 
     b64 = base64.b64encode(png).decode()
@@ -168,7 +167,7 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
     call = ToolCallEvent(id="tc_1", name="ghost_tool")
     event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
 
-    result = convert_messages([], [event], SerializerCls)
+    result = convert_messages([], [event], PydanticSerializer())
 
     assert result == [{"role": "tool", "content": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"}]
 
@@ -176,6 +175,6 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
 def test_compaction_summary_renders_as_user_turn() -> None:
     summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
 
-    result = convert_messages([], [summary], SerializerCls)
+    result = convert_messages([], [summary], PydanticSerializer())
 
     assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]

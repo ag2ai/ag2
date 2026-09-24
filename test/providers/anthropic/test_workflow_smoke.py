@@ -28,6 +28,7 @@ from ag2.config import AnthropicConfig
 from ag2.knowledge import DiskKnowledgeStore
 from ag2.network import (
     EV_PACKET,
+    Envelope,
     Handoff,
     Hub,
     HubClient,
@@ -161,7 +162,7 @@ async def test_workflow_swarm_handoff_revert_close(
     )
 
     # Wait for triage's handoff tool to land as an EV_PACKET in the WAL.
-    handoff_envelopes: list = []
+    handoff_envelopes: list[Envelope] = []
 
     async def _wait_for_handoff(timeout: float) -> None:
         deadline = asyncio.get_event_loop().time() + timeout
@@ -192,6 +193,7 @@ async def test_workflow_swarm_handoff_revert_close(
 
     state = hub.adapter_state(channel.channel_id)
     # FromSpeaker(eng) → RevertToInitiator → next is triage (channel creator).
+    assert isinstance(state, WorkflowState)
     assert state.expected_next_speaker == triage.agent_id
 
     # ── Hub.hydrate() mid-flow: tear down + re-open against the same store.

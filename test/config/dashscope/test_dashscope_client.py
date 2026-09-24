@@ -8,11 +8,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from dashscope.api_entities.dashscope_response import (
+    Choice,
+    Message,
     MultiModalConversationOutput,
     MultiModalConversationResponse,
     MultiModalConversationUsage,
 )
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context
 from ag2.config import DashScopeConfig
@@ -25,7 +27,12 @@ def _response(content: Any, *, finish_reason: str | None = "stop") -> MultiModal
     return MultiModalConversationResponse(
         status_code=200,
         output=MultiModalConversationOutput(
-            choices=[{"finish_reason": finish_reason, "message": {"role": "assistant", "content": content}}],
+            choices=[
+                Choice(
+                    finish_reason=finish_reason,  # type: ignore[arg-type]  # the SDK's stub says `str` over a `None` default; a chunk mid-stream carries none
+                    message=Message(role="assistant", content=content),
+                )
+            ],
         ),
         usage=MultiModalConversationUsage(input_tokens=3, output_tokens=5, total_tokens=8),
     )
@@ -50,7 +57,7 @@ async def test_non_streaming_reads_the_sdk_response() -> None:
             context=context,
             tools=[],
             response_schema=None,
-            serializer=SerializerCls,
+            serializer=PydanticSerializer(),
         )
 
     assert result.message is not None
@@ -74,7 +81,7 @@ async def test_streaming_reads_the_sdk_async_stream() -> None:
             context=context,
             tools=[],
             response_schema=None,
-            serializer=SerializerCls,
+            serializer=PydanticSerializer(),
         )
 
     assert result.message is not None

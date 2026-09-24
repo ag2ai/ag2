@@ -5,8 +5,8 @@
 import base64
 
 import pytest
-from fast_depends.use import SerializerCls
-from xai_sdk.chat import chat_pb2
+from fast_depends.pydantic import PydanticSerializer
+from xai_sdk.proto import chat_pb2
 
 from ag2 import Context, ToolResult
 from ag2.compact import CompactionSummary
@@ -46,12 +46,12 @@ def _content_kinds(msg: chat_pb2.Message) -> list[str]:
 
 class TestSystemPrompt:
     def test_no_system_messages_when_prompt_empty(self) -> None:
-        result, replays = convert_messages([], [], SerializerCls)
+        result, replays = convert_messages([], [], PydanticSerializer())
         assert result == []
         assert replays == []
 
     def test_system_prompts_joined_with_newline(self) -> None:
-        result, replays = convert_messages(["be helpful", "be terse"], [], SerializerCls)
+        result, replays = convert_messages(["be helpful", "be terse"], [], PydanticSerializer())
 
         assert len(result) == 1
         assert result[0].role == chat_pb2.ROLE_SYSTEM
@@ -64,23 +64,23 @@ class TestUserContent:
     PNG = b"\x89PNG\r\n"
 
     def test_text_only_request(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([TextInput("hello")])], SerializerCls)
+        [msg], _ = convert_messages([], [ModelRequest([TextInput("hello")])], PydanticSerializer())
 
         assert msg.role == chat_pb2.ROLE_USER
         assert _content_texts(msg) == ["hello"]
 
     def test_multiple_text_parts(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([TextInput("hi"), TextInput("there")])], SerializerCls)
+        [msg], _ = convert_messages([], [ModelRequest([TextInput("hi"), TextInput("there")])], PydanticSerializer())
 
         assert _content_texts(msg) == ["hi", "there"]
 
     def test_data_input_serialized_via_serializer(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([DataInput({"key": "value"})])], SerializerCls)
+        [msg], _ = convert_messages([], [ModelRequest([DataInput({"key": "value"})])], PydanticSerializer())
 
         assert _content_texts(msg) == ['{"key":"value"}']
 
     def test_image_url(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([ImageInput(url=self.IMG_URL)])], SerializerCls)
+        [msg], _ = convert_messages([], [ModelRequest([ImageInput(url=self.IMG_URL)])], PydanticSerializer())
 
         assert msg.role == chat_pb2.ROLE_USER
         # Image is a Content oneof — not text
@@ -89,7 +89,7 @@ class TestUserContent:
 
     def test_image_binary_base64(self) -> None:
         [msg], _ = convert_messages(
-            [], [ModelRequest([ImageInput(data=self.PNG, media_type="image/png")])], SerializerCls
+            [], [ModelRequest([ImageInput(data=self.PNG, media_type="image/png")])], PydanticSerializer()
         )
 
         kinds = _content_kinds(msg)
@@ -102,7 +102,7 @@ class TestUserContent:
 
     def test_pdf_binary_becomes_file(self) -> None:
         [msg], _ = convert_messages(
-            [], [ModelRequest([DocumentInput(data=b"%PDF", media_type="application/pdf")])], SerializerCls
+            [], [ModelRequest([DocumentInput(data=b"%PDF", media_type="application/pdf")])], PydanticSerializer()
         )
 
         kinds = _content_kinds(msg)
@@ -115,7 +115,7 @@ class TestUserContent:
         [msg], _ = convert_messages(
             [],
             [ModelRequest([TextInput("describe"), ImageInput(url=self.IMG_URL)])],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         kinds = _content_kinds(msg)
@@ -130,7 +130,7 @@ class TestUserContent:
                         BinaryInput(b"\x00", media_type="audio/wav", kind=BinaryType.AUDIO),
                     ])
                 ],
-                SerializerCls,
+                PydanticSerializer(),
             )
 
     def test_video_input_unsupported(self) -> None:
@@ -138,7 +138,7 @@ class TestUserContent:
             convert_messages(
                 [],
                 [ModelRequest([VideoInput(url="https://example.com/clip.mp4")])],
-                SerializerCls,
+                PydanticSerializer(),
             )
 
     def test_audio_url_input_unsupported(self) -> None:
@@ -146,11 +146,11 @@ class TestUserContent:
             convert_messages(
                 [],
                 [ModelRequest([AudioInput(url="https://example.com/a.wav")])],
-                SerializerCls,
+                PydanticSerializer(),
             )
 
     def test_file_id_input_passes_through(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc")])], SerializerCls)
+        [msg], _ = convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc")])], PydanticSerializer())
 
         kinds = _content_kinds(msg)
         assert "file" in kinds
@@ -162,7 +162,7 @@ class TestToolResult:
     def test_text_only_tool_result(self) -> None:
         event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("ok"))])
 
-        [msg], _ = convert_messages([], [event], SerializerCls)
+        [msg], _ = convert_messages([], [event], PydanticSerializer())
 
         assert msg.role == chat_pb2.ROLE_TOOL
         assert msg.tool_call_id == "tc_1"
@@ -179,7 +179,7 @@ class TestToolResult:
             ]
         )
 
-        [msg], _ = convert_messages([], [event], SerializerCls)
+        [msg], _ = convert_messages([], [event], PydanticSerializer())
 
         assert _content_texts(msg) == ['["first", "second"]']
 
@@ -195,14 +195,14 @@ class TestToolResult:
         )
 
         with pytest.raises(UnsupportedInputError, match="tool_result"):
-            convert_messages([], [event], SerializerCls)
+            convert_messages([], [event], PydanticSerializer())
 
     def test_hallucinated_tool_call_maps_with_error_text(self) -> None:
         # Regression: a not-found tool call used to leave result=None and crash on r.result.parts.
         call = ToolCallEvent(id="tc_1", name="ghost_tool")
         event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
 
-        [msg], _ = convert_messages([], [event], SerializerCls)
+        [msg], _ = convert_messages([], [event], PydanticSerializer())
 
         assert msg.role == chat_pb2.ROLE_TOOL
         assert msg.tool_call_id == "tc_1"
@@ -218,7 +218,7 @@ class TestAssistantRoundTrip:
             finish_reason="stop",
         )
 
-        messages, replays = convert_messages([], [event], SerializerCls)
+        messages, replays = convert_messages([], [event], PydanticSerializer())
 
         assert messages == []
         assert len(replays) == 1
@@ -231,7 +231,7 @@ class TestAssistantRoundTrip:
         event = XAIAssistantEvent(proto_bytes=proto.SerializeToString())
         mr = ModelResponse(message=ModelMessage("Hello"))
 
-        messages, replays = convert_messages([], [event, mr], SerializerCls)
+        messages, replays = convert_messages([], [event, mr], PydanticSerializer())
 
         assert messages == []  # neither the proto nor the synthesized assistant
         assert len(replays) == 1
@@ -240,7 +240,7 @@ class TestAssistantRoundTrip:
         """When no XAIAssistantEvent precedes it, ModelResponse becomes ``assistant(text)``."""
         mr = ModelResponse(message=ModelMessage("Hi"))
 
-        [msg], replays = convert_messages([], [mr], SerializerCls)
+        [msg], replays = convert_messages([], [mr], PydanticSerializer())
 
         assert msg.role == chat_pb2.ROLE_ASSISTANT
         assert _content_texts(msg) == ["Hi"]
@@ -254,7 +254,7 @@ class TestAssistantRoundTrip:
 
         _, filtered = await ConversationPolicy().apply([], events, Context(stream=MemoryStream()))
 
-        messages, replays = convert_messages([], filtered, SerializerCls)
+        messages, replays = convert_messages([], filtered, PydanticSerializer())
 
         assert messages == []  # the companion ModelResponse stays shadowed
         assert [r.proto.SerializeToString() for r in replays] == [proto.SerializeToString()]
@@ -274,7 +274,7 @@ class TestAssistantRoundTrip:
 
         _, trimmed = await SlidingWindowPolicy(max_events=3).apply([], events, Context(stream=MemoryStream()))
 
-        messages, replays = convert_messages([], trimmed, SerializerCls)
+        messages, replays = convert_messages([], trimmed, PydanticSerializer())
 
         assert replays == []
         assert [msg.role for msg in messages] == [chat_pb2.ROLE_USER]
@@ -283,7 +283,7 @@ class TestAssistantRoundTrip:
 def test_compaction_summary_renders_as_user_turn() -> None:
     summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
 
-    [msg], replays = convert_messages([], [summary], SerializerCls)
+    [msg], replays = convert_messages([], [summary], PydanticSerializer())
 
     assert msg.role == chat_pb2.ROLE_USER
     assert _content_texts(msg) == ["[Summary of earlier conversation]\nLooked up Paris and Tokyo."]

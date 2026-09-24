@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import pytest
 from dirty_equals import IsPartialDict
-from xai_sdk.chat import chat_pb2
+from xai_sdk.proto import chat_pb2
 
 from ag2.config.xai.mappers import response_proto_to_format
 from ag2.response import ResponseSchema

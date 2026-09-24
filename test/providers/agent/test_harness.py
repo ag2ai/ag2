@@ -6,10 +6,13 @@
 aggregation — every opt-in Agent primitive exercised against a real LLM.
 """
 
-import pytest
+from collections.abc import Sequence
+from typing import Any
 
-from ag2 import Agent
-from ag2.agent import KnowledgeConfig
+import pytest
+from typing_extensions import Self
+
+from ag2 import Agent, Context, KnowledgeConfig
 from ag2.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
@@ -20,10 +23,13 @@ from ag2.compact import (
     SummarizeCompact,
     TailWindowCompact,
 )
+from ag2.config import LLMClient, ModelConfig, ModelProvider
 from ag2.events import (
     AggregationCompleted,
+    BaseEvent,
     CompactionCompleted,
     ModelRequest,
+    ModelResponse,
     TextInput,
 )
 from ag2.knowledge import (
@@ -63,24 +69,32 @@ async def test_sliding_window_trims_long_history(provider_config) -> None:
     the LLM — instead of the model's reply, which is unreliable across
     providers (assistant responses can echo trimmed words back).
     """
-    sent_payloads: list[list] = []
+    sent_payloads: list[list[BaseEvent]] = []
 
-    class _CapturingClient:
-        def __init__(self, inner):
+    class _CapturingClient(LLMClient):
+        def __init__(self, inner: LLMClient) -> None:
             self._inner = inner
 
-        async def __call__(self, messages, context, **kwargs):
+        async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
             sent_payloads.append(list(messages))
             return await self._inner(messages, context=context, **kwargs)
 
-    class _CapturingConfig:
-        def __init__(self, inner):
+    class _CapturingConfig(ModelConfig):
+        def __init__(self, inner: ModelConfig) -> None:
             self._inner = inner
 
-        def copy(self):
+        @property
+        def provider(self) -> ModelProvider:
+            return self._inner.provider
+
+        @property
+        def model(self) -> str:
+            return self._inner.model
+
+        def copy(self) -> Self:
             return self
 
-        def create(self):
+        def create(self) -> _CapturingClient:
             return _CapturingClient(self._inner.create())
 
     agent = Agent(
@@ -204,7 +218,7 @@ async def test_tail_window_compact_triggers(provider_config) -> None:
     """TailWindowCompact (non-LLM) triggers after enough events."""
     store = MemoryKnowledgeStore()
 
-    compact_events: list = []
+    compact_events: list[CompactionCompleted] = []
     stream = MemoryStream()
     stream.where(CompactionCompleted).subscribe(lambda e: compact_events.append(e))
 
@@ -236,7 +250,7 @@ async def test_summarize_compact_uses_llm(provider_config) -> None:
     """SummarizeCompact uses a secondary LLM call to summarize history."""
     store = MemoryKnowledgeStore()
 
-    compact_events: list = []
+    compact_events: list[CompactionCompleted] = []
     stream = MemoryStream()
     stream.where(CompactionCompleted).subscribe(lambda e: compact_events.append(e))
 
@@ -266,7 +280,7 @@ async def test_on_end_aggregation(provider_config) -> None:
     """AggregateTrigger(on_end=True) fires at execute finalisation."""
     store = MemoryKnowledgeStore()
 
-    aggregate_events: list = []
+    aggregate_events: list[AggregationCompleted] = []
     stream = MemoryStream()
     stream.where(AggregationCompleted).subscribe(lambda e: aggregate_events.append(e))
 
@@ -303,7 +317,7 @@ async def test_every_n_turns_aggregation(provider_config) -> None:
     """
     store = MemoryKnowledgeStore()
 
-    aggregate_events: list = []
+    aggregate_events: list[AggregationCompleted] = []
     stream = MemoryStream()
     stream.where(AggregationCompleted).subscribe(lambda e: aggregate_events.append(e))
 
@@ -342,7 +356,7 @@ async def test_every_n_events_aggregation(provider_config) -> None:
     """
     store = MemoryKnowledgeStore()
 
-    aggregate_events: list = []
+    aggregate_events: list[AggregationCompleted] = []
     stream = MemoryStream()
     stream.where(AggregationCompleted).subscribe(lambda e: aggregate_events.append(e))
 

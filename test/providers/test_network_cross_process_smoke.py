@@ -518,6 +518,7 @@ async def test_remote_agent_proxy_federation_over_wire() -> None:
             Passport(name="echo", kind="remote_agent", auth=AuthBlock(scheme="rpc", claim={})),
             Resume(claimed_capabilities=["math"]),
         )
+        assert echo.agent_id is not None
         proxy = _LLMRemoteProxy(
             hub,
             Agent(

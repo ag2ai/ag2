@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from google.genai import types
 
 from ag2 import ToolResult
@@ -30,9 +30,10 @@ from ag2.events import (
     VideoInput,
 )
 from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
+from ag2.types import AudioMediaType
 
 
-def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
+def _model_response_with_tool_call(arguments: str) -> ModelResponse:
     return ModelResponse(
         message=None,
         tool_calls=ToolCallsEvent(
@@ -42,11 +43,10 @@ def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
 
 
 class TestConvertMessagesEmptyArguments:
-    """json.loads must not crash on empty or None tool call arguments."""
+    """json.loads must not crash on empty tool call arguments."""
 
-    @pytest.mark.parametrize("arguments", ["", None])
-    def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
-        [content] = convert_messages([_model_response_with_tool_call(arguments)], SerializerCls)
+    def test_empty_arguments_produce_empty_dict(self) -> None:
+        [content] = convert_messages([_model_response_with_tool_call("")], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "model",
@@ -54,7 +54,7 @@ class TestConvertMessagesEmptyArguments:
         }
 
     def test_valid_arguments_are_preserved(self) -> None:
-        [content] = convert_messages([_model_response_with_tool_call('{"category": "books"}')], SerializerCls)
+        [content] = convert_messages([_model_response_with_tool_call('{"category": "books"}')], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "model",
@@ -64,7 +64,7 @@ class TestConvertMessagesEmptyArguments:
 
 def test_image_url() -> None:
     img_url = "https://example.com/image.png"
-    [content] = convert_messages([ModelRequest([ImageInput(url=img_url)])], SerializerCls)
+    [content] = convert_messages([ModelRequest([ImageInput(url=img_url)])], PydanticSerializer())
 
     assert content.model_dump(exclude_none=True) == {
         "role": "user",
@@ -74,7 +74,7 @@ def test_image_url() -> None:
 
 def test_image_binary() -> None:
     png = b"\x89PNG\r\n\x1a\nfake"
-    [content] = convert_messages([ModelRequest([ImageInput(data=png, media_type="image/png")])], SerializerCls)
+    [content] = convert_messages([ModelRequest([ImageInput(data=png, media_type="image/png")])], PydanticSerializer())
 
     assert content.model_dump(exclude_none=True) == {
         "role": "user",
@@ -84,7 +84,7 @@ def test_image_binary() -> None:
 
 def test_audio_url() -> None:
     audio_url = "https://example.com/audio.wav"
-    [content] = convert_messages([ModelRequest([AudioInput(url=audio_url)])], SerializerCls)
+    [content] = convert_messages([ModelRequest([AudioInput(url=audio_url)])], PydanticSerializer())
 
     assert content.model_dump(exclude_none=True) == {
         "role": "user",
@@ -94,7 +94,7 @@ def test_audio_url() -> None:
 
 def test_audio_binary() -> None:
     audio = b"\x00\x01\x02audio"
-    [content] = convert_messages([ModelRequest([AudioInput(data=audio, media_type="audio/wav")])], SerializerCls)
+    [content] = convert_messages([ModelRequest([AudioInput(data=audio, media_type="audio/wav")])], PydanticSerializer())
 
     assert content.model_dump(exclude_none=True) == {
         "role": "user",
@@ -104,7 +104,7 @@ def test_audio_binary() -> None:
 
 def test_document_url() -> None:
     doc_url = "https://example.com/doc.pdf"
-    [content] = convert_messages([ModelRequest([DocumentInput(url=doc_url)])], SerializerCls)
+    [content] = convert_messages([ModelRequest([DocumentInput(url=doc_url)])], PydanticSerializer())
 
     assert content.model_dump(exclude_none=True) == {
         "role": "user",
@@ -114,7 +114,9 @@ def test_document_url() -> None:
 
 def test_document_binary() -> None:
     pdf = b"%PDF-1.4"
-    [content] = convert_messages([ModelRequest([DocumentInput(data=pdf, media_type="application/pdf")])], SerializerCls)
+    [content] = convert_messages(
+        [ModelRequest([DocumentInput(data=pdf, media_type="application/pdf")])], PydanticSerializer()
+    )
 
     assert content.model_dump(exclude_none=True) == {
         "role": "user",
@@ -125,7 +127,7 @@ def test_document_binary() -> None:
 class TestVideoUrl:
     def test_known_extension(self) -> None:
         url = "https://example.com/clip.mp4"
-        [content] = convert_messages([ModelRequest([VideoInput(url=url)])], SerializerCls)
+        [content] = convert_messages([ModelRequest([VideoInput(url=url)])], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -134,7 +136,7 @@ class TestVideoUrl:
 
     def test_youtube_url_has_no_mime_type(self) -> None:
         url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        [content] = convert_messages([ModelRequest([VideoInput(url=url)])], SerializerCls)
+        [content] = convert_messages([ModelRequest([VideoInput(url=url)])], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -144,7 +146,7 @@ class TestVideoUrl:
 
 def test_video_binary() -> None:
     video = b"\x00\x00\x00\x1cftypisom"
-    [content] = convert_messages([ModelRequest([VideoInput(data=video, media_type="video/mp4")])], SerializerCls)
+    [content] = convert_messages([ModelRequest([VideoInput(data=video, media_type="video/mp4")])], PydanticSerializer())
 
     assert content.model_dump(exclude_none=True) == {
         "role": "user",
@@ -161,7 +163,7 @@ class TestVendorMetadata:
             media_type="image/png",
             vendor_metadata={"media_resolution": "MEDIA_RESOLUTION_LOW"},
         )
-        [content] = convert_messages([ModelRequest([inp])], SerializerCls)
+        [content] = convert_messages([ModelRequest([inp])], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -181,7 +183,7 @@ class TestVendorMetadata:
             media_type="image/png",
             vendor_metadata={"media_resolution": {"num_tokens": 64}},
         )
-        [content] = convert_messages([ModelRequest([inp])], SerializerCls)
+        [content] = convert_messages([ModelRequest([inp])], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -199,7 +201,7 @@ class TestVendorMetadata:
             media_type="video/mp4",
             vendor_metadata={"video_metadata": {"fps": 5, "start_offset": "10s", "end_offset": "30s"}},
         )
-        [content] = convert_messages([ModelRequest([inp])], SerializerCls)
+        [content] = convert_messages([ModelRequest([inp])], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -217,7 +219,7 @@ class TestVendorMetadata:
             media_type="image/png",
             vendor_metadata={"display_name": "my_photo.png"},
         )
-        [content] = convert_messages([ModelRequest([inp])], SerializerCls)
+        [content] = convert_messages([ModelRequest([inp])], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -226,7 +228,7 @@ class TestVendorMetadata:
 
     def test_empty_metadata_is_noop(self) -> None:
         inp = BinaryInput(data=self.PNG, media_type="image/png")
-        [content] = convert_messages([ModelRequest([inp])], SerializerCls)
+        [content] = convert_messages([ModelRequest([inp])], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -238,9 +240,9 @@ class TestAudioFormatVariants:
     AUDIO = b"\x00\x01\x02audio"
 
     @pytest.mark.parametrize("media_type", ["audio/wav", "audio/mpeg", "audio/ogg"])
-    def test_inline_audio_preserves_media_type(self, media_type: str) -> None:
+    def test_inline_audio_preserves_media_type(self, media_type: AudioMediaType) -> None:
         [content] = convert_messages(
-            [ModelRequest([AudioInput(data=self.AUDIO, media_type=media_type)])], SerializerCls
+            [ModelRequest([AudioInput(data=self.AUDIO, media_type=media_type)])], PydanticSerializer()
         )
 
         assert content.model_dump(exclude_none=True) == {
@@ -261,7 +263,7 @@ class TestMultipleInputs:
                     ImageInput(url=b_url),
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert content.model_dump(exclude_none=True) == {
@@ -282,7 +284,7 @@ class TestMultipleInputs:
                     ImageInput(data=png, media_type="image/png"),
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert content.model_dump(exclude_none=True) == {
@@ -304,7 +306,7 @@ class TestToolResult:
 
     def test_text_only_goes_into_response(self) -> None:
         event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("hello"))])
-        [content] = convert_messages([event], SerializerCls)
+        [content] = convert_messages([event], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -313,7 +315,7 @@ class TestToolResult:
 
     def test_multiple_text_chunks_become_list(self) -> None:
         event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("a", "b"))])
-        [content] = convert_messages([event], SerializerCls)
+        [content] = convert_messages([event], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -324,7 +326,7 @@ class TestToolResult:
         event = ToolResultsEvent(
             results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult(ImageInput(url=self.IMG_URL)))]
         )
-        [content] = convert_messages([event], SerializerCls)
+        [content] = convert_messages([event], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -349,7 +351,7 @@ class TestToolResult:
                 )
             ]
         )
-        [content] = convert_messages([event], SerializerCls)
+        [content] = convert_messages([event], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -368,7 +370,7 @@ class TestToolResult:
         event = ToolResultsEvent(
             results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult(DocumentInput(url=self.PDF_URL)))]
         )
-        [content] = convert_messages([event], SerializerCls)
+        [content] = convert_messages([event], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -393,7 +395,7 @@ class TestToolResult:
                 )
             ]
         )
-        [content] = convert_messages([event], SerializerCls)
+        [content] = convert_messages([event], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -418,7 +420,7 @@ class TestToolResult:
                 )
             ]
         )
-        [content] = convert_messages([event], SerializerCls)
+        [content] = convert_messages([event], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -438,14 +440,14 @@ class TestToolResult:
             results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult(AudioInput(url="https://x/a.wav")))]
         )
         with pytest.raises(UnsupportedInputError, match="UrlInput.*gemini"):
-            convert_messages([event], SerializerCls)
+            convert_messages([event], PydanticSerializer())
 
     def test_url_video_raises(self) -> None:
         event = ToolResultsEvent(
             results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult(VideoInput(url="https://x/v.mp4")))]
         )
         with pytest.raises(UnsupportedInputError, match="UrlInput.*gemini"):
-            convert_messages([event], SerializerCls)
+            convert_messages([event], PydanticSerializer())
 
     def test_binary_audio_raises(self) -> None:
         event = ToolResultsEvent(
@@ -458,14 +460,14 @@ class TestToolResult:
             ]
         )
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*gemini"):
-            convert_messages([event], SerializerCls)
+            convert_messages([event], PydanticSerializer())
 
     def test_file_id_raises(self) -> None:
         event = ToolResultsEvent(
             results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult(FileIdInput(file_id="file-abc")))]
         )
         with pytest.raises(UnsupportedInputError, match="FileIdInput.*gemini"):
-            convert_messages([event], SerializerCls)
+            convert_messages([event], PydanticSerializer())
 
 
 class TestBuiltinToolEventReplay:
@@ -475,7 +477,7 @@ class TestBuiltinToolEventReplay:
             ModelResponse(message=None, tool_calls=ToolCallsEvent(calls=[])),
             GeminiServerToolCallEvent(name="code_execution", arguments="{}", part=code_part),
         ]
-        result = convert_messages(events, SerializerCls)
+        result = convert_messages(events, PydanticSerializer())
 
         assert result == [types.Content(role="model", parts=[code_part])]
 
@@ -490,7 +492,7 @@ class TestBuiltinToolEventReplay:
                     parent_id="x", name="code_execution", result=ToolResult(), part=result_part
                 ),
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [types.Content(role="model", parts=[code_part, result_part])]
@@ -504,7 +506,7 @@ class TestBuiltinToolEventReplay:
                     parent_id="x", name="web_search", result=ToolResult(), grounding_metadata=gm
                 ),
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == []
@@ -515,7 +517,7 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
     call = ToolCallEvent(id="tc_1", name="ghost_tool")
     event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
 
-    [content] = convert_messages([event], SerializerCls)
+    [content] = convert_messages([event], PydanticSerializer())
 
     assert content.model_dump(exclude_none=True) == {
         "role": "user",
@@ -537,7 +539,7 @@ class TestConvertMessagesCompactionSummary:
     def test_summary_renders_as_user_text(self) -> None:
         summary = CompactionSummary(summary="Earlier the user configured the project.", event_count=12)
 
-        [content] = convert_messages([summary], SerializerCls)
+        [content] = convert_messages([summary], PydanticSerializer())
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
@@ -553,6 +555,6 @@ class TestConvertMessagesCompactionSummary:
             ToolResultsEvent(results=[ToolResultEvent(parent_id="c9", name="get_weather", result=ToolResult("21C"))]),
         ]
 
-        contents = convert_messages(events, SerializerCls)
+        contents = convert_messages(events, PydanticSerializer())
 
         assert contents[0].role == "user"

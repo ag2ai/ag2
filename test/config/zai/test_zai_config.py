@@ -5,8 +5,9 @@
 import inspect
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from zai.api_resource.chat.completions import Completions as RealCompletions
 
 import ag2.config.zai.zai_client as zai_client_module
@@ -85,7 +86,7 @@ async def test_inference_params_reach_sdk_call(monkeypatch: pytest.MonkeyPatch) 
         context=make_call_context(),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert completions.kwargs == {
@@ -127,7 +128,7 @@ async def test_unset_params_are_omitted_and_thinking_precedence(monkeypatch: pyt
         context=make_call_context(),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert completions.kwargs == {
@@ -150,7 +151,7 @@ async def test_thinking_false_maps_to_disabled(monkeypatch: pytest.MonkeyPatch) 
         context=make_call_context(),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert completions.kwargs == {
@@ -165,38 +166,38 @@ async def test_thinking_false_maps_to_disabled(monkeypatch: pytest.MonkeyPatch) 
 async def test_client_connection_params_reach_sdk_client(monkeypatch: pytest.MonkeyPatch) -> None:
     completions = FakeCompletions()
     factory = FakeZAIClientFactory(completions)
-    http_client = object()
-    monkeypatch.setattr(zai_client_module, "ZaiClient", factory)
-    client = ZAIConfig(
-        model="glm-5.2",
-        api_key="key",
-        base_url="https://example.test/api/paas/v4/",
-        timeout=12.0,
-        max_retries=5,
-        http_client=http_client,  # type: ignore[arg-type]
-        custom_headers={"x-test": "1"},
-        disable_token_cache=False,
-        source_channel="ag2-test",
-    ).create()
+    with httpx.Client() as http_client:
+        monkeypatch.setattr(zai_client_module, "ZaiClient", factory)
+        client = ZAIConfig(
+            model="glm-5.2",
+            api_key="key",
+            base_url="https://example.test/api/paas/v4/",
+            timeout=12.0,
+            max_retries=5,
+            http_client=http_client,
+            custom_headers={"x-test": "1"},
+            disable_token_cache=False,
+            source_channel="ag2-test",
+        ).create()
 
-    await client(
-        messages=[ModelRequest([TextInput("hello")])],
-        context=make_call_context(),
-        tools=[],
-        response_schema=None,
-        serializer=SerializerCls,
-    )
+        await client(
+            messages=[ModelRequest([TextInput("hello")])],
+            context=make_call_context(),
+            tools=[],
+            response_schema=None,
+            serializer=PydanticSerializer(),
+        )
 
-    assert factory.kwargs == {
-        "api_key": "key",
-        "base_url": "https://example.test/api/paas/v4/",
-        "timeout": 12.0,
-        "max_retries": 5,
-        "http_client": http_client,
-        "custom_headers": {"x-test": "1"},
-        "disable_token_cache": False,
-        "source_channel": "ag2-test",
-    }
+        assert factory.kwargs == {
+            "api_key": "key",
+            "base_url": "https://example.test/api/paas/v4/",
+            "timeout": 12.0,
+            "max_retries": 5,
+            "http_client": http_client,
+            "custom_headers": {"x-test": "1"},
+            "disable_token_cache": False,
+            "source_channel": "ag2-test",
+        }
 
 
 @patch("ag2.config.zai.files.ZaiClient")
@@ -210,10 +211,10 @@ def test_create_files_client(_mock_zai_client: MagicMock) -> None:
 
 def test_unsupported_penalty_fields_are_rejected() -> None:
     with pytest.raises(TypeError):
-        ZAIConfig(model="glm-5.2", frequency_penalty=0.1)  # type: ignore[call-arg]
+        ZAIConfig(model="glm-5.2", frequency_penalty=0.1)  # type: ignore[call-arg]  # the refusal under test
 
     with pytest.raises(TypeError):
-        ZAIConfig(model="glm-5.2", presence_penalty=0.2)  # type: ignore[call-arg]
+        ZAIConfig(model="glm-5.2", presence_penalty=0.2)  # type: ignore[call-arg]  # the refusal under test
 
 
 @pytest.mark.asyncio
@@ -247,7 +248,7 @@ async def test_sdk_only_receives_kwargs_it_accepts(monkeypatch: pytest.MonkeyPat
         context=make_call_context(),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert completions.kwargs is not None

@@ -5,11 +5,13 @@
 
 import httpx
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from mistralai.client.models import TextChunk, ThinkChunk, Tool
 from pydantic import BaseModel
+from typing_extensions import Unpack
 
 from ag2.config.mistral import MistralClient
+from ag2.config.mistral.mistral_client import CreateOptions
 from ag2.events import (
     BinaryType,
     BuiltinToolCallEvent,
@@ -29,7 +31,7 @@ from test.config._helpers import make_tool
 from test.config.mistral._helpers import (
     FakeChat,
     FakeHttpClient,
-    FakeMistralClient,
+    install_fake_sdk,
     make_agentic_response,
     make_call_context,
     make_response,
@@ -47,7 +49,7 @@ class Verdict(BaseModel):
 
 
 def _make_client(
-    chat: FakeChat, *, streaming: bool = False, http: FakeHttpClient | None = None, **options
+    chat: FakeChat, *, streaming: bool = False, http: FakeHttpClient | None = None, **options: Unpack[CreateOptions]
 ) -> MistralClient:
     # A fake http client keeps generated-image fetches off the network.
     client = MistralClient(
@@ -56,7 +58,7 @@ def _make_client(
         async_client=http or FakeHttpClient(),
         create_options=options or None,
     )
-    client._client = FakeMistralClient(chat)
+    install_fake_sdk(client, chat)
     return client
 
 
@@ -66,7 +68,7 @@ async def _ask(client: MistralClient, context=None, tools=(), response_schema=No
         context=context if context is not None else make_call_context(),
         tools=tools,
         response_schema=response_schema,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 

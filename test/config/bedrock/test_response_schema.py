@@ -7,7 +7,7 @@
 import json
 
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from pydantic import BaseModel
 
 from ag2.config.bedrock import BedrockClient
@@ -34,12 +34,13 @@ async def _ask(fake: FakeBedrockRuntime, response_schema) -> None:
         context=make_call_context(),
         tools=[],
         response_schema=response_schema,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 
 def test_output_config_shape() -> None:
     config = response_proto_to_output_config(ResponseSchema(Verdict))
+    assert config is not None
 
     text_format = config["textFormat"]
     assert text_format["type"] == "json_schema"
@@ -53,6 +54,7 @@ def test_output_config_shape() -> None:
 
 def test_output_config_nested_additional_properties() -> None:
     config = response_proto_to_output_config(ResponseSchema(Nested))
+    assert config is not None
 
     schema = json.loads(config["textFormat"]["structure"]["jsonSchema"]["schema"])
     assert schema["additionalProperties"] is False

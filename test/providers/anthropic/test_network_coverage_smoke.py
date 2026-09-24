@@ -31,6 +31,7 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_PACKET,
     EV_TEXT,
+    Envelope,
     Handoff,
     Hub,
     Resume,
@@ -388,7 +389,7 @@ async def test_workflow_graph_with_two_handoff_tools(
 
     # Wait for triage's routing packet to land.
     deadline = asyncio.get_event_loop().time() + 60.0
-    handoffs: list = []
+    handoffs: list[Envelope] = []
     while asyncio.get_event_loop().time() < deadline:
         wal = await hub.read_wal(channel.channel_id)
         handoffs = [
