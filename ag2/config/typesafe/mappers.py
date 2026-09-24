@@ -9,10 +9,10 @@ import textwrap
 from collections.abc import Iterable, Mapping, Sequence
 from enum import Enum
 from functools import cache
-from typing import Any
+from typing import Any, NoReturn
 
 from fast_depends.library.serializer import SerializerProto
-from typesafe_sdk import Answer, Choice, ChoiceAnswer, Noul, NoulAnswer, Question, Score
+from typesafe_sdk import Answer, Choice, ChoiceAnswer, JSONValue, Noul, NoulAnswer, Question, Score
 from typesafe_sdk import Usage as TypeSafeUsage
 
 from ag2.compact import CompactionSummary
@@ -36,27 +36,23 @@ ANSWER_KEY = "answer"  # Name of the single question sent per request
 
 
 class UnsupportedResponseSchemaError(AG2Error):
-    """Raised when a ``response_schema`` cannot be expressed as a TypeSafe question.
-
-    Jev is decision-only: it answers yes/no, choice and score questions and never
-    generates free text.
-    """
+    """Raised when a ``response_schema`` cannot be expressed as a TypeSafe question."""
 
     def __init__(self, reason: str) -> None:
         super().__init__(
-            f"{reason} TypeSafe Jev is decision-only: use `bool`, a probability `float` (ge=0, le=1), "
-            "a `Literal`/`Enum` of strings, or a documented `IntEnum` as `response_schema`."
+            f"{reason} TypeSafe Jev is decision-only: use `bool`, an `Enum` of strings, a documented `IntEnum`, "
+            "or a `0..1` number schema from `ResponseSchema.from_schema` as `response_schema`."
         )
 
 
-def tool_to_api(t: ToolSchema) -> None:
+def tool_to_api(t: ToolSchema) -> NoReturn:
     """Jev does not call tools, so every tool is rejected."""
     raise UnsupportedToolError(t.type, PROVIDER)
 
 
-def convert_state(messages: Iterable[BaseEvent], serializer: SerializerProto) -> list[dict[str, Any]]:
+def convert_state(messages: Iterable[BaseEvent], serializer: SerializerProto) -> list[dict[str, JSONValue | None]]:
     """Serialise the conversation into Jev ``state``: a JSON array of ``{role, content}``."""
-    state: list[dict[str, Any]] = []
+    state: list[dict[str, JSONValue | None]] = []
 
     for message in messages:
         if isinstance(message, ModelRequest):
@@ -76,16 +72,17 @@ def convert_state(messages: Iterable[BaseEvent], serializer: SerializerProto) ->
     return state
 
 
-def _parts_content(parts: Sequence[Input], serializer: SerializerProto) -> Any:
+def _parts_content(parts: Sequence[Input], serializer: SerializerProto) -> JSONValue | None:
     values = [_part_value(p, serializer) for p in parts]
     return values[0] if len(values) == 1 else values
 
 
-def _part_value(part: Input, serializer: SerializerProto) -> Any:
+def _part_value(part: Input, serializer: SerializerProto) -> JSONValue | None:
     if isinstance(part, TextInput):
         return part.content
     if isinstance(part, DataInput):
-        return json.loads(serializer.encode(part.data))
+        data: JSONValue | None = json.loads(serializer.encode(part.data))
+        return data
     raise UnsupportedInputError(type(part).__name__, PROVIDER)
 
 
@@ -95,14 +92,7 @@ def response_proto_to_question(
     instructions: str | None,
     criteria: Mapping[str, str] | None = None,
 ) -> Question:
-    """
-    Pick the Jev primitive for a ``response_schema`` from its JSON schema.
-
-    ``instructions`` (the agent prompt) frames the question; the type's own description,
-    an explicit ``description=`` or an Enum docstring, is the question itself. The docstring under each Enum
-    member describes that option; ``criteria`` overrides them, keyed by choice label, by
-    score level (as a string), or by ``"true"`` / ``"false"`` for a yes/no question.
-    """
+    """Convert a ``response_schema`` to the single Jev question: noul, choice or score."""
     node, _ = _decision_node(response)
     question = _explicit_description(response) or node.get("description")
     instructions = "\n\n".join(s for s in (instructions, question) if s) or None
@@ -141,7 +131,7 @@ def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, bo
     """Render a Jev answer as the JSON the ``response_schema`` validates."""
     node, embedded = _decision_node(response)
 
-    value: Any
+    value: bool | int | float | str
     if isinstance(answer, NoulAnswer):
         value = answer.noul >= boolean_threshold if node.get("type") == "boolean" else answer.noul
     elif isinstance(answer, ChoiceAnswer):
@@ -170,12 +160,7 @@ def _option_docs(response: ResponseProto[Any] | None) -> dict[Any, str]:
 
 @cache
 def _member_docstrings(enum_type: type[Enum]) -> dict[Any, str]:
-    """
-    Map each member's value to the string literal under its ``NAME = value`` line.
-
-    Python discards that string at runtime, so it is read back from the class source;
-    with no source available (REPL, frozen app) the options stay undescribed.
-    """
+    """Map each member's value to the string literal under it, read from the class source."""
     try:
         tree = ast.parse(textwrap.dedent(inspect.getsource(enum_type)))
     except (OSError, TypeError, SyntaxError):
@@ -215,11 +200,8 @@ def _decision_node(response: ResponseProto[Any] | None) -> tuple[Mapping[str, An
     return node, embedded
 
 
-def normalize_usage(raw: TypeSafeUsage | None) -> Usage:
+def normalize_usage(raw: TypeSafeUsage) -> Usage:
     """Normalise TypeSafe's ``Usage`` (either count may be unreported) to AG2 ``Usage``."""
-    if raw is None:
-        return Usage()
-
     prompt = float(raw.input_tokens) if raw.input_tokens is not None else None
     completion = float(raw.output_tokens) if raw.output_tokens is not None else None
     total = (prompt or 0) + (completion or 0) if prompt is not None or completion is not None else None

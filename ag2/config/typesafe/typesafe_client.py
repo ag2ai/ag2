@@ -30,11 +30,6 @@ __all__ = ["TypeSafeClient"]
 
 
 class TypeSafeClient(LLMClient):
-    """
-    Non-streaming only: each call sends one question derived from
-    ``response_schema`` and returns its answer as schema JSON.
-    """
-
     def __init__(
         self,
         model: str,
@@ -108,6 +103,6 @@ class TypeSafeClient(LLMClient):
         return ModelResponse(
             message=model_msg,
             usage=normalize_usage(response.usage),
-            model=response.model or self._model,
+            model=response.model,
             provider=PROVIDER,
         )

@@ -11,6 +11,7 @@ from fast_depends.use import SerializerCls
 from typesafe_sdk import Choice, ChoiceAnswer, Noul, NoulAnswer, Score, ScoreAnswer
 from typesafe_sdk import Usage as TypeSafeUsage
 
+from ag2.compact import CompactionSummary
 from ag2.config.typesafe.mappers import (
     UnsupportedResponseSchemaError,
     answer_metadata,
@@ -19,7 +20,19 @@ from ag2.config.typesafe.mappers import (
     normalize_usage,
     response_proto_to_question,
 )
-from ag2.events import DataInput, ModelMessage, ModelRequest, ModelResponse, TextInput, Usage
+from ag2.events import (
+    DataInput,
+    FileIdInput,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolResult,
+    ToolResultEvent,
+    ToolResultsEvent,
+    Usage,
+)
+from ag2.exceptions import UnsupportedInputError
 from ag2.response import PromptedSchema, ResponseSchema
 
 
@@ -108,8 +121,7 @@ def test_string_literal_maps_to_choice() -> None:
     assert question == Choice(criteria={"calm": None, "angry": "Hostile or upset"})
 
 
-@pytest.mark.asyncio
-async def test_enum_maps_to_choice_and_round_trips() -> None:
+def test_enum_maps_to_choice() -> None:
     schema = ResponseSchema(Department)
     answer = ChoiceAnswer(
         type="choice", choice="technical", confidence=0.9, probabilities={"billing": 0.1, "technical": 0.9}
@@ -120,11 +132,10 @@ async def test_enum_maps_to_choice_and_round_trips() -> None:
         instructions="You triage support tickets.\n\nWhich team should handle this ticket?",
         criteria={"billing": "Payments, invoicing, refunds.", "technical": None},
     )
-    assert await schema.validate(answer_to_content(schema, answer), context=None) is Department.TECHNICAL  # type: ignore[arg-type]
+    assert json.loads(answer_to_content(schema, answer)) == {"data": "technical"}
 
 
-@pytest.mark.asyncio
-async def test_int_enum_maps_to_score_and_snaps_to_nearest_level() -> None:
+def test_int_enum_maps_to_score_and_snaps_to_nearest_level() -> None:
     schema = ResponseSchema(Severity)
     answer = ScoreAnswer(
         type="score",
@@ -137,7 +148,7 @@ async def test_int_enum_maps_to_score_and_snaps_to_nearest_level() -> None:
     assert response_proto_to_question(schema, instructions=None, criteria={"2": "Outage"}) == Score(
         criteria=["Cosmetic.", "Degraded.", "Outage"]
     )
-    assert await schema.validate(answer_to_content(schema, answer), context=None) is Severity.HIGH  # type: ignore[arg-type]
+    assert json.loads(answer_to_content(schema, answer)) == {"data": 2}
 
 
 @pytest.mark.parametrize(
@@ -153,6 +164,14 @@ async def test_int_enum_maps_to_score_and_snaps_to_nearest_level() -> None:
 def test_invalid_rubrics_are_rejected(schema: Any) -> None:
     with pytest.raises(UnsupportedResponseSchemaError, match="2-10 levels numbered from 0"):
         response_proto_to_question(schema, instructions=None)
+
+
+def test_enum_without_source_has_undescribed_options() -> None:
+    tone = Enum("tone", {"CALM": "calm", "ANGRY": "angry"})
+
+    question = response_proto_to_question(ResponseSchema(tone), instructions="What is the tone?")
+
+    assert question == Choice(instructions="What is the tone?", criteria={"calm": None, "angry": None})
 
 
 def test_undocumented_rubric_accepts_criteria() -> None:
@@ -183,6 +202,9 @@ def test_convert_state_serialises_history() -> None:
         [
             ModelRequest([TextInput("I was charged twice.")]),
             ModelResponse(ModelMessage("billing")),
+            ModelResponse(),
+            ToolResultsEvent([ToolResultEvent(parent_id="tc_1", name="lookup", result=ToolResult("paid", "refunded"))]),
+            CompactionSummary(summary="The customer was refunded.", event_count=3),
             ModelRequest([DataInput({"order": 42})]),
         ],
         SerializerCls,
@@ -191,8 +213,15 @@ def test_convert_state_serialises_history() -> None:
     assert state == [
         {"role": "user", "content": "I was charged twice."},
         {"role": "assistant", "content": "billing"},
+        {"role": "tool", "content": ["paid", "refunded"]},
+        {"role": "user", "content": "[Summary of earlier conversation]\nThe customer was refunded."},
         {"role": "user", "content": {"order": 42}},
     ]
+
+
+def test_convert_state_rejects_files() -> None:
+    with pytest.raises(UnsupportedInputError, match="FileIdInput"):
+        convert_state([ModelRequest([FileIdInput("file_1")])], SerializerCls)
 
 
 def test_answer_metadata() -> None:

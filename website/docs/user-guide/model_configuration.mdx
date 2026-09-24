@@ -188,7 +188,7 @@ Jev answers a typed question instead of generating text, so the agent must set a
 
 !!! tip
 
-    **AG2** is designed to be async and streaming-first, so for the best user experience it is recommended to enable streaming on the model provider configurations for models that support it. As shown above, `Streaming` has been set to `True` in each config.
+    **AG2** is designed to be async and streaming-first, so for the best user experience it is recommended to enable streaming on the model provider configurations for models that support it. As shown above, `Streaming` has been set to `True` in each config that supports it; TypeSafe's Jev answers in a single response and has no streaming option.
 
 ### Using Environment Variables
 
@@ -500,14 +500,13 @@ The image URL is a short-lived signed link, so download it promptly if you need 
 
 Jev is not a text generator. It answers **one typed question** about the conversation so far — yes or no, one label out of several, or a level on a rubric — and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
 
-If `api_key`, `base_url` and `model` are not passed explicitly, the SDK resolves them from the `TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL` and `TYPESAFE_DEFAULT_MODEL` environment variables; `model` otherwise defaults to `jev-latest`.
+If `api_key` and `base_url` are not passed explicitly, the SDK resolves them from the `TYPESAFE_API_KEY` and `TYPESAFE_BASE_URL` environment variables. `model` defaults to `jev-latest`.
 
-```python linenums="1" hl_lines="7-13 18-19"
+```python linenums="1" hl_lines="6-12 17-18"
 from enum import Enum
 
 from ag2 import Agent
 from ag2.config import TypeSafeConfig
-
 
 class Department(Enum):
     """Which team should handle this ticket?"""
@@ -516,7 +515,6 @@ class Department(Enum):
     """Payments, invoicing, refunds."""
     TECHNICAL = "technical"
     """Bugs, outages, integrations."""
-
 
 router = Agent(
     "router",
@@ -556,7 +554,6 @@ The string literal under each `Enum` / `IntEnum` member describes that option to
 
 ```python linenums="1"
 from enum import IntEnum
-
 
 class Severity(IntEnum):
     LOW = 0
@@ -598,18 +595,7 @@ The SDK answer, minus its `type`, is kept on `reply.response.metadata`. A yes/no
 
 `retry` takes a `typesafe_sdk.RetryPolicy` and `http_client` an `#!python httpx2.AsyncClient`; both are forwarded to the SDK untouched. Token counts land on `ModelResponse.usage` as `prompt_tokens` / `completion_tokens` when the API reports them.
 
-Runnable scripts under `examples/typesafe/`, one per decision shape from [TypeSafe's docs](https://docs.typesafe.ai){.external-link target="_blank"}:
-
-- `classification.py` — one known category should win (`Enum` choice)
-- `detection.py` — a probability that one property is present (`bool`, tuned with `boolean_threshold`)
-- `scoring.py` — the answer belongs on an ordered rubric (`IntEnum` score)
-- `routing.py` — a category selects the next code path: Jev's choice picks the handler function, and a low-confidence pick falls back to a person
-- `ranking.py` — order candidates by relevance with one question per candidate, asked in parallel; search and retrieval are the same loop
-- `verification.py` — check an artifact for specific failure modes, passing it and its source as structured state
-- `features.py` — yes/no probabilities as features for a downstream ML model
-- `docstrings_matter.py` — the same `Enum` with and without member docstrings, side by side
-
-Structured data extraction is the one shape in that table this provider cannot express: an object schema is rejected, since Jev answers one decision per question.
+Structured data extraction, one of the decision shapes in [TypeSafe's docs](https://docs.typesafe.ai){.external-link target="_blank"}, is the one this provider cannot express: an object schema is rejected, since Jev answers one decision per question.
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 

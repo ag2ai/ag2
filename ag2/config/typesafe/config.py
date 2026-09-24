@@ -33,13 +33,6 @@ class TypeSafeConfigOverrides(TypedDict, total=False):
 
 @dataclass(slots=True)
 class TypeSafeConfig(ModelConfig):
-    """
-    fallback env vars:
-    api_key - TYPESAFE_API_KEY
-    base_url - TYPESAFE_BASE_URL
-    model - TYPESAFE_DEFAULT_MODEL
-    """
-
     model: str = DEFAULT_MODEL
     api_key: str | None = None
     base_url: str | None = None
@@ -48,9 +41,7 @@ class TypeSafeConfig(ModelConfig):
     headers: Mapping[str, str] | None = None
     http_client: httpx2.AsyncClient | None = None
     boolean_threshold: float = 0.5
-    """Minimum yes-probability for a ``bool`` schema to resolve to ``True``."""
     criteria: Mapping[str, str] | None = None
-    """Option descriptions keyed by choice label, score value, or ``"true"`` / ``"false"``."""
 
     @property
     def provider(self) -> ModelProvider:
