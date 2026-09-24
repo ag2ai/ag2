@@ -8,15 +8,19 @@ from types import SimpleNamespace, TracebackType
 from typing import Any
 
 from openai.types.realtime import (
+    RealtimeConversationItemFunctionCall,
     RealtimeError,
     RealtimeErrorEvent,
     ResponseCreatedEvent,
     ResponseDoneEvent,
+    ResponseOutputItemDoneEvent,
 )
 from openai.types.realtime.realtime_response import RealtimeResponse
 
 from ag2.live import LiveAgent
 from ag2.live.openai import RealTimeConfig
+from ag2.stream import Stream
+from ag2.tools.tool import Tool
 
 
 class _Recorder:
@@ -94,11 +98,14 @@ class FakeClient:
         return self.connection
 
 
-def live_agent(*tools: Callable[..., Any]) -> tuple[LiveAgent, FakeConnection]:
+def live_agent(
+    *tools: Callable[..., Any] | Tool,
+    stream: Stream | None = None,
+) -> tuple[LiveAgent, FakeConnection]:
     """A `LiveAgent` on OpenAI realtime whose connection is a `FakeConnection`."""
     client = FakeClient()
     config = RealTimeConfig("gpt-realtime", client=client)  # type: ignore[arg-type]
-    return LiveAgent("assistant", config=config, tools=tools), client.connection
+    return LiveAgent("assistant", config=config, tools=tools, stream=stream), client.connection
 
 
 def created(response_id: str) -> ResponseCreatedEvent:
@@ -114,6 +121,26 @@ def done(response_id: str) -> ResponseDoneEvent:
         event_id=f"ev-done-{response_id}",
         response=RealtimeResponse(id=response_id, status="completed"),
         type="response.done",
+    )
+
+
+def function_call(
+    response_id: str,
+    call_id: str,
+    name: str = "lookup",
+    arguments: str = "{}",
+) -> ResponseOutputItemDoneEvent:
+    return ResponseOutputItemDoneEvent(
+        event_id=f"ev-call-{call_id}",
+        item=RealtimeConversationItemFunctionCall(
+            type="function_call",
+            call_id=call_id,
+            name=name,
+            arguments=arguments,
+        ),
+        output_index=0,
+        response_id=response_id,
+        type="response.output_item.done",
     )
 
 

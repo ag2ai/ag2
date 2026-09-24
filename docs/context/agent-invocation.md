@@ -42,7 +42,8 @@ A per-stream queue of follow-up messages waiting to be fed to the model. A calle
 it through a **Run handle** (or the stream directly) while a turn is in flight; the turn
 drains the inbox at its next or final model call, so a message added while the turn runs is
 consumed by that same turn. Anything added when no turn is running waits for the next one.
-A live session (see [Live](./live.md)) instead takes each message the moment it is added.
+A live session (see [Live](./live.md)) instead takes each message the moment it is added,
+and when it opens takes whatever is already waiting.
 
 ### Continuation
 A follow-up turn on the conversation a Reply belongs to, reusing that Reply's context,

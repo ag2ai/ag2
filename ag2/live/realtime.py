@@ -9,8 +9,9 @@ from typing import Any, Protocol
 from fast_depends.library.serializer import SerializerProto
 
 from ag2.agent import HumanHook, Plugin, PluginTarget, PromptType, wrap_hitl
+from ag2.annotations import Context
 from ag2.context import ConversationContext, Stream
-from ag2.events import HumanInputRequest, ModelRequest, ObserverCompleted, ObserverStarted
+from ag2.events import HumanInputRequest, Input, MessageEnqueued, ModelRequest, ObserverCompleted, ObserverStarted
 from ag2.middleware.base import BaseMiddleware, MiddlewareFactory
 from ag2.observers import Observer
 from ag2.stream import MemoryStream
@@ -71,6 +72,13 @@ class LiveAgent(PluginTarget):
     `ModelRequest` — realtime is session-scoped, not request-scoped). The
     resulting iterable of strings is forwarded as `instructions` to the
     provider's session, which is responsible for joining them.
+
+    `context.enqueue(...)` hands the running session a user turn — from the
+    caller, a tool, or a background task. The agent drains the stream's inbox
+    once the provider's session is open (delivering anything left on a shared
+    stream) and again on every `MessageEnqueued`, whether or not the model is
+    responding, and publishes what it drained as one `ModelRequest`. The
+    provider's session takes it from there and decides when to answer.
     """
 
     def __init__(
@@ -192,6 +200,10 @@ class LiveAgent(PluginTarget):
             for obs in all_observers:
                 await context.send(ObserverStarted(name=getattr(obs, "name", type(obs).__name__)))
 
+            # The provider's session and the observers see `ModelRequest` from here on.
+            s.enter_context(stream.where(MessageEnqueued).sub_scope(_on_message_enqueued))
+            await _publish_inbox(context)
+
             try:
                 yield context
 
@@ -208,3 +220,22 @@ class LiveAgent(PluginTarget):
         for hook in self._dynamic_prompt:
             parts.append(await hook(request, context))
         return parts
+
+
+async def _on_message_enqueued(event: MessageEnqueued, context: Context) -> None:
+    await _publish_inbox(context)
+
+
+async def _publish_inbox(context: ConversationContext) -> None:
+    """Publish the inbox as one `ModelRequest`, removing only the messages it published.
+
+    Assumes only the event loop removes from the inbox; other threads only append.
+    """
+    inbox = context.pending_messages
+    count = len(inbox)
+    if not count:
+        return
+    drained = inbox[:count]
+    del inbox[:count]
+    parts: list[Input] = [part for request in drained for part in request.parts]
+    await context.send(ModelRequest(parts))

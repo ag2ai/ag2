@@ -6,25 +6,8 @@ import pytest
 
 pytest.importorskip("openai")
 
-from openai.types.realtime import RealtimeConversationItemFunctionCall, ResponseOutputItemDoneEvent
-
 from ag2.events import ToolResult, ToolResultEvent
-from test.live._helpers import active_response_rejection, created, done, live_agent
-
-
-def function_call(response_id: str, call_id: str) -> ResponseOutputItemDoneEvent:
-    return ResponseOutputItemDoneEvent(
-        event_id=f"ev-call-{call_id}",
-        item=RealtimeConversationItemFunctionCall(
-            type="function_call",
-            call_id=call_id,
-            name="lookup",
-            arguments="{}",
-        ),
-        output_index=0,
-        response_id=response_id,
-        type="response.output_item.done",
-    )
+from test.live._helpers import active_response_rejection, created, done, function_call, live_agent
 
 
 def lookup() -> str:
