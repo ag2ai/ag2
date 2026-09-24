@@ -127,7 +127,11 @@ class FilesystemToolkit(Toolkit):
             ),
         ) -> list[str]:
             target = _resolve_path(base_dir, path)
-            return sorted(str(p.relative_to(base_dir)) for p in _glob(target, pattern))
+            _check_pattern(pattern)
+            # A symlink inside the base can still point outside it.
+            return sorted(
+                str(p.relative_to(base_dir)) for p in _glob(target, pattern) if p.resolve().is_relative_to(base_dir)
+            )
 
         return _find_files
 
@@ -246,6 +250,13 @@ def _resolve_path(base: Path, path: str) -> Path:
     if not resolved.is_relative_to(base):
         raise PermissionError(f"Path '{path}' escapes base directory '{base}'")
     return resolved
+
+
+def _check_pattern(pattern: str) -> None:
+    """Reject a glob *pattern* that could walk outside the search directory."""
+    parts = Path(pattern)
+    if parts.anchor or ".." in parts.parts:
+        raise PermissionError(f"Pattern '{pattern}' escapes base directory")
 
 
 if sys.version_info >= (3, 13):
