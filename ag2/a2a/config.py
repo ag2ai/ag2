@@ -11,7 +11,7 @@ from a2a.client import ClientCallInterceptor
 from a2a.types import AgentCard
 from typing_extensions import Self, Unpack
 
-from ag2.config.config import ModelConfig
+from ag2.config.config import ModelConfig, ModelProvider
 
 from .client import A2AClient, CardVerifier
 from .errors import A2AInvalidCardError
@@ -115,6 +115,14 @@ class A2AConfig(ModelConfig):
     tenant: str | None = None
     history_length: int | None = None
     extensions: Sequence[str] = ()
+
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError("A remote A2A agent has no AG2 provider.")
+
+    @property
+    def model(self) -> None:
+        return None
 
     def copy(self, /, **overrides: Unpack[A2AConfigOverrides]) -> Self:
         return replace(self, **overrides)

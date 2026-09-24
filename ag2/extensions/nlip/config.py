@@ -9,7 +9,7 @@ from typing import TypedDict
 import httpx
 from typing_extensions import Self, Unpack
 
-from ag2.config.config import ModelConfig
+from ag2.config.config import ModelConfig, ModelProvider
 
 from .client import NlipClient
 
@@ -42,6 +42,14 @@ class NlipConfig(ModelConfig):
     timeout: float | None = 60.0
     max_retries: int = 3
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None = field(default=None, repr=False)
+
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError("A remote NLIP agent has no AG2 provider.")
+
+    @property
+    def model(self) -> None:
+        return None
 
     def copy(self, /, **overrides: Unpack[NlipConfigOverrides]) -> Self:
         return replace(self, **overrides)
