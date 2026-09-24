@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from google.oauth2.credentials import Credentials
 
 from ag2 import Context, MemoryStream
@@ -46,7 +46,7 @@ async def _send(client: GeminiClient, tools: list[Tool]) -> None:
         context=context,
         tools=schemas,
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 

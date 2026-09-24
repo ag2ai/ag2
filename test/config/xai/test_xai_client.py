@@ -6,12 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fast_depends.use import SerializerCls
-from xai_sdk.chat import chat_pb2
-from xai_sdk.proto import usage_pb2
+from fast_depends.pydantic import PydanticSerializer
+from xai_sdk.proto import chat_pb2, usage_pb2
 
 from ag2 import Context
-from ag2.config.xai import XAIConfig
+from ag2.config.xai import XAIClient, XAIConfig
 from ag2.config.xai.events import XAIAssistantEvent
 from ag2.events import (
     ModelMessageChunk,
@@ -61,7 +60,7 @@ def _fake_tool_call(
     )
 
 
-def _make_client_with_stub_chat(stub_chat: MagicMock) -> tuple[object, Context]:
+def _make_client_with_stub_chat(stub_chat: MagicMock) -> tuple[XAIClient, Context]:
     with patch("ag2.config.xai.xai_client.AsyncClient") as mock_async_client:
         instance = MagicMock()
         instance.chat.create.return_value = stub_chat
@@ -85,7 +84,7 @@ async def test_non_streaming_happy_path() -> None:
         context=context,
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert isinstance(result, ModelResponse)
@@ -114,7 +113,7 @@ async def test_reasoning_event_emitted() -> None:
         context=context,
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     events = await context.stream.history.get_events()
@@ -140,7 +139,7 @@ async def test_tool_calls_surface_in_response() -> None:
         context=context,
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert result.tool_calls == ToolCallsEvent([
@@ -184,7 +183,7 @@ async def test_streaming_accumulates_chunks() -> None:
         context=context,
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert result.message is not None
@@ -216,7 +215,7 @@ async def test_xai_assistant_event_replays_through_chat_append() -> None:
         context=context,
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     # chat.append should be called exactly once with the replay Response
@@ -242,10 +241,25 @@ async def test_response_format_passed_to_chat_create() -> None:
         context=context,
         tools=[],
         response_schema=ResponseSchema(int, name="N"),
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     create_kwargs = instance.chat.create.call_args.kwargs
     assert "response_format" in create_kwargs
     assert isinstance(create_kwargs["response_format"], chat_pb2.ResponseFormat)
     assert create_kwargs["response_format"].format_type == chat_pb2.FORMAT_TYPE_JSON_SCHEMA
+
+
+@pytest.mark.asyncio
+async def test_client_without_create_options_says_so_when_called() -> None:
+    with patch("ag2.config.xai.xai_client.AsyncClient"):
+        client = XAIClient(api_key="t")
+
+    with pytest.raises(ValueError, match="without create options"):
+        await client(
+            messages=[ModelRequest([TextInput("hi")])],
+            context=Context(stream=MemoryStream()),
+            tools=[],
+            response_schema=None,
+            serializer=PydanticSerializer(),
+        )

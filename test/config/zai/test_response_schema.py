@@ -4,14 +4,14 @@
 
 import pytest
 from dirty_equals import IsPartialDict
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from pydantic import BaseModel
 
 from ag2.config.zai import ZAIClient
 from ag2.config.zai.mappers import response_proto_to_format, schema_instruction
 from ag2.events import ModelRequest, TextInput
 from ag2.response import PromptedSchema, ResponseSchema
-from test.config.zai._helpers import FakeCompletions, FakeZAIClient, make_call_context
+from test.config.zai._helpers import FakeCompletions, install_fake_sdk, make_call_context
 
 
 class Verdict(BaseModel):
@@ -54,14 +54,14 @@ def test_schema_instruction_skips_prompted_schema() -> None:
 async def test_schema_sends_json_mode_and_prompt() -> None:
     completions = FakeCompletions()
     client = ZAIClient(create_options={"model": "glm-test"})
-    client._client = FakeZAIClient(completions)
+    install_fake_sdk(client, completions)
 
     await client(
         messages=[ModelRequest([TextInput("hello")])],
         context=make_call_context(),
         tools=[],
         response_schema=ResponseSchema(Verdict),
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert completions.kwargs == IsPartialDict({"response_format": {"type": "json_object"}})

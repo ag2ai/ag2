@@ -15,7 +15,7 @@ import httpx
 import httpx2
 import pytest
 from dirty_equals import IsPartialDict
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config import OpenAIConfig, OpenAIResponsesConfig
@@ -81,7 +81,7 @@ async def _ask(config: OpenAIConfig | OpenAIResponsesConfig) -> None:
         context=Context(stream=MemoryStream()),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 
@@ -120,7 +120,7 @@ class TestLegacyHttpxClient:
     async def test_completions(self) -> None:
         captured: dict[str, object] = {}
 
-        await _ask(OpenAIConfig(model="gpt-4o", api_key="test", http_client=_legacy_client(captured, _COMPLETION)))
+        await _ask(OpenAIConfig(model="gpt-4o", api_key="test", http_client=_legacy_client(captured, _COMPLETION)))  # type: ignore[arg-type]  # the SDK types `httpx2` but accepts `httpx`
 
         assert captured["body"] == _COMPLETION_BODY
 
@@ -128,7 +128,7 @@ class TestLegacyHttpxClient:
         captured: dict[str, object] = {}
 
         await _ask(
-            OpenAIResponsesConfig(model="gpt-4o", api_key="test", http_client=_legacy_client(captured, _RESPONSE))
+            OpenAIResponsesConfig(model="gpt-4o", api_key="test", http_client=_legacy_client(captured, _RESPONSE))  # type: ignore[arg-type]  # the SDK types `httpx2` but accepts `httpx`
         )
 
         assert captured["body"] == IsPartialDict({"model": "gpt-4o"})

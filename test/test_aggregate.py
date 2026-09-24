@@ -4,13 +4,13 @@
 
 """Tests for AggregateStrategy, AggregateTrigger, and built-in strategies."""
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ag2 import Agent
+from ag2 import Agent, KnowledgeConfig
 from ag2 import Context as Context
-from ag2.agent import KnowledgeConfig
 from ag2.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
@@ -20,6 +20,7 @@ from ag2.events import (
     AggregationCompleted,
     AggregationFailed,
     AggregationStarted,
+    BaseEvent,
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -61,7 +62,7 @@ class TestConversationSummaryAggregate:
         store = MemoryKnowledgeStore()
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        events = [ModelRequest([TextInput("hello")]), ModelRequest([TextInput("world")])]
+        events: list[BaseEvent] = [ModelRequest([TextInput("hello")]), ModelRequest([TextInput("world")])]
 
         await strategy.aggregate(events, ctx, store)
 
@@ -276,7 +277,7 @@ class _RecordingAggregate:
 
     def __init__(self) -> None:
         self.calls = 0
-        self.last_usage: dict = {}
+        self.last_usage: dict[str, Any] = {}
 
     async def aggregate(self, events, context, store) -> None:
         self.calls += 1
@@ -285,6 +286,21 @@ class _RecordingAggregate:
 
 class TestAggregationWiredOnAgent:
     """End-to-end behaviour of the aggregation middleware on an Agent."""
+
+    @pytest.mark.asyncio
+    async def test_a_trigger_without_a_strategy_is_not_wired(self) -> None:
+        stream = MemoryStream()
+        started: list[AggregationStarted] = []
+        stream.where(AggregationStarted).subscribe(lambda e: started.append(e))
+        agent = Agent(
+            "roller",
+            config=TestConfig("done"),
+            knowledge=KnowledgeConfig(store=MemoryKnowledgeStore(), aggregate_trigger=AggregateTrigger(on_end=True)),
+        )
+
+        await agent.ask("go", stream=stream)
+
+        assert started == []
 
     @pytest.mark.asyncio
     async def test_on_end_fires_once_per_ask(self) -> None:
@@ -388,7 +404,7 @@ class TestAggregationWiredOnAgent:
 class _RaisingAggregate:
     """AggregateStrategy that always raises — for failure-path tests."""
 
-    last_usage: dict = {}
+    last_usage: dict[str, Any] = {}
 
     async def aggregate(self, events, context, store) -> None:
         raise RuntimeError("aggregate boom")

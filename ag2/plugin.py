@@ -16,10 +16,10 @@ from typing_extensions import Self
 from .annotations import Context
 from .assembly import AssemblyPolicy
 from .events import (
-    ModelRequest,
+    BaseEvent,
 )
 from .events.conditions import Condition
-from .hitl import HumanHook, wrap_hitl
+from .hitl import HitlFactory, HumanHook, wrap_hitl
 from .middleware.base import (
     MiddlewareFactory,
     ToolMiddleware,
@@ -51,7 +51,8 @@ class PromptObserverMixin:
     """
 
     _system_prompt: list[str]
-    _dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]]
+    # Called with the turn's trigger: a `ModelRequest`, or whatever event `resume` re-enters with.
+    _dynamic_prompt: list[Callable[[BaseEvent, Context], Awaitable[str]]]
     _observers: list[Observer]
     _middleware: list[MiddlewareFactory]
     _policies: list[AssemblyPolicy]
@@ -119,8 +120,8 @@ class PromptObserverMixin:
             return wrapper(callback)
         return wrapper
 
-    def add_tool(self, t: FunctionTool) -> None:
-        """Store a freshly built tool. Subclasses choose eager vs deferred."""
+    def add_tool(self, t: Callable[..., Any] | Tool) -> Self:
+        """Store a tool. Subclasses choose eager vs deferred."""
         raise NotImplementedError
 
     @overload
@@ -239,9 +240,10 @@ class Plugin(PromptObserverMixin):
         self._hitl_hook = func
         return func
 
-    def add_tool(self, t: FunctionTool) -> None:
+    def add_tool(self, t: Callable[..., Any] | Tool) -> Self:
         """Defer the tool; it is applied to an agent later via ``_apply_plugin``."""
         self._tools.append(t)
+        return self
 
 
 class PluginTarget(PromptObserverMixin):
@@ -257,11 +259,11 @@ class PluginTarget(PromptObserverMixin):
     """
 
     name: str
-    tools: list[FunctionTool]
+    tools: list[Tool]
     dependency_provider: Provider
     _serializer: SerializerProto
     _tool_executor: ToolExecutor
-    _hitl_hook: HumanHook | None
+    _hitl_hook: HitlFactory | None
     _agent_dependencies: dict[Any, Any]
     _agent_variables: dict[Any, Any]
 
@@ -291,8 +293,8 @@ class PluginTarget(PromptObserverMixin):
         tools: Iterable[Callable[..., Any] | Tool],
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
-        dependencies: dict[Any, Any],
-        variables: dict[Any, Any],
+        dependencies: dict[Any, Any] | None,
+        variables: dict[Any, Any] | None,
         plugins: Iterable["Plugin"],
     ) -> None:
         """Set up the contribution surface shared by every plugin target.
@@ -355,20 +357,24 @@ class PluginTarget(PromptObserverMixin):
 
 def _wrap_prompt_hook(
     func: PromptHook,
-) -> Callable[[ModelRequest, Context], Awaitable[str]]:
+) -> Callable[[BaseEvent, Context], Awaitable[str]]:
     call_model = build_model(func)
 
     # Carry the hook's identity onto the wrapper, so `Agent.dynamic_prompt`
     # yields something nameable rather than a row of anonymous `wrapper`s.
     @wraps(func)
-    async def wrapper(event: ModelRequest, context: Context) -> str:
+    async def wrapper(event: BaseEvent, context: Context) -> str:
+        # `asolve` annotates each positional as a tuple and each keyword as a
+        # `dict[str, Any]`; the values really are arbitrary.
+        args: tuple[Any, ...] = (event,)
+        options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}
         async with AsyncExitStack() as stack:
-            r = await call_model.asolve(
-                event,
+            r: str = await call_model.asolve(
+                *args,
                 stack=stack,
                 cache_dependencies={},
                 dependency_provider=context.dependency_provider,
-                **{CONTEXT_OPTION_NAME: context},
+                **options,
             )
         return r
 

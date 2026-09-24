@@ -31,7 +31,15 @@ from pydantic_core import to_jsonable_python
 from ag2.context import ConversationContext
 from ag2.stream import MemoryStream
 
-from ._types import A2UIVersion, JsonObject, JsonValue, ServerToClientMessage
+from ._types import (
+    A2UIVersion,
+    ActionResponseContent,
+    ActionResponseError,
+    ActionResponseMessage,
+    JsonObject,
+    JsonValue,
+    ServerToClientMessage,
+)
 from .actions import A2UIAction
 from .incoming import A2UIIncomingAction
 
@@ -67,19 +75,19 @@ def _stamp(message: dict[str, Any], version: A2UIVersion) -> ServerToClientMessa
     """Ensure a handler-returned message carries the wire ``version``."""
     if "version" not in message:
         message = {"version": version, **message}
-    return message  # type: ignore[return-value]
+    # The handler's return is opaque; `_is_message` checked only that it names an envelope key.
+    return cast(ServerToClientMessage, message)
 
 
 def _action_response(
     action_id: str,
-    version: A2UIVersion,
     *,
     value: JsonValue = None,
-    error: dict[str, str] | None = None,
-) -> ServerToClientMessage:
-    body: dict[str, Any] = {"error": error} if error is not None else {"value": value}
-    message: dict[str, Any] = {"version": version, "actionId": action_id, "actionResponse": body}
-    return message  # type: ignore[return-value]
+    error: ActionResponseError | None = None,
+) -> ActionResponseMessage:
+    """``actionResponse`` exists only in v1.0, so it is the only version it is stamped with."""
+    body: ActionResponseContent = {"error": error} if error is not None else {"value": value}
+    return {"version": "v1.0", "actionId": action_id, "actionResponse": body}
 
 
 def build_server_action_context(
@@ -160,7 +168,7 @@ async def run_server_action(
     except Exception as e:  # noqa: BLE001 - a handler failure must not tear down the turn
         logger.exception("A2UI server action %r failed", click.name)
         if can_respond:
-            return [_action_response(action_id, version, error={"code": "ACTION_FAILED", "message": str(e)})]
+            return [_action_response(action_id, error={"code": "ACTION_FAILED", "message": str(e)})]
         return []
 
     return _result_to_messages(
@@ -186,7 +194,7 @@ def _result_to_messages(
     # handler return is opaque (user code); the spec says it is a JSON value
     # here, so the cast marks that boundary before it goes on the wire.
     if can_respond:
-        return [_action_response(action_id, version, value=cast(JsonValue, result))]
+        return [_action_response(action_id, value=cast(JsonValue, result))]
 
     # Fire-and-forget. A non-None result with nowhere to go is dropped.
     if result is not None:

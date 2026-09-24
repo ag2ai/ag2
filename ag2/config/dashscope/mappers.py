@@ -27,7 +27,7 @@ from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 
-def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] | None:
+def response_proto_to_format(response: ResponseProto[Any] | None) -> dict[str, Any] | None:
     """Convert a ResponseProto to DashScope response_format (OpenAI-compatible)."""
     if not response or not response.json_schema:
         return None
@@ -101,7 +101,7 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                blocks: list[dict[str, str]] = []
+                blocks = []
                 has_non_text = False
                 for part in r.result.parts:
                     if isinstance(part, TextInput):

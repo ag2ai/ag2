@@ -19,7 +19,8 @@ import pytest
 from typing_extensions import Self
 
 from ag2 import Agent, Context
-from ag2.config import LLMClient, ModelConfig
+from ag2.assembly import AssemblyPolicy
+from ag2.config import LLMClient, ModelConfig, ModelProvider
 from ag2.events import (
     BaseEvent,
     HaltEvent,
@@ -30,6 +31,7 @@ from ag2.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from ag2.files.protocol import FilesClient
 from ag2.observers import BaseObserver
 from ag2.policies import AlertPolicy
 from ag2.stream import MemoryStream
@@ -74,12 +76,24 @@ class _RecordingConfig(ModelConfig):
         self._responses = responses
         self.client: _RecordingClient | None = None
 
+    # What the protocol's own bodies do: this double names no provider or model and has no Files API.
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError
+
+    @property
+    def model(self) -> str:
+        raise NotImplementedError
+
     def copy(self) -> Self:
         return self
 
     def create(self) -> _RecordingClient:
         self.client = _RecordingClient(*self._responses)
         return self.client
+
+    def create_files_client(self) -> FilesClient:
+        raise NotImplementedError
 
 
 class TestAlertPolicyUnit:
@@ -448,7 +462,7 @@ class TestAlertPolicyOrdering:
         from ag2.assembly import AssemblerMiddleware
         from ag2.policies import SlidingWindowPolicy
 
-        policies = [AlertPolicy(), SlidingWindowPolicy(50)]
+        policies: list[AssemblyPolicy] = [AlertPolicy(), SlidingWindowPolicy(50)]
         warnings = AssemblerMiddleware.validate_order(policies)
         assert warnings == []
 
@@ -457,7 +471,7 @@ class TestAlertPolicyOrdering:
         from ag2.assembly import AssemblerMiddleware
         from ag2.policies import SlidingWindowPolicy
 
-        policies = [SlidingWindowPolicy(50), AlertPolicy()]
+        policies: list[AssemblyPolicy] = [SlidingWindowPolicy(50), AlertPolicy()]
         warnings = AssemblerMiddleware.validate_order(policies)
         assert len(warnings) == 1
         assert "alert" in warnings[0]

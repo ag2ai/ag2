@@ -20,7 +20,7 @@ import json
 import httpx
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config.anthropic import AnthropicConfig
@@ -57,7 +57,7 @@ async def _ask(config: AnthropicConfig) -> None:
         context=Context(stream=MemoryStream()),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 
@@ -117,7 +117,7 @@ def test_the_files_client_takes_the_same_client() -> None:
 
 def test_a_legacy_httpx_client_is_refused_by_the_sdk() -> None:
     """ag2 neither adapts it nor preempts the error — the SDK names the package."""
-    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=httpx.AsyncClient())  # type: ignore[arg-type]
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=httpx.AsyncClient())  # type: ignore[arg-type]  # the refusal under test
 
     with pytest.raises(TypeError, match="httpx2.AsyncClient"):
         config.create()

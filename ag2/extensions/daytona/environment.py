@@ -6,7 +6,7 @@ import threading
 from collections.abc import AsyncGenerator, Hashable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from daytona import (
     AsyncDaytona,
@@ -197,7 +197,7 @@ class DaytonaEnvironment:
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
-    def __deepcopy__(self, memo: dict) -> "DaytonaEnvironment":  # type: ignore[type-arg]
+    def __deepcopy__(self, memo: dict[int, Any]) -> "DaytonaEnvironment":
         # Shared resource handle: a copy is the SAME factory. The cached cloud
         # sandboxes (and the threading.Lock guarding them — not deepcopy-able)
         # are reused, not duplicated. This is what lets Agent.add_tool deepcopy

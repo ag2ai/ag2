@@ -4,7 +4,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
-from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, contextmanager
 from functools import partial
 from typing import Any, overload
 from uuid import uuid4
@@ -14,7 +14,7 @@ from fast_depends.core import CallModel
 from ag2.types import ClassInfo, SendableMessage
 
 from .annotations import Context as AnnotatedContext
-from .context import ConversationContext, Stream, StreamId, SubId, drop_background_task
+from .context import ConversationContext, Stream, StreamId, SubId, TEvent, drop_background_task
 from .events import BaseEvent, Input, ModelRequest
 from .events.conditions import Condition, TypeCondition
 from .history import History, MemoryStorage, Storage
@@ -73,11 +73,23 @@ class ABCStream(Stream):
             condition = TypeCondition(condition)
         return SubStream(self, condition)
 
+    @overload
+    def get(
+        self,
+        condition: type[TEvent],
+    ) -> AbstractAsyncContextManager[asyncio.Future[TEvent]]: ...
+
+    @overload
+    def get(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> AbstractAsyncContextManager[asyncio.Future[BaseEvent]]: ...
+
     @asynccontextmanager
     async def get(
         self,
         condition: ClassInfo | Condition,
-    ) -> AsyncGenerator[asyncio.Future[BaseEvent]]:
+    ) -> AsyncGenerator[asyncio.Future[Any]]:
         result = asyncio.Future[BaseEvent]()
 
         async def wait_result(event: BaseEvent) -> None:
@@ -117,6 +129,10 @@ class MemoryStream(ABCStream):
         "_ag2_turn_lock",
     )
 
+    # Writable here; the `Stream` protocol only promises they can be read.
+    history: History
+    pending_messages: list[ModelRequest]
+
     def __init__(
         self,
         storage: Storage | None = None,
@@ -137,13 +153,13 @@ class MemoryStream(ABCStream):
         # single ``ask`` so a background task that finishes after ``ask``
         # returns still delivers — the next ``ask`` on this stream merges
         # the leftover into its initial request.
-        self.pending_messages: list[ModelRequest] = []
+        self.pending_messages = []
         self._background_tasks: set[asyncio.Task[None]] = set()
 
         # Agent._execute populates this lazily on first turn — setting it
         # to None here so `getattr(..., None)` returns None instead of
         # hitting a slot-uninitialized AttributeError.
-        self._ag2_turn_lock = None  # type: ignore[assignment]
+        self._ag2_turn_lock: asyncio.Lock | None = None
 
         if persist_all:
             # Persist every event including transient ones (streaming chunks, lifecycle, etc.)
@@ -211,19 +227,24 @@ class MemoryStream(ABCStream):
         self._interrupters.pop(sub_id, None)
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
+        # `asolve` annotates each positional as a tuple and each keyword as a
+        # `dict[str, Any]`; the values really are arbitrary.
+        options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}
+
         # interrupters should follow registration order
         for condition, interrupter in tuple(self._interrupters.values()):
             if condition and not condition(event):
                 continue
 
+            args: tuple[Any, ...] = (event,)
             async with AsyncExitStack() as stack:
                 if not (
                     e := await interrupter.asolve(
-                        event,
+                        *args,
                         cache_dependencies={},
                         stack=stack,
                         dependency_provider=context.dependency_provider,
-                        **{CONTEXT_OPTION_NAME: context},
+                        **options,
                     )
                 ):
                     return
@@ -236,13 +257,14 @@ class MemoryStream(ABCStream):
             if condition and not condition(event):
                 continue
 
+            sub_args: tuple[Any, ...] = (event,)
             async with AsyncExitStack() as stack:
                 await s.asolve(
-                    event,
+                    *sub_args,
                     cache_dependencies={},
                     stack=stack,
                     dependency_provider=context.dependency_provider,
-                    **{CONTEXT_OPTION_NAME: context},
+                    **options,
                 )
 
 
@@ -312,6 +334,10 @@ class SubStream(ABCStream):
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
         await self._parent.send(event, context)
+
+    @property
+    def history(self) -> History:
+        return self._parent.history
 
     @property
     def pending_messages(self) -> list[ModelRequest]:

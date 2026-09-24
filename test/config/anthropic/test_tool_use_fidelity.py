@@ -13,7 +13,7 @@ the round trip, so both paths park them on ``vendor_metadata``.
 from types import SimpleNamespace
 
 import pytest
-from anthropic.types import Message, ToolUseBlock, Usage
+from anthropic.types import DirectCaller, Message, ToolUseBlock, Usage
 
 from ag2 import Context, MemoryStream
 from ag2.config.anthropic import AnthropicClient
@@ -25,7 +25,7 @@ BLOCK = ToolUseBlock.model_construct(
     name="navigate",
     input={"url": "https://example.com"},
     type="tool_use",
-    caller={"type": "direct"},
+    caller=DirectCaller(type="direct"),
     toolset_name="browser",
 )
 

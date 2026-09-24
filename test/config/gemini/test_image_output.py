@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -15,12 +14,12 @@ from ag2.events import BinaryResult
 _PNG = b"\x89PNG\r\n\x1a\nfake-image-bytes"
 
 
-def _candidate(parts: list) -> SimpleNamespace:
-    return SimpleNamespace(content=SimpleNamespace(parts=parts), finish_reason=None, grounding_metadata=None)
+def _candidate(parts: list[types.Part]) -> types.Candidate:
+    return types.Candidate(content=types.Content(parts=parts))
 
 
-def _response(candidates: list[SimpleNamespace]) -> SimpleNamespace:
-    return SimpleNamespace(candidates=candidates, usage_metadata=None)
+def _response(candidates: list[types.Candidate]) -> types.GenerateContentResponse:
+    return types.GenerateContentResponse(candidates=candidates)
 
 
 @pytest.fixture

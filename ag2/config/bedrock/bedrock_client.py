@@ -5,6 +5,7 @@
 import asyncio
 import json
 from collections.abc import Iterable, Iterator, Sequence
+from enum import Enum, auto
 from itertools import chain
 from typing import Any, TypedDict
 
@@ -30,8 +31,15 @@ from ag2.tools.schemas import ToolSchema
 
 from .mappers import convert_messages, normalize_usage, response_proto_to_output_config, tool_to_api
 
-# End-of-stream sentinel for pulling the sync EventStream via next() without StopIteration
-_STREAM_DONE = object()
+
+class _StreamDone(Enum):
+    """End-of-stream sentinel for pulling the sync EventStream via next() without StopIteration.
+
+    An enum member rather than ``object()`` so that ``is not`` narrows the loop variable back to
+    an event; a bare sentinel object widens it to ``object`` and every ``event.get`` with it.
+    """
+
+    DONE = auto()
 
 
 class CreateOptions(TypedDict, total=False):
@@ -91,7 +99,9 @@ class BedrockClient(LLMClient):
             self._client_kwargs["config"] = config
 
         self._client: Any | None = None
-        self._create_options = create_options or {}
+        if create_options is None:
+            raise ValueError("BedrockClient needs create options, so it has a model to call.")
+        self._create_options = create_options
         self._streaming = self._create_options.get("stream", False)
         self._model: str = self._create_options["model"]
 
@@ -107,7 +117,7 @@ class BedrockClient(LLMClient):
         context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
@@ -222,7 +232,7 @@ class BedrockClient(LLMClient):
         tool_accs: dict[int, dict[str, str]] = {}
 
         # Sync EventStream — pull each event off the loop
-        while (event := await asyncio.to_thread(next, stream, _STREAM_DONE)) is not _STREAM_DONE:
+        while (event := await asyncio.to_thread(next, stream, _StreamDone.DONE)) is not _StreamDone.DONE:
             if block_start := event.get("contentBlockStart"):
                 if tool_use := (block_start.get("start") or {}).get("toolUse"):
                     tool_accs[block_start["contentBlockIndex"]] = {

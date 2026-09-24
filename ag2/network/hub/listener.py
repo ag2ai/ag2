@@ -25,15 +25,13 @@ Conventions:
   swallowed.
 """
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from ..channel import ChannelMetadata, Expectation
     from ..envelope import Envelope
     from ..errors import NetworkError
     from .expectations import Violation
-
-__all__ = ("HubListener",)
 
 
 @runtime_checkable
@@ -82,7 +80,7 @@ class HubListener(Protocol):
         self,
         channel_id: str,
         kind: str,
-        payload: dict,
+        payload: dict[str, Any],
     ) -> None:
         """A channel-lifecycle event fired.
 
@@ -96,7 +94,7 @@ class HubListener(Protocol):
         self,
         agent_id: str,
         kind: str,
-        payload: dict,
+        payload: dict[str, Any],
     ) -> None:
         """An identity-lifecycle event fired.
 
@@ -140,7 +138,7 @@ class HubListener(Protocol):
         self,
         task_id: str,
         kind: str,
-        payload: dict,
+        payload: dict[str, Any],
     ) -> None:
         """A task-lifecycle event fired.
 
@@ -182,31 +180,31 @@ class HubListener(Protocol):
 class BaseHubListener:
     """No-op base implementation. Override only the events you care about."""
 
-    async def on_envelope_posted(self, envelope, metadata) -> None:  # noqa: ARG002
+    async def on_envelope_posted(self, envelope: "Envelope", metadata: "ChannelMetadata") -> None:  # noqa: ARG002
         return None
 
-    async def on_envelope_rejected(self, envelope, reason) -> None:  # noqa: ARG002
+    async def on_envelope_rejected(self, envelope: "Envelope", reason: "NetworkError") -> None:  # noqa: ARG002
         return None
 
-    async def on_dispatch_failed(self, envelope, recipient_id, reason) -> None:  # noqa: ARG002
+    async def on_dispatch_failed(self, envelope: "Envelope", recipient_id: str, reason: BaseException) -> None:  # noqa: ARG002
         return None
 
-    async def on_channel_event(self, channel_id, kind, payload) -> None:  # noqa: ARG002
+    async def on_channel_event(self, channel_id: str, kind: str, payload: dict[str, Any]) -> None:  # noqa: ARG002
         return None
 
-    async def on_agent_event(self, agent_id, kind, payload) -> None:  # noqa: ARG002
+    async def on_agent_event(self, agent_id: str, kind: str, payload: dict[str, Any]) -> None:  # noqa: ARG002
         return None
 
-    async def on_expectation_fired(self, channel_id, expectation, violation) -> None:  # noqa: ARG002
+    async def on_expectation_fired(self, channel_id: str, expectation: "Expectation", violation: "Violation") -> None:  # noqa: ARG002
         return None
 
-    async def on_turn_failed(self, channel_id, agent_id, envelope_id, exc) -> None:  # noqa: ARG002
+    async def on_turn_failed(self, channel_id: str, agent_id: str, envelope_id: str, exc: BaseException) -> None:  # noqa: ARG002
         return None
 
-    async def on_task_event(self, task_id, kind, payload) -> None:  # noqa: ARG002
+    async def on_task_event(self, task_id: str, kind: str, payload: dict[str, Any]) -> None:  # noqa: ARG002
         return None
 
-    async def on_inbox_pressure(self, agent_id, pending, cap) -> None:  # noqa: ARG002
+    async def on_inbox_pressure(self, agent_id: str, pending: int, cap: int) -> None:  # noqa: ARG002
         return None
 
 

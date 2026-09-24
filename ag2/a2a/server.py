@@ -185,7 +185,7 @@ class A2AServer:
             **self._shared_kwargs(include_card_modifier=True),
         )
 
-    def build_grpc(  # type: ignore[no-any-unimported]
+    def build_grpc(
         self,
         *,
         bind: str,

@@ -26,6 +26,7 @@ from ag2.config import AnthropicConfig
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_TEXT,
+    Envelope,
     Hub,
     Resume,
 )
@@ -46,7 +47,7 @@ def _agent(name: str, prompt: str, config: AnthropicConfig) -> Agent:
     return Agent(name=name, prompt=prompt, config=config)
 
 
-async def _wait_text_count(hub: Hub, channel_id: str, expected: int, *, timeout: float = 30.0) -> list:
+async def _wait_text_count(hub: Hub, channel_id: str, expected: int, *, timeout: float = 30.0) -> list[Envelope]:
     """Poll WAL until ``expected`` ``EV_TEXT`` envelopes appear."""
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:

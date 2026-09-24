@@ -2,12 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from ag2.annotations import Context
+from ag2.context import SubId
 from ag2.events import (
     HumanInputRequest,
     TaskCompleted,
@@ -41,7 +42,7 @@ class TaskResult:
     error: Exception | None = None
 
 
-def _make_hitl_bridge(parent_context: Context):
+def _make_hitl_bridge(parent_context: Context) -> "Callable[[HumanInputRequest, Context], Awaitable[None]]":
     """Forward ``HumanInputRequest`` events from the child stream to the parent.
 
     Defined at module level so it isn't re-created per ``run_task`` call (per
@@ -112,7 +113,7 @@ def _sole_pair(incurred: Iterable[UsageEvent]) -> tuple[str | None, str | None]:
 
 
 async def run_task(
-    agent: "Agent",
+    agent: "Agent[Any]",
     objective: str,
     *,
     parent_context: Context,
@@ -145,7 +146,7 @@ async def run_task(
     # Bridge HITL events to the parent stream so the parent's hook can handle
     # them. If the subagent has its own HITL hook, it is registered as an
     # interrupter and swallows the event first.
-    sub_id: str | None = None
+    sub_id: SubId | None = None
     if not agent._hitl_hook:
         sub_id = task_stream.where(HumanInputRequest).subscribe(
             _make_hitl_bridge(parent_context),

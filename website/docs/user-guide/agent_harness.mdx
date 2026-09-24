@@ -134,8 +134,8 @@ class TaskConfig:
 |---|---|
 | `config` | The `ModelConfig` used for sub-task Agents. Falls back to the parent Agent's `config`. |
 | `prompt` | Default system prompt for sub-task Agents. |
-| `include_tools` | Allowlist of parent-tool names to inherit. `None` means "inherit all". |
-| `exclude_tools` | Blocklist of parent-tool names to drop. Applied after `include_tools`. |
+| `include_tools` | Allowlist of parent function-tool names to inherit. `None` means "inherit all". A builtin tool or a `Toolkit` has no function name, so an allowlist drops it. |
+| `exclude_tools` | Blocklist of parent function-tool names to drop. Applied after `include_tools`. |
 | `extra_tools` | Additional tools given to sub-tasks that the parent does not have. |
 | `max_concurrency` | Optional cap shared by all sub-tasks spawned by this Agent. Extra work waits for a slot. `None` keeps concurrency unbounded. |
 

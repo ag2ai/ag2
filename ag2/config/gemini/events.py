@@ -36,12 +36,14 @@ class GeminiServerToolCallEvent(BuiltinToolCallEvent):
     def from_executable_code(cls, part: types.Part) -> "GeminiServerToolCallEvent | None":
         if part.executable_code is None:
             return None
+        # `ExecutableCode.language` is optional, and a part that omits it reports no language
+        # rather than failing the whole call.
         language = part.executable_code.language
         return cls(
             name=CODE_EXECUTION_TOOL_NAME,
             arguments=json.dumps({
                 "code": part.executable_code.code or "",
-                "language": language.name if language.name else str(language) or "",
+                "language": language.name if language is not None else "",
             }),
             part=part,
         )

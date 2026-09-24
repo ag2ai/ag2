@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_pairwise
+from ag2.eval import InMemoryTraceSource, Task, TraceRef, evaluate_pairwise
 from ag2.eval.scorers import export_pairwise_cases, human_labels, human_pairwise
 from ag2.eval.trace import Trace
 from ag2.events import ModelMessage, ModelResponse
@@ -68,3 +68,15 @@ async def test_human_labels_missing_label_is_tie(tmp_path) -> None:
 
     result = await evaluate_pairwise(_src("A", ("t1",)), _src("B", ("t1",)), comparators=[comp], store_dir=tmp_path)
     assert result.tally("c") == (0, 0, 1)  # no 'preferred' -> tie
+
+
+@pytest.mark.asyncio()
+async def test_human_labels_refuses_an_unknown_first_variant(tmp_path) -> None:
+    manifest = tmp_path / "m.jsonl"
+    manifest.write_text(json.dumps({"task_id": "t1", "criterion": "c", "first_variant": "B", "preferred": "1"}) + "\n")
+    comp = human_labels(str(manifest), criterion="c", key="c")
+
+    with pytest.raises(ValueError, match="first_variant"):
+        await comp.compare(
+            task=Task(task_id="t1", inputs={}), trace_a=_trace("A"), trace_b=_trace("B"), reference_outputs=None
+        )

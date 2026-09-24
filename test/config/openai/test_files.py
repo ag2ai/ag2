@@ -39,6 +39,31 @@ class TestOpenAIFilesClient:
         assert result.created_at == 1700000000.0
 
     @patch("ag2.config.openai.files.AsyncOpenAI")
+    async def test_upload_defaults_the_purpose(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
+        mock_client = AsyncMock()
+        mock_openai_cls.return_value = mock_client
+        mock_client.files.create.return_value = SimpleNamespace(
+            id="file-abc", filename="test.pdf", bytes=1, purpose="assistants", created_at=1700000000
+        )
+
+        await OpenAIFilesClient(openai_config).upload(b"pdf-data", "test.pdf")
+
+        assert mock_client.files.create.await_args.kwargs["purpose"] == "assistants"
+
+    @patch("ag2.config.openai.files.AsyncOpenAI")
+    async def test_upload_refuses_a_purpose_openai_does_not_accept(
+        self, mock_openai_cls: MagicMock, openai_config: MagicMock
+    ) -> None:
+        """Other providers take purposes this one does not; those stop before the request."""
+        mock_client = AsyncMock()
+        mock_openai_cls.return_value = mock_client
+
+        with pytest.raises(ValueError, match="knowledge"):
+            await OpenAIFilesClient(openai_config).upload(b"data", "kb.txt", "knowledge")
+
+        mock_client.files.create.assert_not_awaited()
+
+    @patch("ag2.config.openai.files.AsyncOpenAI")
     async def test_read(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_openai_cls.return_value = mock_client

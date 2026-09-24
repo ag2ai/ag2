@@ -25,7 +25,7 @@ import json
 import random
 from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ag2.events import ModelResponse
 
@@ -135,7 +135,8 @@ class _HumanLabels:
         entry = self._labels().get(task.task_id)
         if entry is None or entry[1] is None:
             return PairwiseOutcome(winner="tie", reasoning="no human label", detail={"missing": True})
-        first_variant, preferred = entry
+        raw_variant, preferred = entry
+        first_variant = _first_variant(raw_variant, task.task_id)
         return PairwiseOutcome(
             winner=_deblind(preferred, first_variant),
             reasoning="human label",
@@ -155,7 +156,7 @@ class _HumanInline:
         self, *, task: Task, trace_a: Trace, trace_b: Trace, reference_outputs: dict[str, Any] | None
     ) -> PairwiseOutcome:
         answer_a, answer_b = _final_text(trace_a), _final_text(trace_b)
-        first_variant = self._rng.choice(["a", "b"])
+        first_variant: Literal["a", "b"] = self._rng.choice(("a", "b"))
         response_1, response_2 = (answer_a, answer_b) if first_variant == "a" else (answer_b, answer_a)
         preferred = self._ask(task, response_1, response_2)
         if inspect.isawaitable(preferred):
@@ -167,13 +168,22 @@ class _HumanInline:
         )
 
 
-def _deblind(preferred: Any, first_variant: str) -> str:
-    other = "b" if first_variant == "a" else "a"
+def _deblind(preferred: Any, first_variant: Literal["a", "b"]) -> Literal["a", "b", "tie"]:
+    other: Literal["a", "b"] = "b" if first_variant == "a" else "a"
     if str(preferred) == "1":
         return first_variant
     if str(preferred) == "2":
         return other
     return "tie"
+
+
+def _first_variant(value: Any, task_id: str) -> Literal["a", "b"]:
+    """Read a manifest row's de-blinding key, which a labelling UI may have mangled."""
+    if value == "a":
+        return "a"
+    if value == "b":
+        return "b"
+    raise ValueError(f"Task {task_id!r} has first_variant {value!r}; expected 'a' or 'b'.")
 
 
 def _final_text(trace: Trace) -> str:

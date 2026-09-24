@@ -16,6 +16,7 @@ Default expectations:
 """
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from ..channel import (
     ChannelManifest,
@@ -34,17 +35,26 @@ from ..envelope import (
     Envelope,
 )
 from ..errors import ProtocolError
+from ..handoff import Handoff
 from ..views.base import ViewPolicy
 from ..views.builtin import NamedWindowedSummary
 from .base import (
     AdapterResult,
     ExpectedTurn,
+    NameDirectory,
     default_build_packet_envelope,
     default_build_round_envelope,
     default_build_text_envelope,
     default_extract_turn_input,
     default_render_envelope,
 )
+
+if TYPE_CHECKING:
+    from ag2.agent import AgentReply
+    from ag2.events import BaseEvent
+    from ag2.tools.tool import Tool
+
+    from ..client.agent_client import AgentClient
 
 __all__ = (
     "DISCUSSION_TYPE",
@@ -220,32 +230,54 @@ class DiscussionAdapter:
         recent_n = max(len(metadata.participants) * 2, 4)
         return NamedWindowedSummary(recent_n=recent_n)
 
-    def extract_turn_input(self, envelope):
+    def extract_turn_input(self, envelope: Envelope) -> str | None:
         return default_extract_turn_input(envelope)
 
-    def build_round_envelope(self, metadata, sender_id, reply, events, state, hub):
+    def build_round_envelope(
+        self,
+        metadata: ChannelMetadata,
+        sender_id: str,
+        reply: "AgentReply",
+        events: "list[BaseEvent]",
+        state: DiscussionState,
+        hub: NameDirectory,
+    ) -> Envelope | None:
         return default_build_round_envelope(metadata, sender_id, reply, events, state, hub)
 
-    def render_envelope(self, envelope):
+    def render_envelope(self, envelope: Envelope) -> str | None:
         return default_render_envelope(envelope)
 
-    def tools_for(self, client, metadata, state, participant_id):
+    def tools_for(
+        self,
+        client: "AgentClient",
+        metadata: ChannelMetadata,
+        state: DiscussionState,
+        participant_id: str,
+    ) -> "list[Tool]":
         return []
 
-    def build_text_envelope(self, channel_id, sender_id, text, *, audience=None, causation_id=None):
+    def build_text_envelope(
+        self,
+        channel_id: str,
+        sender_id: str,
+        text: str,
+        *,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
         return default_build_text_envelope(channel_id, sender_id, text, audience=audience, causation_id=causation_id)
 
     def build_packet_envelope(
         self,
-        channel_id,
-        sender_id,
-        body,
+        channel_id: str,
+        sender_id: str,
+        body: str,
         *,
-        handoff=None,
-        context_set=None,
-        audience=None,
-        causation_id=None,
-    ):
+        handoff: Handoff | None = None,
+        context_set: dict[str, Any] | None = None,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
         return default_build_packet_envelope(
             channel_id,
             sender_id,

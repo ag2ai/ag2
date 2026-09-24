@@ -9,12 +9,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from ag2.agent import Agent, Plugin
+from ag2.agent import Agent
 from ag2.config.config import ModelConfig
 from ag2.exceptions import ToolResolutionError
 from ag2.hitl import HumanHook
 from ag2.middleware.base import MiddlewareFactory
 from ag2.observers import Observer
+from ag2.plugin import Plugin
 from ag2.response.proto import ResponseProto
 from ag2.response.schema import RawSchema
 from ag2.tools.final import FunctionTool, Toolkit

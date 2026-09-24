@@ -40,11 +40,16 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
 from ag2.knowledge import KnowledgeStore
 
 from .layout import audit_path
 from .listener import BaseHubListener
+
+if TYPE_CHECKING:
+    from ..channel import Expectation
+    from .expectations import Violation
 
 
 def _default_clock() -> str:
@@ -56,7 +61,7 @@ def _default_clock() -> str:
 logger = logging.getLogger(__name__)
 
 
-AuditSubscriber = Callable[[dict], Awaitable[None]]
+AuditSubscriber = Callable[[dict[str, Any]], Awaitable[None]]
 ClockFn = Callable[[], str]
 
 __all__ = (
@@ -120,7 +125,7 @@ class AuditLog(BaseHubListener):
 
     # ── Direct write surface ─────────────────────────────────────────────────
 
-    async def append(self, record: dict) -> None:
+    async def append(self, record: dict[str, Any]) -> None:
         """Serialise and append one record. Notifies subscribers afterwards.
 
         Public so tenants and hub subclasses can append records with
@@ -146,12 +151,12 @@ class AuditLog(BaseHubListener):
         """
         return self._bytes_written
 
-    async def read_all(self) -> list[dict]:
+    async def read_all(self) -> list[dict[str, Any]]:
         """Read and parse the entire audit log. Returns ``[]`` if absent."""
         data = await self._store.read(audit_path())
         if not data:
             return []
-        records: list[dict] = []
+        records: list[dict[str, Any]] = []
         for line in data.splitlines():
             if not line.strip():
                 continue
@@ -175,7 +180,7 @@ class AuditLog(BaseHubListener):
 
     # ── Listener Protocol impl ───────────────────────────────────────────────
 
-    async def on_agent_event(self, agent_id: str, kind: str, payload: dict) -> None:
+    async def on_agent_event(self, agent_id: str, kind: str, payload: dict[str, Any]) -> None:
         """Translate identity-lifecycle events into audit records.
 
         Recognises ``"registered"``, ``"unregistered"``, ``"resume_set"``,
@@ -232,7 +237,7 @@ class AuditLog(BaseHubListener):
                 "outcome": payload.get("outcome"),
             })
 
-    async def on_channel_event(self, channel_id: str, kind: str, payload: dict) -> None:
+    async def on_channel_event(self, channel_id: str, kind: str, payload: dict[str, Any]) -> None:
         """Translate channel-lifecycle events into audit records.
 
         Records ``"created"``, ``"closed"``, and ``"expired"``. Other
@@ -247,7 +252,7 @@ class AuditLog(BaseHubListener):
             participants = payload.get("participants")
             if participants is None and metadata is not None:
                 participants = [p.agent_id for p in metadata.participants]
-            record: dict = {
+            record: dict[str, Any] = {
                 "at": at,
                 "kind": AUDIT_KIND_CHANNEL_CREATED,
                 "channel_id": channel_id,
@@ -274,7 +279,7 @@ class AuditLog(BaseHubListener):
                 "reason": payload.get("reason"),
             })
 
-    async def on_expectation_fired(self, channel_id: str, expectation, violation) -> None:
+    async def on_expectation_fired(self, channel_id: str, expectation: "Expectation", violation: "Violation") -> None:
         """Record one violation per ``(channel, expectation, violator)`` fire."""
         at = self._clock()
         await self.append({
@@ -288,7 +293,7 @@ class AuditLog(BaseHubListener):
             "detail": dict(violation.detail),
         })
 
-    async def on_task_event(self, task_id: str, kind: str, payload: dict) -> None:
+    async def on_task_event(self, task_id: str, kind: str, payload: dict[str, Any]) -> None:
         """Record terminal task transitions.
 
         ``"started"`` / ``"progress"`` are observed-only; only the

@@ -14,9 +14,11 @@ flat surface keeps the LLM's tool list short — ``say`` and
 """
 
 import asyncio
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from ag2.tools import tool
+from ag2.tools.final import FunctionTool
 
 from ...envelope import (
     EV_CHANNEL_CLOSED,
@@ -77,7 +79,7 @@ async def _available_target_names(client: "AgentClient") -> list[str]:
     return sorted(names)
 
 
-def make_delegate_tool(agent_client: "AgentClient") -> object:
+def make_delegate_tool(agent_client: "AgentClient") -> FunctionTool:
     """Return a closure-bound ``delegate`` tool."""
 
     @tool
@@ -135,7 +137,7 @@ def make_delegate_tool(agent_client: "AgentClient") -> object:
             return f"Error: cannot delegate to self (target {target!r} is this agent)"
 
         # Open consulting channel — handshake awaited inside.
-        knobs = {"capability": capability} if capability else None
+        knobs: dict[str, object] | None = {"capability": capability} if capability else None
         try:
             channel = await actual_client.open(
                 type="consulting",
@@ -197,7 +199,7 @@ def make_delegate_tool(agent_client: "AgentClient") -> object:
     return delegate
 
 
-def _reply_or_terminal_predicate(target_id: str):
+def _reply_or_terminal_predicate(target_id: str) -> Callable[[Envelope], bool]:
     """Match the respondent's substantive reply OR any terminal channel event."""
 
     def matches(envelope: Envelope) -> bool:

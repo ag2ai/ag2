@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2.config import BedrockConfig
 from ag2.config.bedrock import BedrockClient
@@ -17,7 +17,7 @@ async def _ask(client: BedrockClient) -> None:
         context=make_call_context(),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 

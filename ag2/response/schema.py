@@ -5,10 +5,10 @@
 import warnings
 from dataclasses import is_dataclass
 from types import UnionType
-from typing import Annotated, Any, Union, get_origin, overload
+from typing import Any, Union, cast, get_origin, overload
 
 from fast_depends import Provider
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, create_model
 from typing_extensions import TypeVar as TypeVar313
 
 from ag2.annotations import Context
@@ -89,6 +89,13 @@ class ResponseSchema(ResponseProto[T]):
         obj: "type[T]",
     ) -> "ResponseSchema[T]": ...
 
+    @overload
+    @classmethod
+    def ensure_schema(
+        cls,
+        obj: "ClassInfo",
+    ) -> "ResponseSchema[Any]": ...
+
     @classmethod
     def ensure_schema(
         cls,
@@ -116,12 +123,13 @@ class ResponseSchema(ResponseProto[T]):
         context: "Context",
         provider: "Provider | None" = None,
     ) -> T:
+        # The adapter is built from a runtime type object, so pydantic hands back
+        # `Any`; the constructor's overloads are what tie that value to `T`.
         if self._adapter is None:
-            return response
+            # `make_adapter` declines an adapter only for `str`, so `T` is `str`.
+            return cast("T", response)
         result = self._adapter.validate_json(response)
-        if self._embedded_type:
-            return result.data
-        return result
+        return cast("T", result.data if self._embedded_type else result)
 
 
 class RawSchema(ResponseProto[str]):
@@ -153,15 +161,19 @@ class RawSchema(ResponseProto[str]):
         return response
 
 
-def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]:
+def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[Any] | None, bool]:
     origin = get_origin(types)
     embedded_type = True
 
     if types is str:
         return None, True
 
-    if _is_safe_subclass(types, (list, tuple)):
-        # Process `T1, T2]` and `(T1, T2)`
+    # A runtime type object, so the adapter it produces is only known to the
+    # caller that passed it in. `ResponseSchema`'s overloads are what tie the
+    # two together.
+    _final_type: Any
+    if isinstance(types, (list, tuple)):
+        # Process `[T1, T2]` and `(T1, T2)`
         _final_type = Union[tuple(types)]  # noqa: UP007
 
     elif origin and origin in (Union, UnionType):
@@ -185,18 +197,20 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
         embedded_type = False
 
     if embedded_type:
+        # Built with `create_model` rather than a class body: the field's type is
+        # only known at runtime, and a class body would have to name it through a
+        # variable, which no checker can read as a type.
+        _final_type = create_model(
+            "ResponseSchema",
+            data=(_final_type, Field(description='Response with a one-field JSON `"{"data":...}"`')),
+        )
 
-        class _EmbeddedSchema(BaseModel):
-            data: Annotated[_final_type, Field(description='Response with a one-field JSON `"{"data":...}"`')]
-            model_config = {"title": "ResponseSchema"}
-
-        _final_type = _EmbeddedSchema
-
-    return TypeAdapter[T](_final_type), embedded_type
+    return TypeAdapter(_final_type), embedded_type
 
 
-def _is_safe_subclass(cls: type, base: type | tuple[type, ...]) -> bool:
+def _is_safe_subclass(cls: ClassInfo, base: type | tuple[type, ...]) -> bool:
+    """`issubclass` for a `ClassInfo`, whose members need not be classes."""
     try:
-        return issubclass(cls, base)
+        return issubclass(cast("type", cls), base)
     except TypeError:
         return issubclass(type(cls), base)

@@ -9,10 +9,10 @@ import pytest
 
 from ag2 import Agent, Context, tool
 from ag2.events import ToolCallEvent
-from ag2.exceptions import ToolConflictError
+from ag2.exceptions import ToolConflictError, ToolMiddlewareUnsupportedError
 from ag2.middleware import ToolExecution, ToolResultType
 from ag2.testing import TestConfig
-from ag2.tools import Toolkit
+from ag2.tools import CodeExecutionTool, Toolkit
 
 
 @pytest.mark.asyncio
@@ -391,3 +391,31 @@ class TestMerger:
         toolkit = Toolkit(add1) | add1
 
         assert [t.name for t in toolkit.tools] == ["add1"]
+
+
+class TestToolkitWithProviderExecutedTools:
+    """A toolkit holds any `Tool`, but its middleware only reaches local ones."""
+
+    def test_a_builtin_tool_can_be_put_in_a_toolkit(self) -> None:
+        toolkit = Toolkit(CodeExecutionTool())
+        assert [t.name for t in toolkit.tools] == [CodeExecutionTool().name]
+
+    def test_a_builtin_tool_mixes_with_a_function_tool(self) -> None:
+        @tool
+        def add(a: int, b: int) -> int:
+            """Add two numbers."""
+            return a + b
+
+        toolkit = Toolkit(add, CodeExecutionTool())
+        assert len(toolkit.tools) == 2
+
+    def test_toolkit_middleware_on_a_builtin_tool_is_refused_not_dropped(self) -> None:
+        """The provider runs it, so the middleware could only be silently skipped."""
+
+        async def audit(event: ToolCallEvent, context: Context, call_next: ToolExecution) -> ToolResultType:
+            return await call_next(event, context)
+
+        with pytest.raises(ToolMiddlewareUnsupportedError) as exc:
+            Toolkit(CodeExecutionTool(), middleware=[audit])
+
+        assert CodeExecutionTool().name in str(exc.value)

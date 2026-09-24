@@ -67,6 +67,21 @@ class TestPluginTools:
         await agent.ask("Hi!")
         mock.assert_called_once()
 
+    async def test_add_tool_chains(self, mock: MagicMock) -> None:
+        """``Plugin.add_tool`` returns the plugin, as the agent's own does."""
+        test_config = TestConfig(ToolCallEvent(name="tool3"), "result")
+
+        def tool3(ctx: Context) -> str:
+            mock()
+            return "ok"
+
+        plugin = Plugin()
+        assert plugin.add_tool(tool3) is plugin
+
+        agent = Agent("agent", config=test_config, plugins=[plugin])
+        await agent.ask("Hi!")
+        mock.assert_called_once()
+
     async def test_combined_with_agent_tools(self, mock: MagicMock) -> None:
         """Tools from plugins and from the agent itself are both registered."""
         test_config = TestConfig(ToolCallEvent(name="plugin_tool"), "result")

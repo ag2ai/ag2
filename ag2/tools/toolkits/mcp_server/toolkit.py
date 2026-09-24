@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator, Iterable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import replace
 from functools import partial
+from types import EllipsisType
 from typing import Any, TypeAlias, get_args
 
 import httpx2
@@ -220,8 +221,7 @@ class _MCPProxyTool(Tool):
             result = await execution(event, context)
             await context.send(result)
 
-        # ``Event.field == value`` builds a Condition at runtime; mypy sees ``bool``.
-        stack.enter_context(context.stream.where(ToolCallEvent.name == self.name).sub_scope(execute))  # type: ignore[arg-type]
+        stack.enter_context(context.stream.where(ToolCallEvent.name == self.name).sub_scope(execute))
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent | ToolErrorEvent":
         try:
@@ -488,7 +488,9 @@ def _resolve_value(value: Any, context: "Context") -> Any:
         return context.variables[name]
     if value.default is not Ellipsis:
         return value.default
-    if value.default_factory is not Ellipsis:
+    # `is not Ellipsis` is the same test, but only `isinstance` narrows the
+    # `EllipsisType` out of the union for the call below.
+    if not isinstance(value.default_factory, EllipsisType):
         return value.default_factory()
     raise KeyError(f"Context variable {name!r} not found and no default provided")
 

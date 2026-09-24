@@ -7,17 +7,21 @@
 Maintained by @camcalaquian and Tenki.
 """
 
+from typing import TYPE_CHECKING
+
 from ag2.exceptions import missing_additional_dependency
 
-try:
+# Imported twice on purpose: the checker is shown only the real import, because
+# rebinding a name it has already bound to a class is an error, and the install hint
+# is runtime behaviour. See website/docs/contributor-guide/type-checking.mdx.
+if TYPE_CHECKING:
     from .environment import TenkiEnvironment, TenkiResources
-except ImportError as e:
-    TenkiEnvironment = missing_additional_dependency(  # type: ignore[misc]
-        "TenkiEnvironment", "tenki>=0.5.4,<1", e
-    )
-    TenkiResources = missing_additional_dependency(  # type: ignore[misc]
-        "TenkiResources", "tenki>=0.5.4,<1", e
-    )
+else:
+    try:
+        from .environment import TenkiEnvironment, TenkiResources
+    except ImportError as e:
+        TenkiEnvironment = missing_additional_dependency("TenkiEnvironment", "tenki>=0.5.4,<1", e)
+        TenkiResources = missing_additional_dependency("TenkiResources", "tenki>=0.5.4,<1", e)
 
 __all__ = (
     "TenkiEnvironment",

@@ -4,7 +4,7 @@
 
 import pytest
 from dirty_equals import IsPartialDict
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from pydantic import BaseModel
 
 from ag2.config.zai import ZAIClient
@@ -21,7 +21,7 @@ from ag2.response import PromptedSchema
 from test.config._helpers import make_tool
 from test.config.zai._helpers import (
     FakeCompletions,
-    FakeZAIClient,
+    install_fake_sdk,
     make_call_context,
     make_response,
     make_stream_chunk,
@@ -37,7 +37,7 @@ class Verdict(BaseModel):
 
 def _make_client(completions: FakeCompletions, *, streaming: bool = False) -> ZAIClient:
     client = ZAIClient(create_options={"model": "glm-test", "stream": streaming})
-    client._client = FakeZAIClient(completions)
+    install_fake_sdk(client, completions)
     return client
 
 
@@ -47,7 +47,7 @@ async def _ask(client: ZAIClient, context=None, tools=(), response_schema=None):
         context=context if context is not None else make_call_context(),
         tools=tools,
         response_schema=response_schema,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 

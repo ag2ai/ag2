@@ -17,11 +17,13 @@ Covers:
 This suite uses ``TestConfig`` so it runs offline and fast.
 """
 
+import asyncio
+
 import pytest
 
 from ag2 import Agent
 from ag2.compact import CompactionSummary
-from ag2.events import ModelMessage, ModelRequest, TextInput
+from ag2.events import ImageInput, ModelMessage, ModelRequest, TextInput
 from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from ag2.network import (
     EV_CHANNEL_INVITE,
@@ -45,7 +47,7 @@ from ag2.network.channel import (
 )
 from ag2.network.errors import ProtocolError
 from ag2.network.views.builtin import WindowedSummary
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 
 from ._helpers import ScriptedConfig, wait_for_text_count
 
@@ -120,6 +122,42 @@ async def test_conversation_back_and_forth_multi_turn() -> None:
     assert isinstance(state, ConversationState)
     assert state.turn_count == 4
     assert state.last_speaker_id == bob.agent_id
+
+    await hub.close()
+
+
+class _RichInputAdapter(ConversationAdapter):
+    """Hands the next speaker a text part and an image part for every turn."""
+
+    def render_envelope(self, envelope):  # noqa: ARG002
+        return None
+
+    def extract_turn_input(self, envelope):  # noqa: ARG002
+        return [TextInput("describe this"), ImageInput("https://example.com/cat.png")]
+
+
+@pytest.mark.asyncio
+async def test_adapter_turn_input_list_reaches_the_model_as_separate_parts() -> None:
+    """An adapter's ``list[Input]`` turn input is one part per input, not one ``DataInput``."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, register_default_adapters=False)
+    hub.register_adapter(_RichInputAdapter())
+
+    bob_config = TrackingConfig(ScriptedConfig())
+    alice = await hub.register(_scripted_agent("alice"))
+    await hub.register(Agent(name="bob", config=bob_config))
+
+    channel = await alice.open(type=CONVERSATION_TYPE, target="bob")
+    await channel.send("hello bob")
+
+    for _ in range(200):
+        if bob_config.mock.called:
+            break
+        await asyncio.sleep(0.01)
+
+    bob_config.mock.assert_called_once_with(
+        ModelRequest([TextInput("describe this"), ImageInput("https://example.com/cat.png")])
+    )
 
     await hub.close()
 

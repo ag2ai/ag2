@@ -209,17 +209,21 @@ class _FakeConfigViews:
 
     __slots__ = ()
 
+    # Declared, not assigned: the config this is mixed into owns both fields.
+    _sessions: "dict[StreamId, ACPSession]"
+    _connect: "ConnectHook | None"
+
     @property
     def sessions(self) -> "dict[StreamId, ACPSession]":
         """Live sessions keyed by stream id (empty once ``aclose()`` ran)."""
-        return self._sessions  # type: ignore[attr-defined]
+        return self._sessions
 
     @property
     def connect(self) -> "ConnectHook":
         """The in-process connection opener, for driving ``ACPSession.ensure`` directly."""
-        connect = self._connect  # type: ignore[attr-defined]
+        connect = self._connect
         assert connect is not None
-        return cast("ConnectHook", connect)
+        return connect
 
 
 @dataclass(slots=True, kw_only=True)

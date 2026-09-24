@@ -8,40 +8,26 @@ Vertex/Gemini does not always populate ``fc.id`` on returned function calls.
 Ensure that parallel tool call usage still results in unique ids.
 """
 
-from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from google.genai import types
 
 from ag2 import Context
 from ag2.config.gemini.gemini_client import GeminiClient
 
 
-def _part(*, function_call=None, text=None, thought=None, thought_signature=None, inline_data=None) -> SimpleNamespace:
-    return SimpleNamespace(
-        function_call=function_call,
-        text=text,
-        thought=thought,
-        thought_signature=thought_signature,
-        inline_data=inline_data,
-    )
+def _part(*, function_call: types.FunctionCall) -> types.Part:
+    return types.Part(function_call=function_call)
 
 
-def _function_call(name: str, args: dict, fc_id: str | None = None) -> SimpleNamespace:
-    return SimpleNamespace(id=fc_id, name=name, args=args)
+def _function_call(name: str, args: dict[str, Any], fc_id: str | None = None) -> types.FunctionCall:
+    return types.FunctionCall(id=fc_id, name=name, args=args)
 
 
-def _response(parts: list[SimpleNamespace]) -> SimpleNamespace:
-    return SimpleNamespace(
-        candidates=[
-            SimpleNamespace(
-                content=SimpleNamespace(parts=parts),
-                finish_reason=None,
-                grounding_metadata=None,
-            )
-        ],
-        usage_metadata=None,
-    )
+def _response(parts: list[types.Part]) -> types.GenerateContentResponse:
+    return types.GenerateContentResponse(candidates=[types.Candidate(content=types.Content(parts=parts))])
 
 
 @pytest.fixture

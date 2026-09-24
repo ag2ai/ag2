@@ -16,7 +16,7 @@ from anthropic.types import (
 from anthropic.types.bash_code_execution_tool_result_error import BashCodeExecutionToolResultError
 from anthropic.types.text_editor_code_execution_tool_result_error import TextEditorCodeExecutionToolResultError
 from dirty_equals import IsPartialDict
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import ToolResult
 from ag2.compact import CompactionSummary
@@ -45,7 +45,7 @@ from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
 from ag2.files.types import FileProvider, UploadedFile
 
 
-def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
+def _model_response_with_tool_call(arguments: str = "{}") -> ModelResponse:
     """Helper to build a ModelResponse containing a single tool call."""
     return ModelResponse(
         message=None,
@@ -69,12 +69,11 @@ def _matching_tool_result(content: str = "ok") -> ToolResultsEvent:
 
 
 class TestConvertMessagesEmptyArguments:
-    """json.loads must not crash on empty or None tool call arguments."""
+    """json.loads must not crash on empty tool call arguments."""
 
-    @pytest.mark.parametrize("arguments", ["", None])
-    def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
-        response = _model_response_with_tool_call(arguments)
-        result = convert_messages([response, _matching_tool_result()], SerializerCls)
+    def test_empty_arguments_produce_empty_dict(self) -> None:
+        response = _model_response_with_tool_call("")
+        result = convert_messages([response, _matching_tool_result()], PydanticSerializer())
 
         assert result[0] == IsPartialDict({
             "role": "assistant",
@@ -83,7 +82,7 @@ class TestConvertMessagesEmptyArguments:
 
     def test_valid_arguments_are_preserved(self) -> None:
         response = _model_response_with_tool_call('{"category": "books"}')
-        result = convert_messages([response, _matching_tool_result()], SerializerCls)
+        result = convert_messages([response, _matching_tool_result()], PydanticSerializer())
 
         assert result[0] == IsPartialDict({
             "content": [IsPartialDict({"type": "tool_use", "input": {"category": "books"}})],
@@ -91,7 +90,7 @@ class TestConvertMessagesEmptyArguments:
 
     def test_empty_object_arguments(self) -> None:
         response = _model_response_with_tool_call("{}")
-        result = convert_messages([response, _matching_tool_result()], SerializerCls)
+        result = convert_messages([response, _matching_tool_result()], PydanticSerializer())
 
         assert result[0] == IsPartialDict({
             "content": [IsPartialDict({"type": "tool_use", "input": {}})],
@@ -113,7 +112,7 @@ def test_full_sequence_with_empty_args() -> None:
             ],
         ),
     ]
-    result = convert_messages(events, SerializerCls)
+    result = convert_messages(events, PydanticSerializer())
 
     assert result[0] == IsPartialDict({"role": "user"})
     assert result[1] == IsPartialDict({
@@ -128,7 +127,7 @@ def test_full_sequence_with_empty_args() -> None:
 
 def test_image_url_input_converts_to_url_block() -> None:
     image_url = "https://example.com/image.png"
-    result = convert_messages([ModelRequest([ImageInput(url=image_url)])], SerializerCls)
+    result = convert_messages([ModelRequest([ImageInput(url=image_url)])], PydanticSerializer())
 
     assert result == [
         {
@@ -143,7 +142,7 @@ class TestImageBinaryInput:
 
     def test_converts_to_image_base64_block(self) -> None:
         result = convert_messages(
-            [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])], SerializerCls
+            [ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type="image/png")])], PydanticSerializer()
         )
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
@@ -171,7 +170,7 @@ class TestImageBinaryInput:
                     )
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [
@@ -193,7 +192,7 @@ class TestImageBinaryInput:
                     )
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
@@ -212,7 +211,7 @@ class TestImageBinaryInput:
 
 def test_document_url_input_converts_to_url_block() -> None:
     doc_url = "https://example.com/doc.pdf"
-    result = convert_messages([ModelRequest([DocumentInput(url=doc_url)])], SerializerCls)
+    result = convert_messages([ModelRequest([DocumentInput(url=doc_url)])], PydanticSerializer())
 
     assert result == [
         {
@@ -227,7 +226,7 @@ class TestDocumentBinaryInput:
 
     def test_converts_to_document_base64_block(self) -> None:
         result = convert_messages(
-            [ModelRequest([DocumentInput(data=self.SAMPLE_BYTES, media_type="application/pdf")])], SerializerCls
+            [ModelRequest([DocumentInput(data=self.SAMPLE_BYTES, media_type="application/pdf")])], PydanticSerializer()
         )
 
         expected_b64 = base64.b64encode(self.SAMPLE_BYTES).decode()
@@ -255,7 +254,7 @@ class TestDocumentBinaryInput:
                     )
                 ])
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [
@@ -270,7 +269,7 @@ class TestFileIdInput:
     FILE_ID = "file_011CNha8iCJcU1wXNR6q4V8w"
 
     def test_no_filename_defaults_to_document(self) -> None:
-        result = convert_messages([ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
+        result = convert_messages([ModelRequest([FileIdInput(file_id=self.FILE_ID)])], PydanticSerializer())
 
         assert result == [
             {
@@ -281,7 +280,7 @@ class TestFileIdInput:
 
     def test_image_filename_uses_image_block(self) -> None:
         result = convert_messages(
-            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="photo.jpg")])], SerializerCls
+            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="photo.jpg")])], PydanticSerializer()
         )
 
         assert result == [
@@ -293,7 +292,7 @@ class TestFileIdInput:
 
     def test_pdf_filename_uses_document_block(self) -> None:
         result = convert_messages(
-            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], SerializerCls
+            [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], PydanticSerializer()
         )
 
         assert result == [
@@ -307,13 +306,13 @@ class TestFileIdInput:
         with pytest.raises(UnsupportedInputError, match="'openai'.*anthropic"):
             convert_messages(
                 [ModelRequest([UploadedFile(file_id="file-abc", provider=FileProvider.OPENAI)])],
-                SerializerCls,
+                PydanticSerializer(),
             )
 
     def test_matching_provider_passes(self) -> None:
         result = convert_messages(
             [ModelRequest([UploadedFile(file_id=self.FILE_ID, provider=FileProvider.ANTHROPIC)])],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [
@@ -333,7 +332,7 @@ def test_multiple_inputs_grouped_into_one_message() -> None:
                 ImageInput(url="https://example.com/b.jpg"),
             ])
         ],
-        SerializerCls,
+        PydanticSerializer(),
     )
 
     assert result == [
@@ -355,7 +354,7 @@ class TestToolResult:
 
     def test_text_only_stays_string(self) -> None:
         event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("hello"))])
-        result = convert_messages([event], SerializerCls)
+        result = convert_messages([event], PydanticSerializer())
 
         assert result == [
             {
@@ -374,7 +373,7 @@ class TestToolResult:
                 )
             ]
         )
-        result = convert_messages([event], SerializerCls)
+        result = convert_messages([event], PydanticSerializer())
 
         expected_b64 = base64.b64encode(self.PNG).decode()
         assert result == [
@@ -405,7 +404,7 @@ class TestToolResult:
                 )
             ]
         )
-        result = convert_messages([event], SerializerCls)
+        result = convert_messages([event], PydanticSerializer())
 
         assert result == [
             {
@@ -430,7 +429,7 @@ class TestToolResult:
                 )
             ]
         )
-        result = convert_messages([event], SerializerCls)
+        result = convert_messages([event], PydanticSerializer())
 
         assert result == [
             IsPartialDict({
@@ -459,7 +458,7 @@ class TestToolResult:
                 )
             ]
         )
-        result = convert_messages([event], SerializerCls)
+        result = convert_messages([event], PydanticSerializer())
 
         expected_b64 = base64.b64encode(pdf).decode()
         assert result == [
@@ -485,7 +484,7 @@ class TestToolResult:
         event = ToolResultsEvent(
             results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult(DocumentInput(url=doc_url)))]
         )
-        result = convert_messages([event], SerializerCls)
+        result = convert_messages([event], PydanticSerializer())
 
         assert result == [
             {
@@ -510,7 +509,7 @@ class TestToolResult:
                 )
             ]
         )
-        result = convert_messages([event], SerializerCls)
+        result = convert_messages([event], PydanticSerializer())
 
         assert result == [
             {
@@ -535,7 +534,7 @@ class TestToolResult:
                 )
             ]
         )
-        result = convert_messages([event], SerializerCls)
+        result = convert_messages([event], PydanticSerializer())
 
         assert result == [
             {
@@ -554,7 +553,7 @@ class TestToolResult:
         event = ToolResultsEvent(
             results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult(FileIdInput(file_id="file_plain")))]
         )
-        result = convert_messages([event], SerializerCls)
+        result = convert_messages([event], PydanticSerializer())
 
         assert result == [
             {
@@ -580,7 +579,7 @@ class TestToolResult:
             ]
         )
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*audio.*anthropic"):
-            convert_messages([event], SerializerCls)
+            convert_messages([event], PydanticSerializer())
 
 
 @pytest.mark.parametrize(
@@ -615,14 +614,14 @@ class TestToolResult:
 )
 def test_unsupported_input_raises(input_factory: Callable[[], Any], match: str) -> None:
     with pytest.raises(UnsupportedInputError, match=match):
-        convert_messages([ModelRequest([input_factory()])], SerializerCls)
+        convert_messages([ModelRequest([input_factory()])], PydanticSerializer())
 
 
 def _server_tool_use_block(
     *,
     id: str = "stu_1",
     name: str = "web_search",
-    input: dict | None = None,
+    input: dict[str, Any] | None = None,
 ) -> ServerToolUseBlock:
     return ServerToolUseBlock(
         id=id,
@@ -635,7 +634,7 @@ def _server_tool_use_block(
 def _web_search_result_block(
     *,
     tool_use_id: str = "stu_1",
-    content: list | None = None,
+    content: list[Any] | None = None,
 ) -> WebSearchToolResultBlock:
     return WebSearchToolResultBlock(
         tool_use_id=tool_use_id,
@@ -656,7 +655,7 @@ class TestAnthropicServerToolCallEvent:
                     block=block,
                 ),
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [{"role": "assistant", "content": [block.model_dump(exclude_none=True, mode="json")]}]
@@ -668,7 +667,7 @@ class TestAnthropicServerToolCallEvent:
                 ModelResponse(message=ModelMessage("Let me search for that."), tool_calls=ToolCallsEvent()),
                 AnthropicServerToolCallEvent(id=block.id, name="web_search", arguments="{}", block=block),
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [
@@ -694,7 +693,7 @@ class TestAnthropicServerToolResultEvent:
                     block=block,
                 ),
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [{"role": "assistant", "content": [block.model_dump(exclude_none=True, mode="json")]}]
@@ -712,7 +711,7 @@ class TestAnthropicServerToolResultEvent:
                     block=result_block,
                 ),
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
 
         assert result == [
@@ -743,7 +742,7 @@ def test_full_sequence_round_trip() -> None:
         ModelRequest([TextInput("What was the exact price?")]),
     ]
 
-    result = convert_messages(events, SerializerCls)
+    result = convert_messages(events, PydanticSerializer())
 
     assert result == [
         {"role": "user", "content": "Search for bitcoin price"},
@@ -811,7 +810,7 @@ def test_code_execution_subtool_preserves_block_shape(
                 parent_id=result_block.tool_use_id, name="code_execution", result=ToolResult(), block=result_block
             ),
         ],
-        SerializerCls,
+        PydanticSerializer(),
     )
 
     assert result == [
@@ -828,19 +827,23 @@ def test_code_execution_subtool_preserves_block_shape(
 class TestUnsupportedInputs:
     def test_audio_url_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*anthropic"):
-            convert_messages([ModelRequest([AudioInput(url="https://example.com/audio.wav")])], SerializerCls)
+            convert_messages([ModelRequest([AudioInput(url="https://example.com/audio.wav")])], PydanticSerializer())
 
     def test_video_url_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="UrlInput.*video.*anthropic"):
-            convert_messages([ModelRequest([VideoInput(url="https://example.com/video.mp4")])], SerializerCls)
+            convert_messages([ModelRequest([VideoInput(url="https://example.com/video.mp4")])], PydanticSerializer())
 
     def test_audio_binary_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*audio.*anthropic"):
-            convert_messages([ModelRequest([AudioInput(data=b"\x00audio", media_type="audio/wav")])], SerializerCls)
+            convert_messages(
+                [ModelRequest([AudioInput(data=b"\x00audio", media_type="audio/wav")])], PydanticSerializer()
+            )
 
     def test_video_binary_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*video.*anthropic"):
-            convert_messages([ModelRequest([VideoInput(data=b"\x00video", media_type="video/mp4")])], SerializerCls)
+            convert_messages(
+                [ModelRequest([VideoInput(data=b"\x00video", media_type="video/mp4")])], PydanticSerializer()
+            )
 
     def test_generic_binary_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*binary.*anthropic"):
@@ -850,7 +853,7 @@ class TestUnsupportedInputs:
                         BinaryInput(data=b"\x00", media_type="application/octet-stream", kind=BinaryType.BINARY)
                     ])
                 ],
-                SerializerCls,
+                PydanticSerializer(),
             )
 
 
@@ -859,7 +862,7 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
     call = ToolCallEvent(id="tc_1", name="ghost_tool")
     event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
 
-    result = convert_messages([event], SerializerCls)
+    result = convert_messages([event], PydanticSerializer())
 
     assert result == [
         {
@@ -880,7 +883,7 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
 def test_compaction_summary_renders_as_user_turn() -> None:
     summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
 
-    result = convert_messages([summary], SerializerCls)
+    result = convert_messages([summary], PydanticSerializer())
 
     assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]
 
@@ -900,7 +903,7 @@ class TestLooseToolResultEvent:
             ToolResultEvent(parent_id="tc_1", result=ToolResult("ok")),
         ]
 
-        assert convert_messages(events, SerializerCls)[-1] == {
+        assert convert_messages(events, PydanticSerializer())[-1] == {
             "role": "user",
             "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok"}],
         }
@@ -909,23 +912,23 @@ class TestLooseToolResultEvent:
         image = ImageInput(data=self.PNG, media_type="image/png")
         wrapped = convert_messages(
             [
-                _model_response_with_tool_call(None),
+                _model_response_with_tool_call(),
                 ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", result=ToolResult(image))]),
             ],
-            SerializerCls,
+            PydanticSerializer(),
         )
         loose = convert_messages(
-            [_model_response_with_tool_call(None), ToolResultEvent(parent_id="tc_1", result=ToolResult(image))],
-            SerializerCls,
+            [_model_response_with_tool_call(), ToolResultEvent(parent_id="tc_1", result=ToolResult(image))],
+            PydanticSerializer(),
         )
 
         assert loose == wrapped
 
     def test_tool_error_event_renders(self) -> None:
         error = ToolErrorEvent.from_call(ToolCallEvent(id="tc_1", name="list_items"), ValueError("boom"))
-        events = [_model_response_with_tool_call(None), error]
+        events = [_model_response_with_tool_call(), error]
 
-        assert convert_messages(events, SerializerCls)[-1] == {
+        assert convert_messages(events, PydanticSerializer())[-1] == {
             "role": "user",
             "content": [
                 {"type": "tool_result", "tool_use_id": "tc_1", "content": "ValueError: boom\n", "is_error": True}
@@ -934,9 +937,9 @@ class TestLooseToolResultEvent:
 
     def test_wrapper_still_wins_when_both_are_present(self) -> None:
         loose = ToolResultEvent(parent_id="tc_1", result=ToolResult("ok"))
-        events = [_model_response_with_tool_call(None), loose, _matching_tool_result()]
+        events = [_model_response_with_tool_call(), loose, _matching_tool_result()]
 
-        results = [m for m in convert_messages(events, SerializerCls) if m["role"] == "user"]
+        results = [m for m in convert_messages(events, PydanticSerializer()) if m["role"] == "user"]
         assert len(results) == 1
 
 
@@ -946,7 +949,7 @@ class TestToolErrorIsError:
     def test_error_sets_is_error(self) -> None:
         error = ToolErrorEvent.from_call(ToolCallEvent(id="tc_1", name="t"), ValueError("boom"))
 
-        assert convert_messages([ToolResultsEvent(results=[error])], SerializerCls) == [
+        assert convert_messages([ToolResultsEvent(results=[error])], PydanticSerializer()) == [
             {
                 "role": "user",
                 "content": [
@@ -958,14 +961,14 @@ class TestToolErrorIsError:
     def test_success_has_no_is_error(self) -> None:
         ok = ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("fine"))
 
-        assert convert_messages([ToolResultsEvent(results=[ok])], SerializerCls) == [
+        assert convert_messages([ToolResultsEvent(results=[ok])], PydanticSerializer()) == [
             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "fine"}]}
         ]
 
     def test_loose_error_sets_is_error(self) -> None:
         error = ToolErrorEvent.from_call(ToolCallEvent(id="tc_1", name="list_items"), ValueError("boom"))
 
-        assert convert_messages([_model_response_with_tool_call(None), error], SerializerCls)[-1] == {
+        assert convert_messages([_model_response_with_tool_call(), error], PydanticSerializer())[-1] == {
             "role": "user",
             "content": [IsPartialDict({"tool_use_id": "tc_1", "is_error": True})],
         }
@@ -995,7 +998,7 @@ class TestToolUseVendorMetadata:
             _matching_tool_result(),
         ]
 
-        assert convert_messages(events, SerializerCls)[0] == {
+        assert convert_messages(events, PydanticSerializer())[0] == {
             "role": "assistant",
             "content": [
                 {
@@ -1011,7 +1014,7 @@ class TestToolUseVendorMetadata:
     def test_toolset_name_replays_on_both_sides(self) -> None:
         events = [self._response(toolset_name="browser"), _matching_tool_result()]
 
-        assert convert_messages(events, SerializerCls) == [
+        assert convert_messages(events, PydanticSerializer()) == [
             {
                 "role": "assistant",
                 "content": [
@@ -1027,7 +1030,7 @@ class TestToolUseVendorMetadata:
     def test_nothing_added_when_absent(self) -> None:
         events = [self._response(), _matching_tool_result()]
 
-        assert convert_messages(events, SerializerCls) == [
+        assert convert_messages(events, PydanticSerializer()) == [
             {"role": "assistant", "content": [{"type": "tool_use", "id": "tc_1", "name": "navigate", "input": {}}]},
             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok"}]},
         ]

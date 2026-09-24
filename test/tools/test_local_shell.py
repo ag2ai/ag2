@@ -7,7 +7,7 @@ import json
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 
 import pytest
 
@@ -112,6 +112,29 @@ class TestCheckIgnore:
 
     def test_remote_pure_workdir_blocks_absolute_outside(self) -> None:
         result = check_ignore("cat /etc/passwd", PurePosixPath("/workspace"), ["**/.env"])
+        assert result is not None
+        assert "Access denied" in result
+
+    def test_lexical_workdir_is_judged_without_touching_the_filesystem(self) -> None:
+        """A purely lexical workdir has no ``resolve()``; it must still get a verdict."""
+        assert check_ignore("cat .env", PurePath("/workspace"), [".env"]) is not None
+        assert check_ignore("cat README.md", PurePath("/workspace"), [".env"]) is None
+
+    def test_unresolvable_token_is_denied(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A path we could not judge is not a path we may permit.
+
+        Previously an unresolvable token was skipped, so a command naming it ran.
+        """
+        real_resolve = Path.resolve
+
+        def resolve(self: Path, strict: bool = False) -> Path:
+            if self.name == "unreadable":
+                raise OSError("Too many levels of symbolic links")
+            return real_resolve(self, strict=strict)
+
+        monkeypatch.setattr(Path, "resolve", resolve)
+
+        result = check_ignore("cat unreadable", tmp_path, ["**/.env"])
         assert result is not None
         assert "Access denied" in result
 

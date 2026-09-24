@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config import OpenAIConfig, OpenAIResponsesConfig
@@ -60,7 +60,7 @@ async def _ask(config: OpenAIConfig | OpenAIResponsesConfig) -> None:
         context=Context(stream=MemoryStream()),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 
@@ -75,7 +75,8 @@ async def _chat_body(**overrides: Any) -> dict[str, Any]:
             **overrides,
         )
     )
-    return captured["body"]  # type: ignore[no-any-return]
+    body: dict[str, Any] = captured["body"]
+    return body
 
 
 async def _responses_body(**overrides: Any) -> dict[str, Any]:
@@ -89,7 +90,8 @@ async def _responses_body(**overrides: Any) -> dict[str, Any]:
             **overrides,
         )
     )
-    return captured["body"]  # type: ignore[no-any-return]
+    body: dict[str, Any] = captured["body"]
+    return body
 
 
 BOTH_SURFACES = pytest.mark.parametrize("body_of", (_chat_body, _responses_body), ids=("chat", "responses"))

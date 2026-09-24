@@ -35,6 +35,8 @@ class MiddlewareDescription:
     complete: bool = True
     inner: tuple["MiddlewareDescription", ...] = ()
 
+    # `config` is a dict, so a description is never hashable; `None` is how a class
+    # says so, and typeshed declares `__hash__` as a method rather than optional.
     __hash__ = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:

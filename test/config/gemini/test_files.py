@@ -43,7 +43,7 @@ class TestGeminiFilesClient:
     ) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client
-        mock_client.aio.files.upload.return_value = SimpleNamespace(name="files/x", size_bytes=3)
+        mock_client.aio.files.upload.return_value = SimpleNamespace(name="files/x", size_bytes=3, create_time=None)
 
         await GeminiFilesClient(gemini_config).upload(b"abc", "blob.unknownext")
 
@@ -52,6 +52,30 @@ class TestGeminiFilesClient:
             "display_name": "blob.unknownext",
             "mime_type": "application/octet-stream",
         }
+
+    @patch("ag2.config.gemini.files.genai")
+    async def test_upload_falls_back_to_the_payload_size_when_the_api_reports_none(
+        self, mock_genai: MagicMock, gemini_config: MagicMock
+    ) -> None:
+        """`File.size_bytes` is optional; the uploaded payload is the size we do know."""
+        mock_client = AsyncMock()
+        mock_genai.Client.return_value = mock_client
+        mock_client.aio.files.upload.return_value = SimpleNamespace(name="files/x", size_bytes=None, create_time=None)
+
+        result = await GeminiFilesClient(gemini_config).upload(b"abcde", "blob.bin")
+
+        assert result.bytes_count == 5
+
+    @patch("ag2.config.gemini.files.genai")
+    async def test_upload_refuses_a_file_with_no_resource_name(
+        self, mock_genai: MagicMock, gemini_config: MagicMock
+    ) -> None:
+        mock_client = AsyncMock()
+        mock_genai.Client.return_value = mock_client
+        mock_client.aio.files.upload.return_value = SimpleNamespace(name=None, size_bytes=3, create_time=None)
+
+        with pytest.raises(ValueError, match="no resource name"):
+            await GeminiFilesClient(gemini_config).upload(b"abc", "blob.bin")
 
     @patch("ag2.config.gemini.files.genai")
     async def test_read_downloadable(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:

@@ -8,7 +8,7 @@ import datetime
 import pytest
 
 from ag2 import Context
-from ag2.events import ModelMessage, ToolCallEvent
+from ag2.events import BaseEvent, ModelMessage, ToolCallEvent
 from ag2.stream import MemoryStream
 from ag2.watch import (
     AllOf,
@@ -27,7 +27,7 @@ class TestEventWatch:
     async def test_fires_on_matching_event(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[BaseEvent] = []
 
         async def callback(events, _ctx):
             received.extend(events)
@@ -45,7 +45,7 @@ class TestEventWatch:
     async def test_does_not_fire_on_non_matching(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[BaseEvent] = []
 
         async def callback(events, _ctx):
             received.extend(events)
@@ -60,7 +60,7 @@ class TestEventWatch:
     async def test_condition_filter(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[BaseEvent] = []
 
         async def callback(events, _ctx):
             received.extend(events)
@@ -76,7 +76,7 @@ class TestEventWatch:
     async def test_disarm_stops_firing(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[BaseEvent] = []
 
         async def callback(events, _ctx):
             received.extend(events)
@@ -95,7 +95,7 @@ class TestCadenceWatch:
     async def test_fires_after_n_events(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        batches: list = []
+        batches: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             batches.append(events)
@@ -114,7 +114,7 @@ class TestCadenceWatch:
     async def test_multiple_batches(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        batches: list = []
+        batches: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             batches.append(events)
@@ -131,7 +131,7 @@ class TestCadenceWatch:
     async def test_disarm_clears_buffer(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        batches: list = []
+        batches: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             batches.append(events)
@@ -147,7 +147,7 @@ class TestCadenceWatch:
     async def test_fires_on_timeout(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        batches: list = []
+        batches: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             batches.append(events)
@@ -167,7 +167,7 @@ class TestCadenceWatch:
     async def test_n_wins_when_reached_before_timeout(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        batches: list = []
+        batches: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             batches.append(events)
@@ -186,7 +186,7 @@ class TestCadenceWatch:
     async def test_timeout_wins_when_n_not_reached(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        batches: list = []
+        batches: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             batches.append(events)
@@ -216,7 +216,7 @@ class TestCadenceWatch:
     async def test_count_trigger_cancels_pending_timer(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        batches: list = []
+        batches: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             batches.append(events)
@@ -237,7 +237,7 @@ class TestCadenceWatch:
     async def test_timer_restarts_after_count_flush(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        batches: list = []
+        batches: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             batches.append(events)
@@ -298,7 +298,7 @@ class TestCadenceWatch:
     async def test_count_fires_after_timer_flush(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        batches: list = []
+        batches: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             batches.append(events)
@@ -396,7 +396,7 @@ class TestAllOf:
     async def test_fires_when_all_sub_watches_fired(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             received.append(events)
@@ -420,7 +420,7 @@ class TestAllOf:
         """AllOf should include events from ALL sub-watches in callback, not just the last."""
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             received.append(events)
@@ -448,7 +448,7 @@ class TestAllOf:
     async def test_resets_after_firing(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             received.append(events)
@@ -475,7 +475,7 @@ class TestAnyOf:
     async def test_fires_on_either_watch(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             received.append(events)
@@ -498,7 +498,7 @@ class TestSequence:
     async def test_fires_in_order(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             received.append(events)
@@ -525,7 +525,7 @@ class TestSequence:
     async def test_resets_after_completion(self) -> None:
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        received: list = []
+        received: list[list[BaseEvent]] = []
 
         async def callback(events, _ctx):
             received.append(events)

@@ -9,7 +9,6 @@ they crash AG-UI's ``TextMessageContentEvent`` validator (which enforces
 ``MinLen(1)`` on ``delta``) and carry no payload for any other subscriber.
 """
 
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -20,16 +19,12 @@ from ag2.config.gemini.gemini_client import GeminiClient
 from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelReasoning
 
 
-def _candidate(parts: list) -> SimpleNamespace:
-    return SimpleNamespace(
-        content=SimpleNamespace(parts=parts),
-        finish_reason=None,
-        grounding_metadata=None,
-    )
+def _candidate(parts: list[types.Part]) -> types.Candidate:
+    return types.Candidate(content=types.Content(parts=parts))
 
 
-def _response(candidates: list[SimpleNamespace]) -> SimpleNamespace:
-    return SimpleNamespace(candidates=candidates, usage_metadata=None)
+def _response(candidates: list[types.Candidate]) -> types.GenerateContentResponse:
+    return types.GenerateContentResponse(candidates=candidates)
 
 
 @pytest.fixture

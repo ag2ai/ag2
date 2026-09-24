@@ -5,7 +5,7 @@
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AsyncExitStack
 from functools import partial
-from typing import Literal, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 from .annotations import Context
 from .events import HumanInputRequest, HumanMessage
@@ -22,6 +22,10 @@ HumanHook: TypeAlias = (
 
 HitlExecution: TypeAlias = Callable[[HumanInputRequest, Context], Awaitable[None]]
 
+# A `HumanHook` once `wrap_hitl` has taken it: bound to a run's middleware, it
+# answers the handler that stream subscribes to `HumanInputRequest`.
+HitlFactory: TypeAlias = Callable[[Iterable[BaseMiddleware]], HitlExecution]
+
 # Whether a protocol peer that can put a question to *our* human may be asked, or
 # is refused outright. Deliberately two-valued, unlike a permission policy: a
 # permission request carries an allow option a peer can pick blind, whereas an
@@ -36,22 +40,24 @@ HitlExecution: TypeAlias = Callable[[HumanInputRequest, Context], Awaitable[None
 ElicitationPolicy = Literal["ask", "decline"]
 
 
-def wrap_hitl(
-    func: HumanHook,
-) -> Callable[[Iterable["BaseMiddleware"]], HitlExecution]:
+def wrap_hitl(func: HumanHook) -> HitlFactory:
     call_model = build_model(func)
 
     async def _call_model(event: HumanInputRequest, context: Context) -> HumanMessage:
         # Nothing is caught here: a hook that raises is the channel failing, and
         # ``Context.input`` — the only way in — turns that into a
         # ``HumanInputError`` on the way back out.
+        # `asolve` annotates each positional as a tuple and each keyword as a
+        # `dict[str, Any]`; the values really are arbitrary.
+        args: tuple[Any, ...] = (event,)
+        options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}
         async with AsyncExitStack() as stack:
             result = await call_model.asolve(
-                event,
+                *args,
                 stack=stack,
                 cache_dependencies={},
                 dependency_provider=context.dependency_provider,
-                **{CONTEXT_OPTION_NAME: context},
+                **options,
             )
 
         return HumanMessage.ensure_message(result, parent_id=event.id)
@@ -62,8 +68,8 @@ def wrap_hitl(
             ask_user = partial(middleware.on_human_input, ask_user)
 
         async def wrapper(event: HumanInputRequest, context: Context) -> None:
-            event = await ask_user(event, context)
-            await context.send(event)
+            reply = await ask_user(event, context)
+            await context.send(reply)
 
         return wrapper
 

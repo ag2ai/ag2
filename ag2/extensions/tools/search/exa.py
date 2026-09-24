@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 
 from exa_py import AsyncExa
+from exa_py.api import AnswerResponse
 from pydantic import Field
 
 from ag2.annotations import Context, Variable
@@ -313,6 +314,10 @@ class ExaToolkit(Toolkit):
                 raw = await c.answer(query, text=True)
             finally:
                 await c.client.aclose()
+            # The SDK's return type covers streaming, which `answer()` refuses, and a
+            # structured answer, which only an `output_schema` asks for.
+            if not isinstance(raw, AnswerResponse) or not isinstance(raw.answer, str):
+                raise TypeError("Exa answered with something other than a text answer")
             return ToolResult(
                 ExaAnswerResult(
                     answer=raw.answer,

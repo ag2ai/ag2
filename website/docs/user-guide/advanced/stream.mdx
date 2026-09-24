@@ -91,6 +91,19 @@ You can filter events based on the value of their fields. The event classes defi
 stream.where(ToolCallEvent.name == "fetch_data").subscribe(handle_event)
 ```
 
+<Tip>
+A field is declared with the type of its value, so a type checker reads
+`ToolCallEvent.name == "fetch_data"` as a `bool` unless it is told otherwise. AG2 ships a
+mypy plugin that makes class-level field access resolve to the field descriptor, whose
+comparison operators return a `Condition`. Add it to your own configuration to check these
+filters in your project:
+
+```toml
+[tool.mypy]
+plugins = ["ag2.mypy"]
+```
+</Tip>
+
 ## Static subscribers with decorators
 
 You can use `subscribe` as a decorator to register static handlers cleanly. This works well with `where` filters.

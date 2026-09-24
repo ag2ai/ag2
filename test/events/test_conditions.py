@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.events import BaseEvent, Field
+from ag2.events import BaseEvent, Condition, Field
 
 
 class TestEvent(BaseEvent):
@@ -113,7 +113,8 @@ class TestEventConditions:
         assert not condition(TestEvent(field=0))
 
     def test_or_condition_with_union_classes(self):
-        condition = AnotherEvent | TestEvent
+        # Annotated: a bare `X = A | B` of classes is read by the checker as a type alias.
+        condition: Condition = AnotherEvent | TestEvent
 
         assert condition(TestEvent(field=15))
         assert condition(AnotherEvent(field=""))
@@ -164,11 +165,12 @@ class TestEventConditions:
         assert not condition(TestEvent(field=99))
 
     def test_event_with_multiple_fields(self):
-        event = TestEvent(field="test", value=42, name="example")
+        # Undeclared keywords are stored as attributes at runtime; the checker rightly refuses them.
+        event = TestEvent(field="test", value=42, name="example")  # type: ignore[call-arg]
 
         assert event.field == "test"
-        assert event.value == 42
-        assert event.name == "example"
+        assert event.value == 42  # type: ignore[attr-defined]
+        assert event.name == "example"  # type: ignore[attr-defined]
 
     def test_condition_with_none_value(self):
         condition = TestEvent.field == None  # noqa: E711

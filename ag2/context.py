@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeAlias, cast, overload, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, TypeVar, cast, overload, runtime_checkable
 from uuid import UUID
 
 from fast_depends import Provider
@@ -18,21 +18,35 @@ from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, ModelRequ
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
+if TYPE_CHECKING:
+    # `history` imports this module, so the declaration below is type-time only.
+    from .history import History
+
 logger = logging.getLogger(__name__)
 
 StreamId: TypeAlias = UUID
 SubId: TypeAlias = UUID
+
+TEvent = TypeVar("TEvent", bound=BaseEvent)
 
 
 @runtime_checkable
 class Stream(Protocol):
     id: StreamId
 
-    pending_messages: list[ModelRequest]
-    """Inbox of follow-up turns produced asynchronously (e.g. by background
-    tasks). The agent loop drains this before each model call; whatever lands
-    here while no ``ask`` is running is consumed by the next ``ask`` on this
-    stream and merged into its initial request."""
+    @property
+    def history(self) -> "History":
+        """Every event sent on this stream, and the storage backing them. A filtered
+        stream is a view, so it shares its parent's."""
+        ...
+
+    @property
+    def pending_messages(self) -> list[ModelRequest]:
+        """Inbox of follow-up turns produced asynchronously (e.g. by background
+        tasks). The agent loop drains this before each model call; whatever lands
+        here while no ``ask`` is running is consumed by the next ``ask`` on this
+        stream and merged into its initial request."""
+        ...
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None: ...
 
@@ -98,10 +112,22 @@ class Stream(Protocol):
         sync_to_thread: bool = True,
     ) -> AbstractContextManager[None]: ...
 
+    @overload
+    def get(
+        self,
+        condition: type[TEvent],
+    ) -> AbstractAsyncContextManager[asyncio.Future[TEvent]]: ...
+
+    @overload
     def get(
         self,
         condition: ClassInfo | Condition,
     ) -> AbstractAsyncContextManager[asyncio.Future[BaseEvent]]: ...
+
+    def get(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> AbstractAsyncContextManager[asyncio.Future[Any]]: ...
 
 
 @dataclass(slots=True)
@@ -173,8 +199,10 @@ class ConversationContext:
 
             except asyncio.TimeoutError as exc:
                 # Only ``wait_for`` can reach this: anything the channel raised,
-                # timeouts included, left _ask_human as a HumanInputError.
-                raise HumanInputTimeoutError(timeout) from exc  # type: ignore[arg-type]
+                # timeouts included, left _ask_human as a HumanInputError. And
+                # ``wait_for`` times out only when given a timeout.
+                assert timeout is not None
+                raise HumanInputTimeoutError(timeout) from exc
 
         return result.content
 

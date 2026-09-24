@@ -8,11 +8,12 @@ from pydantic import BaseModel
 from ag2 import Agent, TaskConfig, tool
 from ag2.middleware import (
     ApprovalRequired,
-    LoggingMiddleware,
+    BaseMiddleware,
     Middleware,
     TokenLimiter,
 )
 from ag2.observers import observer
+from ag2.tools.types import FunctionTool
 
 
 def alpha(x: int) -> int:
@@ -34,6 +35,10 @@ def make_hook():  # type: ignore[no-untyped-def]
 
 class Out(BaseModel):
     value: int
+
+
+class Configurable(BaseMiddleware):
+    """A middleware class for `Middleware` to wrap; never instantiated here."""
 
 
 class TestAgentComposition:
@@ -61,7 +66,7 @@ class TestAgentComposition:
         assert agent.response_schema is None
 
     def test_set_slots_are_reported(self) -> None:
-        @observer
+        @observer()
         def watcher(event, context) -> None:  # type: ignore[no-untyped-def]
             return None
 
@@ -78,7 +83,9 @@ class TestAgentComposition:
         async def greeting() -> str:
             return "hi"
 
-        assert [hook.__name__ for hook in agent.dynamic_prompt] == ["greeting"]
+        [hook] = agent.dynamic_prompt
+        assert callable(hook)
+        assert hook.__name__ == "greeting"
 
 
 class TestViewsAreReadOnly:
@@ -153,6 +160,8 @@ class TestSharingIsObservable:
             tools=[tool(alpha, middleware=[shared]), tool(beta, middleware=[shared])],
         )
         first, second = agent.tools
+        assert isinstance(first, FunctionTool)
+        assert isinstance(second, FunctionTool)
 
         assert first.middleware[0].middleware is second.middleware[0].middleware
 
@@ -163,6 +172,8 @@ class TestSharingIsObservable:
             tools=[tool(alpha, middleware=[make_hook()]), tool(beta, middleware=[make_hook()])],
         )
         first, second = agent.tools
+        assert isinstance(first, FunctionTool)
+        assert isinstance(second, FunctionTool)
 
         # Descriptions cannot tell these apart, which is why identity is exposed.
         assert first.middleware[0].description == second.middleware[0].description
@@ -171,13 +182,13 @@ class TestSharingIsObservable:
 
 class TestMiddlewareFactoryFields:
     def test_reports_the_wrapped_class_and_its_options(self) -> None:
-        factory = Middleware(LoggingMiddleware, level=10)
+        factory = Middleware(Configurable, level=10)
 
-        assert factory.cls is LoggingMiddleware
+        assert factory.cls is Configurable
         assert dict(factory.options) == {"level": 10}
 
     def test_options_expose_values_that_the_description_withholds(self) -> None:
-        factory = Middleware(LoggingMiddleware, api_key="sk-SECRET-123")
+        factory = Middleware(Configurable, api_key="sk-SECRET-123")
 
         # A description may be logged or committed as a fixture, so it reports
         # names only. Reading the factory you already hold is a deliberate act.
@@ -185,7 +196,7 @@ class TestMiddlewareFactoryFields:
         assert "sk-SECRET-123" not in repr(factory.describe())
 
     def test_options_cannot_be_mutated_through_the_view(self) -> None:
-        factory = Middleware(LoggingMiddleware, level=10)
+        factory = Middleware(Configurable, level=10)
 
         with pytest.raises(TypeError):
             factory.options["level"] = 20  # type: ignore[index]

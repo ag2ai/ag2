@@ -23,12 +23,12 @@ class TaskStarted(TaskEvent):
     # Optional ``TaskSpec`` describing what the task is doing. Set by the
     # framework-core ``Task`` primitive (``ag2.task``); legacy
     # ``run_task`` callers leave it ``None``.
-    spec: "TaskSpec | None" = Field(None)
+    spec: "TaskSpec | None" = Field(default=None)
     # Absolute ISO deadline (start + ttl_seconds) if the task was created
     # with a TTL, else ``None``. Carried on the event so the network's
     # ``TaskMirror`` can hand it to the hub, whose TTL sweeper expires
     # tasks past ``expires_at``. ``TaskSpec`` does not hold the TTL.
-    expires_at: str | None = Field(None)
+    expires_at: str | None = Field(default=None)
 
 
 class TaskProgress(TaskEvent):
@@ -46,7 +46,7 @@ class TaskProgress(TaskEvent):
 
     __transient__ = True
 
-    content: str = Field("")
+    content: str = Field(default="")
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -54,7 +54,7 @@ class TaskCompleted(TaskEvent):
     # Widened from ``str | None`` to ``Any`` so framework-core ``Task``
     # owners can return structured results. ``run_task`` still passes a
     # string, so existing callers are unaffected.
-    result: Any = Field(None)
+    result: Any = Field(default=None)
     # Stream reference for inspection. Resolves against the parent's storage
     # only when the sub-task's stream shares it, as `stream=None` builds it to.
     task_stream: "StreamId"
@@ -67,7 +67,8 @@ class TaskCompleted(TaskEvent):
 
 
 class TaskFailed(TaskEvent):
-    error: Exception
+    # A task exited by cancellation or an interrupt fails with that, not only with an `Exception`.
+    error: BaseException
 
     _content: str = Field(
         default_factory=str,
@@ -108,4 +109,4 @@ class TaskCancelled(TaskEvent):
     the cancellation alongside the other terminal events.
     """
 
-    reason: str = Field("")
+    reason: str = Field(default="")

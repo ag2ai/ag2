@@ -27,7 +27,7 @@ from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 
-def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] | str | None:
+def response_proto_to_format(response: ResponseProto[Any] | None) -> dict[str, Any] | str | None:
     """Convert a ResponseProto to Ollama's format parameter."""
     if not response or not response.json_schema:
         return None

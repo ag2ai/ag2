@@ -39,7 +39,7 @@ from ag2.tools.schemas import ToolSchema
 from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
 
 
-def response_proto_to_config(response: ResponseProto | None) -> dict[str, Any]:
+def response_proto_to_config(response: ResponseProto[Any] | None) -> dict[str, Any]:
     """Convert a ResponseProto to Gemini GenerateContentConfig kwargs."""
     if not response or not response.json_schema:
         return {}
@@ -58,7 +58,7 @@ def build_system_instruction(
     return joined or None
 
 
-def _strip_additional_properties(node: Any) -> Any:
+def _strip_additional_properties(schema: dict[str, Any]) -> dict[str, Any]:
     """Recursively remove ``additionalProperties`` from a JSON Schema.
 
     Gemini's API rejects ``additionalProperties`` when it appears
@@ -67,10 +67,15 @@ def _strip_additional_properties(node: Any) -> Any:
     Gemini doesn't enforce additional-properties anyway, so dropping
     everywhere is safe.
     """
+    return {k: _strip_node(v) for k, v in schema.items() if k != "additionalProperties"}
+
+
+def _strip_node(node: Any) -> Any:
+    """Walk one schema node; only the mapping arm is a schema, so only it is typed."""
     if isinstance(node, dict):
-        return {k: _strip_additional_properties(v) for k, v in node.items() if k != "additionalProperties"}
+        return _strip_additional_properties(node)
     if isinstance(node, list):
-        return [_strip_additional_properties(v) for v in node]
+        return [_strip_node(v) for v in node]
     return node
 
 
@@ -332,7 +337,7 @@ def convert_messages(
             result.append(types.Content(role="user", parts=parts_list))
 
         elif isinstance(message, ModelRequest):
-            parts: list[types.Part] = []
+            parts = []
             for inp in message.parts:
                 if isinstance(inp, TextInput):
                     parts.append(types.Part.from_text(text=inp.content))
@@ -357,9 +362,9 @@ def convert_messages(
                     parts.append(types.Part(file_data=types.FileData(file_uri=file_uri)))
 
                 elif isinstance(inp, BinaryInput):
-                    part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
-                    _apply_vendor_metadata(part, inp.vendor_metadata)
-                    parts.append(part)
+                    binary_part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
+                    _apply_vendor_metadata(binary_part, inp.vendor_metadata)
+                    parts.append(binary_part)
 
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "gemini")

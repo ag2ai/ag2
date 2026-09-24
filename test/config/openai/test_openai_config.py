@@ -42,6 +42,7 @@ def test_extra_body_passed_to_create_options() -> None:
 
     client = config.create()
 
+    assert client._create_options is not None
     assert client._create_options.get("extra_body") == extra
 
 

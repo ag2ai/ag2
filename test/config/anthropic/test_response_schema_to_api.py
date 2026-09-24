@@ -3,18 +3,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field
 
 from ag2.config.anthropic.mappers import response_proto_to_output_config
-from ag2.response import ResponseSchema
+from ag2.response import PromptedSchema, ResponseSchema
 from ag2.response.schema import RawSchema
 
 
-def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
+def _embedded_data_schema(inner: dict[str, Any]) -> dict[str, Any]:
     """JSON schema for a primitive/union wrapped in ``{\"data\": ...}`` (default ``embed=True``)."""
     return {
         "properties": {
@@ -44,7 +44,7 @@ def test_response_proto_to_output_config_none_returns_none() -> None:
 def test_primitive_schemas_primitive_type(
     type_: type,
     name: str,
-    expected_inner_schema: dict,  # type: ignore[type-arg]
+    expected_inner_schema: dict[str, Any],
 ) -> None:
     schema = ResponseSchema(type_, name=name)
 
@@ -278,11 +278,6 @@ class TestRawSchema:
 
 
 def test_no_json_schema_returns_none() -> None:
-    class FakeProto:
-        name = "test"
-        description = None
-        json_schema = None
-        system_prompt = None
-
-    result = response_proto_to_output_config(FakeProto())  # type: ignore[arg-type]
+    # A prompted schema carries its JSON schema in the system prompt, not natively.
+    result = response_proto_to_output_config(PromptedSchema(int))
     assert result is None

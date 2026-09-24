@@ -35,6 +35,7 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_PACKET,
     EV_TEXT,
+    Envelope,
     Handoff,
     Hub,
     HubClient,
@@ -46,7 +47,7 @@ from ag2.network.adapters.discussion import (
     DISCUSSION_TYPE,
     ORDERING_ROUND_ROBIN,
 )
-from ag2.network.adapters.workflow import WORKFLOW_TYPE
+from ag2.network.adapters.workflow import WORKFLOW_TYPE, WorkflowState
 from ag2.network.transitions import (
     AgentTarget,
     FromSpeaker,
@@ -206,7 +207,7 @@ async def test_3way_discussion_one_per_provider() -> None:
     await hub.close()
 
 
-async def _wait_for_handoff(hub: Hub, channel_id: str, *, timeout: float = 60.0) -> list:
+async def _wait_for_handoff(hub: Hub, channel_id: str, *, timeout: float = 60.0) -> list[Envelope]:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
         wal = await hub.read_wal(channel_id)
@@ -324,6 +325,7 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
 
     # After RevertToInitiator, expected_next_speaker should be triage again.
     state = hub.adapter_state(channel.channel_id)
+    assert isinstance(state, WorkflowState)
     assert state.expected_next_speaker == triage.agent_id
 
     await user_hc.close()

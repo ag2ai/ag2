@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import ToolResult
 from ag2.compact import CompactionSummary
@@ -22,23 +22,24 @@ from ag2.events import (
     ToolResultsEvent,
 )
 from ag2.exceptions import UnsupportedInputError
+from ag2.types import SendableMessage
 
 
 def test_user_text_input() -> None:
-    result = convert_messages([], [ModelRequest([TextInput("hello")])], SerializerCls)
+    result = convert_messages([], [ModelRequest([TextInput("hello")])], PydanticSerializer())
 
     assert result == [{"role": "user", "content": "hello"}]
 
 
 def test_data_input_serialization() -> None:
-    data = {"category": "books", "limit": 3}
-    result = convert_messages([], [ModelRequest([DataInput(data)])], SerializerCls)
+    data: SendableMessage = {"category": "books", "limit": 3}
+    result = convert_messages([], [ModelRequest([DataInput(data)])], PydanticSerializer())
 
-    assert result == [{"role": "user", "content": SerializerCls.encode(data).decode()}]
+    assert result == [{"role": "user", "content": PydanticSerializer().encode(data).decode()}]
 
 
 def test_system_prompt() -> None:
-    result = convert_messages(["You are helpful.", "Be brief."], [], SerializerCls)
+    result = convert_messages(["You are helpful.", "Be brief."], [], PydanticSerializer())
 
     assert result == [{"role": "system", "content": "You are helpful.\nBe brief."}]
 
@@ -48,7 +49,7 @@ def test_assistant_text_and_tool_call() -> None:
         message=ModelMessage("Let me check."),
         tool_calls=ToolCallsEvent([ToolCallEvent(id="tc_1", name="list_items", arguments='{"category": "books"}')]),
     )
-    result = convert_messages([], [response], SerializerCls)
+    result = convert_messages([], [response], PydanticSerializer())
 
     assert result == [
         {
@@ -68,7 +69,7 @@ def test_assistant_text_and_tool_call() -> None:
 def test_assistant_without_message_has_explicit_null_content() -> None:
     response = ModelResponse(message=None, tool_calls=ToolCallsEvent([]))
 
-    result = convert_messages([], [response], SerializerCls)
+    result = convert_messages([], [response], PydanticSerializer())
 
     assert result == [{"role": "assistant", "content": None}]
 
@@ -82,7 +83,7 @@ def test_tool_result_and_error_result() -> None:
             ]
         )
     ]
-    result = convert_messages([], events, SerializerCls)
+    result = convert_messages([], events, PydanticSerializer())
 
     assert result == [
         {"role": "tool", "tool_call_id": "tc_1", "content": "apple"},
@@ -94,18 +95,18 @@ def test_loose_tool_result() -> None:
     result = convert_messages(
         [],
         [ToolResultEvent(parent_id="tc_1", name="list_items", result=ToolResult("ok"))],
-        SerializerCls,
+        PydanticSerializer(),
     )
 
     assert result == [{"role": "tool", "tool_call_id": "tc_1", "content": "ok"}]
 
 
 def test_compaction_summary() -> None:
-    result = convert_messages([], [CompactionSummary(summary="Looked up Paris.", event_count=3)], SerializerCls)
+    result = convert_messages([], [CompactionSummary(summary="Looked up Paris.", event_count=3)], PydanticSerializer())
 
     assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris."}]
 
 
 def test_unsupported_input_raises() -> None:
     with pytest.raises(UnsupportedInputError):
-        convert_messages([], [ModelRequest([ImageInput("https://example.com/image.png")])], SerializerCls)
+        convert_messages([], [ModelRequest([ImageInput("https://example.com/image.png")])], PydanticSerializer())

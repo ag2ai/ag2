@@ -4,15 +4,26 @@
 
 import base64
 from collections.abc import Iterable, Sequence
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
-from openai.types.chat import ChatCompletionFunctionToolParam
+from openai.types.chat import (
+    ChatCompletionAssistantMessageParam,
+    ChatCompletionContentPartParam,
+    ChatCompletionContentPartTextParam,
+    ChatCompletionFunctionToolParam,
+    ChatCompletionMessageParam,
+    ChatCompletionSystemMessageParam,
+)
+from openai.types.chat.chat_completion_content_part_image_param import ImageURL
+from openai.types.chat.chat_completion_content_part_param import File
 from openai.types.responses import (
     FileSearchToolParam,
     FunctionShellToolParam,
+    ResponseFormatTextJSONSchemaConfigParam,
     ResponseFunctionShellToolCall,
+    ResponseTextConfigParam,
     ResponseUsage,
     SkillReferenceParam,
     ToolSearchToolParam,
@@ -23,6 +34,7 @@ from openai.types.responses.container_reference_param import ContainerReferenceP
 from openai.types.responses.file_search_tool_param import Filters as FileSearchFilters
 from openai.types.responses.function_shell_tool_param import Environment as ShellEnvironmentParam
 from openai.types.responses.local_environment_param import LocalEnvironmentParam
+from openai.types.responses.response_includable import ResponseIncludable
 from openai.types.responses.tool_param import (
     CodeInterpreter,
     CodeInterpreterContainerCodeInterpreterToolAuto,
@@ -30,6 +42,8 @@ from openai.types.responses.tool_param import (
     Mcp,
 )
 from openai.types.responses.web_search_tool_param import UserLocation as WebSearchUserLocation
+from openai.types.shared_params import ResponseFormatJSONSchema
+from openai.types.shared_params.response_format_json_schema import JSONSchema
 
 from ag2.compact import CompactionSummary
 from ag2.config.openai.events import (
@@ -87,14 +101,13 @@ def _kind_label(kind: BinaryType | str) -> str:
     return kind.value if isinstance(kind, BinaryType) else str(kind)
 
 
-def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] | None:
+def response_proto_to_schema(response: ResponseProto[Any] | None) -> ResponseFormatJSONSchema | None:
     """Convert a ResponseProto to Chat Completions response_format."""
     if not response or not response.json_schema:
         return None
 
-    strict_schema = _strictify_schema(response.json_schema)
-    schema: dict[str, Any] = {
-        "schema": strict_schema,
+    schema: JSONSchema = {
+        "schema": _strictify_schema(response.json_schema),
         "name": response.name,
         "strict": True,
     }
@@ -131,18 +144,16 @@ def _strictify_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def response_proto_to_text_config(
-    response: ResponseProto | None,
-) -> dict[str, Any] | None:
+    response: ResponseProto[Any] | None,
+) -> ResponseTextConfigParam | None:
     """Convert a ResponseProto to Responses API text config."""
     if not response or not response.json_schema:
         return None
 
-    strict_schema = _strictify_schema(response.json_schema)
-
-    fmt: dict[str, Any] = {
+    fmt: ResponseFormatTextJSONSchemaConfigParam = {
         "type": "json_schema",
         "name": response.name,
-        "schema": strict_schema,
+        "schema": _strictify_schema(response.json_schema),
         "strict": True,
     }
     if response.description:
@@ -341,17 +352,20 @@ def convert_messages(
     system_prompt: Iterable[str],
     messages: Iterable[BaseEvent],
     serializer: SerializerProto,
-) -> list[dict[str, Any]]:
+) -> list[ChatCompletionMessageParam]:
     # legacy prompt message format
-    result: list[dict[str, Any]] = [{"content": "\n".join(system_prompt), "role": "system"}]
+    system: ChatCompletionSystemMessageParam = {"content": "\n".join(system_prompt), "role": "system"}
+    result: list[ChatCompletionMessageParam] = [system]
 
     for message in messages:
         if isinstance(message, ModelResponse):
-            result.append(message.to_api())
+            # `to_api()` is provider-neutral and answers a plain mapping; this is the
+            # one place in the chat path where it becomes an OpenAI assistant turn.
+            result.append(cast(ChatCompletionAssistantMessageParam, message.to_api()))
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                result_parts: list[dict[str, Any]] = []
+                result_parts: list[ChatCompletionContentPartTextParam] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
                         result_parts.append({"type": "text", "text": part.content})
@@ -361,13 +375,13 @@ def convert_messages(
                         raise UnsupportedInputError(type(part).__name__, "openai-completions")
 
                 # Simple string content for a single plain-text turn (most common case)
-                if len(result_parts) == 1 and result_parts[0]["type"] == "text":
+                if len(result_parts) == 1:
                     result.append({"role": "tool", "tool_call_id": r.parent_id, "content": result_parts[0]["text"]})
                 else:
                     result.append({"role": "tool", "tool_call_id": r.parent_id, "content": result_parts})
 
         elif isinstance(message, ModelRequest):
-            parts: list[dict[str, Any]] = []
+            parts: list[ChatCompletionContentPartParam] = []
             for inp in message.parts:
                 if isinstance(inp, TextInput):
                     parts.append({"type": "text", "text": inp.content})
@@ -388,13 +402,15 @@ def convert_messages(
                 elif isinstance(inp, BinaryInput):
                     if inp.kind == BinaryType.AUDIO:
                         b64 = base64.b64encode(inp.data).decode()
-                        fmt = _MIME_TO_AUDIO_FORMAT.get(inp.media_type, inp.media_type.split("/", 1)[1])
+                        fmt = _MIME_TO_AUDIO_FORMAT.get(inp.media_type)
+                        if fmt is None:
+                            raise UnsupportedInputError(f"BinaryInput({inp.media_type})", "openai-completions")
                         parts.append({"type": "input_audio", "input_audio": {"data": b64, "format": fmt}})
 
                     elif inp.kind == BinaryType.IMAGE:
                         b64 = base64.b64encode(inp.data).decode()
                         data_url = f"data:{inp.media_type};base64,{b64}"
-                        image_url: dict[str, Any] = {"url": data_url}
+                        image_url: ImageURL = {"url": data_url}
                         if "detail" in inp.vendor_metadata:
                             image_url["detail"] = inp.vendor_metadata["detail"]
                         parts.append({"type": "image_url", "image_url": image_url})
@@ -406,7 +422,8 @@ def convert_messages(
                         if not filename:
                             suffix = inp.media_type.rsplit("/", 1)[-1].split("+", 1)[0]
                             filename = f"file.{suffix}"
-                        parts.append({"type": "file", "file": {"file_data": data_url, "filename": filename}})
+                        document: File = {"type": "file", "file": {"file_data": data_url, "filename": filename}}
+                        parts.append(document)
 
                     else:
                         raise UnsupportedInputError(f"BinaryInput({_kind_label(inp.kind)})", "openai-completions")
@@ -415,8 +432,9 @@ def convert_messages(
                     raise UnsupportedInputError(type(inp).__name__, "openai-completions")
 
             # Simple string content for a single plain-text turn (most common case)
-            if len(parts) == 1 and parts[0]["type"] == "text":
-                result.append({"role": "user", "content": parts[0]["text"]})
+            first = parts[0] if len(parts) == 1 else None
+            if first is not None and first["type"] == "text":
+                result.append({"role": "user", "content": first["text"]})
             else:
                 result.append({"role": "user", "content": parts})
 
@@ -436,7 +454,7 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def tool_to_api(t: ToolSchema) -> dict[str, Any]:
+def tool_to_api(t: ToolSchema) -> ChatCompletionFunctionToolParam:
     """Chat Completions API tool format."""
     if isinstance(t, FunctionToolSchema):
         if t.defer_loading:
@@ -445,7 +463,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             # instead of silently sending the tool eagerly (which would defeat
             # defer_loading and give no error). Use the Responses API instead.
             raise UnsupportedToolError("function with defer_loading (use the Responses API)", "openai-completions")
-        fn_tool: ChatCompletionFunctionToolParam = {
+        return {
             "type": "function",
             "function": {
                 "name": t.function.name,
@@ -453,7 +471,6 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
                 "parameters": _ensure_object_schema(t.function.parameters),
             },
         }
-        return dict(fn_tool)
 
     raise UnsupportedToolError(t.type, "openai-completions")
 
@@ -662,8 +679,8 @@ def reject_client_executed_shell(openai_tools: list[dict[str, Any]]) -> None:
             raise ClientExecutedShellUnsupportedError()
 
 
-def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
-    includes: list[str] = []
+def responses_api_includes(tools: Iterable[ToolSchema]) -> list[ResponseIncludable]:
+    includes: list[ResponseIncludable] = []
     for t in tools:
         if isinstance(t, WebSearchToolSchema):
             includes.append("web_search_call.action.sources")
@@ -693,13 +710,13 @@ def normalize_responses_usage(usage: ResponseUsage) -> Usage:
     )
 
 
-_MIME_TO_AUDIO_FORMAT: dict[str, str] = {
+# The two audio formats the Chat Completions API takes, restated as a literal so the
+# SDK checks each value where it is used. ag2's own `AudioMediaType` is wider because
+# other providers take more; an audio input this map does not name is refused here
+# rather than sent and answered with a 400.
+_MIME_TO_AUDIO_FORMAT: dict[str, Literal["wav", "mp3"]] = {
     "audio/wav": "wav",
     "audio/mpeg": "mp3",
-    "audio/ogg": "ogg",
-    "audio/flac": "flac",
-    "audio/aiff": "aiff",
-    "audio/aac": "aac",
 }
 
 

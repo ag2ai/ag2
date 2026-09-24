@@ -5,14 +5,19 @@
 import asyncio
 import json
 from collections.abc import Iterable, Iterator, Sequence
+from enum import Enum
 from itertools import chain
 from typing import Any, TypedDict
 
 import httpx
 from fast_depends.library.serializer import SerializerProto
+from typing_extensions import Required
 from zai import ZaiClient
+from zai.core import StreamResponse
 from zai.types.chat.chat_completion import Completion
 from zai.types.chat.chat_completion_chunk import ChatCompletionChunk
+from zai.types.chat.code_geex.code_geex_params import CodeGeexExtra
+from zai.types.sensitive_word_check import SensitiveWordCheckRequest
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
@@ -40,31 +45,45 @@ from .mappers import (
     tool_to_api,
 )
 
-_STREAM_DONE = object()
+
+class _Sentinel(Enum):
+    """A one-member enum, so `next(stream, _STREAM_DONE)` has a type the loop below narrows."""
+
+    STREAM_DONE = "stream-done"
+
+
+_STREAM_DONE = _Sentinel.STREAM_DONE
 
 
 class CreateOptions(TypedDict, total=False):
-    model: str
+    """The generation parameters a `ZAIConfig` hands its client.
+
+    Every item but `model` and `stream` is optional to the API, and `ZAIConfig` sets all of
+    them unconditionally, so `None` is part of each item's type. `_merge_extra_body` is what
+    drops them before the SDK call — the SDK takes no `None` for these.
+    """
+
+    model: Required[str]
     stream: bool
-    max_tokens: int
-    temperature: float
-    top_p: float
-    stop: str | list[str]
-    seed: int
-    tool_choice: str | dict[str, Any]
-    request_id: str
-    user_id: str
-    do_sample: bool
-    meta: dict[str, str]
-    sensitive_word_check: Any
-    extra: Any
+    max_tokens: int | None
+    temperature: float | None
+    top_p: float | None
+    stop: str | list[str] | None
+    seed: int | None
+    tool_choice: str | dict[str, Any] | None
+    request_id: str | None
+    user_id: str | None
+    do_sample: bool | None
+    meta: dict[str, str] | None
+    sensitive_word_check: SensitiveWordCheckRequest | None
+    extra: CodeGeexExtra | None
     timeout: float | httpx.Timeout | None
-    watermark_enabled: bool
-    tool_stream: bool
-    reasoning_effort: str
-    thinking: dict[str, Any]
-    extra_body: dict[str, Any]
-    extra_headers: dict[str, str]
+    watermark_enabled: bool | None
+    tool_stream: bool | None
+    reasoning_effort: str | None
+    thinking: dict[str, Any] | None
+    extra_body: dict[str, Any] | None
+    extra_headers: dict[str, str] | None
 
 
 def _merge_extra_body(options: CreateOptions) -> dict[str, Any]:
@@ -100,8 +119,9 @@ class ZAIClient(LLMClient):
         self._custom_headers = custom_headers
         self._disable_token_cache = disable_token_cache
         self._source_channel = source_channel
-        self._create_options = create_options or {}
-        self._streaming = self._create_options.get("stream", False)
+        # Left as ``None`` rather than widened to an empty mapping: ``model`` is
+        # required, so there is no such thing as an empty set of create options.
+        self._create_options = create_options
         self._client: ZaiClient | None = None
 
     def _get_client(self) -> ZaiClient:
@@ -130,9 +150,12 @@ class ZAIClient(LLMClient):
         context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
+        if self._create_options is None:
+            raise ValueError("ZAIClient was built without create options, so it has no model to call.")
+
         schema_prompt = (
             (response_schema.system_prompt or schema_instruction(response_schema)) if response_schema else None
         )
@@ -155,14 +178,16 @@ class ZAIClient(LLMClient):
 
         client = await asyncio.to_thread(self._get_client)
 
-        if self._streaming:
-            response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
-            return await self._process_stream(iter(response), context)
-
         response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
-        return await self._process_completion(response, context)
+        # One call answers either shape; the reply is what says which, rather than the flag
+        # that asked for it.
+        if isinstance(response, StreamResponse):
+            return await self._process_stream(iter(response), context, model=self._create_options["model"])
+        return await self._process_completion(response, context, model=self._create_options["model"])
 
-    async def _process_completion(self, response: Completion, context: "ConversationContext") -> ModelResponse:
+    async def _process_completion(
+        self, response: Completion, context: "ConversationContext", *, model: str
+    ) -> ModelResponse:
         choices = response.choices or []
         choice = choices[0] if choices else None
         message = choice.message if choice else None
@@ -189,18 +214,17 @@ class ZAIClient(LLMClient):
             message=model_msg,
             tool_calls=ToolCallsEvent(calls),
             usage=normalize_usage(response.usage),
-            model=response.model or self._create_options.get("model"),
+            model=response.model or model,
             provider=PROVIDER,
             finish_reason=choice.finish_reason if choice else None,
         )
 
     async def _process_stream(
-        self, stream: Iterator[ChatCompletionChunk], context: "ConversationContext"
+        self, stream: Iterator[ChatCompletionChunk], context: "ConversationContext", *, model: str
     ) -> ModelResponse:
         full_content = ""
         usage = Usage()
         finish_reason: str | None = None
-        model = self._create_options.get("model")
         tool_accs: dict[int, dict[str, str]] = {}
 
         while (chunk := await asyncio.to_thread(next, stream, _STREAM_DONE)) is not _STREAM_DONE:

@@ -88,6 +88,19 @@ class TestMistralFilesClient:
         assert client.files.upload_async.call_args.kwargs["purpose"] == "fine-tune"
 
     @patch("ag2.config.mistral.files.Mistral")
+    async def test_upload_sends_a_purpose_the_sdk_does_not_name(
+        self, mock_mistral: MagicMock, mistral_config: MagicMock
+    ) -> None:
+        """Mistral's purposes are an open enum; an unnamed one is sent rather than refused."""
+        client = MagicMock()
+        mock_mistral.return_value = client
+        client.files.upload_async = AsyncMock(return_value=_file())
+
+        await MistralFilesClient(mistral_config).upload(b"x", "a.bin", purpose="audio")
+
+        assert client.files.upload_async.call_args.kwargs["purpose"] == "audio"
+
+    @patch("ag2.config.mistral.files.Mistral")
     async def test_read_combines_metadata_and_content(self, mock_mistral: MagicMock, mistral_config: MagicMock) -> None:
         client = MagicMock()
         mock_mistral.return_value = client

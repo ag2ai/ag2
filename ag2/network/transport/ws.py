@@ -25,8 +25,9 @@ import contextlib
 import functools
 import json
 import logging
+import ssl
 from collections.abc import AsyncGenerator, AsyncIterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from websockets.asyncio.client import connect as _ws_connect
 from websockets.asyncio.server import serve as _ws_serve
@@ -67,7 +68,7 @@ class WsLinkClient:
         self,
         url: str,
         *,
-        ssl_context: Any = None,
+        ssl_context: ssl.SSLContext | None = None,
         ping_interval: float | None = 20.0,
         ping_timeout: float | None = 20.0,
         open_timeout: float | None = 10.0,
@@ -214,7 +215,7 @@ class WsLink:
         self,
         url: str,
         *,
-        ssl_context: Any = None,
+        ssl_context: ssl.SSLContext | None = None,
         ping_interval: float | None = 20.0,
         ping_timeout: float | None = 20.0,
         open_timeout: float | None = 10.0,
@@ -264,7 +265,7 @@ async def serve_ws(
     host: str,
     port: int,
     *,
-    ssl_context: Any = None,
+    ssl_context: ssl.SSLContext | None = None,
     ping_interval: float | None = 20.0,
     ping_timeout: float | None = 20.0,
 ) -> AsyncGenerator["_WsServer"]:

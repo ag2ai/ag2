@@ -4,12 +4,14 @@
 
 """Tests for CompactStrategy, CompactTrigger, and built-in strategies."""
 
+from typing import Any
+
 import pytest
 
-from ag2 import Agent, Context
-from ag2.agent import KnowledgeConfig
+from ag2 import Agent, Context, KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact, TailWindowCompact
 from ag2.events import (
+    BaseEvent,
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
     CompactionCompleted,
@@ -38,7 +40,7 @@ class TestTailWindowCompact:
     @pytest.mark.asyncio
     async def test_no_op_below_target(self) -> None:
         compact = TailWindowCompact(target=10)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 5
@@ -46,17 +48,16 @@ class TestTailWindowCompact:
     @pytest.mark.asyncio
     async def test_truncates_above_target(self) -> None:
         compact = TailWindowCompact(target=3)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
-        assert len(result) == 3
-        assert result[0].parts[0].content == "msg-7"
+        assert result == events[7:]
 
     @pytest.mark.asyncio
     async def test_persists_dropped_to_store(self) -> None:
         store = MemoryKnowledgeStore()
         compact = TailWindowCompact(target=3)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         stream = MemoryStream()
         ctx = Context(stream=stream)
         result = await compact.compact(events, ctx, store)
@@ -70,7 +71,7 @@ class TestTailWindowCompact:
     @pytest.mark.asyncio
     async def test_no_persist_without_store(self) -> None:
         compact = TailWindowCompact(target=3)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 3
@@ -104,7 +105,7 @@ class TestTailWindowToolCycleBoundary:
 
     async def test_clean_cycle_boundary_kept(self) -> None:
         mr, res = _cycle("c1")
-        events = [ModelRequest([TextInput("u0")]), mr, res]
+        events: list[BaseEvent] = [ModelRequest([TextInput("u0")]), mr, res]
         result = await TailWindowCompact(target=2).compact(events, Context(stream=MemoryStream()), None)
         assert result == [mr, res]
 
@@ -173,26 +174,26 @@ class TestTelemetryNotConversational:
     the retention window, leak into the summary, or trigger compaction."""
 
     async def test_usage_events_do_not_consume_window(self) -> None:
-        events: list = []
+        events: list[BaseEvent] = []
         for i in range(3):
             events.append(ModelRequest([TextInput(f"u{i}")]))
             events.append(UsageEvent(Usage(total_tokens=10)))
         result = await TailWindowCompact(target=2).compact(events, Context(stream=MemoryStream()), None)
 
         conv = [e for e in result if isinstance(e, ModelRequest)]
-        assert [e.parts[0].content for e in conv] == ["u1", "u2"]
+        assert conv == [ModelRequest([TextInput("u1")]), ModelRequest([TextInput("u2")])]
         # Retained telemetry rides along so UsageReport keeps the window's usage
         assert any(isinstance(e, UsageEvent) for e in result)
 
     async def test_telemetry_alone_is_no_op(self) -> None:
-        events: list = [ModelRequest([TextInput("only")])]
+        events: list[BaseEvent] = [ModelRequest([TextInput("only")])]
         events += [UsageEvent(Usage(total_tokens=1)) for _ in range(10)]
         result = await TailWindowCompact(target=3).compact(events, Context(stream=MemoryStream()), None)
         assert result == events
 
     async def test_summarizer_prompt_excludes_telemetry(self) -> None:
         tracking = TrackingConfig(TestConfig(ModelResponse(ModelMessage("summary"))))
-        events: list = [
+        events: list[BaseEvent] = [
             ModelRequest([TextInput("keep-this-text")]),
             UsageEvent(Usage(total_tokens=313373)),
             ModelResponse(ModelMessage("and-this-text")),
@@ -374,6 +375,22 @@ class TestCompactionWiredOnAgent:
     on the stream and shrinks history once the trigger threshold is crossed."""
 
     @pytest.mark.asyncio
+    async def test_a_strategy_without_a_trigger_never_fires(self) -> None:
+        stream = MemoryStream()
+        started: list[CompactionStarted] = []
+        stream.where(CompactionStarted).subscribe(lambda e: started.append(e))
+        agent = Agent(
+            "compactor",
+            config=TestConfig("a", "b"),
+            knowledge=KnowledgeConfig(store=MemoryKnowledgeStore(), compact=TailWindowCompact(target=1)),
+        )
+
+        reply = await agent.ask("first", stream=stream)
+        await reply.ask("second")
+
+        assert started == []
+
+    @pytest.mark.asyncio
     async def test_fires_when_threshold_crossed(self) -> None:
         store = MemoryKnowledgeStore()
         stream = MemoryStream()
@@ -451,9 +468,9 @@ class TestCompactionWiredOnAgent:
 class _RaisingCompact:
     """CompactStrategy that always raises — for failure-path tests."""
 
-    last_usage: dict = {}
+    last_usage: dict[str, Any] = {}
 
-    async def compact(self, events, context, store) -> list:
+    async def compact(self, events, context, store) -> list[BaseEvent]:
         raise RuntimeError("compact boom")
 
 

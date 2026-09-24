@@ -92,7 +92,14 @@ class _PairwiseJudge:
     """A :class:`PairwiseComparator` backed by a judge :class:`Agent`."""
 
     def __init__(
-        self, judge: Agent, key: str, *, include_trace: bool, include_reference: bool, retries: int, swap: bool
+        self,
+        judge: Agent[PairwiseVerdict],
+        key: str,
+        *,
+        include_trace: bool,
+        include_reference: bool,
+        retries: int,
+        swap: bool,
     ) -> None:
         self._judge = judge
         self.key = key
@@ -153,7 +160,9 @@ class _PairwiseJudge:
         )
 
 
-def _pref_to_ab(preferred: str, first: str, second: str) -> str:
+def _pref_to_ab(
+    preferred: Literal["first", "second", "tie"], first: Literal["a", "b"], second: Literal["a", "b"]
+) -> Literal["a", "b", "tie"]:
     if preferred == "first":
         return first
     if preferred == "second":

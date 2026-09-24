@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from typing import Any
 
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config.openai import OpenAIClient
@@ -14,7 +15,7 @@ from ag2.events import ModelRequest, TextInput
 from ag2.tools import tool
 
 
-def _capturing_client(captured: dict[str, object]) -> httpx2.AsyncClient:
+def _capturing_client(captured: dict[str, Any]) -> httpx2.AsyncClient:
     def handler(request: httpx2.Request) -> httpx2.Response:
         captured["body"] = json.loads(request.content)
         return httpx2.Response(
@@ -40,7 +41,7 @@ def _capturing_client(captured: dict[str, object]) -> httpx2.AsyncClient:
 
 @pytest.mark.asyncio
 async def test_empty_tools_omits_tools_field() -> None:
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
     client = OpenAIClient(
         api_key="test",
         http_client=_capturing_client(captured),
@@ -52,7 +53,7 @@ async def test_empty_tools_omits_tools_field() -> None:
         context=Context(stream=MemoryStream()),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     assert "tools" not in captured["body"]
@@ -60,7 +61,7 @@ async def test_empty_tools_omits_tools_field() -> None:
 
 @pytest.mark.asyncio
 async def test_non_empty_tools_serialized() -> None:
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
     context = Context(stream=MemoryStream())
 
     @tool(description="Get weather")
@@ -80,7 +81,7 @@ async def test_non_empty_tools_serialized() -> None:
         context=context,
         tools=[weather_schema],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
     tools = captured["body"]["tools"]

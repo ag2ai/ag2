@@ -6,7 +6,7 @@ import base64
 from collections.abc import Callable
 
 import pytest
-from mcp.types import BlobResourceContents, TextResourceContents
+from mcp.types import BlobResourceContents, EmbeddedResource, TextResourceContents
 from mcp_ui_server import UIResource
 from mcp_ui_server.exceptions import InvalidContentError, InvalidURIError
 
@@ -14,7 +14,7 @@ from ag2 import mcp_ui
 
 # Each builder invoked with a caller-supplied ``uri`` and otherwise-valid content,
 # so a validation test can drive all three through their shared guards.
-BUILDERS_TAKING_A_URI: list[Callable[[str], UIResource]] = [
+BUILDERS_TAKING_A_URI: list[Callable[[str], EmbeddedResource]] = [
     lambda uri: mcp_ui.raw_html(uri, "<h1>Hi</h1>"),
     lambda uri: mcp_ui.external_url(uri, "https://docs.ag2.ai/"),
     lambda uri: mcp_ui.remote_dom(uri, "root.appendChild(el)"),
@@ -101,7 +101,7 @@ def test_uri_without_ui_scheme_is_rejected(build: Callable[[str], UIResource]) -
 
 
 # The same three builders, called with a valid ``uri`` and empty content.
-BUILDERS_TAKING_CONTENT: list[Callable[[str], UIResource]] = [
+BUILDERS_TAKING_CONTENT: list[Callable[[str], EmbeddedResource]] = [
     lambda content: mcp_ui.raw_html("ui://ag2/greeting", content),
     lambda content: mcp_ui.external_url("ui://ag2/docs", content),
     lambda content: mcp_ui.remote_dom("ui://ag2/dom", content),

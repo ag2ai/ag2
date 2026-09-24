@@ -10,7 +10,8 @@ import pytest
 
 from ag2 import Context
 from ag2.events import ModelMessage, ObserverAlert, Severity, ToolCallEvent
-from ag2.observers import BaseObserver
+from ag2.observers import BaseObserver, SimpleObserver, observer
+from ag2.observers.observer import StreamObserver
 from ag2.stream import MemoryStream
 from ag2.watch import EventWatch
 
@@ -48,7 +49,7 @@ class TestBaseObserver:
         ctx = Context(stream=stream)
         obs = DummyObserver()
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
 
         @stream.where(ObserverAlert).subscribe()
         def on_alert(e: ObserverAlert) -> None:
@@ -80,7 +81,7 @@ class TestBaseObserver:
         ctx = Context(stream=stream)
         obs = NullObserver()
 
-        signals: list = []
+        signals: list[ObserverAlert] = []
 
         @stream.where(ObserverAlert).subscribe()
         def on_alert(e: ObserverAlert) -> None:
@@ -192,3 +193,33 @@ class TestObserverExceptionHandling:
             await asyncio.sleep(0.01)
 
         assert len(signals) == 0
+
+
+class TestObserverFactoryReturnTypes:
+    """`observer()` returns two different classes, and says which."""
+
+    def test_without_a_condition_returns_a_simple_observer(self) -> None:
+        obs = observer(callback=lambda event: None)
+        assert type(obs) is SimpleObserver
+
+    def test_with_a_condition_returns_a_stream_observer(self) -> None:
+        obs = observer(ToolCallEvent, callback=lambda event: None)
+        assert type(obs) is StreamObserver
+        assert isinstance(obs, SimpleObserver)
+
+    def test_as_a_decorator_it_returns_the_same_two_classes(self) -> None:
+        @observer()
+        def unconditional(event: ModelMessage) -> None: ...
+
+        @observer(ToolCallEvent)
+        def conditional(event: ToolCallEvent) -> None: ...
+
+        assert type(unconditional) is SimpleObserver
+        assert type(conditional) is StreamObserver
+
+    def test_simple_observer_is_importable_from_the_package(self) -> None:
+        """It is `observer()`'s declared return type, so callers can name it."""
+        import ag2.observers
+
+        assert ag2.observers.SimpleObserver is SimpleObserver
+        assert "SimpleObserver" in ag2.observers.__all__

@@ -296,3 +296,21 @@ class TestStreamGet:
             event = await result
 
         assert event == ModelMessage("first")
+
+
+class TestSubStreamDelegatesHistory:
+    """A filtered stream is a view; it shares its parent's history."""
+
+    def test_history_is_the_parent_s(self) -> None:
+        stream = MemoryStream()
+        assert stream.where(ToolCallEvent).history is stream.history
+
+    def test_history_survives_chained_filters(self) -> None:
+        stream = MemoryStream()
+        filtered = stream.where(ToolCallEvent).where(ToolCallEvent.name == "f")
+        assert filtered.history is stream.history
+
+    def test_storage_reaches_a_subtask_built_from_a_filtered_stream(self) -> None:
+        """`run_task` and `persistent_stream` both read `stream.history.storage`."""
+        stream = MemoryStream()
+        assert stream.where(ToolCallEvent).history.storage is stream.history.storage

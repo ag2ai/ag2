@@ -42,7 +42,7 @@ __all__ = (
 )
 
 
-class ParsedSkill(dict):
+class ParsedSkill(dict[str, Any]):
     """``{"frontmatter": dict, "body": str}`` with ``.frontmatter`` and ``.body`` attrs.
 
     Subclasses ``dict`` so it round-trips as JSON without conversion;
@@ -51,11 +51,13 @@ class ParsedSkill(dict):
 
     @property
     def frontmatter(self) -> dict[str, Any]:
-        return self["frontmatter"]
+        frontmatter: dict[str, Any] = self["frontmatter"]
+        return frontmatter
 
     @property
     def body(self) -> str:
-        return self["body"]
+        body: str = self["body"]
+        return body
 
 
 _FENCE = "---"

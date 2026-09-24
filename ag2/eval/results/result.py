@@ -406,8 +406,8 @@ def _render_summary(result: RunResult) -> str:
         lines.append("Value counts:")
         width = max(len(k) for k in aggs.value_counts)
         for key in sorted(aggs.value_counts):
-            counts = aggs.value_counts[key]
-            joined = " ".join(f"{label}={count}" for label, count in sorted(counts.items()))
+            label_counts = aggs.value_counts[key]
+            joined = " ".join(f"{label}={count}" for label, count in sorted(label_counts.items()))
             lines.append(f"  {key:<{width}}  {joined}")
 
     return "\n".join(lines)

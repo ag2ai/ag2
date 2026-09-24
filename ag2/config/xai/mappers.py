@@ -14,7 +14,6 @@ from xai_sdk.chat import (
 )
 from xai_sdk.chat import (
     assistant,
-    chat_pb2,
     system,
     tool_result,
     user,
@@ -31,7 +30,7 @@ from xai_sdk.chat import (
 from xai_sdk.chat import (
     tool as xai_tool,
 )
-from xai_sdk.proto import usage_pb2
+from xai_sdk.proto import chat_pb2, usage_pb2
 
 from ag2.compact import CompactionSummary
 from ag2.events import (
@@ -105,7 +104,7 @@ def _ensure_additional_properties_false(schema: dict[str, Any]) -> dict[str, Any
     return schema
 
 
-def response_proto_to_format(response: ResponseProto | None) -> chat_pb2.ResponseFormat | None:
+def response_proto_to_format(response: ResponseProto[Any] | None) -> chat_pb2.ResponseFormat | None:
     """Convert AG2 ``ResponseProto`` to xAI's ``chat_pb2.ResponseFormat`` proto.
 
     xAI's chat.create accepts either a Pydantic class, a Literal alias, or a

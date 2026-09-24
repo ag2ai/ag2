@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 from dirty_equals import IsPartialDict
@@ -14,7 +14,7 @@ from ag2.response import ResponseSchema
 from ag2.response.schema import RawSchema
 
 
-def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
+def _embedded_data_schema(inner: dict[str, Any]) -> dict[str, Any]:
     """JSON schema for a primitive/union wrapped in ``{\"data\": ...}`` (default ``embed=True``)."""
     return {
         "properties": {
@@ -44,7 +44,7 @@ def test_none_returns_none() -> None:
 def test_primitive_type(
     type_: type,
     name: str,
-    expected_inner_schema: dict,  # type: ignore[type-arg]
+    expected_inner_schema: dict[str, Any],
 ) -> None:
     schema = ResponseSchema(type_, name=name)
 

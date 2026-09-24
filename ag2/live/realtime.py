@@ -8,11 +8,12 @@ from typing import Any, Protocol
 
 from fast_depends.library.serializer import SerializerProto
 
-from ag2.agent import HumanHook, Plugin, PluginTarget, PromptType, wrap_hitl
 from ag2.context import ConversationContext, Stream
 from ag2.events import HumanInputRequest, ModelRequest, ObserverCompleted, ObserverStarted
+from ag2.hitl import HumanHook, wrap_hitl
 from ag2.middleware.base import BaseMiddleware, MiddlewareFactory
 from ag2.observers import Observer
+from ag2.plugin import Plugin, PluginTarget, PromptType
 from ag2.stream import MemoryStream
 from ag2.tools.final import FunctionTool, FunctionToolSchema
 from ag2.tools.schemas import ToolSchema

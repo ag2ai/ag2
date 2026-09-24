@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -23,16 +22,12 @@ from ag2.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
 from ag2.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 
 
-def _candidate(parts: list, grounding_metadata=None) -> SimpleNamespace:
-    return SimpleNamespace(
-        content=SimpleNamespace(parts=parts),
-        finish_reason=None,
-        grounding_metadata=grounding_metadata,
-    )
+def _candidate(parts: list[types.Part], grounding_metadata: types.GroundingMetadata | None = None) -> types.Candidate:
+    return types.Candidate(content=types.Content(parts=parts), grounding_metadata=grounding_metadata)
 
 
-def _response(candidates: list[SimpleNamespace]) -> SimpleNamespace:
-    return SimpleNamespace(candidates=candidates, usage_metadata=None)
+def _response(candidates: list[types.Candidate]) -> types.GenerateContentResponse:
+    return types.GenerateContentResponse(candidates=candidates)
 
 
 @pytest.fixture
@@ -53,6 +48,7 @@ class TestFactoryFromExecutableCode:
 
         event = GeminiServerToolCallEvent.from_executable_code(part)
 
+        assert event is not None
         assert event == GeminiServerToolCallEvent(
             id=event.id,
             name=CODE_EXECUTION_TOOL_NAME,
@@ -62,6 +58,15 @@ class TestFactoryFromExecutableCode:
 
     def test_returns_none_for_non_code_part(self) -> None:
         assert GeminiServerToolCallEvent.from_executable_code(types.Part(text="hello")) is None
+
+    def test_reports_an_empty_language_when_the_part_omits_one(self) -> None:
+        """`ExecutableCode.language` is optional, and a part that omits it used to crash."""
+        part = types.Part(executable_code=types.ExecutableCode(code="print(1)"))
+
+        event = GeminiServerToolCallEvent.from_executable_code(part)
+
+        assert event is not None
+        assert event.arguments == '{"code": "print(1)", "language": ""}'
 
 
 class TestFactoryFromCodeExecutionResult:
@@ -163,6 +168,7 @@ class TestProcessResponseEmitsBuiltinEvents:
 
         events = list(await stream.history.get_events())
         [call_event, result_event] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert events == [
             GeminiServerToolCallEvent(
                 id=call_event.id,
@@ -189,6 +195,7 @@ class TestProcessResponseEmitsBuiltinEvents:
 
         events = list(await stream.history.get_events())
         [call_event, _] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert events == [
             GeminiServerToolCallEvent(
                 id=call_event.id,
@@ -215,6 +222,7 @@ class TestProcessResponseEmitsBuiltinEvents:
 
         events = list(await stream.history.get_events())
         [call_event, _] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert events == [
             GeminiServerToolCallEvent(
                 id=call_event.id,
@@ -248,6 +256,7 @@ class TestProcessStreamEmitsBuiltinEvents:
 
         events = list(await stream.history.get_events())
         [call_event, _] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert events == [
             GeminiServerToolCallEvent(
                 id=call_event.id,
@@ -277,6 +286,7 @@ class TestProcessStreamEmitsBuiltinEvents:
 
         events = list(await stream.history.get_events())
         [call_event, _] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert events == [
             GeminiServerToolCallEvent(
                 id=call_event.id,
@@ -306,6 +316,7 @@ class TestResultParts:
 
         events = list(await stream.history.get_events())
         [call_event, _] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert events == [
             GeminiServerToolCallEvent(
                 id=call_event.id,
@@ -332,6 +343,7 @@ class TestResultParts:
 
         events = list(await stream.history.get_events())
         [call_event, _] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert events == [
             GeminiServerToolCallEvent(
                 id=call_event.id,
@@ -358,6 +370,7 @@ class TestResultParts:
 
         events = list(await stream.history.get_events())
         [call_event, _] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert events == [
             GeminiServerToolCallEvent(
                 id=call_event.id,
@@ -388,6 +401,7 @@ class TestResultParts:
 
         events = list(await stream.history.get_events())
         [call_event, _] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert events == [
             GeminiServerToolCallEvent(
                 id=call_event.id,
@@ -416,6 +430,7 @@ class TestResultParts:
 
         events = list(await stream.history.get_events())
         [call_event, result_event] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert call_event.name == GOOGLE_MAPS_TOOL_NAME
         assert result_event == GeminiServerToolResultEvent(
             parent_id=call_event.id,
@@ -444,6 +459,7 @@ class TestResultParts:
 
         events = list(await stream.history.get_events())
         [call_event, result_event] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert call_event.name == FILE_SEARCH_TOOL_NAME
         assert result_event == GeminiServerToolResultEvent(
             parent_id=call_event.id,
@@ -480,6 +496,7 @@ class TestResultParts:
 
         events = list(await stream.history.get_events())
         [call_event, result_event] = events
+        assert isinstance(call_event, GeminiServerToolCallEvent)
         assert call_event.name == FILE_SEARCH_TOOL_NAME
         assert call_event.arguments == '{"queries": ["hot cache"]}'
         assert result_event == GeminiServerToolResultEvent(

@@ -21,11 +21,12 @@ so user-supplied overrides can replace only the parts they care about.
 
 import contextlib
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ag2._telemetry_consts import TRACEPARENT_DEP_KEY
-from ag2.events import BaseEvent, ModelMessage, ModelRequest, TextInput
+from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, TextInput
 from ag2.stream import MemoryStream
+from ag2.tools.tool import Tool
 
 from ..channel import ChannelMetadata, ChannelState
 from ..envelope import (
@@ -60,11 +61,11 @@ def _is_task_event(event_type: str) -> bool:
 async def _render_current_input(
     view: ViewPolicy,
     envelope: Envelope,
-    adapter: "ChannelAdapter",
+    adapter: "ChannelAdapter[Any]",
     participant_id: str,
     metadata: ChannelMetadata,
     name_for: NameResolver,
-) -> str | None:
+) -> "str | Input | list[Input] | None":
     """Render the current-turn envelope through the view.
 
     Calls ``view.project([envelope])`` so named views apply consistent
@@ -258,7 +259,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         # consulting / discussion). Resolution is cached on the adapter
         # so the schema build cost is paid once per (adapter, client)
         # — see ``ChannelAdapter.tools_for`` default implementation.
-        adapter_tools: list = []
+        adapter_tools: list[Tool] = []
         try:
             adapter_tools = list(adapter.tools_for(client, metadata, state, client.agent_id))
         except Exception:
@@ -279,8 +280,11 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         )
         sub_ids = mirror.attach(stream)
         try:
+            # An adapter may hand back several inputs (text plus an image,
+            # say); each is its own part of the request, not one list.
+            turn_input = current_input if isinstance(current_input, list) else [current_input]
             reply = await client.agent.ask(
-                current_input,
+                *turn_input,
                 stream=stream,
                 dependencies=dependencies,
                 tools=adapter_tools,

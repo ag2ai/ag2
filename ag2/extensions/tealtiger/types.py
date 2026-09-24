@@ -531,6 +531,17 @@ class GovernanceDecision:
     timestamp_ms: float = field(default_factory=lambda: time.time() * 1000)
 
 
+class GovernanceDeniedError(PermissionError):
+    """Raised when governance blocks a whole turn, such as a frozen agent's.
+
+    ``decision`` is the recorded ``GovernanceDecision`` that denied it.
+    """
+
+    def __init__(self, message: str, decision: GovernanceDecision) -> None:
+        super().__init__(message)
+        self.decision = decision
+
+
 @dataclass
 class TEECReceipt:
     """Typed Evidence & Evidence Contract receipt — tamper-evident governance record."""

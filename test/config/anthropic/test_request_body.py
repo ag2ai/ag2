@@ -11,11 +11,12 @@ they are asserted there rather than against AG2's own kwargs.
 """
 
 import json
+from collections.abc import Iterable
 
 import httpx2
 import pytest
 from dirty_equals import IsPartialDict
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Context, MemoryStream
 from ag2.config.anthropic import AnthropicClient, AnthropicConfig
@@ -24,6 +25,7 @@ from ag2.exceptions import WebFetchOptionUnsupportedError, WebFetchUrlSourceTool
 from ag2.tools.builtin.mcp_server import MCPServerTool
 from ag2.tools.builtin.web_fetch import ExceptTools, OnlyTools, UrlSources, WebFetchTool
 from ag2.tools.builtin.web_search import WebSearchTool
+from ag2.tools.schemas import ToolSchema
 
 _MESSAGE = {
     "id": "msg_1",
@@ -62,13 +64,13 @@ def _capturing_client(captured: dict[str, object], *, stream: bool = False) -> h
     return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
 
 
-async def _ask(config: AnthropicConfig, **kwargs: object) -> None:
+async def _ask(config: AnthropicConfig, tools: Iterable[ToolSchema] = ()) -> None:
     await config.create()(
         messages=[ModelRequest([TextInput("hi")])],
         context=Context(stream=MemoryStream()),
+        tools=tools,
         response_schema=None,
-        serializer=SerializerCls,
-        **{"tools": [], **kwargs},  # type: ignore[arg-type]
+        serializer=PydanticSerializer(),
     )
 
 
@@ -243,7 +245,7 @@ async def _ask_client(client: AnthropicClient) -> None:
         context=Context(stream=MemoryStream()),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 
@@ -260,7 +262,7 @@ async def test_a_direct_client_caller_gets_the_extra_body_route_not_a_type_error
         api_key="test",
         prompt_caching=False,
         http_client=_capturing_client(captured),
-        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "temperature": 0.2},  # type: ignore[typeddict-unknown-key]
+        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "temperature": 0.2},  # type: ignore[arg-type]  # keys `CreateOptions` no longer types
     )
 
     await _ask_client(client)
@@ -280,7 +282,7 @@ async def test_a_direct_caller_may_still_spell_a_sampling_field_none() -> None:
         api_key="test",
         prompt_caching=False,
         http_client=_capturing_client(captured),
-        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "temperature": None},  # type: ignore[typeddict-unknown-key]
+        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "temperature": None},  # type: ignore[arg-type]  # keys `CreateOptions` no longer types
     )
 
     await _ask_client(client)
@@ -297,7 +299,7 @@ async def test_a_direct_callers_extra_body_still_wins() -> None:
         api_key="test",
         prompt_caching=False,
         http_client=_capturing_client(captured),
-        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "top_k": 5},  # type: ignore[typeddict-unknown-key]
+        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "top_k": 5},  # type: ignore[arg-type]  # keys `CreateOptions` no longer types
         extra_body={"top_k": 9},
     )
 
@@ -598,7 +600,7 @@ async def test_a_source_outside_the_pair_is_sent_as_written(context: Context) ->
     """
     captured: dict[str, object] = {}
     config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
-    schemas = await WebFetchTool(url_sources=UrlSources(user_input="All")).schemas(context)  # type: ignore[arg-type]
+    schemas = await WebFetchTool(url_sources=UrlSources(user_input="All")).schemas(context)  # type: ignore[arg-type]  # the typo under test
 
     await _ask(config, tools=schemas)
 

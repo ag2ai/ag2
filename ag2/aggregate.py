@@ -13,13 +13,13 @@ Unlike compaction (which removes), aggregation creates.
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from fast_depends.pydantic import PydanticSerializer
 
 from .annotations import Context
 from .config import ModelConfig
-from .events import BaseEvent, ModelRequest, UsageEvent, render_for_prompt
+from .events import BaseEvent, ModelRequest, Usage, UsageEvent, render_for_prompt
 from .knowledge import CONVERSATIONS_PREFIX, WORKING_MEMORY_PATH, KnowledgeStore
 from .stream import MemoryStream
 
@@ -73,7 +73,7 @@ class ConversationSummaryAggregate:
             pydantic_config={"arbitrary_types_allowed": True},
             use_fastdepends_errors=False,
         )
-        self.last_usage: dict = {}
+        self.last_usage: Usage | dict[str, Any] = {}
 
     async def aggregate(
         self,
@@ -170,7 +170,7 @@ class WorkingMemoryAggregate:
             pydantic_config={"arbitrary_types_allowed": True},
             use_fastdepends_errors=False,
         )
-        self.last_usage: dict = {}
+        self.last_usage: Usage | dict[str, Any] = {}
 
     async def aggregate(
         self,

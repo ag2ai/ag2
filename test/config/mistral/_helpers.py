@@ -7,6 +7,11 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
+import httpx
+from mistralai.client.models import DeltaMessage, FunctionCall, ToolCall
+
+from ag2.config.mistral import MistralClient
+
 
 def make_usage(
     prompt_tokens: int | None = None,
@@ -35,18 +40,34 @@ def make_tool_call(
     )
 
 
+def make_turn(
+    content: str = "",
+    *,
+    tool_call_id: str | None = None,
+    tool_calls: list[tuple[str, str, str]] | None = None,
+) -> DeltaMessage:
+    """One turn of `ChatCompletionChoice.messages`, which the SDK parses as a `DeltaMessage`."""
+    return DeltaMessage(
+        content=content,
+        tool_call_id=tool_call_id,
+        tool_calls=[ToolCall(id=i, function=FunctionCall(name=n, arguments=a)) for i, n, a in tool_calls]
+        if tool_calls
+        else None,
+    )
+
+
 def make_server_tool_turns(
     call_id: str = "gen_1",
     name: str = "generate_image",
     arguments: str = '{"prompt": "a red circle"}',
     url: str = "https://example.com/generated.jpg",
     text: str = "Here is your image.",
-) -> list[SimpleNamespace]:
+) -> list[DeltaMessage]:
     """The `messages` trace a server-executed tool produces: call, result, answer."""
     return [
-        SimpleNamespace(content="", tool_call_id=None, tool_calls=[make_tool_call(call_id, name, arguments)]),
-        SimpleNamespace(content=f'{{"url": "{url}"}}', tool_call_id=call_id, tool_calls=None),
-        SimpleNamespace(content=text, tool_call_id=None, tool_calls=None),
+        make_turn(tool_calls=[(call_id, name, arguments)]),
+        make_turn(f'{{"url": "{url}"}}', tool_call_id=call_id),
+        make_turn(text),
     ]
 
 
@@ -80,7 +101,7 @@ def make_response(
     return SimpleNamespace(
         choices=[
             SimpleNamespace(
-                message=SimpleNamespace(content=content, tool_calls=tool_calls or [], tool_call_id=None),
+                message=SimpleNamespace(content=content, tool_calls=tool_calls or []),
                 messages=None,
                 finish_reason=finish_reason,
             )
@@ -133,28 +154,25 @@ class FakeChat:
     def __init__(self, response: Any | None = None, stream_chunks: Iterable[Any] = ()) -> None:
         self.response = response if response is not None else make_response()
         self.stream_chunks = list(stream_chunks)
-        self.kwargs: dict[str, Any] | None = None
+        self._kwargs: dict[str, Any] | None = None
+
+    @property
+    def kwargs(self) -> dict[str, Any]:
+        """What the last call was made with; fails the test if none was."""
+        assert self._kwargs is not None, "the chat API was never called"
+        return self._kwargs
 
     async def complete_async(self, **kwargs: Any) -> Any:
-        self.kwargs = kwargs
+        self._kwargs = kwargs
         return self.response
 
     async def stream_async(self, **kwargs: Any) -> Any:
-        self.kwargs = kwargs
+        self._kwargs = kwargs
         return _AsyncIterator(self.stream_chunks)
 
 
-class FakeHttpResponse:
-    def __init__(self, data: bytes, content_type: str = "image/jpeg") -> None:
-        self.content = data
-        self.headers = {"content-type": content_type}
-
-    def raise_for_status(self) -> None:
-        return None
-
-
-class FakeHttpClient:
-    """Stands in for httpx.AsyncClient so image fetches never touch the network."""
+class FakeHttpClient(httpx.AsyncClient):
+    """An httpx client answered by a local transport, so image fetches never touch the network."""
 
     def __init__(
         self, data: bytes = b"\xff\xd8image", content_type: str = "image/jpeg", error: Exception | None = None
@@ -163,20 +181,23 @@ class FakeHttpClient:
         self.content_type = content_type
         self.error = error
         self.urls: list[str] = []
+        super().__init__(transport=httpx.MockTransport(self._answer))
 
-    async def get(self, url: str, **kwargs: Any) -> FakeHttpResponse:
-        self.urls.append(url)
+    def _answer(self, request: httpx.Request) -> httpx.Response:
+        self.urls.append(str(request.url))
         if self.error is not None:
             raise self.error
-        return FakeHttpResponse(self.data, self.content_type)
-
-    async def aclose(self) -> None:
-        return None
+        return httpx.Response(200, content=self.data, headers={"content-type": self.content_type})
 
 
 class FakeMistralClient:
     def __init__(self, chat: FakeChat) -> None:
         self.chat = chat
+
+
+def install_fake_sdk(client: MistralClient, chat: FakeChat) -> None:
+    """Stand `chat` in for the SDK client `client` would otherwise build."""
+    client._client = FakeMistralClient(chat)  # type: ignore[assignment]  # the tests read what the chat API was called with, which the SDK turns into a request body
 
 
 def make_call_context(prompt: list[str] | None = None) -> AsyncMock:

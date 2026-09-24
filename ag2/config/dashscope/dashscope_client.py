@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import AsyncGenerator, Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 import dashscope
 from dashscope import AioMultiModalConversation
@@ -27,6 +27,10 @@ from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
 from .mappers import convert_messages, response_proto_to_format, tool_to_api
+
+if TYPE_CHECKING:
+    # Declared only by the SDK's bundled stub; the runtime `dashscope` package does not export it.
+    from dashscope import MultiModalConversationResponse
 
 DASHSCOPE_INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1"
 
@@ -62,7 +66,7 @@ class DashScopeClient(LLMClient):
         context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
@@ -97,11 +101,15 @@ class DashScopeClient(LLMClient):
         kwargs: dict[str, Any],
         context: "ConversationContext",
     ) -> ModelResponse:
-        response = await AioMultiModalConversation.call(
-            model=self._model,
-            messages=messages,
-            api_key=self._api_key,
-            **kwargs,
+        # Without `stream` the SDK answers one response; its stub declares the stream arm regardless.
+        response = cast(
+            "MultiModalConversationResponse",
+            await AioMultiModalConversation.call(
+                model=self._model,
+                messages=messages,
+                api_key=self._api_key,
+                **kwargs,
+            ),
         )
 
         if response.status_code != 200:
@@ -148,9 +156,7 @@ class DashScopeClient(LLMClient):
             usage=usage,
             model=self._model,
             provider="dashscope",
-            finish_reason=choice.get("finish_reason")
-            if hasattr(choice, "get")
-            else getattr(choice, "finish_reason", None),
+            finish_reason=choice.get("finish_reason"),
         )
 
     async def _call_streaming(
@@ -159,13 +165,17 @@ class DashScopeClient(LLMClient):
         kwargs: dict[str, Any],
         context: "ConversationContext",
     ) -> ModelResponse:
-        responses = await AioMultiModalConversation.call(
-            model=self._model,
-            messages=messages,
-            api_key=self._api_key,
-            stream=True,
-            incremental_output=True,
-            **kwargs,
+        # The SDK's stub declares a synchronous `Generator` here; the async call yields an async one.
+        responses = cast(
+            "AsyncGenerator[MultiModalConversationResponse]",
+            await AioMultiModalConversation.call(
+                model=self._model,
+                messages=messages,
+                api_key=self._api_key,
+                stream=True,
+                incremental_output=True,
+                **kwargs,
+            ),
         )
 
         full_content: str = ""
@@ -186,8 +196,7 @@ class DashScopeClient(LLMClient):
                 )
 
             for choice in chunk.output.choices:
-                fr = choice.get("finish_reason") if hasattr(choice, "get") else getattr(choice, "finish_reason", None)
-                if fr:
+                if fr := choice.get("finish_reason"):
                     finish_reason = fr
 
                 msg = choice.message

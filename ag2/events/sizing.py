@@ -8,10 +8,19 @@ Sizes and renders an event from its full content (never the truncated repr):
 text verbatim, non-text parts by a flat per-modality token budget.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 
 from .base import BaseEvent, is_conversational
-from .input_events import BinaryInput, BinaryType, DataInput, FileIdInput, ModelRequest, TextInput, UrlInput
+from .input_events import (
+    BinaryInput,
+    BinaryType,
+    DataInput,
+    FileIdInput,
+    Input,
+    ModelRequest,
+    TextInput,
+    UrlInput,
+)
 from .tool_events import ToolResultsEvent
 from .types import ModelResponse
 
@@ -34,13 +43,13 @@ _LABELS = ((ModelRequest, "User: "), (ModelResponse, "Assistant: "), (ToolResult
 
 def _modality(kind: BinaryType | None, media_type: str | None) -> str:
     if kind is not None and kind != BinaryType.BINARY:
-        return kind.value
+        return str(kind.value)
     if media_type:
         return media_type.split("/", 1)[0]
     return "binary"
 
 
-def _part_pieces(parts: list) -> Iterator[_Piece]:
+def _part_pieces(parts: Sequence[Input]) -> Iterator[_Piece]:
     for p in parts:
         if isinstance(p, TextInput):
             yield ("text", p.content)

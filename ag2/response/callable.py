@@ -123,17 +123,22 @@ def _unwrap_message_to_fast_depends_decorator(
     name: str,
     sync_to_thread: bool = True,
     embed: bool = True,
-) -> tuple[ResponseValidator[T], ResponseSchema[T]]:
+) -> tuple[ResponseValidator[T], ResponseSchema[Any]]:
     model = build_model(func, sync_to_thread=sync_to_thread)
 
     async def execute(*args: Any, _dep_provider_: "Provider | None", **kwargs: Any) -> T:
         async with AsyncExitStack() as stack:
-            return await model.asolve(
-                *args,
-                stack=stack,
-                cache_dependencies={},
-                dependency_provider=_dep_provider_,
-                **kwargs,
+            # fast_depends resolves the hook dynamically, so `asolve` is `Any`;
+            # `build_model` was handed a callable returning `T`.
+            return cast(
+                "T",
+                await model.asolve(
+                    *args,
+                    stack=stack,
+                    cache_dependencies={},
+                    dependency_provider=_dep_provider_,
+                    **kwargs,
+                ),
             )
 
     dependant_params = model.flat_params
@@ -146,21 +151,22 @@ def _unwrap_message_to_fast_depends_decorator(
     else:
         is_multi_params = True
 
-    schema: ResponseSchema[T]
+    schema: ResponseSchema[Any]
     if is_multi_params:
-        pydantic_model = cast(
-            type[BaseModel],
-            create_model(name, **{i.field_name: (i.field_type, i.default_value) for i in dependant_params}),
-        )
-
-        schema = ResponseSchema(pydantic_model, embed=embed)
+        fields: dict[str, Any] = {i.field_name: (i.field_type, i.default_value) for i in dependant_params}
+        # The generated model's fields are the hook's *parameters*, so this schema
+        # validates into that model — not into `T`, which is what the hook returns.
+        # The closure below needs that narrower type; `schema` is only returned for
+        # its `json_schema`, so it stays the union of both branches.
+        params_schema: ResponseSchema[BaseModel] = ResponseSchema(create_model(name, **fields), embed=embed)
+        schema = params_schema
 
         async def decode_wrapper(
             message: str,
             context: "Context",
             provider: "Provider | None",
         ) -> T:
-            content = await schema.validate(message, context, provider)
+            content = await params_schema.validate(message, context, provider)
             return await execute(
                 _dep_provider_=provider,
                 **(content.model_dump() | {CONTEXT_OPTION_NAME: context}),

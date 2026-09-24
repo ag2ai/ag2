@@ -6,6 +6,7 @@ import hashlib
 import os
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -63,13 +64,14 @@ class SkillsClient:
         kwargs.update(overrides)
         return httpx.AsyncClient(**kwargs)  # type: ignore[arg-type]
 
-    async def search(self, query: str, limit: int = 10) -> list[dict]:
+    async def search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """Search skills.sh and return a list of skill records."""
         url = f"{self.SKILLS_SH_API}/search"
         async with self._make_client() as client:
             response = await client.get(url, params={"q": query, "limit": limit})
             response.raise_for_status()
-            return response.json().get("skills", [])
+            skills: list[dict[str, Any]] = response.json().get("skills", [])
+            return skills
 
     async def download_skill(self, source: str, skill_id: str, runtime: SkillRuntime) -> tuple[SkillMetadata, str]:
         """Download a skill via the GitHub Tarball API and install it via *runtime*.

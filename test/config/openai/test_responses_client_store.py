@@ -3,20 +3,27 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from typing import Any
 
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
+from typing_extensions import Unpack
 
 from ag2 import Context, MemoryStream
 from ag2.config.openai import OpenAIResponsesConfig
+from ag2.config.openai.config import OpenAIResponsesConfigOverrides
 from ag2.events import ModelRequest, TextInput
 from ag2.tools.builtin.file_search import FileSearchTool
+from ag2.tools.schemas import ToolSchema
+from ag2.tools.tool import Tool
 
 ENCRYPTED_REASONING = "reasoning.encrypted_content"
 
 
-def _capturing_config(captured: dict[str, object], **kwargs: object) -> OpenAIResponsesConfig:
+def _capturing_config(
+    captured: dict[str, object], **kwargs: Unpack[OpenAIResponsesConfigOverrides]
+) -> OpenAIResponsesConfig:
     def handler(request: httpx2.Request) -> httpx2.Response:
         captured["body"] = json.loads(request.content)
         return httpx2.Response(
@@ -43,13 +50,14 @@ def _capturing_config(captured: dict[str, object], **kwargs: object) -> OpenAIRe
         api_key="test",
         base_url="http://test/v1",
         http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
-        **kwargs,  # type: ignore[arg-type]
-    )
+    ).copy(**kwargs)
 
 
-async def _request_body(captured: dict[str, object], tools: list, **kwargs: object) -> dict[str, object]:
+async def _request_body(
+    captured: dict[str, object], tools: list[Tool], **kwargs: Unpack[OpenAIResponsesConfigOverrides]
+) -> dict[str, Any]:
     context = Context(stream=MemoryStream())
-    schemas = []
+    schemas: list[ToolSchema] = []
     for t in tools:
         schemas.extend(await t.schemas(context))
     client = _capturing_config(captured, **kwargs).create()
@@ -58,9 +66,11 @@ async def _request_body(captured: dict[str, object], tools: list, **kwargs: obje
         context=context,
         tools=schemas,
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
-    return captured["body"]  # type: ignore[return-value]
+    body = captured["body"]
+    assert isinstance(body, dict)
+    return body
 
 
 @pytest.mark.asyncio

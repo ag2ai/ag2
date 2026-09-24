@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from ag2 import Agent, Context, MemoryStream, tool
-from ag2.events import ClientToolCallEvent, ToolCallEvent
+from ag2.events import ClientToolCallEvent, ModelResponse, ToolCallEvent
 from ag2.middleware import ToolExecution, ToolResultType
 from ag2.testing import TestConfig
 from ag2.tools.final.client_tool import ClientTool
@@ -124,3 +124,43 @@ async def test_function_tool_with_middleware_preserves_existing() -> None:
     await agent.ask("Hi!")
 
     assert call_order == ["second", "first", "tool"]
+
+
+class TestClientCallsInHistory:
+    """The turn the client must answer is recorded as the calls the model made.
+
+    `ClientToolCallEvent` is an *outcome* — `ClientTool` subscribes to the
+    model's `ToolCallEvent` and emits one as that call's result, which is why it
+    is a sibling of `ToolResultEvent` rather than a `ToolCallEvent`. Putting
+    outcomes into the `ToolCallsEvent` on the assistant turn made history claim
+    the model had asked for them, and dropped the provider fields with it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_assistant_turn_carries_the_model_s_calls(self) -> None:
+        client_tool = ClientTool(schema={"function": {"name": "pick", "description": "d", "parameters": {}}})
+        stream = MemoryStream()
+        call = ToolCallEvent(name="pick", arguments="{}", vendor_metadata={"caller": "ui"})
+        agent = Agent("", config=TestConfig(call), tools=[client_tool])
+
+        await agent.ask("go", stream=stream)
+
+        events = await stream.history.get_events()
+        pending = [e.tool_calls for e in events if isinstance(e, ModelResponse) and e.tool_calls.calls][-1]
+        assert [type(c) for c in pending.calls] == [ToolCallEvent]
+        assert pending.calls[0].vendor_metadata == {"caller": "ui"}
+
+    @pytest.mark.asyncio
+    async def test_that_history_maps_for_a_provider(self) -> None:
+        """The mapper reads `vendor_metadata` off every call on the turn."""
+        anthropic_mappers = pytest.importorskip("ag2.config.anthropic.mappers")
+        serializer = pytest.importorskip("fast_depends.pydantic.serializer")
+
+        client_tool = ClientTool(schema={"function": {"name": "pick", "description": "d", "parameters": {}}})
+        stream = MemoryStream()
+        agent = Agent("", config=TestConfig(ToolCallEvent(name="pick", arguments="{}")), tools=[client_tool])
+
+        await agent.ask("go", stream=stream)
+
+        events = list(await stream.history.get_events())
+        anthropic_mappers.convert_messages(events, serializer.PydanticSerializer())

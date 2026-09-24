@@ -2,10 +2,33 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
+
+from zai.core import StreamResponse
+from zai.types.chat.chat_completion import CompletionTokensDetails, CompletionUsage, PromptTokensDetails
+
+from ag2.config.zai import ZAIClient
+
+
+class FakeStreamResponse(StreamResponse[Any]):
+    """A `StreamResponse` over a fixed list of chunks.
+
+    `ZAIClient` narrows on the SDK's own class to tell a stream from a completion — the SDK
+    answers both from one `create` call — so the double has to be one. Iteration is overridden
+    rather than fed through the SSE machinery, so nothing here depends on the SDK's internals.
+    """
+
+    def __init__(self, chunks: Iterable[Any]) -> None:
+        self._chunks: Iterator[Any] = iter(chunks)
+
+    def __iter__(self) -> Iterator[Any]:
+        return self._chunks
+
+    def __next__(self) -> Any:
+        return next(self._chunks)
 
 
 def make_usage(
@@ -14,14 +37,16 @@ def make_usage(
     total_tokens: int | None = None,
     cached_tokens: int | None = None,
     reasoning_tokens: int | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
+) -> CompletionUsage:
+    # The SDK's own `construct`, the unvalidated path every response it parses takes, so a
+    # `null` the API sends for a count arrives as `None` here too.
+    return CompletionUsage.construct(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
-        prompt_tokens_details=SimpleNamespace(cached_tokens=cached_tokens) if cached_tokens is not None else None,
+        prompt_tokens_details=PromptTokensDetails(cached_tokens=cached_tokens) if cached_tokens is not None else None,
         completion_tokens_details=(
-            SimpleNamespace(reasoning_tokens=reasoning_tokens) if reasoning_tokens is not None else None
+            CompletionTokensDetails(reasoning_tokens=reasoning_tokens) if reasoning_tokens is not None else None
         ),
     )
 
@@ -92,18 +117,29 @@ class FakeCompletions:
     def __init__(self, response: Any | None = None, stream_chunks: Iterable[Any] = ()) -> None:
         self.response = response if response is not None else make_response()
         self.stream_chunks = list(stream_chunks)
-        self.kwargs: dict[str, Any] | None = None
+        self._kwargs: dict[str, Any] | None = None
+
+    @property
+    def kwargs(self) -> dict[str, Any]:
+        """What `create` was called with; fails the test if it never was."""
+        assert self._kwargs is not None, "create() was never called"
+        return self._kwargs
 
     def create(self, **kwargs: Any) -> Any:
-        self.kwargs = kwargs
+        self._kwargs = kwargs
         if kwargs.get("stream"):
-            return iter(self.stream_chunks)
+            return FakeStreamResponse(self.stream_chunks)
         return self.response
 
 
 class FakeZAIClient:
     def __init__(self, completions: FakeCompletions) -> None:
         self.chat = SimpleNamespace(completions=completions)
+
+
+def install_fake_sdk(client: ZAIClient, completions: FakeCompletions) -> None:
+    """Stand `completions` in for the SDK client `client` would otherwise build."""
+    client._client = FakeZAIClient(completions)  # type: ignore[assignment]  # the tests read what create() was called with, which the SDK turns into a request body
 
 
 def make_call_context(prompt: list[str] | None = None) -> AsyncMock:

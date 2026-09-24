@@ -5,7 +5,7 @@
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Annotated, Any, Union
+from typing import Annotated, Any, NamedTuple, Union
 
 import pytest
 from dirty_equals import IsPartialDict
@@ -111,6 +111,34 @@ class TestEmbeddedTypes:
             "required": ["data"],
             "type": "object",
         }
+
+    @pytest.mark.parametrize(
+        ("type_", "schema"),
+        [
+            pytest.param(list, {"type": "array", "items": {}}, id="list"),
+            pytest.param(tuple, {"type": "array", "items": {}}, id="tuple"),
+        ],
+    )
+    def test_bare_container_types_are_schemas_not_sequences_of_types(
+        self,
+        type_: ClassInfo,
+        schema: dict[str, Any],
+    ) -> None:
+        """`list` is a type to describe, not a pair of types to union."""
+        response_schema = ResponseSchema(type_, embed=False)
+        assert not response_schema._embedded_type
+        assert response_schema.json_schema == schema
+
+    def test_named_tuple_is_a_schema_not_a_sequence_of_types(self) -> None:
+        """A NamedTuple subclasses `tuple`; it is still one type, not several."""
+
+        class Point(NamedTuple):
+            x: int
+            y: int
+
+        response_schema = ResponseSchema(Point, embed=False)
+        assert not response_schema._embedded_type
+        assert response_schema.json_schema == IsPartialDict({"type": "array"})
 
     def test_str_has_no_schema(self) -> None:
         response_schema = ResponseSchema(str)
@@ -400,6 +428,7 @@ class TestNameDescription:
 
         schema = ResponseSchema(MyModel)
 
+        assert schema.json_schema is not None
         assert "title" not in schema.json_schema
         assert "description" not in schema.json_schema
 
@@ -512,13 +541,14 @@ class TestValidation:
         assert result == expected
 
     async def test_validate_union(self) -> None:
-        schema = ResponseSchema(int | str)
+        # Annotated: a union is not a `type[T]`, so nothing infers `T` from it.
+        schema: ResponseSchema[int | str] = ResponseSchema(int | str)
 
         assert await schema.validate('{"data": 42}', context=None) == 42  # type: ignore[arg-type]
         assert await schema.validate('{"data": "hello"}', context=None) == "hello"  # type: ignore[arg-type]
 
     async def test_validate_not_embedded_union(self) -> None:
-        schema = ResponseSchema(int | str, embed=False)
+        schema: ResponseSchema[int | str] = ResponseSchema(int | str, embed=False)
 
         assert await schema.validate("42", context=None) == 42  # type: ignore[arg-type]
         assert await schema.validate('"hello"', context=None) == "hello"  # type: ignore[arg-type]

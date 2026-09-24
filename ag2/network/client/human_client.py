@@ -354,7 +354,7 @@ class HumanClient:
             labels=labels,
         )
         self._ensure_channel_inbox(metadata.channel_id)
-        return Channel(metadata=metadata, client=self)  # type: ignore[arg-type]
+        return Channel(metadata=metadata, client=self)
 
     async def close_channel(self, channel_id: str, reason: str = "human_closed") -> ChannelMetadata:
         """Close a channel this participant is in."""

@@ -32,9 +32,9 @@ async def test_collects_events_in_window(self) -> None:
 async def test_collects_events_in_window(self) -> None:
     # arrange stream
     stream = MemoryStream()
-    batches: list[BaseEvent] = []
+    batches: list[list[BaseEvent]] = []
 
-    async def callback(events: BaseEvent, ctx: Context) -> None:
+    async def callback(events: list[BaseEvent], ctx: Context) -> None:
         batches.append(events)
 
     watch = CadenceWatch(max_wait=0.01, condition=ToolCallEvent)

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2.config.bedrock import BedrockClient
 from ag2.events import (
@@ -37,7 +37,7 @@ async def _ask(client: BedrockClient, context=None, tools=(), response_schema=No
         context=context if context is not None else make_call_context(),
         tools=tools,
         response_schema=response_schema,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 
@@ -248,3 +248,8 @@ async def test_streaming_missing_metadata_yields_empty_usage() -> None:
     result = await _ask(client)
 
     assert result.usage == Usage()
+
+
+def test_client_without_create_options_says_so() -> None:
+    with pytest.raises(ValueError, match="needs create options"):
+        BedrockClient(session=StubSession(FakeBedrockRuntime()))

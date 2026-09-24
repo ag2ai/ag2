@@ -14,10 +14,11 @@ from typing import Any
 
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Agent, Context, MemoryStream
 from ag2.config.openai import OpenAIClient
+from ag2.config.openai.openai_client import CreateOptions
 from ag2.events import ModelRequest, ModelResponse, TextInput
 
 from ._helpers import ask, config, message, response, streaming_config
@@ -54,12 +55,15 @@ STREAMED_RESPONSE: list[dict[str, Any]] = [
 ]
 
 
-def _chat_client(handler: Any, **create_options: Any) -> OpenAIClient:
+def _chat_client(handler: Any, *, stream: bool = False) -> OpenAIClient:
     """A chat completions client whose transport replays one crafted payload."""
+    create_options: CreateOptions = {"model": "gpt-4o"}
+    if stream:
+        create_options["stream"] = True
     return OpenAIClient(
         api_key="test",
         http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
-        create_options={"model": "gpt-4o", **create_options},
+        create_options=create_options,
     )
 
 
@@ -79,7 +83,7 @@ async def _chat(client: OpenAIClient) -> ModelResponse:
         context=Context(stream=MemoryStream()),
         tools=[],
         response_schema=None,
-        serializer=SerializerCls,
+        serializer=PydanticSerializer(),
     )
 
 

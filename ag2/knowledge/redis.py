@@ -4,15 +4,21 @@
 
 import asyncio
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .base import ChangeCallback, ChangeSubscription, _normalize
 from .polling import PollingChangeWatcher
 
-try:
-    from redis import asyncio as _aioredis  # type: ignore[import-not-found]
-except ImportError:
-    _aioredis = None  # type: ignore[assignment]
+# Same shape as the package's optional-dependency fallbacks: mypy sees only the
+# real import, so `_aioredis` keeps redis-py's types and the `None` stand-in stays
+# runtime-only. See website/docs/contributor-guide/type-checking.mdx.
+if TYPE_CHECKING:
+    from redis import asyncio as _aioredis
+else:
+    try:
+        from redis import asyncio as _aioredis
+    except ImportError:
+        _aioredis = None
 
 
 class RedisKnowledgeStore:
@@ -65,7 +71,12 @@ class RedisKnowledgeStore:
             await self._client.zrem(self._index_key, *normalized_paths)
 
     async def _index_scan(self) -> dict[str, int]:
-        raw = await self._client.zrange(self._index_key, 0, -1, withscores=True)
+        # redis-py types `zrange` as a union over all three of its shapes; only
+        # the `withscores=True` one — (member, score) pairs — is reachable here.
+        raw = cast(
+            "list[tuple[bytes | str, float]]",
+            await self._client.zrange(self._index_key, 0, -1, withscores=True),
+        )
         result: dict[str, int] = {}
         for entry in raw:
             path, score = entry

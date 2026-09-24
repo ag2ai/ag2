@@ -20,10 +20,10 @@ class TestObserverAlertCreation:
         assert s.severity == "custom"  # Accepts any string
 
     def test_severity_values(self) -> None:
-        assert Severity.INFO == "info"
-        assert Severity.WARNING == "warning"
-        assert Severity.CRITICAL == "critical"
-        assert Severity.FATAL == "fatal"
+        # Held as `str`: strict equality reads an enum literal as disjoint from a string
+        # literal, but the `str` mixin is exactly what makes these equal.
+        levels: list[str] = [Severity.INFO, Severity.WARNING, Severity.CRITICAL, Severity.FATAL]
+        assert levels == ["info", "warning", "critical", "fatal"]
 
 
 class TestHaltEvent:

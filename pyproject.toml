@@ -179,6 +179,8 @@ optionals = [
     "tenki>=0.5.4,<2",
     "tinyfish>=0.5,<0.6; python_version>='3.11'",
     "exa-py>=2.12.1,<3",
+    "nlip-sdk>=0.1.0,<1",  # ag2.extensions.nlip — without it `test/beta/extensions/nlip` importorskips itself out of the run
+    "nlip-server>=0.1.3,<1",
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
@@ -237,6 +239,47 @@ types = [
     "types-PyYAML",
     { include-group = "test" },
     "ag2[openai, anthropic, a2a, ag-ui]",
+    # Small, pure-Python and fully annotated, so the pull-request job really
+    # checks the packages behind them instead of checking them against `Any`.
+    "ag2[redis, tracing, metrics]", # ag2.streams, ag2.knowledge.redis, ag2.middleware.builtin
+    "watchdog>=4.0,<7",            # ag2.knowledge.disk — an additional dependency, not an extra
+    "websockets>=14.0,<17",        # ag2.network.transport.ws — an additional dependency, not an extra
+    # google-genai is neither small nor pure-Python — it is ~8MB and reaches
+    # `cryptography` through google-auth — but all three of google-genai,
+    # google-auth and zai-sdk ship `py.typed`, the wheels are prebuilt on all
+    # three runners, and the alternative is checking two whole provider packages
+    # against `Any` on every pull request. Weight is not the test; whether the
+    # extra can be installed on every runner is.
+    "ag2[gemini, zai]", # ag2.config.gemini, ag2.config.zai
+    # xai-sdk reaches grpcio and protobuf, dashscope reaches cryptography; all
+    # three have prebuilt wheels on every runner. xai-sdk is followed rather
+    # than wrapped (see the override below), which only holds if it is installed.
+    "ag2[xai, dashscope]", # ag2.config.xai, ag2.config.dashscope
+    # Pure-Python and shipping `py.typed` (mistralai under `mistralai.client`).
+    "ag2[mistral, ollama]", # ag2.config.mistral, ag2.config.ollama
+    # Pure-Python and shipping `py.typed`.
+    "ag2[elevenlabs]", # ag2.live.elevenlabs
+    # The protocol bridges. `agent-client-protocol` ships `py.typed`; grpc,
+    # protobuf and jsonschema ship none, and typeshed publishes all three.
+    # protobuf's stubs are held to the major a2a-sdk pins (`protobuf<7`).
+    "ag2[acp, a2ui]",          # ag2.acp, ag2.a2ui
+    "grpcio>=1.60",            # ag2.a2a's gRPC transport; a2a-sdk's own floor, without its codegen tools
+    "types-grpcio",            # ag2.a2a
+    "types-protobuf>=6.32,<7", # ag2.a2a
+    "types-jsonschema",        # ag2.mcp, ag2.a2ui
+    # `disallow_any_unimported` turns an unresolved import into an error rather
+    # than a silent `Any`, so a checked module's backends have to be installed.
+    "ag2[tavily, ddgs, perplexity]", # ag2.tools.search
+    # Extensions are not shipped as extras, so their packages are listed here
+    # directly, pinned as the `optionals` group pins them. All have prebuilt
+    # wheels on every runner; tinyfish is 3.11+ only, like everywhere else.
+    "daytona>=0.171.0,<1",                            # ag2.extensions.daytona
+    "tenki>=0.5.4,<2",                                # ag2.extensions.tenki
+    "types-docker",                                   # ag2.extensions.docker; docker itself comes in via `test`
+    "nlip-sdk>=0.1.0,<1",                             # ag2.extensions.nlip
+    "nlip-server>=0.1.3,<1",                          # ag2.extensions.nlip
+    "exa-py>=2.12.1,<3",                              # ag2.extensions.tools.search.exa
+    "tinyfish>=0.5,<0.6; python_version>='3.11'",     # ag2.extensions.tools.search.tinyfish
 ]
 
 lint = ["ruff==0.16.7", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -370,6 +413,11 @@ ignore = [
     "ASYNC240",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# The condition DSL fixture is input to the type checker, never imported; its
+# `reveal_type` calls are how the expected types are written down.
+"test/typing/fixtures/*" = ["F821"]
+
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
 max-complexity = 10
@@ -384,22 +432,254 @@ docstring-code-format = true
 convention = "google"
 
 [tool.mypy]
+# The project's declared floor is `requires-python = ">=3.10"`. Checking against
+# the floor — not against whatever interpreter happens to be installed — is what
+# catches a construct that only works on a newer runtime.
 python_version = "3.10"
 
-# The `ag2` tree is not yet strict-clean. Strict mypy coverage is being
-# (re)introduced module-by-module; until then mypy is scoped to modules
-# that already pass under `strict = true`.
+# === The ratchet ===
+#
+# Everything listed here is checked under the strict settings below: locally via
+# bare `mypy`, in the pre-commit hook, and on every pull request across three
+# operating systems. The list only ever grows, and its length is the measure of
+# progress. Anything absent is absent because it has not been cleaned yet, with
+# two deliberate exceptions noted at the end of the list.
+#
+# Two tiers of guarantee. The pull-request job installs the `types` dependency
+# group, which pulls a handful of extras; the nightly matrix installs
+# twenty-seven, across five Python versions. A module behind an extra the
+# pull-request job does not install is checked against `Any` there and only
+# really checked overnight — an entry in that position says so on its own line.
+# See website/docs/contributor-guide/type-checking.mdx.
 files = [
+    # Import machinery behind the optional-dependency fallbacks. No extras needed.
     "ag2/_import_utils.py",
-    "ag2/config/anthropic/mappers.py",
-    "ag2/config/openai/mappers.py",
+
+    # Provider configuration core: the `ModelConfig` and `LLMClient` protocols
+    # every provider is built against. No extras needed.
+    "ag2/config/__init__.py",
+    "ag2/config/client.py",
+    "ag2/config/config.py",
+
+    # The OpenAI and Anthropic providers — configs, clients, mappers, hosted-tool
+    # events and Files clients. The reference implementations the other providers
+    # copy, so their shapes are what tickets 12-14 build on. `openai` and
+    # `anthropic` are in the `types` group, so these are really checked on every
+    # pull request.
+    "ag2/config/anthropic/",
+    "ag2/config/openai/",
+
+    # The Gemini and Z.AI providers. `google-genai`, `google-auth` and `zai-sdk` all ship
+    # `py.typed`, and they joined the `types` group, so these are really checked on every
+    # pull request.
+    "ag2/config/gemini/",
+    "ag2/config/zai/",
+
+    # The xAI and DashScope providers. `xai-sdk` carries no `py.typed` but is
+    # annotated and ships `.pyi` for its protos, so it is followed (see the
+    # override below) rather than wrapped. `dashscope` ships a bundled stub that
+    # is wrong about the async call's stream arm; the client casts there, once,
+    # with the reason. Both extras are in the `types` group, so these are really
+    # checked on every pull request.
+    "ag2/config/dashscope/",
+    "ag2/config/xai/",
+
+    # The Mistral and Ollama providers. `mistralai` and `ollama` ship `py.typed`
+    # and are in the `types` group, so these are really checked on every pull
+    # request.
+    "ag2/config/mistral/",
+    "ag2/config/ollama/",
+
+    # The protocol bridges: ACP, MCP, AG-UI, A2A and A2UI serve an agent over a
+    # published specification, so an error here is usually one we are not
+    # honouring. Every extra they reach, the gRPC transport and the stubs for
+    # grpc, protobuf and jsonschema are in the `types` group, so these are
+    # really checked on every pull request.
+    "ag2/a2a/",
+    "ag2/a2ui/",
+    "ag2/acp/",
+    "ag2/ag_ui/",
+    "ag2/mcp/",
+
+    # The Bedrock provider. boto3 is data-driven and ships no types, so the
+    # boto3 client is `Any` by our own declaration on every job; installing the
+    # extra would change nothing. The service's own types come from
+    # `types-boto3[bedrock-runtime]`, which the Bedrock SDK-types change adds.
+    "ag2/config/bedrock/",
+
+    # Offline evaluation: datasets, scorers, the runner and persistence. httpx and
+    # pydantic are core dependencies, so this is really checked.
+    "ag2/eval/",
+    # Extensions: the Daytona, Docker and Tenki sandboxes, the NLIP bridge, the
+    # TealTiger governance middleware and the Exa, Serply, TinyFish and Xquik
+    # search toolkits. Their packages are additional dependencies, not extras, so
+    # they are in the `types` group directly. `nlip-sdk` and `nlip-server` carry
+    # no `py.typed` but are annotated, so they are followed (see the override
+    # below) rather than wrapped; `docker` is typed by `types-docker`. `tinyfish`
+    # needs Python 3.11 and the pull-request job runs 3.10, so
+    # `tools/search/tinyfish.py` is checked against `Any` there and only really
+    # checked by the nightly matrix.
+    "ag2/extensions/",
+
+    # Live voice: the realtime agent, the STT/LLM/TTS cascade and the OpenAI,
+    # Gemini and ElevenLabs sessions, whose extras are all in the `types` group.
+    # `sounddevice` has no types at all and numpy is skipped (below), so
+    # `sound_device.py` declares what it uses of both as local protocols.
+    "ag2/live/",
+
+    # MCP-UI resource and action builders. `mcp-ui-server` carries no `py.typed`
+    # but is fully annotated, so it is followed (see the override below) rather
+    # than wrapped. `ag2[mcp-ui]` comes in via the `test` group, so the
+    # pull-request job really checks this.
+    "ag2/mcp_ui/",
+
+    # Event vocabulary. Imported by everything else, so its types are what make
+    # the packages after it cheap. No extras needed.
+    "ag2/events/",
+
+    # Structured output: response schemas, prompted schemas, `@response_schema`.
+    # pydantic and fast_depends are core dependencies, so this is really checked.
+    "ag2/response/",
+
+    # The Files API facade and its provider-client protocol. No extras needed.
+    "ag2/files/",
+
+    # History policies. No extras needed.
+    "ag2/policies/",
+
+    # Observers — the `observer` factory and the watch-driven base. No extras needed.
+    "ag2/observers/",
+
+    # Middleware, including the telemetry and metrics builtins. `ag2[tracing]`
+    # and `ag2[metrics]` are in the `types` group, so this is really checked.
+    "ag2/middleware/",
+
+    # Knowledge stores. `ag2[redis]` and `watchdog` are in the `types` group, so
+    # the Redis and disk stores are really checked alongside the SQLite one.
+    "ag2/knowledge/",
+
+    # Persistent stream backends. `ag2[redis]` is in the `types` group, so this
+    # is really checked.
+    "ag2/streams/",
+
+    # Tools: the `Tool` hierarchy, the executor, the builtins, subagent
+    # delegation and the toolkits. The surface a downstream developer writes
+    # against most often. `ag2[mcp]` comes in via the `test` group and the
+    # search extras are in `types`, so this is really checked.
+    "ag2/tools/",
+
+    # The top-level runtime: the stream, context, history, plugins, HITL, tasks,
+    # compaction and aggregation, replay, the spec loader and the `ag2` namespace
+    # itself — the names a downstream developer imports first. No extras needed.
+    # `agent.py` has its own entry below; `textual.py` cannot be imported at all
+    # (see .scratch/mypy-full-coverage/issues/41).
+    "ag2/__init__.py",
+    "ag2/_replay.py",
+    "ag2/_telemetry_consts.py",
+    "ag2/aggregate.py",
+    "ag2/annotations.py",
+    "ag2/assembly.py",
+    "ag2/compact.py",
+    "ag2/context.py",
+    "ag2/exceptions.py",
+    "ag2/history.py",
+    "ag2/hitl.py",
+    "ag2/mypy.py",
+    "ag2/plugin.py",
+    "ag2/spec.py",
+    "ag2/stream.py",
+    "ag2/task.py",
+    "ag2/testing.py",
+    "ag2/types.py",
+    "ag2/usage.py",
+    "ag2/utils.py",
+    "ag2/version.py",
+    "ag2/watch.py",
+
+    # The agent: `Agent`, `AgentReply`, `AgentRun` — `ask`, `run`, `resume` and
+    # the registration surface. It imports nearly everything above, so it went
+    # in last of the runtime. No extras needed.
+    "ag2/agent.py",
+
+    # The agent network, the whole package: the hub, the client, the transport,
+    # the channel adapters, the workflow transition graph, the views, and the
+    # envelope, channel and identity types they share. The client is what a
+    # downstream developer holds to join a hub, so its signatures are the ones
+    # their checker follows. `ag2[tracing]` and `websockets` (an additional
+    # dependency, not an extra) are both in the `types` group, so all of it is
+    # really checked on every pull request.
+    "ag2/network/",
+
+    # === The test tree ===
+    #
+    # Checked under the relaxed profile in the `test.*` override below. A test
+    # directory goes in only after the package directory it covers is clean, so
+    # the package's corrected types do the work rather than being fought at every
+    # test-double boundary. What this buys: a double that no longer satisfies the
+    # type it stands in for is reported, instead of the test silently exercising
+    # something else.
+
+    # The test-tree root: the agent's composition, assembly, compaction,
+    # aggregation, tasks, watches and history, plus the shared helpers and
+    # `conftest.py` every directory below imports. No extras needed.
+    "test/*.py",
+
+    # Type-level guarantees, tested through mypy's own output; the harness runs
+    # each fixture under `fixtures/` separately, so the fixtures stay out of here.
+    "test/typing/__init__.py",
+    "test/typing/test_fixtures.py",
+
+    # The events, stream, response, files, knowledge, policies, observers, spec
+    # and MCP-UI tests: the packages the first sweep tickets cleaned. The Redis
+    # stream and disk-knowledge tests need `ag2[redis]` and `watchdog`, both in
+    # the `types` group, so all of it is really checked on every pull request.
+    "test/events/",
+    "test/files/",
+    "test/knowledge/",
+    "test/mcp_ui/",
+    "test/observer/",
+    "test/policies/",
+    "test/response/",
+    "test/spec/",
+    "test/stream/",
+
+    # The OpenAI and Anthropic provider tests, with the `test/config` root they
+    # share with the other providers' tests (package marker, helpers, conftest).
+    # `openai` and `anthropic` are in the `types` group, so these are really
+    # checked on every pull request.
+    "test/config/*.py",
+    "test/config/anthropic/",
+    "test/config/openai/",
+
+    # The other seven providers' tests. Every SDK they build doubles from is in
+    # the `types` group, so these are really checked on every pull request —
+    # except boto3, which the Bedrock client holds as `Any` on every job, so the
+    # Bedrock tests are checked against ag2's own types and their fakes.
+    "test/config/bedrock/",
+    "test/config/dashscope/",
+    "test/config/gemini/",
+    "test/config/mistral/",
+    "test/config/ollama/",
+    "test/config/xai/",
+    "test/config/zai/",
+
+    # The real-API smoke tests: the agent harness, sessions, workflows and the
+    # network run against each provider. They skip without credentials, so the
+    # checker is what keeps them honest between the runs that have keys. Their
+    # providers, `ag2[tracing]` and `websockets` are all in the `types` group.
+    "test/providers/",
+
+    # Deliberately absent, and not on their way in:
+    #   - the demo scripts at the repository root, which are examples rather
+    #     than shipped code;
+    #   - the website documentation code samples, which are prose.
 ]
 
 strict = true
 ignore_missing_imports = true
 install_types = true
 non_interactive = true
-plugins = ["pydantic.mypy"]
+plugins = ["pydantic.mypy", "ag2.mypy"]
 
 # remove after all files in the repo are fixed
 follow_imports = "silent"
@@ -419,6 +699,48 @@ disallow_any_unimported = true
 
 # numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
 # under python_version = "3.10"; skip analysing numpy entirely (it is not our code).
+# `mcp-ui-server` is fully annotated but ships no `py.typed` marker, so mypy
+# would hand us `Any` from every name we import and spread it through our own
+# signatures. Following it uses its real types, which stay right when it changes
+# — always preferred over a hand-written boundary. See
+# website/docs/contributor-guide/type-checking.mdx. `xai-sdk` is the same case:
+# annotated throughout, with `.pyi` for its generated protos, but no marker.
+# `nlip-sdk` and `nlip-server` are the same again, minus a few methods left
+# unannotated; those are called at one place each, with the reason.
+# `perplexity.types` is the SDK's public surface but re-exports its generated
+# names without an `__all__`, which strict mode reads as "not exported". The
+# alternative is importing from `perplexity.generated.*`, which is internal.
+[[tool.mypy.overrides]]
+module = "perplexity.*"
+implicit_reexport = true
+
+[[tool.mypy.overrides]]
+module = "mcp_ui_server.*"
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = "xai_sdk.*"
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["nlip_sdk.*", "nlip_server.*"]
+follow_untyped_imports = true
+
+# The test tree is not a published surface: nobody reads a test's signature to
+# learn an API, and a test that takes nothing and returns nothing gains nothing
+# from saying so. So the settings that only demand declarations are off here —
+# about nine hundred edits' worth, none carrying information. Everything
+# substantive stays on, `check_untyped_defs` above all: an unannotated test body
+# is still checked, so a double that no longer satisfies the protocol it stands
+# in for is reported rather than silently testing nothing.
+[[tool.mypy.overrides]]
+module = "test.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_decorators = false
+disallow_untyped_calls = false
+disallow_any_unimported = false
+
 [[tool.mypy.overrides]]
 module = "numpy.*"
 follow_imports = "skip"

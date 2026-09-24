@@ -86,7 +86,7 @@ omit = Omit()
 
 _T = TypeVar("_T")
 
-Omittable = _T | Omit
+Omittable: TypeAlias = _T | Omit
 
 
 JsonDecodable: TypeAlias = bool | bytes | bytearray | float | int | str | None

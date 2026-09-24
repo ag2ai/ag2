@@ -32,6 +32,7 @@ from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from ag2.network import (
     EV_CHANNEL_CLOSED,
     EV_TEXT,
+    Envelope,
     Hub,
     Resume,
 )
@@ -57,7 +58,7 @@ def _agent(name: str, prompt: str, config: GeminiConfig) -> Agent:
     return Agent(name=name, prompt=prompt, config=config)
 
 
-async def _wait_text_count(hub: Hub, channel_id: str, expected: int, *, timeout: float = 30.0) -> list:
+async def _wait_text_count(hub: Hub, channel_id: str, expected: int, *, timeout: float = 30.0) -> list[Envelope]:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
         wal = await hub.read_wal(channel_id)

@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import TYPE_CHECKING
+
 from ag2.exceptions import missing_additional_dependency, missing_optional_dependency
 
 from .cascade import CascadeConfig
@@ -9,37 +11,51 @@ from .observer import TTSObserver
 from .realtime import LiveAgent
 from .turn import SilenceTurnDetector, TurnDetector
 
-try:
-    from .sound_device import Player as SoundDevicePlayer
-    from .sound_device import Recorder as SoundDeviceRecorder
-except ImportError as e:
-    SoundDevicePlayer = missing_additional_dependency("SoundDevicePlayer", "sounddevice[numpy]", e)  # type: ignore[misc]
-    SoundDeviceRecorder = missing_additional_dependency("SoundDeviceRecorder", "sounddevice[numpy]", e)  # type: ignore[misc]
-
-try:
+# The fallback rebinds a name mypy has bound to a class, which it rejects; it
+# sees only the real import. See website/docs/contributor-guide/type-checking.mdx.
+if TYPE_CHECKING:
+    from .elevenlabs import STTConfig as ElevenLabsTranscriber
+    from .elevenlabs import StreamingTTSConfig as ElevenLabsStreamingTTSConfig
+    from .elevenlabs import TTSConfig as ElevenLabsTTSConfig
+    from .gemini import RealTimeConfig as GeminiRealTimeConfig
     from .openai import RealTimeConfig as OpenAIRealTimeConfig
     from .openai import STTConfig as OpenAITranscriber
     from .openai import STTTranslationConfig as OpenAITranslationTranscriber
     from .openai import TTSConfig as OpenAITTSConfig
-except ImportError as e:
-    OpenAIRealTimeConfig = missing_optional_dependency("RealTimeConfig", "openai", e)  # type: ignore[misc]
-    OpenAITTSConfig = missing_optional_dependency("TTSConfig", "openai", e)  # type: ignore[misc]
-    OpenAITranscriber = missing_optional_dependency("STTConfig", "openai", e)  # type: ignore[misc]
-    OpenAITranslationTranscriber = missing_optional_dependency("STTTranslationConfig", "openai", e)  # type: ignore[misc]
+    from .sound_device import Player as SoundDevicePlayer
+    from .sound_device import Recorder as SoundDeviceRecorder
+else:
+    try:
+        from .sound_device import Player as SoundDevicePlayer
+        from .sound_device import Recorder as SoundDeviceRecorder
+    except ImportError as e:
+        SoundDevicePlayer = missing_additional_dependency("SoundDevicePlayer", "sounddevice[numpy]", e)
+        SoundDeviceRecorder = missing_additional_dependency("SoundDeviceRecorder", "sounddevice[numpy]", e)
 
-try:
-    from .gemini import RealTimeConfig as GeminiRealTimeConfig
-except ImportError as e:
-    GeminiRealTimeConfig = missing_optional_dependency("RealTimeConfig", "gemini", e)  # type: ignore[misc]
+    try:
+        from .openai import RealTimeConfig as OpenAIRealTimeConfig
+        from .openai import STTConfig as OpenAITranscriber
+        from .openai import STTTranslationConfig as OpenAITranslationTranscriber
+        from .openai import TTSConfig as OpenAITTSConfig
+    except ImportError as e:
+        OpenAIRealTimeConfig = missing_optional_dependency("RealTimeConfig", "openai", e)
+        OpenAITTSConfig = missing_optional_dependency("TTSConfig", "openai", e)
+        OpenAITranscriber = missing_optional_dependency("STTConfig", "openai", e)
+        OpenAITranslationTranscriber = missing_optional_dependency("STTTranslationConfig", "openai", e)
 
-try:
-    from .elevenlabs import STTConfig as ElevenLabsTranscriber
-    from .elevenlabs import StreamingTTSConfig as ElevenLabsStreamingTTSConfig
-    from .elevenlabs import TTSConfig as ElevenLabsTTSConfig
-except ImportError as e:
-    ElevenLabsTTSConfig = missing_optional_dependency("TTSConfig", "elevenlabs", e)  # type: ignore[misc]
-    ElevenLabsStreamingTTSConfig = missing_optional_dependency("StreamingTTSConfig", "elevenlabs", e)  # type: ignore[misc]
-    ElevenLabsTranscriber = missing_optional_dependency("STTConfig", "elevenlabs", e)  # type: ignore[misc]
+    try:
+        from .gemini import RealTimeConfig as GeminiRealTimeConfig
+    except ImportError as e:
+        GeminiRealTimeConfig = missing_optional_dependency("RealTimeConfig", "gemini", e)
+
+    try:
+        from .elevenlabs import STTConfig as ElevenLabsTranscriber
+        from .elevenlabs import StreamingTTSConfig as ElevenLabsStreamingTTSConfig
+        from .elevenlabs import TTSConfig as ElevenLabsTTSConfig
+    except ImportError as e:
+        ElevenLabsTTSConfig = missing_optional_dependency("TTSConfig", "elevenlabs", e)
+        ElevenLabsStreamingTTSConfig = missing_optional_dependency("StreamingTTSConfig", "elevenlabs", e)
+        ElevenLabsTranscriber = missing_optional_dependency("STTConfig", "elevenlabs", e)
 
 
 __all__ = (

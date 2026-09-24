@@ -52,7 +52,7 @@ wheels = [
 
 [[package]]
 name = "ag2"
-version = "1.0.5"
+version = "1.0.6"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
@@ -142,12 +142,13 @@ zai = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
     { name = "codespell" },
     { name = "daytona" },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "exa-py" },
+    { name = "grpcio" },
     { name = "httpx2" },
     { name = "jinja2" },
     { name = "mcp" },
@@ -175,6 +176,10 @@ dev = [
     { name = "tenki" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'" },
     { name = "typer" },
+    { name = "types-docker" },
+    { name = "types-grpcio" },
+    { name = "types-jsonschema" },
+    { name = "types-protobuf" },
     { name = "types-pyyaml" },
     { name = "watchdog" },
     { name = "websockets" },
@@ -216,6 +221,8 @@ optionals = [
     { name = "daytona" },
     { name = "docker" },
     { name = "exa-py" },
+    { name = "nlip-sdk" },
+    { name = "nlip-server" },
     { name = "tenki" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'" },
     { name = "watchdog" },
@@ -242,11 +249,16 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "mcp", "mcp-ui", "openai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "daytona" },
     { name = "dirty-equals" },
     { name = "docker" },
+    { name = "exa-py" },
+    { name = "grpcio" },
     { name = "httpx2" },
     { name = "mypy" },
+    { name = "nlip-sdk" },
+    { name = "nlip-server" },
     { name = "pillow" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -254,7 +266,15 @@ types = [
     { name = "pytest-timeout" },
     { name = "python-dotenv" },
     { name = "respx" },
+    { name = "tenki" },
+    { name = "tinyfish", marker = "python_full_version >= '3.11'" },
+    { name = "types-docker" },
+    { name = "types-grpcio" },
+    { name = "types-jsonschema" },
+    { name = "types-protobuf" },
     { name = "types-pyyaml" },
+    { name = "watchdog" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -300,26 +320,33 @@ provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini
 [package.metadata.requires-dev]
 dev = [
     { name = "ag2", extras = ["a2a"] },
+    { name = "ag2", extras = ["acp", "a2ui"] },
     { name = "ag2", extras = ["ag-ui"] },
     { name = "ag2", extras = ["anthropic"] },
     { name = "ag2", extras = ["dashscope"] },
+    { name = "ag2", extras = ["elevenlabs"] },
     { name = "ag2", extras = ["gemini"] },
+    { name = "ag2", extras = ["gemini", "zai"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
     { name = "ag2", extras = ["metrics"] },
     { name = "ag2", extras = ["mistral"] },
+    { name = "ag2", extras = ["mistral", "ollama"] },
     { name = "ag2", extras = ["ollama"] },
     { name = "ag2", extras = ["openai"] },
     { name = "ag2", extras = ["openai", "anthropic", "a2a", "ag-ui"] },
     { name = "ag2", extras = ["redis"] },
+    { name = "ag2", extras = ["redis", "tracing", "metrics"] },
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
+    { name = "ag2", extras = ["xai", "dashscope"] },
     { name = "codespell", specifier = "==2.4.3" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
+    { name = "grpcio", specifier = ">=1.60" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
@@ -347,6 +374,10 @@ dev = [
     { name = "tenki", specifier = ">=0.5.4,<2" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
     { name = "typer", specifier = ">=0.22,<0.28" },
+    { name = "types-docker" },
+    { name = "types-grpcio" },
+    { name = "types-jsonschema" },
+    { name = "types-protobuf", specifier = ">=6.32,<7" },
     { name = "types-pyyaml" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
@@ -419,6 +450,8 @@ optionals = [
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
+    { name = "nlip-sdk", specifier = ">=0.1.0,<1" },
+    { name = "nlip-server", specifier = ">=0.1.3,<1" },
     { name = "tenki", specifier = ">=0.5.4,<2" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
     { name = "watchdog", specifier = ">=4.0,<7" },
@@ -446,13 +479,25 @@ test-core = [
     { name = "pytest-timeout", specifier = ">=2.4.0,<3" },
 ]
 types = [
+    { name = "ag2", extras = ["acp", "a2ui"] },
+    { name = "ag2", extras = ["elevenlabs"] },
+    { name = "ag2", extras = ["gemini", "zai"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
+    { name = "ag2", extras = ["mistral", "ollama"] },
     { name = "ag2", extras = ["openai", "anthropic", "a2a", "ag-ui"] },
+    { name = "ag2", extras = ["redis", "tracing", "metrics"] },
+    { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
+    { name = "ag2", extras = ["xai", "dashscope"] },
+    { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
+    { name = "exa-py", specifier = ">=2.12.1,<3" },
+    { name = "grpcio", specifier = ">=1.60" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
     { name = "mypy", specifier = "==2.3.1" },
+    { name = "nlip-sdk", specifier = ">=0.1.0,<1" },
+    { name = "nlip-server", specifier = ">=0.1.3,<1" },
     { name = "pillow" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-asyncio", specifier = "==1.4.0" },
@@ -460,7 +505,15 @@ types = [
     { name = "pytest-timeout", specifier = ">=2.4.0,<3" },
     { name = "python-dotenv" },
     { name = "respx", specifier = ">=0.23.0,<0.24.0" },
+    { name = "tenki", specifier = ">=0.5.4,<2" },
+    { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
+    { name = "types-docker" },
+    { name = "types-grpcio" },
+    { name = "types-jsonschema" },
+    { name = "types-protobuf", specifier = ">=6.32,<7" },
     { name = "types-pyyaml" },
+    { name = "watchdog", specifier = ">=4.0,<7" },
+    { name = "websockets", specifier = ">=14.0,<17" },
 ]
 
 [[package]]
@@ -653,9 +706,9 @@ name = "aiologic"
 version = "0.17.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "sniffio" },
-    { name = "typing-extensions" },
-    { name = "wrapt" },
+    { name = "sniffio", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "wrapt", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f1/7a/d51f2fde1e8ae8a83431f8e97b7a71e9358cdb1d4d2ce6be387fa44d68de/aiologic-0.17.1.tar.gz", hash = "sha256:2e1b93b9e88ced318c2a63ad7b382688f40cbfe40e3d42258d49dc9c5aea179d", size = 252354, upload-time = "2026-06-27T20:41:33.25Z" }
 wheels = [
@@ -1397,8 +1450,8 @@ name = "culsans"
 version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiologic" },
-    { name = "typing-extensions" },
+    { name = "aiologic", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d9/e3/49afa1bc180e0d28008ec6bcdf82a4072d1c7a41032b5b759b60814ca4b0/culsans-0.11.0.tar.gz", hash = "sha256:0b43d0d05dce6106293d114c86e3fb4bfc63088cfe8ff08ed3fe36891447fe33", size = 107546, upload-time = "2025-12-31T23:15:38.196Z" }
 wheels = [
@@ -1710,7 +1763,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -2304,8 +2357,8 @@ name = "httpcore2"
 version = "2.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11" },
-    { name = "truststore" },
+    { name = "h11", marker = "python_full_version < '3.12' or python_full_version >= '3.14' or sys_platform != 'emscripten'" },
+    { name = "truststore", marker = "python_full_version < '3.12' or python_full_version >= '3.14' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/be/ad/f4f0e57345f1870f3e8cb624e058d7eca6e5a27d33bcc3311d9b618734cd/httpcore2-2.12.0.tar.gz", hash = "sha256:9293522bba0aa7c4c8e9e3f040c16575bd8868e155a77fa30c7a9085a5eae648", size = 67548, upload-time = "2026-08-18T13:22:08.211Z" }
 wheels = [
@@ -5520,9 +5573,9 @@ name = "tinyfish"
 version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "tenacity" },
+    { name = "httpx", marker = "python_full_version >= '3.11'" },
+    { name = "pydantic", marker = "python_full_version >= '3.11'" },
+    { name = "tenacity", marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1f/0d/ce597e06fc30b80e76946abdc7a7bd56c16360bbf098108ea05988bce43c/tinyfish-0.5.0.tar.gz", hash = "sha256:1e9d97b9badb591d6839fbcbf01a503cc33a4a5d729553baa345ca4de3c522a4", size = 74916, upload-time = "2026-08-04T21:37:42.74Z" }
 wheels = [
@@ -5617,12 +5670,67 @@ wheels = [
 ]
 
 [[package]]
+name = "types-docker"
+version = "7.2.0.20260923"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "types-requests" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dc/23/f0b34fc4c81fd172811763e191b19295a3fc9500bb424d97028332414b7b/types_docker-7.2.0.20260923.tar.gz", hash = "sha256:b585cff7ff88720ed63dea8388469a2fd1785ed51d6f8043606513c52a94d121", size = 37322, upload-time = "2026-09-23T06:52:15.995Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/34/6469781657881c4e1b388f5e9df3cb5f5a4a34eefc9ca7525afad7c4fe2e/types_docker-7.2.0.20260923-py3-none-any.whl", hash = "sha256:d966f9e65708d9242995fc95515e2fb070623f14c3d7df9109266e3d50af41ae", size = 51416, upload-time = "2026-09-23T06:52:14.908Z" },
+]
+
+[[package]]
+name = "types-grpcio"
+version = "1.83.0.20260730"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/b7/65a3ebc728ddcdfa3ac6b8872956c14193e5b95e9b43ae5d988d29f41202/types_grpcio-1.83.0.20260730.tar.gz", hash = "sha256:e2b0532526a563dbb39aa6ee39fe0961488116ac1afec3065607532c93299b64", size = 15455, upload-time = "2026-07-30T04:44:31.863Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/1f/6bd33dd7cfb782669c25e669abe0058d9dc4e1c25f34b8e6b97845c531ca/types_grpcio-1.83.0.20260730-py3-none-any.whl", hash = "sha256:400e0517d088e90ecfe302a96f09728cb9c72508d835fa0793fce552cd4e1477", size = 15917, upload-time = "2026-07-30T04:44:31.027Z" },
+]
+
+[[package]]
+name = "types-jsonschema"
+version = "4.26.0.20260518"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "referencing" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dd/46/73b6a5d61a61015c4248030a8cb07e5bdddb4041430fae9e585a68692578/types_jsonschema-4.26.0.20260518.tar.gz", hash = "sha256:e1dd53dc97a64f5eccdd6fa9839666e09bb500a8ebba2db6fdaf1789faea81a6", size = 16638, upload-time = "2026-05-18T06:06:44.106Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/d5/134f8a147dcecda10db7f60cfc6af0578a25a5c53c87b3907a64385e0184/types_jsonschema-4.26.0.20260518-py3-none-any.whl", hash = "sha256:30b30a518c7fe335df85c919fcbcc631b69c03d4a4b5b632fa916bea03065307", size = 16072, upload-time = "2026-05-18T06:06:43.264Z" },
+]
+
+[[package]]
+name = "types-protobuf"
+version = "6.32.1.20260221"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/e2/9aa4a3b2469508bd7b4e2ae11cbedaf419222a09a1b94daffcd5efca4023/types_protobuf-6.32.1.20260221.tar.gz", hash = "sha256:6d5fb060a616bfb076cbb61b4b3c3969f5fc8bec5810f9a2f7e648ee5cbcbf6e", size = 64408, upload-time = "2026-02-21T03:55:13.916Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/e8/1fd38926f9cf031188fbc5a96694203ea6f24b0e34bd64a225ec6f6291ba/types_protobuf-6.32.1.20260221-py3-none-any.whl", hash = "sha256:da7cdd947975964a93c30bfbcc2c6841ee646b318d3816b033adc2c4eb6448e4", size = 77956, upload-time = "2026-02-21T03:55:12.894Z" },
+]
+
+[[package]]
 name = "types-pyyaml"
 version = "6.0.12.20260906"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/90/6e/abec85b9013db5b934b0280a6dd104904d84f7bcbaab2e2f3def87ac7463/types_pyyaml-6.0.12.20260906.tar.gz", hash = "sha256:f59c1cc05010b833d2d72287bbaa72610106b28d42d89a907313117faba85212", size = 18649, upload-time = "2026-09-06T06:35:35.362Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/15/c0/fc0644b7ddcfb969e95845837143cb5173ddd6e06ee4ba5fc493cd9329b7/types_pyyaml-6.0.12.20260906-py3-none-any.whl", hash = "sha256:bca893ff0d51df5c9053137d5d0e6ccd36e939a196356f1d5c16372422f5137b", size = 21282, upload-time = "2026-09-06T06:35:34.372Z" },
+]
+
+[[package]]
+name = "types-requests"
+version = "2.33.0.20260906"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/18/4c2c0290953f8b3b9612adfcb07b57f144ade3ad32a76764fca42b77c5f3/types_requests-2.33.0.20260906.tar.gz", hash = "sha256:76ab8a0fb736744a0c3deee7aa57b2927e301f078d9e61f5391b3e92002416b9", size = 25263, upload-time = "2026-09-06T06:35:47.707Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/60/4c/51ec821d22a45b4162fa3f3e9e94ea4c0f8c49e82363b10955baa5438391/types_requests-2.33.0.20260906-py3-none-any.whl", hash = "sha256:9f53622652bd921ead7a54d665be1b8d518165c8b51cc9d68d944cd6b6bfa8fb", size = 21461, upload-time = "2026-09-06T06:35:45.856Z" },
 ]
 
 [[package]]

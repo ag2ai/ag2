@@ -2,13 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
 import sys
 from pathlib import Path
 
+import acp
 import pytest
 from acp import schema
 
-from ag2.acp.bridge import BridgeState, make_bridge
+from ag2.acp.bridge import ACPBridge, BridgeState, make_bridge
 from ag2.acp.config import ACPConfig
 from ag2.events import BaseEvent, ModelMessageChunk, ModelReasoning
 
@@ -169,3 +171,79 @@ async def test_terminal_kill(tmp_path: Path) -> None:
     else:
         assert exit_status.signal is not None  # terminated by signal
     await st.terminals.release(tid)
+
+
+class TestProtocolConformance:
+    """The bridge implements ``acp.Client``; that declaration is the specification.
+
+    The SDK's router dispatches by keyword, so a divergence in parameter order is
+    invisible over the wire — but any Python caller holding an ``acp.Client``,
+    including a future router, may call positionally, and the declaration says it
+    may. These tests call the way the declaration allows.
+    """
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "request_permission",
+            "session_update",
+            "read_text_file",
+            "write_text_file",
+            "create_terminal",
+            "terminal_output",
+            "release_terminal",
+            "wait_for_terminal_exit",
+            "kill_terminal",
+            "create_elicitation",
+            "complete_elicitation",
+        ],
+    )
+    def test_parameters_match_the_protocol(self, name: str) -> None:
+        declared = list(inspect.signature(getattr(acp.Client, name)).parameters)
+        implemented = list(inspect.signature(getattr(ACPBridge, name)).parameters)
+        assert implemented == declared
+
+    @pytest.mark.asyncio
+    async def test_read_text_file_positionally(self, tmp_path: Path) -> None:
+        (tmp_path / "notes.txt").write_text("l1\nl2\nl3\nl4\n")
+        bridge = make_bridge(ACPConfig(cwd=str(tmp_path)))
+
+        response = await bridge.read_text_file("s", "notes.txt", 2, 2)
+
+        assert response.content == "l2\nl3\n"
+
+    @pytest.mark.asyncio
+    async def test_write_text_file_positionally(self, tmp_path: Path) -> None:
+        bridge = make_bridge(ACPConfig(cwd=str(tmp_path)))
+
+        await bridge.write_text_file("s", "new.txt", "written by the agent")
+
+        assert (tmp_path / "new.txt").read_text() == "written by the agent"
+
+    @pytest.mark.asyncio
+    async def test_request_permission_positionally(self) -> None:
+        bridge = make_bridge(ACPConfig(permission_policy="auto"))
+
+        response = await bridge.request_permission(
+            "s",
+            schema.ToolCallUpdate(tool_call_id="tc1", title="Edit"),
+            [schema.PermissionOption(option_id="ok", kind="allow_once", name="Allow")],
+        )
+
+        assert response.outcome == schema.AllowedOutcome(option_id="ok", outcome="selected")
+
+    @pytest.mark.asyncio
+    async def test_create_terminal_positionally(self, tmp_path: Path) -> None:
+        bridge = make_bridge(ACPConfig(cwd=str(tmp_path)))
+
+        response = await bridge.create_terminal(
+            "s",
+            sys.executable,
+            ["-c", "import os; print(os.environ['GREETING'])"],
+            [schema.EnvVariable(name="GREETING", value="hello")],
+            str(tmp_path),
+        )
+
+        await bridge.state.terminals.wait(response.terminal_id)
+        output, _, _ = bridge.state.terminals.output(response.terminal_id)
+        assert output.strip() == "hello"

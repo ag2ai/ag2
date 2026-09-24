@@ -41,7 +41,7 @@ class TestData:
 
     def test_missing_media_type_raises(self) -> None:
         with pytest.raises(ValueError, match="media_type"):
-            AudioInput(data=b"raw")
+            AudioInput(data=b"raw")  # type: ignore[call-overload]  # the misuse under test
 
 
 class TestPath:
@@ -91,4 +91,4 @@ class TestPath:
 
 def test_no_args_raises() -> None:
     with pytest.raises(ValueError, match="requires one of"):
-        AudioInput()
+        AudioInput()  # type: ignore[call-overload]  # the misuse under test

@@ -19,6 +19,7 @@ import contextlib
 from typing import TYPE_CHECKING, Any, Literal
 
 from ag2.tools import tool
+from ag2.tools.final import FunctionTool
 
 from ..inject import AgentClientInject, ChannelInject
 
@@ -55,7 +56,7 @@ def _metadata_dict(metadata: Any) -> dict[str, Any]:
     }
 
 
-def make_channels_tool(agent_client: "AgentClient") -> object:
+def make_channels_tool(agent_client: "AgentClient") -> FunctionTool:
     """Return a closure-bound ``channels`` tool."""
 
     @tool
@@ -64,7 +65,7 @@ def make_channels_tool(agent_client: "AgentClient") -> object:
         *,
         type: str | None = None,
         target: str | list[str] | None = None,
-        knobs: dict | None = None,
+        knobs: dict[str, Any] | None = None,
         intent: str | None = None,
         ttl: str | int | None = None,
         message: str | None = None,
@@ -72,7 +73,7 @@ def make_channels_tool(agent_client: "AgentClient") -> object:
         state: Literal["active", "all"] = "active",
         client: AgentClientInject = None,
         current: ChannelInject = None,
-    ) -> list[dict] | dict | str:
+    ) -> list[dict[str, Any]] | dict[str, Any] | str:
         """Channel lifecycle.
 
         ``list``:  args state="active"|"all"
@@ -124,7 +125,7 @@ def make_channels_tool(agent_client: "AgentClient") -> object:
                     with contextlib.suppress(Exception):
                         await hub.close_channel(channel.channel_id, reason="seed_failed")
                     return f"Error: seed send failed: {exc}"
-            result: dict = {
+            result: dict[str, Any] = {
                 "channel_id": channel.channel_id,
                 "type": type,
                 "participants": [p.agent_id for p in channel.metadata.participants],

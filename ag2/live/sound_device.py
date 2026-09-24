@@ -7,6 +7,7 @@ import contextlib
 import queue
 import threading
 from types import TracebackType
+from typing import Protocol
 
 import numpy as np
 import sounddevice as sd
@@ -24,6 +25,40 @@ from ag2.events import (
 
 from .protocols import AudioPlayer
 from .stt import VoiceInput
+
+# `sounddevice` ships no annotations and has no published stubs, and numpy is
+# skipped (see pyproject.toml), so both would hand every signature here `Any`.
+# These declare the little of each that this module uses; the real objects
+# satisfy them structurally.
+
+
+class _Frames(Protocol):
+    """A block of samples as sounddevice hands it over (a numpy array)."""
+
+    def copy(self) -> "_Frames": ...
+
+    def tobytes(self) -> bytes: ...
+
+
+class _InputStream(Protocol):
+    def start(self) -> None: ...
+
+    def stop(self) -> None: ...
+
+    def close(self) -> None: ...
+
+
+class _Speaker(Protocol):
+    """What `Player` needs of a speaker; `sounddevice.OutputStream` satisfies it."""
+
+    def __enter__(self) -> object: ...
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: TracebackType | None
+    ) -> object: ...
+
+    def write(self, data: object) -> object: ...
+
 
 # Bounded buffer between the audio thread and the asyncio bus. Drop-oldest
 # when full — stale mic bytes are useless for STT, so we keep the most
@@ -53,7 +88,7 @@ class Recorder:
 
         self.context = context or ConversationContext(stream=MemoryStream())
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._input: sd.InputStream | None = None
+        self._input: _InputStream | None = None
         self._queue: asyncio.Queue[bytes] | None = None
         self._drain_task: asyncio.Task[None] | None = None
 
@@ -94,8 +129,8 @@ class Recorder:
 
     async def __aexit__(
         self,
-        exc_type: type | None,
-        exc_value: object | None,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
         if self._input is not None:
@@ -110,7 +145,7 @@ class Recorder:
         self._queue = None
         self._loop = None
 
-    def _callback(self, indata: np.ndarray, _frames: int, _time, _status) -> None:
+    def _callback(self, indata: _Frames, _frames: int, _time: object, _status: object) -> None:
         # Runs on sounddevice's audio thread; hand off to the loop thread.
         # asyncio.Queue is NOT thread-safe, so we MUST go via call_soon_threadsafe.
         if self._loop is None:
@@ -139,7 +174,7 @@ class Player(AudioPlayer[bytes]):
         self,
         *,
         context: ConversationContext | None = None,
-        output_stream: sd.OutputStream | None = None,
+        output_stream: _Speaker | None = None,
     ) -> None:
         self.context = context or ConversationContext(stream=MemoryStream())
         self._output_stream = output_stream
@@ -178,8 +213,8 @@ class Player(AudioPlayer[bytes]):
 
     async def __aexit__(
         self,
-        exc_type: type | None,
-        exc_value: object | None,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
         if self._sub_id is not None:

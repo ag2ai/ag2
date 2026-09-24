@@ -6,7 +6,7 @@ import os
 import threading
 from collections.abc import AsyncGenerator, Hashable
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ag2.annotations import Variable
 from ag2.tools.builtin._resolve import resolve_variable
@@ -149,7 +149,7 @@ class DockerEnvironment:
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
-    def __deepcopy__(self, memo: dict) -> "DockerEnvironment":  # type: ignore[type-arg]
+    def __deepcopy__(self, memo: dict[int, Any]) -> "DockerEnvironment":
         # Shared resource handle: a copy is the SAME factory. The cached
         # containers (and the threading.Lock guarding them — not deepcopy-able)
         # are reused, not duplicated. This is what lets Agent.add_tool deepcopy

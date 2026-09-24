@@ -123,12 +123,14 @@ class AnthropicServerToolResultEvent(BuiltinToolResultEvent):
         parts: list[Input] = []
         metadata: dict[str, Any] = {}
 
+        # Each branch names its own content: every hosted tool answers with a different
+        # union, so one shared local would read as whichever branch bound it first.
         if isinstance(block, WebSearchToolResultBlock):
             name = WEB_SEARCH_TOOL_NAME
-            content = block.content
-            if isinstance(content, WebSearchToolResultError):
-                parts = [TextInput(f"{content.type}: {content.error_code}")]
-                metadata = {"error": True, "error_code": content.error_code, "type": content.type}
+            search_result = block.content
+            if isinstance(search_result, WebSearchToolResultError):
+                parts = [TextInput(f"{search_result.type}: {search_result.error_code}")]
+                metadata = {"error": True, "error_code": search_result.error_code, "type": search_result.type}
             else:
                 parts = [
                     UrlInput(
@@ -136,88 +138,88 @@ class AnthropicServerToolResultEvent(BuiltinToolResultEvent):
                         kind=BinaryType.BINARY,
                         metadata={"title": r.title, "page_age": r.page_age},
                     )
-                    for r in content
+                    for r in search_result
                     if isinstance(r, WebSearchResultBlock)
                 ]
-                metadata = {"count": len(content)}
+                metadata = {"count": len(search_result)}
 
         elif isinstance(block, WebFetchToolResultBlock):
             name = WEB_FETCH_TOOL_NAME
-            content = block.content
-            if isinstance(content, WebFetchToolResultErrorBlock):
-                parts = [TextInput(f"{content.type}: {content.error_code}")]
-                metadata = {"error": True, "error_code": content.error_code, "type": content.type}
-            elif isinstance(content, WebFetchBlock):
-                document = content.content
+            fetch_result = block.content
+            if isinstance(fetch_result, WebFetchToolResultErrorBlock):
+                parts = [TextInput(f"{fetch_result.type}: {fetch_result.error_code}")]
+                metadata = {"error": True, "error_code": fetch_result.error_code, "type": fetch_result.type}
+            elif isinstance(fetch_result, WebFetchBlock):
+                document = fetch_result.content
                 source = document.source
-                parts = [UrlInput(content.url, kind=BinaryType.BINARY)]
+                parts = [UrlInput(fetch_result.url, kind=BinaryType.BINARY)]
                 if isinstance(source, Base64PDFSource):
                     parts.append(
                         BinaryInput(b64decode(source.data), media_type="application/pdf", kind=BinaryType.DOCUMENT)
                     )
                 elif isinstance(source, PlainTextSource):
                     parts.append(TextInput(source.data))
-                metadata = {"retrieved_at": content.retrieved_at, "title": document.title}
+                metadata = {"retrieved_at": fetch_result.retrieved_at, "title": document.title}
 
         elif isinstance(block, (CodeExecutionToolResultBlock, BashCodeExecutionToolResultBlock)):
             name = CODE_EXECUTION_TOOL_NAME
-            content = block.content
-            if isinstance(content, (CodeExecutionToolResultError, BashCodeExecutionToolResultError)):
-                parts = [TextInput(f"{content.type}: {content.error_code}")]
-                metadata = {"error": True, "error_code": content.error_code, "type": content.type}
-            elif isinstance(content, EncryptedCodeExecutionResultBlock):
-                parts = [FileIdInput(o.file_id) for o in content.content]
-                metadata = {"return_code": content.return_code, "encrypted": True}
-            elif isinstance(content, (CodeExecutionResultBlock, BashCodeExecutionResultBlock)):
-                if content.stdout:
-                    parts.append(TextInput(content.stdout))
-                if content.stderr:
-                    parts.append(TextInput(content.stderr))
-                parts.extend(FileIdInput(o.file_id) for o in content.content)
-                metadata = {"return_code": content.return_code}
+            exec_result = block.content
+            if isinstance(exec_result, (CodeExecutionToolResultError, BashCodeExecutionToolResultError)):
+                parts = [TextInput(f"{exec_result.type}: {exec_result.error_code}")]
+                metadata = {"error": True, "error_code": exec_result.error_code, "type": exec_result.type}
+            elif isinstance(exec_result, EncryptedCodeExecutionResultBlock):
+                parts = [FileIdInput(o.file_id) for o in exec_result.content]
+                metadata = {"return_code": exec_result.return_code, "encrypted": True}
+            elif isinstance(exec_result, (CodeExecutionResultBlock, BashCodeExecutionResultBlock)):
+                if exec_result.stdout:
+                    parts.append(TextInput(exec_result.stdout))
+                if exec_result.stderr:
+                    parts.append(TextInput(exec_result.stderr))
+                parts.extend(FileIdInput(o.file_id) for o in exec_result.content)
+                metadata = {"return_code": exec_result.return_code}
 
         elif isinstance(block, TextEditorCodeExecutionToolResultBlock):
             name = CODE_EXECUTION_TOOL_NAME
-            content = block.content
-            if isinstance(content, TextEditorCodeExecutionToolResultError):
-                text = f"{content.type}: {content.error_code}"
-                if content.error_message:
-                    text = f"{text}: {content.error_message}"
+            edit_result = block.content
+            if isinstance(edit_result, TextEditorCodeExecutionToolResultError):
+                text = f"{edit_result.type}: {edit_result.error_code}"
+                if edit_result.error_message:
+                    text = f"{text}: {edit_result.error_message}"
                 parts = [TextInput(text)]
                 metadata = {
                     "error": True,
-                    "error_code": content.error_code,
-                    "error_message": content.error_message,
-                    "type": content.type,
+                    "error_code": edit_result.error_code,
+                    "error_message": edit_result.error_message,
+                    "type": edit_result.type,
                 }
-            elif isinstance(content, TextEditorCodeExecutionViewResultBlock):
-                parts = [TextInput(content.content)]
+            elif isinstance(edit_result, TextEditorCodeExecutionViewResultBlock):
+                parts = [TextInput(edit_result.content)]
                 metadata = {
-                    "file_type": content.file_type,
-                    "num_lines": content.num_lines,
-                    "start_line": content.start_line,
-                    "total_lines": content.total_lines,
+                    "file_type": edit_result.file_type,
+                    "num_lines": edit_result.num_lines,
+                    "start_line": edit_result.start_line,
+                    "total_lines": edit_result.total_lines,
                 }
-            elif isinstance(content, TextEditorCodeExecutionCreateResultBlock):
-                metadata = {"is_file_update": content.is_file_update}
-            elif isinstance(content, TextEditorCodeExecutionStrReplaceResultBlock):
-                if content.lines is not None:
-                    parts = [TextInput("\n".join(content.lines))]
+            elif isinstance(edit_result, TextEditorCodeExecutionCreateResultBlock):
+                metadata = {"is_file_update": edit_result.is_file_update}
+            elif isinstance(edit_result, TextEditorCodeExecutionStrReplaceResultBlock):
+                if edit_result.lines is not None:
+                    parts = [TextInput("\n".join(edit_result.lines))]
                 metadata = {
-                    "new_lines": content.new_lines,
-                    "new_start": content.new_start,
-                    "old_lines": content.old_lines,
-                    "old_start": content.old_start,
+                    "new_lines": edit_result.new_lines,
+                    "new_start": edit_result.new_start,
+                    "old_lines": edit_result.old_lines,
+                    "old_start": edit_result.old_start,
                 }
 
         elif isinstance(block, ToolSearchToolResultBlock):
             name = TOOL_SEARCH_TOOL_NAME
-            content = block.content
-            if isinstance(content, ToolSearchToolResultError):
-                parts = [TextInput(f"{content.type}: {content.error_code}")]
-                metadata = {"error": True, "error_code": content.error_code, "type": content.type}
-            elif isinstance(content, ToolSearchToolSearchResultBlock):
-                references = [ref.tool_name for ref in content.tool_references]
+            tool_search_result = block.content
+            if isinstance(tool_search_result, ToolSearchToolResultError):
+                parts = [TextInput(f"{tool_search_result.type}: {tool_search_result.error_code}")]
+                metadata = {"error": True, "error_code": tool_search_result.error_code, "type": tool_search_result.type}
+            elif isinstance(tool_search_result, ToolSearchToolSearchResultBlock):
+                references = [ref.tool_name for ref in tool_search_result.tool_references]
                 parts = [TextInput(", ".join(references))] if references else []
                 metadata = {"tool_references": references}
 

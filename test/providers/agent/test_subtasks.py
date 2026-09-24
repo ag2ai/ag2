@@ -13,7 +13,7 @@ from ag2 import agent as actor_mod
 from ag2.agent import TaskConfig
 from ag2.events import TaskCompleted, TaskStarted
 from ag2.history import MemoryStorage
-from ag2.stream import MemoryStream
+from ag2.stream import MemoryStream, Stream
 from ag2.tools.subagents import persistent_stream
 from ag2.tools.subagents import run_task as run_task_mod
 
@@ -159,7 +159,7 @@ async def test_subtask_cannot_recurse(provider_config) -> None:
         return await original(agent, *args, **kwargs)
 
     run_task_mod.run_task = capturing_run_task
-    actor_mod._run_task = capturing_run_task
+    actor_mod._run_task = capturing_run_task  # type: ignore[attr-defined]  # patches the agent's private alias of run_task, which is how the spawned subtask is observed
     try:
         agent = Agent(
             "delegator",
@@ -170,7 +170,7 @@ async def test_subtask_cannot_recurse(provider_config) -> None:
         await agent.ask("Use run_subtask to look up: what colour is the sky?")
     finally:
         run_task_mod.run_task = original
-        actor_mod._run_task = original
+        actor_mod._run_task = original  # type: ignore[attr-defined]  # restores the private alias patched above
 
     assert captured_subtasks, "subtask must have been spawned"
     child = captured_subtasks[0]
@@ -192,7 +192,7 @@ async def test_persistent_stream_shares_history(provider_config) -> None:
     Both invariants are necessary for cross-call history persistence and
     neither holds under the default per-call StreamFactory.
     """
-    captured_streams: list[MemoryStream] = []
+    captured_streams: list[Stream] = []
     inner = persistent_stream()
 
     def wrapped_factory(agent, ctx):

@@ -32,8 +32,7 @@ from .types import ElicitationProperty, ElicitationValue
 
 if TYPE_CHECKING:
     from ag2.context import ConversationContext
-
-    from .config import ElicitationPolicy
+    from ag2.hitl import ElicitationPolicy
 
 logger = logging.getLogger(__name__)
 

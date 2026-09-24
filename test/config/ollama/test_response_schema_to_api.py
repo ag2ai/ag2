@@ -3,17 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field
 
 from ag2.config.ollama.mappers import response_proto_to_format
-from ag2.response import ResponseSchema
+from ag2.response import PromptedSchema, ResponseSchema
 
 
-def _embedded_data_schema(inner: dict) -> dict:  # type: ignore[type-arg]
+def _embedded_data_schema(inner: dict[str, Any]) -> dict[str, Any]:
     """JSON schema for a primitive/union wrapped in ``{\"data\": ...}`` (default ``embed=True``)."""
     return {
         "properties": {
@@ -43,7 +43,7 @@ def test_none_returns_none() -> None:
 def test_primitive_type(
     type_: type,
     name: str,
-    expected_inner_schema: dict,  # type: ignore[type-arg]
+    expected_inner_schema: dict[str, Any],
 ) -> None:
     schema = ResponseSchema(type_, name=name)
 
@@ -127,11 +127,5 @@ def test_union_type() -> None:
 
 
 def test_no_schema_returns_none() -> None:
-    class FakeProto:
-        name = "test"
-        description = None
-        json_schema = None
-        system_prompt = None
-
-    result = response_proto_to_format(FakeProto())  # type: ignore[arg-type]
+    result = response_proto_to_format(PromptedSchema(int))
     assert result is None

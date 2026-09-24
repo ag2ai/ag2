@@ -9,6 +9,7 @@ are framework-core concepts used by observers and AlertPolicy.
 """
 
 from enum import Enum
+from typing import Any
 
 from .base import BaseEvent, Field
 
@@ -30,9 +31,9 @@ class ObserverAlert(BaseEvent):
     """
 
     source: str  # Observer name that produced this alert
-    severity: Severity  # Severity level (uses Severity enum values, but accepts any string)
+    severity: Severity | str  # Severity level (uses Severity enum values, but accepts any string)
     message: str  # Human/LLM-readable description
-    data: dict = Field(default_factory=dict)  # Optional structured payload
+    data: dict[str, Any] = Field(default_factory=dict)  # Optional structured payload
 
 
 class HaltEvent(BaseEvent):
@@ -40,4 +41,4 @@ class HaltEvent(BaseEvent):
 
     reason: str
     source: str
-    alerts: list = Field(default_factory=list)
+    alerts: list[ObserverAlert] = Field(default_factory=list)

@@ -181,7 +181,7 @@ async def test_extra_body_lands_in_messages_create_kwargs() -> None:
         captured.update(kwargs)
         return _make_response(_make_usage(input_tokens=1, output_tokens=1))
 
-    client._client.messages.create = fake_create  # type: ignore[method-assign]
+    client._client.messages.create = fake_create  # type: ignore[method-assign]  # asserts on create()'s kwargs, which the HTTP body merges
 
     await client(
         messages=[],
@@ -204,7 +204,7 @@ async def test_no_extra_body_means_no_extra_body_kwarg() -> None:
         captured.update(kwargs)
         return _make_response(_make_usage(input_tokens=1, output_tokens=1))
 
-    client._client.messages.create = fake_create  # type: ignore[method-assign]
+    client._client.messages.create = fake_create  # type: ignore[method-assign]  # asserts on create()'s kwargs, which the HTTP body merges
 
     await client(
         messages=[],

@@ -7,7 +7,7 @@ from contextlib import AsyncExitStack, ExitStack
 from typing import Any, overload
 
 from ag2.annotations import Context
-from ag2.exceptions import ToolConflictError
+from ag2.exceptions import ToolConflictError, ToolMiddlewareUnsupportedError
 from ag2.middleware import BaseMiddleware, ToolMiddleware
 from ag2.tools.schemas import ToolSchema
 from ag2.tools.tool import Tool
@@ -40,7 +40,14 @@ class Toolkit(Tool):
         return tuple(self._tools.values())
 
     def _add_tool(self, tool: Tool | Callable[..., Any], *, unsafe: bool = False) -> None:
-        t = FunctionTool.ensure_tool(tool).with_middleware(*self._middleware)
+        t = FunctionTool.ensure_tool(tool)
+        if self._middleware:
+            # Only the function family executes locally, so only it has execution
+            # to wrap (ADR 0002). Attaching to anything else would drop the
+            # middleware silently — including an approval hook.
+            if not isinstance(t, FunctionTool):
+                raise ToolMiddlewareUnsupportedError(t.name)
+            t = t.with_middleware(*self._middleware)
 
         if not unsafe and t.name in self._tools:
             raise ToolConflictError(t.name)

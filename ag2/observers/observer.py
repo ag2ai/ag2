@@ -38,6 +38,7 @@ __all__ = (
     "BaseObserver",
     "CompositeObserver",
     "Observer",
+    "SimpleObserver",
     "StreamObserver",
     "observer",
 )
@@ -154,9 +155,21 @@ class BaseObserver(ABC):
         ...
 
 
+# Split on `condition` because the two values are different classes: without one
+# there is nothing to filter on, so a bare `SimpleObserver` comes back.
 @overload
 def observer(
-    condition: ClassInfo | Condition | None = None,
+    condition: None = None,
+    callback: None = None,
+    *,
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+) -> Callable[[Callable[..., Any]], SimpleObserver]: ...
+
+
+@overload
+def observer(
+    condition: ClassInfo | Condition,
     callback: None = None,
     *,
     interrupt: bool = False,
@@ -166,7 +179,28 @@ def observer(
 
 @overload
 def observer(
-    condition: ClassInfo | Condition | None,
+    condition: None,
+    callback: Callable[..., Any],
+    *,
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+) -> SimpleObserver: ...
+
+
+# `observer(callback=f)`: the overload above cannot default `condition` while a
+# required `callback` follows it positionally.
+@overload
+def observer(
+    *,
+    callback: Callable[..., Any],
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+) -> SimpleObserver: ...
+
+
+@overload
+def observer(
+    condition: ClassInfo | Condition,
     callback: Callable[..., Any],
     *,
     interrupt: bool = False,
@@ -180,7 +214,7 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
-) -> StreamObserver | Callable[[Callable[..., Any]], StreamObserver]:
+) -> SimpleObserver | Callable[[Callable[..., Any]], SimpleObserver]:
     if condition is None:
         cond: Condition | None = None
     elif isinstance(condition, Condition):
@@ -188,7 +222,7 @@ def observer(
     else:
         cond = TypeCondition(condition)
 
-    def decorator(func: Callable[..., Any]) -> StreamObserver:
+    def decorator(func: Callable[..., Any]) -> SimpleObserver:
         if cond is None:
             return SimpleObserver(
                 callback=func,

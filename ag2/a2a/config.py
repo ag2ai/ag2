@@ -33,7 +33,7 @@ class A2AConfigOverrides(TypedDict, total=False):
     input_required_timeout: float | None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None
     interceptors: Sequence[ClientCallInterceptor]
-    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None  # type: ignore[no-any-unimported]
+    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None
     preset_card: AgentCard | None
     card_signature_verifier: CardVerifier | None
     tenant: str | None
@@ -42,7 +42,7 @@ class A2AConfigOverrides(TypedDict, total=False):
 
 
 @dataclass(slots=True)
-class A2AConfig(ModelConfig):  # type: ignore[no-any-unimported]
+class A2AConfig(ModelConfig):
     """Connection config for an A2A agent acting as an LLM provider.
 
     ``card_url`` is the HTTP(S) URL where the agent card is published
@@ -109,9 +109,7 @@ class A2AConfig(ModelConfig):  # type: ignore[no-any-unimported]
     input_required_timeout: float | None = None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None = field(default=None, repr=False)
     interceptors: Sequence[ClientCallInterceptor] = ()
-    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = field(  # type: ignore[no-any-unimported]
-        default=None, repr=False
-    )
+    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = field(default=None, repr=False)
     preset_card: AgentCard | None = field(default=None, repr=False)
     card_signature_verifier: CardVerifier | None = field(default=None, repr=False)
     tenant: str | None = None

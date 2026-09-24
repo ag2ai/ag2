@@ -2,22 +2,32 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import TYPE_CHECKING
+
 from ag2.exceptions import missing_optional_dependency
 
-try:
-    from .tavily import TavilySearchTool
-except ImportError as e:
-    TavilySearchTool = missing_optional_dependency("TavilySearchTool", "tavily", e)  # type: ignore[misc]
-
-try:
+# Imported twice on purpose: the checker is shown only the real import, because
+# rebinding a name it has already bound to a class is an error, and the install hint
+# is runtime behaviour. See website/docs/contributor-guide/type-checking.mdx.
+if TYPE_CHECKING:
     from .duckduckgo import DuckDuckSearchTool
-except ImportError as e:
-    DuckDuckSearchTool = missing_optional_dependency("DuckDuckSearchTool", "ddgs", e)  # type: ignore[misc]
-
-try:
     from .perplexity import PerplexitySearchToolkit
-except ImportError as e:
-    PerplexitySearchToolkit = missing_optional_dependency("PerplexitySearchToolkit", "perplexity", e)  # type: ignore[misc]
+    from .tavily import TavilySearchTool
+else:
+    try:
+        from .tavily import TavilySearchTool
+    except ImportError as e:
+        TavilySearchTool = missing_optional_dependency("TavilySearchTool", "tavily", e)
+
+    try:
+        from .duckduckgo import DuckDuckSearchTool
+    except ImportError as e:
+        DuckDuckSearchTool = missing_optional_dependency("DuckDuckSearchTool", "ddgs", e)
+
+    try:
+        from .perplexity import PerplexitySearchToolkit
+    except ImportError as e:
+        PerplexitySearchToolkit = missing_optional_dependency("PerplexitySearchToolkit", "perplexity", e)
 
 __all__ = (
     "DuckDuckSearchTool",

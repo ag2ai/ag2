@@ -32,10 +32,20 @@ does not install it automatically.
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 try:
-    from opentelemetry.sdk.trace import ReadableSpan
-    from opentelemetry.trace import Link, SpanContext, SpanKind, Status, StatusCode, set_span_in_context
+    from opentelemetry.sdk.trace import Span as RecordingSpan
+    from opentelemetry.trace import (
+        Link,
+        Span,
+        SpanContext,
+        SpanKind,
+        Status,
+        StatusCode,
+        TracerProvider,
+        set_span_in_context,
+    )
 
     from ._envelope_tracing import get_tracer, iso_to_ns, serialize_span
 except ImportError as _err:  # pragma: no cover - exercised via packaging
@@ -81,9 +91,15 @@ from .audit import RESUME_SOURCE_OBSERVED, RESUME_SOURCE_TENANT
 from .layout import spans_path
 from .listener import BaseHubListener
 
+if TYPE_CHECKING:
+    from ..channel import Expectation
+    from ..envelope import Envelope
+    from ..errors import NetworkError
+    from .expectations import Violation
+
 logger = logging.getLogger(__name__)
 
-SpanRecordSubscriber = Callable[[dict], Awaitable[None]]
+SpanRecordSubscriber = Callable[[dict[str, Any]], Awaitable[None]]
 
 __all__ = ("HubTelemetryListener", "SpanRecordSubscriber")
 
@@ -107,14 +123,14 @@ class HubTelemetryListener(BaseHubListener):
         self,
         store: KnowledgeStore,
         *,
-        tracer_provider: object | None = None,
+        tracer_provider: TracerProvider | None = None,
         span_attributes: dict[str, str] | None = None,
     ) -> None:
         self._store = store
         self._tracer = get_tracer(tracer_provider)
         self._stamp = dict(span_attributes or {})
-        self._channel_spans: dict[str, object] = {}
-        self._agent_spans: dict[str, object] = {}
+        self._channel_spans: dict[str, Span] = {}
+        self._agent_spans: dict[str, Span] = {}
         self._subscribers: list[SpanRecordSubscriber] = []
         self._bytes_written = 0
 
@@ -146,13 +162,13 @@ class HubTelemetryListener(BaseHubListener):
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
-    async def _emit(self, span: object) -> None:
+    async def _emit(self, span: Span) -> None:
         """Serialise an ended span, append it to disk, notify subscribers.
 
-        Spans that are not ``ReadableSpan``s — a ``NonRecordingSpan`` from a
+        Spans that are not recording spans — a ``NonRecordingSpan`` from a
         no-op provider or a dropped sample — are skipped.
         """
-        if not isinstance(span, ReadableSpan):
+        if not isinstance(span, RecordingSpan):
             return
         record, line = serialize_span(span)
         await self._store.append(spans_path(), line)
@@ -171,11 +187,11 @@ class HubTelemetryListener(BaseHubListener):
 
     # ── Agent lifecycle ───────────────────────────────────────────────────────
 
-    async def on_agent_event(self, agent_id: str, kind: str, payload: dict) -> None:
+    async def on_agent_event(self, agent_id: str, kind: str, payload: dict[str, Any]) -> None:
         if kind == "registered":
             passport = payload.get("passport")
             name = getattr(passport, "name", None) or agent_id
-            span = self._tracer.start_span(
+            agent_span = self._tracer.start_span(
                 f"agent.lifetime {name}",
                 kind=SpanKind.INTERNAL,
                 attributes={
@@ -185,7 +201,7 @@ class HubTelemetryListener(BaseHubListener):
                     "gen_ai.agent.name": name,
                 },
             )
-            self._agent_spans[agent_id] = span
+            self._agent_spans[agent_id] = agent_span
             return
 
         if kind == "unregistered":
@@ -205,8 +221,8 @@ class HubTelemetryListener(BaseHubListener):
             return
         await self._emit_agent_child(agent_id, kind, payload, parent)
 
-    async def _emit_agent_child(self, agent_id: str, kind: str, payload: dict, parent: object) -> None:
-        attributes: dict = {
+    async def _emit_agent_child(self, agent_id: str, kind: str, payload: dict[str, Any], parent: Span) -> None:
+        attributes: dict[str, Any] = {
             **self._stamp,
             ATTR_SPAN_TYPE: SPAN_TYPE_AGENT_EVENT,
             ATTR_AGENT_ID: agent_id,
@@ -240,10 +256,10 @@ class HubTelemetryListener(BaseHubListener):
 
     # ── Channel lifecycle ─────────────────────────────────────────────────────
 
-    async def on_channel_event(self, channel_id: str, kind: str, payload: dict) -> None:
+    async def on_channel_event(self, channel_id: str, kind: str, payload: dict[str, Any]) -> None:
         if kind == "created":
             metadata = payload.get("metadata")
-            attributes: dict = {
+            attributes: dict[str, Any] = {
                 **self._stamp,
                 ATTR_SPAN_TYPE: SPAN_TYPE_CHANNEL,
                 ATTR_NET_CHANNEL_ID: channel_id,
@@ -252,12 +268,12 @@ class HubTelemetryListener(BaseHubListener):
                 attributes[ATTR_NET_MANIFEST_TYPE] = metadata.manifest.type
                 attributes[ATTR_NET_CREATOR_ID] = metadata.creator_id
             manifest_type = metadata.manifest.type if metadata is not None else "channel"
-            span = self._tracer.start_span(
+            channel_span = self._tracer.start_span(
                 f"network.channel {manifest_type}",
                 kind=SpanKind.INTERNAL,
                 attributes=attributes,
             )
-            self._channel_spans[channel_id] = span
+            self._channel_spans[channel_id] = channel_span
             return
 
         span = self._channel_spans.get(channel_id)
@@ -277,7 +293,7 @@ class HubTelemetryListener(BaseHubListener):
 
     # ── Channel-attached signal events ────────────────────────────────────────
 
-    async def on_expectation_fired(self, channel_id: str, expectation: object, violation: object) -> None:
+    async def on_expectation_fired(self, channel_id: str, expectation: "Expectation", violation: "Violation") -> None:
         span = self._channel_spans.get(channel_id)
         if span is None:
             logger.warning("telemetry: expectation fired for unknown channel_id=%s", channel_id)
@@ -292,7 +308,7 @@ class HubTelemetryListener(BaseHubListener):
             },
         )
 
-    async def on_envelope_rejected(self, envelope: object, reason: object) -> None:
+    async def on_envelope_rejected(self, envelope: "Envelope", reason: "NetworkError") -> None:
         span = self._channel_spans.get(envelope.channel_id)
         if span is None:
             return
@@ -306,7 +322,7 @@ class HubTelemetryListener(BaseHubListener):
             },
         )
 
-    async def on_dispatch_failed(self, envelope: object, recipient_id: str, reason: BaseException) -> None:
+    async def on_dispatch_failed(self, envelope: "Envelope", recipient_id: str, reason: BaseException) -> None:
         span = self._channel_spans.get(envelope.channel_id)
         if span is None:
             return
@@ -346,7 +362,7 @@ class HubTelemetryListener(BaseHubListener):
 
     # ── Task lifecycle (single-shot at terminal) ──────────────────────────────
 
-    async def on_task_event(self, task_id: str, kind: str, payload: dict) -> None:
+    async def on_task_event(self, task_id: str, kind: str, payload: dict[str, Any]) -> None:
         if kind not in _TERMINAL_TASK_KINDS:
             return  # started / progress never fan out; nothing to do
 
@@ -355,7 +371,7 @@ class HubTelemetryListener(BaseHubListener):
         capability = payload.get("capability") or "task"
         channel_id = payload.get("channel_id")
 
-        attributes: dict = {
+        attributes: dict[str, Any] = {
             **self._stamp,
             ATTR_SPAN_TYPE: SPAN_TYPE_TASK,
             ATTR_NET_TASK_ID: task_id,

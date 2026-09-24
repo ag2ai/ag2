@@ -7,15 +7,16 @@
 import asyncio
 import json
 import sys
+from collections.abc import Coroutine
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import pytest
 
 pytest.importorskip("watchdog")
 
-from ag2 import Agent
-from ag2.agent import KnowledgeConfig
+from ag2 import Agent, KnowledgeConfig
 from ag2.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TextInput, UnknownEvent
 from ag2.knowledge import (
     DefaultBootstrap,
@@ -25,8 +26,33 @@ from ag2.knowledge import (
     MemoryKnowledgeStore,
     SqliteKnowledgeStore,
 )
+from ag2.knowledge.disk import _DiskChangeHandler
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
+
+
+class _RecordingAwaitable:
+    """An awaitable that is not a coroutine — which is all ``ChangeCallback`` promises."""
+
+    def __init__(self, seen: list[str], done: asyncio.Event, path: str) -> None:
+        self._seen = seen
+        self._done = done
+        self._path = path
+
+    def __await__(self):
+        self._seen.append(self._path)
+        self._done.set()
+        return iter(())
+
+
+class _FileEvent:
+    """The shape of a watchdog file event, as the handler reads it."""
+
+    is_directory = False
+
+    def __init__(self, event_type: str, src_path: str) -> None:
+        self.event_type = event_type
+        self.src_path = src_path
 
 
 class TestMemoryKnowledgeStore:
@@ -120,10 +146,7 @@ class TestEventLogWriter:
         await writer.persist(stream_id, events)
 
         loaded = await writer.load(stream_id)
-        assert len(loaded) == 2
-        assert loaded[0].parts[0].content == "hello"
-        assert loaded[1].agent_name == "analyzer"
-        assert loaded[1].result == "done"
+        assert loaded == events
 
     @pytest.mark.asyncio
     async def test_persist_dropped_segments(self) -> None:
@@ -142,10 +165,7 @@ class TestEventLogWriter:
 
         # Load should return all in order: dropped-1, dropped-2, final
         loaded = await writer.load(stream_id)
-        assert len(loaded) == 3
-        assert loaded[0].parts[0].content == "old-1"
-        assert loaded[1].parts[0].content == "old-2"
-        assert loaded[2].parts[0].content == "recent"
+        assert loaded == [*dropped1, *dropped2, *final]
 
     @pytest.mark.asyncio
     async def test_persist_dropped_multiple_writers_no_overwrite(self) -> None:
@@ -171,10 +191,11 @@ class TestEventLogWriter:
 
         # All three segments must be present and loadable
         loaded = await EventLogWriter(store).load(stream_id)
-        assert len(loaded) == 3
-        assert loaded[0].parts[0].content == "batch-1"
-        assert loaded[1].parts[0].content == "batch-2"
-        assert loaded[2].parts[0].content == "final"
+        assert loaded == [
+            ModelRequest([TextInput("batch-1")]),
+            ModelRequest([TextInput("batch-2")]),
+            ModelRequest([TextInput("final")]),
+        ]
 
     @pytest.mark.asyncio
     async def test_load_empty(self) -> None:
@@ -214,6 +235,7 @@ class TestDefaultBootstrap:
         assert await store.exists("/memory/SKILL.md")
 
         root_skill = await store.read("/SKILL.md")
+        assert root_skill is not None
         assert "test-agent" in root_skill
 
     @pytest.mark.asyncio
@@ -391,6 +413,45 @@ class TestDiskKnowledgeStore:
         with pytest.raises(ValueError, match="Path traversal"):
             await store.write("/../escape.txt", "x")
 
+    async def test_on_change_accepts_a_non_coroutine_awaitable(self, tmp_path: Path) -> None:
+        """``ChangeCallback`` returns an ``Awaitable``, and not every awaitable is a coroutine.
+
+        The handler used to hand whatever the callback returned straight to
+        ``asyncio.run_coroutine_threadsafe``, which accepts coroutines only, so
+        this dispatch raised from the watchdog thread.
+        """
+        loop = asyncio.get_running_loop()
+        seen: list[str] = []
+        done = asyncio.Event()
+
+        handler = _DiskChangeHandler(
+            root=tmp_path.resolve(),
+            virtual_prefix="/",
+            loop=loop,
+            callback=lambda path: _RecordingAwaitable(seen, done, path),
+        )
+        handler.dispatch(_FileEvent("modified", str(tmp_path / "file.txt")))
+
+        await asyncio.wait_for(done.wait(), timeout=1.0)
+        assert seen == ["/file.txt"]
+
+    async def test_on_change_drops_the_callback_when_the_loop_is_gone(self, tmp_path: Path) -> None:
+        """A dead loop means the callback is never called, and nothing is left unawaited."""
+        dead_loop = asyncio.new_event_loop()
+        dead_loop.close()
+        seen: list[str] = []
+        done = asyncio.Event()
+
+        handler = _DiskChangeHandler(
+            root=tmp_path.resolve(),
+            virtual_prefix="/",
+            loop=dead_loop,
+            callback=lambda path: _RecordingAwaitable(seen, done, path),
+        )
+        handler.dispatch(_FileEvent("modified", str(tmp_path / "file.txt")))
+
+        assert seen == []
+
     async def test_on_change_fires_on_write(self, tmp_path: Path) -> None:
         store = DiskKnowledgeStore(str(tmp_path))
         received: list[str] = []
@@ -560,7 +621,7 @@ class TestSqliteKnowledgeStore:
         """
         store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
         try:
-            ops = []
+            ops: list[Coroutine[Any, Any, object]] = []
             for i in range(50):
                 path = f"/t/{i}"
                 ops.append(store.write(path, f"value-{i}"))

@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from typing import Any
 
 import pytest
+from fast_depends.pydantic import PydanticSerializer
 from openai.types.responses import (
     Response,
     ResponseCodeInterpreterToolCall,
@@ -63,6 +64,10 @@ async def _process(output: Iterable[Any]) -> tuple[ModelResponse, list[BaseEvent
         model="gpt-5",
         output=list(output),
         usage=None,
+        created_at=0,
+        parallel_tool_calls=False,
+        tool_choice="auto",
+        tools=[],
     )
     stream = MemoryStream()
     context = Context(stream=stream)
@@ -185,7 +190,7 @@ class TestReasoning:
             OpenAIServerToolResultEvent(parent_id="ws_1", name=WEB_SEARCH_TOOL_NAME, result=ToolResult()),
         ]
 
-        api_input = events_to_responses_input(events, serializer=None)  # type: ignore[arg-type]
+        api_input = events_to_responses_input(events, serializer=PydanticSerializer())
 
         assert api_input == [
             reasoning_item.model_dump(exclude_none=True, mode="json"),
@@ -216,7 +221,7 @@ class TestReasoning:
 
         _, filtered = await ConversationPolicy().apply([], events, Context(stream=MemoryStream()))
 
-        assert events_to_responses_input(filtered, serializer=None) == [  # type: ignore[arg-type]
+        assert events_to_responses_input(filtered, serializer=PydanticSerializer()) == [
             reasoning_item.model_dump(exclude_none=True, mode="json"),
             web_item.model_dump(exclude_none=True, mode="json"),
         ]
@@ -246,7 +251,7 @@ class TestReasoning:
 
         _, trimmed = await SlidingWindowPolicy(max_events=2).apply([], events, Context(stream=MemoryStream()))
 
-        assert events_to_responses_input(trimmed, serializer=None) == [  # type: ignore[arg-type]
+        assert events_to_responses_input(trimmed, serializer=PydanticSerializer()) == [
             reasoning_item.model_dump(exclude_none=True, mode="json"),
             web_item.model_dump(exclude_none=True, mode="json"),
         ]
@@ -297,7 +302,7 @@ class TestReasoning:
             OpenAIReasoningEvent("step two", item=reasoning_item),
         ]
 
-        api_input = events_to_responses_input(events, serializer=None)  # type: ignore[arg-type]
+        api_input = events_to_responses_input(events, serializer=PydanticSerializer())
 
         assert api_input == [reasoning_item.model_dump(exclude_none=True, mode="json")]
 
@@ -373,7 +378,7 @@ class TestResultParts:
             action=ActionSearch(
                 type="search",
                 query="bitcoin",
-                sources=[ActionSearchSource.model_construct(type="url", url=None)],
+                sources=[ActionSearchSource.model_construct(type="url", url=None)],  # type: ignore[arg-type]  # the SDK declares `str`
             ),
             status="completed",
             type="web_search_call",
@@ -550,7 +555,9 @@ class TestResultParts:
 
         [_, result_event] = events
         assert isinstance(result_event, OpenAIServerToolResultEvent)
-        assert response.files[0].data is result_event.result.parts[0].data
+        [part] = result_event.result.parts
+        assert isinstance(part, BinaryInput)
+        assert response.files[0].data is part.data
 
     async def test_file_search_call_emits_text_input_and_metadata(self) -> None:
         item = ResponseFileSearchToolCall(

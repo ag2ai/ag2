@@ -1,0 +1,166 @@
+---
+title: Type checking
+---
+
+AG2 ships a `py.typed` marker, so every downstream project that runs a type checker treats this
+library as typed. Keeping that promise is a ratchet: the set of checked files only ever grows,
+and it lives in exactly one place.
+
+## What is checked
+
+The `files` list under `[tool.mypy]` in `pyproject.toml` is the whole answer. If the module you
+are about to edit is in that list, a type error you introduce fails your pull request. If it is
+not, nothing checks it.
+
+Anything absent from the list is absent because it has not been cleaned up yet — not because it
+is exempt. Two things are genuinely out of scope and say so at the end of the list: the demo
+scripts at the repository root, and the documentation code samples.
+
+Run the checker exactly the way CI does:
+
+```bash
+mypy
+```
+
+No arguments. The bare invocation reads `files` from `pyproject.toml`, so a clean local run, the
+pre-commit hook and the pull-request job all check the same set.
+
+## Checking a package that is not covered yet
+
+You do not have to wait for a package's turn. Pass it on the command line and it is checked
+instead of the allowlist, under the same strict settings:
+
+```bash
+mypy ag2/knowledge
+```
+
+Expect errors — that is the debt. When a package reports none, add it to `files` in the same
+pull request that cleans it, so it is defended from then on.
+
+## The two tiers of guarantee
+
+"Checked" means two different things depending on the module, and the difference is worth
+knowing before you rely on it.
+
+- **Every pull request** (`.github/workflows/pr-checks.yml`) installs the `types` dependency
+  group, which pulls a handful of extras, and runs `mypy` on Linux, macOS and Windows.
+- **Nightly** (`.github/workflows/type-check.yml`) runs the same `mypy` across five Python
+  versions and twenty-seven extras.
+
+A module that imports a package behind an extra the pull-request job does not install is checked
+against `Any` there: its imports are unresolved, so mistakes inside it survive until the nightly
+run. Prefer adding the extra to the `types` group so the pull-request job really checks it. Where
+an extra is too heavy to install on every pull request, the module's entry in `files` says it is
+nightly-only, so nobody mistakes the weaker guarantee for the stronger one.
+
+## Containing an untyped dependency
+
+An unstubbed dependency hands mypy `Any`, and that `Any` spreads out through the signatures of
+*our* functions — which is precisely what AG2's `py.typed` marker promises a downstream project
+will not get. Suppressing at each leak site says "we gave up here" once per site and nobody ever
+revisits it. Contain it instead, in this order:
+
+1. **Published stubs.** If the package ships a typed release or there is a `types-…` distribution,
+   add it to the `types` dependency group. Nothing else to do.
+2. **Follow it.** Many packages are fully annotated but ship no `py.typed` marker. Tell mypy to
+   read them anyway and you get their real types, which keep working when the dependency changes:
+
+   ```toml
+   [[tool.mypy.overrides]]
+   module = "some_package.*"
+   follow_untyped_imports = true
+   ```
+
+   `mcp_ui_server` is the worked example — that one override is the whole of what `ag2/mcp_ui/`
+   needed to enter the allowlist. `xai_sdk` is the largest: it ships `.pyi` for its generated
+   protos and annotates the rest, and the override removed 21 of `ag2/config/xai/`'s 24 errors.
+   Check for annotations before writing a boundary, even for an SDK that looks untyped.
+3. **A local boundary.** Only when the dependency genuinely has no types to read: declare what we
+   expect of it in the single module that touches it, so every caller past that point sees our
+   types and one file changes when the dependency does.
+4. **A suppression**, with its error code and a reason, when none of the above can work.
+
+A dependency's own types can be wrong, too. `dashscope` bundles a stub that declares its async
+call's stream arm as a synchronous `Generator`, and names a response class its runtime package
+does not export — so an `isinstance` on it cannot run. The client casts at the call, once, and
+says which half of the stub is wrong; that is a boundary, not a suppression.
+
+Whichever you pick, confirm the dependency's extra is installed by the pull-request job — via the
+`types` group or a group it includes — or the module is only really checked overnight.
+
+## The optional-dependency fallback
+
+Every public `__init__.py` behind an extra rebinds a name when its import fails, so a user gets
+an install hint instead of a bare `ImportError`:
+
+```python
+try:
+    from .redis import RedisStream
+except ImportError as e:
+    RedisStream = missing_optional_dependency("RedisStream", "redis", e)
+```
+
+mypy has already bound `RedisStream` to a class by then and rejects the rebind outright —
+`Cannot assign to a type`. Show it only the real import; the fallback is runtime behaviour, and
+reads as such:
+
+```python
+if TYPE_CHECKING:
+    from .redis import RedisStream
+else:
+    try:
+        from .redis import RedisStream
+    except ImportError as e:
+        RedisStream = missing_optional_dependency("RedisStream", "redis", e)
+```
+
+The names keep their true types, and the one duplicated import line is the whole cost. Do this
+rather than suppressing per name — there are over a hundred of these bindings across the tree.
+
+Packages still outside the allowlist have not been converted; several `__init__.py` files under
+them carry a `# type: ignore[misc]` per name, which is what this replaces when a package's turn
+comes.
+
+## The condition DSL
+
+An event field is declared with the type of its value, so without help a checker reads
+`ToolCallEvent.name == "search"` as a `bool`. The `ag2.mypy` plugin — registered in this
+repository's `plugins`, and shipped for downstream projects to register in theirs — resolves
+class-level field access to the field descriptor, whose comparison operators return a
+`Condition`. `test/typing/` checks a fixture of every form the user guide teaches.
+
+Bound to a name, `A | B` of two event classes is a type alias to the checker, not a value, and
+no plugin hook reaches that decision. Annotate the name — `either: Condition = A | B` — and it
+stays a condition.
+
+## The test tree
+
+Tests are checked too, under a relaxed profile — the `test.*` override in `pyproject.toml`. It
+turns off only the settings that demand declarations (untyped and incomplete definitions,
+untyped decorators and calls, `Any` from unimported dependencies): a test that takes nothing and
+returns nothing gains nothing from saying so. Everything substantive stays on, `check_untyped_defs`
+above all, so an unannotated test body is still checked.
+
+That is what the profile is for: when a test double no longer satisfies the type it stands in
+for, the checker says so, instead of the test quietly exercising something else. When a test
+reports an error, fix the double before reaching for a suppression.
+
+A test directory joins `files` only after the package directory it covers is clean, so the
+package's corrected types do the work rather than being fought at every test-double boundary.
+
+A guarantee about the public types themselves — an overload's return type, a form the checker
+must refuse — goes in `test/typing/fixtures/` as a fixture with its expectations inline
+(`# N: <note>`, `# E: <error>`). `test/typing/test_fixtures.py` runs mypy over each fixture and
+compares.
+
+## Suppressions
+
+A `# type: ignore[...]` carries its error code and a reason a later reader can act on. A
+suppression with neither is indistinguishable from an abandoned one.
+
+## The pre-commit hook
+
+`mypy` runs as a local pre-commit hook via `scripts/pre-commit-mypy-run.sh`, which reinstalls the
+`types` group before checking. It runs once per commit, over the same allowlist, so its cost
+grows with coverage. If it becomes slow enough that people start skipping it, that is a signal
+to reach for mypy's incremental cache in the hook rather than to shrink what is checked.
