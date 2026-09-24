@@ -29,7 +29,10 @@ class LinkClient(Protocol):
     multiplexes any number of registered ``AgentClient``s through it.
     """
 
-    endpoint_id: str
+    @property
+    def endpoint_id(self) -> str:
+        """The hub's id for this connection; read-only, since the hub assigns it."""
+        ...
 
     async def open(self) -> None:
         """Connect, perform ``hello`` handshake, await ``welcome``.
