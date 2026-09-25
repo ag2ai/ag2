@@ -15,6 +15,10 @@ class Serializer(Enum):
 
     JSON = "json"  # default
     PICKLE = "pickle"
+    """Unpickling runs arbitrary code, so anyone who can write to the Redis keys
+    or Pub/Sub channels can execute code in every process reading the stream.
+    Use only with a Redis instance that is fully trusted and closed to other clients.
+    """
 
 
 def serialize(obj: Any, fmt: Serializer) -> bytes:

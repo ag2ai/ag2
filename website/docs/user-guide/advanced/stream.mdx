@@ -242,6 +242,11 @@ stream = RedisStream("redis://localhost:6379")
 stream = RedisStream("redis://localhost:6379", serializer=Serializer.PICKLE)
 ```
 
+!!! danger "Pickle trusts everything in Redis"
+    Deserializing pickle runs arbitrary code. With `Serializer.PICKLE`, anyone who can write to the stream's Redis keys or publish to its Pub/Sub channel can execute code in every process that reads the stream — the same as giving them a shell on those hosts.
+
+    Use pickle only when the Redis instance is fully trusted: not reachable from untrusted networks, protected by authentication (and ACLs if it is shared), and written to only by your own processes. Otherwise keep the default JSON serializer.
+
 ### Cross-Process Communication
 
 Multiple `RedisStream` instances sharing the same `id` automatically receive each other's events via Redis Pub/Sub:
