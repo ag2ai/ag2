@@ -3,16 +3,43 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
-from collections.abc import Iterable, Sequence
-from typing import Any, cast
+import json
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Literal, TypeVar, cast
 
 from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
-from openai.types.chat import ChatCompletionFunctionToolParam
+from openai.types.chat import (
+    ChatCompletionAssistantMessageParam,
+    ChatCompletionContentPartImageParam,
+    ChatCompletionContentPartInputAudioParam,
+    ChatCompletionContentPartParam,
+    ChatCompletionContentPartTextParam,
+    ChatCompletionFunctionToolParam,
+    ChatCompletionMessageFunctionToolCallParam,
+    ChatCompletionMessageParam,
+    ChatCompletionSystemMessageParam,
+    ChatCompletionToolMessageParam,
+    ChatCompletionUserMessageParam,
+)
+from openai.types.chat.chat_completion_content_part_image_param import ImageURL
+from openai.types.chat.chat_completion_content_part_param import File
 from openai.types.responses import (
+    EasyInputMessageParam,
     FileSearchToolParam,
     FunctionShellToolParam,
+    ImageDetail,
+    ResponseFunctionCallOutputItemParam,
     ResponseFunctionShellToolCall,
+    ResponseFunctionToolCallParam,
+    ResponseInputContentParam,
+    ResponseInputFileContentParam,
+    ResponseInputFileParam,
+    ResponseInputImageContentParam,
+    ResponseInputImageParam,
+    ResponseInputItemParam,
+    ResponseInputTextContentParam,
+    ResponseInputTextParam,
     ResponseUsage,
     SkillReferenceParam,
     ToolSearchToolParam,
@@ -23,6 +50,7 @@ from openai.types.responses.container_reference_param import ContainerReferenceP
 from openai.types.responses.file_search_tool_param import Filters as FileSearchFilters
 from openai.types.responses.function_shell_tool_param import Environment as ShellEnvironmentParam
 from openai.types.responses.local_environment_param import LocalEnvironmentParam
+from openai.types.responses.response_input_item_param import FunctionCallOutput
 from openai.types.responses.tool_param import (
     CodeInterpreter,
     CodeInterpreterContainerCodeInterpreterToolAuto,
@@ -73,6 +101,8 @@ from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_search import UserLocation, WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
+
+_Detail = TypeVar("_Detail", bound=str)
 
 _OUTPUT_ONLY_FIELDS = {"created_by"}
 """Fields the API puts on a hosted output item but rejects on the way back in.
@@ -154,89 +184,83 @@ def response_proto_to_text_config(
 def events_to_responses_input(
     messages: Sequence[BaseEvent],
     serializer: SerializerProto,
-) -> list[dict[str, Any]]:
+) -> list[ResponseInputItemParam]:
     """Convert a sequence of events to Responses API input items."""
-    result: list[dict[str, Any]] = []
+    result: list[ResponseInputItemParam] = []
     seen_reasoning_ids: set[str] = set()
     answered_shell_calls = _answered_shell_calls(messages)
 
     for message in messages:
         if isinstance(message, ModelResponse):
-            # Reconstruct assistant message
-            content: list[dict[str, Any]] = []
             if message.message:
-                content.append({"type": "output_text", "text": message.message.content})
-            if content:
-                result.append({"role": "assistant", "content": content})
+                result.append(_easy_message("assistant", message.message.content))
             # Add function call items from the response
             for call in message.tool_calls.calls:
-                result.append({
+                function_call: ResponseFunctionToolCallParam = {
                     "type": "function_call",
                     "call_id": call.id,
                     "name": call.name,
                     "arguments": call.arguments,
-                })
+                }
+                result.append(function_call)
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                blocks: list[dict[str, Any]] = []
+                blocks: list[ResponseFunctionCallOutputItemParam] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
-                        blocks.append({"type": "input_text", "text": part.content})
+                        blocks.append(_tool_output_text(part.content))
                     elif isinstance(part, DataInput):
-                        blocks.append({"type": "input_text", "text": serializer.encode(part.data).decode()})
+                        blocks.append(_tool_output_text(serializer.encode(part.data).decode()))
                     elif isinstance(part, BinaryInput):
                         b64 = base64.b64encode(part.data).decode()
                         if part.kind == BinaryType.IMAGE:
                             # Images in output must use input_image (input_file rejects image/* MIME).
-                            blocks.append({
+                            output_image: ResponseInputImageContentParam = {
                                 "type": "input_image",
                                 "image_url": f"data:{part.media_type};base64,{b64}",
-                            })
+                            }
+                            blocks.append(output_image)
                         elif part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
                             # input_file with file_data *requires* filename.
-                            filename = part.vendor_metadata.get("filename")
-                            if not filename:
-                                suffix = part.media_type.rsplit("/", 1)[-1].split("+", 1)[0]
-                                filename = f"file.{suffix}"
-                            blocks.append({
+                            output_file: ResponseInputFileContentParam = {
                                 "type": "input_file",
                                 "file_data": f"data:{part.media_type};base64,{b64}",
-                                "filename": filename,
-                            })
+                                "filename": _filename(part),
+                            }
+                            blocks.append(output_file)
                         else:
                             raise UnsupportedInputError(f"BinaryInput({_kind_label(part.kind)})", "openai-responses")
                     elif isinstance(part, UrlInput):
                         if part.kind == BinaryType.IMAGE:
-                            blocks.append({"type": "input_image", "image_url": part.url})
+                            url_image: ResponseInputImageContentParam = {"type": "input_image", "image_url": part.url}
+                            blocks.append(url_image)
                         elif part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
                             # file_url forbids filename (API mutual-exclusion).
-                            blocks.append({"type": "input_file", "file_url": part.url})
+                            url_file: ResponseInputFileContentParam = {"type": "input_file", "file_url": part.url}
+                            blocks.append(url_file)
                         else:
                             raise UnsupportedInputError(f"UrlInput({_kind_label(part.kind)})", "openai-responses")
                     elif isinstance(part, FileIdInput):
                         # file_id forbids filename in output (user-message allows both).
-                        blocks.append({"type": "input_file", "file_id": part.file_id})
+                        file_ref: ResponseInputFileContentParam = {"type": "input_file", "file_id": part.file_id}
+                        blocks.append(file_ref)
                     else:
                         raise UnsupportedInputError(type(part).__name__, "openai-responses")
 
-                if len(blocks) == 1 and (block := blocks[0])["type"] == "input_text":
-                    result.append({
-                        "type": "function_call_output",
-                        "call_id": r.parent_id,
-                        "output": block["text"],
-                    })
-                else:
-                    result.append({
-                        "type": "function_call_output",
-                        "call_id": r.parent_id,
-                        "output": blocks,
-                    })
+                output: FunctionCallOutput = {
+                    "type": "function_call_output",
+                    "call_id": r.parent_id,
+                    "output": block["text"]
+                    if len(blocks) == 1 and (block := blocks[0])["type"] == "input_text"
+                    else blocks,
+                }
+                result.append(output)
 
         elif isinstance(message, OpenAIReasoningEvent):
             if message.item.id not in seen_reasoning_ids:
                 seen_reasoning_ids.add(message.item.id)
-                result.append(message.item.model_dump(exclude_none=True, mode="json"))
+                result.append(_replayed_item(message.item.model_dump(exclude_none=True, mode="json")))
 
         elif isinstance(message, OpenAIServerToolCallEvent):
             # A `shell_call` is the one hosted item the API will not accept
@@ -253,24 +277,25 @@ def events_to_responses_input(
             # Literal["url"] but the API returns other values (e.g. "api"),
             # which makes pydantic warn on every round-trip serialization.
             result.append(
-                message.item.model_dump(exclude_none=True, mode="json", warnings=False, exclude=_OUTPUT_ONLY_FIELDS)
+                _replayed_item(
+                    message.item.model_dump(exclude_none=True, mode="json", warnings=False, exclude=_OUTPUT_ONLY_FIELDS)
+                )
             )
 
         elif isinstance(message, OpenAIServerToolResultEvent) and message.item is not None:
             # Only a hosted shell call carries one: its output is a separate
             # item, so the call replays incomplete without it.
-            result.append(message.item.model_dump(exclude_none=True, mode="json", exclude=_OUTPUT_ONLY_FIELDS))
+            result.append(
+                _replayed_item(message.item.model_dump(exclude_none=True, mode="json", exclude=_OUTPUT_ONLY_FIELDS))
+            )
 
         elif isinstance(message, ModelRequest):
             for inp in message.parts:
                 if isinstance(inp, TextInput):
-                    result.append({"role": "user", "content": [{"type": "input_text", "text": inp.content}]})
+                    result.append(_user_message(_input_text(inp.content)))
 
                 elif isinstance(inp, DataInput):
-                    result.append({
-                        "role": "user",
-                        "content": [{"type": "input_text", "text": serializer.encode(inp.data).decode()}],
-                    })
+                    result.append(_user_message(_input_text(serializer.encode(inp.data).decode())))
 
                 elif isinstance(inp, FileIdInput):
                     if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.OPENAI:
@@ -280,48 +305,34 @@ def events_to_responses_input(
                         )
                     # OpenAI Responses API: file_id and filename are mutually exclusive.
                     # filename applies to inline file_data, not to file_id references.
-                    result.append({
-                        "role": "user",
-                        "content": [{"type": "input_file", "file_id": inp.file_id}],
-                    })
+                    file_id_input: ResponseInputFileParam = {"type": "input_file", "file_id": inp.file_id}
+                    result.append(_user_message(file_id_input))
 
                 elif isinstance(inp, BinaryInput):
                     b64 = base64.b64encode(inp.data).decode()
                     if inp.kind == BinaryType.IMAGE:
-                        image_block: dict[str, Any] = {
-                            "type": "input_image",
-                            "image_url": f"data:{inp.media_type};base64,{b64}",
-                        }
-                        if "detail" in inp.vendor_metadata:
-                            image_block["detail"] = inp.vendor_metadata["detail"]
-                        result.append({"role": "user", "content": [image_block]})
+                        detail = _image_detail(inp, _RESPONSES_IMAGE_DETAILS, "openai-responses")
+                        result.append(_user_message(_input_image(f"data:{inp.media_type};base64,{b64}", detail)))
 
                     elif inp.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
                         # input_file with file_data *requires* filename.
-                        filename = inp.vendor_metadata.get("filename")
-                        if not filename:
-                            suffix = inp.media_type.rsplit("/", 1)[-1].split("+", 1)[0]
-                            filename = f"file.{suffix}"
-                        result.append({
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "input_file",
-                                    "file_data": f"data:{inp.media_type};base64,{b64}",
-                                    "filename": filename,
-                                }
-                            ],
-                        })
+                        file_data_input: ResponseInputFileParam = {
+                            "type": "input_file",
+                            "file_data": f"data:{inp.media_type};base64,{b64}",
+                            "filename": _filename(inp),
+                        }
+                        result.append(_user_message(file_data_input))
 
                     else:
                         raise UnsupportedInputError(f"BinaryInput({_kind_label(inp.kind)})", "openai-responses")
 
                 elif isinstance(inp, UrlInput):
                     if inp.kind == BinaryType.IMAGE:
-                        result.append({"role": "user", "content": [{"type": "input_image", "image_url": inp.url}]})
+                        result.append(_user_message(_input_image(inp.url, None)))
 
                     elif inp.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
-                        result.append({"role": "user", "content": [{"type": "input_file", "file_url": inp.url}]})
+                        file_url_input: ResponseInputFileParam = {"type": "input_file", "file_url": inp.url}
+                        result.append(_user_message(file_url_input))
 
                     else:
                         raise UnsupportedInputError(f"UrlInput({_kind_label(inp.kind)})", "openai-responses")
@@ -332,26 +343,59 @@ def events_to_responses_input(
         elif isinstance(message, CompactionSummary):
             # Surface the summary as a user turn so it stays visible and gives a valid opening turn
             text = f"[Summary of earlier conversation]\n{message.summary}"
-            result.append({"role": "user", "content": [{"type": "input_text", "text": text}]})
+            result.append(_user_message(_input_text(text)))
 
     return result
+
+
+def _easy_message(
+    role: Literal["user", "assistant"], content: str | list[ResponseInputContentParam]
+) -> EasyInputMessageParam:
+    return {"role": role, "content": content}
+
+
+def _user_message(part: ResponseInputContentParam) -> EasyInputMessageParam:
+    return _easy_message("user", [part])
+
+
+def _input_text(text: str) -> ResponseInputTextParam:
+    return {"type": "input_text", "text": text}
+
+
+def _tool_output_text(text: str) -> ResponseInputTextContentParam:
+    return {"type": "input_text", "text": text}
+
+
+def _input_image(image_url: str, detail: ImageDetail | None) -> ResponseInputImageParam:
+    if detail is not None:
+        return {"type": "input_image", "image_url": image_url, "detail": detail}
+    # The SDK marks `detail` Required, but the API accepts its omission (verified live) and
+    # applies its own default; ag2 does not send a detail the caller did not ask for.
+    return cast(ResponseInputImageParam, {"type": "input_image", "image_url": image_url})
+
+
+def _replayed_item(item: dict[str, Any]) -> ResponseInputItemParam:
+    # The one untyped boundary: the dump of the SDK's own output item, which pydantic
+    # validated on the way in, is the input item of the same kind.
+    return cast(ResponseInputItemParam, item)
 
 
 def convert_messages(
     system_prompt: Iterable[str],
     messages: Iterable[BaseEvent],
     serializer: SerializerProto,
-) -> list[dict[str, Any]]:
+) -> list[ChatCompletionMessageParam]:
     # legacy prompt message format
-    result: list[dict[str, Any]] = [{"content": "\n".join(system_prompt), "role": "system"}]
+    system: ChatCompletionSystemMessageParam = {"content": "\n".join(system_prompt), "role": "system"}
+    result: list[ChatCompletionMessageParam] = [system]
 
     for message in messages:
         if isinstance(message, ModelResponse):
-            result.append(message.to_api())
+            result.append(_assistant_message(message))
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                result_parts: list[dict[str, Any]] = []
+                result_parts: list[ChatCompletionContentPartTextParam] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
                         result_parts.append({"type": "text", "text": part.content})
@@ -360,53 +404,67 @@ def convert_messages(
                     else:
                         raise UnsupportedInputError(type(part).__name__, "openai-completions")
 
-                # Simple string content for a single plain-text turn (most common case)
-                if len(result_parts) == 1 and result_parts[0]["type"] == "text":
-                    result.append({"role": "tool", "tool_call_id": r.parent_id, "content": result_parts[0]["text"]})
-                else:
-                    result.append({"role": "tool", "tool_call_id": r.parent_id, "content": result_parts})
+                tool_message: ChatCompletionToolMessageParam = {
+                    "role": "tool",
+                    "tool_call_id": r.parent_id,
+                    # Simple string content for a single plain-text turn (most common case)
+                    "content": result_parts[0]["text"] if len(result_parts) == 1 else result_parts,
+                }
+                result.append(tool_message)
 
         elif isinstance(message, ModelRequest):
-            parts: list[dict[str, Any]] = []
+            parts: list[ChatCompletionContentPartParam] = []
             for inp in message.parts:
                 if isinstance(inp, TextInput):
-                    parts.append({"type": "text", "text": inp.content})
+                    parts.append(_chat_text_part(inp.content))
 
                 elif isinstance(inp, DataInput):
-                    parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
+                    parts.append(_chat_text_part(serializer.encode(inp.data).decode()))
 
                 elif isinstance(inp, UrlInput):
                     if inp.kind == BinaryType.IMAGE:
-                        parts.append({"type": "image_url", "image_url": {"url": inp.url}})
+                        url_image: ChatCompletionContentPartImageParam = {
+                            "type": "image_url",
+                            "image_url": {"url": inp.url},
+                        }
+                        parts.append(url_image)
 
                     else:
                         raise UnsupportedInputError(f"UrlInput({_kind_label(inp.kind)})", "openai-completions")
 
                 elif isinstance(inp, FileIdInput):
-                    parts.append({"type": "file", "file": {"file_id": inp.file_id}})
+                    file_ref: File = {"type": "file", "file": {"file_id": inp.file_id}}
+                    parts.append(file_ref)
 
                 elif isinstance(inp, BinaryInput):
                     if inp.kind == BinaryType.AUDIO:
-                        b64 = base64.b64encode(inp.data).decode()
-                        fmt = _MIME_TO_AUDIO_FORMAT.get(inp.media_type, inp.media_type.split("/", 1)[1])
-                        parts.append({"type": "input_audio", "input_audio": {"data": b64, "format": fmt}})
+                        audio_format = _MIME_TO_AUDIO_FORMAT.get(inp.media_type)
+                        if audio_format is None:
+                            # The API answers anything else with `Supported values are: 'wav' and 'mp3'`.
+                            raise UnsupportedInputError(
+                                f"BinaryInput(audio, media_type={inp.media_type})", "openai-completions"
+                            )
+                        audio: ChatCompletionContentPartInputAudioParam = {
+                            "type": "input_audio",
+                            "input_audio": {"data": base64.b64encode(inp.data).decode(), "format": audio_format},
+                        }
+                        parts.append(audio)
 
                     elif inp.kind == BinaryType.IMAGE:
                         b64 = base64.b64encode(inp.data).decode()
-                        data_url = f"data:{inp.media_type};base64,{b64}"
-                        image_url: dict[str, Any] = {"url": data_url}
-                        if "detail" in inp.vendor_metadata:
-                            image_url["detail"] = inp.vendor_metadata["detail"]
-                        parts.append({"type": "image_url", "image_url": image_url})
+                        image_url: ImageURL = {"url": f"data:{inp.media_type};base64,{b64}"}
+                        if (detail := _image_detail(inp, _CHAT_IMAGE_DETAILS, "openai-completions")) is not None:
+                            image_url["detail"] = detail
+                        image: ChatCompletionContentPartImageParam = {"type": "image_url", "image_url": image_url}
+                        parts.append(image)
 
                     elif inp.kind == BinaryType.DOCUMENT:
                         b64 = base64.b64encode(inp.data).decode()
-                        data_url = f"data:{inp.media_type};base64,{b64}"
-                        filename = inp.vendor_metadata.get("filename")
-                        if not filename:
-                            suffix = inp.media_type.rsplit("/", 1)[-1].split("+", 1)[0]
-                            filename = f"file.{suffix}"
-                        parts.append({"type": "file", "file": {"file_data": data_url, "filename": filename}})
+                        document: File = {
+                            "type": "file",
+                            "file": {"file_data": f"data:{inp.media_type};base64,{b64}", "filename": _filename(inp)},
+                        }
+                        parts.append(document)
 
                     else:
                         raise UnsupportedInputError(f"BinaryInput({_kind_label(inp.kind)})", "openai-completions")
@@ -414,17 +472,64 @@ def convert_messages(
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "openai-completions")
 
-            # Simple string content for a single plain-text turn (most common case)
-            if len(parts) == 1 and parts[0]["type"] == "text":
-                result.append({"role": "user", "content": parts[0]["text"]})
-            else:
-                result.append({"role": "user", "content": parts})
+            user_message: ChatCompletionUserMessageParam = {
+                "role": "user",
+                # Simple string content for a single plain-text turn (most common case)
+                "content": parts[0]["text"] if len(parts) == 1 and parts[0]["type"] == "text" else parts,
+            }
+            result.append(user_message)
 
         elif isinstance(message, CompactionSummary):
             # Surface the summary as a user turn so it stays visible and gives a valid opening turn
-            result.append({"role": "user", "content": f"[Summary of earlier conversation]\n{message.summary}"})
+            summary: ChatCompletionUserMessageParam = {
+                "role": "user",
+                "content": f"[Summary of earlier conversation]\n{message.summary}",
+            }
+            result.append(summary)
 
     return result
+
+
+def _assistant_message(message: ModelResponse) -> ChatCompletionAssistantMessageParam:
+    """Replay a model turn: its text, then the function calls it made."""
+    assistant: ChatCompletionAssistantMessageParam = {
+        "content": message.message.content if message.message else None,
+        "role": "assistant",
+    }
+    if message.tool_calls:
+        tool_calls: list[ChatCompletionMessageFunctionToolCallParam] = [
+            {
+                "id": call.id,
+                "type": "function",
+                "function": {"arguments": json.dumps(call.serialized_arguments), "name": call.name},
+            }
+            for call in message.tool_calls.calls
+        ]
+        assistant["tool_calls"] = tool_calls
+    return assistant
+
+
+def _chat_text_part(text: str) -> ChatCompletionContentPartTextParam:
+    return {"type": "text", "text": text}
+
+
+def _image_detail(inp: BinaryInput, details: Mapping[str, _Detail], provider: str) -> _Detail | None:
+    """The ``detail`` a caller set in ``vendor_metadata``, refused unless the API knows it."""
+    if "detail" not in inp.vendor_metadata:
+        return None
+    detail = inp.vendor_metadata["detail"]
+    if not isinstance(detail, str) or detail not in details:
+        raise UnsupportedInputError(f"BinaryInput(image, detail={detail!r})", provider)
+    return details[detail]
+
+
+def _filename(inp: BinaryInput) -> str:
+    """The name inline file data travels under; the API requires one."""
+    filename = inp.vendor_metadata.get("filename")
+    if filename:
+        return str(filename)
+    suffix = inp.media_type.rsplit("/", 1)[-1].split("+", 1)[0]
+    return f"file.{suffix}"
 
 
 def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
@@ -693,13 +798,20 @@ def normalize_responses_usage(usage: ResponseUsage) -> Usage:
     )
 
 
-_MIME_TO_AUDIO_FORMAT: dict[str, str] = {
+_MIME_TO_AUDIO_FORMAT: dict[str, Literal["wav", "mp3"]] = {
     "audio/wav": "wav",
     "audio/mpeg": "mp3",
-    "audio/ogg": "ogg",
-    "audio/flac": "flac",
-    "audio/aiff": "aiff",
-    "audio/aac": "aac",
+    "audio/mp3": "mp3",
+}
+"""The only formats Chat Completions accepts for ``input_audio``, keyed by MIME type."""
+
+_CHAT_IMAGE_DETAILS: dict[str, Literal["auto", "low", "high"]] = {"auto": "auto", "low": "low", "high": "high"}
+
+_RESPONSES_IMAGE_DETAILS: dict[str, ImageDetail] = {
+    "auto": "auto",
+    "low": "low",
+    "high": "high",
+    "original": "original",
 }
 
 

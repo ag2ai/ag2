@@ -28,7 +28,7 @@ from a2a.types import (
 from fast_depends.library.serializer import SerializerProto
 
 from ag2.config.client import LLMClient
-from ag2.context import ConversationContext
+from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.events import (
     BaseEvent,
     Input,
@@ -384,7 +384,7 @@ class A2AClient(LLMClient):
                 tool_schemas=function_schemas,
                 task_id=self._task_id,
                 context_id=context_id,
-                context_update=dict(context.variables) or None,
+                context_update=_outgoing_variables(context),
                 extra_extensions=self._extensions,
             )
 
@@ -400,7 +400,7 @@ class A2AClient(LLMClient):
             task_id=self._task_id,
             context_id=context_id,
             advertise_extension=bool(function_schemas) or self._task_id is not None,
-            context_update=dict(context.variables) or None,
+            context_update=_outgoing_variables(context),
             extra_parts=extra_parts,
             extra_extensions=self._extensions,
         )
@@ -686,7 +686,7 @@ class A2AClient(LLMClient):
     def _merge_context_update(context: ConversationContext, payload: Mapping[str, Any]) -> None:
         if not payload:
             return
-        context.variables.update(payload)
+        context.variables.update(strip_reserved_variables(payload, source="an A2A peer response"))
 
 
 def _ensure_stream_response(event: StreamResponse | Task | Message) -> StreamResponse:
@@ -716,3 +716,12 @@ def _read_extra_parts(context: ConversationContext) -> list[Part]:
     if not raw:
         return []
     return [p for p in raw if isinstance(p, Part)]
+
+
+def _outgoing_variables(context: ConversationContext) -> dict[str, Any] | None:
+    """The variables sync this request carries, or ``None`` when nothing is left to send.
+
+    The peer has no business reading this side's control-plane state — including
+    the context ids, which ride their own protocol field — so reserved keys stay home.
+    """
+    return strip_reserved_variables(context.variables, source="an outgoing A2A request", warn=False) or None

@@ -4,17 +4,18 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable, Coroutine
-from contextlib import AbstractAsyncContextManager, AbstractContextManager
+from collections.abc import AsyncIterator, Callable, Coroutine, Mapping
+from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeAlias, cast, overload, runtime_checkable
 from uuid import UUID
 
+import anyio.from_thread
 from fast_depends import Provider
 
 from ag2.types import ClassInfo, SendableMessage
 
-from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, ModelRequest
+from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, MessageEnqueued, ModelRequest
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
@@ -37,7 +38,12 @@ class Stream(Protocol):
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None: ...
 
     def enqueue(self, *content: "SendableMessage | Input") -> None:
-        """Append a follow-up turn to this stream's inbox."""
+        """Append a follow-up turn to this stream's inbox.
+
+        Low-level: it only appends and announces nothing. Code that hands a
+        running agent input goes through ``ConversationContext.enqueue``,
+        which also publishes ``MessageEnqueued``.
+        """
         ...
 
     def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
@@ -109,7 +115,9 @@ class ConversationContext:
     stream: Stream = field(repr=False)
     dependency_provider: "Provider | None" = field(default=None, repr=False)
 
-    # store Context Variables as separated serializable field
+    # store Context Variables as separated serializable field. Keys under
+    # ``RESERVED_VARIABLE_PREFIXES`` are the framework's own control-plane state
+    # and are never authored by a remote peer — see ``strip_reserved_variables``.
     variables: dict[str, Any] = field(default_factory=dict)
 
     dependencies: dict[Any, Any] = field(default_factory=dict)
@@ -131,12 +139,30 @@ class ConversationContext:
         return self.stream.spawn_background(coro)
 
     def enqueue(self, *content: "SendableMessage | Input") -> None:
-        """Forward to ``self.stream.enqueue``.
+        """Append a follow-up turn to the stream's inbox and announce it.
 
         The inbox lives on the stream, so a message enqueued here survives the
         end of the current run and feeds the next ``ask`` on the same stream.
+        The append is immediate; ``MessageEnqueued`` follows from a background
+        task, so this stays safe to call from a stream subscriber and from a
+        sync tool running in a worker thread. From a thread that is not an
+        event-loop worker the message is appended but not announced.
         """
+        if not content:
+            return
         self.stream.enqueue(*content)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # A sync tool runs in an anyio worker thread; the announcement has to
+            # be scheduled on the event loop that owns the stream.
+            with suppress(RuntimeError):
+                anyio.from_thread.run_sync(self._announce_enqueued)
+        else:
+            self._announce_enqueued()
+
+    def _announce_enqueued(self) -> None:
+        self.spawn_background(self.send(MessageEnqueued()))
 
     async def input(self, message: str, timeout: float | None = None) -> str:
         """Put ``message`` to a human and return their answer.
@@ -220,3 +246,33 @@ def drop_background_task(tasks: set[asyncio.Task[None]], task: asyncio.Task[Any]
     exc = task.exception()
     if exc is not None:
         logger.exception("Background task raised", exc_info=exc)
+
+
+# Variable namespaces the framework reserves for its own control-plane state:
+# the ``approval_required`` allow-always bypass (``ag:approval_required:always``),
+# the A2A context-id bookkeeping and the per-call tenant override
+# (``a2a:tenant``) all live in ``ConversationContext.variables``. A transport
+# that syncs variables with a peer must not let that peer author them — a caller
+# able to write the bypass key pre-approves a gated tool and the human is never
+# asked. Every wire-originated merge goes through ``strip_reserved_variables``.
+RESERVED_VARIABLE_PREFIXES = ("ag:", "a2a:")
+
+
+def strip_reserved_variables(payload: Mapping[str, Any], *, source: str, warn: bool = True) -> dict[str, Any]:
+    """Return *payload* without the framework's reserved variable keys.
+
+    Transports call this on every variables payload that arrives from — or
+    leaves for — a remote peer, so control-plane state stays locally authored;
+    ``warn`` is off on the outbound side, where stripping is routine rather
+    than a peer overstepping.
+    """
+    if not payload:
+        return {}
+    kept = {key: value for key, value in payload.items() if not str(key).startswith(RESERVED_VARIABLE_PREFIXES)}
+    if warn and len(kept) != len(payload):
+        logger.warning(
+            "Dropped reserved context variables from %s: %s",
+            source,
+            sorted(str(key) for key in payload if key not in kept),
+        )
+    return kept

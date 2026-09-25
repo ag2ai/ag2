@@ -27,7 +27,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-version = "1.0.6"
+version = "1.1.0"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -99,6 +99,7 @@ mistral = ["mistralai>=2.8.0,<3"]
 ollama = ["ollama>=0.4.7"]
 bedrock = ["boto3>=1.34.149"]
 dashscope = ["dashscope>=1.25.13"]
+typesafe = ["typesafe-sdk>=0.7.1,<0.8"]
 
 redis = ["redis>=5.0,<9"]
 # SDK only: ag2 builds spans and hands them to whatever SpanProcessor the caller
@@ -189,6 +190,7 @@ optionals = [
     "ag2[xai]",
     "ag2[zai]",
     "ag2[mistral]",
+    "ag2[typesafe]",
     "ag2[elevenlabs]",
 ]
 
@@ -269,6 +271,7 @@ markers = [
     "anthropic",
     "zai",
     "mistral",
+    "typesafe",
     "deepseek",
     "cosmosdb",
     "ollama",

@@ -66,9 +66,7 @@ class ApprovalRequired:
         ).lower()
 
         if self._allow_always and user_result == "always":
-            bypass_dict = context.variables.get(BYPASS_KEY, {})
-            bypass_dict[event.name] = True
-            context.variables[BYPASS_KEY] = bypass_dict
+            context.variables[BYPASS_KEY] = {**context.variables.get(BYPASS_KEY, {}), event.name: True}
             return await call_next(event, context)
 
         elif user_result in ("y", "yes", "1"):

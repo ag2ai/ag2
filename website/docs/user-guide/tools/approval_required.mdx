@@ -50,6 +50,8 @@ Y/N?
 
 Typing **y** lets the tool run. Any other input denies it — the agent receives the denied message and can adjust.
 
+With `allow_always=True` (the default), typing **always** approves this call and every later call of the same tool in this agent's conversation. It does not carry across [sub-task delegation](/docs/user-guide/subagents) in either direction: a sub-task asks again, and its "always" does not reach the parent.
+
 !!! note
     `approval_required()` relies on the agent's `#!python hitl_hook` to collect user input. With no `hitl_hook` configured there is nobody to ask, so `#!python context.input()` raises `#!python HumanInputNotProvidedError` and **the turn ends** — the gated tool does not run, and the model is not handed a tool failure it could route around. Read more about [Human in the Loop](/docs/user-guide/context/human_in_the_loop) to learn how to configure a HITL hook.
 
@@ -83,6 +85,14 @@ approval_required(timeout=5, allow_always=False).describe().config
 ```
 
 Approval state (which tools the user answered "always" for) lives in `#!python context.variables`, not on the instance, so it never appears in the description. See [Describing middleware](/docs/user-guide/middleware#describing-middleware).
+
+!!! note "Only your human writes it"
+
+    The "always" answer is stored under a reserved `ag:` variable key. When the agent is
+    served over a protocol that syncs variables with a peer — A2A, NLIP, A2UI, AG-UI —
+    reserved keys are stripped from the payload in both directions, so a remote caller
+    can neither pre-approve a gated tool nor read what your human approved. See
+    [Variables over a protocol connection](/docs/user-guide/context/variables#variables-over-a-protocol-connection).
 
 ## Customizing the prompt
 

@@ -162,3 +162,26 @@ def fetch_secure_data(
         return "Error: Not authenticated."
     return f"Data fetched with token {auth_token}"
 ```
+
+## Variables Over a Protocol Connection
+
+When an agent is served over — or delegates through — A2A, NLIP, A2UI or AG-UI, the
+conversation's variables are synced with the peer on every message. An inbound payload
+is merged into the turn's variables before the agent runs, and the turn's variables are
+sent back to the peer with the reply.
+
+That makes variables a channel, not just local state: the peer reads what you put there,
+and writes what the turn sees.
+
+!!! warning "Reserved namespaces are never authored by a peer"
+
+    Variable keys beginning with `ag:` or `a2a:` are the framework's own control-plane
+    state — the [`approval_required()`](/docs/user-guide/tools/approval_required) allow-always bypass, the A2A context-id
+    bookkeeping, the per-call tenant override. They are stripped from every payload
+    crossing a protocol boundary, in both directions: a caller cannot pre-approve a
+    gated tool by sending one, and a peer is not shown yours. Do not use those prefixes
+    for your own variables; they will not survive the wire.
+
+Everything else round-trips. Treat a variable as readable by the peer and writable by it:
+keep secrets in [dependencies](/docs/user-guide/context/inject) instead, which are never synced, and do not let
+a variable a peer can set decide something the peer should not control.
