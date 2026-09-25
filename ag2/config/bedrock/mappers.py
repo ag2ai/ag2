@@ -6,7 +6,7 @@ import json
 import logging
 import re
 from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from fast_depends.library.serializer import SerializerProto
 
@@ -30,16 +30,38 @@ from ag2.response import ResponseProto
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
+if TYPE_CHECKING:
+    from types_boto3_bedrock_runtime.literals import (
+        ConversationRoleType,
+        DocumentFormatType,
+        ImageFormatType,
+        VideoFormatType,
+    )
+    from types_boto3_bedrock_runtime.type_defs import (
+        ContentBlockTypeDef,
+        DocumentBlockTypeDef,
+        ImageBlockTypeDef,
+        JsonSchemaDefinitionTypeDef,
+        MessageTypeDef,
+        OutputConfigTypeDef,
+        ToolResultBlockTypeDef,
+        ToolResultContentBlockTypeDef,
+        ToolSpecificationTypeDef,
+        ToolTypeDef,
+        ToolUseBlockTypeDef,
+        VideoBlockTypeDef,
+    )
+
 logger = logging.getLogger(__name__)
 
-_IMAGE_MEDIA_TO_FORMAT = {
+_IMAGE_MEDIA_TO_FORMAT: "dict[str, ImageFormatType]" = {
     "image/png": "png",
     "image/jpeg": "jpeg",
     "image/gif": "gif",
     "image/webp": "webp",
 }
 
-_DOCUMENT_MEDIA_TO_FORMAT = {
+_DOCUMENT_MEDIA_TO_FORMAT: "dict[str, DocumentFormatType]" = {
     "application/pdf": "pdf",
     "text/csv": "csv",
     "application/msword": "doc",
@@ -51,7 +73,7 @@ _DOCUMENT_MEDIA_TO_FORMAT = {
     "text/markdown": "md",
 }
 
-_VIDEO_MEDIA_TO_FORMAT = {
+_VIDEO_MEDIA_TO_FORMAT: "dict[str, VideoFormatType]" = {
     "video/x-matroska": "mkv",
     "video/quicktime": "mov",
     "video/mp4": "mp4",
@@ -109,19 +131,20 @@ def response_proto_to_output_config(response: ResponseProto | None) -> dict[str,
         return None
 
     strict_schema = _ensure_additional_properties_false(response.json_schema)
-    json_schema: dict[str, Any] = {
+    json_schema: JsonSchemaDefinitionTypeDef = {
         "schema": json.dumps(strict_schema),
         "name": response.name,
     }
     if response.description:
         json_schema["description"] = response.description
 
-    return {
+    output_config: OutputConfigTypeDef = {
         "textFormat": {
             "type": "json_schema",
             "structure": {"jsonSchema": json_schema},
         },
     }
+    return dict(output_config)
 
 
 def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
@@ -134,14 +157,15 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:
     if isinstance(t, FunctionToolSchema):
-        spec: dict[str, Any] = {
+        spec: ToolSpecificationTypeDef = {
             "name": t.function.name,
             "inputSchema": {"json": _ensure_object_schema(t.function.parameters)},
         }
         # Converse rejects empty description strings
         if t.function.description:
             spec["description"] = t.function.description
-        return {"toolSpec": spec}
+        tool: ToolTypeDef = {"toolSpec": spec}
+        return dict(tool)
 
     raise UnsupportedToolError(t.type, "bedrock")
 
@@ -155,52 +179,86 @@ def _sanitize_document_name(name: str | None) -> str:
     return cleaned or "document"
 
 
-def _binary_to_block(part: BinaryInput) -> dict[str, Any]:
-    if part.kind is BinaryType.IMAGE:
-        image_format = _IMAGE_MEDIA_TO_FORMAT.get(part.media_type)
-        if image_format is None:
-            raise UnsupportedInputError(f"BinaryInput({part.media_type})", "bedrock")
-        return {"image": {"format": image_format, "source": {"bytes": part.data}}}
-
-    elif part.kind is BinaryType.DOCUMENT:
-        document_format = _DOCUMENT_MEDIA_TO_FORMAT.get(part.media_type)
-        if document_format is None:
-            raise UnsupportedInputError(f"BinaryInput({part.media_type})", "bedrock")
-        return {
-            "document": {
-                "format": document_format,
-                "name": _sanitize_document_name(part.vendor_metadata.get("filename")),
-                "source": {"bytes": part.data},
-            },
-        }
-
-    elif part.kind is BinaryType.VIDEO:
-        video_format = _VIDEO_MEDIA_TO_FORMAT.get(part.media_type)
-        if video_format is None:
-            raise UnsupportedInputError(f"BinaryInput({part.media_type})", "bedrock")
-        return {"video": {"format": video_format, "source": {"bytes": part.data}}}
-
-    raise UnsupportedInputError(f"BinaryInput({part.kind.value})", "bedrock")
+def _image_block(part: BinaryInput) -> "ImageBlockTypeDef":
+    image_format = _IMAGE_MEDIA_TO_FORMAT.get(part.media_type)
+    if image_format is None:
+        raise UnsupportedInputError(f"BinaryInput({part.media_type})", "bedrock")
+    return {"format": image_format, "source": {"bytes": part.data}}
 
 
-def _input_to_block(inp: Input, serializer: SerializerProto) -> dict[str, Any]:
+def _document_block(part: BinaryInput) -> "DocumentBlockTypeDef":
+    document_format = _DOCUMENT_MEDIA_TO_FORMAT.get(part.media_type)
+    if document_format is None:
+        raise UnsupportedInputError(f"BinaryInput({part.media_type})", "bedrock")
+    return {
+        "format": document_format,
+        "name": _sanitize_document_name(part.vendor_metadata.get("filename")),
+        "source": {"bytes": part.data},
+    }
+
+
+def _video_block(part: BinaryInput) -> "VideoBlockTypeDef":
+    video_format = _VIDEO_MEDIA_TO_FORMAT.get(part.media_type)
+    if video_format is None:
+        raise UnsupportedInputError(f"BinaryInput({part.media_type})", "bedrock")
+    return {"format": video_format, "source": {"bytes": part.data}}
+
+
+def _input_to_text(inp: Input, serializer: SerializerProto) -> str:
+    """Render a non-binary Input as Converse text — the one conversion both positions share."""
     if isinstance(inp, TextInput):
-        return {"text": inp.content}
+        return inp.content
     elif isinstance(inp, DataInput):
-        return {"text": serializer.encode(inp.data).decode()}
-    elif isinstance(inp, BinaryInput):
-        return _binary_to_block(inp)
+        return serializer.encode(inp.data).decode()
     # UrlInput / FileIdInput: Converse sources accept bytes only; no Files API
     raise UnsupportedInputError(type(inp).__name__, "bedrock")
 
 
-def _append_blocks(result: list[dict[str, Any]], role: str, blocks: list[dict[str, Any]]) -> None:
+def _input_to_block(inp: Input, serializer: SerializerProto) -> "ContentBlockTypeDef":
+    """Convert an Input to a block in *message* position.
+
+    Converse accepts different block sets in its two content positions — a message block may also
+    carry ``toolUse``/``toolResult``/``audio``, a toolResult block ``json``/``searchResult`` — so
+    each position owns the list of keys it may emit while the conversions stay shared. The two
+    ladders look alike only because today's inputs land in the overlap; an ``audio`` input would
+    belong in this one alone.
+    """
+    if isinstance(inp, BinaryInput):
+        if inp.kind is BinaryType.IMAGE:
+            return {"image": _image_block(inp)}
+        elif inp.kind is BinaryType.DOCUMENT:
+            return {"document": _document_block(inp)}
+        elif inp.kind is BinaryType.VIDEO:
+            return {"video": _video_block(inp)}
+        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "bedrock")
+    return {"text": _input_to_text(inp, serializer)}
+
+
+def _input_to_tool_result_block(inp: Input, serializer: SerializerProto) -> "ToolResultContentBlockTypeDef":
+    """Convert an Input to a block in *toolResult* position. See :func:`_input_to_block`."""
+    if isinstance(inp, BinaryInput):
+        if inp.kind is BinaryType.IMAGE:
+            return {"image": _image_block(inp)}
+        elif inp.kind is BinaryType.DOCUMENT:
+            return {"document": _document_block(inp)}
+        elif inp.kind is BinaryType.VIDEO:
+            return {"video": _video_block(inp)}
+        raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "bedrock")
+    return {"text": _input_to_text(inp, serializer)}
+
+
+def _append_blocks(
+    result: list["MessageTypeDef"],
+    role: "ConversationRoleType",
+    blocks: list["ContentBlockTypeDef"],
+) -> None:
     """Append blocks, merging same-role runs (Converse requires user-first, alternating roles)."""
     if not blocks:
         return
 
     if result and result[-1]["role"] == role:
-        result[-1]["content"].extend(blocks)
+        # MessageTypeDef declares content as a Sequence; every run here was built as a list
+        cast("list[ContentBlockTypeDef]", result[-1]["content"]).extend(blocks)
         return
 
     if not result and role == "assistant":
@@ -242,11 +300,11 @@ def convert_messages(
                 if r.parent_id in valid_tool_ids:
                     emitted_result_ids.add(r.parent_id)
 
-    result: list[dict[str, Any]] = []
+    result: list[MessageTypeDef] = []
 
     for message in event_list:
         if isinstance(message, ModelResponse):
-            content: list[dict[str, Any]] = []
+            content: list[ContentBlockTypeDef] = []
             if message.message:
                 content.append({"text": message.message.content})
             # Orphan toolUse blocks are dropped; assistant text is kept.
@@ -259,25 +317,25 @@ def convert_messages(
                         call.name,
                     )
                     continue
-                content.append({
-                    "toolUse": {
-                        "toolUseId": call.id,
-                        "name": call.name,
-                        "input": json.loads(call.arguments or "{}"),
-                    },
-                })
+                tool_use: ToolUseBlockTypeDef = {
+                    "toolUseId": call.id,
+                    "name": call.name,
+                    "input": json.loads(call.arguments or "{}"),
+                }
+                content.append({"toolUse": tool_use})
             _append_blocks(result, "assistant", content)
 
         elif isinstance(message, ToolResultsEvent):
-            tool_results: list[dict[str, Any]] = []
+            tool_results: list[ContentBlockTypeDef] = []
             for r in message.results:
                 # Converse rejects a toolResult with no toolUse in the prior
                 # turn — applies even when compaction removed every toolUse.
-                if r.parent_id not in valid_tool_ids:
+                # (A None parent_id never matches; spelling it out is what narrows toolUseId to str.)
+                if r.parent_id is None or r.parent_id not in valid_tool_ids:
                     continue
-                tool_result: dict[str, Any] = {
+                tool_result: ToolResultBlockTypeDef = {
                     "toolUseId": r.parent_id,
-                    "content": [_input_to_block(part, serializer) for part in r.result.parts],
+                    "content": [_input_to_tool_result_block(part, serializer) for part in r.result.parts],
                 }
                 if isinstance(r, ToolErrorEvent):
                     tool_result["status"] = "error"
@@ -294,17 +352,21 @@ def convert_messages(
 
         elif isinstance(message, (ToolResultEvent, ToolErrorEvent)):
             # Loose result whose ToolResultsEvent wrapper never persisted.
-            if message.parent_id in valid_tool_ids and message.parent_id not in emitted_result_ids:
+            if (
+                message.parent_id is not None
+                and message.parent_id in valid_tool_ids
+                and message.parent_id not in emitted_result_ids
+            ):
                 emitted_result_ids.add(message.parent_id)
                 tool_result = {
                     "toolUseId": message.parent_id,
-                    "content": [_input_to_block(part, serializer) for part in message.result.parts],
+                    "content": [_input_to_tool_result_block(part, serializer) for part in message.result.parts],
                 }
                 if isinstance(message, ToolErrorEvent):
                     tool_result["status"] = "error"
                 _append_blocks(result, "user", [{"toolResult": tool_result}])
 
-    return result
+    return [dict(turn) for turn in result]
 
 
 def normalize_usage(raw: dict[str, Any]) -> Usage:
