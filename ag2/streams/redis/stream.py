@@ -40,6 +40,9 @@ class RedisStream(MemoryStream):
         prefix: Key prefix for Redis storage and pub/sub channels.
         id: Stream ID. If None, a new UUID is generated.
         serializer: Serialization format (Serializer.JSON or Serializer.PICKLE).
+            ``Serializer.PICKLE`` lets anyone who can write to this Redis
+            execute code in the reading process; use it only with a fully
+            trusted Redis.
     """
 
     def __init__(
