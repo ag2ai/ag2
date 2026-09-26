@@ -9,6 +9,9 @@ Covers standalone usage with no hub or network — pure
 for ``TaskInject``, and TTL field population.
 """
 
+import asyncio
+from typing import Any
+
 import pytest
 
 from ag2 import Agent, TaskSpec
@@ -314,3 +317,75 @@ class TestMetadata:
         agent = _agent()
         async with agent.task("payload-test", payload={"capability": "search"}) as task:
             assert task.metadata.spec.payload == {"capability": "search"}
+
+
+class TestConcurrentSiblingTasks:
+    @pytest.mark.asyncio
+    async def test_sibling_exit_keeps_active_task_dependency(self) -> None:
+        """A exits while B is active: the entry must be B's task, and B's exit
+        must remove the entry rather than resurrect the exited A."""
+        agent = _agent()
+        ctx = ConversationContext(stream=MemoryStream())
+        ts: dict[str, Any] = {}
+        entered = {n: asyncio.Event() for n in "AB"}
+        proceed = {n: asyncio.Event() for n in "AB"}
+
+        async def run(name: str) -> None:
+            async with agent.task(name, context=ctx) as task:
+                ts[name] = task
+                entered[name].set()
+                await proceed[name].wait()
+
+        a = asyncio.create_task(run("A"))
+        b = asyncio.create_task(run("B"))
+        await asyncio.gather(entered["A"].wait(), entered["B"].wait())
+
+        proceed["A"].set()
+        await a
+        assert ctx.dependencies.get("ag2.task") is ts["B"]
+
+        proceed["B"].set()
+        await b
+        assert ctx.dependencies.get("ag2.task") is None
+
+    @pytest.mark.asyncio
+    async def test_three_overlapping_middle_exits_first(self) -> None:
+        """A→B→C entered, B then C exit first: the entry must walk the chain
+        back to the still-running A."""
+        agent = _agent()
+        ctx = ConversationContext(stream=MemoryStream())
+        ts: dict[str, Any] = {}
+        entered = {n: asyncio.Event() for n in "ABC"}
+        proceed = {n: asyncio.Event() for n in "ABC"}
+
+        async def run(name: str) -> None:
+            async with agent.task(name, context=ctx) as task:
+                ts[name] = task
+                entered[name].set()
+                await proceed[name].wait()
+
+        runners: dict[str, asyncio.Task] = {}
+        for n in "ABC":
+            runners[n] = asyncio.create_task(run(n))
+            await entered[n].wait()
+
+        proceed["B"].set()
+        await runners["B"]
+        proceed["C"].set()
+        await runners["C"]
+        assert ctx.dependencies.get("ag2.task") is ts["A"]
+
+        proceed["A"].set()
+        await runners["A"]
+        assert ctx.dependencies.get("ag2.task") is None
+
+    @pytest.mark.asyncio
+    async def test_sequential_nested_task_dependency_restored(self) -> None:
+        agent = _agent()
+        ctx = ConversationContext(stream=MemoryStream())
+
+        async with agent.task("outer", context=ctx) as outer:
+            async with agent.task("inner", context=ctx) as inner:
+                assert ctx.dependencies.get("ag2.task") is inner
+            # inner's exit restores the still-active outer task
+            assert ctx.dependencies.get("ag2.task") is outer
