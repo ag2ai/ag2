@@ -529,3 +529,26 @@ async def _id_for(hub_client: HubClient, name: str) -> str:
     passport = await hub_client.get_agent(name)
     assert passport.agent_id is not None
     return passport.agent_id
+
+
+@pytest.mark.asyncio
+async def test_shutdown_unregisters_a_human_and_ends_its_envelope_stream() -> None:
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    hc = HubClient(LocalLink(hub), hub=hub)
+    human = await hc.register_human(Passport(name="reviewer"))
+    received: list[Envelope] = []
+    consumer = asyncio.create_task(_drain(human, received))
+    await asyncio.sleep(0)  # let the consumer park on the empty queue
+
+    await hc.shutdown()
+
+    await asyncio.wait_for(consumer, timeout=1)
+    assert received == []
+    assert await hub.list_agents(kind="human") == []
+    await hub.close()
+
+
+async def _drain(human: HumanClient, into: list[Envelope]) -> None:
+    async for envelope in human.envelopes():
+        into.append(envelope)

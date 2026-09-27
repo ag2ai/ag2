@@ -1189,14 +1189,15 @@ class HubClient:
                 await self._receive_task
 
     async def shutdown(self) -> None:
-        """Unregister every ``AgentClient`` then ``close()``."""
+        """Unregister every client this connection registered, then ``close()``.
+
+        A ``HumanClient`` is also disconnected, so a consumer parked on its ``envelopes()`` ends.
+        """
         for client in list(self._clients.values()):
-            # A ``HumanClient`` has no ``unregister``, so a human stays
-            # registered and its pull consumers are not woken.
-            if not isinstance(client, AgentClient):
-                continue
             with contextlib.suppress(Exception):
                 await client.unregister()
+            if isinstance(client, HumanClient):
+                await client.disconnect()
         self._clients.clear()
         await self.close()
 

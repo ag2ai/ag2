@@ -77,6 +77,7 @@ class HumanClient:
         self._hub_client = hub_client
         self._auto_ack_invites = auto_ack_invites
         self._disconnected = False
+        self._unregistered = False
 
         # Push callbacks. Run in registration order; exceptions are
         # logged and do not propagate (a buggy UI callback cannot break
@@ -171,6 +172,12 @@ class HumanClient:
                     envelope.channel_id,
                     envelope.event_type,
                 )
+
+    async def unregister(self) -> None:
+        """Remove this human from the hub's registry, as ``AgentClient.unregister`` does. Idempotent."""
+        if not self._unregistered:
+            await self._hub_client.unregister_agent(self.agent_id)
+            self._unregistered = True
 
     async def disconnect(self) -> None:
         """Stop accepting deliveries and wake any blocked consumers. Idempotent.
