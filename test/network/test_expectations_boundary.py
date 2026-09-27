@@ -25,16 +25,32 @@ don't explicitly exercise:
 """
 
 from datetime import datetime
+from typing import Any
 
 import pytest
 
+from ag2 import AgentReply
+from ag2.events import BaseEvent
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_TEXT,
+    AgentClient,
     Envelope,
+    Handoff,
     Hub,
 )
-from ag2.network.adapters.base import AdapterResult
+from ag2.network.adapters.base import (
+    AdapterResult,
+    ExpectedTurn,
+    NameDirectory,
+    default_build_packet_envelope,
+    default_build_round_envelope,
+    default_build_text_envelope,
+    default_expected_next,
+    default_extract_turn_input,
+    default_render_envelope,
+    default_tools_for,
+)
 from ag2.network.adapters.conversation import ConversationAdapter
 from ag2.network.channel import (
     ChannelManifest,
@@ -54,6 +70,7 @@ from ag2.network.hub import (
     ReplyWithinEvaluator,
 )
 from ag2.network.views.builtin import FullTranscript
+from ag2.tools.tool import Tool
 
 from ._helpers import _MockClock
 
@@ -70,23 +87,80 @@ class _NoOpAdapter:
     def __init__(self, manifest: ChannelManifest) -> None:
         self.manifest = manifest
 
-    def initial_state(self, _meta: ChannelMetadata) -> dict:
+    def initial_state(self, _meta: ChannelMetadata) -> dict[str, Any]:
         return {}
 
-    def fold(self, _envelope: Envelope, state: dict) -> dict:
+    def fold(self, _envelope: Envelope, state: dict[str, Any]) -> dict[str, Any]:
         return state
 
     def validate_create(self, _meta: ChannelMetadata) -> None:
         return
 
-    def validate_send(self, _meta: ChannelMetadata, _envelope: Envelope, _state: dict) -> None:
+    def validate_send(self, _meta: ChannelMetadata, _envelope: Envelope, _state: dict[str, Any]) -> None:
         return
 
-    def on_accepted(self, _meta: ChannelMetadata, _envelope: Envelope, _state: dict) -> AdapterResult:
+    def on_accepted(self, _meta: ChannelMetadata, _envelope: Envelope, _state: dict[str, Any]) -> AdapterResult:
         return AdapterResult()
+
+    def expected_next(self, metadata: ChannelMetadata, state: dict[str, Any]) -> ExpectedTurn | None:
+        return default_expected_next(metadata, state)
 
     def default_view_policy(self, _meta: ChannelMetadata, _participant_id: str) -> FullTranscript:
         return FullTranscript()
+
+    def extract_turn_input(self, envelope: Envelope) -> str | None:
+        return default_extract_turn_input(envelope)
+
+    def build_round_envelope(
+        self,
+        metadata: ChannelMetadata,
+        sender_id: str,
+        reply: AgentReply,
+        events: list[BaseEvent],
+        state: dict[str, Any],
+        hub: NameDirectory,
+    ) -> Envelope | None:
+        return default_build_round_envelope(metadata, sender_id, reply, events, state, hub)
+
+    def render_envelope(self, envelope: Envelope) -> str | None:
+        return default_render_envelope(envelope)
+
+    def tools_for(
+        self, client: AgentClient, metadata: ChannelMetadata, state: dict[str, Any], participant_id: str
+    ) -> list[Tool]:
+        return default_tools_for(client, metadata, state, participant_id)
+
+    def build_text_envelope(
+        self,
+        channel_id: str,
+        sender_id: str,
+        text: str,
+        *,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
+        return default_build_text_envelope(channel_id, sender_id, text, audience=audience, causation_id=causation_id)
+
+    def build_packet_envelope(
+        self,
+        channel_id: str,
+        sender_id: str,
+        body: str,
+        *,
+        handoff: Handoff | None = None,
+        context_set: dict[str, Any] | None = None,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
+        return default_build_packet_envelope(
+            channel_id,
+            sender_id,
+            body,
+            handoff=handoff,
+            context_set=context_set,
+            audience=audience,
+            causation_id=causation_id,
+        )
 
 
 def _conv_meta(

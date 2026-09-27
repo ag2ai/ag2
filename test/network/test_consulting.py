@@ -35,10 +35,12 @@ from ag2.network import (
 from ag2.network.adapters.consulting import ConsultingAdapter, ConsultingState
 from ag2.network.channel import ChannelState
 from ag2.network.errors import ProtocolError
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, Turn
+
+from ._helpers import adapter_state
 
 
-def _agent(name: str, *events: object) -> Agent:
+def _agent(name: str, *events: Turn) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
 
 
@@ -186,8 +188,7 @@ async def test_hub_hydrate_refolds_active_channel(tmp_path) -> None:
     assert refreshed.manifest.type == "consulting"
 
     # Adapter state cache rebuilt by re-folding the WAL.
-    state = hub2._adapter_states[channel.channel_id]
-    assert isinstance(state, ConsultingState)
+    state = adapter_state(hub2, channel.channel_id, ConsultingState)
     # Alice has sent her prompt; bob has not replied yet.
     assert state.initiator_sent is True
     assert state.respondent_replied is False

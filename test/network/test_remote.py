@@ -266,6 +266,7 @@ class TestDispatchRouting:
             Passport(name="bob", auth=AuthBlock(scheme="grpc", claim={}), kind="remote_agent"),
             Resume(),
         )
+        assert bob_passport.agent_id is not None
 
         # The invite leg also lands on the (missing) proxy path, so
         # ``alice.open`` would hang on the invite-ack. Pre-ack the
@@ -322,6 +323,7 @@ class TestDispatchRouting:
             Passport(name="bob", auth=AuthBlock(scheme="a2a"), kind="remote_agent"),
             Resume(),
         )
+        assert bob_passport.agent_id is not None
 
         boom = RuntimeError("transport down")
         # Proxy raises on every dispatch, so the invite cannot
@@ -385,6 +387,7 @@ class TestDispatchRouting:
             Passport(name="bob", auth=AuthBlock(scheme="a2a"), kind="remote_agent"),
             Resume(),
         )
+        assert bob_passport.agent_id is not None
 
         # Proxy raises on EV_TEXT dispatch but auto-acks invites so
         # the channel can activate.

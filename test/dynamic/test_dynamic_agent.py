@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from typing import Any
 
 import pytest
 
@@ -16,6 +17,7 @@ from ag2.events import (
 )
 from ag2.testing import TestConfig
 from ag2.tools.dynamic import dynamic_agent
+from test._helpers import text_of
 
 
 @tool
@@ -30,11 +32,11 @@ def web_search(query: str) -> str:
     return f"results for {query}"
 
 
-def _args(payload: dict) -> str:
+def _args(payload: dict[str, Any]) -> str:
     return json.dumps(payload)
 
 
-def _spec(name: str, *, prompt: list[str] | None = None, tool_names: list[str] | None = None) -> dict:
+def _spec(name: str, *, prompt: list[str] | None = None, tool_names: list[str] | None = None) -> dict[str, Any]:
     return {
         "name": name,
         "prompt": prompt or [],
@@ -44,7 +46,7 @@ def _spec(name: str, *, prompt: list[str] | None = None, tool_names: list[str] |
 
 def _text(event: ToolResultEvent) -> str:
     """Pull the text body out of a ToolResultEvent."""
-    return event.result.parts[0].content
+    return text_of(event.result.parts[0])
 
 
 @pytest.mark.asyncio

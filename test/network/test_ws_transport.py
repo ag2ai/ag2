@@ -92,7 +92,8 @@ async def _new_hub() -> Hub:
 
 
 def _bound_port(server) -> int:
-    return server.sockets[0].getsockname()[1]
+    port: int = server.sockets[0].getsockname()[1]
+    return port
 
 
 class TestHandshake:
@@ -330,6 +331,7 @@ class TestConnectionLifecycle:
     async def test_client_close_drops_server_endpoint(self) -> None:
         hub = await _new_hub()
         passport = await hub.register_identity(Passport(name="alice"), Resume())
+        assert passport.agent_id is not None
         async with serve_ws(hub, "127.0.0.1", 0) as server:
             port = _bound_port(server)
             client = WsLinkClient(f"ws://127.0.0.1:{port}")
@@ -409,7 +411,9 @@ class TestTracePropagationOverWire:
 
                 # That traceparent belongs to the hub's network.envelope span,
                 # so a cross-process consumer joins the same trace.
-                envelope_spans = [s for s in exporter.spans if s.attributes.get("ag2.span.type") == "envelope"]
+                envelope_spans = [
+                    s for s in exporter.spans if s.attributes and s.attributes.get("ag2.span.type") == "envelope"
+                ]
                 assert envelope_spans, "expected a network.envelope span"
                 span_trace_hex = format(envelope_spans[0].context.trace_id, "032x")
                 assert wire_traceparent.split("-")[1] == span_trace_hex

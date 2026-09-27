@@ -32,10 +32,10 @@ from ag2.network import (
     Hub,
 )
 from ag2.network.adapters.consulting import CONSULTING_TYPE
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, Turn
 
 
-def _agent(name: str, *events: object) -> Agent:
+def _agent(name: str, *events: Turn) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
 
 

@@ -134,6 +134,7 @@ class TestHelloFrameAuthWiring:
             expectation_sweep_interval=0,
         )
         passport = await hub.register_identity(Passport(name="alice"), Resume())
+        assert passport.agent_id is not None
 
         link = LocalLink(hub)
         client = link.client()
@@ -160,6 +161,7 @@ class TestHelloFrameAuthWiring:
             Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "k-alice"})),
             Resume(),
         )
+        assert passport.agent_id is not None
 
         link = LocalLink(hub)
         client = link.client()
@@ -286,6 +288,7 @@ class TestHelloFrameAuthWiring:
             Passport(name="alice", auth=AuthBlock(scheme="api_key", claim={"token": "k-alice"})),
             Resume(),
         )
+        assert passport.agent_id is not None
 
         link = LocalLink(hub)
         client = link.client()

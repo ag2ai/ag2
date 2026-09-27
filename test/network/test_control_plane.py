@@ -54,7 +54,8 @@ async def _new_hub(auth: AuthRegistry | None = None) -> Hub:
 
 
 def _bound_port(server) -> int:
-    return server.sockets[0].getsockname()[1]
+    port: int = server.sockets[0].getsockname()[1]
+    return port
 
 
 def _url(server) -> str:

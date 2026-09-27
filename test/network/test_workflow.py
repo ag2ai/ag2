@@ -18,6 +18,8 @@ Two layers:
   adapter and recovers ``expected_next_speaker`` deterministically.
 """
 
+from typing import Any
+
 import pytest
 
 from ag2 import Agent
@@ -52,10 +54,12 @@ from ag2.network.transitions import (
     WorkflowGraphError,
     register_target,
 )
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, Turn
+
+from ._helpers import adapter_state
 
 
-def _agent(name: str, *events: object) -> Agent:
+def _agent(name: str, *events: Turn) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
 
 
@@ -74,7 +78,7 @@ def _state(
     )
 
 
-def _routing_packet(tool: str, *, reason: str = "") -> dict:
+def _routing_packet(tool: str, *, reason: str = "") -> dict[str, Any]:
     """Construct an ``EV_PACKET`` payload that simulates a tool-driven
     handoff (the framework normally builds this from the agent's local
     ``ToolCallEvent``s at round-end)."""
@@ -87,7 +91,7 @@ def _routing_packet(tool: str, *, reason: str = "") -> dict:
 
 def _envelope(sender: str, *, event_type: str = EV_TEXT, tool: str = "") -> Envelope:
     if event_type == EV_TEXT:
-        data: dict = {"text": "x"}
+        data: dict[str, Any] = {"text": "x"}
     elif event_type == EV_PACKET:
         data = {
             "routing": {"kind": "handoff", "tool": tool, "reason": ""},
@@ -200,7 +204,7 @@ class TestTransitionGraphSerialization:
         assert restored.max_turns == 5
 
     def test_unknown_target_name_raises(self) -> None:
-        bad = {
+        bad: dict[str, Any] = {
             "initial_speaker": "alice",
             "transitions": [],
             "default_target": {"name": "unknown_target", "args": {}},
@@ -297,8 +301,7 @@ async def test_workflow_round_robin_advances_through_participants() -> None:
     )
     assert channel.state == ChannelState.ACTIVE
 
-    state = hub._adapter_states[channel.channel_id]
-    assert isinstance(state, WorkflowState)
+    state = adapter_state(hub, channel.channel_id, WorkflowState)
     assert state.expected_next_speaker == alice.agent_id
 
     # Manual sends in turn order.
@@ -312,7 +315,7 @@ async def test_workflow_round_robin_advances_through_participants() -> None:
         )
         await hub.post_envelope(env)
 
-    state = hub._adapter_states[channel.channel_id]
+    state = adapter_state(hub, channel.channel_id, WorkflowState)
     assert state.expected_next_speaker == alice.agent_id  # cycled back
     assert state.turn_count == 3
 
@@ -417,7 +420,7 @@ async def test_workflow_swarm_with_tool_handoff_and_revert() -> None:
         },
     )
     await hub.post_envelope(handoff_env)
-    state = hub._adapter_states[channel.channel_id]
+    state = adapter_state(hub, channel.channel_id, WorkflowState)
     assert state.expected_next_speaker == eng.agent_id
 
     # 2. eng replies with text.
@@ -429,7 +432,7 @@ async def test_workflow_swarm_with_tool_handoff_and_revert() -> None:
         event_data={"text": "eng analysis: looks good"},
     )
     await hub.post_envelope(eng_env)
-    state = hub._adapter_states[channel.channel_id]
+    state = adapter_state(hub, channel.channel_id, WorkflowState)
     # FromSpeaker(eng) fires → revert to initiator (triage).
     assert state.expected_next_speaker == triage.agent_id
 
@@ -493,7 +496,7 @@ async def test_workflow_finish_routing_closes_channel() -> None:
 
     # State should reflect termination intent: no next speaker, reason
     # propagated from Finish.
-    state = hub._adapter_states[channel.channel_id]
+    state = adapter_state(hub, channel.channel_id, WorkflowState)
     assert state.expected_next_speaker is None
     assert state.pending_close_reason == "all_done"
 
@@ -593,7 +596,7 @@ async def test_workflow_manager_as_initiator_auto_pattern() -> None:
             event_data=ed,
         )
         await hub.post_envelope(env)
-        state = hub._adapter_states[channel.channel_id]
+        state = adapter_state(hub, channel.channel_id, WorkflowState)
         assert state.expected_next_speaker == exp, (
             f"after {sender.agent_id} sent {et}, expected_next was {state.expected_next_speaker}, expected {exp}"
         )
@@ -643,7 +646,7 @@ async def test_workflow_hydrate_recovers_expected_next_speaker(tmp_path) -> None
         },
     )
     await hub1.post_envelope(handoff_env)
-    pre_state = hub1._adapter_states[channel.channel_id]
+    pre_state = adapter_state(hub1, channel.channel_id, WorkflowState)
     assert pre_state.expected_next_speaker == eng.agent_id
 
     await hub1.close()
@@ -656,8 +659,7 @@ async def test_workflow_hydrate_recovers_expected_next_speaker(tmp_path) -> None
     assert refreshed.manifest.type == WORKFLOW_TYPE
     assert refreshed.state == ChannelState.ACTIVE
 
-    rebuilt = hub2._adapter_states[channel.channel_id]
-    assert isinstance(rebuilt, WorkflowState)
+    rebuilt = adapter_state(hub2, channel.channel_id, WorkflowState)
     assert rebuilt.expected_next_speaker == eng.agent_id
     assert rebuilt.last_speaker_id == triage.agent_id
     assert rebuilt.turn_count == 1

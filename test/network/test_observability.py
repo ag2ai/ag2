@@ -8,6 +8,7 @@ handler exception trap, ``Hub.health()``, hub logging.
 
 import asyncio
 import logging
+from typing import Any
 
 import pytest
 
@@ -50,13 +51,13 @@ class _RecordingListener(BaseHubListener):
     """Captures every event for assertion."""
 
     def __init__(self) -> None:
-        self.envelope_posted: list = []
-        self.envelope_rejected: list = []
-        self.channel_events: list = []
-        self.agent_events: list = []
-        self.turn_failed: list = []
-        self.task_events: list = []
-        self.dispatch_failed: list = []
+        self.envelope_posted: list[tuple[Any, ...]] = []
+        self.envelope_rejected: list[tuple[Any, ...]] = []
+        self.channel_events: list[tuple[Any, ...]] = []
+        self.agent_events: list[tuple[Any, ...]] = []
+        self.turn_failed: list[tuple[Any, ...]] = []
+        self.task_events: list[tuple[Any, ...]] = []
+        self.dispatch_failed: list[tuple[Any, ...]] = []
 
     async def on_envelope_posted(self, envelope, metadata) -> None:
         self.envelope_posted.append((envelope.event_type, envelope.sender_id))
@@ -266,9 +267,9 @@ async def test_resolve_unknown_audience_silent_drop_default() -> None:
 async def test_audit_subscribe_taps_live_stream() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
-    captured: list[dict] = []
+    captured: list[dict[str, Any]] = []
 
-    async def tap(record: dict) -> None:
+    async def tap(record: dict[str, Any]) -> None:
         captured.append(record)
 
     hub.audit_log.subscribe(tap)
@@ -567,7 +568,7 @@ async def test_register_human_duplicate_name_raises() -> None:
 def test_passport_kind_rejects_typo_at_construction() -> None:
     """Tightened ``Passport.kind`` raises ValueError for unknown literals."""
     with pytest.raises(ValueError, match="kind must be one of"):
-        Passport(name="x", kind="huMAn")  # typo
+        Passport(name="x", kind="huMAn")  # type: ignore[arg-type]  # a typo on purpose: the runtime check is under test
 
 
 @pytest.mark.asyncio

@@ -50,7 +50,7 @@ async def test_subclass_on_envelope_posted_fires_without_listener_registration()
     class _RecordingHub(Hub):
         def __init__(self, *args, **kwargs) -> None:
             super().__init__(*args, **kwargs)
-            self.captured: list = []
+            self.captured: list[tuple[str, str | None]] = []
 
         async def on_envelope_posted(self, envelope, metadata) -> None:
             self.captured.append((envelope.event_type, envelope.sender_id))
@@ -85,14 +85,14 @@ async def test_subclass_hook_runs_alongside_external_listener() -> None:
     class _SubHub(Hub):
         def __init__(self, *args, **kwargs) -> None:
             super().__init__(*args, **kwargs)
-            self.sub_calls: list = []
+            self.sub_calls: list[tuple[str, str]] = []
 
         async def on_agent_event(self, agent_id, kind, payload) -> None:
             self.sub_calls.append((kind, agent_id))
 
     class _Listener(BaseHubListener):
         def __init__(self) -> None:
-            self.calls: list = []
+            self.calls: list[tuple[str, str]] = []
 
         async def on_agent_event(self, agent_id, kind, payload) -> None:
             self.calls.append((kind, agent_id))
@@ -206,7 +206,7 @@ async def test_inbox_pressure_fires_on_crossing_high_water() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    fires: list = []
+    fires: list[tuple[str, int, int]] = []
 
     class _PressureListener(BaseHubListener):
         async def on_inbox_pressure(self, agent_id, pending, cap) -> None:
@@ -253,7 +253,7 @@ async def test_task_mirror_failure_fires_mirror_failed_event() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    events: list = []
+    events: list[tuple[str, str]] = []
 
     class _Listener(BaseHubListener):
         async def on_task_event(self, task_id, kind, payload) -> None:
@@ -265,10 +265,10 @@ async def test_task_mirror_failure_fires_mirror_failed_event() -> None:
     async def _broken_observe(metadata) -> None:
         raise RuntimeError("simulated hub failure")
 
-    hub.observe_task = _broken_observe  # type: ignore[assignment]
+    hub.observe_task = _broken_observe  # type: ignore[method-assign]  # a failing hub, which no public seam offers
 
     mirror = TaskMirror(hub=hub, owner_id="ghost-agent", channel_id="ghost-channel")
-    await mirror._on_started(TaskStarted(task_id="task-x", objective="test"))
+    await mirror._on_started(TaskStarted(task_id="task-x", objective="test", agent_name="ghost-agent"))
 
     assert any(kind == "mirror_failed" for _, kind in events)
 

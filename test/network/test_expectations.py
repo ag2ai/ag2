@@ -62,12 +62,12 @@ from ag2.network.hub import (
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
 )
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, Turn
 
 from ._helpers import _MockClock
 
 
-def _agent(name: str, *events: object) -> Agent:
+def _agent(name: str, *events: Turn) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
 
 

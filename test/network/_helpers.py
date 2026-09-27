@@ -9,15 +9,20 @@
   terminal event to await on.
 * :func:`wait_for_delivery` — poll one recipient's captured envelopes
   until a given text lands; for per-recipient delivery assertions.
+* :func:`adapter_state` — a channel's folded state, as the adapter's
+  state class.
 """
 
 import asyncio
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
+from typing import TypeVar
 
 from ag2.network import EV_TEXT, Envelope, Hub
 
-__all__ = ("_MockClock", "wait_for_delivery", "wait_for_text_count")
+__all__ = ("_MockClock", "adapter_state", "wait_for_delivery", "wait_for_text_count")
+
+TState = TypeVar("TState")
 
 
 class _MockClock:
@@ -77,3 +82,13 @@ async def wait_for_delivery(
             return
         await asyncio.sleep(0.02)
     raise asyncio.TimeoutError(f"no EV_TEXT envelope carrying {text!r} was delivered within {timeout}s")
+
+
+def adapter_state(hub: Hub, channel_id: str, kind: type[TState]) -> TState:
+    """Read ``channel_id``'s folded state through ``Hub.adapter_state``, as ``kind``.
+
+    The hub answers ``object``; a state of another class fails here rather than at an attribute read.
+    """
+    state = hub.adapter_state(channel_id)
+    assert isinstance(state, kind), f"channel {channel_id!r} holds {state!r}, not a {kind.__name__}"
+    return state

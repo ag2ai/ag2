@@ -83,6 +83,7 @@ async def _raw_bob(hub: Hub, name: str = "bob"):
     ``LocalLinkClient`` to it. The returned link can be driven with
     arbitrary frames without the default auto-ack interfering."""
     passport = await hub.register_identity(Passport(name=name), Resume())
+    assert passport.agent_id is not None
     link = LocalLink(hub)
     raw_client = link.client()
     hub.bind_endpoint(raw_client.endpoint_id, passport.agent_id)
@@ -151,6 +152,7 @@ class TestReceiptCursorAdvance:
             await _await_cursor(hub, bob.agent_id, channel.channel_id, lambda c: c == text_env.envelope_id)
             assert hub.inbox_cursor(bob.agent_id, channel.channel_id) == text_env.envelope_id
             cursor_blob = await hub._store.read(f"/agents/{bob.agent_id}/inbox.cursors.json")
+            assert cursor_blob is not None
             assert json.loads(cursor_blob)[channel.channel_id] == text_env.envelope_id
         finally:
             await hub.close()

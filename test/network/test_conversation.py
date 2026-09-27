@@ -47,12 +47,12 @@ from ag2.network.channel import (
 )
 from ag2.network.errors import ProtocolError
 from ag2.network.views.builtin import WindowedSummary
-from ag2.testing import TestConfig, TrackingConfig
+from ag2.testing import TestConfig, TrackingConfig, Turn
 
-from ._helpers import wait_for_text_count
+from ._helpers import adapter_state, wait_for_text_count
 
 
-def _agent(name: str, *events: object) -> Agent:
+def _agent(name: str, *events: Turn) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
 
 
@@ -118,8 +118,7 @@ async def test_conversation_back_and_forth_multi_turn() -> None:
     ]
 
     # Adapter state reflects the final speaker + count.
-    state = hub._adapter_states[channel.channel_id]
-    assert isinstance(state, ConversationState)
+    state = adapter_state(hub, channel.channel_id, ConversationState)
     assert state.turn_count == 4
     assert state.last_speaker_id == bob.agent_id
 
@@ -240,8 +239,7 @@ async def test_conversation_hydrate_refolds_active_channel(tmp_path) -> None:
     assert refreshed.manifest.type == CONVERSATION_TYPE
     assert refreshed.state == ChannelState.ACTIVE
 
-    state = hub2._adapter_states[channel.channel_id]
-    assert isinstance(state, ConversationState)
+    state = adapter_state(hub2, channel.channel_id, ConversationState)
     assert state.turn_count == 1
     assert state.last_speaker_id == alice.agent_id
 

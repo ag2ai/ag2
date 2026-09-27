@@ -460,6 +460,7 @@ async def test_channel_ttl_per_channel_override_wins() -> None:
     await hub.register(_agent("bob"))
 
     channel = await alice.open(type="conversation", target="bob", ttl="30m")
+    assert channel.metadata.expires_at is not None
     expires = datetime.fromisoformat(channel.metadata.expires_at)
     created = datetime.fromisoformat(channel.metadata.created_at)
     delta = (expires - created).total_seconds()

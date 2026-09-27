@@ -15,6 +15,8 @@ These tests exercise the rejection paths and fold determinism that
 the existing per-adapter integration tests don't cover directly.
 """
 
+from typing import Any
+
 import pytest
 
 from ag2 import Agent
@@ -36,6 +38,8 @@ from ag2.network.channel import (
 )
 from ag2.testing import TestConfig
 
+from ._helpers import adapter_state
+
 
 def _agent(name: str) -> Agent:
     return Agent(name=name, config=TestConfig())
@@ -46,7 +50,7 @@ def _make_metadata(
     manifest,
     creator: str,
     participants: list[tuple[str, ParticipantRole]],
-    knobs: dict | None = None,
+    knobs: dict[str, Any] | None = None,
 ) -> ChannelMetadata:
     parts = [
         Participant(agent_id=aid, role=role, order=i, joined_at="2026-01-01T00:00:00+00:00")
@@ -460,7 +464,7 @@ async def test_hydrate_refolds_discussion_state_deterministically() -> None:
             )
         )
 
-        live_state: DiscussionState = hub1._adapter_states[sid]
+        live_state = adapter_state(hub1, sid, DiscussionState)
         live_summary = (
             live_state.expected_next_speaker,
             live_state.last_speaker_id,
@@ -471,7 +475,7 @@ async def test_hydrate_refolds_discussion_state_deterministically() -> None:
         await hub1.close()
 
         hub2 = await Hub.open(DiskKnowledgeStore(tmp), ttl_sweep_interval=0, expectation_sweep_interval=0)
-        rehydrated: DiscussionState = hub2._adapter_states[sid]
+        rehydrated = adapter_state(hub2, sid, DiscussionState)
         rehydrated_summary = (
             rehydrated.expected_next_speaker,
             rehydrated.last_speaker_id,

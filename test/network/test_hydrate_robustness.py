@@ -32,6 +32,7 @@ from ag2.network import (
     Envelope,
     Hub,
     LimitsBlock,
+    Passport,
     ProtocolError,
     Resume,
     Rule,
@@ -48,6 +49,13 @@ from ag2.testing import TestConfig
 
 def _agent(name: str) -> Agent:
     return Agent(name=name, config=TestConfig())
+
+
+def _agent_ids(passports: list[Passport]) -> list[str]:
+    """Each listed passport's id, which the hub stamps on every one."""
+    ids = [p.agent_id for p in passports]
+    assert all(i is not None for i in ids), ids
+    return [i for i in ids if i is not None]
 
 
 @pytest.mark.asyncio
@@ -74,9 +82,9 @@ async def test_hydrate_idempotent(tmp_path) -> None:
     await hub1.close()
 
     hub2 = await Hub.open(DiskKnowledgeStore(str(tmp_path)), ttl_sweep_interval=0, expectation_sweep_interval=0)
-    after_first = sorted(p.agent_id for p in await hub2.list_agents())
+    after_first = sorted(_agent_ids(await hub2.list_agents()))
     await hub2.hydrate()
-    after_second = sorted(p.agent_id for p in await hub2.list_agents())
+    after_second = sorted(_agent_ids(await hub2.list_agents()))
     assert after_first == after_second == [alice.agent_id]
 
     await hub2.close()
@@ -200,6 +208,7 @@ async def test_hydrate_handles_partial_trailing_line_in_audit_log(tmp_path) -> N
 
     # The valid prefix is intact: split manually and parse without the bad tail.
     body = await store.read(audit_path())
+    assert body is not None
     valid_lines = [line for line in body.splitlines() if line.startswith("{") and line.endswith("}")]
     assert len(valid_lines) == 2
     assert json.loads(valid_lines[0])["name"] == "alice"

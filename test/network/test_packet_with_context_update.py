@@ -18,6 +18,8 @@ envelope can atomically:
 ``ContextEquals`` rule on the same packet matches the just-set value.
 """
 
+from typing import Any
+
 import pytest
 
 from ag2 import Agent
@@ -34,8 +36,11 @@ from ag2.network import (
     ToolCalled,
     Transition,
     TransitionGraph,
+    WorkflowState,
 )
 from ag2.testing import TestConfig
+
+from ._helpers import adapter_state
 
 
 def _agent(name: str, *replies: str) -> Agent:
@@ -49,13 +54,13 @@ def _packet(
     tool: str | None = None,
     reason: str = "",
     target: str | None = None,
-    set_vars: dict | None = None,
-    delete_vars: list | None = None,
+    set_vars: dict[str, Any] | None = None,
+    delete_vars: list[str] | None = None,
     body: str = "",
 ) -> Envelope:
     """Helper: build an EV_PACKET envelope with the given routing
     intent and context_updates."""
-    routing: dict = {"kind": "handoff" if tool or target else "text"}
+    routing: dict[str, Any] = {"kind": "handoff" if tool or target else "text"}
     if tool is not None:
         routing["tool"] = tool
     if reason:
@@ -119,7 +124,7 @@ class TestPacketWithContextUpdate:
         )
         await hub.post_envelope(envelope)
 
-        state = hub._adapter_states[channel.channel_id]
+        state = adapter_state(hub, channel.channel_id, WorkflowState)
         # Context vars carry the new key.
         assert state.context_vars == {"category": "technical"}
         # ContextEquals matched on post-update state — speaker is the
@@ -156,7 +161,7 @@ class TestPacketWithContextUpdate:
         )
 
         # Verify the seeded value is in place.
-        assert hub._adapter_states[channel.channel_id].context_vars == {"route": "stale"}
+        assert adapter_state(hub, channel.channel_id, WorkflowState).context_vars == {"route": "stale"}
 
         # Packet that clears the route via context_updates.delete.
         # Fold applies it before select_next, so ContextEquals(route, None)
@@ -170,7 +175,7 @@ class TestPacketWithContextUpdate:
         )
         await hub.post_envelope(envelope)
 
-        state = hub._adapter_states[channel.channel_id]
+        state = adapter_state(hub, channel.channel_id, WorkflowState)
         assert state.context_vars == {}
         # Terminate rule fired — no next speaker, close reason set.
         assert state.expected_next_speaker is None
@@ -213,7 +218,7 @@ class TestPacketWithContextUpdate:
         )
         await hub.post_envelope(envelope)
 
-        state = hub._adapter_states[channel.channel_id]
+        state = adapter_state(hub, channel.channel_id, WorkflowState)
         # Existing context untouched; routing follows FromSpeaker rule.
         assert state.context_vars == {"existing": "kept"}
         assert state.expected_next_speaker == bob.agent_id
@@ -255,7 +260,7 @@ class TestPacketWithContextUpdate:
         )
         await hub.post_envelope(envelope)
 
-        state = hub._adapter_states[channel.channel_id]
+        state = adapter_state(hub, channel.channel_id, WorkflowState)
         assert state.expected_next_speaker == b.agent_id
 
         await hub.close()

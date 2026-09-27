@@ -29,8 +29,11 @@ from ag2.network import (
     TerminateTarget,
     Transition,
     TransitionGraph,
+    WorkflowState,
 )
 from ag2.testing import TestConfig
+
+from ._helpers import adapter_state
 
 
 def _agent(name: str, *replies: str) -> Agent:
@@ -82,7 +85,7 @@ class TestContextVars:
             set={"priority": "high", "ticket_id": "T-481"},
         )
 
-        state = hub._adapter_states[channel.channel_id]
+        state = adapter_state(hub, channel.channel_id, WorkflowState)
         assert state.context_vars == {"priority": "high", "ticket_id": "T-481"}
 
         await hub.close()
@@ -123,7 +126,7 @@ class TestContextVars:
             set={"resolved": True},
         )
 
-        state = hub._adapter_states[channel.channel_id]
+        state = adapter_state(hub, channel.channel_id, WorkflowState)
         assert state.context_vars == {"priority": "high", "resolved": True}
 
         await hub.close()
@@ -159,7 +162,7 @@ class TestContextVars:
             set={"observer_flag": True},
         )
 
-        state = hub._adapter_states[channel.channel_id]
+        state = adapter_state(hub, channel.channel_id, WorkflowState)
         assert state.context_vars == {"observer_flag": True}
 
         await hub.close()
@@ -265,14 +268,14 @@ class TestContextVars:
         )
 
         # Snapshot before close.
-        before = dict(hub._adapter_states[channel_id].context_vars)
+        before = dict(adapter_state(hub, channel_id, WorkflowState).context_vars)
 
         await hub.close()
 
         # Re-open against the same store and re-fold the WAL.
         hub2 = await Hub.open(store, ttl_sweep_interval=0)
         try:
-            after = dict(hub2._adapter_states[channel_id].context_vars)
+            after = dict(adapter_state(hub2, channel_id, WorkflowState).context_vars)
             assert after == before
             assert after == {"k2": "v2", "k3": "v3"}
         finally:
@@ -299,8 +302,9 @@ class TestContextVars:
             knobs={"graph": graph.to_dict()},
         )
 
-        before_turn = hub._adapter_states[channel.channel_id].turn_count
-        before_speaker = hub._adapter_states[channel.channel_id].expected_next_speaker
+        before = adapter_state(hub, channel.channel_id, WorkflowState)
+        before_turn = before.turn_count
+        before_speaker = before.expected_next_speaker
 
         await _post_context_set(
             hub,
@@ -309,7 +313,7 @@ class TestContextVars:
             set={"k": "v"},
         )
 
-        after = hub._adapter_states[channel.channel_id]
+        after = adapter_state(hub, channel.channel_id, WorkflowState)
         assert after.turn_count == before_turn
         assert after.expected_next_speaker == before_speaker
 

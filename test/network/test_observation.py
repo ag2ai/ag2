@@ -41,10 +41,10 @@ from ag2.network.identity import (
     Resume,
 )
 from ag2.task import TaskState
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, Turn
 
 
-def _agent(name: str, *events: object) -> Agent:
+def _agent(name: str, *events: Turn) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
 
 
@@ -395,10 +395,10 @@ async def test_record_observation_writes_audit_with_observed_source() -> None:
         Resume(claimed_capabilities=["analysis"]),
     )
 
-    pre_audit = len(await hub._audit_log.read_all())
+    pre_audit = len(await hub.audit_log.read_all())
 
     # Tenant-driven update.
-    await bob_hc._hub.set_resume(bob.agent_id, Resume(summary="updated by tenant"))
+    await hub.set_resume(bob.agent_id, Resume(summary="updated by tenant"))
     # Hub-driven observation.
     await hub.record_observation(
         owner_id=bob.agent_id,
@@ -407,7 +407,7 @@ async def test_record_observation_writes_audit_with_observed_source() -> None:
         latency_ms=42,
     )
 
-    audit = await hub._audit_log.read_all()
+    audit = await hub.audit_log.read_all()
     new_records = audit[pre_audit:]
     resume_records = [r for r in new_records if r["kind"] == AUDIT_KIND_RESUME_SET]
 

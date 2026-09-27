@@ -57,7 +57,7 @@ from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
 
-async def _invoke(tool: Any, args: dict, *, dependencies: dict | None = None) -> Any:
+async def _invoke(tool: Any, args: dict[str, Any], *, dependencies: dict[str, Any] | None = None) -> Any:
     """Invoke a ``FunctionTool`` directly and return the underlying value."""
     event = ToolCallEvent(name=tool.name, arguments=json.dumps(args))
     context = Context(stream=MemoryStream(), dependencies=dependencies or {})
@@ -229,7 +229,7 @@ async def test_cross_tool_flow_exercises_all_six_tools() -> None:
         "context",
     }
 
-    deps: dict = {AGENT_CLIENT_DEP: alice}
+    deps: dict[str, Any] = {AGENT_CLIENT_DEP: alice}
 
     # peers(action="find", capability="math") → bob
     found = await _invoke(peers, {"action": "find", "capability": "math"}, dependencies=deps)

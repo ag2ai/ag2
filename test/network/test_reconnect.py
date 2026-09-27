@@ -64,6 +64,7 @@ class TestAttachRegisterFallback:
             assert client.agent_id is not None
             assert hub._name_to_id["alice"] == client.agent_id
             # The endpoint binding goes through register's path.
+            assert hc._client_link is not None
             assert hub._agent_to_endpoint[client.agent_id] == hc._client_link.endpoint_id
             # Resume captured.
             assert "debate" in hub._resumes[client.agent_id].claimed_capabilities
@@ -118,6 +119,7 @@ class TestAttachRebind:
         alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
         bob_v1 = await bob_hc_v1.register(_agent("bob"), Passport(name="bob"), Resume())
         bob_id = bob_v1.agent_id
+        assert bob_hc_v1._client_link is not None
         v1_endpoint_id = bob_hc_v1._client_link.endpoint_id
         assert hub._agent_to_endpoint[bob_id] == v1_endpoint_id
 
@@ -128,6 +130,7 @@ class TestAttachRebind:
             # Bob re-attaches via a different HubClient — same name.
             bob_hc_v2 = HubClient(link, hub=hub)
             bob_v2 = await bob_hc_v2.attach(_agent("bob", ""), "bob")
+            assert bob_hc_v2._client_link is not None
             v2_endpoint_id = bob_hc_v2._client_link.endpoint_id
 
             try:
@@ -172,6 +175,7 @@ class TestAttachRebind:
         shared_hc = HubClient(link, hub=hub)
         await shared_hc.register(_agent("alice"), Passport(name="alice"), Resume())
         bob = await shared_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        assert shared_hc._client_link is not None
         shared_endpoint_id = shared_hc._client_link.endpoint_id
         # Both bound to the same endpoint.
         assert hub._endpoint_to_agents[shared_endpoint_id] >= {bob.agent_id}

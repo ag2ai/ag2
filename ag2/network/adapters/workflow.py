@@ -28,6 +28,7 @@ them through the expectation sweeper.
 """
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -560,7 +561,7 @@ def _packet_text(envelope: Envelope) -> "str | None":
 
 
 def _resolve_routing(
-    events: list[BaseEvent],
+    events: Sequence[BaseEvent],
     graph: TransitionGraph | None,
     name_to_id: dict[str, str],
 ) -> dict[str, Any]:

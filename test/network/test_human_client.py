@@ -18,6 +18,7 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_TEXT,
     Channel,
+    Envelope,
     Hub,
     HubClient,
     HumanClient,
@@ -257,7 +258,7 @@ async def test_callback_exception_does_not_break_dispatch() -> None:
     await channel.send("second")
 
     # Pull queue is still populated even though the push callback raised.
-    text_envs = []
+    text_envs: list[Envelope] = []
     while len(text_envs) < 2:
         env = await human.next_envelope(timeout=2.0)
         if env.event_type == EV_TEXT:

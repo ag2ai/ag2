@@ -11,13 +11,14 @@ canonical default; tenants may plug in any compatible store.
 """
 
 import asyncio
+from typing import Any
 
 import pytest
-from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace import Event, ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 
 from ag2 import Agent, Context
-from ag2.events import TaskCancelled
+from ag2.events import BaseEvent, TaskCancelled
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     Hub,
@@ -41,12 +42,12 @@ class _InMemoryCheckpointStore:
     """Test double satisfying :class:`CheckpointStore` without a hub."""
 
     def __init__(self) -> None:
-        self.data: dict[str, dict] = {}
+        self.data: dict[str, dict[str, Any]] = {}
 
-    async def write(self, task_id: str, state: dict) -> None:
+    async def write(self, task_id: str, state: dict[str, Any]) -> None:
         self.data[task_id] = dict(state)
 
-    async def read(self, task_id: str) -> dict | None:
+    async def read(self, task_id: str) -> dict[str, Any] | None:
         snap = self.data.get(task_id)
         return dict(snap) if snap is not None else None
 
@@ -63,7 +64,7 @@ class TestTaskCancel:
     @pytest.mark.asyncio
     async def test_cancel_transitions_to_cancelled_and_emits_event(self) -> None:
         stream = MemoryStream()
-        events: list = []
+        events: list[BaseEvent] = []
         stream.subscribe(lambda ev: events.append(ev))
 
         from ag2.context import ConversationContext
@@ -88,7 +89,7 @@ class TestTaskCancel:
         from ag2.context import ConversationContext
 
         stream = MemoryStream()
-        events: list = []
+        events: list[BaseEvent] = []
         stream.subscribe(lambda ev: events.append(ev))
 
         task = Task(
@@ -279,7 +280,7 @@ class _CapturingExporter(SpanExporter):
         self.spans.clear()
 
 
-def _events_named(span: ReadableSpan, name: str) -> list:
+def _events_named(span: ReadableSpan, name: str) -> list[Event]:
     return [e for e in span.events if e.name == name]
 
 
@@ -314,8 +315,11 @@ class TestCheckpointTracing:
         [span] = exporter.spans
 
         [write_ev] = _events_named(span, "checkpoint.write")
+        assert write_ev.attributes is not None
         assert write_ev.attributes["ag2.checkpoint.task_id"] == "task-42"
-        assert write_ev.attributes["ag2.checkpoint.bytes"] > 0
+        written = write_ev.attributes["ag2.checkpoint.bytes"]
+        assert isinstance(written, int)
+        assert written > 0
 
         read_evs = _events_named(span, "checkpoint.read")
         assert len(read_evs) == 2
@@ -361,6 +365,7 @@ class TestMirrorCancellation:
         )
         try:
             bob_passport = await hub.register_identity(Passport(name="bob"), Resume())
+            assert bob_passport.agent_id is not None
             agent = Agent(name="bob", config=TestConfig())
             stream = MemoryStream()
             mirror = TaskMirror(hub=hub, owner_id=bob_passport.agent_id)
@@ -395,6 +400,7 @@ class TestMirrorCancellation:
                 Passport(name="bob"),
                 Resume(claimed_capabilities=["indexing"]),
             )
+            assert bob_passport.agent_id is not None
             agent = Agent(name="bob", config=TestConfig())
             stream = MemoryStream()
             mirror = TaskMirror(hub=hub, owner_id=bob_passport.agent_id)
@@ -459,6 +465,7 @@ class TestHubAccessors:
         )
         try:
             passport = await hub.register_identity(Passport(name="alice"), Resume())
+            assert passport.agent_id is not None
             rule = await hub.get_rule(passport.agent_id)
             assert isinstance(rule, Rule)
         finally:

@@ -35,14 +35,14 @@ from ag2.network.client.tools.tasks import make_tasks_tool
 from ag2.network.policies import AGENT_CLIENT_DEP, CHANNEL_DEP
 from ag2.stream import MemoryStream
 from ag2.task import TaskMetadata, TaskSpec, TaskState
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, Turn
 
 
-def _agent(name: str, *events: object) -> Agent:
+def _agent(name: str, *events: Turn) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
 
 
-async def _invoke(tool: Any, args: dict, *, dependencies: dict | None = None) -> Any:
+async def _invoke(tool: Any, args: dict[str, Any], *, dependencies: dict[str, Any] | None = None) -> Any:
     """Invoke a ``FunctionTool`` directly with ``args`` and return the underlying value.
 
     The framework wraps return values in ``ToolResult.parts`` — strings

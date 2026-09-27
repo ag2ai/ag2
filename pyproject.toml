@@ -697,6 +697,19 @@ files = [
     "test/ag_ui/",
     "test/mcp/",
 
+    # The network tests: the hub, its clients, adapters, transports and
+    # telemetry. Most of what they hold is doubles for an adapter, view or link
+    # endpoint, checked here against the protocol each stands in for.
+    # `websockets` and `ag2[tracing]` are in the `types` group, so these are
+    # really checked on every pull request.
+    "test/network/",
+
+    # The last three directories nothing else claimed: `dynamic_agent`, the
+    # plugin system, and the orchestration package marker. No extras needed.
+    "test/dynamic/",
+    "test/orchestration/",
+    "test/test_plugin/",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;

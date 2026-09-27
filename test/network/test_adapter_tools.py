@@ -24,12 +24,15 @@ from ag2.network import (
     EV_TEXT,
     Handoff,
     Hub,
+    TransitionGraph,
 )
-from ag2.network.adapters.consulting import ConsultingAdapter
-from ag2.network.adapters.conversation import ConversationAdapter
-from ag2.network.adapters.discussion import DiscussionAdapter
-from ag2.network.adapters.workflow import WorkflowAdapter
+from ag2.network.adapters.consulting import ConsultingAdapter, ConsultingState
+from ag2.network.adapters.conversation import ConversationAdapter, ConversationState
+from ag2.network.adapters.discussion import DiscussionAdapter, DiscussionState
+from ag2.network.adapters.workflow import WORKFLOW_TYPE, WorkflowAdapter, WorkflowState
 from ag2.testing import TestConfig
+
+from ._helpers import adapter_state
 
 
 def _agent(name: str, *replies: str) -> Agent:
@@ -67,7 +70,7 @@ async def test_consulting_tools_for_gates_by_turn() -> None:
     channel = await alice.open(type="consulting", target="bob")
 
     adapter = ConsultingAdapter()
-    state = hub.adapter_state(channel.channel_id)
+    state = adapter_state(hub, channel.channel_id, ConsultingState)
     # Initiator's turn (hasn't sent the prompt yet).
     initiator_tools = adapter.tools_for(alice, channel.metadata, state, alice.agent_id)
     assert [t.name for t in initiator_tools] == ["say"]
@@ -88,7 +91,7 @@ async def test_conversation_tools_for_always_offers_say() -> None:
     channel = await alice.open(type="conversation", target="bob")
 
     adapter = ConversationAdapter()
-    state = hub.adapter_state(channel.channel_id)
+    state = adapter_state(hub, channel.channel_id, ConversationState)
     assert [t.name for t in adapter.tools_for(alice, channel.metadata, state, alice.agent_id)] == ["say"]
     assert [t.name for t in adapter.tools_for(bob, channel.metadata, state, bob.agent_id)] == ["say"]
 
@@ -115,7 +118,7 @@ async def test_discussion_tools_for_returns_empty() -> None:
     )
 
     adapter = DiscussionAdapter()
-    state = hub.adapter_state(channel.channel_id)
+    state = adapter_state(hub, channel.channel_id, DiscussionState)
     # No adapter tools for any participant, regardless of whose turn it is.
     assert adapter.tools_for(alice, channel.metadata, state, alice.agent_id) == []
     assert adapter.tools_for(bob, channel.metadata, state, bob.agent_id) == []
@@ -130,10 +133,14 @@ async def test_workflow_tools_for_returns_empty() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
     alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    graph = TransitionGraph.round_robin([alice.agent_id, bob.agent_id], max_turns=4)
+    channel = await alice.open(type=WORKFLOW_TYPE, target=[bob.agent_id], knobs={"graph": graph.to_dict()})
 
     adapter = WorkflowAdapter()
-    # No active workflow channel needed — tools_for is pure.
-    assert adapter.tools_for(alice, None, None, alice.agent_id) == []
+    state = adapter_state(hub, channel.channel_id, WorkflowState)
+    assert adapter.tools_for(alice, channel.metadata, state, alice.agent_id) == []
+    assert adapter.tools_for(bob, channel.metadata, state, bob.agent_id) == []
 
     await hub.close()
 

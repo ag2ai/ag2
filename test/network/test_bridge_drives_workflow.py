@@ -39,6 +39,8 @@ from ag2.network import (
 from ag2.network.adapters.workflow import WORKFLOW_TYPE
 from ag2.network.channel import ChannelState
 
+from ._helpers import adapter_state
+
 
 @pytest.mark.asyncio
 async def test_bridge_drives_workflow_via_layer2_envelope_helpers() -> None:
@@ -101,8 +103,7 @@ async def test_bridge_drives_workflow_via_layer2_envelope_helpers() -> None:
     await hub.post_envelope(env_alice)
 
     # Workflow state advanced to expect bob next.
-    state = hub.adapter_state(channel.channel_id)
-    assert isinstance(state, WorkflowState)
+    state = adapter_state(hub, channel.channel_id, WorkflowState)
     assert state.expected_next_speaker == bob.agent_id
     assert state.last_speaker_id == alice.agent_id
 
@@ -117,7 +118,7 @@ async def test_bridge_drives_workflow_via_layer2_envelope_helpers() -> None:
     await hub.post_envelope(env_bob)
 
     # FromSpeaker(bob) → RevertToInitiatorTarget → expected next is alice.
-    state = hub.adapter_state(channel.channel_id)
+    state = adapter_state(hub, channel.channel_id, WorkflowState)
     assert state.expected_next_speaker == alice.agent_id
     assert state.last_speaker_id == bob.agent_id
 
@@ -172,7 +173,7 @@ async def test_bridge_uses_module_level_default_helper_directly() -> None:
     assert envelope.event_type == EV_PACKET
     await hub.post_envelope(envelope)
 
-    state = hub.adapter_state(channel.channel_id)
+    state = adapter_state(hub, channel.channel_id, WorkflowState)
     assert state.expected_next_speaker == bob.agent_id
 
     await alice_hc.close()

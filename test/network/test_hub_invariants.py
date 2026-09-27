@@ -29,6 +29,7 @@ import asyncio
 import contextlib
 import json
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -41,6 +42,7 @@ from ag2.network import (
     EV_CHANNEL_INVITE_ACK,
     EV_TEXT,
     AccessDeniedError,
+    AgentClient,
     Envelope,
     Hub,
     HubClient,
@@ -75,22 +77,23 @@ from ag2.network.hub.layout import (
     skill_path,
 )
 from ag2.network.rule import InboxBlock, LimitsBlock
+from ag2.network.transport import Frame
 from ag2.stream import MemoryStream
 from ag2.task import (
     TaskMetadata,
     TaskSpec,
     TaskState,
 )
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, Turn
 
 from ._helpers import _MockClock
 
 
-def _agent(name: str, *events: object) -> Agent:
+def _agent(name: str, *events: Turn) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
 
 
-async def _invoke(tool: Any, args: dict, *, dependencies: dict | None = None) -> Any:
+async def _invoke(tool: Any, args: dict[str, Any], *, dependencies: dict[str, Any] | None = None) -> Any:
     """Invoke a ``FunctionTool`` directly and return its underlying value."""
     event = ToolCallEvent(name=tool.name, arguments=json.dumps(args))
     context = Context(stream=MemoryStream(), dependencies=dependencies or {})
@@ -106,7 +109,7 @@ async def _invoke(tool: Any, args: dict, *, dependencies: dict | None = None) ->
     return first
 
 
-def _ack_only_handler(client: "HubClient | object"):
+def _ack_only_handler(client: AgentClient):
     """Build a notify handler that auto-acks invites and ignores everything else.
 
     Used when a test needs a channel to open (handshake completes) but
@@ -820,11 +823,15 @@ async def test_set_resume_rewrites_by_capability_disk_file() -> None:
     assert json.loads(initial) == {}
 
     await alice.set_resume(Resume(claimed_capabilities=["math"]))
-    assert json.loads(await store.read(by_capability_path())) == {"math": [alice.agent_id]}
+    first_claim = await store.read(by_capability_path())
+    assert first_claim is not None
+    assert json.loads(first_claim) == {"math": [alice.agent_id]}
 
     # Adding a second claim leaves the first intact.
     await alice.set_resume(Resume(claimed_capabilities=["math", "policy"]))
-    after_add = json.loads(await store.read(by_capability_path()))
+    added = await store.read(by_capability_path())
+    assert added is not None
+    after_add = json.loads(added)
     assert after_add == {
         "math": [alice.agent_id],
         "policy": [alice.agent_id],
@@ -832,7 +839,9 @@ async def test_set_resume_rewrites_by_capability_disk_file() -> None:
 
     # Removing a claim drops it from disk.
     await alice.set_resume(Resume(claimed_capabilities=["policy"]))
-    after_remove = json.loads(await store.read(by_capability_path()))
+    removed = await store.read(by_capability_path())
+    assert removed is not None
+    after_remove = json.loads(removed)
     assert after_remove == {"policy": [alice.agent_id]}
 
     await hub.close()
@@ -906,10 +915,10 @@ class _FailingEndpoint:
         self.endpoint_id = "failing-ep-001"
         self.agent_id: str | None = None
 
-    async def send_frame(self, frame: object) -> None:  # noqa: D102
+    async def send_frame(self, frame: Frame) -> None:  # noqa: D102
         pass
 
-    async def frames(self):  # type: ignore[override]
+    async def frames(self) -> AsyncIterator[Frame]:
         raise RuntimeError("transport read failed")
         yield  # pragma: no cover - marks this coroutine as an async generator
 
@@ -930,7 +939,7 @@ async def test_endpoint_frame_loop_failure_is_logged(caplog: pytest.LogCaptureFi
 
     with caplog.at_level(logging.ERROR, logger="ag2.network.hub.core"):
         before = asyncio.all_tasks()
-        hub.attach_endpoint(_FailingEndpoint())  # type: ignore[arg-type]
+        hub.attach_endpoint(_FailingEndpoint())
         spawned = asyncio.all_tasks() - before
         await asyncio.gather(*spawned, return_exceptions=True)
 

@@ -51,12 +51,12 @@ from ag2.network.adapters.discussion import (
 from ag2.network.channel import ChannelState
 from ag2.network.client.agent_client import AgentClient
 from ag2.network.errors import ProtocolError
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, Turn
 
-from ._helpers import wait_for_text_count
+from ._helpers import adapter_state, wait_for_text_count
 
 
-def _agent(name: str, *events: object) -> Agent:
+def _agent(name: str, *events: Turn) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
 
 
@@ -152,8 +152,7 @@ async def test_discussion_5_way_handshake_transitions_to_active() -> None:
     assert ack_count == 4
     assert any(e.event_type == EV_CHANNEL_OPENED for e in wal)
 
-    state = hub._adapter_states[channel.channel_id]
-    assert isinstance(state, DiscussionState)
+    state = adapter_state(hub, channel.channel_id, DiscussionState)
     assert state.expected_next_speaker == alice.agent_id
     assert state.participant_order[0] == alice.agent_id
 
@@ -187,7 +186,7 @@ async def test_discussion_round_robin_advances_through_participants() -> None:
 
     # Round 1: alice → bob → carol.
     await channel.send("alice 1")
-    state = hub._adapter_states[channel.channel_id]
+    state = adapter_state(hub, channel.channel_id, DiscussionState)
     assert state.expected_next_speaker == bob.agent_id
 
     bob_envelope = Envelope(
@@ -198,7 +197,7 @@ async def test_discussion_round_robin_advances_through_participants() -> None:
         event_data={"text": "bob 1"},
     )
     await hub.post_envelope(bob_envelope)
-    state = hub._adapter_states[channel.channel_id]
+    state = adapter_state(hub, channel.channel_id, DiscussionState)
     assert state.expected_next_speaker == carol.agent_id
 
     carol_envelope = Envelope(
@@ -209,7 +208,7 @@ async def test_discussion_round_robin_advances_through_participants() -> None:
         event_data={"text": "carol 1"},
     )
     await hub.post_envelope(carol_envelope)
-    state = hub._adapter_states[channel.channel_id]
+    state = adapter_state(hub, channel.channel_id, DiscussionState)
     assert state.expected_next_speaker == alice.agent_id  # cycle back
     assert state.turn_count == 3
     assert state.last_speaker_id == carol.agent_id
@@ -295,8 +294,7 @@ async def test_discussion_hydrate_refolds_round_robin_state(tmp_path) -> None:
     store2 = DiskKnowledgeStore(str(tmp_path))
     hub2 = await Hub.open(store2, ttl_sweep_interval=0)
 
-    state = hub2._adapter_states[channel.channel_id]
-    assert isinstance(state, DiscussionState)
+    state = adapter_state(hub2, channel.channel_id, DiscussionState)
     assert state.expected_next_speaker == bob.agent_id
     assert state.last_speaker_id == alice.agent_id
     assert state.turn_count == 1
@@ -341,7 +339,7 @@ async def test_discussion_llm_driven_round_robin_3_way() -> None:
         alice.agent_id,
     ]
 
-    state = hub._adapter_states[channel.channel_id]
+    state = adapter_state(hub, channel.channel_id, DiscussionState)
     assert state.expected_next_speaker == bob.agent_id
     assert state.turn_count == 4
 

@@ -28,7 +28,7 @@ import pytest
 
 from ag2 import Agent
 from ag2.compact import CompactionSummary
-from ag2.events import ModelMessage, ModelRequest, TextInput
+from ag2.events import BaseEvent, ModelMessage, ModelRequest, TextInput
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_TEXT,
@@ -463,7 +463,7 @@ class _FixedView:
 
     name = "fixed"
 
-    def __init__(self, projected: list) -> None:
+    def __init__(self, projected: list[BaseEvent]) -> None:
         self._projected = projected
 
     async def project(
@@ -474,20 +474,21 @@ class _FixedView:
         channel,  # noqa: ARG002
         render_envelope,  # noqa: ARG002
         name_for: NameResolver = default_name_resolver,  # noqa: ARG002
-    ) -> list:
+    ) -> list[BaseEvent]:
         return self._projected
 
 
-class _FixedAdapter:
-    """Stub adapter with a fixed extract_turn_input return value."""
+class _FixedAdapter(ConversationAdapter):
+    """Conversation adapter with a fixed extract_turn_input return value and nothing to render."""
 
     def __init__(self, fallback: str = "fallback") -> None:
+        super().__init__()
         self._fallback = fallback
 
-    def render_envelope(self, envelope):  # noqa: ARG002
+    def render_envelope(self, envelope: Envelope) -> str | None:  # noqa: ARG002
         return None
 
-    def extract_turn_input(self, envelope):  # noqa: ARG002
+    def extract_turn_input(self, envelope: Envelope) -> str | None:  # noqa: ARG002
         return self._fallback
 
 

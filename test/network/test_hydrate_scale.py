@@ -39,6 +39,8 @@ from ag2.network.channel import ChannelState
 from ag2.network.envelope import EV_TEXT
 from ag2.testing import TestConfig
 
+from ._helpers import adapter_state
+
 # Scale chosen for unit-run speed: 100 channels × 100 envelopes ≈
 # 10k envelopes, ~1s populate, instant hydrate. Bump
 # ``ENVELOPES_PER_CHANNEL`` locally for larger sweeps. Hydrate cost
@@ -72,7 +74,7 @@ async def test_hydrate_round_trips_many_channels(tmp_path) -> None:
 
     # Build conversation channels in parallel batches; each channel
     # fills its WAL with N alternating EV_TEXT envelopes.
-    expected_states: dict[str, dict] = {}
+    expected_states: dict[str, dict[str, object]] = {}
     channels = []
     for _ in range(n_channels):
         channel = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
@@ -91,7 +93,7 @@ async def test_hydrate_round_trips_many_channels(tmp_path) -> None:
             )
             await hub1.post_envelope(envelope)
         # Snapshot expected state.
-        cached = hub1._adapter_states[channel.channel_id]
+        cached = adapter_state(hub1, channel.channel_id, ConversationState)
         expected_states[channel.channel_id] = {
             "turn_count": cached.turn_count,
             "last_speaker_id": cached.last_speaker_id,
@@ -117,15 +119,14 @@ async def test_hydrate_round_trips_many_channels(tmp_path) -> None:
         assert meta.manifest.type == CONVERSATION_TYPE
         assert meta.state == ChannelState.ACTIVE
 
-        cached = hub2._adapter_states[channel.channel_id]
-        assert isinstance(cached, ConversationState)
+        cached = adapter_state(hub2, channel.channel_id, ConversationState)
         assert cached.turn_count == expected_states[channel.channel_id]["turn_count"]
         assert cached.last_speaker_id == expected_states[channel.channel_id]["last_speaker_id"]
 
     # Round 2: hydrating twice from the same store is idempotent.
     await hub2.hydrate()
     for channel in channels:
-        cached = hub2._adapter_states[channel.channel_id]
+        cached = adapter_state(hub2, channel.channel_id, ConversationState)
         assert cached.turn_count == expected_states[channel.channel_id]["turn_count"]
 
     await hub2.close()
@@ -162,7 +163,7 @@ async def test_hydrate_refolds_discussion_round_robin_state(tmp_path) -> None:
         )
         await hub1.post_envelope(envelope)
 
-    expected = hub1._adapter_states[channel.channel_id]
+    expected = adapter_state(hub1, channel.channel_id, DiscussionState)
     expected_turn_count = expected.turn_count
     expected_next = expected.expected_next_speaker
     expected_last = expected.last_speaker_id
@@ -172,8 +173,7 @@ async def test_hydrate_refolds_discussion_round_robin_state(tmp_path) -> None:
     store2 = DiskKnowledgeStore(str(tmp_path))
     hub2 = await Hub.open(store2, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    rebuilt = hub2._adapter_states[channel.channel_id]
-    assert isinstance(rebuilt, DiscussionState)
+    rebuilt = adapter_state(hub2, channel.channel_id, DiscussionState)
     assert rebuilt.turn_count == expected_turn_count
     assert rebuilt.expected_next_speaker == expected_next
     assert rebuilt.last_speaker_id == expected_last

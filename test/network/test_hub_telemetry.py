@@ -11,6 +11,7 @@ import asyncio
 import json
 import threading
 from collections.abc import Sequence as SequenceType
+from typing import Any
 
 import pytest
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
@@ -69,7 +70,7 @@ def otel_setup():
     return exporter, provider
 
 
-async def _read_disk_spans(store: MemoryKnowledgeStore) -> list[dict]:
+async def _read_disk_spans(store: MemoryKnowledgeStore) -> list[dict[str, Any]]:
     data = await store.read(spans_path())
     return [json.loads(line) for line in (data or "").splitlines() if line.strip()]
 
@@ -133,7 +134,7 @@ async def test_listener_emits_channel_and_agent_spans_to_disk(otel_setup) -> Non
 
     # Channel span carries opened + closed events; agent.lifetime spans emit on close.
     disk = await _read_disk_spans(store)
-    by_type: dict[str, list[dict]] = {}
+    by_type: dict[str, list[dict[str, Any]]] = {}
     for rec in disk:
         by_type.setdefault(rec["attributes"].get("ag2.span.type", "?"), []).append(rec)
 
@@ -232,6 +233,7 @@ async def test_update_task_terminal_fans_out_network_task_span(otel_setup) -> No
     span = task_spans[0]
     assert span.name == "network.task analysis"
     assert span.status.status_code.name == "OK"
+    assert span.attributes is not None
     assert span.attributes.get("ag2.network.outcome") == "completed"
 
     await hc.shutdown()
@@ -436,6 +438,7 @@ async def test_dispatch_failure_recorded_on_envelope_span(otel_setup) -> None:
         Passport(name="bob", auth=AuthBlock(scheme="a2a"), kind="remote_agent"),
         Resume(),
     )
+    assert bob.agent_id is not None
 
     class _AckThenFailProxy:
         scheme = "a2a"
