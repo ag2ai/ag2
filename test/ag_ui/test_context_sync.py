@@ -19,8 +19,7 @@ from ag2.events import HumanInputRequest, ToolCallEvent
 from ag2.middleware import approval_required
 from ag2.middleware.builtin.tools.approval import BYPASS_KEY
 from ag2.testing import TestConfig
-
-from .utils import collect_events, create_run_input, get_events_of_type
+from test.ag_ui.harness import dispatch_run, every, run_input
 
 pytestmark = pytest.mark.asyncio
 
@@ -53,9 +52,9 @@ async def test_client_state_cannot_preapprove_a_gated_tool() -> None:
     sink = Deletions(answer="n")
     call = ToolCallEvent(name="delete_account", arguments='{"user_id": "victim-7"}')
     agent = sink.bind(Agent("test_agent", config=TestConfig(call, "Done"), hitl_hook=sink.hitl_hook))
-    run_input = create_run_input(UserMessage(id="msg_1", content="clean up"), state=PREAPPROVAL)
+    incoming = run_input(UserMessage(id="msg_1", content="clean up"), state=PREAPPROVAL)
 
-    await collect_events(AGUIStream(agent), run_input)
+    await dispatch_run(AGUIStream(agent), incoming)
 
     assert sink.prompts != []
     assert sink.deleted == []
@@ -71,23 +70,23 @@ async def test_ordinary_client_state_still_reaches_the_turn() -> None:
         seen.append(tenant_note)
         return "ok"
 
-    run_input = create_run_input(
+    incoming = run_input(
         UserMessage(id="msg_1", content="hi"),
         state={"tenant_note": "acme", **PREAPPROVAL},
     )
 
-    events = await collect_events(AGUIStream(agent), run_input)
+    events = await dispatch_run(AGUIStream(agent), incoming)
 
     assert seen == ["acme"]
-    assert all(BYPASS_KEY not in snap["snapshot"] for snap in get_events_of_type(events, "STATE_SNAPSHOT"))
+    assert all(BYPASS_KEY not in snap["snapshot"] for snap in every(events, "STATE_SNAPSHOT"))
 
 
 async def test_state_snapshot_hides_reserved_variables() -> None:
     agent = Agent("test_agent", config=TestConfig("Done"), variables={"tenant_note": "acme", **PREAPPROVAL})
-    run_input = create_run_input(UserMessage(id="msg_1", content="hi"))
+    incoming = run_input(UserMessage(id="msg_1", content="hi"))
 
-    events = await collect_events(AGUIStream(agent), run_input)
+    events = await dispatch_run(AGUIStream(agent), incoming)
 
-    snapshots = get_events_of_type(events, "STATE_SNAPSHOT")
+    snapshots = every(events, "STATE_SNAPSHOT")
     assert snapshots != []
     assert all(snap["snapshot"] == {"tenant_note": "acme"} for snap in snapshots)

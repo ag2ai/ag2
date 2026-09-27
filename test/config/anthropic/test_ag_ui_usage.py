@@ -30,7 +30,7 @@ from ag_ui.core import RunFinishedEvent, TokenUsage, UserMessage  # noqa: E402
 from ag2 import Agent  # noqa: E402
 from ag2.ag_ui import AGUIStream  # noqa: E402
 from ag2.config.anthropic import AnthropicConfig  # noqa: E402
-from test.ag_ui.utils import collect_events, create_run_input  # noqa: E402
+from test.ag_ui.harness import dispatch_run, run_input  # noqa: E402
 
 pytestmark = pytest.mark.asyncio
 
@@ -62,7 +62,7 @@ def _agent(usage: dict[str, Any]) -> Agent:
 
 async def _finished(agent: Agent) -> RunFinishedEvent:
     """The terminating event of a completed run, parsed by the class that sent it."""
-    frames = await collect_events(AGUIStream(agent), create_run_input(UserMessage(id="msg_1", content="go")))
+    frames = await dispatch_run(AGUIStream(agent), run_input(UserMessage(id="msg_1", content="go")))
     return RunFinishedEvent.model_validate(frames[-1])
 
 
