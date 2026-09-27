@@ -248,9 +248,14 @@ async def test_the_agent_says_it_speaks_the_interrupt_protocol() -> None:
     })
 
 
-def asking_twice_at_once(*, timeout: float | None = None) -> tuple[Agent, dict[str, str]]:
-    """An agent whose model calls two asking tools in one response, and what each was told."""
+def asking_twice_at_once(*, timeout: float | None = None) -> tuple[Agent, dict[str, str], dict[str, asyncio.Event]]:
+    """An agent whose model calls two asking tools in one response.
+
+    Returns what each tool was told, and an event per question set as its tool
+    starts asking: when a parallel call gets to run is up to the scheduler.
+    """
     answers: dict[str, str] = {}
+    asking = {"A?": asyncio.Event(), "B?": asyncio.Event()}
 
     agent = Agent(
         "test_agent",
@@ -263,23 +268,25 @@ def asking_twice_at_once(*, timeout: float | None = None) -> tuple[Agent, dict[s
     @agent.tool
     async def ask_a(context: Context) -> str:
         """Ask the first question."""
+        asking["A?"].set()
         answers["A?"] = await context.input("A?", timeout=timeout)
         return answers["A?"]
 
     @agent.tool
     async def ask_b(context: Context) -> str:
         """Ask the second question."""
+        asking["B?"].set()
         answers["B?"] = await context.input("B?", timeout=timeout)
         return answers["B?"]
 
-    return agent, answers
+    return agent, answers, asking
 
 
 class TestQuestionsAskedAtOnce:
     """Parallel tool calls each asking: the questions go out one run at a time."""
 
     async def test_each_is_the_outcome_of_the_run_that_answers_the_one_before(self) -> None:
-        agent, answers = asking_twice_at_once()
+        agent, answers, _ = asking_twice_at_once()
         app = app_for(AGUIStream(agent))
 
         first = sole_interrupt(await post_run(app, run_body(thread_id="t1", run_id="r1")))
@@ -299,10 +306,15 @@ class TestQuestionsAskedAtOnce:
     async def test_a_queued_question_advertises_the_timeout_it_has_been_spending(self) -> None:
         """`timeout=` runs from the call, so time spent queued comes off the deadline shown."""
         clock = Clock()
-        agent, _ = asking_twice_at_once(timeout=60.0)
+        agent, _, asking = asking_twice_at_once(timeout=60.0)
         app = app_for(AGUIStream(agent, now=clock))
 
         first = sole_interrupt(await post_run(app, run_body(thread_id="t1", run_id="r1")))
+        # Both asked before the clock moves: the run ends on the first question,
+        # which can be before the other call has been scheduled at all. Once its
+        # tool has started asking, give it the moment it takes to reach the queue.
+        await asyncio.wait_for(asyncio.gather(*(e.wait() for e in asking.values())), timeout=_NEVER)
+        await asyncio.sleep(0.02)
         asked_at_deadline = clock.ahead(60.0)
         clock.advance(30.0)
         second = sole_interrupt(

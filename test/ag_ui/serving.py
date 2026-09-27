@@ -198,16 +198,16 @@ async def ask_once(app: Any, thread_id: str = "t1", run_id: str = "r1") -> dict[
 
 
 def answer(interrupt: dict[str, Any], payload: Any) -> list[dict[str, Any]]:
-    """A compliant client's resume: the answer, under the envelope it was given.
+    """A resume this server accepts: the answer, under the envelope it was given.
 
-    A client carries an interrupt's `metadata` back untouched, so anything the
-    server put there to recognise its own question comes home with the answer.
+    The client copies the interrupt's `metadata` back itself — the protocol does
+    not require it — so the proof the server issued comes home with the answer.
     """
     return resolved(interrupt["id"], payload, metadata=interrupt.get("metadata"))
 
 
 def abandon(interrupt: dict[str, Any]) -> list[dict[str, Any]]:
-    """A compliant client giving up on the question."""
+    """A client giving up on the question, with the proof that giving up needs too."""
     return [{"interruptId": interrupt["id"], "status": "cancelled", "metadata": interrupt.get("metadata")}]
 
 

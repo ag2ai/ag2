@@ -86,8 +86,9 @@ async def main() -> None:
         print(f"  question: {interrupt['message']}")
         print(f"  expires:  {interrupt['expiresAt']}")
 
-        # A compliant client carries the interrupt's metadata back untouched:
-        # it is the proof that this answer comes from whoever was asked.
+        # The client must copy the interrupt's metadata into the resume itself —
+        # the protocol does not require it and `@ag-ui/client` does not do it —
+        # because it is the proof that this answer comes from whoever was asked.
         print("POST #2 — the client answers, under a new run id on the same thread")
         answered = await post_run(
             app,
