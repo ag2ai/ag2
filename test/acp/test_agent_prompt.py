@@ -396,7 +396,7 @@ class TestDeliveryFailures:
     """A turn must not report success for output the Client never received."""
 
     class _DeadClient(RecordingClient):
-        async def session_update(self, *, session_id: str, update: Any, **kwargs: Any) -> None:
+        async def session_update(self, session_id: str, update: SessionUpdate, **kwargs: Any) -> None:
             raise ConnectionResetError("client went away")
 
     async def test_an_undeliverable_turn_is_not_reported_as_end_turn(self) -> None:
@@ -408,7 +408,7 @@ class TestDeliveryFailures:
             await executor.run_turn(
                 session=session,
                 store=store,
-                client=self._DeadClient(),  # type: ignore[arg-type]  # ticket 62: _DeadClient is a RecordingClient, which does not satisfy acp.Client
+                client=self._DeadClient(),
                 blocks=[acp.text_block("hi")],
             )
 
@@ -422,7 +422,7 @@ class TestDeliveryFailures:
             await executor.run_turn(
                 session=session,
                 store=store,
-                client=self._DeadClient(),  # type: ignore[arg-type]  # ticket 62: _DeadClient is a RecordingClient, which does not satisfy acp.Client
+                client=self._DeadClient(),
                 blocks=[acp.text_block("hi")],
             )
 
@@ -542,7 +542,7 @@ class TestDynamicPrompt:
         await AgentExecutor(agent).run_turn(
             session=session,
             store=store,
-            client=RecordingClient(),  # type: ignore[arg-type]  # ticket 62: RecordingClient does not satisfy acp.Client
+            client=RecordingClient(),
             blocks=[acp.text_block("hi")],
             meta={"ag2.space": {"room": "!r"}},
         )

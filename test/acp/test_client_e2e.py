@@ -13,7 +13,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 from ag2 import Agent, Context
 from ag2.acp import MCPCapabilityError
-from ag2.acp.testing import ACPTurn, fake_acp_config
+from ag2.acp.testing import ACPTurn, FakeConnection, fake_acp_config
 from ag2.events import BaseEvent, ModelReasoning, ModelResponse, ToolCallEvent, ToolResultEvent
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
 from ag2.exceptions import HumanInputNotProvidedError, UnsupportedToolError
@@ -411,7 +411,7 @@ async def test_aclose_closes_session() -> None:
     await cfg.aclose()
     assert cfg.sessions == {}
     for conn in conns:
-        assert conn is not None and conn.closed  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection
+        assert isinstance(conn, FakeConnection) and conn.closed
 
 
 @pytest.mark.asyncio
@@ -473,8 +473,8 @@ async def test_external_server_named_like_the_gateway_is_fine_without_function_t
         assert result.body == "hi"
         session = next(iter(cfg.sessions.values()))
         assert session.gateway is None
-        assert session.conn is not None
-        assert [s.name for s in session.conn.new_session_kwargs["mcp_servers"]] == ["ag2"]  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection
+        assert isinstance(session.conn, FakeConnection)
+        assert [s.name for s in session.conn.new_session_kwargs["mcp_servers"]] == ["ag2"]
     finally:
         await cfg.aclose()
 
@@ -564,8 +564,8 @@ async def test_expose_tools_false_disables_gateway() -> None:
             await run.result()
         session = next(iter(cfg.sessions.values()))
         assert session.gateway is None
-        assert session.conn is not None
-        assert session.conn.new_session_kwargs.get("mcp_servers") is None  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection
+        assert isinstance(session.conn, FakeConnection)
+        assert session.conn.new_session_kwargs.get("mcp_servers") is None
     finally:
         await cfg.aclose()
 

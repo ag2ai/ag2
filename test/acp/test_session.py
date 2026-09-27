@@ -10,7 +10,7 @@ from acp import schema
 from ag2.acp import MCPCapabilityError
 from ag2.acp.bridge import make_bridge
 from ag2.acp.session import ACPSession, new_prompt_text
-from ag2.acp.testing import ACPTurn, fake_acp_config
+from ag2.acp.testing import ACPTurn, FakeConnection, fake_acp_config
 from ag2.events import ModelRequest, TextInput
 from ag2.events.types import ModelMessage
 
@@ -62,8 +62,8 @@ async def test_ensure_passes_mcp_servers_to_new_session() -> None:
         mcp_servers=[server],
     )
     try:
-        assert session.conn is not None
-        assert session.conn.new_session_kwargs["mcp_servers"] == [server]  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection
+        assert isinstance(session.conn, FakeConnection)
+        assert session.conn.new_session_kwargs["mcp_servers"] == [server]
     finally:
         await session.close()
 
@@ -97,7 +97,7 @@ async def test_ensure_rejects_agent_without_http_mcp() -> None:
         )
     assert session.started is False
     (conn,) = conns
-    assert conn.closed  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection; ensure tore it down, not just left it dangling
+    assert isinstance(conn, FakeConnection) and conn.closed
 
 
 @pytest.mark.asyncio

@@ -17,7 +17,6 @@ import socket
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
-from functools import cache
 from typing import TYPE_CHECKING, Any, cast
 
 import acp
@@ -33,9 +32,9 @@ if TYPE_CHECKING:
 
     from ag2.context import StreamId
 
+    from ._remote_testing import FakeACPRemoteConfig
     from .agent import ACPAgent
     from .config import ConnectHook
-    from .remote import ACPRemoteConfig
     from .session import ACPSession
 
 FAKE_SESSION_ID = "fake-session-1"
@@ -44,6 +43,8 @@ __all__ = (
     "FAKE_SESSION_ID",
     "ACPTurn",
     "FakeACPConfig",
+    "FakeACPRemoteConfig",
+    "FakeConnection",
     "RecordingClient",
     "ScriptedElicitation",
     "connect",
@@ -52,6 +53,15 @@ __all__ = (
     "fake_acp_config",
     "fake_remote_acp_config",
 )
+
+
+def __getattr__(name: str) -> Any:
+    # ``FakeACPRemoteConfig`` needs ``[http]``; resolved on first use so the rest of the harness does not.
+    if name == "FakeACPRemoteConfig":
+        from ._remote_testing import FakeACPRemoteConfig
+
+        return FakeACPRemoteConfig
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 @dataclass
@@ -101,8 +111,11 @@ class ACPTurn:
     elicitations: Sequence[ScriptedElicitation] = field(default_factory=tuple)
 
 
-class _FakeConnection:
+class FakeConnection:
     """Minimal ``ClientSideConnection`` stand-in that drives the bridge in-process.
+
+    What ``ACPSession.conn`` holds under :func:`fake_acp_config`; narrow to it with
+    ``isinstance`` to read ``closed`` and ``new_session_kwargs``.
 
     ``prompt`` replays one :class:`ACPTurn`'s updates back through the bound client
     (the bridge) exactly as a real agent's ``session/update`` callbacks would.
@@ -231,23 +244,6 @@ class FakeACPConfig(_FakeConfigViews, ACPConfig):
     """:class:`ACPConfig` bound to the scripted in-process agent."""
 
 
-@cache
-def _fake_remote_config_type() -> "type[ACPRemoteConfig]":
-    """The remote fake's class, built on first use.
-
-    Deferred so importing this module does not require
-    ``agent-client-protocol[http]``: a caller who only drives local subprocesses
-    still gets the rest of the harness.
-    """
-    from .remote import ACPRemoteConfig
-
-    @dataclass(slots=True, kw_only=True)
-    class FakeACPRemoteConfig(_FakeConfigViews, ACPRemoteConfig):
-        """:class:`ACPRemoteConfig` bound to the scripted in-process agent."""
-
-    return FakeACPRemoteConfig
-
-
 def _scripted_connect(
     *turns: ACPTurn,
     agent_capabilities: "schema.AgentCapabilities | None" = None,
@@ -263,8 +259,8 @@ def _scripted_connect(
     script = list(turns)
 
     @asynccontextmanager
-    async def connect(client: acp.Client) -> "AsyncGenerator[tuple[_FakeConnection, None]]":
-        conn = _FakeConnection(
+    async def connect(client: acp.Client) -> "AsyncGenerator[tuple[FakeConnection, None]]":
+        conn = FakeConnection(
             client,
             iter(script),
             agent_capabilities=agent_capabilities,
@@ -279,6 +275,7 @@ def _scripted_connect(
         finally:
             conn.closed = True
 
+    # The fake stands in for a `ClientSideConnection`; a test narrows `session.conn` to it with `isinstance`.
     return cast("ConnectHook", connect)
 
 
@@ -341,14 +338,17 @@ def fake_remote_acp_config(
     initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
     elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
     **overrides: Any,
-) -> "ACPRemoteConfig":
+) -> "FakeACPRemoteConfig":
     """:func:`fake_acp_config`, but behind an :class:`ACPRemoteConfig`.
 
     Same scripted agent, same arguments; only the config the turns run through
     differs. No socket is opened — ``url`` is there because a remote config must
     have one, and to prove behaviour does not depend on it.
     """
-    config = _fake_remote_config_type()(url=url, **overrides)
+    # Deferred so importing this module does not require ``agent-client-protocol[http]``.
+    from ._remote_testing import FakeACPRemoteConfig
+
+    config = FakeACPRemoteConfig(url=url, **overrides)
     config._connect = _scripted_connect(
         *turns,
         agent_capabilities=agent_capabilities,
@@ -414,7 +414,7 @@ def duplex_acp_config(agent: "Callable[[acp.Client], Any] | Any", **overrides: A
     return config
 
 
-class RecordingClient:
+class RecordingClient(acp.Client):
     """An :class:`acp.Client` that records every ``session/update`` it receives.
 
     The server side of the harness: pair it with :func:`connect` to assert on the
@@ -422,8 +422,8 @@ class RecordingClient:
     order it emitted them.
 
     Client capabilities are all off — this client implements no filesystem,
-    terminal or permission behaviour, so advertising any would let a test pass
-    against a capability nothing here provides.
+    terminal, permission or elicitation behaviour, so advertising any would let a
+    test pass against a capability nothing here provides.
     """
 
     def __init__(self) -> None:
@@ -433,25 +433,73 @@ class RecordingClient:
         """Only the updates belonging to ``session_id``, in arrival order."""
         return [u for sid, u in self.updates if sid == session_id]
 
-    async def session_update(self, *, session_id: str, update: Any, **kwargs: Any) -> None:
+    async def session_update(self, session_id: str, update: SessionUpdate, **kwargs: Any) -> None:
         self.updates.append((session_id, update))
 
-    async def request_permission(self, **kwargs: Any) -> Any:
+    async def request_permission(
+        self,
+        session_id: str,
+        tool_call: schema.ToolCallUpdate,
+        options: list[schema.PermissionOption],
+        **kwargs: Any,
+    ) -> schema.RequestPermissionResponse:
         raise NotImplementedError("RecordingClient does not implement permissions.")
 
-    async def write_text_file(self, **kwargs: Any) -> Any:
+    async def write_text_file(
+        self, session_id: str, path: str, content: str, **kwargs: Any
+    ) -> schema.WriteTextFileResponse | None:
         raise NotImplementedError("RecordingClient does not implement fs/write_text_file.")
 
-    async def read_text_file(self, **kwargs: Any) -> Any:
+    async def read_text_file(
+        self, session_id: str, path: str, line: int | None = None, limit: int | None = None, **kwargs: Any
+    ) -> schema.ReadTextFileResponse:
         raise NotImplementedError("RecordingClient does not implement fs/read_text_file.")
 
-    async def create_terminal(self, **kwargs: Any) -> Any:
+    async def create_terminal(
+        self,
+        session_id: str,
+        command: str,
+        args: list[str] | None = None,
+        env: list[schema.EnvVariable] | None = None,
+        cwd: str | None = None,
+        output_byte_limit: int | None = None,
+        **kwargs: Any,
+    ) -> schema.CreateTerminalResponse:
         raise NotImplementedError("RecordingClient does not implement terminals.")
+
+    async def terminal_output(self, session_id: str, terminal_id: str, **kwargs: Any) -> schema.TerminalOutputResponse:
+        raise NotImplementedError("RecordingClient does not implement terminals.")
+
+    async def release_terminal(
+        self, session_id: str, terminal_id: str, **kwargs: Any
+    ) -> schema.ReleaseTerminalResponse | None:
+        raise NotImplementedError("RecordingClient does not implement terminals.")
+
+    async def wait_for_terminal_exit(
+        self, session_id: str, terminal_id: str, **kwargs: Any
+    ) -> schema.WaitForTerminalExitResponse:
+        raise NotImplementedError("RecordingClient does not implement terminals.")
+
+    async def kill_terminal(
+        self, session_id: str, terminal_id: str, **kwargs: Any
+    ) -> schema.KillTerminalResponse | None:
+        raise NotImplementedError("RecordingClient does not implement terminals.")
+
+    async def create_elicitation(
+        self, message: str, mode: schema.ElicitationMode, **kwargs: Any
+    ) -> schema.CreateElicitationResponse:
+        raise NotImplementedError("RecordingClient does not implement elicitation.")
+
+    async def complete_elicitation(self, elicitation_id: str, **kwargs: Any) -> None:
+        raise NotImplementedError("RecordingClient does not implement elicitation.")
 
     async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError(f"RecordingClient does not implement ext method {method!r}.")
 
     async def ext_notification(self, method: str, params: dict[str, Any]) -> None:
+        return None
+
+    def on_connect(self, conn: acp.Agent) -> None:
         return None
 
 
@@ -483,13 +531,10 @@ async def connect(
     agent_reader, agent_writer = await asyncio.open_connection(sock=agent_end)
     client_reader, client_writer = await asyncio.open_connection(sock=client_end)
 
-    # ``ACPAgent`` / ``RecordingClient`` implement the SDK's Agent / Client
-    # Protocols structurally; mypy cannot see that through the ``**kwargs``
-    # signatures the Protocols declare.
     from .guard import serve
 
     agent_task = asyncio.create_task(serve(server.bind, agent_reader, agent_writer))
-    conn = ClientSideConnection(cast("Any", lambda _agent: recorder), client_writer, client_reader)
+    conn = ClientSideConnection(recorder, client_writer, client_reader)
     try:
         if initialize:
             await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)

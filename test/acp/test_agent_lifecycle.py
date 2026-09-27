@@ -201,7 +201,7 @@ class TestServeOverStreams:
         server = ACPAgent(Agent("workie", config=TestConfig("ok")))
         (agent_r, agent_w), (client_r, client_w) = await duplex()
         served = asyncio.create_task(serve(server.bind, agent_r, agent_w))
-        conn = ClientSideConnection(lambda _agent: RecordingClient(), client_w, client_r)  # type: ignore[arg-type, return-value]  # ticket 62: RecordingClient does not satisfy acp.Client
+        conn = ClientSideConnection(lambda _agent: RecordingClient(), client_w, client_r)
 
         try:
             await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
@@ -221,7 +221,7 @@ class TestServeOverStreams:
         agent = _StaticAgent()
         (agent_r, agent_w), (client_r, client_w) = await duplex()
         served = asyncio.create_task(serve(agent, agent_r, agent_w))
-        conn = ClientSideConnection(lambda _agent: RecordingClient(), client_w, client_r)  # type: ignore[arg-type, return-value]  # ticket 62: RecordingClient does not satisfy acp.Client
+        conn = ClientSideConnection(lambda _agent: RecordingClient(), client_w, client_r)
 
         try:
             await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)

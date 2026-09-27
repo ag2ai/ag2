@@ -23,6 +23,7 @@ from ag2 import Agent, Context, observer
 from ag2.acp import ACPAgent, SessionConfig, StaticTokenAuth
 from ag2.acp.executor import CANCELLED_TOOL_RESULT
 from ag2.acp.testing import RecordingClient, connect
+from ag2.acp.types import SessionUpdate
 from ag2.config import ModelConfig
 from ag2.events import (
     BaseEvent,
@@ -470,7 +471,7 @@ class TestOnSession:
         order: list[str] = []
 
         class _OrderingRecorder(RecordingClient):
-            async def session_update(self, *, session_id: str, update: Any, **kwargs: Any) -> None:
+            async def session_update(self, session_id: str, update: SessionUpdate, **kwargs: Any) -> None:
                 order.append("update")
                 await super().session_update(session_id=session_id, update=update, **kwargs)
 
