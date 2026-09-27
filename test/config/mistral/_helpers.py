@@ -2,58 +2,55 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
-from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock
 
 import httpx
-from mistralai.client.models import DeltaMessage, FunctionCall, ToolCall
+from mistralai.client.models import (
+    ArgumentsTypedDict,
+    ChatCompletionChoiceFinishReason,
+    ChatCompletionResponseTypedDict,
+    CompletionChunkTypedDict,
+    CompletionResponseStreamChoiceFinishReason,
+    DeltaMessageContentTypedDict,
+    DeltaMessageTypedDict,
+    ToolCallTypedDict,
+    UsageInfoTypedDict,
+)
 
-from ag2.config.mistral import MistralClient
+from test.config._helpers import WireRecorder
+
+CHAT_URL = "https://api.mistral.ai/v1/chat/completions"
 
 
-def make_usage(
-    prompt_tokens: int | None = None,
-    completion_tokens: int | None = None,
-    total_tokens: int | None = None,
-    cached_tokens: int | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        total_tokens=total_tokens,
-        prompt_tokens_details={"cached_tokens": cached_tokens} if cached_tokens is not None else None,
-    )
+def make_usage(prompt_tokens: int = 1, completion_tokens: int = 1, total_tokens: int = 2) -> UsageInfoTypedDict:
+    return {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_tokens": total_tokens}
 
 
 def make_tool_call(
     call_id: str = "tc_1",
     name: str = "search_docs",
-    arguments: Any = '{"query": "x"}',
+    arguments: ArgumentsTypedDict = '{"query": "x"}',
     index: int | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        id=call_id,
-        index=index,
-        function=SimpleNamespace(name=name, arguments=arguments),
-    )
+) -> ToolCallTypedDict:
+    call: ToolCallTypedDict = {"id": call_id, "function": {"name": name, "arguments": arguments}}
+    if index is not None:
+        call["index"] = index
+    return call
 
 
 def make_turn(
-    content: str = "",
+    content: DeltaMessageContentTypedDict = "",
     *,
     tool_call_id: str | None = None,
     tool_calls: list[tuple[str, str, str]] | None = None,
-) -> DeltaMessage:
-    """One turn of `ChatCompletionChoice.messages`, which the SDK parses as a `DeltaMessage`."""
-    return DeltaMessage(
-        content=content,
-        tool_call_id=tool_call_id,
-        tool_calls=[ToolCall(id=i, function=FunctionCall(name=n, arguments=a)) for i, n, a in tool_calls]
-        if tool_calls
-        else None,
-    )
+) -> DeltaMessageTypedDict:
+    """One turn of `ChatCompletionChoice.messages`."""
+    turn: DeltaMessageTypedDict = {"role": "assistant", "content": content}
+    if tool_call_id is not None:
+        turn["tool_call_id"] = tool_call_id
+    if tool_calls:
+        turn["tool_calls"] = [make_tool_call(i, n, a) for i, n, a in tool_calls]
+    return turn
 
 
 def make_server_tool_turns(
@@ -62,7 +59,7 @@ def make_server_tool_turns(
     arguments: str = '{"prompt": "a red circle"}',
     url: str = "https://example.com/generated.jpg",
     text: str = "Here is your image.",
-) -> list[DeltaMessage]:
+) -> list[DeltaMessageTypedDict]:
     """The `messages` trace a server-executed tool produces: call, result, answer."""
     return [
         make_turn(tool_calls=[(call_id, name, arguments)]),
@@ -72,132 +69,89 @@ def make_server_tool_turns(
 
 
 def make_agentic_response(
-    turns: list[Any] | None = None,
-    finish_reason: str = "stop",
-    usage: Any | None = None,
+    turns: list[DeltaMessageTypedDict] | None = None,
+    finish_reason: ChatCompletionChoiceFinishReason = "stop",
+    usage: UsageInfoTypedDict | None = None,
     model: str = "mistral-test",
-) -> SimpleNamespace:
-    """A response whose `message` is None and whose exchange is in `messages`."""
-    return SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                message=None,
-                messages=turns if turns is not None else make_server_tool_turns(),
-                finish_reason=finish_reason,
-            )
+) -> ChatCompletionResponseTypedDict:
+    """A completion with no `message`, whose exchange is in `messages`."""
+    return {
+        "id": "cmpl_1",
+        "object": "chat.completion",
+        "model": model,
+        "created": 0,
+        "usage": usage if usage is not None else make_usage(),
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": finish_reason,
+                "messages": turns if turns is not None else make_server_tool_turns(),
+            }
         ],
-        usage=usage if usage is not None else make_usage(1, 1, 2),
-        model=model,
-    )
+    }
 
 
 def make_response(
-    content: Any = "ok",
-    tool_calls: list[Any] | None = None,
-    finish_reason: str = "stop",
-    usage: Any | None = None,
+    content: DeltaMessageContentTypedDict | None = "ok",
+    tool_calls: list[ToolCallTypedDict] | None = None,
+    finish_reason: ChatCompletionChoiceFinishReason = "stop",
+    usage: UsageInfoTypedDict | None = None,
     model: str = "mistral-test",
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(content=content, tool_calls=tool_calls or []),
-                messages=None,
-                finish_reason=finish_reason,
-            )
+) -> ChatCompletionResponseTypedDict:
+    return {
+        "id": "cmpl_1",
+        "object": "chat.completion",
+        "model": model,
+        "created": 0,
+        "usage": usage if usage is not None else make_usage(),
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": finish_reason,
+                "message": {"role": "assistant", "content": content, "tool_calls": tool_calls or []},
+            }
         ],
-        usage=usage if usage is not None else make_usage(1, 1, 2),
-        model=model,
-    )
+    }
 
 
 def make_stream_chunk(
-    content: Any = None,
-    tool_calls: list[Any] | None = None,
+    content: DeltaMessageContentTypedDict | None = None,
+    tool_calls: list[ToolCallTypedDict] | None = None,
     tool_call_id: str | None = None,
-    finish_reason: str | None = None,
-    usage: Any | None = None,
-    model: str | None = None,
-) -> SimpleNamespace:
-    """One ``CompletionEvent`` — the SDK wraps each chunk in a ``.data`` envelope."""
-    return SimpleNamespace(
-        data=SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    delta=SimpleNamespace(content=content, tool_calls=tool_calls or [], tool_call_id=tool_call_id),
-                    finish_reason=finish_reason,
-                )
-            ],
-            usage=usage,
-            model=model,
-        )
-    )
+    finish_reason: CompletionResponseStreamChoiceFinishReason | None = None,
+    usage: UsageInfoTypedDict | None = None,
+    model: str = "mistral-test",
+) -> CompletionChunkTypedDict:
+    """One SSE `data:` payload; the SDK wraps it in a `CompletionEvent` itself."""
+    delta: DeltaMessageTypedDict = {"content": content, "tool_calls": tool_calls or []}
+    if tool_call_id is not None:
+        delta["tool_call_id"] = tool_call_id
+    chunk: CompletionChunkTypedDict = {
+        "id": "cmpl_1",
+        "model": model,
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+    }
+    if usage is not None:
+        chunk["usage"] = usage
+    return chunk
 
 
-class _AsyncIterator:
-    def __init__(self, items: Iterable[Any]) -> None:
-        self._items = iter(items)
-
-    def __aiter__(self) -> "_AsyncIterator":
-        return self
-
-    async def __anext__(self) -> Any:
-        try:
-            return next(self._items)
-        except StopIteration:
-            raise StopAsyncIteration from None
+def image_response(data: bytes = b"\xff\xd8image", content_type: str = "image/jpeg") -> httpx.Response:
+    """What the blob store answers a generated-image fetch with."""
+    return httpx.Response(200, content=data, headers={"content-type": content_type})
 
 
-class FakeChat:
-    """Stands in for ``Mistral.chat``, capturing the kwargs sent to the API."""
+class FailingFetches:
+    """Answers the chat API from `wire` and fails every other request with `error`."""
 
-    def __init__(self, response: Any | None = None, stream_chunks: Iterable[Any] = ()) -> None:
-        self.response = response if response is not None else make_response()
-        self.stream_chunks = list(stream_chunks)
-        self._kwargs: dict[str, Any] | None = None
-
-    @property
-    def kwargs(self) -> dict[str, Any]:
-        """What the last call was made with; fails the test if none was."""
-        assert self._kwargs is not None, "the chat API was never called"
-        return self._kwargs
-
-    async def complete_async(self, **kwargs: Any) -> Any:
-        self._kwargs = kwargs
-        return self.response
-
-    async def stream_async(self, **kwargs: Any) -> Any:
-        self._kwargs = kwargs
-        return _AsyncIterator(self.stream_chunks)
-
-
-class FakeHttpClient(httpx.AsyncClient):
-    """An httpx client answered by a local transport, so image fetches never touch the network."""
-
-    def __init__(
-        self, data: bytes = b"\xff\xd8image", content_type: str = "image/jpeg", error: Exception | None = None
-    ) -> None:
-        self.data = data
-        self.content_type = content_type
+    def __init__(self, wire: WireRecorder, error: Exception) -> None:
+        self.wire = wire
         self.error = error
-        self.urls: list[str] = []
-        super().__init__(transport=httpx.MockTransport(self._answer))
 
-    def _answer(self, request: httpx.Request) -> httpx.Response:
-        self.urls.append(str(request.url))
-        if self.error is not None:
-            raise self.error
-        return httpx.Response(200, content=self.data, headers={"content-type": self.content_type})
-
-
-class FakeMistralClient:
-    def __init__(self, chat: FakeChat) -> None:
-        self.chat = chat
-
-
-def install_fake_sdk(client: MistralClient, chat: FakeChat) -> None:
-    """Stand `chat` in for the SDK client `client` would otherwise build."""
-    client._client = FakeMistralClient(chat)  # type: ignore[assignment]  # the tests read what the chat API was called with, which the SDK turns into a request body
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.mistral.ai":
+            return self.wire(request)
+        raise self.error
 
 
 def make_call_context(prompt: list[str] | None = None) -> AsyncMock:

@@ -2,35 +2,35 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import inspect
-from collections.abc import Iterable, Iterator
-from types import SimpleNamespace
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import AsyncMock
 
-from zai.api_resource.chat.completions import Completions
-from zai.core import StreamResponse
-from zai.types.chat.chat_completion import CompletionTokensDetails, CompletionUsage, PromptTokensDetails
+import httpx
+from typing_extensions import Unpack
+from zai.types.chat.chat_completion import (
+    Completion,
+    CompletionChoice,
+    CompletionMessage,
+    CompletionMessageToolCall,
+    CompletionTokensDetails,
+    CompletionUsage,
+    Function,
+    PromptTokensDetails,
+)
+from zai.types.chat.chat_completion_chunk import (
+    ChatCompletionChunk,
+    Choice,
+    ChoiceDelta,
+    ChoiceDeltaToolCall,
+    ChoiceDeltaToolCallFunction,
+)
+from zai.types.chat.chat_completion_chunk import CompletionUsage as ChunkUsage
 
-from ag2.config.zai import ZAIClient
-
-
-class FakeStreamResponse(StreamResponse[Any]):
-    """A `StreamResponse` over a fixed list of chunks.
-
-    `ZAIClient` narrows on the SDK's own class to tell a stream from a completion — the SDK
-    answers both from one `create` call — so the double has to be one. Iteration is overridden
-    rather than fed through the SSE machinery, so nothing here depends on the SDK's internals.
-    """
-
-    def __init__(self, chunks: Iterable[Any]) -> None:
-        self._chunks: Iterator[Any] = iter(chunks)
-
-    def __iter__(self) -> Iterator[Any]:
-        return self._chunks
-
-    def __next__(self) -> Any:
-        return next(self._chunks)
+from ag2.config.zai import ZAIConfig
+from ag2.config.zai.config import ZAIConfigOverrides
+from test.config._helpers import WireRecorder
 
 
 def make_usage(
@@ -53,99 +53,89 @@ def make_usage(
     )
 
 
-def make_response(
+def completion_json(
     content: str | None = "ok",
     reasoning_content: str | None = None,
-    tool_calls: list[Any] | None = None,
+    tool_calls: list[CompletionMessageToolCall] | None = None,
     finish_reason: str = "stop",
-    usage: Any | None = None,
+    usage: CompletionUsage | None = None,
     model: str = "glm-test",
-) -> SimpleNamespace:
-    return SimpleNamespace(
+) -> dict[str, Any]:
+    """A `/chat/completions` reply body, built from the SDK's own `Completion`."""
+    completion = Completion(
+        id="cmpl-1",
+        created=1,
+        model=model,
         choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(
-                    content=content,
-                    reasoning_content=reasoning_content,
-                    tool_calls=tool_calls or [],
-                ),
+            CompletionChoice(
+                index=0,
                 finish_reason=finish_reason,
+                message=CompletionMessage(
+                    role="assistant", content=content, reasoning_content=reasoning_content, tool_calls=tool_calls
+                ),
             )
         ],
-        usage=usage if usage is not None else make_usage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
-        model=model,
+        usage=usage or CompletionUsage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
     )
+    return completion.model_dump(exclude_none=True)
 
 
-def make_tool_call(
-    call_id: str = "tc_1",
-    name: str = "search_docs",
-    arguments: Any = '{"query": "x"}',
-) -> SimpleNamespace:
-    return SimpleNamespace(id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
-
-
-def make_stream_chunk(
+def chunk_json(
     content: str | None = None,
     reasoning_content: str | None = None,
-    tool_calls: list[Any] | None = None,
+    tool_calls: list[ChoiceDeltaToolCall] | None = None,
     finish_reason: str | None = None,
-    usage: Any | None = None,
-    model: str | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
+    usage: ChunkUsage | None = None,
+) -> dict[str, Any]:
+    """One streamed `chat.completion.chunk` event, built from the SDK's own `ChatCompletionChunk`."""
+    chunk = ChatCompletionChunk(
+        id="cmpl-1",
+        created=1,
         choices=[
-            SimpleNamespace(
-                delta=SimpleNamespace(
-                    content=content,
-                    reasoning_content=reasoning_content,
-                    tool_calls=tool_calls or [],
-                ),
+            Choice(
+                index=0,
+                delta=ChoiceDelta(content=content, reasoning_content=reasoning_content, tool_calls=tool_calls),
                 finish_reason=finish_reason,
             )
         ],
         usage=usage,
-        model=model,
+        extra_json={},
+    )
+    # `extra_json` is the SDK's slot for unknown keys, not a wire field.
+    return chunk.model_dump(exclude_none=True, exclude={"extra_json"})
+
+
+def tool_call_json(
+    call_id: str = "tc_1", name: str = "search_docs", arguments: str = '{"query": "x"}'
+) -> CompletionMessageToolCall:
+    return CompletionMessageToolCall(id=call_id, type="function", function=Function(name=name, arguments=arguments))
+
+
+def with_object_arguments(body: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]:
+    """`body` with its first tool call's `arguments` as a JSON object, as Z.AI has sent it.
+
+    The SDK types the field `str` but parses replies unvalidated, so the object arrives as-is.
+    """
+    body["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"] = arguments
+    return body
+
+
+def tool_call_delta_json(
+    index: int, call_id: str | None = None, name: str | None = None, arguments: str | None = None
+) -> ChoiceDeltaToolCall:
+    return ChoiceDeltaToolCall(
+        index=index,
+        id=call_id,
+        type="function" if call_id is not None else None,
+        function=ChoiceDeltaToolCallFunction(name=name, arguments=arguments),
     )
 
 
-def make_stream_tool_call(
-    index: int, call_id: str | None = None, name: str | None = None, arguments: Any = None
-) -> SimpleNamespace:
-    return SimpleNamespace(index=index, id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
-
-
-class FakeCompletions:
-    def __init__(self, response: Any | None = None, stream_chunks: Iterable[Any] = ()) -> None:
-        self.response = response if response is not None else make_response()
-        self.stream_chunks = list(stream_chunks)
-        self._kwargs: dict[str, Any] | None = None
-
-    @property
-    def kwargs(self) -> dict[str, Any]:
-        """What `create` was called with; fails the test if it never was."""
-        assert self._kwargs is not None, "create() was never called"
-        return self._kwargs
-
-    def create(self, **kwargs: Any) -> Any:
-        # Bound against the real signature, so a keyword the SDK would refuse fails here too; an
-        # argument left at the SDK's default (`NOT_GIVEN`, or `None`) is not recorded.
-        signature = inspect.signature(Completions.create)
-        signature.bind(self, **kwargs)
-        self._kwargs = {k: v for k, v in kwargs.items() if v is not signature.parameters[k].default}
-        if kwargs.get("stream"):
-            return FakeStreamResponse(self.stream_chunks)
-        return self.response
-
-
-class FakeZAIClient:
-    def __init__(self, completions: FakeCompletions) -> None:
-        self.chat = SimpleNamespace(completions=completions)
-
-
-def install_fake_sdk(client: ZAIClient, completions: FakeCompletions) -> None:
-    """Stand `completions` in for the SDK client `client` would otherwise build."""
-    client._client = FakeZAIClient(completions)  # type: ignore[assignment]  # the tests read what create() was called with, which the SDK turns into a request body
+@contextmanager
+def wire_config(recorder: WireRecorder, /, **overrides: Unpack[ZAIConfigOverrides]) -> Generator[ZAIConfig]:
+    """A `ZAIConfig` whose SDK client talks to `recorder` through the public `http_client` seam."""
+    with httpx.Client(transport=httpx.MockTransport(recorder)) as http_client:
+        yield ZAIConfig(model="glm-test", api_key="id.secret", http_client=http_client).copy(**overrides)
 
 
 def make_call_context(prompt: list[str] | None = None) -> AsyncMock:

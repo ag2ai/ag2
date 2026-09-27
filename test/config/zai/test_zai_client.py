@@ -2,32 +2,38 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
+from unittest.mock import AsyncMock
+
 import pytest
 from dirty_equals import IsPartialDict
 from fast_depends.pydantic import PydanticSerializer
 from pydantic import BaseModel
+from zai.types.chat.chat_completion import CompletionUsage
+from zai.types.chat.chat_completion_chunk import CompletionUsage as ChunkUsage
 
-from ag2.config.zai import ZAIClient
+from ag2.config.zai import ZAIConfig
 from ag2.events import (
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
     ModelRequest,
+    ModelResponse,
     TextInput,
     ToolCallEvent,
     Usage,
 )
-from ag2.response import PromptedSchema
-from test.config._helpers import make_tool
+from ag2.response import PromptedSchema, ResponseProto
+from ag2.tools.schemas import ToolSchema
+from test.config._helpers import WireRecorder, json_response, make_tool, sse_response
 from test.config.zai._helpers import (
-    FakeCompletions,
-    install_fake_sdk,
+    chunk_json,
+    completion_json,
     make_call_context,
-    make_response,
-    make_stream_chunk,
-    make_stream_tool_call,
-    make_tool_call,
-    make_usage,
+    tool_call_delta_json,
+    tool_call_json,
+    wire_config,
+    with_object_arguments,
 )
 
 
@@ -35,17 +41,16 @@ class Verdict(BaseModel):
     answer: str
 
 
-def _make_client(completions: FakeCompletions, *, streaming: bool = False) -> ZAIClient:
-    client = ZAIClient(create_options={"model": "glm-test", "stream": streaming})
-    install_fake_sdk(client, completions)
-    return client
-
-
-async def _ask(client: ZAIClient, context=None, tools=(), response_schema=None):
-    return await client(
+async def _ask(
+    config: ZAIConfig,
+    context: AsyncMock | None = None,
+    tools: list[ToolSchema] | None = None,
+    response_schema: ResponseProto[Any] | None = None,
+) -> ModelResponse:
+    return await config.create()(
         messages=[ModelRequest([TextInput("hello")])],
         context=context if context is not None else make_call_context(),
-        tools=tools,
+        tools=tools or [],
         response_schema=response_schema,
         serializer=PydanticSerializer(),
     )
@@ -53,67 +58,85 @@ async def _ask(client: ZAIClient, context=None, tools=(), response_schema=None):
 
 @pytest.mark.asyncio
 async def test_empty_tools_are_omitted() -> None:
-    completions = FakeCompletions()
+    recorder = WireRecorder(json_response(completion_json()))
 
-    await _ask(_make_client(completions))
+    with wire_config(recorder) as config:
+        await _ask(config)
 
-    assert "tools" not in completions.kwargs
+    [body] = recorder.bodies
+    assert "tools" not in body
 
 
 @pytest.mark.asyncio
 async def test_function_tools_serialize() -> None:
-    completions = FakeCompletions()
+    recorder = WireRecorder(json_response(completion_json()))
 
-    await _ask(_make_client(completions), tools=[make_tool().schema])
+    with wire_config(recorder) as config:
+        await _ask(config, tools=[make_tool().schema])
 
-    assert completions.kwargs == IsPartialDict({
-        "tools": [
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_docs",
-                    "description": "Search documentation by query.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string"},
-                            "limit": {"type": "integer", "minimum": 1},
+    assert recorder.bodies == [
+        IsPartialDict({
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "search_docs",
+                        "description": "Search documentation by query.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string"},
+                                "limit": {"type": "integer", "minimum": 1},
+                            },
+                            "required": ["query"],
+                            "additionalProperties": False,
                         },
-                        "required": ["query"],
-                        "additionalProperties": False,
                     },
-                },
-            }
-        ]
-    })
+                }
+            ]
+        })
+    ]
 
 
 @pytest.mark.asyncio
 async def test_system_prompt_and_response_schema_prompt_land_in_messages() -> None:
-    completions = FakeCompletions()
+    recorder = WireRecorder(json_response(completion_json()))
     schema = PromptedSchema(Verdict)
 
-    await _ask(_make_client(completions), context=make_call_context(["You are helpful."]), response_schema=schema)
+    with wire_config(recorder) as config:
+        await _ask(config, context=make_call_context(["You are helpful."]), response_schema=schema)
 
-    messages = completions.kwargs["messages"]
-    assert messages[0] == {"role": "system", "content": f"You are helpful.\n{schema.system_prompt}"}
+    assert recorder.bodies == [
+        IsPartialDict({
+            "messages": [
+                {"role": "system", "content": f"You are helpful.\n{schema.system_prompt}"},
+                {"role": "user", "content": "hello"},
+            ]
+        })
+    ]
 
 
 @pytest.mark.asyncio
 async def test_non_streaming_text_reasoning_tool_calls_usage_finish_reason() -> None:
-    completions = FakeCompletions(
-        response=make_response(
-            content="The answer is 42.",
-            reasoning_content="thinking...",
-            tool_calls=[make_tool_call(arguments={"query": "x"})],
-            finish_reason="tool_calls",
-            usage=make_usage(prompt_tokens=10, completion_tokens=5),
-            model="glm-5.2",
+    recorder = WireRecorder(
+        json_response(
+            with_object_arguments(
+                completion_json(
+                    content="The answer is 42.",
+                    reasoning_content="thinking...",
+                    tool_calls=[tool_call_json()],
+                    finish_reason="tool_calls",
+                    usage=CompletionUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+                    model="glm-5.2",
+                ),
+                {"query": "x"},
+            )
         )
     )
     context = make_call_context()
 
-    result = await _ask(_make_client(completions), context=context)
+    with wire_config(recorder) as config:
+        result = await _ask(config, context=context)
 
     assert result.content == "The answer is 42."
     assert result.tool_calls.calls == [ToolCallEvent(id="tc_1", name="search_docs", arguments='{"query": "x"}')]
@@ -129,19 +152,23 @@ async def test_non_streaming_text_reasoning_tool_calls_usage_finish_reason() -> 
 
 @pytest.mark.asyncio
 async def test_streaming_text_reasoning_usage_and_finish_reason() -> None:
-    completions = FakeCompletions(
-        stream_chunks=[
-            make_stream_chunk(reasoning_content="hmm"),
-            make_stream_chunk(content="Hello "),
-            make_stream_chunk(
-                content="world", finish_reason="stop", usage=make_usage(prompt_tokens=4, completion_tokens=2)
+    recorder = WireRecorder(
+        sse_response(
+            chunk_json(reasoning_content="hmm"),
+            chunk_json(content="Hello "),
+            chunk_json(
+                content="world",
+                finish_reason="stop",
+                usage=ChunkUsage(prompt_tokens=4, completion_tokens=2, total_tokens=6),
             ),
-        ]
+        )
     )
     context = make_call_context()
 
-    result = await _ask(_make_client(completions, streaming=True), context=context)
+    with wire_config(recorder, streaming=True) as config:
+        result = await _ask(config, context=context)
 
+    assert recorder.bodies == [IsPartialDict({"stream": True})]
     assert result.content == "Hello world"
     assert result.usage == Usage(prompt_tokens=4, completion_tokens=2, total_tokens=6)
     assert result.finish_reason == "stop"
@@ -155,15 +182,16 @@ async def test_streaming_text_reasoning_usage_and_finish_reason() -> None:
 
 @pytest.mark.asyncio
 async def test_streaming_tool_call_accumulation_and_empty_input() -> None:
-    completions = FakeCompletions(
-        stream_chunks=[
-            make_stream_chunk(tool_calls=[make_stream_tool_call(0, call_id="tc_1", name="alpha", arguments='{"a"')]),
-            make_stream_chunk(tool_calls=[make_stream_tool_call(1, call_id="tc_2", name="beta")]),
-            make_stream_chunk(tool_calls=[make_stream_tool_call(0, arguments=": 1}")], finish_reason="tool_calls"),
-        ]
+    recorder = WireRecorder(
+        sse_response(
+            chunk_json(tool_calls=[tool_call_delta_json(0, call_id="tc_1", name="alpha", arguments='{"a"')]),
+            chunk_json(tool_calls=[tool_call_delta_json(1, call_id="tc_2", name="beta")]),
+            chunk_json(tool_calls=[tool_call_delta_json(0, arguments=": 1}")], finish_reason="tool_calls"),
+        )
     )
 
-    result = await _ask(_make_client(completions, streaming=True))
+    with wire_config(recorder, streaming=True) as config:
+        result = await _ask(config)
 
     assert result.tool_calls.calls == [
         ToolCallEvent(id="tc_1", name="alpha", arguments='{"a": 1}'),
@@ -176,23 +204,25 @@ async def test_streaming_tool_call_accumulation_and_empty_input() -> None:
 async def test_streaming_tool_call_empty_first_arguments_fragment() -> None:
     # OpenAI-compatible streams routinely send the first tool-call delta with
     # arguments="". That empty fragment must not inject "{}" into the accumulator.
-    completions = FakeCompletions(
-        stream_chunks=[
-            make_stream_chunk(tool_calls=[make_stream_tool_call(0, call_id="tc_1", name="alpha", arguments="")]),
-            make_stream_chunk(tool_calls=[make_stream_tool_call(0, arguments='{"a"')]),
-            make_stream_chunk(tool_calls=[make_stream_tool_call(0, arguments=": 1}")], finish_reason="tool_calls"),
-        ]
+    recorder = WireRecorder(
+        sse_response(
+            chunk_json(tool_calls=[tool_call_delta_json(0, call_id="tc_1", name="alpha", arguments="")]),
+            chunk_json(tool_calls=[tool_call_delta_json(0, arguments='{"a"')]),
+            chunk_json(tool_calls=[tool_call_delta_json(0, arguments=": 1}")], finish_reason="tool_calls"),
+        )
     )
 
-    result = await _ask(_make_client(completions, streaming=True))
+    with wire_config(recorder, streaming=True) as config:
+        result = await _ask(config)
 
     assert result.tool_calls.calls == [ToolCallEvent(id="tc_1", name="alpha", arguments='{"a": 1}')]
 
 
 @pytest.mark.asyncio
 async def test_streaming_missing_usage_yields_empty_usage() -> None:
-    completions = FakeCompletions(stream_chunks=[make_stream_chunk(content="hi")])
+    recorder = WireRecorder(sse_response(chunk_json(content="hi")))
 
-    result = await _ask(_make_client(completions, streaming=True))
+    with wire_config(recorder, streaming=True) as config:
+        result = await _ask(config)
 
     assert result.usage == Usage()

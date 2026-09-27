@@ -3,15 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from dirty_equals import IsPartialDict
+from dirty_equals import IsPartialDict, IsStr
 from fast_depends.pydantic import PydanticSerializer
 from pydantic import BaseModel
 
-from ag2.config.zai import ZAIClient
 from ag2.config.zai.mappers import response_proto_to_format, schema_instruction
 from ag2.events import ModelRequest, TextInput
 from ag2.response import PromptedSchema, ResponseSchema
-from test.config.zai._helpers import FakeCompletions, install_fake_sdk, make_call_context
+from test.config._helpers import WireRecorder, json_response
+from test.config.zai._helpers import completion_json, make_call_context, wire_config
 
 
 class Verdict(BaseModel):
@@ -52,19 +52,23 @@ def test_schema_instruction_skips_prompted_schema() -> None:
 
 @pytest.mark.asyncio
 async def test_schema_sends_json_mode_and_prompt() -> None:
-    completions = FakeCompletions()
-    client = ZAIClient(create_options={"model": "glm-test"})
-    install_fake_sdk(client, completions)
+    recorder = WireRecorder(json_response(completion_json()))
 
-    await client(
-        messages=[ModelRequest([TextInput("hello")])],
-        context=make_call_context(),
-        tools=[],
-        response_schema=ResponseSchema(Verdict),
-        serializer=PydanticSerializer(),
-    )
+    with wire_config(recorder) as config:
+        await config.create()(
+            messages=[ModelRequest([TextInput("hello")])],
+            context=make_call_context(),
+            tools=[],
+            response_schema=ResponseSchema(Verdict),
+            serializer=PydanticSerializer(),
+        )
 
-    assert completions.kwargs == IsPartialDict({"response_format": {"type": "json_object"}})
-    system = next(m for m in completions.kwargs["messages"] if m["role"] == "system")
-    assert "JSON schema" in system["content"]
-    assert '"answer"' in system["content"]
+    assert recorder.bodies == [
+        IsPartialDict({
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": IsStr(regex=r'(?s).*JSON schema.*"answer".*')},
+                {"role": "user", "content": "hello"},
+            ],
+        })
+    ]

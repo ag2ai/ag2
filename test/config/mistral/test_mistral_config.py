@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import httpx
 import pytest
 from dirty_equals import IsPartialDict
 from fast_depends.pydantic import PydanticSerializer
@@ -9,7 +10,8 @@ from fast_depends.pydantic import PydanticSerializer
 from ag2.config import MistralConfig, ModelProvider
 from ag2.config.mistral import MistralClient, MistralFilesClient
 from ag2.events import ModelRequest, TextInput
-from test.config.mistral._helpers import FakeChat, install_fake_sdk, make_call_context
+from test.config._helpers import WireRecorder, json_response
+from test.config.mistral._helpers import make_call_context, make_response
 
 
 def test_provider() -> None:
@@ -47,9 +49,13 @@ def test_create_files_client() -> None:
 @pytest.mark.asyncio
 async def test_configured_options_reach_the_api() -> None:
     """Set options are forwarded; unset ones are dropped, not sent as ``None``."""
-    chat = FakeChat()
-    client = MistralConfig(model="mistral-small-latest", temperature=0, max_tokens=64).create()
-    install_fake_sdk(client, chat)
+    wire = WireRecorder(json_response(make_response()))
+    client = MistralConfig(
+        model="mistral-small-latest",
+        temperature=0,
+        max_tokens=64,
+        async_client=httpx.AsyncClient(transport=httpx.MockTransport(wire)),
+    ).create()
 
     await client(
         messages=[ModelRequest([TextInput("hello")])],
@@ -59,9 +65,10 @@ async def test_configured_options_reach_the_api() -> None:
         serializer=PydanticSerializer(),
     )
 
-    assert chat.kwargs == IsPartialDict({
+    [body] = wire.bodies
+    assert body == IsPartialDict({
         "model": "mistral-small-latest",
         "temperature": 0,
         "max_tokens": 64,
     })
-    assert "top_p" not in chat.kwargs
+    assert "top_p" not in body
