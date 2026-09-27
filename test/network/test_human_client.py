@@ -541,12 +541,15 @@ async def test_shutdown_unregisters_a_human_and_ends_its_envelope_stream() -> No
     consumer = asyncio.create_task(_drain(human, received))
     await asyncio.sleep(0)  # let the consumer park on the empty queue
 
-    await hc.shutdown()
+    try:
+        await hc.shutdown()
 
-    await asyncio.wait_for(consumer, timeout=1)
-    assert received == []
-    assert await hub.list_agents(kind="human") == []
-    await hub.close()
+        await asyncio.wait_for(consumer, timeout=1)
+        assert received == []
+        assert await hub.list_agents(kind="human") == []
+    finally:
+        consumer.cancel()
+        await hub.close()
 
 
 async def _drain(human: HumanClient, into: list[Envelope]) -> None:
