@@ -2,9 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 from collections.abc import AsyncGenerator, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, suppress
 from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
 
 from fast_depends.library.serializer import SerializerProto
 
@@ -95,6 +98,26 @@ class LiveAgent(PluginTarget):
         self._config = config
         self._stream = stream
 
+        has_tts = any(getattr(obs, "_is_tts_observer", False) for obs in observers)
+        if has_tts:
+            # Try to detect if the config is not explicitly text output
+            is_text_output = False
+            if (
+                hasattr(config, "_session")
+                and config._session.get("output_modalities") == ["text"]
+                or hasattr(config, "_config")
+                and config._config.get("response_modalities") == [1]
+            ):
+                is_text_output = True
+
+            if not is_text_output:
+                logger.warning(
+                    "Multiple Audio Outputs Detected: TTSObserver is attached, but the model may "
+                    "not be set to text-only output. This can cause double audio (the model's "
+                    "own voice + the observer's synthesized voice). "
+                    "Set output=TextOutput() on your config to prevent this."
+                )
+
     @staticmethod
     async def usage_report(context: ConversationContext) -> UsageReport:
         """Aggregate token usage over the live session's event log."""
@@ -128,6 +151,25 @@ class LiveAgent(PluginTarget):
 
         all_tools: list[Tool] = self.tools + [FunctionTool.ensure_tool(t) for t in tools]
         all_observers: list[Observer] = self._observers + list(observers)
+
+        has_tts = any(getattr(obs, "_is_tts_observer", False) for obs in all_observers)
+        if has_tts and active_config is not None:
+            is_text_output = False
+            if (
+                hasattr(active_config, "_session")
+                and active_config._session.get("output_modalities") == ["text"]
+                or hasattr(active_config, "_config")
+                and active_config._config.get("response_modalities") == [1]
+            ):
+                is_text_output = True
+
+            if not is_text_output:
+                logger.warning(
+                    "Multiple Audio Outputs Detected: TTSObserver is attached, but the model may "
+                    "not be set to text-only output. This can cause double audio (the model's "
+                    "own voice + the observer's synthesized voice). "
+                    "Set output=TextOutput() on your config to prevent this."
+                )
 
         initial_event = ModelRequest([])
         middleware_instances: list[BaseMiddleware] = [

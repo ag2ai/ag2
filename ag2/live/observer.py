@@ -31,7 +31,9 @@ def TTSObserver(config: TTSConfig[bytes], *, min_chars: int = 60) -> CompositeOb
     async def on_model_message(event: events.ModelMessage, context: Context) -> None:
         await speech.finish(event.content, context)
 
-    return CompositeObserver(on_model_message_chunk, on_model_message)
+    obs = CompositeObserver(on_model_message_chunk, on_model_message)
+    obs._is_tts_observer = True  # type: ignore[attr-defined]
+    return obs
 
 
 class SentenceBuffer:
