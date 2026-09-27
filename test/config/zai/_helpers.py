@@ -2,11 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
 from collections.abc import Iterable, Iterator
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
+from zai.api_resource.chat.completions import Completions
 from zai.core import StreamResponse
 from zai.types.chat.chat_completion import CompletionTokensDetails, CompletionUsage, PromptTokensDetails
 
@@ -126,7 +128,11 @@ class FakeCompletions:
         return self._kwargs
 
     def create(self, **kwargs: Any) -> Any:
-        self._kwargs = kwargs
+        # Bound against the real signature, so a keyword the SDK would refuse fails here too; an
+        # argument left at the SDK's default (`NOT_GIVEN`, or `None`) is not recorded.
+        signature = inspect.signature(Completions.create)
+        signature.bind(self, **kwargs)
+        self._kwargs = {k: v for k, v in kwargs.items() if v is not signature.parameters[k].default}
         if kwargs.get("stream"):
             return FakeStreamResponse(self.stream_chunks)
         return self.response

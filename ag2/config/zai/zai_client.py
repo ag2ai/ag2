@@ -4,7 +4,7 @@
 
 import asyncio
 import json
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from enum import Enum
 from itertools import chain
 from typing import Any, TypedDict
@@ -13,7 +13,7 @@ import httpx
 from fast_depends.library.serializer import SerializerProto
 from typing_extensions import Required
 from zai import ZaiClient
-from zai.core import StreamResponse
+from zai.core import NOT_GIVEN, NotGiven, StreamResponse
 from zai.types.chat.chat_completion import Completion
 from zai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from zai.types.chat.code_geex.code_geex_params import CodeGeexExtra
@@ -56,43 +56,41 @@ _STREAM_DONE = _Sentinel.STREAM_DONE
 
 
 class CreateOptions(TypedDict, total=False):
-    """The generation parameters a `ZAIConfig` hands its client.
+    """The generation parameters a `ZAIConfig` hands its client, typed as `Completions.create` takes them.
 
-    Every item but `model` and `stream` is optional to the API, and `ZAIConfig` sets all of
-    them unconditionally, so `None` is part of each item's type. `_merge_extra_body` is what
-    drops them before the SDK call — the SDK takes no `None` for these.
+    That is what makes the spread into `create` checked; an unset parameter is the SDK's `NOT_GIVEN`.
     """
 
     model: Required[str]
     stream: bool
-    max_tokens: int | None
-    temperature: float | None
-    top_p: float | None
-    stop: str | list[str] | None
-    seed: int | None
-    tool_choice: str | dict[str, Any] | None
-    request_id: str | None
-    user_id: str | None
-    do_sample: bool | None
-    meta: dict[str, str] | None
-    sensitive_word_check: SensitiveWordCheckRequest | None
-    extra: CodeGeexExtra | None
-    timeout: float | httpx.Timeout | None
-    watermark_enabled: bool | None
-    tool_stream: bool | None
-    reasoning_effort: str | None
+    max_tokens: int | NotGiven
+    temperature: float | NotGiven
+    top_p: float | NotGiven
+    stop: str | list[str] | NotGiven
+    seed: int | NotGiven
+    tool_choice: str | NotGiven
+    request_id: str | NotGiven
+    user_id: str | NotGiven
+    do_sample: bool | NotGiven
+    meta: dict[str, str] | NotGiven
+    sensitive_word_check: SensitiveWordCheckRequest | NotGiven
+    extra: CodeGeexExtra | NotGiven
+    timeout: float | httpx.Timeout | NotGiven
+    watermark_enabled: bool | NotGiven
+    tool_stream: bool | NotGiven
+    reasoning_effort: str | NotGiven
     thinking: dict[str, Any] | None
-    extra_body: dict[str, Any] | None
     extra_headers: dict[str, str] | None
+    # Forwarded to the SDK's own `extra_body`, merged into the request JSON, so its keys need not be
+    # `create` parameters; `ZAIClient` drops any key a typed argument sets.
+    extra_body: dict[str, Any] | None
 
 
-def _merge_extra_body(options: CreateOptions) -> dict[str, Any]:
-    kwargs = dict(options.get("extra_body") or {})
-    for key, value in options.items():
-        if key == "extra_body" or value is None:
-            continue
-        kwargs[key] = value
-    return kwargs
+def _unshadowed(extra_body: dict[str, Any] | None, taken: Collection[str]) -> dict[str, Any] | None:
+    """`extra_body` without the keys a typed argument sets: the documented precedence, which the SDK's merge reverses."""
+    if extra_body is None:
+        return None
+    return {k: v for k, v in extra_body.items() if k not in taken}
 
 
 class ZAIClient(LLMClient):
@@ -166,19 +164,27 @@ class ZAIClient(LLMClient):
 
         zai_messages = convert_messages(prompt, messages, serializer)
         tools_list = [tool_to_api(t) for t in tools]
-        kwargs: dict[str, Any] = {
-            "messages": zai_messages,
-            **_merge_extra_body(self._create_options),
-        }
-
-        if tools_list:
-            kwargs["tools"] = tools_list
-        if response_format := response_proto_to_format(response_schema):
-            kwargs["response_format"] = response_format
 
         client = await asyncio.to_thread(self._get_client)
 
-        response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
+        response_format = response_proto_to_format(response_schema)
+        taken = {k for k, v in self._create_options.items() if v is not None and not isinstance(v, NotGiven)}
+        taken.add("messages")
+        if tools_list:
+            taken.add("tools")
+        if response_format is not None:
+            taken.add("response_format")
+        options: CreateOptions = {
+            **self._create_options,
+            "extra_body": _unshadowed(self._create_options.get("extra_body"), taken),
+        }
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            messages=zai_messages,
+            tools=tools_list or NOT_GIVEN,
+            response_format=response_format,
+            **options,
+        )
         # One call answers either shape; the reply is what says which, rather than the flag
         # that asked for it.
         if isinstance(response, StreamResponse):

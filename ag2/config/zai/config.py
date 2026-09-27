@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import Any, TypedDict
+from typing import Any, TypeVar, TypedDict
 
 import httpx
 from typing_extensions import Unpack
+from zai.core import NOT_GIVEN, NotGiven
 from zai.types.chat.code_geex.code_geex_params import CodeGeexExtra
 from zai.types.sensitive_word_check import SensitiveWordCheckRequest
 
@@ -14,6 +15,8 @@ from ag2.config.config import ModelConfig, ModelProvider
 
 from .files import ZAIFilesClient
 from .zai_client import CreateOptions, ZAIClient
+
+T = TypeVar("T")
 
 
 class ZAIConfigOverrides(TypedDict, total=False):
@@ -32,7 +35,7 @@ class ZAIConfigOverrides(TypedDict, total=False):
     top_p: float | None
     stop: str | list[str] | None
     seed: int | None
-    tool_choice: str | dict[str, Any] | None
+    tool_choice: str | None
     request_id: str | None
     user_id: str | None
     do_sample: bool | None
@@ -65,7 +68,8 @@ class ZAIConfig(ModelConfig):
     top_p: float | None = None
     stop: str | list[str] | None = None
     seed: int | None = None
-    tool_choice: str | dict[str, Any] | None = None
+    # A string, as `Completions.create` types it; Z.AI documents only "auto".
+    tool_choice: str | None = None
     request_id: str | None = None
     user_id: str | None = None
     do_sample: bool | None = None
@@ -95,22 +99,22 @@ class ZAIConfig(ModelConfig):
         options = CreateOptions(
             model=self.model,
             stream=self.streaming,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            stop=self.stop,
-            seed=self.seed,
-            tool_choice=self.tool_choice,
-            request_id=self.request_id,
-            user_id=self.user_id,
-            do_sample=self.do_sample,
-            meta=self.meta,
-            sensitive_word_check=self.sensitive_word_check,
-            extra=self.extra,
-            timeout=self.request_timeout,
-            watermark_enabled=self.watermark_enabled,
-            tool_stream=self.tool_stream,
-            reasoning_effort=self.reasoning_effort,
+            max_tokens=_given(self.max_tokens),
+            temperature=_given(self.temperature),
+            top_p=_given(self.top_p),
+            stop=_given(self.stop),
+            seed=_given(self.seed),
+            tool_choice=_given(self.tool_choice),
+            request_id=_given(self.request_id),
+            user_id=_given(self.user_id),
+            do_sample=_given(self.do_sample),
+            meta=_given(self.meta),
+            sensitive_word_check=_given(self.sensitive_word_check),
+            extra=_given(self.extra),
+            timeout=_given(self.request_timeout),
+            watermark_enabled=_given(self.watermark_enabled),
+            tool_stream=_given(self.tool_stream),
+            reasoning_effort=_given(self.reasoning_effort),
             thinking={"type": "enabled" if self.thinking else "disabled"} if self.thinking is not None else None,
             extra_headers=self.extra_headers,
             extra_body=self.extra_body,
@@ -127,3 +131,8 @@ class ZAIConfig(ModelConfig):
             source_channel=self.source_channel,
             create_options=options,
         )
+
+
+def _given(value: T | None) -> T | NotGiven:
+    """`None` is how the config spells unset; the SDK spells it `NOT_GIVEN`."""
+    return NOT_GIVEN if value is None else value

@@ -3,16 +3,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import json
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from dirty_equals import IsPartialDict
 from fast_depends.pydantic import PydanticSerializer
 from zai.api_resource.chat.completions import Completions as RealCompletions
 
 import ag2.config.zai.zai_client as zai_client_module
 from ag2.config.zai import ZAIClient, ZAIConfig, ZAIFilesClient
 from ag2.events import ModelRequest, TextInput
+from ag2.tools.schemas import ToolSchema
+from test.config._helpers import make_tool
 from test.config.zai._helpers import FakeCompletions, FakeZAIClient, make_call_context
 
 
@@ -24,6 +29,36 @@ class FakeZAIClientFactory:
     def __call__(self, **kwargs: object) -> FakeZAIClient:
         self.kwargs = kwargs
         return FakeZAIClient(self.completions)
+
+
+class _BodyRecorder:
+    """An `httpx.MockTransport` handler that keeps each request's JSON body — what the API sees."""
+
+    def __init__(self) -> None:
+        self.bodies: list[dict[str, Any]] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "id": "cmpl-1",
+                "created": 1,
+                "model": "glm-5.2",
+                "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "ok"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            },
+        )
+
+
+async def _ask(config: ZAIConfig, tools: list[ToolSchema] | None = None) -> None:
+    await config.create()(
+        messages=[ModelRequest([TextInput("hello")])],
+        context=make_call_context(),
+        tools=tools or [],
+        response_schema=None,
+        serializer=PydanticSerializer(),
+    )
 
 
 def test_defaults() -> None:
@@ -113,7 +148,7 @@ async def test_inference_params_reach_sdk_call(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.asyncio
-async def test_unset_params_are_omitted_and_thinking_precedence(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_unset_params_are_omitted_and_extra_body_is_forwarded_unshadowed(monkeypatch: pytest.MonkeyPatch) -> None:
     completions = FakeCompletions()
     factory = FakeZAIClientFactory(completions)
     monkeypatch.setattr(zai_client_module, "ZaiClient", factory)
@@ -135,9 +170,55 @@ async def test_unset_params_are_omitted_and_thinking_precedence(monkeypatch: pyt
         "model": "glm-5.2",
         "messages": [{"role": "user", "content": "hello"}],
         "stream": False,
-        "request_id": "abc",
         "thinking": {"type": "enabled"},
+        # Forwarded for the SDK to merge into the body, less the key a typed option already sets.
+        "extra_body": {"request_id": "abc"},
     }
+
+
+@pytest.mark.asyncio
+async def test_extra_body_keys_reach_the_request_body_without_binding_to_create() -> None:
+    # `extra_body` is the SDK's escape hatch: its keys join the request JSON without being
+    # parameters of `create`, so a field the SDK does not know yet still reaches the API.
+    recorder = _BodyRecorder()
+    with httpx.Client(transport=httpx.MockTransport(recorder)) as http_client:
+        config = ZAIConfig(
+            model="glm-5.2", api_key="id.secret", http_client=http_client, extra_body={"future_param": {"on": True}}
+        )
+        await _ask(config)
+
+    assert recorder.bodies == [IsPartialDict({"future_param": {"on": True}})]
+
+
+@pytest.mark.asyncio
+async def test_a_typed_option_wins_over_the_same_key_in_extra_body() -> None:
+    # The user guide's precedence; the SDK merges `extra_body` last, so the config has to keep it.
+    recorder = _BodyRecorder()
+    with httpx.Client(transport=httpx.MockTransport(recorder)) as http_client:
+        config = ZAIConfig(
+            model="glm-5.2",
+            api_key="id.secret",
+            http_client=http_client,
+            thinking=True,
+            extra_body={"thinking": {"type": "disabled"}},
+        )
+        await _ask(config)
+
+    assert recorder.bodies == [IsPartialDict({"thinking": {"type": "enabled"}})]
+
+
+@pytest.mark.asyncio
+async def test_the_agents_tools_win_over_tools_in_extra_body() -> None:
+    recorder = _BodyRecorder()
+    with httpx.Client(transport=httpx.MockTransport(recorder)) as http_client:
+        config = ZAIConfig(
+            model="glm-5.2", api_key="id.secret", http_client=http_client, extra_body={"tools": [], "future_param": 1}
+        )
+        await _ask(config, tools=[make_tool().schema])
+
+    assert recorder.bodies == [
+        IsPartialDict({"tools": [IsPartialDict({"type": "function"})], "future_param": 1}),
+    ]
 
 
 @pytest.mark.asyncio
