@@ -97,7 +97,7 @@ xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
 mistral = ["mistralai>=2.8.0,<3"]
 ollama = ["ollama>=0.4.7"]
-bedrock = ["boto3>=1.34.149"]
+bedrock = ["aiobotocore>=3.9.1,<4"]
 dashscope = ["dashscope>=1.25.13"]
 typesafe = ["typesafe-sdk>=0.7.1,<0.8"]
 
@@ -237,6 +237,10 @@ docs = [
 types = [
     "mypy==2.3.1",
     "types-PyYAML",
+    # aiobotocore is data-driven and ships no runtime param classes. The extra pulls
+    # `botocore-stubs` in, which `ag2/config/bedrock/bedrock_client.py` needs under
+    # `disallow_any_unimported`. Type-check only — never a published constraint.
+    "types-aiobotocore[bedrock-runtime]",
     { include-group = "test" },
     "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui]",
 ]
@@ -394,6 +398,8 @@ python_version = "3.10"
 # that already pass under `strict = true`.
 files = [
     "ag2/_import_utils.py",
+    "ag2/config/bedrock/bedrock_client.py",
+    "ag2/config/bedrock/mappers.py",
     "ag2/config/anthropic/mappers.py",
     "ag2/config/dashscope/mappers.py",
     "ag2/config/gemini/mappers.py",

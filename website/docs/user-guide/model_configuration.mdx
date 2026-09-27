@@ -261,9 +261,9 @@ config = AnthropicConfig(
 
 `BedrockConfig` authenticates in either of two ways, both resolved by the underlying AWS SDK:
 
-**1. AWS credentials (SigV4)** — explicit keys, a `profile_name`, or the standard environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`). Recommended for production; credentials refresh automatically through botocore.
+**1. AWS credentials (SigV4)** — explicit keys, a `profile_name`, or the standard environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`). Recommended for production; credentials refresh automatically through aiobotocore.
 
-**2. Bedrock API keys (bearer token)** — set the [Amazon Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html){.external-link target="_blank"} as an environment variable and boto3 uses bearer-token auth for Bedrock calls automatically (no other credentials needed):
+**2. Bedrock API keys (bearer token)** — set the [Amazon Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html){.external-link target="_blank"} as an environment variable and botocore uses bearer-token auth for Bedrock calls automatically (no other credentials needed):
 
 ```bash
 export AWS_BEARER_TOKEN_BEDROCK=<your-bedrock-api-key>
@@ -282,6 +282,29 @@ A region is always required — pass `region_name=` or set `AWS_DEFAULT_REGION`.
 - **Short-term keys** expire with the console session that minted them (max 12 hours) and are region-bound — generate the key in the same region you call.
 - **Long-term keys** are backed by an auto-created IAM user; AWS recommends them for exploration only.
 - API keys work only for Bedrock / Bedrock Runtime actions. If both a bearer token and AWS credentials are present, the bearer token wins for Bedrock calls.
+
+#### Custom Session
+
+`BedrockConfig` is built on [aiobotocore](https://aiobotocore.aio-libs.org/){.external-link target="_blank"}, so `session` takes an `#!python aiobotocore.session.AioSession` — a `boto3.Session` is not accepted. Sharing one session across configs resolves credentials and loads the Bedrock service model once:
+
+```python linenums="1" hl_lines="4 9 15"
+from aiobotocore.session import AioSession
+from ag2.config import BedrockConfig
+
+session = AioSession()
+
+planner = BedrockConfig(
+    model="global.anthropic.claude-sonnet-5",
+    region_name="us-east-1",
+    session=session,
+)
+writer = BedrockConfig(
+    model="global.anthropic.claude-sonnet-5",
+    region_name="us-east-1",
+    streaming=True,
+    session=session,
+)
+```
 
 ### Google Vertex AI (Gemini)
 
