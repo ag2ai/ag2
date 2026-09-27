@@ -21,12 +21,13 @@ Both shapes satisfy the same :class:`Observer` protocol so the Agent
 can register either kind via a single ``register(stack, ctx)`` call.
 """
 
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass
-from typing import Any, Protocol, overload, runtime_checkable
+from typing import Any, Protocol, cast, overload, runtime_checkable
 
 from ag2.annotations import Context
 from ag2.events import BaseEvent, ObserverAlert
@@ -168,7 +169,7 @@ def observer(
 
 
 @overload
-def observer(
+def observer(  # type: ignore[overload-overlap]  # a class is callable, but this overload is matched before the bare-decorator one
     condition: ClassInfo | Condition,
     callback: None = None,
     *,
@@ -208,13 +209,23 @@ def observer(
 ) -> StreamObserver: ...
 
 
+# Bare `@observer`: the decorated function arrives as `condition`, and is the callback. A class is
+# callable too, but the `ClassInfo` overload above is matched first, so it still gets a decorator.
+@overload
+def observer(condition: Callable[..., Any], /) -> SimpleObserver: ...
+
+
 def observer(
-    condition: ClassInfo | Condition | None = None,
+    condition: ClassInfo | Condition | Callable[..., Any] | None = None,
     callback: Callable[..., Any] | None = None,
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
 ) -> SimpleObserver | Callable[[Callable[..., Any]], SimpleObserver]:
+    if callback is None and inspect.isroutine(condition):
+        return SimpleObserver(callback=condition, interrupt=interrupt, sync_to_thread=sync_to_thread)
+    # A routine was taken as the callback above; what is left is a class, a union or a condition.
+    condition = cast("ClassInfo | Condition | None", condition)
     if condition is None:
         cond: Condition | None = None
     elif isinstance(condition, Condition):

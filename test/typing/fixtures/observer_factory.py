@@ -24,3 +24,6 @@ reveal_type(observer()(on_event))  # N: Revealed type is "ag2.observers.observer
 reveal_type(observer(ToolCallEvent, on_event))  # N: Revealed type is "ag2.observers.observer.StreamObserver"
 reveal_type(observer(ToolCallEvent, callback=on_event))  # N: Revealed type is "ag2.observers.observer.StreamObserver"
 reveal_type(observer(ToolCallEvent)(on_event))  # N: Revealed type is "ag2.observers.observer.StreamObserver"
+
+# Bare, as a decorator: the function is the callback, as with `@dataclass`.
+reveal_type(observer(on_event))  # N: Revealed type is "ag2.observers.observer.SimpleObserver"

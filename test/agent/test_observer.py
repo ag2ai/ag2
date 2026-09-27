@@ -283,3 +283,19 @@ async def test_observer_with_variable(
     await agent.ask("Hi!", variables={"myvar": "variable_value"})
 
     mock.assert_called_once_with("variable_value")
+
+
+@pytest.mark.asyncio()
+async def test_bare_observer_decorator_observes_every_event(test_config: TestConfig) -> None:
+    seen: list[BaseEvent] = []
+
+    @observer
+    def watcher(event: BaseEvent) -> None:
+        seen.append(event)
+
+    agent = Agent("", config=test_config, observers=[watcher])
+
+    await agent.ask("Hi!")
+
+    assert any(isinstance(e, ModelRequest) for e in seen)
+    assert any(isinstance(e, ModelResponse) for e in seen)
