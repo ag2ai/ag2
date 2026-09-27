@@ -177,14 +177,14 @@ def tool_to_api(t: ToolSchema) -> chat_pb2.Tool:
             kwargs["server_description"] = t.description
         if t.allowed_tools is not None:
             kwargs["allowed_tool_names"] = t.allowed_tools
-        if t.authorization_token is not None:
-            kwargs["authorization"] = f"Bearer {t.authorization_token}"
-        elif t.headers is not None and "Authorization" in t.headers:
-            kwargs["authorization"] = t.headers["Authorization"]
-        if t.headers is not None:
-            extra = {k: v for k, v in t.headers.items() if k != "Authorization"}
-            if extra:
-                kwargs["extra_headers"] = extra
+        extra: dict[str, str] = {}
+        for key, value in t.http_headers().items():
+            if key.lower() == "authorization":
+                kwargs["authorization"] = value
+            else:
+                extra[key] = value
+        if extra:
+            kwargs["extra_headers"] = extra
         return xai_tools.mcp(**kwargs)
 
     raise UnsupportedToolError(t.type, PROVIDER)

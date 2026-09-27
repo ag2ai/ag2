@@ -685,10 +685,8 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
 
         if t.allowed_tools is not None:
             mcp["allowed_tools"] = t.allowed_tools
-        if t.headers is not None:
-            mcp["headers"] = t.headers
-        elif t.authorization_token is not None:
-            mcp["headers"] = {"Authorization": f"Bearer {t.authorization_token}"}
+        if headers := t.http_headers():
+            mcp["headers"] = headers
         return dict(mcp)
 
     elif isinstance(t, SkillsToolSchema):
