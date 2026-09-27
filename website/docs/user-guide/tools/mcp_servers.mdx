@@ -306,7 +306,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | field | default | what it is for |
 |---|---|---|
 | `server_url` | — | where the server listens, including the MCP endpoint path |
-| `authorization_token` | `None` | bearer token sent on every request |
+| `authorization_token` | `None` | bearer token sent unless `headers` already contains `Authorization` (case-insensitive) |
 | `headers` | `None` | extra HTTP headers |
 | `connection_timeout` | `30.0` | seconds to wait on the server |
 | `proxy` | `None` | HTTP proxy to route through |
