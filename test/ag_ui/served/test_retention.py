@@ -11,8 +11,8 @@ a bound was enforced is that the function stopped running.
 
 import pytest
 
-from ag2.ag_ui import AGUIStream
-from ag2.ag_ui.interrupts import AG2_METADATA_KEY, DEFAULT_RETENTION, NOT_PROVEN, PROOF_KEY, Retention
+from ag2.ag_ui import DEFAULT_RETENTION, NOT_PROVEN, AGUIStream, Retention
+from ag2.ag_ui.interrupts import AG2_METADATA_KEY, PROOF_KEY
 from ag2.exceptions import HumanInputTimeoutError
 from test.ag_ui.harness import only, sole_interrupt, types_of
 from test.ag_ui.serving import (

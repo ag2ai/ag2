@@ -16,8 +16,7 @@ import pytest
 from dirty_equals import IsPartialDict, IsStr
 
 from ag2 import Agent, Context
-from ag2.ag_ui import AGUIStream
-from ag2.ag_ui.interrupts import NOT_PROVEN, TOOL_CALL_REASON
+from ag2.ag_ui import NOT_PROVEN, TOOL_CALL_REASON, AGUIStream
 from ag2.events import ToolCallEvent
 from ag2.middleware import approval_required
 from ag2.testing import TestConfig

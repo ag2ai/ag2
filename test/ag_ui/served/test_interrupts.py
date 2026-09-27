@@ -14,18 +14,15 @@ import asyncio
 
 import httpx
 import pytest
-from ag_ui.core import Interrupt, UserMessage
-from anyio import create_memory_object_stream
+from ag_ui.core import UserMessage
 from dirty_equals import IsPartialDict, IsStr
 
-from ag2 import Agent
+from ag2 import Agent, Context
 from ag2.ag_ui import AGUIStream
-from ag2.ag_ui.interrupts import ANSWER_SCHEMA, ServedTurn, ServedTurns, TurnOutput
-from ag2.events import BaseEvent, HumanInputRequest, HumanMessage
-from ag2.exceptions import HumanInputError
+from ag2.events import HumanInputRequest, HumanMessage, ToolCallEvent
 from ag2.testing import TestConfig
-from test.ag_ui.harness import dispatch_run, only, outcome_of, run_input, sole_interrupt, types_of
-from test.ag_ui.serving import QUESTION, answer, app_for, ask_once, asking_agent, post_run, run_body
+from test.ag_ui.harness import dispatch_run, every, only, outcome_of, run_input, sole_interrupt, types_of
+from test.ag_ui.serving import QUESTION, Clock, answer, app_for, ask_once, asking_agent, post_run, run_body
 
 # Only so a regression fails the test instead of hanging CI until the suite timeout.
 _NEVER = 5.0
@@ -61,14 +58,14 @@ class TestOneQuestionOneAnswer:
 
         interrupt = await ask_once(app)
 
-        assert interrupt["responseSchema"] == ANSWER_SCHEMA
+        assert interrupt["responseSchema"] == IsPartialDict({"type": "string"})
 
     async def test_the_tool_call_the_question_paused_is_completed_by_the_later_run(self) -> None:
-        """The call opens in one run and closes in another, which is the client's problem.
+        """The call is closed in the run that paused it; its result arrives in the later one.
 
-        Asserted because the user guide tells a client to track open tool calls
-        by thread: nothing in a single run's events says the call it opened will
-        be finished somewhere else.
+        `@ag-ui/client` refuses a `RUN_FINISHED` while a call is still open, and
+        refuses a `TOOL_CALL_END` for a call its own run never started — so the
+        end belongs to the first run and only the result to the second.
         """
         agent, _ = asking_agent()
         app = app_for(AGUIStream(agent))
@@ -79,13 +76,15 @@ class TestOneQuestionOneAnswer:
             run_body(thread_id="t1", run_id="r2", text=None, resume=answer(sole_interrupt(first), "blue")),
         )
 
-        assert "TOOL_CALL_START" in types_of(first)
-        assert "TOOL_CALL_END" not in types_of(first)
-        assert [t for t in types_of(second) if t.startswith("TOOL_CALL")] == ["TOOL_CALL_RESULT", "TOOL_CALL_END"]
+        assert [t for t in types_of(first) if t.startswith("TOOL_CALL")] == [
+            "TOOL_CALL_START",
+            "TOOL_CALL_ARGS",
+            "TOOL_CALL_END",
+        ]
+        assert [t for t in types_of(second) if t.startswith("TOOL_CALL")] == ["TOOL_CALL_RESULT"]
         # The same call, under a run id the run that opened it never mentioned.
-        [start] = [e for e in first if e["type"] == "TOOL_CALL_START"]
-        [end] = [e for e in second if e["type"] == "TOOL_CALL_END"]
-        assert end["toolCallId"] == start["toolCallId"]
+        started = only(first, "TOOL_CALL_START")
+        assert only(second, "TOOL_CALL_RESULT") == IsPartialDict({"toolCallId": started["toolCallId"]})
         assert {e["runId"] for e in second if "runId" in e} == {"r2"}
 
     async def test_a_later_run_on_the_same_thread_answers_it(self) -> None:
@@ -249,34 +248,105 @@ async def test_the_agent_says_it_speaks_the_interrupt_protocol() -> None:
     })
 
 
-async def test_a_second_question_is_refused_and_the_first_still_answers() -> None:
-    """A turn carries one outstanding question, and says so when asked for two.
+def asking_twice_at_once(*, timeout: float | None = None) -> tuple[Agent, dict[str, str]]:
+    """An agent whose model calls two asking tools in one response, and what each was told."""
+    answers: dict[str, str] = {}
 
-    At the registry seam rather than over in-process HTTP: driving two genuinely
-    concurrent asks from the wire needs an agent running parallel subtasks, and
-    what is under test is the turn's own invariant, not anything a client sees.
+    agent = Agent(
+        "test_agent",
+        config=TestConfig(
+            [ToolCallEvent(name="ask_a", arguments="{}"), ToolCallEvent(name="ask_b", arguments="{}")],
+            "all done",
+        ),
+    )
 
-    Serving several at once needs one outcome carrying them all and a resume
-    routed per interrupt. Until then the second ask must fail loudly: overwriting
-    the slot orphans the first future, hanging that branch until the turn's
-    deadline, and sends the second question out on an exchange that already
-    ended on the first.
-    """
-    send, _receive = create_memory_object_stream[BaseEvent](max_buffer_size=10)
-    turns = ServedTurns()
-    turn = ServedTurn(TurnOutput(thread_id="thread-1", run_id="run-1", send=send))
+    @agent.tool
+    async def ask_a(context: Context) -> str:
+        """Ask the first question."""
+        answers["A?"] = await context.input("A?", timeout=timeout)
+        return answers["A?"]
 
-    def question(n: int) -> Interrupt:
-        return Interrupt(id=f"interrupt-{n}", reason="input_required", message=f"Q{n}?")
+    @agent.tool
+    async def ask_b(context: Context) -> str:
+        """Ask the second question."""
+        answers["B?"] = await context.input("B?", timeout=timeout)
+        return answers["B?"]
 
-    first = asyncio.create_task(turns.ask(turn, question(1)))
-    await asyncio.sleep(0)  # let the first ask park on its question
+    return agent, answers
 
-    with pytest.raises(HumanInputError, match="already waiting on interrupt interrupt-1"):
-        await turns.ask(turn, question(2))
 
-    assert turn.outstanding is not None
-    assert turn.outstanding.id == "interrupt-1"
+class TestQuestionsAskedAtOnce:
+    """Parallel tool calls each asking: the questions go out one run at a time."""
 
-    turn.deliver("still answerable")
-    assert await asyncio.wait_for(first, timeout=_NEVER) == "still answerable"
+    async def test_each_is_the_outcome_of_the_run_that_answers_the_one_before(self) -> None:
+        agent, answers = asking_twice_at_once()
+        app = app_for(AGUIStream(agent))
+
+        first = sole_interrupt(await post_run(app, run_body(thread_id="t1", run_id="r1")))
+        second_run = await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(first, "one")))
+        second = sole_interrupt(second_run)
+        third_run = await post_run(app, run_body(thread_id="t1", run_id="r3", text=None, resume=answer(second, "two")))
+
+        assert {first["message"], second["message"]} == {"A?", "B?"}
+        assert "RUN_ERROR" not in types_of(second_run)
+        assert answers == {first["message"]: "one", second["message"]: "two"}
+        # The first call's result may land either side of the second question;
+        # what matters is that each reaches the client, once.
+        results = every(second_run, "TOOL_CALL_RESULT") + every(third_run, "TOOL_CALL_RESULT")
+        assert sorted(e["content"] for e in results) == ["one", "two"]
+        assert outcome_of(third_run) == {"type": "success"}
+
+    async def test_a_queued_question_advertises_the_timeout_it_has_been_spending(self) -> None:
+        """`timeout=` runs from the call, so time spent queued comes off the deadline shown."""
+        clock = Clock()
+        agent, _ = asking_twice_at_once(timeout=60.0)
+        app = app_for(AGUIStream(agent, now=clock))
+
+        first = sole_interrupt(await post_run(app, run_body(thread_id="t1", run_id="r1")))
+        asked_at_deadline = clock.ahead(60.0)
+        clock.advance(30.0)
+        second = sole_interrupt(
+            await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(first, "one")))
+        )
+
+        assert first["expiresAt"] == asked_at_deadline
+        assert second["expiresAt"] == asked_at_deadline
+
+
+async def test_work_finished_while_the_question_waits_reaches_the_client() -> None:
+    """A sibling tool call that ends during the pause has its result sent on resume."""
+    question_out, sibling_done = asyncio.Event(), asyncio.Event()
+    agent = Agent(
+        "test_agent",
+        config=TestConfig(
+            [ToolCallEvent(name="ask_human", arguments="{}"), ToolCallEvent(name="look_up", arguments="{}")],
+            "all done",
+        ),
+    )
+
+    @agent.tool
+    async def ask_human(context: Context) -> str:
+        """Ask the human."""
+        return await context.input(QUESTION)
+
+    @agent.tool
+    async def look_up() -> str:
+        """Finish only once the question is out."""
+        await question_out.wait()
+        sibling_done.set()
+        return "looked up"
+
+    app = app_for(AGUIStream(agent))
+
+    first_run = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+    question_out.set()
+    await asyncio.wait_for(sibling_done.wait(), timeout=_NEVER)
+    # The body has returned; give its result the moment it takes to be published.
+    await asyncio.sleep(0.02)
+    second_run = await post_run(
+        app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(sole_interrupt(first_run), "blue"))
+    )
+
+    assert "TOOL_CALL_RESULT" not in types_of(first_run)
+    assert sorted(e["content"] for e in every(second_run, "TOOL_CALL_RESULT")) == ["blue", "looked up"]
+    assert outcome_of(second_run) == {"type": "success"}

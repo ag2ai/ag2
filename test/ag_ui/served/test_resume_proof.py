@@ -16,8 +16,8 @@ import pytest
 from ag_ui.core import AGUI_METADATA_KEY
 from dirty_equals import IsPartialDict, IsStr
 
-from ag2.ag_ui import AGUIStream
-from ag2.ag_ui.interrupts import AG2_METADATA_KEY, NOT_PROVEN, PROOF_KEY
+from ag2.ag_ui import NOT_PROVEN, AGUIStream
+from ag2.ag_ui.interrupts import AG2_METADATA_KEY, PROOF_KEY
 from test.ag_ui.harness import only, outcome_of, types_of
 from test.ag_ui.serving import QUESTION, answer, app_for, ask_once, asking_agent, post_run, resolved, run_body
 

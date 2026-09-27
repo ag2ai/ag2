@@ -9,6 +9,7 @@ are required) and it does not survive a restart.
 """
 
 import asyncio
+import functools
 import logging
 import secrets
 import time
@@ -39,7 +40,7 @@ from anyio.streams.memory import MemoryObjectSendStream
 from ag2.annotations import Context
 from ag2.events import BaseEvent as AG2Event
 from ag2.events import HumanInputRequest, HumanMessage, ToolApprovalRequest
-from ag2.exceptions import AG2Error, HumanInputError, HumanInputTimeoutError
+from ag2.exceptions import AG2Error, HumanInputTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -147,23 +148,47 @@ class TurnOutput:
     """Where a held turn's events go, and under which run.
 
     Rebound on each exchange that carries the turn, so its lifecycle events
-    always name the current run. Sending into an exchange that has already
-    closed drops the event rather than failing the turn.
+    always name the current run. Between the interrupt that pauses the turn and
+    the exchange that resumes it, events are kept and sent first on resume: the
+    turn keeps working while it waits — a sibling tool call finishing — and
+    none of that may be lost. Sending into an exchange that closed otherwise
+    (the client went away mid-run) drops the event rather than failing the turn.
     """
 
-    __slots__ = ("thread_id", "run_id", "_send")
+    __slots__ = ("thread_id", "run_id", "_send", "_paused", "_kept")
 
     def __init__(self, *, thread_id: str, run_id: str, send: MemoryObjectSendStream[BaseEvent]) -> None:
         self.thread_id = thread_id
         self.run_id = run_id
         self._send = send
+        self._paused = False
+        self._kept: list[BaseEvent] = []
 
     def rebind(self, *, run_id: str, send: MemoryObjectSendStream[BaseEvent]) -> None:
         """Point the turn at the exchange now carrying it."""
         self.run_id = run_id
         self._send = send
+        self._paused = False
+
+    async def pause(self, interrupt: RunFinishedEvent) -> None:
+        """End the current exchange on `interrupt`, keeping what follows for the next."""
+        while self._kept:
+            await self._deliver(self._kept.pop(0))
+        # Paused before the interrupt is sent, not after: the send can wait for
+        # the exchange to read it, and an event sent meanwhile would land behind
+        # the RUN_FINISHED it no longer belongs to.
+        self._paused = True
+        await self._deliver(interrupt)
 
     async def send(self, event: BaseEvent) -> None:
+        if self._paused:
+            self._kept.append(event)
+            return
+        while self._kept:
+            await self._deliver(self._kept.pop(0))
+        await self._deliver(event)
+
+    async def _deliver(self, event: BaseEvent) -> None:
         try:
             await self._send.send(event)
         except (BrokenResourceError, ClosedResourceError):
@@ -180,10 +205,12 @@ class ServedTurn:
     survives the exchange that started it.
     """
 
-    __slots__ = ("output", "_task", "_outstanding", "_answer")
+    __slots__ = ("output", "asking", "_task", "_outstanding", "_answer")
 
     def __init__(self, output: TurnOutput) -> None:
         self.output = output
+        self.asking = asyncio.Lock()
+        """Taken by `ServedTurns.ask` for the question being put."""
         self._task: asyncio.Task[None] | None = None
         self._outstanding: Interrupt | None = None
         self._answer: asyncio.Future[str] | None = None
@@ -219,32 +246,9 @@ class ServedTurn:
     def suspend(self, interrupt: Interrupt, answer: "asyncio.Future[str]") -> None:
         """Park the turn on `interrupt` until `answer` is resolved.
 
-        One question is outstanding per turn, so a second ask raises
-        `HumanInputError` rather than displacing the first.
+        Called by `ServedTurns.ask` under `asking`: one question is outstanding per turn.
         """
-        if self._outstanding is not None:
-            # Two questions at once means concurrent work under one turn —
-            # parallel subtasks. Overwriting the slot would orphan the first
-            # future, hanging that branch until the turn's deadline, and the
-            # second question would go out on an exchange that already ended on
-            # the first. Serving several at once needs one outcome carrying them
-            # all and a resume routed per interrupt; until then, say so.
-            #
-            # Logged as well as raised: this fails the turn, and the turn's own
-            # exchange ended on the first question, so the raise reaches no
-            # client. The operator is the only one who can hear it.
-            logger.error(
-                "an AG-UI turn on thread %s asked a second question (interrupt %s) while still "
-                "waiting on interrupt %s; the turn will fail",
-                self.thread_id,
-                interrupt.id,
-                self._outstanding.id,
-            )
-            raise HumanInputError(
-                f"This AG-UI turn is already waiting on interrupt {self._outstanding.id}. "
-                "One question can be outstanding per turn, so concurrent asking — "
-                "parallel subtasks that each ask a human — is not supported yet."
-            )
+        assert self._outstanding is None, "suspend() while another question is outstanding"
         self._outstanding = interrupt
         self._answer = answer
 
@@ -306,8 +310,20 @@ class ServedTurns:
         self._live.add(turn)
         task.add_done_callback(_Discard(self, turn))
 
-    async def ask(self, turn: ServedTurn, interrupt: Interrupt) -> str:
-        """Put `interrupt` to the client, hold `turn`, and return the answer."""
+    async def ask(self, turn: ServedTurn, interrupt_for: "Callable[[datetime], Interrupt]") -> str:
+        """Put a question to the client, hold `turn`, and return the answer.
+
+        Concurrent askers on one turn — parallel tool calls, parallel subtasks —
+        are put one at a time: each next question is the outcome of the run
+        that answers the one before. `interrupt_for` builds the question once
+        its turn comes, from when the caller started waiting, so the deadline
+        it advertises is current.
+        """
+        since = self._now()
+        async with turn.asking:
+            return await self._put(turn, interrupt_for(since))
+
+    async def _put(self, turn: ServedTurn, interrupt: Interrupt) -> str:
         answer: asyncio.Future[str] = asyncio.get_running_loop().create_future()
         turn.suspend(interrupt, answer)
         # Held before the question is emitted, never after: the exchange ends on
@@ -316,7 +332,7 @@ class ServedTurns:
         self.hold(turn)
         seconds = _seconds_until(interrupt, self._now())
         try:
-            await turn.output.send(
+            await turn.output.pause(
                 RunFinishedEvent(
                     thread_id=turn.output.thread_id,
                     run_id=turn.output.run_id,
@@ -419,15 +435,20 @@ class ServedTurns:
         """Whether the question `turn` is held on can still be answered."""
         return _expired(turn, self._now())
 
-    def deadline(self, timeout: float | None = None) -> datetime:
+    def deadline(self, timeout: float | None = None, *, since: datetime | None = None) -> datetime:
         """When an interrupt raised now stops being answerable.
 
-        The earlier of :attr:`Retention.ttl` and `timeout`, the caller's own
-        bound — clients reject late answers locally against this figure, so it
-        has to be the one that will in fact apply.
+        The earlier of :attr:`Retention.ttl` from now and `timeout` from `since`
+        (default now), the caller's own bound — clients reject late answers
+        locally against this figure, so it has to be the one that will in fact
+        apply. `since` is when the caller started waiting: a question queued
+        behind another has spent part of its `timeout` before it is put.
         """
-        seconds = self.retention.ttl if timeout is None else min(self.retention.ttl, timeout)
-        return self._now() + timedelta(seconds=seconds)
+        now = self._now()
+        retained = now + timedelta(seconds=self.retention.ttl)
+        if timeout is None:
+            return retained
+        return min(retained, (since or now) + timedelta(seconds=timeout))
 
     def _evict_expired(self) -> None:
         now = self._now()
@@ -495,12 +516,15 @@ class ClientInterrupter:
         self._turns = turns
 
     async def __call__(self, event: HumanInputRequest, context: Context) -> "AG2Event | None":
-        answer = await self._turns.ask(self._turn, self.interrupt_for(event))
+        answer = await self._turns.ask(self._turn, functools.partial(self.interrupt_for, event))
         await context.send(HumanMessage.ensure_message(answer, parent_id=event.id))
         return None
 
-    def interrupt_for(self, event: HumanInputRequest) -> Interrupt:
-        """The wire interrupt for one human-input request, under the request's own id."""
+    def interrupt_for(self, event: HumanInputRequest, since: datetime | None = None) -> Interrupt:
+        """The wire interrupt for one human-input request, under the request's own id.
+
+        `since` is when the request started waiting; see `ServedTurns.deadline`.
+        """
         # A request gating a tool call says so and names the call, so a client
         # can offer buttons rather than a text box without parsing the prose.
         approval = event if isinstance(event, ToolApprovalRequest) else None
@@ -510,7 +534,7 @@ class ClientInterrupter:
             message=event.content,
             tool_call_id=None if approval is None else approval.tool_call_id,
             response_schema=ANSWER_SCHEMA if approval is None else APPROVAL_SCHEMA,
-            expires_at=self._turns.deadline(event.timeout).isoformat(),
+            expires_at=self._turns.deadline(event.timeout, since=since).isoformat(),
             metadata={AG2_METADATA_KEY: {PROOF_KEY: issue_proof()}},
         )
 

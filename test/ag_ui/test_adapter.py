@@ -23,7 +23,7 @@ from ag2 import Agent, Context, Variable
 from ag2.ag_ui import AGUIEvent, AGUIStream
 from ag2.events import ModelRequest, TextInput, ToolCallEvent, UrlInput
 from ag2.testing import TestConfig, TrackingConfig
-from test.ag_ui.harness import dispatch_run, every, only, run_input, weather_tool
+from test.ag_ui.harness import dispatch_run, every, only, run_input, types_of, weather_tool
 
 pytestmark = pytest.mark.asyncio
 
@@ -112,6 +112,14 @@ class TestBackendTools:
         })
 
         only(events, "TOOL_CALL_END")
+
+        # Closed before it runs, so a call paused mid-run is never left open.
+        assert [t for t in types_of(events) if t.startswith("TOOL_CALL")] == [
+            "TOOL_CALL_START",
+            "TOOL_CALL_ARGS",
+            "TOOL_CALL_END",
+            "TOOL_CALL_RESULT",
+        ]
 
         text_message = only(events, "TEXT_MESSAGE_CHUNK")
         assert text_message == IsPartialDict({

@@ -24,14 +24,8 @@ pytest.importorskip("starlette")
 from ag2 import Agent, Context  # noqa: E402
 from ag2.a2ui import A2UIServer  # noqa: E402
 from ag2.a2ui.transports import AgUiTransport  # noqa: E402
-from ag2.ag_ui.interrupts import (  # noqa: E402
-    AG2_METADATA_KEY,
-    NOT_PROVEN,
-    NO_HELD_TURN,
-    PROOF_KEY,
-    TOOL_CALL_REASON,
-    Retention,
-)
+from ag2.ag_ui import NOT_PROVEN, NO_HELD_TURN, TOOL_CALL_REASON, Retention
+from ag2.ag_ui.interrupts import AG2_METADATA_KEY, PROOF_KEY
 from ag2.events import HumanInputRequest, ToolCallEvent  # noqa: E402
 from ag2.exceptions import HumanInputError  # noqa: E402
 from ag2.middleware import approval_required  # noqa: E402

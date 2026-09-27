@@ -345,6 +345,16 @@ async def run_stream(
                     timestamp=_get_timestamp(),
                 )
             )
+            # Closed as soon as its arguments are complete, not after it runs: a
+            # call paused on a question ends its run with the call still pending,
+            # and clients refuse a RUN_FINISHED while a call is open. The result
+            # follows under the same id, possibly in a later run.
+            await output.send(
+                ToolCallEndEvent(
+                    tool_call_id=event.id,
+                    timestamp=_get_timestamp(),
+                )
+            )
 
         elif isinstance(event, events.ToolResultEvent):
             text_parts = []
@@ -361,12 +371,6 @@ async def run_stream(
                     message_id=str(uuid4()),
                     timestamp=_get_timestamp(),
                     role="tool",
-                )
-            )
-            await output.send(
-                ToolCallEndEvent(
-                    tool_call_id=event.parent_id,
-                    timestamp=_get_timestamp(),
                 )
             )
 

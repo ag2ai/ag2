@@ -32,7 +32,7 @@ Use AG-UI when you want a reusable UI contract across clients and frameworks.
 Verified AG-UI features are supported in AG2:
 
 * [x] Streaming text events (`TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END`, `TEXT_MESSAGE_CHUNK`)
-* [x] [Backend tool lifecycle events](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools){.external-link target="_blank"} (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_RESULT`, `TOOL_CALL_END`)
+* [x] [Backend tool lifecycle events](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools){.external-link target="_blank"} (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END`, `TOOL_CALL_RESULT`)
 * [x] [Frontend-tool dispatch](https://docs.copilotkit.ai/ag2/generative-ui/frontend-tools){.external-link target="_blank"} (`TOOL_CALL_CHUNK` for client tools in `RunAgentInput.tools`)
 * [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state){.external-link target="_blank"} (`STATE_SNAPSHOT`) from context and agent state
 * [x] [Human input checkpoints](https://docs.copilotkit.ai/ag2/human-in-the-loop){.external-link target="_blank"} (`input_required` surfaced as user-visible message events)
@@ -218,26 +218,49 @@ success outcome, having delivered nothing.
 
 !!! warning "A paused tool call's lifecycle spans two runs"
 
-    The tool call that asked the question is still open when its run ends, so
-    its events are split across the two exchanges. The first emits
-    `TOOL_CALL_START` and `TOOL_CALL_ARGS`; the second emits `TOOL_CALL_RESULT`
-    and `TOOL_CALL_END`, under a **different `runId`**:
+    The tool call that asked the question has not produced its result when its
+    run ends, so its events are split across the two exchanges. The first emits
+    the whole call — `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END` — and
+    the second only its `TOOL_CALL_RESULT`, under a **different `runId`**:
 
     ```text
-    run-1:  RUN_STARTED → TOOL_CALL_START → TOOL_CALL_ARGS → RUN_FINISHED (interrupt)
-    run-2:  RUN_STARTED → TOOL_CALL_RESULT → TOOL_CALL_END → TEXT_MESSAGE_CHUNK → RUN_FINISHED
+    run-1:  RUN_STARTED → TOOL_CALL_START → TOOL_CALL_ARGS → TOOL_CALL_END → RUN_FINISHED (interrupt)
+    run-2:  RUN_STARTED → TOOL_CALL_RESULT → TEXT_MESSAGE_CHUNK → RUN_FINISHED
     ```
 
-    Key open tool calls by `threadId`, not by `runId`. A client that drops that
-    state when a run finishes will see a `TOOL_CALL_RESULT` for a call it has no
-    record of starting, and has nothing to attach the result to.
+    Key tool calls by `threadId`, not by `runId`. A client that drops that state
+    when a run finishes will see a `TOOL_CALL_RESULT` for a call it has no record
+    of, and has nothing to attach the result to. `@ag-ui/client` keeps it.
+
+A paused turn keeps working while it waits: another tool call from the same
+model response can finish in the meantime. Nothing it emits is lost — it is sent
+at the start of the run that resumes the turn. Questions asked at once — two
+parallel tool calls each calling `context.input` — go out one per run: the run
+that answers the first ends on the second question, and a queued question's
+`expiresAt` already counts the time it spent waiting for its turn.
 
 Two things must travel back untouched: the **interrupt id**, and the
 **`metadata` envelope**. The envelope carries proof that the answer comes from
 whoever the question was put to — an answer attributed to a human is the input an
 agent trusts most, and an interrupt id alone is a bare string in a request body.
-A resume without it is refused. Clients are required to echo an interrupt's
-metadata, so a compliant one already does this.
+A resume without it is refused. The protocol does not make clients echo it, and
+`@ag-ui/client` does not do it for you: copy the interrupt's `metadata` into the
+resume entry yourself.
+
+```typescript
+import { buildResumeArray } from "@ag-ui/client";
+
+const [interrupt] = agent.pendingInterrupts;
+await agent.runAgent({
+  resume: buildResumeArray(agent.pendingInterrupts, {
+    [interrupt.id]: { status: "resolved", payload: "yes", metadata: interrupt.metadata },
+  }),
+});
+```
+
+A client that cannot set a resume entry's `metadata` cannot answer these
+interrupts. CopilotKit's `useInterrupt` is one: its `resolve()` and `cancel()`
+send no metadata.
 
 Every refusal arrives as `RUN_ERROR` with a machine-readable `code`, never as a
 stream that simply stops:
