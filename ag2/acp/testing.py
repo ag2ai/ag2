@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import acp
 from acp import schema
+from acp.exceptions import RequestError
 
 from .config import ACPConfig
 from .types import SessionUpdate
@@ -43,7 +44,6 @@ __all__ = (
     "FAKE_SESSION_ID",
     "ACPTurn",
     "FakeACPConfig",
-    "FakeACPRemoteConfig",
     "FakeConnection",
     "RecordingClient",
     "ScriptedElicitation",
@@ -56,12 +56,17 @@ __all__ = (
 
 
 def __getattr__(name: str) -> Any:
-    # ``FakeACPRemoteConfig`` needs ``[http]``; resolved on first use so the rest of the harness does not.
+    # ``FakeACPRemoteConfig`` needs ``[http]``, so it is resolved on first use and kept out of
+    # ``__all__``: a star import must not pull in what the rest of the harness does not need.
     if name == "FakeACPRemoteConfig":
-        from ._remote_testing import FakeACPRemoteConfig
-
-        return FakeACPRemoteConfig
+        return _remote_config_type()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def _remote_config_type() -> "type[FakeACPRemoteConfig]":
+    from ._remote_testing import FakeACPRemoteConfig
+
+    return FakeACPRemoteConfig
 
 
 @dataclass
@@ -112,13 +117,9 @@ class ACPTurn:
 
 
 class FakeConnection:
-    """Minimal ``ClientSideConnection`` stand-in that drives the bridge in-process.
+    """The ``ClientSideConnection`` stand-in :func:`fake_acp_config` puts on ``ACPSession.conn``.
 
-    What ``ACPSession.conn`` holds under :func:`fake_acp_config`; narrow to it with
-    ``isinstance`` to read ``closed`` and ``new_session_kwargs``.
-
-    ``prompt`` replays one :class:`ACPTurn`'s updates back through the bound client
-    (the bridge) exactly as a real agent's ``session/update`` callbacks would.
+    Narrow ``session.conn`` to it with ``isinstance`` to read ``closed`` and ``new_session_kwargs``.
     """
 
     def __init__(
@@ -345,10 +346,7 @@ def fake_remote_acp_config(
     differs. No socket is opened — ``url`` is there because a remote config must
     have one, and to prove behaviour does not depend on it.
     """
-    # Deferred so importing this module does not require ``agent-client-protocol[http]``.
-    from ._remote_testing import FakeACPRemoteConfig
-
-    config = FakeACPRemoteConfig(url=url, **overrides)
+    config = _remote_config_type()(url=url, **overrides)
     config._connect = _scripted_connect(
         *turns,
         agent_capabilities=agent_capabilities,
@@ -423,7 +421,8 @@ class RecordingClient(acp.Client):
 
     Client capabilities are all off — this client implements no filesystem,
     terminal, permission or elicitation behaviour, so advertising any would let a
-    test pass against a capability nothing here provides.
+    test pass against a capability nothing here provides. The terminal and
+    elicitation methods answer method-not-found, as an ``acp.Client`` without them would.
     """
 
     def __init__(self) -> None:
@@ -468,30 +467,30 @@ class RecordingClient(acp.Client):
         raise NotImplementedError("RecordingClient does not implement terminals.")
 
     async def terminal_output(self, session_id: str, terminal_id: str, **kwargs: Any) -> schema.TerminalOutputResponse:
-        raise NotImplementedError("RecordingClient does not implement terminals.")
+        raise RequestError.method_not_found("terminal/output")
 
     async def release_terminal(
         self, session_id: str, terminal_id: str, **kwargs: Any
     ) -> schema.ReleaseTerminalResponse | None:
-        raise NotImplementedError("RecordingClient does not implement terminals.")
+        raise RequestError.method_not_found("terminal/release")
 
     async def wait_for_terminal_exit(
         self, session_id: str, terminal_id: str, **kwargs: Any
     ) -> schema.WaitForTerminalExitResponse:
-        raise NotImplementedError("RecordingClient does not implement terminals.")
+        raise RequestError.method_not_found("terminal/wait_for_exit")
 
     async def kill_terminal(
         self, session_id: str, terminal_id: str, **kwargs: Any
     ) -> schema.KillTerminalResponse | None:
-        raise NotImplementedError("RecordingClient does not implement terminals.")
+        raise RequestError.method_not_found("terminal/kill")
 
     async def create_elicitation(
         self, message: str, mode: schema.ElicitationMode, **kwargs: Any
     ) -> schema.CreateElicitationResponse:
-        raise NotImplementedError("RecordingClient does not implement elicitation.")
+        raise RequestError.method_not_found("elicitation/create")
 
     async def complete_elicitation(self, elicitation_id: str, **kwargs: Any) -> None:
-        raise NotImplementedError("RecordingClient does not implement elicitation.")
+        raise RequestError.method_not_found("elicitation/complete")
 
     async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError(f"RecordingClient does not implement ext method {method!r}.")
