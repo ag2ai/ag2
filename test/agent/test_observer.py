@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
+from collections.abc import Callable
 from typing import Annotated
 from unittest.mock import MagicMock
 
@@ -10,6 +12,20 @@ import pytest
 from ag2 import Agent, Context, Depends, Inject, Variable, observer
 from ag2.events import BaseEvent, ModelRequest, ModelResponse, ToolCallEvent
 from ag2.testing import TestConfig
+
+
+class _CallableRecorder:
+    """A callable object, not a function: `@observer` must still take it as the callback."""
+
+    def __init__(self, seen: list[BaseEvent]) -> None:
+        self._seen = seen
+
+    def __call__(self, event: BaseEvent) -> None:
+        self._seen.append(event)
+
+
+def _record(seen: list[BaseEvent], event: BaseEvent) -> None:
+    seen.append(event)
 
 
 @pytest.fixture()
@@ -298,4 +314,22 @@ async def test_bare_observer_decorator_observes_every_event(test_config: TestCon
     await agent.ask("Hi!")
 
     assert any(isinstance(e, ModelRequest) for e in seen)
+    assert any(isinstance(e, ModelResponse) for e in seen)
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    "make_callback",
+    [lambda seen: functools.partial(_record, seen), _CallableRecorder],
+    ids=["partial", "callable-instance"],
+)
+async def test_a_bare_callable_that_is_not_a_function_is_the_callback(
+    test_config: TestConfig, make_callback: Callable[[list[BaseEvent]], Callable[..., None]]
+) -> None:
+    seen: list[BaseEvent] = []
+
+    watcher = observer(make_callback(seen))
+
+    await Agent("", config=test_config, observers=[watcher]).ask("Hi!")
+
     assert any(isinstance(e, ModelResponse) for e in seen)

@@ -21,13 +21,14 @@ Both shapes satisfy the same :class:`Observer` protocol so the Agent
 can register either kind via a single ``register(stack, ctx)`` call.
 """
 
-import inspect
 import logging
+import types
+import typing
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass
-from typing import Any, Protocol, cast, overload, runtime_checkable
+from typing import Any, Protocol, TypeGuard, cast, overload, runtime_checkable
 
 from ag2.annotations import Context
 from ag2.events import BaseEvent, ObserverAlert
@@ -222,9 +223,9 @@ def observer(
     interrupt: bool = False,
     sync_to_thread: bool = True,
 ) -> SimpleObserver | Callable[[Callable[..., Any]], SimpleObserver]:
-    if callback is None and inspect.isroutine(condition):
+    if callback is None and _is_bare_callback(condition):
         return SimpleObserver(callback=condition, interrupt=interrupt, sync_to_thread=sync_to_thread)
-    # A routine was taken as the callback above; what is left is a class, a union or a condition.
+    # A callback was taken above; what is left is a class, a union or a condition.
     condition = cast("ClassInfo | Condition | None", condition)
     if condition is None:
         cond: Condition | None = None
@@ -250,3 +251,12 @@ def observer(
     if callback is not None:
         return decorator(callback)
     return decorator
+
+
+def _is_bare_callback(condition: object) -> TypeGuard[Callable[..., Any]]:
+    """A callable that is not a class, a union, a tuple of them or a `Condition`: what a bare `@observer` receives."""
+    return (
+        callable(condition)
+        and not isinstance(condition, (type, types.UnionType, tuple, Condition))
+        and typing.get_origin(condition) is None
+    )
