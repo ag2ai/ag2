@@ -113,7 +113,7 @@ class TestTheDeterministicToolConstructor:
         # Both the names the branch published and the private names replacing
         # them: re-adding either as a constructor argument must fail here.
         with pytest.raises(TypeError):
-            MCPFunctionTool("paint", "Paint a room.", _handler, **{field_name: {}})  # type: ignore[arg-type]
+            MCPFunctionTool("paint", "Paint a room.", _handler, **{field_name: {}})  # type: ignore[arg-type]  # an undeclared field on purpose: the constructor must refuse it
 
     def test_the_decorator_still_fills_them(self) -> None:
         """They left the constructor, not the tool: ``mcp_tool`` is their only producer."""
@@ -152,11 +152,11 @@ class TestTheServerConfigsAreKeywordOnly:
 
     def test_the_remote_config_rejects_positional_construction(self) -> None:
         with pytest.raises(TypeError):
-            MCPServerConfig("https://example.com/mcp")  # type: ignore[misc]
+            MCPServerConfig("https://example.com/mcp")  # type: ignore[call-arg]  # positional on purpose: the runtime must refuse it
 
     def test_the_stdio_config_rejects_positional_construction(self) -> None:
         with pytest.raises(TypeError):
-            MCPStdioServerConfig("some-mcp-binary")  # type: ignore[misc]
+            MCPStdioServerConfig("some-mcp-binary")  # type: ignore[call-arg]  # positional on purpose: the runtime must refuse it
 
     def test_by_keyword_they_work_as_before(self) -> None:
         remote = MCPServerConfig(server_url="https://example.com/mcp")

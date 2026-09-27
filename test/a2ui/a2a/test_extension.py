@@ -3,7 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from a2a.server.agent_execution import RequestContext
 from a2a.server.context import ServerCallContext
+from a2a.types import AgentExtension
+from dirty_equals import IsStr
 from google.protobuf.json_format import MessageToDict
 
 from ag2.a2ui._types import A2UIVersion
@@ -19,29 +22,19 @@ A2UI_DEFAULT_CATALOG_ID = A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9"]
 A2UI_EXTENSION_URI = A2UI_EXTENSION_URI_BY_VERSION["v0.9"]
 
 
-def _params(ext) -> dict:
+def _params(ext: AgentExtension) -> dict[str, object]:
     return MessageToDict(ext.params, preserving_proto_field_name=True)
 
 
-class _StubContext:
-    """Minimal stand-in for the bits of RequestContext the helper reads.
+def _request_context(requested_extensions: set[str] | None = None) -> RequestContext:
+    """A real ``RequestContext`` whose call carries ``requested_extensions``."""
+    return RequestContext(ServerCallContext(requested_extensions=requested_extensions or set()))
 
-    ``call_context`` is a real ``ServerCallContext`` rather than a
-    hand-rolled double: activation records into its ``state``, and an
-    invented stand-in could accept a write the real type rejects — which
-    is exactly how the previous ``metadata`` carrier went unnoticed
-    (``RequestContext.metadata`` is read-only, so nothing survived). See
-    ``test_extension_e2e.py`` for the round-trip that pins it.
-    """
 
-    def __init__(self, requested_extensions: list[str] | None = None) -> None:
-        self.requested_extensions = requested_extensions or []
-        self.call_context = ServerCallContext()
-
-    @property
-    def activated(self) -> list[str] | None:
-        """Recorded activations, or ``None`` when nothing was recorded."""
-        return self.call_context.state.get(ACTIVATED_EXTENSIONS_KEY)
+def _activated(ctx: RequestContext) -> list[str] | None:
+    """Recorded activations, or ``None`` when nothing was recorded."""
+    activated: list[str] | None = ctx.call_context.state.get(ACTIVATED_EXTENSIONS_KEY)
+    return activated
 
 
 class TestAgentExtension:
@@ -88,35 +81,35 @@ class TestAgentExtension:
     def test_v1_0_uses_v1_namespace(self) -> None:
         ext = get_a2ui_agent_extension(version="v1.0")
         assert ext.uri == "https://a2ui.org/a2a-extension/a2ui/v1.0"
-        assert "v1_0" in _params(ext)["supportedCatalogIds"][0]
+        assert _params(ext) == {"supportedCatalogIds": [IsStr(regex=r".*v1_0.*")]}
 
 
 class TestTryActivateExtension:
     def test_activates_when_client_requests_uri(self) -> None:
-        ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI])
-        assert try_activate_a2ui_extension(ctx) is True  # type: ignore[arg-type]
-        assert ctx.activated == [A2UI_EXTENSION_URI]
+        ctx = _request_context({A2UI_EXTENSION_URI})
+        assert try_activate_a2ui_extension(ctx) is True
+        assert _activated(ctx) == [A2UI_EXTENSION_URI]
 
     def test_not_activated_when_uri_absent(self) -> None:
-        ctx = _StubContext(requested_extensions=["https://example.com/other"])
-        assert try_activate_a2ui_extension(ctx) is False  # type: ignore[arg-type]
-        assert ctx.activated is None
+        ctx = _request_context({"https://example.com/other"})
+        assert try_activate_a2ui_extension(ctx) is False
+        assert _activated(ctx) is None
 
     def test_not_activated_when_no_extensions(self) -> None:
-        ctx = _StubContext()
-        assert try_activate_a2ui_extension(ctx) is False  # type: ignore[arg-type]
+        ctx = _request_context()
+        assert try_activate_a2ui_extension(ctx) is False
 
     def test_idempotent_no_duplicate_activation(self) -> None:
-        ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI])
-        try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
-        try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
-        assert ctx.activated == [A2UI_EXTENSION_URI]
+        ctx = _request_context({A2UI_EXTENSION_URI})
+        try_activate_a2ui_extension(ctx)
+        try_activate_a2ui_extension(ctx)
+        assert _activated(ctx) == [A2UI_EXTENSION_URI]
 
     def test_preserves_existing_activated_extensions(self) -> None:
-        ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI])
+        ctx = _request_context({A2UI_EXTENSION_URI})
         ctx.call_context.state[ACTIVATED_EXTENSIONS_KEY] = ["https://example.com/other"]
-        try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
-        assert ctx.activated == [
+        try_activate_a2ui_extension(ctx)
+        assert _activated(ctx) == [
             "https://example.com/other",
             A2UI_EXTENSION_URI,
         ]
@@ -124,33 +117,33 @@ class TestTryActivateExtension:
     @pytest.mark.parametrize("version", ["v0.9", "v0.9.1", "v1.0"])
     def test_activates_matching_version_uri(self, version: A2UIVersion) -> None:
         uri = A2UI_EXTENSION_URI_BY_VERSION[version]
-        ctx = _StubContext(requested_extensions=[uri])
-        assert try_activate_a2ui_extension(ctx, version=version) is True  # type: ignore[arg-type]
-        assert ctx.activated == [uri]
+        ctx = _request_context({uri})
+        assert try_activate_a2ui_extension(ctx, version=version) is True
+        assert _activated(ctx) == [uri]
 
     def test_does_not_activate_on_version_mismatch(self) -> None:
         # Client requested v0.9 but the agent serves v1.0 — no activation.
-        ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI_BY_VERSION["v0.9"]])
-        assert try_activate_a2ui_extension(ctx, version="v1.0") is False  # type: ignore[arg-type]
-        assert ctx.activated is None
+        ctx = _request_context({A2UI_EXTENSION_URI_BY_VERSION["v0.9"]})
+        assert try_activate_a2ui_extension(ctx, version="v1.0") is False
+        assert _activated(ctx) is None
 
 
 class TestGetActivatedExtensions:
     def test_empty_before_any_activation(self) -> None:
         # Returns a list rather than raising — indexing the state key
         # directly would KeyError here, which is the trap this avoids.
-        assert get_activated_extensions(_StubContext()) == []  # type: ignore[arg-type]
+        assert get_activated_extensions(_request_context()) == []
 
     def test_reports_what_was_activated(self) -> None:
-        ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI])
-        try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
+        ctx = _request_context({A2UI_EXTENSION_URI})
+        try_activate_a2ui_extension(ctx)
 
-        assert get_activated_extensions(ctx) == [A2UI_EXTENSION_URI]  # type: ignore[arg-type]
+        assert get_activated_extensions(ctx) == [A2UI_EXTENSION_URI]
 
     def test_returns_a_copy_the_caller_cannot_corrupt(self) -> None:
-        ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI])
-        try_activate_a2ui_extension(ctx)  # type: ignore[arg-type]
+        ctx = _request_context({A2UI_EXTENSION_URI})
+        try_activate_a2ui_extension(ctx)
 
-        get_activated_extensions(ctx).append("https://example.com/injected")  # type: ignore[arg-type]
+        get_activated_extensions(ctx).append("https://example.com/injected")
 
-        assert get_activated_extensions(ctx) == [A2UI_EXTENSION_URI]  # type: ignore[arg-type]
+        assert get_activated_extensions(ctx) == [A2UI_EXTENSION_URI]

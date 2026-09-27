@@ -16,6 +16,7 @@ from ag_ui.core import (
     ImageInputContent,
     InputContentDataSource,
     InputContentUrlSource,
+    Message,
     SystemMessage,
     TextInputContent,
     ToolCall,
@@ -50,7 +51,7 @@ RAW_BYTES = b"\xff\xd8\xff\xe0"
 B64_VALUE = b64encode(RAW_BYTES).decode()
 
 
-def _command(*messages: object) -> AGStreamInput:
+def _command(*messages: Message) -> AGStreamInput:
     return AGStreamInput(incoming=create_run_input(*messages), variables={})
 
 

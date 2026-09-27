@@ -16,23 +16,26 @@ from ag2.acp import ACPAgent
 from ag2.acp.executor import META_VARIABLE, AgentExecutor, UpdateDeliveryError
 from ag2.acp.sessions import SessionStore
 from ag2.acp.testing import RecordingClient, connect
+from ag2.acp.types import McpServer, SessionUpdate
 from ag2.events import ModelMessageChunk, ToolCallEvent
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, Turn
 from test._helpers import LLMCalls
 
+from ._helpers import chunk_text, tool_call_text
 
-def _agent(*turns: object) -> Agent:
+
+def _agent(*turns: Turn) -> Agent:
     return Agent("workie", config=TestConfig(*(turns or ("ok",))))
 
 
-def _recording_agent(*turns: object) -> tuple[Agent, LLMCalls]:
+def _recording_agent(*turns: Turn) -> tuple[Agent, LLMCalls]:
     calls = LLMCalls()
     return Agent("workie", config=TestConfig(*(turns or ("ok",))), middleware=[calls.middleware()]), calls
 
 
-def _texts(updates: list[Any]) -> list[str]:
+def _texts(updates: list[SessionUpdate]) -> list[str]:
     """The text of every ``agent_message_chunk``, in arrival order."""
-    return [u.content.text for u in updates if isinstance(u, schema.AgentMessageChunk)]
+    return [chunk_text(u) for u in updates if isinstance(u, schema.AgentMessageChunk)]
 
 
 @pytest.mark.asyncio
@@ -157,6 +160,7 @@ class TestPromptTurn:
             with pytest.raises(RequestError) as caught:
                 await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
 
+        assert caught.value.data is not None
         assert "authentication" in caught.value.data["reason"]
 
     async def test_a_failing_tool_is_reported_before_the_turn_dies(self) -> None:
@@ -175,7 +179,7 @@ class TestPromptTurn:
 
         [progress] = [u for u in recorder.updates_for(session.session_id) if isinstance(u, schema.ToolCallProgress)]
         assert progress.status == "failed"
-        assert "kaboom" in progress.content[0].content.text
+        assert "kaboom" in tool_call_text(progress)
 
     async def test_a_failed_turn_does_not_leave_the_session_locked(self) -> None:
         """A failure must release the turn lock, or the session would hang forever.
@@ -227,7 +231,7 @@ class TestUpdateProjection:
 
         [progress] = [u for u in recorder.updates_for(session.session_id) if isinstance(u, schema.ToolCallProgress)]
         assert progress.status == "completed"
-        assert progress.content[0].content.text == "200"
+        assert tool_call_text(progress) == "200"
 
     async def test_a_tool_call_and_its_result_share_an_id(self) -> None:
         async with connect(ACPAgent(self._adding_agent())) as (conn, recorder):
@@ -372,7 +376,7 @@ class TestSessionContext:
         shape ``NewSessionRequest.mcp_servers`` admits is pinned once, here.
         """
         server = ACPAgent(_agent())
-        declared = [
+        declared: list[McpServer] = [
             schema.HttpMcpServer(type="http", name="over-http", url="http://127.0.0.1:9/mcp", headers=[]),
             schema.SseMcpServer(type="sse", name="over-sse", url="http://127.0.0.1:9/sse", headers=[]),
             schema.AcpMcpServer(type="acp", name="over-acp", server_id="peer-1"),
@@ -404,7 +408,7 @@ class TestDeliveryFailures:
             await executor.run_turn(
                 session=session,
                 store=store,
-                client=self._DeadClient(),
+                client=self._DeadClient(),  # type: ignore[arg-type]  # ticket 62: _DeadClient is a RecordingClient, which does not satisfy acp.Client
                 blocks=[acp.text_block("hi")],
             )
 
@@ -418,7 +422,7 @@ class TestDeliveryFailures:
             await executor.run_turn(
                 session=session,
                 store=store,
-                client=self._DeadClient(),
+                client=self._DeadClient(),  # type: ignore[arg-type]  # ticket 62: _DeadClient is a RecordingClient, which does not satisfy acp.Client
                 blocks=[acp.text_block("hi")],
             )
 
@@ -538,7 +542,7 @@ class TestDynamicPrompt:
         await AgentExecutor(agent).run_turn(
             session=session,
             store=store,
-            client=RecordingClient(),
+            client=RecordingClient(),  # type: ignore[arg-type]  # ticket 62: RecordingClient does not satisfy acp.Client
             blocks=[acp.text_block("hi")],
             meta={"ag2.space": {"room": "!r"}},
         )

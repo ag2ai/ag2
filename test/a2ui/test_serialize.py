@@ -4,11 +4,12 @@
 
 import json
 
+from ag2.a2ui._types import ServerToClientMessage
 from ag2.a2ui.constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 from ag2.a2ui.parser import A2UIResponseParser
 from ag2.a2ui.serialize import to_jsonl
 
-SAMPLE_OPS = [
+SAMPLE_OPS: list[ServerToClientMessage] = [
     {
         "version": "v0.9",
         "createSurface": {

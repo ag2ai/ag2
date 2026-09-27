@@ -5,8 +5,8 @@
 """A2UI extension negotiation over a real A2A round-trip.
 
 ``test_extension.py`` covers ``try_activate_a2ui_extension`` against a
-``_StubContext`` that is handed a pre-populated ``requested_extensions``
-list. That pins the helper's *logic* but not the wiring underneath it —
+``RequestContext`` built with a pre-populated ``requested_extensions``
+set. That pins the helper's *logic* but not the wiring underneath it —
 nothing there shows that a real client can put a URI in that list, which
 is the only way the helper ever fires in production.
 
@@ -22,6 +22,8 @@ because that is the only route available today. ``A2AConfig.extensions``
 (ag2ai/ag2#3116) is the supported successor and will slot in here without
 changing a single assertion below — see ``_activating``.
 """
+
+from collections.abc import Awaitable, Callable
 
 import httpx
 import pytest
@@ -69,7 +71,7 @@ class _Recorder(A2AAgentExecutorBase):
         await self.inner.cancel(request_context, event_queue)
 
 
-def _advertising(version: A2UIVersion = "v0.9"):  # type: ignore[no-untyped-def]
+def _advertising(version: A2UIVersion = "v0.9") -> Callable[[AgentCard], Awaitable[AgentCard]]:
     """Card modifier declaring A2UI, as ``user-guide/a2ui/a2a.mdx`` documents."""
 
     async def modifier(card: AgentCard) -> AgentCard:

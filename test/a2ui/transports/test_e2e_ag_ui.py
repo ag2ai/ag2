@@ -25,6 +25,7 @@ from ag_ui.core import RunAgentInput
 
 from ag2 import Agent, Depends
 from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.transports import AgUiTransport
 from ag2.events import ModelMessage, ModelRequest, ModelResponse, TextInput, Usage
 from ag2.middleware.base import BaseMiddleware
@@ -153,7 +154,7 @@ async def test_button_click_in_forwarded_props_executes_server_action() -> None:
     clicked: list[str] = []
 
     @a2ui_action(description="Add the item to the cart")
-    def add_to_basket(good_id: str) -> dict:
+    def add_to_basket(good_id: str) -> JsonObject:
         clicked.append(good_id)
         return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}}
 
@@ -188,7 +189,7 @@ async def test_button_click_resolves_injected_dependency() -> None:
     stub = CartStore()
 
     @a2ui_action(description="Add the item to the cart")
-    def add_to_basket(good_id: str, store: Annotated[CartStore, Depends(get_store)]) -> dict:
+    def add_to_basket(good_id: str, store: Annotated[CartStore, Depends(get_store)]) -> JsonObject:
         store.items.append(good_id)
         return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": len(store.items)}}
 

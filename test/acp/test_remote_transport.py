@@ -17,7 +17,7 @@ pytest.importorskip("h2")
 
 import asyncio
 import contextlib
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Any
 
 import acp
@@ -27,26 +27,39 @@ from acp.http.asgi import create_asgi_app
 
 from ag2 import Agent
 from ag2.acp import ACPRemoteConfig
+from ag2.acp.types import ContentBlock, McpServer
 
 REPLY = "hi from the wire"
 
 
-class _EchoAgent:
+class _EchoAgent(acp.Agent):
     """A minimal ACP Agent: enough of one to carry a single turn."""
 
     def __init__(self, conn: acp.Client) -> None:
         self.conn = conn
 
-    async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
+    async def initialize(
+        self,
+        protocol_version: int,
+        client_capabilities: schema.ClientCapabilities | None = None,
+        client_info: schema.Implementation | None = None,
+        **kwargs: Any,
+    ) -> schema.InitializeResponse:
         return schema.InitializeResponse(
             protocol_version=acp.PROTOCOL_VERSION,
             agent_info=schema.Implementation(name="echo", version="test"),
         )
 
-    async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
+    async def new_session(
+        self,
+        cwd: str,
+        additional_directories: list[str] | None = None,
+        mcp_servers: list[McpServer] | None = None,
+        **kwargs: Any,
+    ) -> schema.NewSessionResponse:
         return schema.NewSessionResponse(session_id="remote-session-1")
 
-    async def prompt(self, *, session_id: str, **kwargs: Any) -> schema.PromptResponse:
+    async def prompt(self, session_id: str, prompt: list[ContentBlock], **kwargs: Any) -> schema.PromptResponse:
         await self.conn.session_update(session_id=session_id, update=acp.update_agent_message_text(REPLY))
         return schema.PromptResponse(stop_reason="end_turn")
 
@@ -59,9 +72,13 @@ async def _served_agent() -> AsyncGenerator[tuple[int, list[dict[str, str]]], No
     answers whichever URL scheme a test points at it.
     """
     requests: list[dict[str, str]] = []
-    app = create_asgi_app(_EchoAgent)  # type: ignore[arg-type]
+    app = create_asgi_app(_EchoAgent)
 
-    async def recording(scope: dict[str, Any], receive: Callable, send: Callable) -> None:
+    async def recording(
+        scope: dict[str, Any],
+        receive: Callable[[], Awaitable[dict[str, Any]]],
+        send: Callable[[dict[str, Any]], Awaitable[None]],
+    ) -> None:
         if scope["type"] in ("http", "websocket"):
             requests.append({k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]})
         await app(scope, receive, send)

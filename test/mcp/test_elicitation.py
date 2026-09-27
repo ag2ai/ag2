@@ -10,7 +10,7 @@ pauses, nothing is stored. The modern era's pause-and-resume path is covered in
 ``test_pause_and_resume.py``.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from dirty_equals import IsPartialDict
@@ -121,7 +121,7 @@ class TestHandshakeEraElicitation:
         assert result.is_error is False
 
     @pytest.mark.parametrize("action", ["decline", "cancel"])
-    async def test_a_refusal_ends_the_turn_deliberately(self, action: str) -> None:
+    async def test_a_refusal_ends_the_turn_deliberately(self, action: Literal["decline", "cancel"]) -> None:
         """A refusal is not a transport failure: the turn ends, and says why."""
         server = MCPServer(asking_agent())
 

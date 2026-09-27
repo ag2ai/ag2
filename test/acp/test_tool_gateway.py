@@ -6,7 +6,7 @@ import asyncio
 import base64
 import signal
 import socket
-from contextlib import asynccontextmanager, suppress
+from contextlib import suppress
 from typing import Any
 
 import httpx
@@ -16,7 +16,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.server.streamable_http import CONTENT_TYPE_JSON, CONTENT_TYPE_SSE, MCP_SESSION_ID_HEADER
 from mcp.shared.inbound import MCP_PROTOCOL_VERSION_HEADER
-from mcp.types import CallToolResult
+from mcp.types import CallToolResult, ImageContent
 from mcp_types.version import LATEST_HANDSHAKE_VERSION
 
 from ag2.acp.bridge import BridgeState
@@ -28,13 +28,23 @@ from ag2.acp.tool_gateway import (
     ToolGateway,
     partition_tools,
 )
-from ag2.events import BinaryInput, ClientToolCallEvent, ToolErrorEvent, ToolResultEvent
+from ag2.events import (
+    BaseEvent,
+    BinaryInput,
+    ClientToolCallEvent,
+    ToolCallEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
+)
 from ag2.events.tool_events import ToolResult
 from ag2.exceptions import HumanInputFailedError, HumanInputNotProvidedError, UnsupportedToolError
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.final.function_tool import FunctionDefinition
+from test.mcp._helpers import first_text
+
+from ._helpers import RecordingRun, Responder
 
 
 def _fn(name: str) -> FunctionToolSchema:
@@ -154,7 +164,7 @@ async def test_gateway_issues_no_session_and_still_serves_a_call() -> None:
     that answered nothing would issue no session id either.
     """
     state = BridgeState(ACPConfig())
-    state.context = _FakeContext(lambda call: ToolResultEvent.from_call(call, "sum is 5"))
+    _run_in(state, lambda call: ToolResultEvent.from_call(call, "sum is 5"))
     gateway = ToolGateway(state, [_fn_add()])
     url = await gateway.start()
     try:
@@ -276,47 +286,10 @@ async def test_gateway_close_is_idempotent_and_frees_port() -> None:
         probe.connect(("127.0.0.1", port))
 
 
-class _FakeStream:
-    def __init__(self) -> None:
-        self.pending: asyncio.Future | None = None
-
-    def get(self, _expr):
-        stream = self
-
-        @asynccontextmanager
-        async def cm():
-            fut: asyncio.Future = asyncio.get_running_loop().create_future()
-            stream.pending = fut
-            try:
-                yield fut
-            finally:
-                stream.pending = None
-
-        return cm()
-
-
-class _FakeContext:
-    """Stands in for ConversationContext: send() answers the pending stream.get().
-
-    ``respond=None`` models a tool call that never completes (no subscriber
-    answers the event) — used to exercise bounded shutdown.
-    """
-
-    def __init__(self, respond=None) -> None:
-        self.stream = _FakeStream()
-        self.sent: list = []
-        self.first_send = asyncio.Event()
-        self._respond = respond
-
-    async def send(self, event) -> None:
-        self.sent.append(event)
-        self.first_send.set()
-        # A turn that failed sends once more on its way out, to close the call
-        # off in history; by then nothing is waiting on the stream any more.
-        if self.stream.pending is None or self.stream.pending.done():
-            return
-        if self._respond is not None:
-            self.stream.pending.set_result(self._respond(event))
+def _run_in(state: BridgeState, respond: Responder | None = None) -> RecordingRun:
+    run = RecordingRun(respond)
+    state.context = run.context
+    return run
 
 
 @pytest.mark.asyncio
@@ -335,24 +308,26 @@ class TestCallTool:
 
     async def test_executes_via_event_stream(self) -> None:
         state = BridgeState(ACPConfig())
-        state.context = _FakeContext(lambda call: ToolResultEvent.from_call(call, "sum is 5"))
+        run = _run_in(state, lambda call: ToolResultEvent.from_call(call, "sum is 5"))
 
         result = await self._call(state, {"a": 2, "b": 3})
 
         assert result.is_error is not True
-        assert result.content[0].text == "sum is 5"
-        (call,) = state.context.sent
+        assert first_text(result) == "sum is 5"
+        call, answer = run.sent
+        assert isinstance(call, ToolCallEvent)
         assert call.name == "add"
         assert call.serialized_arguments == {"a": 2, "b": 3}
+        assert answer == ToolResultEvent.from_call(call, "sum is 5")
 
     async def test_maps_tool_error_to_is_error(self) -> None:
         state = BridgeState(ACPConfig())
-        state.context = _FakeContext(lambda call: ToolErrorEvent.from_call(call, RuntimeError("boom")))
+        _run_in(state, lambda call: ToolErrorEvent.from_call(call, RuntimeError("boom")))
 
         result = await self._call(state, {"a": 1, "b": 1})
 
         assert result.is_error is True
-        assert "boom" in result.content[0].text
+        assert "boom" in first_text(result)
 
     async def test_without_active_run_is_error(self) -> None:
         state = BridgeState(ACPConfig())  # state.context is None
@@ -360,38 +335,39 @@ class TestCallTool:
         result = await self._call(state, {"a": 1, "b": 1})
 
         assert result.is_error is True  # the lowlevel server converts the raised RuntimeError
-        assert "no active AG2 run" in result.content[0].text
+        assert "no active AG2 run" in first_text(result)
 
     async def test_rejects_client_tool(self) -> None:
         state = BridgeState(ACPConfig())
-        state.context = _FakeContext(lambda call: ClientToolCallEvent.from_call(call))
+        _run_in(state, lambda call: ClientToolCallEvent.from_call(call))
 
         result = await self._call(state, {"a": 1, "b": 1})
 
         assert result.is_error is True
-        assert "client-side execution" in result.content[0].text
+        assert "client-side execution" in first_text(result)
 
     async def test_serializes_data_result_as_json(self) -> None:
         state = BridgeState(ACPConfig())
-        state.context = _FakeContext(lambda call: ToolResultEvent.from_call(call, {"sum": 5}))
+        _run_in(state, lambda call: ToolResultEvent.from_call(call, {"sum": 5}))
 
         result = await self._call(state, {"a": 2, "b": 3})
 
         assert result.is_error is not True
-        assert result.content[0].text == '{"sum": 5}'
+        assert first_text(result) == '{"sum": 5}'
 
     async def test_maps_image_result_to_image_content(self) -> None:
         png = b"\x89PNG\r\n\x1a\nfake"
         state = BridgeState(ACPConfig())
-        state.context = _FakeContext(
-            lambda call: ToolResultEvent.from_call(call, ToolResult(BinaryInput(png, media_type="image/png")))
+        _run_in(
+            state,
+            lambda call: ToolResultEvent.from_call(call, ToolResult(BinaryInput(png, media_type="image/png"))),
         )
 
         result = await self._call(state, {"a": 1, "b": 1})
 
         assert result.is_error is not True
         (block,) = result.content
-        assert block.type == "image"
+        assert isinstance(block, ImageContent), block
         assert block.mime_type == "image/png"
         assert base64.b64decode(block.data) == png
 
@@ -472,7 +448,7 @@ async def test_each_gateway_gets_a_distinct_path() -> None:
 @pytest.mark.asyncio
 async def test_close_is_bounded_with_a_stuck_call_in_flight() -> None:
     state = BridgeState(ACPConfig())
-    state.context = _FakeContext(respond=None)  # the tool call never completes
+    run = _run_in(state)  # the tool call never completes
     gateway = ToolGateway(state, [_fn_add()], close_timeout=0.5)
     url = await gateway.start()
 
@@ -483,7 +459,7 @@ async def test_close_is_bounded_with_a_stuck_call_in_flight() -> None:
 
     task = asyncio.ensure_future(stuck_call())
     # wait until the call is in flight inside the gateway
-    await asyncio.wait_for(state.context.first_send.wait(), timeout=5)
+    await asyncio.wait_for(run.first_send.wait(), timeout=5)
 
     # Without bounded shutdown this would wait forever on the in-flight request.
     await asyncio.wait_for(gateway.close(), timeout=10)
@@ -493,14 +469,14 @@ async def test_close_is_bounded_with_a_stuck_call_in_flight() -> None:
         await task
 
 
-def _raise(error: BaseException):
-    """A ``_FakeContext`` responder that fails instead of answering.
+def _raise(error: BaseException) -> Responder:
+    """A ``RecordingRun`` responder that fails instead of answering.
 
-    ``send`` calls the responder, so raising here is what a tool raising out of
-    the stream looks like from the gateway's side.
+    The stream's subscriber calls the responder inside ``send``, so raising here
+    is what a tool raising out of the stream looks like from the gateway's side.
     """
 
-    def respond(_call):
+    def respond(_call: ToolCallEvent) -> BaseEvent:
         raise error
 
     return respond
@@ -530,7 +506,7 @@ class TestAHumanInputFailureIsNotToolOutput:
     async def test_the_failure_is_recorded_and_the_turn_is_stopped(self) -> None:
         state = BridgeState(ACPConfig())
         error = HumanInputNotProvidedError()
-        state.context = _FakeContext(_raise(error))
+        _run_in(state, _raise(error))
 
         result = await self._call(state)
 
@@ -546,11 +522,11 @@ class TestAHumanInputFailureIsNotToolOutput:
         though the tool had said it.
         """
         state = BridgeState(ACPConfig())
-        state.context = _FakeContext(_raise(HumanInputNotProvidedError()))
+        _run_in(state, _raise(HumanInputNotProvidedError()))
 
         result = await self._call(state)
 
-        text = result.content[0].text
+        text = first_text(result)
         assert text == HUMAN_INPUT_GATEWAY_TOOL_ERROR
         assert "hitl_hook" not in text
 
@@ -558,21 +534,21 @@ class TestAHumanInputFailureIsNotToolOutput:
         """Later calls in the same turn are being cancelled, not diagnosing anything."""
         state = BridgeState(ACPConfig())
         first = HumanInputNotProvidedError()
-        state.context = _FakeContext(_raise(first))
+        _run_in(state, _raise(first))
         await self._call(state)
 
-        state.context = _FakeContext(_raise(HumanInputFailedError(RuntimeError("queue down"))))
+        _run_in(state, _raise(HumanInputFailedError(RuntimeError("queue down"))))
         await self._call(state)
 
         assert state.channel_failure is first
 
     async def test_an_ordinary_tool_failure_still_reads_as_one(self) -> None:
         state = BridgeState(ACPConfig())
-        state.context = _FakeContext(_raise(RuntimeError("boom")))
+        _run_in(state, _raise(RuntimeError("boom")))
 
         result = await self._call(state)
 
         assert result.is_error is True
-        assert "boom" in result.content[0].text
+        assert "boom" in first_text(result)
         assert state.channel_failure is None
         assert not state.channel_failed.is_set()

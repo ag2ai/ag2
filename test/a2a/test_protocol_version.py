@@ -7,9 +7,8 @@ selected interface advertises an A2A protocol version < 1.0, while still
 accepting interfaces that omit the optional ``protocol_version`` field."""
 
 import pytest
-from a2a.client.client_factory import TransportProtocol
 from a2a.types import AgentCard, AgentInterface
-from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
+from a2a.utils.constants import PROTOCOL_VERSION_CURRENT, TransportProtocol
 
 from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer, build_card

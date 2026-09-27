@@ -4,6 +4,7 @@
 
 import pytest
 from mcp.server.lowlevel import NotificationOptions
+from mcp.types import TextContent
 
 from ag2.mcp import MCPServer, Prompt, PromptArgument, PromptMessage
 from ag2.mcp.errors import MCPPromptNotFoundError
@@ -21,7 +22,7 @@ class TestPromptGet:
 
         [message] = result.messages
         assert message.role == "user"
-        assert message.content.text == "Hello Sam"
+        assert message.content == TextContent(type="text", text="Hello Sam")
 
     async def test_async_render(self) -> None:
         async def _render(_a: dict[str, str]) -> str:
@@ -31,7 +32,7 @@ class TestPromptGet:
 
         result = await provider.get("p", {})
 
-        assert result.messages[0].content.text == "async-prompt"
+        assert result.messages[0].content == TextContent(type="text", text="async-prompt")
 
     async def test_explicit_message_sequence(self) -> None:
         provider = PromptProvider([
@@ -46,7 +47,10 @@ class TestPromptGet:
 
         result = await provider.get("chat", {})
 
-        assert [(m.role, m.content.text) for m in result.messages] == [("assistant", "Hi!"), ("user", "Continue")]
+        assert [(m.role, m.content) for m in result.messages] == [
+            ("assistant", TextContent(type="text", text="Hi!")),
+            ("user", TextContent(type="text", text="Continue")),
+        ]
 
     async def test_unknown_prompt_raises(self) -> None:
         provider = PromptProvider([])

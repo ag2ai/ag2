@@ -219,6 +219,6 @@ class TestFunctionResponseToPrompt:
         assert "<a2ui-json>" not in prompt
 
     def test_non_serializable_value_falls_back_to_placeholder(self) -> None:
-        fr = A2UIIncomingFunctionResponse(function_call_id="fc-1", call="x", value=object())  # type: ignore[arg-type]
+        fr = A2UIIncomingFunctionResponse(function_call_id="fc-1", call="x", value=object())  # type: ignore[arg-type]  # a non-JSON value on purpose: the prompt must fall back, not raise
         prompt = function_response_to_prompt(fr)
         assert "<non-serializable>" in prompt

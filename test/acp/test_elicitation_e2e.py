@@ -20,12 +20,13 @@ from acp import schema
 from ag2 import Agent
 from ag2.acp import ACPConfig
 from ag2.acp.testing import duplex_acp_config
+from ag2.acp.types import ContentBlock, McpServer
 from ag2.events import HumanInputRequest
 
 AUTH_URL = "https://example.com/authorize"
 
 
-class ElicitingAgent:
+class ElicitingAgent(acp.Agent):
     """An ACP agent that asks the user to complete a url flow on every prompt.
 
     The turn's only message chunk is the outcome, which is what the tests assert
@@ -38,18 +39,29 @@ class ElicitingAgent:
         self.conn = conn
         self.elicitation_offered = False
 
-    async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
-        capabilities = kwargs.get("client_capabilities")
-        self.elicitation_offered = bool(capabilities is not None and capabilities.elicitation is not None)
+    async def initialize(
+        self,
+        protocol_version: int,
+        client_capabilities: schema.ClientCapabilities | None = None,
+        client_info: schema.Implementation | None = None,
+        **kwargs: Any,
+    ) -> schema.InitializeResponse:
+        self.elicitation_offered = bool(client_capabilities is not None and client_capabilities.elicitation is not None)
         return schema.InitializeResponse(
             protocol_version=acp.PROTOCOL_VERSION,
             agent_info=schema.Implementation(name="elicitor", version="test"),
         )
 
-    async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
+    async def new_session(
+        self,
+        cwd: str,
+        additional_directories: list[str] | None = None,
+        mcp_servers: list[McpServer] | None = None,
+        **kwargs: Any,
+    ) -> schema.NewSessionResponse:
         return schema.NewSessionResponse(session_id="elicit-session-1")
 
-    async def prompt(self, *, session_id: str, **kwargs: Any) -> schema.PromptResponse:
+    async def prompt(self, session_id: str, prompt: list[ContentBlock], **kwargs: Any) -> schema.PromptResponse:
         await self.conn.session_update(
             session_id=session_id,
             update=acp.update_agent_message_text(await self._outcome(session_id)),

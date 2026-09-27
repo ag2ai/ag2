@@ -10,9 +10,11 @@ from a2a.types import Part, TaskState
 
 from ag2 import Agent, Depends
 from ag2.a2a.extension import EXTRA_PARTS_DEPENDENCY_KEY
+from ag2.a2a.mappers import data_part
 from ag2.a2ui import a2ui_action
-from ag2.a2ui.a2a import create_a2ui_parts
+from ag2.a2ui._types import JsonObject, JsonValue
 from ag2.a2ui.a2a.executor import _extract_a2ui_envelopes
+from ag2.a2ui.constants import A2UI_MIME_TYPE
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 from test._helpers import LLMCalls
@@ -28,10 +30,10 @@ from ._helpers import (
 VERSION = "v0.9"
 CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 
-DELETE_SURFACE_MSG = {"version": VERSION, "deleteSurface": {"surfaceId": "s1"}}
-CREATE_SURFACE_MSG = {"version": VERSION, "createSurface": {"surfaceId": "s1", "catalogId": CATALOG}}
+DELETE_SURFACE_MSG: JsonObject = {"version": VERSION, "deleteSurface": {"surfaceId": "s1"}}
+CREATE_SURFACE_MSG: JsonObject = {"version": VERSION, "createSurface": {"surfaceId": "s1", "catalogId": CATALOG}}
 
-ACTION_ENVELOPE = {
+ACTION_ENVELOPE: JsonObject = {
     "version": VERSION,
     "action": {
         "name": "submit",
@@ -42,7 +44,7 @@ ACTION_ENVELOPE = {
     },
 }
 
-ERROR_ENVELOPE = {
+ERROR_ENVELOPE: JsonObject = {
     "version": VERSION,
     "error": {
         "code": "VALIDATION_FAILED",
@@ -52,7 +54,7 @@ ERROR_ENVELOPE = {
     },
 }
 
-FUNCTION_RESPONSE_ENVELOPE = {
+FUNCTION_RESPONSE_ENVELOPE: JsonObject = {
     "version": "v1.0",
     "functionResponse": {"functionCallId": "fc-1", "call": "openUrl", "value": True},
 }
@@ -65,6 +67,11 @@ _CALL_FUNCTION_BLOCK = (
 )
 
 
+def _client_part(payload: JsonValue) -> Part:
+    """An A2UI DataPart as a client sends it: ``create_a2ui_parts`` is typed for server→client messages only."""
+    return data_part(payload, media_type=A2UI_MIME_TYPE)
+
+
 class TestExtractA2UIEnvelopes:
     """Envelope decode — the three on-the-wire shapes from get_a2ui_data."""
 
@@ -72,23 +79,23 @@ class TestExtractA2UIEnvelopes:
         assert _extract_a2ui_envelopes(Part(text="hello")) == []
 
     def test_canonical_list_payload(self) -> None:
-        [part] = create_a2ui_parts([ACTION_ENVELOPE])
+        part = _client_part([ACTION_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
     def test_legacy_single_dict_payload(self) -> None:
-        [part] = create_a2ui_parts(ACTION_ENVELOPE, legacy_split=True)
+        part = _client_part(ACTION_ENVELOPE)
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
     def test_filters_entries_without_action_or_error(self) -> None:
-        [part] = create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE])
+        part = _client_part([CREATE_SURFACE_MSG, ACTION_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
     def test_decodes_error_envelope(self) -> None:
-        [part] = create_a2ui_parts([ERROR_ENVELOPE])
+        part = _client_part([ERROR_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [ERROR_ENVELOPE]
 
     def test_decodes_function_response_envelope(self) -> None:
-        [part] = create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])
+        part = _client_part([FUNCTION_RESPONSE_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [FUNCTION_RESPONSE_ENVELOPE]
 
 
@@ -148,7 +155,7 @@ class TestIncomingActionRewrite:
         agent = Agent(name="ui_agent", config=TestConfig("All set."))
         client = client_for(agent, actions=[submit], validate_responses=False)
 
-        reply = await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
+        reply = await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [_client_part([ACTION_ENVELOPE])]})
 
         assert clicked == ["user@example.com"]
         assert reply.response.content == "All set."
@@ -165,7 +172,7 @@ class TestIncomingActionRewrite:
         agent = Agent(name="ui_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
         client = client_for(agent, actions=[submit], validate_responses=False)
 
-        await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
+        await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [_client_part([ACTION_ENVELOPE])]})
 
         synthesized = synthesized_text(calls.messages[-1])
         assert "user@example.com" not in synthesized
@@ -196,7 +203,7 @@ class TestIncomingActionRewrite:
         agent.dependency_provider.override(get_db, get_stub_db)
         client = client_for(agent, actions=[submit], validate_responses=False)
 
-        await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
+        await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [_client_part([ACTION_ENVELOPE])]})
 
         assert recorder.emails == ["user@example.com"]
 
@@ -206,7 +213,7 @@ class TestIncomingActionRewrite:
         agent = Agent(name="ui_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
         client = client_for(agent, validate_responses=False)
 
-        await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
+        await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [_client_part([ACTION_ENVELOPE])]})
 
         # No registered action → the click is rewritten generically (not dropped):
         # the button name and its context still reach the model so the LLM can
@@ -223,7 +230,7 @@ async def test_incoming_error_envelope_becomes_corrective_prompt() -> None:
     agent = Agent(name="ui_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
     client = client_for(agent, validate_responses=False)
 
-    await client.ask("retry", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ERROR_ENVELOPE])})
+    await client.ask("retry", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [_client_part([ERROR_ENVELOPE])]})
 
     synthesized = synthesized_text(calls.messages[-1])
     assert "VALIDATION_FAILED" in synthesized
@@ -237,7 +244,7 @@ async def test_incoming_function_response_becomes_continuation_prompt() -> None:
     client = client_for(agent, protocol_version="v1.0", validate_responses=False)
 
     await client.ask(
-        "continue", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])}
+        "continue", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [_client_part([FUNCTION_RESPONSE_ENVELOPE])]}
     )
 
     synthesized = synthesized_text(calls.messages[-1])
@@ -277,7 +284,7 @@ class TestCallFunctionPause:
         assert TaskState.TASK_STATE_INPUT_REQUIRED in states
         assert hitl_prompts == ["called"]
         # The callFunction DataPart rode the input-required transition.
-        assert any(payload and "callFunction" in payload[0] for payload in payloads)
+        assert any(isinstance(payload, list) and payload and "callFunction" in payload[0] for payload in payloads)
 
     async def test_no_call_function_completes_normally(self) -> None:
         agent = Agent(name="ui_agent", config=TestConfig("Just a plain reply."))

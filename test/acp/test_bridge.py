@@ -12,31 +12,25 @@ from acp import schema
 
 from ag2.acp.bridge import ACPBridge, BridgeState, make_bridge
 from ag2.acp.config import ACPConfig
-from ag2.events import BaseEvent, ModelMessageChunk, ModelReasoning
+from ag2.events import ModelMessageChunk, ModelReasoning
+
+from ._helpers import RecordingRun
 
 
 def _text(text: str) -> schema.TextContentBlock:
     return schema.TextContentBlock(type="text", text=text)
 
 
-class FakeContext:
-    def __init__(self) -> None:
-        self.sent: list[BaseEvent] = []
-
-    async def send(self, event: BaseEvent) -> None:
-        self.sent.append(event)
-
-
-def _state(context: FakeContext, **cfg: object) -> BridgeState:
-    st = BridgeState(ACPConfig(**cfg))  # type: ignore[arg-type]
-    st.context = context  # type: ignore[assignment]
+def _state(run: RecordingRun) -> BridgeState:
+    st = BridgeState(ACPConfig())
+    st.context = run.context
     st.begin_turn()
     return st
 
 
 @pytest.mark.asyncio
 async def test_handle_update_sends_event_and_accumulates_text() -> None:
-    ctx = FakeContext()
+    ctx = RecordingRun()
     st = _state(ctx)
     await st.handle_update(schema.AgentMessageChunk(session_update="agent_message_chunk", content=_text("Hello ")))
     await st.handle_update(schema.AgentMessageChunk(session_update="agent_message_chunk", content=_text("world")))
@@ -46,7 +40,7 @@ async def test_handle_update_sends_event_and_accumulates_text() -> None:
 
 @pytest.mark.asyncio
 async def test_thought_is_sent_but_not_in_turn_text() -> None:
-    ctx = FakeContext()
+    ctx = RecordingRun()
     st = _state(ctx)
     await st.handle_update(schema.AgentThoughtChunk(session_update="agent_thought_chunk", content=_text("thinking")))
     assert isinstance(ctx.sent[0], ModelReasoning)
@@ -55,7 +49,7 @@ async def test_thought_is_sent_but_not_in_turn_text() -> None:
 
 @pytest.mark.asyncio
 async def test_unknown_update_sends_nothing() -> None:
-    ctx = FakeContext()
+    ctx = RecordingRun()
     st = _state(ctx)
     await st.handle_update(schema.SessionInfoUpdate(session_update="session_info_update", title="x"))
     assert ctx.sent == []
@@ -63,7 +57,7 @@ async def test_unknown_update_sends_nothing() -> None:
 
 @pytest.mark.asyncio
 async def test_begin_turn_resets_buffer() -> None:
-    ctx = FakeContext()
+    ctx = RecordingRun()
     st = _state(ctx)
     await st.handle_update(schema.AgentMessageChunk(session_update="agent_message_chunk", content=_text("a")))
     st.begin_turn()

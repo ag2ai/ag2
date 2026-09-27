@@ -10,6 +10,7 @@ import pytest
 from ag2 import Agent
 from ag2.a2ui import A2UIClientCapabilities, a2ui_action
 from ag2.a2ui._runtime import _A2UIRuntime
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.actions import collect_action_declarations, collect_server_actions
 from ag2.a2ui.dispatch import A2UIMessageFrame, A2UIProseFrame, stream_turn
 from ag2.a2ui.request import parse_request
@@ -125,7 +126,7 @@ def _server_action_envelope(
 class TestServerActions:
     async def test_server_action_click_runs_handler_and_skips_agent(self) -> None:
         @a2ui_action
-        def add_to_basket(good_id: str) -> dict:
+        def add_to_basket(good_id: str) -> JsonObject:
             return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}}
 
         # If the agent ran it would emit this prose; asserting it is absent proves
@@ -181,7 +182,7 @@ class TestServerActions:
 
     async def test_server_action_alongside_user_message_also_runs_agent(self) -> None:
         @a2ui_action
-        def add_to_basket(good_id: str) -> dict:
+        def add_to_basket(good_id: str) -> JsonObject:
             return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 2}}
 
         agent = Agent(name="t", config=TestConfig("ok"))

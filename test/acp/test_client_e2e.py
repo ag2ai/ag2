@@ -22,6 +22,8 @@ from ag2.stream import MemoryStream
 from ag2.tools.builtin.mcp_server import MCPServerTool
 from ag2.tools.builtin.web_search import WebSearchTool
 from ag2.tools.final.function_tool import FunctionTool
+from test._helpers import text_of
+from test.mcp._helpers import first_text
 
 
 def _text(text: str) -> schema.TextContentBlock:
@@ -409,7 +411,7 @@ async def test_aclose_closes_session() -> None:
     await cfg.aclose()
     assert cfg.sessions == {}
     for conn in conns:
-        assert conn is not None and conn.closed  # the connection context was exited
+        assert conn is not None and conn.closed  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection
 
 
 @pytest.mark.asyncio
@@ -471,7 +473,8 @@ async def test_external_server_named_like_the_gateway_is_fine_without_function_t
         assert result.body == "hi"
         session = next(iter(cfg.sessions.values()))
         assert session.gateway is None
-        assert [s.name for s in session.conn.new_session_kwargs["mcp_servers"]] == ["ag2"]
+        assert session.conn is not None
+        assert [s.name for s in session.conn.new_session_kwargs["mcp_servers"]] == ["ag2"]  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection
     finally:
         await cfg.aclose()
 
@@ -520,7 +523,7 @@ async def test_function_tools_are_exposed_and_callable_over_mcp() -> None:
             listed = await mcp_session.list_tools()
             observed["tool_names"] = [t.name for t in listed.tools]
             result = await mcp_session.call_tool("add", {"a": 2, "b": 3})
-            observed["call_text"] = result.content[0].text
+            observed["call_text"] = first_text(result)
             observed["call_is_error"] = result.is_error
 
     cfg = fake_acp_config(
@@ -561,7 +564,8 @@ async def test_expose_tools_false_disables_gateway() -> None:
             await run.result()
         session = next(iter(cfg.sessions.values()))
         assert session.gateway is None
-        assert session.conn.new_session_kwargs.get("mcp_servers") is None
+        assert session.conn is not None
+        assert session.conn.new_session_kwargs.get("mcp_servers") is None  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection
     finally:
         await cfg.aclose()
 
@@ -600,7 +604,7 @@ async def test_concurrent_tool_calls_are_correlated() -> None:
                 mcp_session.call_tool("add", {"a": 1, "b": 2}),
                 mcp_session.call_tool("add", {"a": 3, "b": 4}),
             )
-            observed["results"] = (first.content[0].text, second.content[0].text)
+            observed["results"] = (first_text(first), first_text(second))
 
     cfg = fake_acp_config(ACPTurn(updates=[_text_update("done")], on_prompt=drive_mcp), permission_policy="auto")
     agent = Agent("acp", config=cfg, tools=[add])
@@ -631,7 +635,7 @@ async def test_unknown_tool_name_returns_error_not_hang() -> None:
             await mcp_session.initialize()
             result = await asyncio.wait_for(mcp_session.call_tool("nope", {}), timeout=5)
             observed["is_error"] = result.is_error
-            observed["text"] = result.content[0].text
+            observed["text"] = first_text(result)
 
     cfg = fake_acp_config(ACPTurn(updates=[_text_update("done")], on_prompt=drive_mcp), permission_policy="auto")
     agent = Agent("acp", config=cfg, tools=[add])
@@ -800,7 +804,7 @@ class TestAnUnanswerableQuestionEndsTheACPBackedTurn:
             ):
                 await mcp_session.initialize()
                 result = await mcp_session.call_tool("ask_human", {})
-                cfg_holder["tool_text"] = result.content[0].text
+                cfg_holder["tool_text"] = first_text(result)
 
         return drive_mcp
 
@@ -867,5 +871,5 @@ class TestAnUnanswerableQuestionEndsTheACPBackedTurn:
         answered = {event.parent_id for event in events if isinstance(event, ToolResultEvent)}
         assert called and called == answered
 
-        stand_ins = [result.result.parts[0].content for result in events if isinstance(result, ToolResultEvent)]
+        stand_ins = [text_of(result.result.parts[0]) for result in events if isinstance(result, ToolResultEvent)]
         assert stand_ins == [HUMAN_INPUT_ABANDONED_TOOL_RESULT]

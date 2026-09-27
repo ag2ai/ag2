@@ -4,6 +4,7 @@
 
 import pytest
 
+from ag2.a2ui._types import ServerToClientMessage
 from ag2.a2ui.parser import (
     A2UIParseResult,
     A2UIResponseParser,
@@ -137,7 +138,7 @@ class TestA2UIResponseParserValidation:
         )
 
     def test_validate_valid_create_surface(self, parser_with_schema: A2UIResponseParser) -> None:
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v0.9",
                 "createSurface": {
@@ -151,28 +152,28 @@ class TestA2UIResponseParserValidation:
         assert result.errors == []
 
     def test_validate_valid_delete_surface(self, parser_with_schema: A2UIResponseParser) -> None:
-        ops = [{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]
+        ops: list[ServerToClientMessage] = [{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]
         result = parser_with_schema.validate(ops)
         assert result.is_valid is True
 
     def test_validate_missing_version(self, parser_with_schema: A2UIResponseParser) -> None:
-        ops = [{"createSurface": {"surfaceId": "s1", "catalogId": "test"}}]
+        ops: list[ServerToClientMessage] = [{"createSurface": {"surfaceId": "s1", "catalogId": "test"}}]
         result = parser_with_schema.validate(ops)
         assert result.is_valid is False
         assert len(result.errors) == 1
 
     def test_validate_missing_required_field(self, parser_with_schema: A2UIResponseParser) -> None:
-        ops = [{"version": "v0.9", "createSurface": {"surfaceId": "s1"}}]
+        ops: list[ServerToClientMessage] = [{"version": "v0.9", "createSurface": {"surfaceId": "s1"}}]
         result = parser_with_schema.validate(ops)
         assert result.is_valid is False
 
     def test_validate_no_schema_always_valid(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9", server_to_client_schema=None)
-        result = parser.validate([{"anything": "goes"}])
+        result = parser.validate([{"anything": "goes"}])  # type: ignore[list-item]  # an off-schema operation on purpose: without a schema nothing is refused
         assert result.is_valid is True
 
     def test_validate_multiple_ops_one_invalid(self, parser_with_schema: A2UIResponseParser) -> None:
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v0.9",
                 "createSurface": {"surfaceId": "s1", "catalogId": "test"},
@@ -189,7 +190,7 @@ class TestA2UIResponseParserValidation:
             {"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": "test"}},
             123,
         ]
-        result = parser_with_schema.validate(ops)  # type: ignore[arg-type]
+        result = parser_with_schema.validate(ops)  # type: ignore[arg-type]  # a non-dict operation on purpose: validation must report it, not raise
         assert result.is_valid is False
         assert result.errors
         assert len(result.errors) == 1
@@ -199,7 +200,9 @@ class TestA2UIResponseParserValidation:
         # An ``updateComponents`` whose value is not an object (e.g. a bare
         # string) passes the membership check but must not crash the 'root'-node
         # scan with an AttributeError — it is reported as invalid instead.
-        ops = [{"version": "v0.9", "updateComponents": "not-an-object"}]
+        ops: list[ServerToClientMessage] = [
+            {"version": "v0.9", "updateComponents": "not-an-object"}  # type: ignore[typeddict-item]  # a non-object payload on purpose: validation must report it, not crash
+        ]
         result = parser_with_schema.validate(ops)
         assert result.is_valid is False
         assert result.errors
@@ -218,12 +221,12 @@ class TestA2UIResponseParserV091Validation:
         )
 
     def test_accepts_v0_9_1_version_string(self, parser_v091: A2UIResponseParser) -> None:
-        ops = [{"version": "v0.9.1", "deleteSurface": {"surfaceId": "s1"}}]
+        ops: list[ServerToClientMessage] = [{"version": "v0.9.1", "deleteSurface": {"surfaceId": "s1"}}]
         assert parser_v091.validate(ops).is_valid is True
 
     def test_also_accepts_v0_9_version_string(self, parser_v091: A2UIResponseParser) -> None:
         # v0.9.1's version field is the enum ["v0.9", "v0.9.1"] — both are valid.
-        ops = [{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]
+        ops: list[ServerToClientMessage] = [{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]
         assert parser_v091.validate(ops).is_valid is True
 
 
@@ -241,7 +244,7 @@ class TestA2UIResponseParserV1Validation:
 
     def test_validate_call_function(self, parser_v1: A2UIResponseParser) -> None:
         # 'openUrl' is a function defined in the v1.0 basic catalog.
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v1.0",
                 "functionCallId": "fc-1",
@@ -253,12 +256,12 @@ class TestA2UIResponseParserV1Validation:
         assert result.errors == []
 
     def test_validate_action_response_value(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "actionId": "act-1", "actionResponse": {"value": 42}}]
+        ops: list[ServerToClientMessage] = [{"version": "v1.0", "actionId": "act-1", "actionResponse": {"value": 42}}]
         result = parser_v1.validate(ops)
         assert result.is_valid is True
 
     def test_validate_action_response_error(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v1.0",
                 "actionId": "act-1",
@@ -270,7 +273,7 @@ class TestA2UIResponseParserV1Validation:
 
     def test_action_response_rejects_value_and_error_together(self, parser_v1: A2UIResponseParser) -> None:
         # Spec: actionResponse carries exactly one of value | error (oneOf).
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v1.0",
                 "actionId": "act-1",
@@ -281,14 +284,14 @@ class TestA2UIResponseParserV1Validation:
         assert result.is_valid is False
 
     def test_call_function_requires_function_call_id(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "callFunction": {"call": "openUrl"}}]
+        ops: list[ServerToClientMessage] = [{"version": "v1.0", "callFunction": {"call": "openUrl"}}]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
 
     def test_create_surface_valid_in_v1(self, parser_v1: A2UIResponseParser) -> None:
         # createSurface is shared across versions; the v1.0 parser accepts it
         # with the v1.0 version string and catalog id.
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v1.0",
                 "createSurface": {
@@ -314,7 +317,7 @@ class TestPerComponentValidation:
         )
 
     def test_button_missing_child_gives_actionable_error(self, parser_with_components: A2UIResponseParser) -> None:
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v0.9",
                 "updateComponents": {
@@ -335,7 +338,7 @@ class TestPerComponentValidation:
         assert any("btn1" in e and "Button" in e for e in result.errors)
 
     def test_valid_button_with_child_passes(self, parser_with_components: A2UIResponseParser) -> None:
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v0.9",
                 "updateComponents": {
@@ -357,7 +360,7 @@ class TestPerComponentValidation:
         assert result.is_valid is True
 
     def test_update_components_without_root_fails(self, parser_with_components: A2UIResponseParser) -> None:
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v0.9",
                 "updateComponents": {
@@ -373,7 +376,7 @@ class TestPerComponentValidation:
         assert any("'root'" in e for e in result.errors)
 
     def test_multiple_component_errors(self, parser_with_components: A2UIResponseParser) -> None:
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v0.9",
                 "updateComponents": {
@@ -406,7 +409,7 @@ def test_per_component_validation_works_without_catalog_id() -> None:
         component_schemas=manager.get_component_schemas(),
         # catalog_id intentionally omitted — should still drill into components.
     )
-    ops = [
+    ops: list[ServerToClientMessage] = [
         {
             "version": "v0.9",
             "updateComponents": {

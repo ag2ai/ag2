@@ -19,7 +19,7 @@ from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, MCP_PROTOCOL_
 from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
-from mcp_types.version import LATEST_HANDSHAKE_VERSION, LATEST_MODERN_VERSION
+from mcp_types.version import LATEST_MODERN_VERSION
 
 from ag2 import Agent, Context
 from ag2.context import StreamId
@@ -33,7 +33,7 @@ from ag2.mcp.tools import ToolContext
 from ag2.testing import TestConfig
 from test._helpers import LLMCalls
 
-from ._helpers import Weather
+from ._helpers import Weather, handshake_call, open_handshake_session
 
 _JSON = {"Accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}", "Content-Type": CONTENT_TYPE_JSON}
 
@@ -132,50 +132,8 @@ async def _modern_call_with_response(
         },
     )
     assert response.status_code == 200
-    return response.json()["result"], response
-
-
-async def _open_handshake_session(
-    client: httpx.AsyncClient, *, request_id: int, token: str | None = None
-) -> dict[str, str]:
-    """Run the ``initialize`` handshake and return the headers its session needs."""
-    opening = _JSON if token is None else {**_JSON, "Authorization": f"Bearer {token}"}
-    response = await client.post(
-        "/mcp",
-        headers=opening,
-        json={
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": LATEST_HANDSHAKE_VERSION,
-                "capabilities": {},
-                "clientInfo": {"name": "t", "version": "1"},
-            },
-        },
-    )
-    assert response.status_code == 200
-    session_id = response.headers[MCP_SESSION_ID_HEADER]
-    headers = {**opening, MCP_PROTOCOL_VERSION_HEADER: LATEST_HANDSHAKE_VERSION, MCP_SESSION_ID_HEADER: session_id}
-    await client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "method": "notifications/initialized"})
-    return headers
-
-
-async def _handshake_call(
-    client: httpx.AsyncClient, headers: dict[str, str], message: str, *, request_id: int
-) -> dict[str, Any]:
-    response = await client.post(
-        "/mcp",
-        headers=headers,
-        json={
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": "tools/call",
-            "params": {"name": "ask", "arguments": {"message": message}},
-        },
-    )
-    assert response.status_code == 200
-    return response.json()["result"]
+    result: dict[str, Any] = response.json()["result"]
+    return result, response
 
 
 @pytest.mark.asyncio
@@ -231,9 +189,9 @@ class TestHandshakeEraContinuity:
         app = MCPServer(_agent(calls, "ok", "ok"), json_response=True)
 
         async with serve(app) as client:
-            headers = await _open_handshake_session(client, request_id=1)
-            await _handshake_call(client, headers, "first", request_id=2)
-            await _handshake_call(client, headers, "second", request_id=3)
+            headers = await open_handshake_session(client, request_id=1)
+            await handshake_call(client, headers, "first", request_id=2)
+            await handshake_call(client, headers, "second", request_id=3)
 
         assert _turn_texts(calls) == [["first"], ["first", "second"]]
 
@@ -242,10 +200,10 @@ class TestHandshakeEraContinuity:
         app = MCPServer(_agent(calls, "ok", "ok"), json_response=True)
 
         async with serve(app) as client:
-            first = await _open_handshake_session(client, request_id=1)
-            second = await _open_handshake_session(client, request_id=2)
-            await _handshake_call(client, first, "first", request_id=3)
-            await _handshake_call(client, second, "second", request_id=4)
+            first = await open_handshake_session(client, request_id=1)
+            second = await open_handshake_session(client, request_id=2)
+            await handshake_call(client, first, "first", request_id=3)
+            await handshake_call(client, second, "second", request_id=4)
 
         assert _turn_texts(calls) == [["first"], ["second"]]
 
@@ -253,7 +211,9 @@ class TestHandshakeEraContinuity:
 def _handle(result: CallToolResult) -> str:
     """The conversation handle a result carries, as a programmatic client reads it."""
     assert result.meta is not None
-    return result.meta[CONVERSATION_META_KEY]
+    handle = result.meta[CONVERSATION_META_KEY]
+    assert isinstance(handle, str)
+    return handle
 
 
 def _modern_handle(result: dict[str, Any]) -> str:
@@ -314,6 +274,7 @@ class TestConversationHandle:
         # the model can recover from an expired one without reading `_meta`.
         reply, trailer = result.content
         assert reply == TextContent(type="text", text="hello")
+        assert isinstance(trailer, TextContent)
         assert handle in trailer.text
 
     async def test_handles_are_unguessable(self) -> None:
@@ -422,7 +383,8 @@ class TestUnknownHandle:
 
 def _conversation_argument(tool: MCPTool) -> dict[str, Any]:
     """The advertised ``conversation`` argument, or ``{}`` when it is not offered."""
-    return tool.input_schema["properties"].get("conversation", {})
+    argument: dict[str, Any] = tool.input_schema["properties"].get("conversation", {})
+    return argument
 
 
 @pytest.mark.asyncio
@@ -665,8 +627,8 @@ class TestPrincipalBinding:
         calls = LLMCalls()
 
         async with serve(_authenticated(_agent(calls, "ok", "ok"))) as client:
-            headers = await _open_handshake_session(client, request_id=1, token="alice")
-            await _handshake_call(client, headers, "first", request_id=2)
+            headers = await open_handshake_session(client, request_id=1, token="alice")
+            await handshake_call(client, headers, "first", request_id=2)
             swapped = await client.post(
                 "/mcp",
                 headers={**headers, "Authorization": "Bearer bob"},

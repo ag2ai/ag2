@@ -16,6 +16,7 @@ import pytest
 from acp import schema
 
 from ag2 import Agent, Context
+from ag2.acp import ACPConfig
 from ag2.acp.elicitation import MAX_ATTEMPTS
 from ag2.acp.events import ACPElicitation
 from ag2.acp.testing import FAKE_SESSION_ID, ACPTurn, ScriptedElicitation, fake_acp_config
@@ -71,13 +72,14 @@ class Human:
         return only
 
 
-async def _reply_body(cfg: Any, human: Human | None = None) -> str:
+async def _reply_body(cfg: ACPConfig, human: Human | None = None) -> str:
     """Run one turn against the scripted agent and return the reply's text."""
     agent = Agent("acp", config=cfg, hitl_hook=human.answer if human is not None else None)
     try:
         result = await agent.ask("hello")
     finally:
         await cfg.aclose()
+    assert result.body is not None
     return result.body
 
 

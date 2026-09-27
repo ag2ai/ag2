@@ -4,7 +4,6 @@
 
 from pathlib import Path
 
-from a2a.client.client_factory import TransportProtocol
 from a2a.types import (
     AgentCard,
     AgentProvider,
@@ -14,6 +13,7 @@ from a2a.types import (
     OAuthFlows,
     SecurityScheme,
 )
+from a2a.utils.constants import TransportProtocol
 
 from ag2 import Agent
 from ag2.a2a import build_card

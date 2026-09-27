@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+from typing import TypedDict
 
 import pytest
 from mcp.server.streamable_http_manager import DEFAULT_MAX_SESSIONS, DEFAULT_SESSION_IDLE_TIMEOUT
@@ -16,6 +17,15 @@ from ._helpers import JSON_HEADERS, greeter, initialize_request
 # Pinned rather than tracking the newest handshake revision: ``mcp`` 2.0 serves
 # both eras, and which one a connection lands in is settled by this request.
 _INIT = initialize_request(version="2025-06-18")
+
+
+class _Bounds(TypedDict, total=False):
+    """The numeric bounds ``TransportConfig`` validates, as keyword arguments."""
+
+    mcp_session_idle_timeout: float | None
+    max_mcp_sessions: int | None
+    max_request_body_size: int
+    sse_retry_interval: int | None
 
 
 @pytest.mark.asyncio
@@ -196,22 +206,22 @@ class TestTransportValidation:
     @pytest.mark.parametrize(
         "config",
         [
-            pytest.param({"mcp_session_idle_timeout": 0}, id="idle-timeout"),
-            pytest.param({"max_mcp_sessions": 0}, id="max-mcp-sessions"),
-            pytest.param({"max_request_body_size": 0}, id="request-body-size"),
-            pytest.param({"sse_retry_interval": 0}, id="sse-retry-interval"),
+            pytest.param(_Bounds(mcp_session_idle_timeout=0), id="idle-timeout"),
+            pytest.param(_Bounds(max_mcp_sessions=0), id="max-mcp-sessions"),
+            pytest.param(_Bounds(max_request_body_size=0), id="request-body-size"),
+            pytest.param(_Bounds(sse_retry_interval=0), id="sse-retry-interval"),
         ],
     )
-    def test_a_non_positive_bound_is_refused(self, config: dict[str, int]) -> None:
+    def test_a_non_positive_bound_is_refused(self, config: _Bounds) -> None:
         with pytest.raises(ValueError):
             TransportConfig(**config)
 
     @pytest.mark.parametrize(
         "config",
         [
-            pytest.param({"mcp_session_idle_timeout": None}, id="never-reap"),
-            pytest.param({"max_mcp_sessions": None}, id="no-cap"),
+            pytest.param(_Bounds(mcp_session_idle_timeout=None), id="never-reap"),
+            pytest.param(_Bounds(max_mcp_sessions=None), id="no-cap"),
         ],
     )
-    def test_the_off_value_is_not_a_non_positive_bound(self, config: dict[str, None]) -> None:
+    def test_the_off_value_is_not_a_non_positive_bound(self, config: _Bounds) -> None:
         MCPServer(greeter(), transport=TransportConfig(**config))

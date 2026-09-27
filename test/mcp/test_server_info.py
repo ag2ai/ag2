@@ -71,7 +71,7 @@ class TestCacheHints:
         with pytest.raises(ValueError, match="cacheable"):
             # The key set is closed for type-checked callers; the runtime gate is
             # for maps that arrive untyped (e.g. deserialized from config).
-            MCPServer(agent, cache_hints={"tools/call": CacheHint(ttl_ms=1000)})  # type: ignore[dict-item]
+            MCPServer(agent, cache_hints={"tools/call": CacheHint(ttl_ms=1000)})  # type: ignore[dict-item]  # an uncacheable key on purpose: the runtime must refuse it
 
     @pytest.mark.asyncio
     async def test_fills_list_tools_freshness(self) -> None:

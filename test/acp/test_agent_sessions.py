@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from ag2.acp.sessions import (
+    AgentSession,
     SessionBusyError,
     SessionConfig,
     SessionLimitError,
@@ -72,7 +73,7 @@ class TestHistoryIsolation:
 
         await store.stream(first).history.replace([ModelMessage("only for first")])
 
-        assert [e.content for e in await store.stream(first).history.get_events()] == ["only for first"]
+        assert list(await store.stream(first).history.get_events()) == [ModelMessage("only for first")]
         assert list(await store.stream(second).history.get_events()) == []
 
     async def test_history_accumulates_across_turns_of_one_session(self) -> None:
@@ -83,7 +84,7 @@ class TestHistoryIsolation:
         # A *fresh* stream object per turn still reads the session's history back.
         later = store.stream(session)
 
-        assert [e.content for e in await later.history.get_events()] == ["turn one"]
+        assert list(await later.history.get_events()) == [ModelMessage("turn one")]
 
     async def test_a_session_keeps_one_stream_for_its_lifetime(self) -> None:
         """A stream carries an inbox and background tasks, not just history.
@@ -257,7 +258,7 @@ class TestCancellation:
 
         await session.cancel()
 
-        assert [e.content for e in await store.stream(session).history.get_events()] == ["already streamed"]
+        assert list(await store.stream(session).history.get_events()) == [ModelMessage("already streamed")]
 
 
 @pytest.mark.asyncio
@@ -342,7 +343,7 @@ class TestRetention:
         await store.aclose()
 
         assert len(store) == 0
-        assert [e.content for e in await store.stream(session).history.get_events()] == ["kept"]
+        assert list(await store.stream(session).history.get_events()) == [ModelMessage("kept")]
 
     async def test_retained_history_survives_lru_eviction(self) -> None:
         store = SessionStore(max_sessions=1, retain_history=True)
@@ -353,7 +354,7 @@ class TestRetention:
 
         with pytest.raises(UnknownSessionError):
             await store.get(first.session_id)
-        assert [e.content for e in await store.stream(first).history.get_events()] == ["kept"]
+        assert list(await store.stream(first).history.get_events()) == [ModelMessage("kept")]
 
     async def test_retained_history_survives_ttl_expiry(self) -> None:
         now = 0.0
@@ -365,7 +366,7 @@ class TestRetention:
         with pytest.raises(UnknownSessionError):
             await store.get(session.session_id)
 
-        assert [e.content for e in await store.stream(session).history.get_events()] == ["kept"]
+        assert list(await store.stream(session).history.get_events()) == [ModelMessage("kept")]
 
     async def test_close_always_drops_history_even_when_retained(self) -> None:
         """Retention is for sessions that were let go; a close means the conversation is over."""
@@ -435,7 +436,7 @@ class TestAdopt:
         second_store = SessionStore(storage=storage)
         adopted, _ = await second_store.get_or_adopt(original.stream_id)
 
-        assert [e.content for e in await second_store.stream(adopted).history.get_events()] == ["from before"]
+        assert list(await second_store.stream(adopted).history.get_events()) == [ModelMessage("from before")]
 
     async def test_adopt_respects_the_cap(self) -> None:
         store = SessionStore(max_sessions=1)
@@ -482,7 +483,7 @@ class TestAdopt:
 
         with pytest.raises(UnknownSessionError):
             await store.get(session.session_id)
-        assert [e.content for e in await store.stream(session).history.get_events()] == ["not ours to delete"]
+        assert list(await store.stream(session).history.get_events()) == [ModelMessage("not ours to delete")]
         await store.forget("never-issued")  # nothing to undo is not an error
 
 
@@ -556,16 +557,16 @@ class TestEvictionSparesLiveWork:
     """An eviction policy is a memory bound, not a licence to kill running turns."""
 
     @staticmethod
-    async def _busy(session: object) -> "asyncio.Task[None]":
+    async def _busy(session: AgentSession) -> "asyncio.Task[None]":
         started = asyncio.Event()
 
         async def hold() -> None:
-            async with session.turn():  # type: ignore[attr-defined]
+            async with session.turn():
                 started.set()
                 await asyncio.Event().wait()
 
         task = asyncio.create_task(hold())
-        session.turn_task = task  # type: ignore[attr-defined]
+        session.turn_task = task
         await started.wait()
         return task
 
@@ -592,7 +593,7 @@ class TestEvictionSparesLiveWork:
             await store.create()
         await asyncio.sleep(0.01)
 
-        assert [e.content for e in await store.stream(busy).history.get_events()] == ["mid-turn work"]
+        assert list(await store.stream(busy).history.get_events()) == [ModelMessage("mid-turn work")]
         task.cancel()
 
     async def test_an_idle_session_is_still_evicted(self) -> None:
@@ -674,7 +675,7 @@ class TestTtlMeasuresIdleTime:
             now = 25.0  # the turn itself outlives the TTL
 
         assert await store.get(session.session_id) is session
-        assert [e.content for e in await store.stream(session).history.get_events()] == ["slow work"]
+        assert list(await store.stream(session).history.get_events()) == [ModelMessage("slow work")]
 
     async def test_the_clock_restarts_when_a_turn_finishes(self) -> None:
         now = 0.0
@@ -697,17 +698,17 @@ class TestTheCapIsAHardBound:
     """A cap that stretches while turns are in flight is not a cap at all."""
 
     @staticmethod
-    async def _busy(store: SessionStore) -> "tuple[object, asyncio.Task[None]]":
+    async def _busy(store: SessionStore) -> "tuple[AgentSession, asyncio.Task[None]]":
         session = await store.create()
         started = asyncio.Event()
 
         async def hold() -> None:
-            async with session.turn():  # type: ignore[attr-defined]
+            async with session.turn():
                 started.set()
                 await asyncio.Event().wait()
 
         task = asyncio.create_task(hold())
-        session.turn_task = task  # type: ignore[attr-defined]
+        session.turn_task = task
         await started.wait()
         return session, task
 

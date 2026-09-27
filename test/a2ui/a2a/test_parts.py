@@ -4,10 +4,11 @@
 
 from a2a.types import Part
 
+from ag2.a2ui._types import ServerToClientMessage
 from ag2.a2ui.a2a import create_a2ui_parts, get_a2ui_data, is_a2ui_part
 from ag2.a2ui.constants import A2UI_MIME_TYPE
 
-SAMPLE_OPS = [
+SAMPLE_OPS: list[ServerToClientMessage] = [
     {
         "version": "v0.9",
         "createSurface": {

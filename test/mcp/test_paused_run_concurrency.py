@@ -15,6 +15,7 @@ from typing import Any, cast
 
 import pytest
 from mcp.types import ClientCapabilities, ElicitationCapability, InputRequiredResult
+from starlette.types import Message
 
 from ag2.mcp import MCPServer
 from ag2.mcp.executor import AgentExecutor
@@ -232,12 +233,12 @@ class _PeerSession:
 async def _drive_asgi_lifespan(server: MCPServer) -> None:
     """Start and then shut down ``server``'s ASGI app, as a host would."""
     events: list[dict[str, Any]] = [{"type": "lifespan.startup"}, {"type": "lifespan.shutdown"}]
-    sent: list[dict[str, Any]] = []
+    sent: list[Message] = []
 
     async def receive() -> dict[str, Any]:
         return events.pop(0) if events else {"type": "lifespan.shutdown"}
 
-    async def send(message: dict[str, Any]) -> None:
+    async def send(message: Message) -> None:
         sent.append(message)
 
     await server({"type": "lifespan", "asgi": {"version": "3.0"}}, receive, send)

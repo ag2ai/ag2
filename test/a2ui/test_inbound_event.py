@@ -8,13 +8,14 @@ import pytest
 
 from ag2 import Agent
 from ag2.a2ui import A2UIClientEvent
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.incoming import A2UIIncomingActionResult, parse_incoming_interactions
 from ag2.a2ui.middleware import A2UIInboundMiddleware
 from ag2.events import BaseEvent
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
-_ACTION_ENVELOPE = {
+_ACTION_ENVELOPE: JsonObject = {
     "version": "v0.9",
     "action": {
         "name": "confirm",

@@ -62,7 +62,8 @@ async def test_ensure_passes_mcp_servers_to_new_session() -> None:
         mcp_servers=[server],
     )
     try:
-        assert session.conn.new_session_kwargs["mcp_servers"] == [server]
+        assert session.conn is not None
+        assert session.conn.new_session_kwargs["mcp_servers"] == [server]  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection
     finally:
         await session.close()
 
@@ -96,7 +97,7 @@ async def test_ensure_rejects_agent_without_http_mcp() -> None:
         )
     assert session.started is False
     (conn,) = conns
-    assert conn.closed  # ensure tore the connection down, not just left it dangling
+    assert conn.closed  # type: ignore[attr-defined]  # ticket 62: the harness's fake connection is typed as ClientSideConnection; ensure tore it down, not just left it dangling
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import acp
 import pytest
+from acp import schema
 from acp.exceptions import RequestError
 
 from ag2 import Agent
@@ -16,6 +17,17 @@ from ag2.testing import TestConfig
 
 def _agent(*turns: str) -> Agent:
     return Agent("workie", config=TestConfig(*(turns or ("ok",))))
+
+
+def _capabilities(response: schema.InitializeResponse) -> schema.AgentCapabilities:
+    assert response.agent_capabilities is not None
+    return response.agent_capabilities
+
+
+def _prompt_capabilities(response: schema.InitializeResponse) -> schema.PromptCapabilities:
+    prompt = _capabilities(response).prompt_capabilities
+    assert prompt is not None
+    return prompt
 
 
 @pytest.mark.asyncio
@@ -38,13 +50,13 @@ class TestHandshake:
         async with connect(server, initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        assert (response.agent_info.name, response.agent_info.version) == ("custom", "9.9.9")
-        assert response.agent_info.title == "Custom Agent"
+        assert response.agent_info == schema.Implementation(name="custom", title="Custom Agent", version="9.9.9")
 
     async def test_name_defaults_to_the_agent_name(self) -> None:
         async with connect(ACPAgent(_agent()), initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
+        assert response.agent_info is not None
         assert response.agent_info.name == "workie"
 
 
@@ -57,20 +69,22 @@ class TestCapabilitiesAreTruthful:
         async with connect(ACPAgent(_agent()), initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        assert response.agent_capabilities.load_session is True
+        assert _capabilities(response).load_session is True
 
     async def test_does_not_advertise_mcp_support(self) -> None:
         async with connect(ACPAgent(_agent()), initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        mcp = response.agent_capabilities.mcp_capabilities
+        mcp = _capabilities(response).mcp_capabilities
+        assert mcp is not None
         assert (mcp.http, mcp.sse, mcp.acp) == (False, False, False)
 
     async def test_advertises_no_session_operations_beyond_new_prompt_cancel(self) -> None:
         async with connect(ACPAgent(_agent()), initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        sessions = response.agent_capabilities.session_capabilities
+        sessions = _capabilities(response).session_capabilities
+        assert sessions is not None
         assert (sessions.list, sessions.delete, sessions.fork, sessions.resume, sessions.close) == (
             None,
             None,
@@ -84,7 +98,7 @@ class TestCapabilitiesAreTruthful:
         async with connect(ACPAgent(_agent()), initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        prompt = response.agent_capabilities.prompt_capabilities
+        prompt = _prompt_capabilities(response)
         assert (prompt.image, prompt.audio, prompt.embedded_context) == (True, False, True)
 
     async def test_loading_an_unknown_session_is_not_found(self) -> None:
@@ -123,6 +137,7 @@ class TestAuthentication:
         async with connect(server, initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
+        assert response.auth_methods is not None
         assert [m.id for m in response.auth_methods] == ["token"]
 
     async def test_sessions_are_gated_until_authenticated(self) -> None:
@@ -196,13 +211,13 @@ class TestPromptContentIsDeclared:
         async with connect(ACPAgent(_agent()), initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        assert response.agent_capabilities.prompt_capabilities.audio is False
+        assert _prompt_capabilities(response).audio is False
 
     async def test_image_and_documents_are_on_by_default(self) -> None:
         async with connect(ACPAgent(_agent()), initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        prompt = response.agent_capabilities.prompt_capabilities
+        prompt = _prompt_capabilities(response)
         assert (prompt.image, prompt.embedded_context) == (True, True)
 
     async def test_a_deployment_can_declare_what_its_model_accepts(self) -> None:
@@ -211,7 +226,7 @@ class TestPromptContentIsDeclared:
         async with connect(server, initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        prompt = response.agent_capabilities.prompt_capabilities
+        prompt = _prompt_capabilities(response)
         assert (prompt.image, prompt.audio, prompt.embedded_context) == (False, True, False)
 
 

@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from ag2.a2ui import A2UIAction, a2ui_action
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.actions import A2UIEventAction, collect_action_declarations, collect_server_actions
 
 
 class TestDecorator:
     def test_bare_decorator_produces_action(self) -> None:
         @a2ui_action
-        def add_to_basket(good_id: str) -> dict:
+        def add_to_basket(good_id: str) -> JsonObject:
             """Add to cart."""
             return {"ok": True}
 
@@ -22,7 +23,7 @@ class TestDecorator:
 
     def test_call_with_overrides(self) -> None:
         @a2ui_action(name="add", description="Add an item")
-        def add_to_basket(good_id: str) -> dict:
+        def add_to_basket(good_id: str) -> JsonObject:
             return {"ok": True}
 
         assert add_to_basket.action.name == "add"
@@ -32,7 +33,7 @@ class TestDecorator:
 class TestExampleContext:
     def test_auto_derived_from_schema(self) -> None:
         @a2ui_action
-        def add(good_id: str, qty: int) -> dict:
+        def add(good_id: str, qty: int) -> JsonObject:
             return {"ok": True}
 
         # Declared to the LLM so it can render the button with the right context.
@@ -64,7 +65,7 @@ class TestExampleContext:
 
     def test_explicit_override_wins(self) -> None:
         @a2ui_action(example_context={"good_id": "SKU-123"})
-        def add(good_id: str) -> dict:
+        def add(good_id: str) -> JsonObject:
             return {"ok": True}
 
         assert add.action.example_context == {"good_id": "SKU-123"}
@@ -80,11 +81,11 @@ class TestExampleContext:
 class TestCollectors:
     def test_collect_declarations_and_actions(self) -> None:
         @a2ui_action(description="Add to cart")
-        def add_to_basket(good_id: str) -> dict:
+        def add_to_basket(good_id: str) -> JsonObject:
             return {"ok": True}
 
         @a2ui_action
-        def remove(good_id: str) -> dict:
+        def remove(good_id: str) -> JsonObject:
             return {"ok": True}
 
         objs = [add_to_basket, remove]

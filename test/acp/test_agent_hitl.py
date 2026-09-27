@@ -25,6 +25,7 @@ from ag2.history import HUMAN_INPUT_ABANDONED_TOOL_RESULT
 from ag2.hitl import HumanHook
 from ag2.middleware import approval_required
 from ag2.testing import TestConfig
+from test._helpers import text_of
 
 QUESTION = "which colour?"
 
@@ -80,7 +81,8 @@ class TestWithoutAHook:
             with pytest.raises(RequestError) as caught:
                 await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
 
-        assert "hitl_hook" in caught.value.data["reason"]  # type: ignore[index]
+        assert caught.value.data is not None
+        assert "hitl_hook" in caught.value.data["reason"]
 
     async def test_the_served_agents_own_hook_is_not_used(self) -> None:
         """An agent's own hook may read a console — which is the ACP transport.
@@ -285,6 +287,7 @@ class TestAnUnanswerableQuestionReachesTheClient:
             with pytest.raises(RequestError) as caught:
                 await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
 
+        assert caught.value.data is not None
         assert "category" not in caught.value.data
 
     async def test_the_session_survives_the_failed_turn(self) -> None:
@@ -313,6 +316,6 @@ class TestAnUnanswerableQuestionReachesTheClient:
         # Repaired at the turn boundary, where the reason is still known, so the
         # transcript says the question went unanswered rather than claiming a
         # cancellation the Client never asked for.
-        stand_ins = [result.result.parts[0].content for result in results]
+        stand_ins = [text_of(result.result.parts[0]) for result in results]
         assert stand_ins == [HUMAN_INPUT_ABANDONED_TOOL_RESULT]
         assert CANCELLED_TOOL_RESULT not in stand_ins

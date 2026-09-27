@@ -3,45 +3,38 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from mcp.server.streamable_http import MCP_SESSION_ID_HEADER
+from mcp.shared.inbound import MCP_PROTOCOL_VERSION_HEADER
 from mcp_types.version import LATEST_HANDSHAKE_VERSION
 
 from ag2 import Agent
+from ag2.mcp import MCPServer
 from ag2.mcp.errors import UnknownConversationError
-from ag2.mcp.executor import AgentExecutor, _session_id
-from ag2.mcp.sessions import STDIO_SESSION, SessionConfig, SessionStore
+from ag2.mcp.sessions import SessionConfig, SessionStore
+from ag2.mcp.testing import connect, serve
 from ag2.testing import TestConfig
 from test._helpers import LLMCalls
 
-from ._helpers import Clock
+from ._helpers import JSON_HEADERS, Clock, handshake_call, initialize_request, open_handshake_session
 
 
-def _request_context(session_id: str | None) -> SimpleNamespace:
-    """A minimal stand-in for the transport's RequestContext, on a handshake-era protocol version."""
-    headers = {"mcp-session-id": session_id} if session_id is not None else {}
-    return SimpleNamespace(request=SimpleNamespace(headers=headers), protocol_version=LATEST_HANDSHAKE_VERSION)
-
-
-def _stdio_request_context() -> SimpleNamespace:
-    return SimpleNamespace(request=None, protocol_version=LATEST_HANDSHAKE_VERSION)
+def _agent(calls: LLMCalls) -> Agent:
+    return Agent("a", config=TestConfig("ok"), middleware=[calls.middleware()])
 
 
 @pytest.mark.asyncio
 class TestMultiTurnHistory:
     async def test_same_session_accumulates_history(self) -> None:
         calls = LLMCalls()
-        executor = AgentExecutor(
-            Agent("a", config=TestConfig("ok"), middleware=[calls.middleware()]),
-            stream_progress=False,
-            session_store=SessionStore(),
-        )
-        rc = _request_context("sess-1")
+        app = MCPServer(_agent(calls), stream_progress=False, json_response=True)
 
-        await executor.call("ask", message="first", request_context=rc)
-        await executor.call("ask", message="second", request_context=rc)
+        async with serve(app) as client:
+            headers = await open_handshake_session(client, request_id=1)
+            await handshake_call(client, headers, "first", request_id=2)
+            await handshake_call(client, headers, "second", request_id=3)
 
         # Second turn sees the first turn replayed from session history.
         assert len(calls.messages) == 2
@@ -49,46 +42,54 @@ class TestMultiTurnHistory:
 
     async def test_different_sessions_are_isolated(self) -> None:
         calls = LLMCalls()
-        executor = AgentExecutor(
-            Agent("a", config=TestConfig("ok"), middleware=[calls.middleware()]),
-            stream_progress=False,
-            session_store=SessionStore(),
-        )
+        app = MCPServer(_agent(calls), stream_progress=False, json_response=True)
 
-        await executor.call("ask", message="first", request_context=_request_context("sess-1"))
-        await executor.call("ask", message="hello", request_context=_request_context("sess-2"))
+        async with serve(app) as client:
+            first = await open_handshake_session(client, request_id=1)
+            second = await open_handshake_session(client, request_id=2)
+            await handshake_call(client, first, "first", request_id=3)
+            await handshake_call(client, second, "hello", request_id=4)
 
         # A brand-new session starts from an empty history, like the first turn.
         assert len(calls.messages[1]) == len(calls.messages[0])
 
     async def test_stateless_when_sessions_disabled(self) -> None:
         calls = LLMCalls()
-        executor = AgentExecutor(
-            Agent("a", config=TestConfig("ok"), middleware=[calls.middleware()]),
-            stream_progress=False,
-            session_store=None,
-        )
-        rc = _request_context("sess-1")
+        app = MCPServer(_agent(calls), stream_progress=False, sessions=False, json_response=True)
 
-        await executor.call("ask", message="first", request_context=rc)
-        await executor.call("ask", message="second", request_context=rc)
+        async with serve(app) as client:
+            headers = await open_handshake_session(client, request_id=1)
+            await handshake_call(client, headers, "first", request_id=2)
+            await handshake_call(client, headers, "second", request_id=3)
 
         # No session store -> fresh stream each call -> no accumulation.
         assert len(calls.messages[1]) == len(calls.messages[0])
 
     async def test_stateless_http_without_session_id(self) -> None:
         calls = LLMCalls()
-        executor = AgentExecutor(
-            Agent("a", config=TestConfig("ok"), middleware=[calls.middleware()]),
-            stream_progress=False,
-            session_store=SessionStore(),
-        )
+        app = MCPServer(_agent(calls), stream_progress=False, stateless=True, json_response=True)
+        headers = {**JSON_HEADERS, MCP_PROTOCOL_VERSION_HEADER: LATEST_HANDSHAKE_VERSION}
 
-        # HTTP request but no server-issued mcp-session-id (stateless transport).
-        await executor.call("ask", message="first", request_context=_request_context(None))
-        await executor.call("ask", message="second", request_context=_request_context(None))
+        async with serve(app) as client:
+            # HTTP request but no server-issued mcp-session-id (stateless transport).
+            opened = await client.post("/mcp", headers=JSON_HEADERS, json=initialize_request())
+            await handshake_call(client, headers, "first", request_id=2)
+            await handshake_call(client, headers, "second", request_id=3)
 
+        assert MCP_SESSION_ID_HEADER not in opened.headers
         assert len(calls.messages[1]) == len(calls.messages[0])
+
+    async def test_stdio_connections_share_the_process_session(self) -> None:
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls), stream_progress=False)
+
+        # Over stdio there is no transport session id: every turn keys on one per-process session.
+        async with connect(server) as session:
+            await session.call_tool("ask", {"message": "first"})
+        async with connect(server) as session:
+            await session.call_tool("ask", {"message": "second"})
+
+        assert len(calls.messages[1]) > len(calls.messages[0])
 
 
 @pytest.mark.asyncio
@@ -254,17 +255,6 @@ def test_session_store_rejects_bad_config() -> None:
         SessionStore(max_sessions=0)
     with pytest.raises(ValueError):
         SessionStore(ttl=0.0)
-
-
-class TestSessionId:
-    def test_reads_header(self) -> None:
-        assert _session_id(_request_context("abc")) == "abc"
-
-    def test_stateless_http_returns_none(self) -> None:
-        assert _session_id(_request_context(None)) is None
-
-    def test_stdio_uses_process_sentinel(self) -> None:
-        assert _session_id(_stdio_request_context()) == STDIO_SESSION
 
 
 def test_session_config_defaults() -> None:

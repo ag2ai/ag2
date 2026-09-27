@@ -36,6 +36,9 @@ from ag2.events import (
 )
 from ag2.events.tool_events import ToolResult
 from ag2.events.types import HumanMessage, ModelMessage
+from ag2.types import SendableMessage
+
+from ._helpers import chunk_text, tool_call_text
 
 
 class TestPromptToInputs:
@@ -129,7 +132,7 @@ class TestEventToSessionUpdate:
 
         assert isinstance(update, schema.ToolCallProgress)
         assert update.status == "completed"
-        assert update.content[0].content.text == "3"
+        assert update.content == [acp.tool_content(acp.text_block("3"))]
 
     def test_a_tool_error_is_reported_failed(self) -> None:
         event = ToolErrorEvent(parent_id="c1", name="add", result=ToolResult("x"), error=ValueError("kaboom"))
@@ -138,13 +141,16 @@ class TestEventToSessionUpdate:
 
         assert isinstance(update, schema.ToolCallProgress)
         assert update.status == "failed"
-        assert "kaboom" in update.content[0].content.text
+        assert "kaboom" in tool_call_text(update)
 
     def test_a_tool_error_is_not_mistaken_for_a_success(self) -> None:
         """``ToolErrorEvent`` subclasses ``ToolResultEvent`` — order matters."""
         event = ToolErrorEvent(parent_id="c1", name="add", result=ToolResult("x"), error=ValueError("kaboom"))
 
-        assert event_to_session_update(event).status == "failed"
+        update = event_to_session_update(event)
+
+        assert isinstance(update, schema.ToolCallProgress)
+        assert update.status == "failed"
 
     def test_the_final_response_is_not_projected(self) -> None:
         """Its text already went out as chunks; re-sending would duplicate the reply."""
@@ -166,7 +172,7 @@ class TestHistoryToSessionUpdates:
         updates = history_to_session_updates([ModelRequest([TextInput("hi"), TextInput("there")])], session_id="s")
 
         assert [type(u) for u in updates] == [schema.UserMessageChunk, schema.UserMessageChunk]
-        assert [u.content.text for u in updates] == ["hi", "there"]
+        assert [chunk_text(u) for u in updates] == ["hi", "there"]
         assert {u.message_id for u in updates} == {"s:u1"}
 
     def test_agent_text_comes_from_the_response_not_from_chunks(self) -> None:
@@ -197,22 +203,27 @@ class TestHistoryToSessionUpdates:
 
         updates = history_to_session_updates(events, session_id="s")
 
-        assert [type(u) for u in updates] == [schema.ToolCallStart, schema.ToolCallProgress]
-        assert updates[1].status == "completed"
+        start, progress = updates
+        assert isinstance(start, schema.ToolCallStart)
+        assert isinstance(progress, schema.ToolCallProgress)
+        assert progress.status == "completed"
 
     def test_a_wrapped_result_alone_settles_the_call(self) -> None:
         """A repaired batch carries its results only inside the wrapper."""
         updates = history_to_session_updates([_call(), ToolResultsEvent([_result()])], session_id="s")
 
-        assert [type(u) for u in updates] == [schema.ToolCallStart, schema.ToolCallProgress]
+        start, progress = updates
+        assert isinstance(start, schema.ToolCallStart)
+        assert isinstance(progress, schema.ToolCallProgress)
 
     def test_an_error_result_is_failed(self) -> None:
         error = ToolErrorEvent(parent_id="c1", name="add", result=ToolResult("x"), error=ValueError("kaboom"))
 
         _, update = history_to_session_updates([_call(), error], session_id="s")
 
+        assert isinstance(update, schema.ToolCallProgress)
         assert update.status == "failed"
-        assert "kaboom" in update.content[0].content.text
+        assert "kaboom" in tool_call_text(update)
 
     def test_a_result_for_a_call_never_started_is_dropped(self) -> None:
         assert history_to_session_updates([_result()], session_id="s") == []
@@ -224,7 +235,7 @@ class TestHistoryToSessionUpdates:
         updates = history_to_session_updates([request, answer], session_id="s")
 
         assert [type(u) for u in updates] == [schema.AgentMessageChunk, schema.UserMessageChunk]
-        assert [u.content.text for u in updates] == ["which one?", "the second"]
+        assert [chunk_text(u) for u in updates] == ["which one?", "the second"]
 
     def test_telemetry_and_compaction_are_not_replayed(self) -> None:
         events = [UsageEvent(), CompactionSummary(summary="earlier talk", event_count=9)]
@@ -289,7 +300,7 @@ class TestToolResultText:
             ([1, 2], "[1, 2]"),
         ],
     )
-    def test_non_string_results_render_as_text(self, value: object, expected: str) -> None:
+    def test_non_string_results_render_as_text(self, value: SendableMessage, expected: str) -> None:
         assert tool_result_text(ToolResult(value)) == expected
 
     def test_binary_parts_get_a_placeholder_not_the_bytes(self) -> None:

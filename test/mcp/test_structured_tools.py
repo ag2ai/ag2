@@ -50,7 +50,7 @@ async def get_mapping() -> dict[str, Any]:
 @mcp_tool
 async def get_both() -> Item:
     """State the text and the data separately."""
-    return CallToolResult(
+    return CallToolResult(  # type: ignore[return-value]  # the schema follows the annotation; the hand-built result is the point
         content=[TextContent(type="text", text="one item, cheap")],
         structuredContent={"id": "a", "price": 1.0},
     )

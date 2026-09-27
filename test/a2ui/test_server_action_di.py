@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from ag2 import Agent, Context, Depends, Inject, Variable
 from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.transports import RestTransport
 from ag2.testing import TestConfig
 
@@ -72,7 +73,7 @@ async def test_depends_injects_into_server_action() -> None:
         return db
 
     @a2ui_action(description="Add the item to the cart")
-    async def add_to_cart(good_id: str, database: Annotated[Database, Depends(get_db)]) -> dict:
+    async def add_to_cart(good_id: str, database: Annotated[Database, Depends(get_db)]) -> JsonObject:
         count = database.add(good_id)
         return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": count}}
 
@@ -97,7 +98,7 @@ async def test_dependency_override_swaps_implementation() -> None:
         return stub
 
     @a2ui_action
-    async def add_to_cart(good_id: str, database: Annotated[Database, Depends(get_db)]) -> dict:
+    async def add_to_cart(good_id: str, database: Annotated[Database, Depends(get_db)]) -> JsonObject:
         database.add(good_id)
         return {"ok": True}
 
@@ -116,7 +117,7 @@ async def test_inject_resolves_agent_dependency() -> None:
     store = Database()
 
     @a2ui_action
-    async def add_to_cart(good_id: str, database: Annotated[Database, Inject("db")]) -> dict:
+    async def add_to_cart(good_id: str, database: Annotated[Database, Inject("db")]) -> JsonObject:
         database.add(good_id)
         return {"ok": True}
 
@@ -134,7 +135,7 @@ async def test_serializer_coerces_context_values() -> None:
     captured: list[int] = []
 
     @a2ui_action
-    async def set_qty(qty: int) -> dict:
+    async def set_qty(qty: int) -> JsonObject:
         captured.append(qty)
         return {"ok": True}
 
@@ -158,7 +159,7 @@ async def test_sync_handler_runs_with_injected_dependency() -> None:
         return db
 
     @a2ui_action
-    def add_to_cart(good_id: str, database: Annotated[Database, Depends(get_db)]) -> dict:
+    def add_to_cart(good_id: str, database: Annotated[Database, Depends(get_db)]) -> JsonObject:
         count = database.add(good_id)
         return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": count}}
 
@@ -179,7 +180,7 @@ async def test_variable_injects_into_server_action() -> None:
     captured: list[int] = []
 
     @a2ui_action
-    async def show_count(count: Annotated[int, Variable("count")]) -> dict:
+    async def show_count(count: Annotated[int, Variable("count")]) -> JsonObject:
         captured.append(count)
         return {"ok": True}
 
@@ -199,7 +200,7 @@ async def test_context_injected_into_server_action() -> None:
     seen: list[dict[str, Any]] = []
 
     @a2ui_action
-    async def inspect_ctx(ctx: Context) -> dict:
+    async def inspect_ctx(ctx: Context) -> JsonObject:
         seen.append({"vars": dict(ctx.variables), "deps": dict(ctx.dependencies)})
         return {"ok": True}
 
@@ -226,7 +227,7 @@ async def test_handler_result_is_serialized_for_wire() -> None:
     when = datetime(2026, 6, 23, 12, 0, tzinfo=timezone.utc)
 
     @a2ui_action
-    async def stamp() -> dict:
+    async def stamp() -> dict[str, object]:
         return {"updateDataModel": {"surfaceId": "s1", "path": "/at", "value": when}}
 
     app = _server(Agent(name="ui", config=TestConfig("AGENT SHOULD NOT RUN")), stamp)
@@ -309,7 +310,7 @@ async def test_generator_dependency_is_set_up_and_torn_down() -> None:
             events.append("close")
 
     @a2ui_action
-    async def add_to_cart(good_id: str, session: Annotated[Database, Depends(get_session)]) -> dict:
+    async def add_to_cart(good_id: str, session: Annotated[Database, Depends(get_session)]) -> JsonObject:
         session.add(good_id)
         events.append(f"used:{session.added}")
         return {"ok": True}

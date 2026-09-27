@@ -36,19 +36,19 @@ class TestTransportResolution:
 
     def test_unknown_override_is_rejected(self) -> None:
         with pytest.raises(ValueError, match="unknown ACP transport"):
-            ACPRemoteConfig(url="https://box.internal/acp", transport="carrier-pigeon")  # type: ignore[arg-type]
+            ACPRemoteConfig(url="https://box.internal/acp", transport="carrier-pigeon")  # type: ignore[arg-type]  # an unknown transport on purpose: the runtime must refuse it
 
 
 class TestConstruction:
     def test_url_is_required(self) -> None:
         with pytest.raises(TypeError, match="url"):
-            ACPRemoteConfig()  # type: ignore[call-arg]
+            ACPRemoteConfig()  # type: ignore[call-arg]  # no url on purpose: the runtime must refuse it
 
     def test_a_command_and_a_url_together_are_rejected(self) -> None:
         # Not a precedence rule: a remote config carries no launch fields at all,
         # so an ambiguous config cannot be constructed in the first place.
         with pytest.raises(TypeError, match="command"):
-            ACPRemoteConfig(url="https://box.internal/acp", command=["claude-agent-acp"])  # type: ignore[call-arg]
+            ACPRemoteConfig(url="https://box.internal/acp", command=["claude-agent-acp"])  # type: ignore[call-arg]  # a launch field on purpose: the runtime must refuse it
 
     def test_create_returns_llmclient(self) -> None:
         assert isinstance(ACPRemoteConfig(url="https://box.internal/acp").create(), LLMClient)
@@ -144,7 +144,7 @@ class TestLaunchFields:
         # Refused rather than ignored: a caller who passes a command is telling
         # AG2 to launch something, and this config cannot.
         with pytest.raises(TypeError, match=launch_field):
-            ACPRemoteConfig(url="https://box.internal/acp", **{launch_field: ["agent"]})
+            ACPRemoteConfig(url="https://box.internal/acp", **{launch_field: ["agent"]})  # type: ignore[arg-type]  # a launch field on purpose: the runtime must refuse it
 
     def test_a_launch_field_is_not_in_the_repr(self) -> None:
         assert "command" not in repr(ACPRemoteConfig(url="https://box.internal/acp"))

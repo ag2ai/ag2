@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.a2a import (
     A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
     A2UIClientCapabilities,
@@ -11,7 +12,7 @@ from ag2.a2ui.a2a import (
 
 class TestParseClientCapabilities:
     def test_full_payload(self) -> None:
-        metadata = {
+        metadata: JsonObject = {
             A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {
                 "v0.9": {
                     "supportedCatalogIds": [
@@ -27,7 +28,7 @@ class TestParseClientCapabilities:
         )
 
     def test_minimal_supported_catalog_ids_only(self) -> None:
-        metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v0.9": {"supportedCatalogIds": ["x"]}}}
+        metadata: JsonObject = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v0.9": {"supportedCatalogIds": ["x"]}}}
         caps = parse_client_capabilities(metadata)
         assert caps == A2UIClientCapabilities(supported_catalog_ids=["x"], inline_catalogs=[])
 
@@ -36,7 +37,7 @@ class TestParseClientCapabilities:
         assert parse_client_capabilities({}) is None
 
     def test_wrong_version_returns_none(self) -> None:
-        metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v0.8": {"supportedCatalogIds": []}}}
+        metadata: JsonObject = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v0.8": {"supportedCatalogIds": []}}}
         assert parse_client_capabilities(metadata) is None
 
     def test_malformed_payload_returns_none(self) -> None:

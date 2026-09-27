@@ -23,6 +23,7 @@ from acp import schema
 
 from ag2 import Agent
 from ag2.acp.testing import duplex_acp_config
+from ag2.acp.types import ContentBlock, McpServer
 from ag2.events import ModelMessageChunk
 
 # Enough that unserialized handlers cannot plausibly stay in order by luck, and
@@ -34,7 +35,7 @@ CHUNKS = 200
 EXPECTED = "".join(str(i % 10) for i in range(CHUNKS))
 
 
-class ChunkingAgent:
+class ChunkingAgent(acp.Agent):
     """An ACP agent that streams ``CHUNKS`` message chunks, then ends the turn.
 
     The shape is the point: every ``session/update`` is written, then
@@ -45,16 +46,28 @@ class ChunkingAgent:
     def __init__(self, conn: acp.Client) -> None:
         self.conn = conn
 
-    async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
+    async def initialize(
+        self,
+        protocol_version: int,
+        client_capabilities: schema.ClientCapabilities | None = None,
+        client_info: schema.Implementation | None = None,
+        **kwargs: Any,
+    ) -> schema.InitializeResponse:
         return schema.InitializeResponse(
             protocol_version=acp.PROTOCOL_VERSION,
             agent_info=schema.Implementation(name="chunker", version="test"),
         )
 
-    async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
+    async def new_session(
+        self,
+        cwd: str,
+        additional_directories: list[str] | None = None,
+        mcp_servers: list[McpServer] | None = None,
+        **kwargs: Any,
+    ) -> schema.NewSessionResponse:
         return schema.NewSessionResponse(session_id="chunk-session-1")
 
-    async def prompt(self, *, session_id: str, **kwargs: Any) -> schema.PromptResponse:
+    async def prompt(self, session_id: str, prompt: list[ContentBlock], **kwargs: Any) -> schema.PromptResponse:
         for i in range(CHUNKS):
             await self.conn.session_update(
                 session_id=session_id,

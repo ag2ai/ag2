@@ -2,10 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
-
 import httpx
 import pytest
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer
@@ -19,16 +18,16 @@ from ._http_server import serve_over_http
 class _HeaderSpy:
     """ASGI wrapper recording ``header``'s value on every request, by path."""
 
-    def __init__(self, app: object, header: str) -> None:
+    def __init__(self, app: ASGIApp, header: str) -> None:
         self.app = app
         self.header = header.lower().encode()
         self.seen: dict[str, str | None] = {}
 
-    async def __call__(self, scope: dict[str, Any], receive: object, send: object) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http":
             raw = dict(scope["headers"]).get(self.header)
             self.seen[scope["path"]] = raw.decode() if raw is not None else None
-        await self.app(scope, receive, send)  # type: ignore[operator]
+        await self.app(scope, receive, send)
 
 
 @pytest.mark.asyncio

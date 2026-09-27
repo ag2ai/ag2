@@ -3,19 +3,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from typing import Any
 
 import acp
 import pytest
 from acp import schema
+from acp.core import ClientSideConnection
+from fast_depends.pydantic import PydanticSerializer
 
 from ag2 import Agent, observer
 from ag2.acp import ACPAgent, SessionConfig, StaticTokenAuth
 from ag2.acp.executor import CANCELLED_TOOL_RESULT
 from ag2.acp.testing import connect
+from ag2.acp.types import SessionUpdate
 from ag2.config.openai.mappers import convert_messages
 from ag2.events import BaseEvent, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from ag2.testing import TestConfig
+
+from ._helpers import chunk_text
 
 
 class _Hold(BaseEvent):
@@ -40,18 +44,8 @@ def _gated_agent(gate: _Gate, *turns: str) -> Agent:
     return Agent("workie", config=TestConfig(_Hold(), *(turns or ("ok",))), observers=[observer(_Hold, gate)])
 
 
-class _NullSerializer:
-    """Stand-in for the provider serializer; tool schemas are not exercised here."""
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        raise NotImplementedError
-
-    def response(self, *args: Any, **kwargs: Any) -> Any:
-        raise NotImplementedError
-
-
-def _texts(updates: list[Any]) -> list[str]:
-    return [u.content.text for u in updates if isinstance(u, schema.AgentMessageChunk)]
+def _texts(updates: list[SessionUpdate]) -> list[str]:
+    return [chunk_text(u) for u in updates if isinstance(u, schema.AgentMessageChunk)]
 
 
 @pytest.mark.asyncio
@@ -228,7 +222,7 @@ class TestCancelLeavesAUsableSession:
 
         return agent
 
-    async def _cancel_mid_tool(self, server: ACPAgent, conn: Any) -> str:
+    async def _cancel_mid_tool(self, server: ACPAgent, conn: ClientSideConnection) -> str:
         session = await conn.new_session(cwd="/tmp")
         turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")]))
         await self.entered.wait()
@@ -271,7 +265,7 @@ class TestCancelLeavesAUsableSession:
             session = await server.sessions.get(session_id)
             events = list(await server.sessions.stream(session).history.get_events())
 
-        messages = convert_messages([], events, _NullSerializer())
+        messages = convert_messages([], events, PydanticSerializer())
         orphans = [
             message
             for index, message in enumerate(messages)
@@ -491,8 +485,8 @@ class TestParallelToolCancellation:
             live = await server.sessions.get(session.session_id)
             events = list(await server.sessions.stream(live).history.get_events())
 
-        messages = convert_messages([], events, _NullSerializer())
-        calls = sum(len(m.get("tool_calls") or []) for m in messages)
+        messages = convert_messages([], events, PydanticSerializer())
+        calls = sum(len(list(m["tool_calls"])) for m in messages if m["role"] == "assistant" and "tool_calls" in m)
         results = sum(1 for m in messages if m.get("role") == "tool")
         assert calls == results == 2
 

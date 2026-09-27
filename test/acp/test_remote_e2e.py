@@ -31,6 +31,7 @@ from ag2.acp.testing import ACPTurn, fake_acp_config, fake_remote_acp_config
 from ag2.events import BaseEvent, ModelReasoning
 from ag2.events.tool_events import BuiltinToolCallEvent
 from ag2.tools.final.function_tool import FunctionTool
+from test.mcp._helpers import first_text
 
 
 def _text(text: str) -> schema.TextContentBlock:
@@ -114,7 +115,7 @@ async def test_a_second_turn_reuses_the_remote_session() -> None:
         reply = await Agent("acp", config=cfg).ask("first")
         assert reply.body == "one"
         assert (await reply.ask("second")).body == "two"
-        assert len(cfg.sessions) == 1
+        assert len(cfg.sessions) == 1  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig
     finally:
         await cfg.aclose()
 
@@ -151,7 +152,7 @@ async def test_a_model_the_remote_agent_does_not_offer_is_rejected() -> None:
     try:
         with pytest.raises(ValueError, match="is not offered by the ACP agent"):
             await Agent("acp", config=cfg).ask("hello")
-        assert cfg.sessions == {}
+        assert cfg.sessions == {}  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig
     finally:
         await cfg.aclose()
 
@@ -172,6 +173,7 @@ async def test_filesystem_and_terminal_capabilities_are_advertised() -> None:
 
     (capabilities,) = advertised
     assert capabilities is not None
+    assert capabilities.fs is not None
     assert capabilities.fs.read_text_file is True and capabilities.fs.write_text_file is True
     assert capabilities.terminal is True
 
@@ -223,7 +225,7 @@ class TestToolExposure:
         try:
             with pytest.raises(MCPCapabilityError) as raised:
                 await agent.ask("hello")
-            assert cfg.sessions == {}  # nothing was started behind the refusal
+            assert cfg.sessions == {}  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig; nothing was started behind the refusal
         finally:
             await cfg.aclose()
 
@@ -255,7 +257,7 @@ class TestToolExposure:
         )
         try:
             assert (await Agent("acp", config=cfg, tools=[add]).ask("hello")).body == "hi"
-            assert next(iter(cfg.sessions.values())).gateway is None
+            assert next(iter(cfg.sessions.values())).gateway is None  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig
         finally:
             await cfg.aclose()
 
@@ -273,7 +275,7 @@ class TestToolExposure:
             ):
                 await mcp.initialize()
                 observed["tools"] = sorted(t.name for t in (await mcp.list_tools()).tools)
-                observed["result"] = (await mcp.call_tool("add", {"a": 2, "b": 3})).content[0].text
+                observed["result"] = first_text(await mcp.call_tool("add", {"a": 2, "b": 3}))
 
         host = routable_host
         cfg = fake_remote_acp_config(
@@ -304,7 +306,7 @@ class TestToolExposure:
         )
         try:
             await Agent("acp", config=cfg, tools=[add]).ask("hello")
-            gateway = next(iter(cfg.sessions.values())).gateway
+            gateway = next(iter(cfg.sessions.values())).gateway  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig
             assert gateway.url.startswith(f"http://{host}:{port}/")
         finally:
             await cfg.aclose()
@@ -350,6 +352,7 @@ class TestToolExposure:
             gateway = next(iter(cfg.sessions.values())).gateway
             assert gateway is not None
             assert gateway.address.is_loopback
+            assert gateway.url is not None
             assert gateway.url.startswith("http://127.0.0.1:")
         finally:
             await cfg.aclose()
@@ -368,7 +371,7 @@ class TestLifecycle:
             async with Agent("acp", config=cfg).run("hang") as run:
                 reply = await run.result()
             assert reply.body == ""
-            assert cfg.sessions  # the cancel was honoured, so the session survives
+            assert cfg.sessions  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig; the cancel was honoured, so the session survives
         finally:
             await cfg.aclose()
 
@@ -419,11 +422,11 @@ class TestLifecycle:
         # The error is where the chosen transport becomes observable, and it is
         # raised rather than answered with an empty reply: a blank body cannot be
         # told apart from an agent that genuinely had nothing to say.
-        def drop_the_connection() -> Any:
+        async def drop_the_connection() -> None:
             raise ConnectionError("Connection closed")
 
         cfg = fake_remote_acp_config(
-            ACPTurn(on_prompt=drop_the_connection),  # type: ignore[arg-type]
+            ACPTurn(on_prompt=drop_the_connection),
             url=url,
             transport=override,
             permission_policy="auto",
@@ -471,13 +474,13 @@ class TestLifecycle:
         )
         await Agent("acp", config=cfg).ask("hello")
 
-        (session,) = cfg.sessions.values()
+        (session,) = cfg.sessions.values()  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig
         assert session.proc is None  # nothing to kill
         conn = session.conn
 
         await cfg.aclose()
 
-        assert cfg.sessions == {}
+        assert cfg.sessions == {}  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig
         assert conn.closed
 
     async def test_config_teardown_covers_every_session_it_started(self) -> None:
@@ -491,10 +494,10 @@ class TestLifecycle:
             agent = Agent("acp", config=cfg)
             await agent.ask("first")
             await agent.ask("second")
-            conns = [s.conn for s in cfg.sessions.values()]
+            conns = [s.conn for s in cfg.sessions.values()]  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig
             assert len(conns) == 2  # a separate ask() is a separate stream, so a separate session
 
-        assert cfg.sessions == {}
+        assert cfg.sessions == {}  # type: ignore[attr-defined]  # ticket 62: fake_remote_acp_config is typed as a plain ACPRemoteConfig
         assert all(conn.closed for conn in conns)
 
 

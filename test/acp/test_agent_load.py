@@ -40,6 +40,8 @@ from ag2.history import MemoryStorage, unanswered_tool_calls
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
+from ._helpers import chunk_text, tool_call_text
+
 NOT_FOUND = RequestError.resource_not_found().code
 INVALID_REQUEST = RequestError.invalid_request().code
 
@@ -106,11 +108,14 @@ class TestReplay:
             schema.AgentMessageChunk,
         ]
         user, start, progress, answer = replay
-        assert user.content.text == "what is 2 + 2"
+        assert isinstance(user, schema.UserMessageChunk)
+        assert isinstance(start, schema.ToolCallStart)
+        assert isinstance(progress, schema.ToolCallProgress)
+        assert chunk_text(user) == "what is 2 + 2"
         assert user.message_id
         assert start.title == "add"
-        assert (progress.status, progress.content[0].content.text) == ("completed", "4")
-        assert answer.content.text == "4"
+        assert (progress.status, tool_call_text(progress)) == ("completed", "4")
+        assert chunk_text(answer) == "4"
 
     async def test_nothing_is_sent_after_load_returns(self) -> None:
         """The response is the line between history and whatever comes next."""
@@ -174,7 +179,7 @@ class TestAcrossConnections:
             response = await second.prompt(session_id=sid, prompt=[acp.text_block("still there?")])
 
         assert _kinds(replay) == [schema.UserMessageChunk, schema.AgentMessageChunk]
-        assert [u.content.text for u in replay] == ["hello", "one"]
+        assert [chunk_text(u) for u in replay] == ["hello", "one"]
         assert response.stop_reason == "end_turn"
 
     async def test_without_retention_a_disconnected_session_is_not_found(self) -> None:
@@ -286,12 +291,8 @@ class TestSessionState:
         server = ACPAgent(_agent())
 
         async with connect(server) as (conn, _):
-            raw = conn._conn if hasattr(conn, "_conn") else conn._connection
-            created = await raw.send_request(
-                "session/new",
-                {"cwd": "/a", "mcpServers": [], "_meta": {"ag2.space": {"room": "!r"}}},
-            )
-            sid = created["sessionId"]
+            meta: dict[str, Any] = {"ag2.space": {"room": "!r"}}
+            sid = (await conn.new_session(cwd="/a", **meta)).session_id
 
             await conn.load_session(session_id=sid, cwd="/b", additional_directories=["/extra"])
             session = await server.sessions.get(sid)
@@ -304,11 +305,8 @@ class TestSessionState:
 
         async with connect(server) as (conn, _):
             sid = (await conn.new_session(cwd="/tmp")).session_id
-            raw = conn._conn if hasattr(conn, "_conn") else conn._connection
-            await raw.send_request(
-                "session/load",
-                {"sessionId": sid, "cwd": "/tmp", "mcpServers": [], "_meta": {"ag2.space": {"room": "!r"}}},
-            )
+            meta: dict[str, Any] = {"ag2.space": {"room": "!r"}}
+            await conn.load_session(session_id=sid, cwd="/tmp", **meta)
             session = await server.sessions.get(sid)
 
         assert session.meta == {"ag2.space": {"room": "!r"}}
@@ -350,8 +348,10 @@ class TestRepair:
 
         replay = recorder.updates_for(sid)
         assert _kinds(replay) == [schema.UserMessageChunk, schema.ToolCallStart, schema.ToolCallProgress]
-        assert replay[2].status == "completed"
-        assert replay[2].content[0].content.text == CANCELLED_TOOL_RESULT
+        progress = replay[2]
+        assert isinstance(progress, schema.ToolCallProgress)
+        assert progress.status == "completed"
+        assert tool_call_text(progress) == CANCELLED_TOOL_RESULT
         assert len([e for e in events if isinstance(e, ToolResultsEvent)]) == 1
         assert unanswered_tool_calls(events) == set()
 

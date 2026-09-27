@@ -6,11 +6,12 @@ import base64
 from dataclasses import dataclass
 
 import pytest
+from mcp.types import BlobResourceContents, TextContent
 
 from ag2 import Agent
 from ag2.events import BinaryResult, ModelMessage, ModelResponse
 from ag2.mcp import MCPServer
-from ag2.mcp.mappers import reply_to_content, to_structured_dict
+from ag2.mcp.mappers import to_structured_dict
 from ag2.mcp.testing import connect
 from ag2.testing import TestConfig
 
@@ -78,20 +79,20 @@ class TestContentMapping:
             result = await session.call_tool("ask", {"message": "write"})
 
         resource = next(c for c in result.content if c.type == "resource")
+        assert isinstance(resource.resource, BlobResourceContents)
         assert resource.resource.mime_type == "application/pdf"
         assert base64.b64decode(resource.resource.blob) == _BLOB
 
 
-def test_empty_reply_maps_to_single_empty_text() -> None:
-    class _Reply:
-        body = None
-        files: list[BinaryResult] = []
+@pytest.mark.asyncio
+async def test_empty_reply_maps_to_single_empty_text() -> None:
+    # Without conversations there is no handle trailer, so the reply is the whole content.
+    server = MCPServer(_replying(ModelResponse(message=None)), sessions=False)
 
-    blocks = reply_to_content(_Reply())  # type: ignore[arg-type]
+    async with connect(server) as session:
+        result = await session.call_tool("ask", {"message": "write"})
 
-    assert len(blocks) == 1
-    assert blocks[0].type == "text"
-    assert blocks[0].text == ""
+    assert result.content == [TextContent(type="text", text="")]
 
 
 def test_to_structured_dict_variants() -> None:

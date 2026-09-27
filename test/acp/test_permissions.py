@@ -5,7 +5,11 @@
 import pytest
 from acp import schema
 
+from ag2 import MemoryStream
 from ag2.acp.permissions import resolve_permission_option_id
+from ag2.context import ConversationContext
+from ag2.events import HumanInputRequest
+from ag2.events.types import HumanMessage
 
 ALLOW = schema.PermissionOption(option_id="ok", kind="allow_once", name="Allow")
 REJECT = schema.PermissionOption(option_id="no", kind="reject_once", name="Reject")
@@ -15,14 +19,18 @@ def _tool_call(title: str | None = None) -> schema.ToolCallUpdate:
     return schema.ToolCallUpdate(tool_call_id="tc1", title=title)
 
 
-class FakeContext:
+class _Human:
+    """A real context whose every question is answered with ``reply``."""
+
     def __init__(self, reply: str) -> None:
         self._reply = reply
         self.prompts: list[str] = []
+        self.context = ConversationContext(stream=MemoryStream())
+        self.context.stream.where(HumanInputRequest).subscribe(self._answer, sync_to_thread=False)
 
-    async def input(self, message: str, timeout: float | None = None) -> str:
-        self.prompts.append(message)
-        return self._reply
+    async def _answer(self, event: HumanInputRequest) -> None:
+        self.prompts.append(event.content)
+        await self.context.send(HumanMessage(self._reply, parent_id=event.id))
 
 
 @pytest.mark.asyncio
@@ -37,16 +45,16 @@ async def test_deny_rejects() -> None:
 
 @pytest.mark.asyncio
 async def test_ask_human_allows() -> None:
-    ctx = FakeContext("yes")
-    chosen = await resolve_permission_option_id("ask", [ALLOW, REJECT], _tool_call("Edit a.py"), ctx)
+    human = _Human("yes")
+    chosen = await resolve_permission_option_id("ask", [ALLOW, REJECT], _tool_call("Edit a.py"), human.context)
     assert chosen == "ok"
-    assert ctx.prompts  # human was actually asked
+    assert human.prompts  # human was actually asked
 
 
 @pytest.mark.asyncio
 async def test_ask_human_rejects() -> None:
-    ctx = FakeContext("no")
-    chosen = await resolve_permission_option_id("ask", [ALLOW, REJECT], _tool_call("Edit a.py"), ctx)
+    human = _Human("no")
+    chosen = await resolve_permission_option_id("ask", [ALLOW, REJECT], _tool_call("Edit a.py"), human.context)
     assert chosen == "no"
 
 

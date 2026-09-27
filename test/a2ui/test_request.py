@@ -4,10 +4,13 @@
 
 import pytest
 
+from ag2 import TextInput
 from ag2.a2ui import A2UIClientCapabilities
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.actions import A2UIEventAction
 from ag2.a2ui.request import parse_request
 from ag2.events import ModelRequest, ModelResponse
+from test._helpers import text_of
 
 
 def _no_actions(name: str) -> None:
@@ -20,7 +23,7 @@ class TestParseRequestCapabilities:
         assert req.client_capabilities is None
 
     def test_capabilities_parsed_for_version(self) -> None:
-        body = {
+        body: JsonObject = {
             "messages": [],
             "a2uiClientCapabilities": {"v1.0": {"supportedCatalogIds": ["https://x.example/c.json"]}},
         }
@@ -30,7 +33,7 @@ class TestParseRequestCapabilities:
         )
 
     def test_capabilities_version_mismatch_is_none(self) -> None:
-        body = {"messages": [], "a2uiClientCapabilities": {"v1.0": {"supportedCatalogIds": ["x"]}}}
+        body: JsonObject = {"messages": [], "a2uiClientCapabilities": {"v1.0": {"supportedCatalogIds": ["x"]}}}
         req = parse_request(body, resolve_action=_no_actions)  # default version_key "v0.9"
         assert req.client_capabilities is None
 
@@ -66,7 +69,7 @@ class TestParseRequestShape:
 
     def test_accepts_bytes_body(self) -> None:
         req = parse_request(b'{"messages": [{"role": "user", "content": "hi"}]}', resolve_action=_no_actions)
-        assert [p.content for p in req.current_inputs] == ["hi"]
+        assert req.current_inputs == [TextInput("hi")]
 
 
 class TestParseRequestMapping:
@@ -76,8 +79,7 @@ class TestParseRequestMapping:
             resolve_action=_no_actions,
         )
         assert req.history == []
-        assert [type(i).__name__ for i in req.current_inputs] == ["TextInput"]
-        assert req.current_inputs[0].content == "show a form"
+        assert req.current_inputs == [TextInput("show a form")]
 
     def test_prior_turns_become_history(self) -> None:
         req = parse_request(
@@ -92,7 +94,7 @@ class TestParseRequestMapping:
         )
         assert isinstance(req.history[0], ModelRequest)
         assert isinstance(req.history[1], ModelResponse)
-        assert [i.content for i in req.current_inputs] == ["second"]
+        assert req.current_inputs == [TextInput("second")]
 
     def test_system_and_developer_become_prompt(self) -> None:
         req = parse_request(
@@ -155,8 +157,8 @@ class TestParseRequestActions:
             },
             resolve_action=_no_actions,
         )
-        assert len(req.current_inputs) == 1
-        assert "ghost" in req.current_inputs[0].content
+        [prompt] = req.current_inputs
+        assert "ghost" in text_of(prompt)
 
     def test_error_envelope_becomes_corrective_prompt(self) -> None:
         req = parse_request(
@@ -171,9 +173,9 @@ class TestParseRequestActions:
             },
             resolve_action=_no_actions,
         )
-        assert len(req.current_inputs) == 1
-        assert "error" in req.current_inputs[0].content.lower()
-        assert "VALIDATION_FAILED" in req.current_inputs[0].content
+        [prompt] = req.current_inputs
+        assert "error" in text_of(prompt).lower()
+        assert "VALIDATION_FAILED" in text_of(prompt)
 
     def test_unregistered_action_appended_after_trailing_user_text(self) -> None:
         # An unregistered click becomes a generic prompt appended after the
@@ -190,8 +192,9 @@ class TestParseRequestActions:
             },
             resolve_action=_no_actions,
         )
-        assert [i.content for i in req.current_inputs][0] == "and also"
-        assert len(req.current_inputs) == 2
+        [user_text, click] = req.current_inputs
+        assert user_text == TextInput("and also")
+        assert "go" in text_of(click)
 
     def test_function_response_envelope_becomes_continuation_prompt(self) -> None:
         req = parse_request(
@@ -210,8 +213,8 @@ class TestParseRequestActions:
             },
             resolve_action=_no_actions,
         )
-        assert len(req.current_inputs) == 1
-        content = req.current_inputs[0].content
+        [prompt] = req.current_inputs
+        content = text_of(prompt)
         assert "getScreenResolution" in content
         assert "fc-1" in content
 

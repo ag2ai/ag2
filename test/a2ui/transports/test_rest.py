@@ -9,6 +9,7 @@ from starlette.testclient import TestClient
 
 from ag2 import Agent
 from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.transports import RestTransport
 from ag2.testing import TestConfig
 
@@ -99,7 +100,7 @@ def test_action_click_runs_server_action() -> None:
     # not invoked); the handler's surface update is streamed back as the only
     # frame, with no agent prose.
     @a2ui_action(description="Confirm the booking")
-    def confirm() -> dict:
+    def confirm() -> JsonObject:
         return {"updateDataModel": {"surfaceId": "s1", "path": "/confirmed", "value": True}}
 
     client = TestClient(_server("AGENT SHOULD NOT RUN", validate=False, actions=[confirm]))

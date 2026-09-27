@@ -285,7 +285,9 @@ class TestRoundTrip:
             last_chunk=True,
         )
 
-        reparsed = parse_stream_response(StreamResponse(artifact_update=a2a_event_to_sdk(original)))
+        sdk_event = a2a_event_to_sdk(original)
+        assert isinstance(sdk_event, TaskArtifactUpdateEvent)
+        reparsed = parse_stream_response(StreamResponse(artifact_update=sdk_event))
 
         assert reparsed == original
 

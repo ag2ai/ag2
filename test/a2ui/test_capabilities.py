@@ -5,6 +5,7 @@
 import logging
 
 from ag2.a2ui import A2UIClientCapabilities
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.capabilities import (
     A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
     capabilities_to_prompt,
@@ -62,21 +63,21 @@ class TestCapabilitiesToPrompt:
 
 class TestParseClientCapabilitiesVersionKey:
     def test_reads_requested_version(self) -> None:
-        metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["x"]}}}
+        metadata: JsonObject = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["x"]}}}
         caps = parse_client_capabilities(metadata, version_key="v1.0")
         assert caps == A2UIClientCapabilities(supported_catalog_ids=["x"], inline_catalogs=[])
 
     def test_default_version_misses_v1_payload(self) -> None:
-        metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["x"]}}}
+        metadata: JsonObject = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["x"]}}}
         assert parse_client_capabilities(metadata) is None
 
     def test_coerces_ids_to_str(self) -> None:
-        metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v0.9": {"supportedCatalogIds": [1, 2]}}}
+        metadata: JsonObject = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v0.9": {"supportedCatalogIds": [1, 2]}}}
         caps = parse_client_capabilities(metadata)
         assert caps == A2UIClientCapabilities(supported_catalog_ids=["1", "2"], inline_catalogs=[])
 
     def test_drops_non_dict_inline_catalogs(self) -> None:
-        metadata = {
+        metadata: JsonObject = {
             A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {
                 "v0.9": {"supportedCatalogIds": ["x"], "inlineCatalogs": [{"catalogId": "ok"}, "nope", 5]}
             }

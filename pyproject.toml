@@ -684,6 +684,19 @@ files = [
     "test/middleware/",
     "test/tools/",
 
+    # The protocol-bridge tests: ACP (with its remote transports and the tool
+    # gateway), A2A, A2UI, AG-UI and MCP. Most of what they hold is doubles for
+    # a protocol peer, so this is where the checker asks whether a double still
+    # conforms. Every bridge's package is in the `types` group, so these are
+    # really checked on every pull request — except `pyjwt`, which only
+    # `a2a-sdk[signing]` brings, so the key types in
+    # `test/a2a/test_card_signing.py` read as `Any` on the pull-request job.
+    "test/a2a/",
+    "test/a2ui/",
+    "test/acp/",
+    "test/ag_ui/",
+    "test/mcp/",
+
     # Deliberately absent, and not on their way in:
     #   - the demo scripts at the repository root, which are examples rather
     #     than shipped code;

@@ -20,7 +20,7 @@ from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer
 from ag2.a2a.events import A2ATaskStatusUpdate
 from ag2.a2a.testing import make_test_client_factory
-from ag2.a2ui._types import A2UIVersion
+from ag2.a2ui._types import A2UIVersion, JsonObject
 from ag2.a2ui.a2a import get_a2ui_data, is_a2ui_part
 from ag2.a2ui.a2a.executor import A2UIAgentExecutor
 from ag2.events import BaseEvent
@@ -107,14 +107,16 @@ def synthesized_text(messages: Sequence[BaseEvent]) -> str:
     return "\n".join(chunks)
 
 
-def subscribe_task_stream(stream: MemoryStream) -> "tuple[list, list[TaskState]]":
+def subscribe_task_stream(
+    stream: MemoryStream,
+) -> "tuple[list[JsonObject | list[JsonObject] | None], list[TaskState]]":
     """Collect A2UI DataPart payloads and task states off the client's stream.
 
     The client flattens A2UI DataParts out of ``reply.response`` (it only decodes
     text and tool-call parts), so the canonical A2UI DataPart is observed on the
     finalization message that rides the ``A2ATaskStatusUpdate`` (streaming mode).
     """
-    a2ui_payloads: list = []
+    a2ui_payloads: list[JsonObject | list[JsonObject] | None] = []
     states: list[TaskState] = []
 
     @stream.subscribe

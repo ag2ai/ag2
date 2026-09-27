@@ -3,23 +3,29 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+from collections.abc import Callable
+from typing import Any, TypeAlias
+
 import httpx
 import pytest
-from a2a.client.client_factory import TransportProtocol
 from a2a.server.context import ServerCallContext
 from a2a.types import AgentCard, AgentInterface, AgentSkill
+from a2a.utils.constants import TransportProtocol
 from a2a.utils.signing import create_agent_card_signer, create_signature_verifier
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from google.protobuf.json_format import ParseDict
+from starlette.applications import Starlette
 
 from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer, build_card
 from ag2.a2a.client import CardVerifier
 from ag2.a2a.errors import A2ACardSignatureError, A2AStaleCardSignatureError
-from ag2.a2a.server import CardSigner
 from ag2.a2a.testing import make_test_client_factory
 from ag2.testing import TestConfig
+
+# ag2.a2a.server uses CardSigner in A2AServer's signature but does not re-export it.
+CardSigner: TypeAlias = Callable[[AgentCard], AgentCard]
 
 
 def _keypair() -> tuple[bytes, bytes]:
@@ -97,14 +103,15 @@ def _extended_card() -> AgentCard:
     return card
 
 
-async def _fetch_card_json(app: object) -> dict:
+async def _fetch_card_json(app: Starlette) -> dict[str, Any]:
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/.well-known/agent-card.json")
     assert resp.status_code == 200
-    return resp.json()
+    payload: dict[str, Any] = resp.json()
+    return payload
 
 
-def _signature_validity(payload: dict, verifier_callable: CardVerifier) -> list[bool]:
+def _signature_validity(payload: dict[str, Any], verifier_callable: CardVerifier) -> list[bool]:
     """Verify each signature on a served card independently, in wire order."""
     # The SDK verifier accepts a card as long as *one* signature validates,
     # so a whole-card assert can't catch a stale signature riding along.
@@ -119,7 +126,7 @@ def _signature_validity(payload: dict, verifier_callable: CardVerifier) -> list[
     return validity
 
 
-def _without_signatures(payload: dict) -> dict:
+def _without_signatures(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if key != "signatures"}
 
 

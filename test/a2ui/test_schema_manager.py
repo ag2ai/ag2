@@ -4,6 +4,7 @@
 
 import pytest
 
+from ag2.a2ui._types import ServerToClientMessage
 from ag2.a2ui.actions import A2UIEventAction
 from ag2.a2ui.parser import A2UIResponseParser
 from ag2.a2ui.schema_manager import A2UISchemaManager
@@ -20,7 +21,7 @@ class TestA2UISchemaManager:
 
     def test_unsupported_version_raises(self) -> None:
         with pytest.raises(ValueError, match="Unsupported A2UI protocol version"):
-            A2UISchemaManager(protocol_version="v0.7")
+            A2UISchemaManager(protocol_version="v0.7")  # type: ignore[arg-type]  # an unsupported version on purpose: the runtime must refuse it
 
     def test_v0_9_1_init_loads_specs(self) -> None:
         manager = A2UISchemaManager(protocol_version="v0.9.1")
@@ -77,6 +78,7 @@ class TestA2UISchemaManager:
         assert "oneOf" in schema
         assert "$defs" in schema
         defs = schema["$defs"]
+        assert isinstance(defs, dict)
         assert "CreateSurfaceMessage" in defs
         assert "UpdateComponentsMessage" in defs
         assert "UpdateDataModelMessage" in defs
@@ -86,6 +88,7 @@ class TestA2UISchemaManager:
         manager = A2UISchemaManager()
         catalog = manager.basic_catalog_schema
         components = catalog.get("components", {})
+        assert isinstance(components, dict)
         assert "Text" in components
         assert "Image" in components
         assert "Button" in components
@@ -126,6 +129,7 @@ class TestA2UISchemaManager:
         assert schema is not None
         # client_to_server.json declares action / error oneOf at top level.
         props = schema.get("properties", {})
+        assert isinstance(props, dict)
         assert "action" in props
         assert "error" in props
 
@@ -147,7 +151,7 @@ class TestMergedCatalog:
             component_schemas=manager.get_component_schemas(),
             catalog_id=manager.catalog_id,
         )
-        ops = [
+        ops: list[ServerToClientMessage] = [
             {
                 "version": "v0.9",
                 "updateComponents": {

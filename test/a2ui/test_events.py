@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from ag2.a2ui import A2UIMessageEvent
+from ag2.a2ui._types import ServerToClientMessage
 from ag2.events import BaseEvent
 
 
@@ -14,7 +15,7 @@ class TestA2UIMessageEvent:
         assert event.__transient__ is True
 
     def test_carries_message_payload(self) -> None:
-        message = {
+        message: ServerToClientMessage = {
             "version": "v0.9",
             "createSurface": {"surfaceId": "s1", "catalogId": "test"},
         }

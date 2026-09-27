@@ -112,6 +112,7 @@ class TestOverrideIsRefused:
                     {"sessionId": mine, "cwd": "/tmp", "mcpServers": [], "_meta": {"sessionId": victim}},
                 )
 
+        assert caught.value.data is not None
         assert "sessionId" in caught.value.data["reason"]
 
     async def test_the_error_names_the_offending_key(self) -> None:
@@ -124,6 +125,7 @@ class TestOverrideIsRefused:
                     {"cwd": "/tmp", "mcpServers": [], "_meta": {"cwd": "/etc"}},
                 )
 
+        assert caught.value.data is not None
         assert "cwd" in caught.value.data["reason"]
 
 

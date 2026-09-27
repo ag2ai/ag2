@@ -34,7 +34,7 @@ class TestRuntimeConstruction:
 
     def test_unsupported_version_raises(self) -> None:
         with pytest.raises(ValueError, match="Unsupported A2UI protocol version"):
-            _A2UIRuntime(protocol_version="v0.7")
+            _A2UIRuntime(protocol_version="v0.7")  # type: ignore[arg-type]  # an unsupported version on purpose: the runtime must refuse it
 
     def test_custom_catalog_id_from_catalog(self) -> None:
         rt = _A2UIRuntime(

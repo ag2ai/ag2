@@ -7,10 +7,12 @@
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
+import httpx
 from mcp.client.session import ClientRequestContext
-from mcp.server.streamable_http import CONTENT_TYPE_JSON, CONTENT_TYPE_SSE
+from mcp.server.streamable_http import CONTENT_TYPE_JSON, CONTENT_TYPE_SSE, MCP_SESSION_ID_HEADER
+from mcp.shared.inbound import MCP_PROTOCOL_VERSION_HEADER
 from mcp.types import (
     CallToolResult,
     ElicitRequestParams,
@@ -152,13 +154,13 @@ def answering(answer: str, *, seen: list[str] | None = None) -> ElicitationCallb
     return callback
 
 
-def refusing(action: str = "decline", *, seen: list[str] | None = None) -> ElicitationCallback:
+def refusing(action: Literal["decline", "cancel"] = "decline", *, seen: list[str] | None = None) -> ElicitationCallback:
     """A client whose human refuses — declining the question, or dismissing it."""
 
     async def callback(context: ClientRequestContext, params: ElicitRequestParams) -> ElicitResult:
         if seen is not None:
             seen.append(params.message)
-        return ElicitResult(action=action)  # type: ignore[arg-type]
+        return ElicitResult(action=action)
 
     return callback
 
@@ -212,7 +214,7 @@ async def answer(
     )
 
 
-def first_text(result: Any) -> str:
+def first_text(result: CallToolResult) -> str:
     """The text of a result's first content block."""
     block = result.content[0]
     assert isinstance(block, TextContent), f"expected a text block, got {block.type!r}"
@@ -289,3 +291,35 @@ def initialize_request(*, request_id: int = 1, version: str = LATEST_HANDSHAKE_V
             "clientInfo": {"name": "test", "version": "1"},
         },
     }
+
+
+async def open_handshake_session(
+    client: httpx.AsyncClient, *, request_id: int, token: str | None = None
+) -> dict[str, str]:
+    """Run the ``initialize`` handshake over HTTP and return the headers its session needs."""
+    opening = JSON_HEADERS if token is None else {**JSON_HEADERS, "Authorization": f"Bearer {token}"}
+    response = await client.post("/mcp", headers=opening, json=initialize_request(request_id=request_id))
+    assert response.status_code == 200
+    session_id = response.headers[MCP_SESSION_ID_HEADER]
+    headers = {**opening, MCP_PROTOCOL_VERSION_HEADER: LATEST_HANDSHAKE_VERSION, MCP_SESSION_ID_HEADER: session_id}
+    await client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "method": "notifications/initialized"})
+    return headers
+
+
+async def handshake_call(
+    client: httpx.AsyncClient, headers: dict[str, str], message: str, *, request_id: int
+) -> dict[str, Any]:
+    """POST one ``tools/call`` of the conversational tool as a handshake-era client; return its result."""
+    response = await client.post(
+        "/mcp",
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": "ask", "arguments": {"message": message}},
+        },
+    )
+    assert response.status_code == 200
+    result: dict[str, Any] = response.json()["result"]
+    return result

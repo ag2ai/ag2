@@ -21,6 +21,7 @@ from dirty_equals import IsPartialDict
 
 from ag2 import Agent
 from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.transports import RestTransport
 from ag2.events import ModelRequest, TextInput
 from ag2.testing import TestConfig, TrackingConfig
@@ -97,7 +98,7 @@ async def test_action_round_trip_client_click_executes_server_action() -> None:
     clicked: list[str] = []
 
     @a2ui_action(description="Add the item to the cart")
-    def add_to_basket(good_id: str) -> dict:
+    def add_to_basket(good_id: str) -> JsonObject:
         clicked.append(good_id)
         return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 1}}
 
