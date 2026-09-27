@@ -12,6 +12,7 @@ import logging
 import pytest
 
 from ag2 import Agent
+from ag2.events import BaseEvent
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_TEXT,
@@ -20,7 +21,10 @@ from ag2.network import (
     AuditLog,
     BaseHubArbiter,
     BaseHubListener,
+    ChannelMetadata,
+    ConversationAdapter,
     Deny,
+    Envelope,
     Hub,
     HubClient,
     HumanClient,
@@ -31,6 +35,7 @@ from ag2.network import (
     Rule,
 )
 from ag2.network.rule import AccessBlock
+from ag2.network.views.base import EnvelopeRenderer, NameResolver, ViewPolicy, default_name_resolver
 from ag2.testing import TestConfig
 
 
@@ -66,7 +71,7 @@ class _RecordingListener(BaseHubListener):
         self.agent_events.append((kind, agent_id))
 
     async def on_turn_failed(self, channel_id, agent_id, envelope_id, exc) -> None:
-        self.turn_failed.append((channel_id, agent_id, type(exc).__name__))
+        self.turn_failed.append((channel_id, agent_id, exc))
 
     async def on_task_event(self, task_id, kind, payload) -> None:
         self.task_events.append((kind, task_id))
@@ -491,7 +496,7 @@ async def test_hub_health_on_populated_hub() -> None:
 
 @pytest.mark.asyncio
 async def test_widened_trap_catches_pre_ask_failures() -> None:
-    """A monkey-patched ``default_view_policy`` that raises lands in ``on_turn_failed``.
+    """A view whose ``project`` raises lands in ``on_turn_failed``.
 
     Regression for the widened ``_process_substantive`` trap — the
     original trap started after view projection, so a buggy view
@@ -500,16 +505,30 @@ async def test_widened_trap_catches_pre_ask_failures() -> None:
     """
 
     class _BadView:
-        async def project(self, history, *, participant_id, channel, render_envelope):
+        name = "bad"
+
+        async def project(
+            self,
+            wal: list[Envelope],
+            *,
+            participant_id: str,
+            channel: ChannelMetadata,
+            render_envelope: EnvelopeRenderer,
+            name_for: NameResolver = default_name_resolver,
+        ) -> list[BaseEvent]:
             raise RuntimeError("view broke")
+
+    class _BadViewAdapter(ConversationAdapter):
+        def default_view_policy(self, metadata: ChannelMetadata, participant_id: str) -> ViewPolicy:
+            return _BadView()
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0)
     listener = _RecordingListener()
     hub.register_listener(listener)
 
-    # Force every view resolution to return the bad view.
-    hub.default_view_policy = lambda channel_id, participant_id: _BadView()  # type: ignore[method-assign]
+    # The handler resolves a turn's view from the channel's adapter, so the bad view goes there.
+    hub.register_adapter(_BadViewAdapter())
 
     alice = await hub.register(_agent("alice"))
     await hub.register(_agent("bob", "ok"))
@@ -522,6 +541,9 @@ async def test_widened_trap_catches_pre_ask_failures() -> None:
         await asyncio.sleep(0.01)
 
     assert listener.turn_failed, "view.project crash should fire on_turn_failed"
+    _, _, exc = listener.turn_failed[0]
+    assert isinstance(exc, RuntimeError)
+    assert str(exc) == "view broke"
     # Channel survives — subsequent send still works.
     assert await channel.send("still alive?")
 
