@@ -31,13 +31,13 @@ from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 if TYPE_CHECKING:
-    from types_boto3_bedrock_runtime.literals import (
+    from types_aiobotocore_bedrock_runtime.literals import (
         ConversationRoleType,
         DocumentFormatType,
         ImageFormatType,
         VideoFormatType,
     )
-    from types_boto3_bedrock_runtime.type_defs import (
+    from types_aiobotocore_bedrock_runtime.type_defs import (
         ContentBlockTypeDef,
         DocumentBlockTypeDef,
         ImageBlockTypeDef,
