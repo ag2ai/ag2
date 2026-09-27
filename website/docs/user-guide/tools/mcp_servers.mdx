@@ -358,7 +358,7 @@ agent_with_mcp = Agent(
 )
 ```
 
-`MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime. As with `MCPToolkit`, `authorization_token` is sent as a bearer `Authorization` header unless `headers` already contains `Authorization` (case-insensitive).
+`MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime. As with `MCPToolkit`, `authorization_token` is sent as a bearer `Authorization` header unless `headers` already contains `Authorization` (case-insensitive). Anthropic does not forward `headers` — only `authorization_token` is sent.
 
 !!! warning "`blocked_tools` is not enforceable on every provider"
 
