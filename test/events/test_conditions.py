@@ -170,6 +170,7 @@ class TestEventConditions:
 
         assert event.field == "test"
         assert event.value == 42  # type: ignore[attr-defined]
+        # Undeclared, as `value` above.
         assert event.name == "example"  # type: ignore[attr-defined]
 
     def test_condition_with_none_value(self):

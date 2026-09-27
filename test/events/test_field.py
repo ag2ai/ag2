@@ -54,6 +54,7 @@ class TestFieldBasics:
             # sees no default at the construction below (see `Field`).
             a: str = Field("1")  # type: ignore[call-arg]
 
+        # The checker sees no default for `a`, as said above.
         obj = Event()  # type: ignore[call-arg]
         assert obj.a == "1"
 

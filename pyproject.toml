@@ -437,283 +437,29 @@ convention = "google"
 # catches a construct that only works on a newer runtime.
 python_version = "3.10"
 
-# === The ratchet ===
-#
-# Everything listed here is checked under the strict settings below: locally via
-# bare `mypy`, in the pre-commit hook, and on every pull request across three
-# operating systems. The list only ever grows, and its length is the measure of
-# progress. Anything absent is absent because it has not been cleaned yet, with
-# two deliberate exceptions noted at the end of the list.
+# Both trees are checked under the strict settings below: locally via bare
+# `mypy`, in the pre-commit hook, on every pull request across three operating
+# systems and in the nightly matrix. The test tree is relaxed only where the
+# `test.*` override says so.
 #
 # Two tiers of guarantee. The pull-request job installs the `types` dependency
-# group, which pulls a handful of extras; the nightly matrix installs
-# twenty-seven, across five Python versions. A module behind an extra the
-# pull-request job does not install is checked against `Any` there and only
-# really checked overnight — an entry in that position says so on its own line.
-# See website/docs/contributor-guide/type-checking.mdx.
-files = [
-    # Import machinery behind the optional-dependency fallbacks. No extras needed.
-    "ag2/_import_utils.py",
+# group, which pulls the extras and additional dependencies nearly every module
+# reaches; the nightly matrix installs twenty-seven extras across five Python
+# versions. A module whose dependency the pull-request job cannot install is
+# checked against `Any` there and only really checked overnight. Today that is
+# `ag2/extensions/tools/search/tinyfish.py` and its test (`tinyfish` needs
+# Python 3.11), and the key types in `test/a2a/test_card_signing.py` (`pyjwt`
+# comes only with `a2a-sdk[signing]`). See website/docs/contributor-guide/type-checking.mdx.
+files = ["ag2", "test"]
 
-    # Provider configuration core: the `ModelConfig` and `LLMClient` protocols
-    # every provider is built against. No extras needed.
-    "ag2/config/__init__.py",
-    "ag2/config/client.py",
-    "ag2/config/config.py",
-
-    # The OpenAI and Anthropic providers — configs, clients, mappers, hosted-tool
-    # events and Files clients. The reference implementations the other providers
-    # copy, so their shapes are what tickets 12-14 build on. `openai` and
-    # `anthropic` are in the `types` group, so these are really checked on every
-    # pull request.
-    "ag2/config/anthropic/",
-    "ag2/config/openai/",
-
-    # The Gemini and Z.AI providers. `google-genai`, `google-auth` and `zai-sdk` all ship
-    # `py.typed`, and they joined the `types` group, so these are really checked on every
-    # pull request.
-    "ag2/config/gemini/",
-    "ag2/config/zai/",
-
-    # The xAI and DashScope providers. `xai-sdk` carries no `py.typed` but is
-    # annotated and ships `.pyi` for its protos, so it is followed (see the
-    # override below) rather than wrapped. `dashscope` ships a bundled stub that
-    # is wrong about the async call's stream arm; the client casts there, once,
-    # with the reason. Both extras are in the `types` group, so these are really
-    # checked on every pull request.
-    "ag2/config/dashscope/",
-    "ag2/config/xai/",
-
-    # The Mistral and Ollama providers. `mistralai` and `ollama` ship `py.typed`
-    # and are in the `types` group, so these are really checked on every pull
-    # request.
-    "ag2/config/mistral/",
-    "ag2/config/ollama/",
-
-    # The protocol bridges: ACP, MCP, AG-UI, A2A and A2UI serve an agent over a
-    # published specification, so an error here is usually one we are not
-    # honouring. Every extra they reach, the gRPC transport and the stubs for
-    # grpc, protobuf and jsonschema are in the `types` group, so these are
-    # really checked on every pull request.
-    "ag2/a2a/",
-    "ag2/a2ui/",
-    "ag2/acp/",
-    "ag2/ag_ui/",
-    "ag2/mcp/",
-
-    # The Bedrock provider. boto3 is data-driven and ships no types, so the
-    # boto3 client is `Any` by our own declaration on every job; installing the
-    # extra would change nothing. The service's own types come from
-    # `types-boto3[bedrock-runtime]`, which the Bedrock SDK-types change adds.
-    "ag2/config/bedrock/",
-
-    # Offline evaluation: datasets, scorers, the runner and persistence. httpx and
-    # pydantic are core dependencies, so this is really checked.
-    "ag2/eval/",
-    # Extensions: the Daytona, Docker and Tenki sandboxes, the NLIP bridge, the
-    # TealTiger governance middleware and the Exa, Serply, TinyFish and Xquik
-    # search toolkits. Their packages are additional dependencies, not extras, so
-    # they are in the `types` group directly. `nlip-sdk` and `nlip-server` carry
-    # no `py.typed` but are annotated, so they are followed (see the override
-    # below) rather than wrapped; `docker` is typed by `types-docker`. `tinyfish`
-    # needs Python 3.11 and the pull-request job runs 3.10, so
-    # `tools/search/tinyfish.py` is checked against `Any` there and only really
-    # checked by the nightly matrix.
-    "ag2/extensions/",
-
-    # Live voice: the realtime agent, the STT/LLM/TTS cascade and the OpenAI,
-    # Gemini and ElevenLabs sessions, whose extras are all in the `types` group.
-    # `sounddevice` has no types at all and numpy is skipped (below), so
-    # `sound_device.py` declares what it uses of both as local protocols.
-    "ag2/live/",
-
-    # MCP-UI resource and action builders. `mcp-ui-server` carries no `py.typed`
-    # but is fully annotated, so it is followed (see the override below) rather
-    # than wrapped. `ag2[mcp-ui]` comes in via the `test` group, so the
-    # pull-request job really checks this.
-    "ag2/mcp_ui/",
-
-    # Event vocabulary. Imported by everything else, so its types are what make
-    # the packages after it cheap. No extras needed.
-    "ag2/events/",
-
-    # Structured output: response schemas, prompted schemas, `@response_schema`.
-    # pydantic and fast_depends are core dependencies, so this is really checked.
-    "ag2/response/",
-
-    # The Files API facade and its provider-client protocol. No extras needed.
-    "ag2/files/",
-
-    # History policies. No extras needed.
-    "ag2/policies/",
-
-    # Observers — the `observer` factory and the watch-driven base. No extras needed.
-    "ag2/observers/",
-
-    # Middleware, including the telemetry and metrics builtins. `ag2[tracing]`
-    # and `ag2[metrics]` are in the `types` group, so this is really checked.
-    "ag2/middleware/",
-
-    # Knowledge stores. `ag2[redis]` and `watchdog` are in the `types` group, so
-    # the Redis and disk stores are really checked alongside the SQLite one.
-    "ag2/knowledge/",
-
-    # Persistent stream backends. `ag2[redis]` is in the `types` group, so this
-    # is really checked.
-    "ag2/streams/",
-
-    # Tools: the `Tool` hierarchy, the executor, the builtins, subagent
-    # delegation and the toolkits. The surface a downstream developer writes
-    # against most often. `ag2[mcp]` comes in via the `test` group and the
-    # search extras are in `types`, so this is really checked.
-    "ag2/tools/",
-
-    # The top-level runtime: the stream, context, history, plugins, HITL, tasks,
-    # compaction and aggregation, replay, the spec loader and the `ag2` namespace
-    # itself — the names a downstream developer imports first. No extras needed.
-    # `agent.py` has its own entry below; `textual.py` cannot be imported at all
-    # (see .scratch/mypy-full-coverage/issues/41).
-    "ag2/__init__.py",
-    "ag2/_replay.py",
-    "ag2/_telemetry_consts.py",
-    "ag2/aggregate.py",
-    "ag2/annotations.py",
-    "ag2/assembly.py",
-    "ag2/compact.py",
-    "ag2/context.py",
-    "ag2/exceptions.py",
-    "ag2/history.py",
-    "ag2/hitl.py",
-    "ag2/mypy.py",
-    "ag2/plugin.py",
-    "ag2/spec.py",
-    "ag2/stream.py",
-    "ag2/task.py",
-    "ag2/testing.py",
-    "ag2/types.py",
-    "ag2/usage.py",
-    "ag2/utils.py",
-    "ag2/version.py",
-    "ag2/watch.py",
-
-    # The agent: `Agent`, `AgentReply`, `AgentRun` — `ask`, `run`, `resume` and
-    # the registration surface. It imports nearly everything above, so it went
-    # in last of the runtime. No extras needed.
-    "ag2/agent.py",
-
-    # The agent network, the whole package: the hub, the client, the transport,
-    # the channel adapters, the workflow transition graph, the views, and the
-    # envelope, channel and identity types they share. The client is what a
-    # downstream developer holds to join a hub, so its signatures are the ones
-    # their checker follows. `ag2[tracing]` and `websockets` (an additional
-    # dependency, not an extra) are both in the `types` group, so all of it is
-    # really checked on every pull request.
-    "ag2/network/",
-
-    # === The test tree ===
-    #
-    # Checked under the relaxed profile in the `test.*` override below. A test
-    # directory goes in only after the package directory it covers is clean, so
-    # the package's corrected types do the work rather than being fought at every
-    # test-double boundary. What this buys: a double that no longer satisfies the
-    # type it stands in for is reported, instead of the test silently exercising
-    # something else.
-
-    # The test-tree root: the agent's composition, assembly, compaction,
-    # aggregation, tasks, watches and history, plus the shared helpers and
-    # `conftest.py` every directory below imports. No extras needed.
-    "test/*.py",
-
-    # Type-level guarantees, tested through mypy's own output; the harness runs
-    # each fixture under `fixtures/` separately, so the fixtures stay out of here.
-    "test/typing/__init__.py",
-    "test/typing/test_fixtures.py",
-
-    # The events, stream, response, files, knowledge, policies, observers, spec
-    # and MCP-UI tests: the packages the first sweep tickets cleaned. The Redis
-    # stream and disk-knowledge tests need `ag2[redis]` and `watchdog`, both in
-    # the `types` group, so all of it is really checked on every pull request.
-    "test/events/",
-    "test/files/",
-    "test/knowledge/",
-    "test/mcp_ui/",
-    "test/observer/",
-    "test/policies/",
-    "test/response/",
-    "test/spec/",
-    "test/stream/",
-
-    # The OpenAI and Anthropic provider tests, with the `test/config` root they
-    # share with the other providers' tests (package marker, helpers, conftest).
-    # `openai` and `anthropic` are in the `types` group, so these are really
-    # checked on every pull request.
-    "test/config/*.py",
-    "test/config/anthropic/",
-    "test/config/openai/",
-
-    # The other seven providers' tests. Every SDK they build doubles from is in
-    # the `types` group, so these are really checked on every pull request —
-    # except boto3, which the Bedrock client holds as `Any` on every job, so the
-    # Bedrock tests are checked against ag2's own types and their fakes.
-    "test/config/bedrock/",
-    "test/config/dashscope/",
-    "test/config/gemini/",
-    "test/config/mistral/",
-    "test/config/ollama/",
-    "test/config/xai/",
-    "test/config/zai/",
-
-    # The real-API smoke tests: the agent harness, sessions, workflows and the
-    # network run against each provider. They skip without credentials, so the
-    # checker is what keeps them honest between the runs that have keys. Their
-    # providers, `ag2[tracing]` and `websockets` are all in the `types` group.
-    "test/providers/",
-
-    # The runtime tests: tools (with MCP and the search toolkits), the agent,
-    # middleware and telemetry, eval, live voice, and the extensions (the NLIP
-    # end-to-end test under `test/beta` with them). Every package they build
-    # doubles from is in the `types` group, so these are really checked on every
-    # pull request — except tinyfish, which needs Python 3.11, so
-    # `test/extensions/tools/search/test_tinyfish.py` reads its SDK as `Any` on
-    # the 3.10 pull-request job and is only really checked by the nightly matrix.
-    "test/agent/",
-    "test/beta/",
-    "test/eval/",
-    "test/extensions/",
-    "test/live/",
-    "test/middleware/",
-    "test/tools/",
-
-    # The protocol-bridge tests: ACP (with its remote transports and the tool
-    # gateway), A2A, A2UI, AG-UI and MCP. Most of what they hold is doubles for
-    # a protocol peer, so this is where the checker asks whether a double still
-    # conforms. Every bridge's package is in the `types` group, so these are
-    # really checked on every pull request — except `pyjwt`, which only
-    # `a2a-sdk[signing]` brings, so the key types in
-    # `test/a2a/test_card_signing.py` read as `Any` on the pull-request job.
-    "test/a2a/",
-    "test/a2ui/",
-    "test/acp/",
-    "test/ag_ui/",
-    "test/mcp/",
-
-    # The network tests: the hub, its clients, adapters, transports and
-    # telemetry. Most of what they hold is doubles for an adapter, view or link
-    # endpoint, checked here against the protocol each stands in for.
-    # `websockets` and `ag2[tracing]` are in the `types` group, so these are
-    # really checked on every pull request.
-    "test/network/",
-
-    # The last three directories nothing else claimed: `dynamic_agent`, the
-    # plugin system, and the orchestration package marker. No extras needed.
-    "test/dynamic/",
-    "test/orchestration/",
-    "test/test_plugin/",
-
-    # Deliberately absent, and not on their way in:
-    #   - the demo scripts at the repository root, which are examples rather
-    #     than shipped code;
-    #   - the website documentation code samples, which are prose.
+# Kept out of discovery, each for a reason that is not "not cleaned yet":
+#   - `test/typing/fixtures/` fail the checker on purpose; `test/typing/test_fixtures.py`
+#     runs each one on its own and compares mypy's output with the expectations inline.
+#   - `ag2/textual.py` cannot be imported at all (`ag2.import_utils` does not exist);
+#     whether it is revived or removed is .scratch/mypy-full-coverage/issues/41.
+exclude = [
+    '^test/typing/fixtures/',
+    '^ag2/textual\.py$',
 ]
 
 strict = true
@@ -722,9 +468,6 @@ install_types = true
 non_interactive = true
 plugins = ["pydantic.mypy", "ag2.mypy"]
 
-# remove after all files in the repo are fixed
-follow_imports = "silent"
-
 # from https://blog.wolt.com/engineering/2021/09/30/professional-grade-mypy-configuration/
 disallow_untyped_defs = true
 no_implicit_optional = true
@@ -732,7 +475,7 @@ check_untyped_defs = true
 warn_return_any = true
 show_error_codes = true
 
-warn_unused_ignores = false
+warn_unused_ignores = true
 
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true

@@ -112,7 +112,7 @@ class SkillsToolkit(Toolkit):
         ``Literal`` cannot be empty).
         """
         names = [s.name for s in self.merged_skills()]
-        base: object = Literal[tuple(names)] if names else str  # type: ignore[valid-type]
+        base: object = Literal[tuple(names)] if names else str
         return Annotated[base, Field(description=description)]
 
     def list_skills(
@@ -139,6 +139,7 @@ class SkillsToolkit(Toolkit):
 
         @tool(name=name, description=description, middleware=middleware)
         async def _load_skill(
+            # A `Literal` of the skills found when the schema is built; the checker takes only a static one.
             name: name_type,  # type: ignore[valid-type]
             ctx: Context,  # injected; absent from the tool schema
         ) -> str:
@@ -160,6 +161,7 @@ class SkillsToolkit(Toolkit):
 
         @tool(name=name, description=description, middleware=middleware)
         async def _read_skill_resource(
+            # A `Literal` of the skills found when the schema is built; the checker takes only a static one.
             name: name_type,  # type: ignore[valid-type]
             resource: Annotated[
                 str,
@@ -182,6 +184,7 @@ class SkillsToolkit(Toolkit):
 
         @tool(name=name, description=description, middleware=middleware)
         async def _run_skill_script(
+            # A `Literal` of the skills found when the schema is built; the checker takes only a static one.
             name: name_type,  # type: ignore[valid-type]
             ctx: Context,
             script: Annotated[

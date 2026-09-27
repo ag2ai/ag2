@@ -693,12 +693,12 @@ class TestLockedKnowledgeStore:
         assert await inner.read("/test.txt") is None
 
     async def test_write_releases_on_inner_exception(self) -> None:
-        class ExplodingStore:
+        class ExplodingStore(MemoryKnowledgeStore):
             async def write(self, path: str, content: str) -> None:
                 raise ValueError("boom")
 
         lock = _FakeLock()
-        locked = LockedKnowledgeStore(ExplodingStore(), lock)  # type: ignore[arg-type]
+        locked = LockedKnowledgeStore(ExplodingStore(), lock)
 
         with pytest.raises(ValueError, match="boom"):
             await locked.write("/test.txt", "hello")

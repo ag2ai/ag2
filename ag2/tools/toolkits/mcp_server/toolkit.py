@@ -92,10 +92,10 @@ async def _mcp_session(
     """
     if isinstance(config, MCPStdioServerConfig):
         params = StdioServerParameters(
-            command=config.command,  # type: ignore[arg-type]
-            args=list(config.args or []),  # type: ignore[arg-type]
-            env=config.env,  # type: ignore[arg-type]
-            cwd=config.cwd,  # type: ignore[arg-type]
+            command=config.command,
+            args=list(config.args or []),  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
+            env=config.env,
+            cwd=config.cwd,
             encoding=config.encoding,
         )
         async with (
@@ -367,6 +367,7 @@ class MCPToolkit(Toolkit):
             # All already resolved (Variable -> concrete) by _resolve_config above.
             allowed = resolved.allowed_tools
             blocked = set(resolved.blocked_tools or [])  # type: ignore[arg-type]
+            # Resolved by `_resolve_config` above, like `blocked`.
             prefix: str = resolved.tool_name_prefix  # type: ignore[assignment]
 
             for raw in raw_tools:

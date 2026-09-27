@@ -29,6 +29,7 @@ class TestUsageArithmetic:
 
     def test_add_rejects_non_usage(self) -> None:
         with pytest.raises(TypeError):
+            # A non-`Usage` operand: the runtime refusal is what is under test.
             Usage() + 42  # type: ignore[operator]
 
     def test_builtin_sum_aggregates(self) -> None:

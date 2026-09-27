@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from ag2.annotations import Context
 from ag2.middleware import BaseMiddleware, ToolMiddleware
 from ag2.tools.final import tool
-from ag2.tools.final.function_tool import FunctionTool
+from ag2.tools.final.function_tool import FunctionTool, FunctionToolSchema
 from ag2.tools.sandbox import CodeAdapter, SandboxFactory
 from ag2.tools.tool import Tool
 
@@ -119,7 +119,7 @@ class SandboxCodeTool(Tool):
         backend was passed, otherwise the object you supplied)."""
         return self._env
 
-    async def schemas(self, context: "Context") -> list:  # type: ignore[type-arg]
+    async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return await self._tool.schemas(context)
 
     def register(

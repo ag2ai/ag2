@@ -51,6 +51,7 @@ class TestFileContent:
     def test_frozen(self) -> None:
         fc = FileContent(name="test.txt", data=b"hello")
         with pytest.raises(AttributeError):
+            # Writing a frozen field is what is under test.
             fc.name = "other.txt"  # type: ignore[misc]
 
     def test_fields_preserved(self) -> None:

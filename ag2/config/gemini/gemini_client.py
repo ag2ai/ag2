@@ -65,6 +65,7 @@ def _credentials_from_file(path: str) -> google.auth.credentials.Credentials:
     google-auth ships `py.typed` but leaves `from_service_account_file` unannotated, so the
     one suppression is confined here and the rest of the client keeps a real credentials type.
     """
+    # google-auth leaves `from_service_account_file` unannotated.
     credentials: google.auth.credentials.Credentials = service_account.Credentials.from_service_account_file(  # type: ignore[no-untyped-call]
         path,
         scopes=["https://www.googleapis.com/auth/cloud-platform"],

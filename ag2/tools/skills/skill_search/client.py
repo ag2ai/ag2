@@ -62,6 +62,7 @@ class SkillsClient:
             "cert": self._cert,
         }
         kwargs.update(overrides)
+        # `overrides` may replace any entry, so the dict holds `object`; httpx checks the values.
         return httpx.AsyncClient(**kwargs)  # type: ignore[arg-type]
 
     async def search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:

@@ -16,7 +16,7 @@ from .conditions import Condition, NotCondition, OpCondition, OrCondition, TypeC
 try:
     import annotationlib as _annotationlib
 except ImportError:
-    _annotationlib = None  # type: ignore[assignment]
+    _annotationlib = None
 
 
 _REPR_MAX_LEN = 80
@@ -123,9 +123,11 @@ class FieldInfo:
     def __set__(self, instance: Any, value: Any) -> None:
         instance.__dict__[self.name] = value
 
+    # On the class a field compares into a condition (the DSL); `object` promises a `bool`.
     def __eq__(self, other: Any) -> Condition:  # type: ignore[override]
         return OpCondition(check_eq, self.name, other, self.event_class)
 
+    # On the class a field compares into a condition (the DSL); `object` promises a `bool`.
     def __ne__(self, other: Any) -> Condition:  # type: ignore[override]
         return OpCondition(operator.ne, self.name, other, self.event_class)
 
@@ -227,6 +229,7 @@ def _process_fields(cls: type) -> None:
         fields[field_name] = field
         setattr(cls, field_name, field)
 
+    # Stamped on every event class here and read back with `getattr`; `type` does not declare it.
     cls._event_fields_ = fields  # type: ignore[attr-defined]
 
 

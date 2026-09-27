@@ -117,6 +117,7 @@ def test_empty_content_is_rejected(build: Callable[[str], UIResource]) -> None:
 
 def test_remote_dom_rejects_unknown_framework() -> None:
     with pytest.raises(InvalidContentError, match="react"):
+        # A framework outside the declared literal: the runtime refusal is what is under test.
         mcp_ui.remote_dom("ui://ag2/dom", "root.appendChild(el)", framework="svelte")  # type: ignore[arg-type]
 
 
@@ -125,6 +126,7 @@ def test_an_unknown_encoding_is_rejected() -> None:
     treating it as text would ship the caller a resource they did not ask for.
     """
     with pytest.raises(InvalidContentError, match="encoding"):
+        # An encoding outside the declared literal: the runtime refusal is what is under test.
         mcp_ui.raw_html("ui://ag2/greeting", "<h1>Hi</h1>", encoding="base64")  # type: ignore[arg-type]
 
 
@@ -133,4 +135,5 @@ def test_the_uri_is_checked_before_the_framework() -> None:
     it is the error a caller gets from all three rather than one special case.
     """
     with pytest.raises(InvalidURIError):
+        # A framework outside the declared literal: the runtime refusal is what is under test.
         mcp_ui.remote_dom("https://ag2.ai/dom", "root.appendChild(el)", framework="svelte")  # type: ignore[arg-type]

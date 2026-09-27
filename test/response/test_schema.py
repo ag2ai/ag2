@@ -12,8 +12,10 @@ from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
+from ag2 import Context
 from ag2.response import ResponseSchema
 from ag2.response.schema import RawSchema
+from ag2.stream import MemoryStream
 from ag2.types import ClassInfo
 
 
@@ -352,7 +354,7 @@ class TestUnionSchemas:
             ),
         ],
     )
-    def test_union_schema(self, type_: ClassInfo, expected_any_of: list) -> None:  # type: ignore[type-arg]
+    def test_union_schema(self, type_: ClassInfo, expected_any_of: list[dict[str, Any]]) -> None:
         schema = ResponseSchema(type_, name="Union", embed=False)
 
         assert schema.name == "Union"
@@ -504,7 +506,7 @@ class TestRawSchema:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = await raw.validate("hello", context=None)  # type: ignore[arg-type]
+            result = await raw.validate("hello", context=Context(stream=MemoryStream()))
 
         assert result == "hello"
         assert len(w) == 1
@@ -524,7 +526,7 @@ class TestValidation:
     )
     async def test_validate_primitive(self, type_: type, json_input: str, expected: object) -> None:
         schema = ResponseSchema(type_)
-        result = await schema.validate(json_input, context=None)  # type: ignore[arg-type]
+        result = await schema.validate(json_input, context=Context(stream=MemoryStream()))
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -537,21 +539,21 @@ class TestValidation:
     )
     async def test_validate_not_embedded_primitive(self, type_: type, json_input: str, expected: object) -> None:
         schema = ResponseSchema(type_, embed=False)
-        result = await schema.validate(json_input, context=None)  # type: ignore[arg-type]
+        result = await schema.validate(json_input, context=Context(stream=MemoryStream()))
         assert result == expected
 
     async def test_validate_union(self) -> None:
         # Annotated: a union is not a `type[T]`, so nothing infers `T` from it.
         schema: ResponseSchema[int | str] = ResponseSchema(int | str)
 
-        assert await schema.validate('{"data": 42}', context=None) == 42  # type: ignore[arg-type]
-        assert await schema.validate('{"data": "hello"}', context=None) == "hello"  # type: ignore[arg-type]
+        assert await schema.validate('{"data": 42}', context=Context(stream=MemoryStream())) == 42
+        assert await schema.validate('{"data": "hello"}', context=Context(stream=MemoryStream())) == "hello"
 
     async def test_validate_not_embedded_union(self) -> None:
         schema: ResponseSchema[int | str] = ResponseSchema(int | str, embed=False)
 
-        assert await schema.validate("42", context=None) == 42  # type: ignore[arg-type]
-        assert await schema.validate('"hello"', context=None) == "hello"  # type: ignore[arg-type]
+        assert await schema.validate("42", context=Context(stream=MemoryStream())) == 42
+        assert await schema.validate('"hello"', context=Context(stream=MemoryStream())) == "hello"
 
     async def test_validate_dataclass(self) -> None:
         @dataclass
@@ -561,7 +563,7 @@ class TestValidation:
 
         schema = ResponseSchema(Point)
 
-        result = await schema.validate('{"x": 1, "y": 2}', context=None)  # type: ignore[arg-type]
+        result = await schema.validate('{"x": 1, "y": 2}', context=Context(stream=MemoryStream()))
 
         assert result == Point(x=1, y=2)
 
@@ -572,7 +574,7 @@ class TestValidation:
 
         schema = ResponseSchema(Item)
 
-        result = await schema.validate('{"name": "Widget", "price": 9.99}', context=None)  # type: ignore[arg-type]
+        result = await schema.validate('{"name": "Widget", "price": 9.99}', context=Context(stream=MemoryStream()))
 
         assert result == Item(name="Widget", price=9.99)
 
@@ -580,4 +582,4 @@ class TestValidation:
         schema = ResponseSchema(int, embed=False)
 
         with pytest.raises(Exception):
-            await schema.validate("not a number", context=None)  # type: ignore[arg-type]
+            await schema.validate("not a number", context=Context(stream=MemoryStream()))

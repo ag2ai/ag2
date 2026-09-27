@@ -26,8 +26,8 @@ def beta(x: int) -> int:
     return x
 
 
-def make_hook():  # type: ignore[no-untyped-def]
-    async def hook(call_next, event, context):  # type: ignore[no-untyped-def]
+def make_hook():
+    async def hook(call_next, event, context):
         return await call_next(event, context)
 
     return hook
@@ -67,7 +67,7 @@ class TestAgentComposition:
 
     def test_set_slots_are_reported(self) -> None:
         @observer()
-        def watcher(event, context) -> None:  # type: ignore[no-untyped-def]
+        def watcher(event, context) -> None:
             return None
 
         agent = Agent("bot", prompt="p", observers=[watcher], tasks=TaskConfig(), response_schema=Out)
@@ -102,9 +102,11 @@ class TestViewsAreReadOnly:
         agent = Agent("bot", prompt="p", dependencies={"db": object()}, variables={"k": 1})
 
         with pytest.raises(TypeError):
+            # The mapping is read-only: the runtime refusal is what is under test.
             agent.dependencies["db"] = object()  # type: ignore[index]
 
         with pytest.raises(TypeError):
+            # The mapping is read-only: the runtime refusal is what is under test.
             agent.variables["k"] = 2  # type: ignore[index]
 
     def test_dependency_values_are_the_injected_objects(self) -> None:
@@ -199,6 +201,7 @@ class TestMiddlewareFactoryFields:
         factory = Middleware(Configurable, level=10)
 
         with pytest.raises(TypeError):
+            # The mapping is read-only: the runtime refusal is what is under test.
             factory.options["level"] = 20  # type: ignore[index]
 
 

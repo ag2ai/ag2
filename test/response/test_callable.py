@@ -216,7 +216,7 @@ class TestValidation:
         def parse(content: str) -> int:
             return int(content)
 
-        result = await parse.validate("42", context=None)  # type: ignore[arg-type]
+        result = await parse.validate("42", context=Context(stream=MemoryStream()))
 
         assert result == 42
 
@@ -226,7 +226,7 @@ class TestValidation:
         async def parse(content: str) -> int:
             return int(content)
 
-        result = await parse.validate("42", context=None)  # type: ignore[arg-type]
+        result = await parse.validate("42", context=Context(stream=MemoryStream()))
 
         assert result == 42
 
@@ -236,7 +236,7 @@ class TestValidation:
         def double(value: int) -> int:
             return value * 2
 
-        result = await double.validate('{"data": 21}', context=None)  # type: ignore[arg-type]
+        result = await double.validate('{"data": 21}', context=Context(stream=MemoryStream()))
 
         assert result == 42
 
@@ -253,7 +253,7 @@ class TestValidation:
 
         result = await stringify.validate(
             '{"x": 3, "y": 4}',
-            context=None,  # type: ignore[arg-type]
+            context=Context(stream=MemoryStream()),
         )
 
         assert result == "3,4"
@@ -264,8 +264,8 @@ class TestValidation:
         def to_str(value: int | str) -> str:
             return str(value)
 
-        assert await to_str.validate('{"data": 42}', context=None) == "42"  # type: ignore[arg-type]
-        assert await to_str.validate('{"data": "hello"}', context=None) == "hello"  # type: ignore[arg-type]
+        assert await to_str.validate('{"data": 42}', context=Context(stream=MemoryStream())) == "42"
+        assert await to_str.validate('{"data": "hello"}', context=Context(stream=MemoryStream())) == "hello"
 
     @pytest.mark.asyncio()
     async def test_multi_params_with_defaults_uses_default(self) -> None:
@@ -275,7 +275,7 @@ class TestValidation:
 
         result = await process.validate(
             '{"name": "test"}',
-            context=None,  # type: ignore[arg-type]
+            context=Context(stream=MemoryStream()),
         )
 
         assert result == "test x3"
@@ -288,7 +288,7 @@ class TestValidation:
 
         result = await process.validate(
             '{"name": "test", "retries": 5}',
-            context=None,  # type: ignore[arg-type]
+            context=Context(stream=MemoryStream()),
         )
 
         assert result == "test x5"
@@ -301,7 +301,7 @@ class TestValidation:
 
         result = await greet.validate(
             '{"name": "Alice", "age": 30}',
-            context=None,  # type: ignore[arg-type]
+            context=Context(stream=MemoryStream()),
         )
 
         assert result == "Alice is 30"
@@ -314,7 +314,7 @@ class TestValidation:
 
         result = await greet.validate(
             '{"name": "Bob", "age": 25}',
-            context=None,  # type: ignore[arg-type]
+            context=Context(stream=MemoryStream()),
         )
 
         assert result == "Bob is 25"

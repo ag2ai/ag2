@@ -3,18 +3,23 @@ title: Type checking
 ---
 
 AG2 ships a `py.typed` marker, so every downstream project that runs a type checker treats this
-library as typed. Keeping that promise is a ratchet: the set of checked files only ever grows,
-and it lives in exactly one place.
+library as typed. That marker is a guarantee, not a claim: every importable module under `ag2/` is checked
+under strict settings — on every pull request, bar the few modules [only checked
+overnight](#the-two-tiers-of-guarantee) — so a public signature says what the code does, and
+a name you import from AG2 does not hand your checker an `Any` it did not ask for.
 
 ## What is checked
 
-The `files` list under `[tool.mypy]` in `pyproject.toml` is the whole answer. If the module you
-are about to edit is in that list, a type error you introduce fails your pull request. If it is
-not, nothing checks it.
+Everything. `files` under `[tool.mypy]` in `pyproject.toml` is `["ag2", "test"]` — the library
+under strict settings, the tests under the relaxed profile described [below](#the-test-tree).
+Imports are followed for real, so an error at the seam between two packages is reported where it
+happens.
 
-Anything absent from the list is absent because it has not been cleaned up yet — not because it
-is exempt. Two things are genuinely out of scope and say so at the end of the list: the demo
-scripts at the repository root, and the documentation code samples.
+Two paths are kept out of discovery by `exclude`, each with its reason beside it: the typing
+fixtures, which fail the checker on purpose and are run one at a time by their own harness, and
+`ag2/textual.py`, which cannot be imported at all until its keep-or-remove decision is made. The
+demo scripts at the repository root and the documentation code samples are outside both trees:
+they are examples and prose, not shipped code.
 
 Run the checker exactly the way CI does:
 
@@ -22,20 +27,8 @@ Run the checker exactly the way CI does:
 mypy
 ```
 
-No arguments. The bare invocation reads `files` from `pyproject.toml`, so a clean local run, the
-pre-commit hook and the pull-request job all check the same set.
-
-## Checking a package that is not covered yet
-
-You do not have to wait for a package's turn. Pass it on the command line and it is checked
-instead of the allowlist, under the same strict settings:
-
-```bash
-mypy ag2/knowledge
-```
-
-Expect errors — that is the debt. When a package reports none, add it to `files` in the same
-pull request that cleans it, so it is defended from then on.
+No arguments. The bare invocation reads `files` from `pyproject.toml`, so a local run, the
+pre-commit hook, the pull-request job and the nightly matrix all check the same two trees.
 
 ## The two tiers of guarantee
 
@@ -50,8 +43,8 @@ knowing before you rely on it.
 A module that imports a package behind an extra the pull-request job does not install is checked
 against `Any` there: its imports are unresolved, so mistakes inside it survive until the nightly
 run. Prefer adding the extra to the `types` group so the pull-request job really checks it. Where
-an extra is too heavy to install on every pull request, the module's entry in `files` says it is
-nightly-only, so nobody mistakes the weaker guarantee for the stronger one.
+that cannot work — `tinyfish` needs Python 3.11 and the job runs 3.10 — the comment above `files`
+names the module as nightly-only, so nobody mistakes the weaker guarantee for the stronger one.
 
 ## Containing an untyped dependency
 
@@ -72,7 +65,7 @@ revisits it. Contain it instead, in this order:
    ```
 
    `mcp_ui_server` is the worked example — that one override is the whole of what `ag2/mcp_ui/`
-   needed to enter the allowlist. `xai_sdk` is the largest: it ships `.pyi` for its generated
+   needed to be checked. `xai_sdk` is the largest: it ships `.pyi` for its generated
    protos and annotates the rest, and the override removed 21 of `ag2/config/xai/`'s 24 errors.
    Check for annotations before writing a boundary, even for an SDK that looks untyped.
 3. **A local boundary.** Only when the dependency genuinely has no types to read: declare what we
@@ -117,10 +110,6 @@ else:
 The names keep their true types, and the one duplicated import line is the whole cost. Do this
 rather than suppressing per name — there are over a hundred of these bindings across the tree.
 
-Packages still outside the allowlist have not been converted; several `__init__.py` files under
-them carry a `# type: ignore[misc]` per name, which is what this replaces when a package's turn
-comes.
-
 ## The condition DSL
 
 An event field is declared with the type of its value, so without help a checker reads
@@ -145,9 +134,6 @@ That is what the profile is for: when a test double no longer satisfies the type
 for, the checker says so, instead of the test quietly exercising something else. When a test
 reports an error, fix the double before reaching for a suppression.
 
-A test directory joins `files` only after the package directory it covers is clean, so the
-package's corrected types do the work rather than being fought at every test-double boundary.
-
 A guarantee about the public types themselves — an overload's return type, a form the checker
 must refuse — goes in `test/typing/fixtures/` as a fixture with its expectations inline
 (`# N: <note>`, `# E: <error>`). `test/typing/test_fixtures.py` runs mypy over each fixture and
@@ -155,12 +141,15 @@ compares.
 
 ## Suppressions
 
-A `# type: ignore[...]` carries its error code and a reason a later reader can act on. A
-suppression with neither is indistinguishable from an abandoned one.
+A `# type: ignore[...]` carries its error code and a reason a later reader can act on, on its
+own line or the one above. A suppression with neither is indistinguishable from an abandoned one.
+
+`warn_unused_ignores` is on, so a suppression that stops suppressing anything is itself an error.
+When a fix makes one stale, delete it in the same change.
 
 ## The pre-commit hook
 
 `mypy` runs as a local pre-commit hook via `scripts/pre-commit-mypy-run.sh`, which reinstalls the
-`types` group before checking. It runs once per commit, over the same allowlist, so its cost
-grows with coverage. If it becomes slow enough that people start skipping it, that is a signal
+`types` group before checking. It runs once per commit, over the same two trees, so its cost
+grows with the codebase. If it becomes slow enough that people start skipping it, that is a signal
 to reach for mypy's incremental cache in the hook rather than to shrink what is checked.

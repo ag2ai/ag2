@@ -44,10 +44,11 @@ class ModuleInfo:
         if self.name not in sys.modules:
             return f"'{self.name}' is not installed."
 
-        if hasattr(sys.modules[self.name], "__file__") and sys.modules[self.name].__file__ is not None:
+        module_file = getattr(sys.modules[self.name], "__file__", None)
+        if module_file is not None:
             ag2_path = (Path(__file__).parent).resolve()
             test_path = (Path(__file__).parent.parent / "test").resolve()
-            module_path = Path(sys.modules[self.name].__file__).resolve()  # type: ignore[arg-type]
+            module_path = Path(module_file).resolve()
 
             if str(ag2_path) in str(module_path) or str(test_path) in str(module_path):
                 # The module is in the ag2 or test directory
@@ -166,7 +167,7 @@ class PatchObject(ABC, Generic[T]):
         msg += f"Please install {'them' if plural else 'it'} using:\n'pip install ag2[{self.dep_target}]'"
         return msg
 
-    def copy_metadata(self, retval: T) -> None:
+    def copy_metadata(self, retval: Callable[..., Any]) -> None:
         """Copy metadata from original object to patched object
 
         Args:
@@ -177,7 +178,7 @@ class PatchObject(ABC, Generic[T]):
         if hasattr(o, "__doc__"):
             retval.__doc__ = o.__doc__
         if hasattr(o, "__name__"):
-            retval.__name__ = o.__name__  # type: ignore[attr-defined]
+            retval.__name__ = o.__name__
         if hasattr(o, "__module__"):
             retval.__module__ = o.__module__
 
@@ -217,13 +218,13 @@ class PatchCallable(PatchObject[F]):
 
         f: Callable[..., Any] = self.o
 
-        # @wraps(f.__call__)  # type: ignore[operator]
         @wraps(f)
         def _call(*args: Any, **kwargs: Any) -> Any:
             raise ImportError(self.msg)
 
-        self.copy_metadata(_call)  # type: ignore[arg-type]
+        self.copy_metadata(_call)
 
+        # A raising stand-in with the original's metadata replaces it; the checker cannot see that is still `F`.
         return _call  # type: ignore[return-value]
 
 
@@ -244,17 +245,20 @@ class PatchStatic(PatchObject[F]):
         if name in except_for:
             return self.o
 
+        # `accept` admitted only a `staticmethod`, which `F` does not say.
         f: Callable[..., Any] = self.o.__func__  # type: ignore[attr-defined]
 
         @wraps(f)
         def _call(*args: Any, **kwargs: Any) -> Any:
             raise ImportError(self.msg)
 
-        self.copy_metadata(_call)  # type: ignore[arg-type]
+        self.copy_metadata(_call)
 
+        # A raising stand-in with the original's metadata replaces it; the checker cannot see that is still `F`.
         return staticmethod(_call)  # type: ignore[return-value]
 
     def get_object_with_metadata(self) -> Any:
+        # `accept` admitted only a `staticmethod`, which `F` does not say.
         return self.o.__func__  # type: ignore[attr-defined]
 
 
@@ -274,8 +278,9 @@ class PatchInit(PatchObject[F]):
         def _call(*args: Any, **kwargs: Any) -> Any:
             raise ImportError(self.msg)
 
-        self.copy_metadata(_call)  # type: ignore[arg-type]
+        self.copy_metadata(_call)
 
+        # A raising stand-in with the original's metadata replaces it; the checker cannot see that is still `F`.
         return staticmethod(_call)  # type: ignore[return-value]
 
     def get_object_with_metadata(self) -> Any:
@@ -294,6 +299,7 @@ class PatchProperty(PatchObject[Any]):
         f: Callable[..., Any] = self.o.fget
 
         if f.__name__ in except_for:
+            # `PatchProperty` holds its descriptor as `Any`; `accept` admitted only a property.
             return self.o  # type: ignore[no-any-return]
 
         @wraps(f)
@@ -390,6 +396,7 @@ def _mark_object(o: T, dep_target: str) -> T:
 
     pytest_mark_o = pytest.mark.aux_neg_flag(pytest_mark_o)
 
+    # The mark is looked up by name with `getattr`, so it is `Any`; applied, it returns the object.
     return pytest_mark_o  # type: ignore[no-any-return]
 
 
@@ -430,7 +437,7 @@ def run_for_optional_imports(modules: str | Iterable[str], dep_target: str) -> C
                         )
                     return o(*args, **kwargs)
 
-        pytest_mark_o: G = _mark_object(wrapped, dep_target)  # type: ignore[assignment]
+        pytest_mark_o: G = _mark_object(wrapped, dep_target)
 
         return pytest_mark_o
 
@@ -452,14 +459,15 @@ def skip_on_missing_imports(modules: str | Iterable[str], dep_target: str) -> Ca
 
         def decorator(o: T) -> T:
             pytest_mark_o = _mark_object(o, dep_target)
-            return pytest_mark_o  # type: ignore[no-any-return]
+            return pytest_mark_o
 
     else:
 
         def decorator(o: T) -> T:
             pytest_mark_o = _mark_object(o, dep_target)
 
-            return pytest.mark.skip(  # type: ignore[return-value,no-any-return]
+            # `T` is unbounded, so pytest's overload picks the mark; applied to a test it returns the test.
+            return pytest.mark.skip(  # type: ignore[return-value]
                 f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
             )(pytest_mark_o)
 

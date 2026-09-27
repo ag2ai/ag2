@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 from ag2.annotations import Context
 from ag2.middleware import BaseMiddleware, ToolMiddleware
 from ag2.tools.final import tool
-from ag2.tools.final.function_tool import FunctionTool
+from ag2.tools.final.function_tool import FunctionTool, FunctionToolSchema
 from ag2.tools.sandbox import LocalEnvironment, SandboxFactory
 from ag2.tools.sandbox.adapter import ShellAdapter
 from ag2.tools.tool import Tool
@@ -107,7 +107,7 @@ class SandboxShellTool(Tool):
         """The working directory of the underlying environment."""
         return self._workdir
 
-    async def schemas(self, context: "Context") -> list:  # type: ignore[type-arg]
+    async def schemas(self, context: "Context") -> list[FunctionToolSchema]:
         return await self._tool.schemas(context)
 
     def register(
