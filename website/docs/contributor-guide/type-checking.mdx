@@ -15,10 +15,8 @@ under strict settings, the tests under the relaxed profile described [below](#th
 Imports are followed for real, so an error at the seam between two packages is reported where it
 happens.
 
-Two paths are kept out of discovery by `exclude`, each with its reason beside it: the typing
-fixtures, which fail the checker on purpose and are run one at a time by their own harness, and
-`ag2/textual.py`, which cannot be imported at all until its keep-or-remove decision is made. The
-demo scripts at the repository root and the documentation code samples are outside both trees:
+One path is kept out of discovery by `exclude`, with its reason beside it: the typing fixtures,
+which fail the checker on purpose and are run one at a time by their own harness. The demo scripts at the repository root and the documentation code samples are outside both trees:
 they are examples and prose, not shipped code.
 
 Run the checker exactly the way CI does:

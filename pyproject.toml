@@ -452,14 +452,11 @@ python_version = "3.10"
 # comes only with `a2a-sdk[signing]`). See website/docs/contributor-guide/type-checking.mdx.
 files = ["ag2", "test"]
 
-# Kept out of discovery, each for a reason that is not "not cleaned yet":
-#   - `test/typing/fixtures/` fail the checker on purpose; `test/typing/test_fixtures.py`
-#     runs each one on its own and compares mypy's output with the expectations inline.
-#   - `ag2/textual.py` cannot be imported at all (`ag2.import_utils` does not exist);
-#     whether it is revived or removed is .scratch/mypy-full-coverage/issues/41.
+# Kept out of discovery, for a reason that is not "not cleaned yet":
+# `test/typing/fixtures/` fail the checker on purpose; `test/typing/test_fixtures.py`
+# runs each one on its own and compares mypy's output with the expectations inline.
 exclude = [
     '^test/typing/fixtures/',
-    '^ag2/textual\.py$',
 ]
 
 strict = true
