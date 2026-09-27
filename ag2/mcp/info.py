@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def build_ask_tool(
-    agent: Agent,
+    agent: Agent[Any],
     *,
     tool_name: str = "ask",
     tool_description: str | None = None,

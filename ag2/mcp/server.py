@@ -284,7 +284,7 @@ class MCPServer:
 
     def __init__(
         self,
-        agent: Agent,
+        agent: Agent[Any],
         *,
         name: str | None = None,
         version: str | None = None,
@@ -388,7 +388,7 @@ class MCPServer:
         self._http: Starlette = Starlette(routes=routes, lifespan=_session_manager_lifespan(manager, self._paused_runs))
 
     @property
-    def agent(self) -> Agent:
+    def agent(self) -> Agent[Any]:
         """The agent this server serves."""
         return self._agent
 

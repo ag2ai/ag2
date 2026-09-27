@@ -94,7 +94,7 @@ class AgentExecutor:
 
     def __init__(
         self,
-        agent: Agent,
+        agent: Agent[Any],
         *,
         tool_name: str = "ask",
         tool_description: str | None = None,
