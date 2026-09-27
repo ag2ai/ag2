@@ -4,7 +4,7 @@
 
 import json
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlparse
 
 from fast_depends.library.serializer import SerializerProto
@@ -39,7 +39,7 @@ from ag2.tools.schemas import ToolSchema
 from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
 
 
-def response_proto_to_config(response: ResponseProto | None) -> dict[str, Any]:
+def response_proto_to_config(response: ResponseProto | None) -> types.GenerateContentConfigDict:
     """Convert a ResponseProto to Gemini GenerateContentConfig kwargs."""
     if not response or not response.json_schema:
         return {}
@@ -87,7 +87,7 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     raw_type = str(params.get("type", "")).lower()
     if not params or raw_type in ("null", "none", ""):
         return {"type": "object", "properties": {}}
-    return _strip_additional_properties(params)
+    return cast(dict[str, Any], _strip_additional_properties(params))
 
 
 def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
@@ -106,10 +106,7 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
             )
 
         elif isinstance(t, WebSearchToolSchema):
-            gs_kwargs: dict[str, Any] = {}
-            if t.blocked_domains:
-                gs_kwargs["exclude_domains"] = t.blocked_domains
-            extra_tools.append(types.Tool(google_search=types.GoogleSearch(**gs_kwargs)))
+            extra_tools.append(types.Tool(google_search=types.GoogleSearch(exclude_domains=t.blocked_domains or None)))
 
         elif isinstance(t, WebFetchToolSchema):
             extra_tools.append(types.Tool(url_context=types.UrlContext()))
@@ -332,20 +329,20 @@ def convert_messages(
             result.append(types.Content(role="user", parts=parts_list))
 
         elif isinstance(message, ModelRequest):
-            parts: list[types.Part] = []
+            request_parts: list[types.Part] = []
             for inp in message.parts:
                 if isinstance(inp, TextInput):
-                    parts.append(types.Part.from_text(text=inp.content))
+                    request_parts.append(types.Part.from_text(text=inp.content))
 
                 elif isinstance(inp, DataInput):
-                    parts.append(types.Part.from_text(text=serializer.encode(inp.data).decode()))
+                    request_parts.append(types.Part.from_text(text=serializer.encode(inp.data).decode()))
 
                 elif isinstance(inp, UrlInput):
                     mime = _mime_from_url(inp.url)
                     if mime is not None:
-                        parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
+                        request_parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
                     else:
-                        parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
+                        request_parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
 
                 elif isinstance(inp, FileIdInput):
                     if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.GEMINI:
@@ -354,18 +351,18 @@ def convert_messages(
                             "gemini",
                         )
                     file_uri = f"https://generativelanguage.googleapis.com/v1beta/{inp.file_id}"
-                    parts.append(types.Part(file_data=types.FileData(file_uri=file_uri)))
+                    request_parts.append(types.Part(file_data=types.FileData(file_uri=file_uri)))
 
                 elif isinstance(inp, BinaryInput):
-                    part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
-                    _apply_vendor_metadata(part, inp.vendor_metadata)
-                    parts.append(part)
+                    binary_part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
+                    _apply_vendor_metadata(binary_part, inp.vendor_metadata)
+                    request_parts.append(binary_part)
 
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "gemini")
 
-            if parts:
-                result.append(types.Content(role="user", parts=parts))
+            if request_parts:
+                result.append(types.Content(role="user", parts=request_parts))
 
         elif isinstance(message, CompactionSummary):
             # Surface the summary as a user turn so it stays visible and gives a valid opening turn
@@ -375,10 +372,12 @@ def convert_messages(
     return result
 
 
-def normalize_usage(metadata: Any) -> Usage:
+def normalize_usage(metadata: types.GenerateContentResponseUsageMetadata) -> Usage:
     """Build usage from Gemini UsageMetadata, normalizing to standard keys."""
 
     cache_read = _to_float(metadata.cached_content_token_count) or None
+    # Read through getattr although the annotation declares the field: test_gemini_usage pins
+    # the behaviour for a google-genai below the declared floor, where it is absent.
     thinking = _to_float(getattr(metadata, "thoughts_token_count", None)) or None
     return Usage(
         prompt_tokens=_to_float(metadata.prompt_token_count),

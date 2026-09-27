@@ -123,7 +123,7 @@ It is off unless you ask for it, and a server that has not enabled it never send
 !!! warning "This moves three things to the caller"
     **Cost** — every turn the agent takes spends their budget. **Capability** — which model answers is a fact about the client, so the same agent gives different answers to different callers and its quality is no longer yours to control. **Reproducibility** — a trace cannot be re-run against a known model, because the model was the peer's.
 
-A client that advertised no sampling capability is never asked. What happens then is read off the agent, not off a second switch: one with a `config` of its own falls back to it, and one without fails the turn with `MCPSamplingUnavailableError`. So `client_model=` decides only whether the caller's budget may be spent at all — a deployment holding credentials it would rather not spend keeps them as the fallback simply by configuring them.
+A client that advertised no sampling capability is never asked. What happens then is read off the agent, not off a second switch: one with a `config` of its own falls back to it, and one without fails the call with `MCPSamplingUnavailableError` — a JSON-RPC error `-32021` whose `data.requiredCapabilities` names `sampling`, not a tool result, since no rewording by the model supplies a capability the client lacks. So `client_model=` decides only whether the caller's budget may be spent at all — a deployment holding credentials it would rather not spend keeps them as the fallback simply by configuring them.
 
 A turn needing tools or a structured response refuses rather than losing them silently, since sampling carries neither here, and so does a completion that comes back carrying no text at all — read as an empty reply it would report success while the agent answered with nothing.
 
@@ -615,6 +615,8 @@ Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `descript
 `MCPServer`, `SessionConfig`, `TransportConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
 
 Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the last: `MCPAgentConfigError`, `MCPToolNameConflictError`, `UnknownConversationError` (a handle naming no live conversation, reported to the caller as a tool error), `MCPResourceNotFoundError`, `MCPPromptNotFoundError`, and `MCPSamplingUnavailableError` / `MCPSamplingRefusedError` (both `MCPSamplingError`). `MCPElicitationDeclinedError` subclasses core's `HumanInputNotProvidedError` instead, so a question the client refused is the same failure as one nobody was there to answer.
+
+`MCPResourceNotFoundError`, `MCPPromptNotFoundError` and `MCPSamplingUnavailableError` are also the SDK's `MCPError`, so each reaches the caller as a JSON-RPC protocol error rather than a tool result: `-32602` (Invalid params) for an unknown resource URI — with the URI in `data.uri` — or prompt name, and `-32021` for a missing client capability. A `tools/call` naming a tool the server does not have, and a `prompts/get` omitting an argument its prompt declares `required`, are answered `-32602` the same way, before any handler or renderer runs.
 
 ## Beyond the conversational tool
 

@@ -212,6 +212,17 @@ class TestEventConditions:
         assert condition(ChildEvent(field="1"))
         assert not condition(TestEvent(field="1"))
 
+    def test_reading_an_inherited_field_elsewhere_does_not_retarget_a_condition(self):
+        """Parent and child share one descriptor, so reading it through the child
+        between the class access and the comparison must not retarget the condition.
+
+        Worker threads interleave the same way, which hung the parent's wait for a
+        ``ToolResultEvent`` on a condition built for ``ToolErrorEvent``.
+        """
+        condition = TestEvent.field == ChildEvent(field="1").field
+
+        assert condition(TestEvent(field="1"))
+
     def test_invert_event_class(self):
         condition = ~TestEvent
 

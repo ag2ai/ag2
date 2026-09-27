@@ -63,11 +63,12 @@ from .mappers import (
     extract_mcp_servers,
     extract_skills_for_container,
     has_file_id_references,
+    inject_cache_breakpoint,
     merge_sampling_into_extra_body,
     normalize_usage,
     response_proto_to_output_config,
     take_sampling_fields,
-    tool_to_api,
+    tools_to_api,
 )
 
 
@@ -141,7 +142,7 @@ class AnthropicClient(LLMClient):
         )
 
         if self._prompt_caching and anthropic_messages:
-            self._inject_cache_control(anthropic_messages)
+            inject_cache_breakpoint(anthropic_messages)
 
         tools_schemas = list(tools)
         tools_without_skills = [t for t in tools_schemas if not isinstance(t, SkillsToolSchema)]
@@ -150,7 +151,7 @@ class AnthropicClient(LLMClient):
         if anthropic_skills and not any(isinstance(t, CodeExecutionToolSchema) for t in tools_without_skills):
             tools_without_skills.append(CodeExecutionToolSchema())
 
-        tools_list = [tool_to_api(t) for t in tools_without_skills]
+        tools_list = tools_to_api(tools_without_skills)
         mcp_servers = extract_mcp_servers(tools_without_skills)
 
         kwargs: dict[str, Any] = {}
@@ -242,17 +243,6 @@ class AnthropicClient(LLMClient):
             return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
         return text
 
-    @staticmethod
-    def _inject_cache_control(messages: list[dict[str, Any]]) -> None:
-        for msg in reversed(messages):
-            if msg.get("role") == "user":
-                content = msg.get("content")
-                if isinstance(content, str):
-                    msg["content"] = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
-                elif isinstance(content, list) and content:
-                    content[-1]["cache_control"] = {"type": "ephemeral"}
-                break
-
     async def _process_response(
         self,
         response: Message,
@@ -313,6 +303,7 @@ class AnthropicClient(LLMClient):
             model=response.model,
             provider="anthropic",
             finish_reason=response.stop_reason,
+            response_id=response.id,
         )
 
     async def _process_stream(
@@ -417,6 +408,7 @@ class AnthropicClient(LLMClient):
             model=final_message.model,
             provider="anthropic",
             finish_reason=final_message.stop_reason,
+            response_id=final_message.id,
         )
 
 

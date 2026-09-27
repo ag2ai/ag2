@@ -391,6 +391,16 @@ class TestDiskKnowledgeStore:
         with pytest.raises(ValueError, match="Path traversal"):
             await store.write("/../escape.txt", "x")
 
+    async def test_sibling_directory_sharing_root_prefix_blocked(self, tmp_path: Path) -> None:
+        root = tmp_path / "store"
+        root.mkdir()
+        sibling = tmp_path / "store_evil"
+        sibling.mkdir()
+        (sibling / "secret.txt").write_text("secret")
+        store = DiskKnowledgeStore(str(root))
+        with pytest.raises(ValueError, match="Path traversal"):
+            await store.read("/../store_evil/secret.txt")
+
     async def test_on_change_fires_on_write(self, tmp_path: Path) -> None:
         store = DiskKnowledgeStore(str(tmp_path))
         received: list[str] = []

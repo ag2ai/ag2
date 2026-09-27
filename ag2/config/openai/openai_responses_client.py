@@ -25,6 +25,7 @@ from openai.types.responses import (
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
 )
+from openai.types.responses.response_create_params import PromptCacheOptions
 from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
 
@@ -45,6 +46,7 @@ from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.schemas import ToolSchema
 
 from .events import (
+    OpenAIPromptCacheDiagnostics,
     OpenAIReasoningEvent,
     OpenAIServerToolCallEvent,
     OpenAIServerToolResultEvent,
@@ -75,6 +77,8 @@ class CreateOptions(TypedDict, total=False):
     top_logprobs: int | None | Omit
     store: bool | None
     metadata: dict[str, str] | None | Omit
+    prompt_cache_key: str | Omit
+    prompt_cache_options: PromptCacheOptions | Omit
     service_tier: str | None | Omit
     user: str
     stream: bool
@@ -95,6 +99,7 @@ class OpenAIResponsesClient(LLMClient):
         default_query: dict[str, object] | None = None,
         http_client: httpx2.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
+        prompt_cache_diagnostics: bool = False,
     ) -> None:
         self._client = AsyncOpenAI(
             api_key=api_key,
@@ -111,6 +116,44 @@ class OpenAIResponsesClient(LLMClient):
 
         self._create_options = create_options or {}
         self._streaming = self._create_options.get("stream", False)
+        self._prompt_cache_diagnostics = prompt_cache_diagnostics
+        self._last_response_id: str | None = None
+
+    def _request_options(self) -> dict[str, Any]:
+        """The create options for this call, diagnosing against the last response if asked to.
+
+        Only the comparison id varies between calls; everything else is fixed at construction.
+        Returns a plain mapping rather than ``CreateOptions`` because that TypedDict declares
+        ``service_tier`` and ``truncation`` as ``str`` where the SDK wants a ``Literal``;
+        spreading it as a typed mapping fails on those fields, which are not this change's.
+        """
+        options = dict(self._create_options)
+        if not self._prompt_cache_diagnostics or self._last_response_id is None:
+            return options
+
+        configured = self._create_options.get("prompt_cache_options")
+        if configured and "comparison_response_id" in configured:
+            # The caller named a response to compare against; that choice outranks the chain.
+            return options
+
+        chained: PromptCacheOptions = {"comparison_response_id": self._last_response_id}
+        options["prompt_cache_options"] = {**configured, **chained} if configured else chained
+        return options
+
+    @staticmethod
+    def _comparison_id(options: dict[str, Any]) -> str | None:
+        """The response this request asked to be compared against, if it asked at all."""
+        configured: PromptCacheOptions | None = options.get("prompt_cache_options") or None
+        return configured.get("comparison_response_id") if configured else None
+
+    async def _report_cache_diagnostics(
+        self,
+        response: Response,
+        context: "ConversationContext",
+        comparison_id: str | None,
+    ) -> None:
+        if diagnostics := OpenAIPromptCacheDiagnostics.from_response(response, requested_comparison_id=comparison_id):
+            await context.send(diagnostics)
 
     async def __call__(
         self,
@@ -152,22 +195,33 @@ class OpenAIResponsesClient(LLMClient):
         if includes:
             kwargs["include"] = includes
 
+        options = self._request_options()
         response = await self._client.responses.create(
-            **self._create_options,
+            **options,
             **kwargs,
             input=input_items,
             instructions=instructions,
             tools=openai_tools or omit,
         )
 
+        comparison_id = self._comparison_id(options)
         if self._streaming:
-            return await self._process_stream(response, context)
-        return await self._process_response(response, context)
+            result = await self._process_stream(response, context, comparison_id=comparison_id)
+        else:
+            result = await self._process_response(response, context, comparison_id=comparison_id)
+
+        # A turn that reported no id leaves the previous one standing: a stale comparison
+        # still names a real response, where `None` would silently stop diagnosing.
+        if result.response_id:
+            self._last_response_id = result.response_id
+        return result
 
     async def _process_response(
         self,
         response: Response,
         context: "ConversationContext",
+        *,
+        comparison_id: str | None = None,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
@@ -215,6 +269,8 @@ class OpenAIResponsesClient(LLMClient):
 
         usage = normalize_responses_usage(response.usage) if response.usage else Usage()
 
+        await self._report_cache_diagnostics(response, context, comparison_id)
+
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls),
@@ -222,6 +278,7 @@ class OpenAIResponsesClient(LLMClient):
             model=response.model,
             provider="openai",
             finish_reason=response.status,
+            response_id=response.id,
             files=files,
         )
 
@@ -229,12 +286,15 @@ class OpenAIResponsesClient(LLMClient):
         self,
         response_stream: AsyncStream[ResponseStreamEvent],
         context: "ConversationContext",
+        *,
+        comparison_id: str | None = None,
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCallEvent] = []
         files: list[BinaryResult] = []
         finish_reason: str | None = None
         resolved_model: str | None = None
+        response_id: str | None = None
         usage = Usage()
         shell_calls = ShellCallTracker()
 
@@ -307,6 +367,9 @@ class OpenAIResponsesClient(LLMClient):
 
                 finish_reason = event.response.status
                 resolved_model = event.response.model
+                response_id = event.response.id
+
+                await self._report_cache_diagnostics(event.response, context, comparison_id)
 
         message: ModelMessage | None = None
         if full_content:
@@ -320,5 +383,6 @@ class OpenAIResponsesClient(LLMClient):
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
+            response_id=response_id,
             files=files,
         )

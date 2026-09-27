@@ -2,6 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from mcp.shared.exceptions import MCPError
+from mcp.types import (
+    INVALID_PARAMS,
+    MISSING_REQUIRED_CLIENT_CAPABILITY,
+    ClientCapabilities,
+    MissingRequiredClientCapabilityErrorData,
+    SamplingCapability,
+)
+
 from ag2.exceptions import AG2Error, HumanInputNotProvidedError
 
 
@@ -33,18 +42,18 @@ class MCPToolNameConflictError(MCPServerError):
         super().__init__(message)
 
 
-class MCPResourceNotFoundError(MCPServerError):
-    """Raised when a ``resources/read`` targets an unknown URI."""
+class MCPResourceNotFoundError(MCPServerError, MCPError):
+    """Raised when a ``resources/read`` targets an unknown URI; reaches the client as ``-32602``."""
 
     def __init__(self, uri: str) -> None:
-        super().__init__(f"No resource matches URI {uri!r}.")
+        MCPError.__init__(self, code=INVALID_PARAMS, message=f"No resource matches URI {uri!r}.", data={"uri": uri})
 
 
-class MCPPromptNotFoundError(MCPServerError):
-    """Raised when a ``prompts/get`` targets an unknown prompt name."""
+class MCPPromptNotFoundError(MCPServerError, MCPError):
+    """Raised when a ``prompts/get`` targets an unknown prompt name; reaches the client as ``-32602``."""
 
     def __init__(self, name: str) -> None:
-        super().__init__(f"No prompt named {name!r}.")
+        MCPError.__init__(self, code=INVALID_PARAMS, message=f"No prompt named {name!r}.")
 
 
 class UnknownConversationError(MCPServerError):
@@ -80,17 +89,26 @@ class MCPSamplingError(MCPServerError):
     """Base error for a served agent whose model is the calling client's."""
 
 
-class MCPSamplingUnavailableError(MCPSamplingError):
+class MCPSamplingUnavailableError(MCPSamplingError, MCPError):
     """Raised when the caller cannot lend the model this server was told to borrow.
 
-    An agent that has a ``config`` of its own falls back to it instead.
+    Reaches the client as ``-32021`` naming the ``sampling`` capability. An agent
+    that has a ``config`` of its own falls back to it instead.
     """
 
     def __init__(self) -> None:
-        super().__init__(
-            "This server runs the agent on the calling client's model, and this client advertised no "
-            "sampling capability. Connect with sampling enabled, or ask the operator to configure a model "
-            "for the agent to fall back to."
+        data = MissingRequiredClientCapabilityErrorData(
+            required_capabilities=ClientCapabilities(sampling=SamplingCapability())
+        )
+        MCPError.__init__(
+            self,
+            code=MISSING_REQUIRED_CLIENT_CAPABILITY,
+            message=(
+                "This server runs the agent on the calling client's model, and this client advertised no "
+                "sampling capability. Connect with sampling enabled, or ask the operator to configure a model "
+                "for the agent to fall back to."
+            ),
+            data=data.model_dump(by_alias=True, mode="json", exclude_none=True),
         )
 
 

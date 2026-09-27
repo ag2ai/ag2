@@ -13,10 +13,13 @@ returned as the call's result and answered by the client's retry.
 import pytest
 from mcp import MCPDeprecationWarning
 from mcp.client.session import ClientRequestContext
+from mcp.shared.exceptions import MCPError
 from mcp.types import (
+    MISSING_REQUIRED_CLIENT_CAPABILITY,
     CreateMessageRequest,
     CreateMessageRequestParams,
     CreateMessageResult,
+    ErrorData,
     ImageContent,
     InputRequiredResult,
     TextContent,
@@ -154,10 +157,18 @@ class TestItIsADecision:
     async def test_a_client_that_cannot_sample_is_not_asked_and_the_turn_fails(self) -> None:
         """No capability declared, and no model of the agent's own: say so, do not improvise."""
         async with connect(borrowing(), raise_exceptions=False) as session:
-            result = await session.call_tool("ask", {"message": "hi"})
+            with pytest.raises(MCPError) as caught:
+                await session.call_tool("ask", {"message": "hi"})
 
-        assert result.is_error is True
-        assert "advertised no sampling capability" in first_text(result)
+        assert caught.value.error == ErrorData(
+            code=MISSING_REQUIRED_CLIENT_CAPABILITY,
+            message=(
+                "This server runs the agent on the calling client's model, and this client advertised no "
+                "sampling capability. Connect with sampling enabled, or ask the operator to configure a model "
+                "for the agent to fall back to."
+            ),
+            data={"requiredCapabilities": {"sampling": {}}},
+        )
         assert ASKED == []
 
     async def test_an_agent_with_a_model_of_its_own_falls_back_to_it(self) -> None:

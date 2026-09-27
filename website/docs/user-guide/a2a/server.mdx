@@ -309,6 +309,15 @@ Duplicate URIs raise `#!python ValueError`, including redeclaring `#!python urn:
 
 See [Extensions](/docs/user-guide/a2a/client#extensions) for activating them on the client.
 
+## Conversation Variables
+
+The caller's message can carry a variables payload, which is merged into the served turn's
+variables before the agent runs, and the turn's variables travel back on the reply. Treat
+them as caller-writable and caller-readable: anything the caller should not set or see
+belongs in `#!python dependencies`, which are never synced. Keys under the reserved
+`#!python ag:` / `#!python a2a:` prefixes are stripped in both directions. See
+[Variables over a protocol connection](/docs/user-guide/context/variables#variables-over-a-protocol-connection).
+
 ## Adding Cross-cutting Middleware
 
 A2A doesn't define server-side middleware. Attach CORS, auth or tracing directly to the returned transport object:

@@ -115,6 +115,10 @@ class ModelResponse(ModelEvent):
     model: str | None = Field(default=None, compare=False)
     provider: str | None = Field(default=None, compare=False)
     finish_reason: str | None = Field(default=None, compare=False)
+    response_id: str | None = Field(default=None, compare=False)
+    """The provider's own identifier for this response. Absent when the provider
+    supplied none — never synthesised, since a fabricated id is indistinguishable
+    from a real one downstream."""
 
     @property
     def metadata(self) -> dict[str, Any]:

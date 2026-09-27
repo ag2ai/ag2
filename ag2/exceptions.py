@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Iterable
 from unittest.mock import Mock
 
 
@@ -67,6 +68,42 @@ class ClientExecutedShellUnsupportedError(ToolExecutionError):
             "with no result. Pass ShellTool(environment=ContainerAutoEnvironment()) for the "
             "hosted shell, or use SandboxShellTool, which AG2 executes itself and works "
             "with any provider."
+        )
+
+
+class WebFetchOptionUnsupportedError(ToolExecutionError):
+    """Raised when a web fetch option the selected tool version cannot carry is set.
+
+    Refused rather than dropped: a silently ignored option turns a caching or payload
+    decision into a no-op the caller has no way to detect.
+    """
+
+    def __init__(self, option: str, version: str, since: str) -> None:
+        self.option = option
+        self.version = version
+        self.since = since
+        super().__init__(
+            f"WebFetchTool option `{option}` is not available on `{version}`: "
+            f"it arrived in `{since}`. Pass WebFetchTool(version=...) with `{since}` "
+            f"or later, or drop `{option}`."
+        )
+
+
+class WebFetchUrlSourceToolNotFoundError(ToolExecutionError):
+    """Raised when a ``url_sources`` filter names a tool the same request does not declare.
+
+    The API resolves those names against this request's ``tools[]``, so a name that is absent
+    is a policy that silently covers nothing rather than the restriction it was written as.
+    """
+
+    def __init__(self, tool_name: str, declared: Iterable[str]) -> None:
+        self.tool_name = tool_name
+        self.declared = tuple(declared)
+        declared_names = ", ".join(f"`{n}`" for n in self.declared) or "no tools"
+        super().__init__(
+            f"WebFetchTool `url_sources` names `{tool_name}`, which this request does not "
+            f"declare. It declares {declared_names}. Give the agent that tool, or drop the "
+            f"name from `url_sources`."
         )
 
 

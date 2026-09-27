@@ -12,6 +12,7 @@ test, so it covers whoever imports this module next.
 """
 
 import asyncio
+import socket
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -34,6 +35,13 @@ async def serving(app: Any) -> AsyncGenerator[str]:
     # which is why `started` below is what has to be waited on. Connecting
     # earlier is refused outright on Linux and merely slow elsewhere.
     sock = config.bind_socket()
+    # `bind_socket` leaves the listener's `proto` at 0, and `asyncio` only sets
+    # `TCP_NODELAY` on an accepted socket whose `proto` is `IPPROTO_TCP`. Nagle
+    # therefore stays on server-side, and because a response goes out as two
+    # writes (headers, then body) the second one waits for the client's ACK —
+    # 40ms of delayed-ACK per response on Linux, ~0ms elsewhere. Set here
+    # because accepted sockets inherit it from the listener.
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     server = uvicorn.Server(config)
     serving_task = asyncio.create_task(server.serve(sockets=[sock]))
     drain = AppStatus.should_exit

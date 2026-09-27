@@ -101,27 +101,27 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                blocks: list[dict[str, str]] = []
+                result_blocks: list[dict[str, str]] = []
                 has_non_text = False
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
-                        blocks.append({"text": part.content})
+                        result_blocks.append({"text": part.content})
                     elif isinstance(part, DataInput):
-                        blocks.append({"text": serializer.encode(part.data).decode()})
+                        result_blocks.append({"text": serializer.encode(part.data).decode()})
                     elif isinstance(part, BinaryInput) and part.kind is BinaryType.IMAGE:
                         b64 = base64.b64encode(part.data).decode()
-                        blocks.append({"image": f"data:{part.media_type};base64,{b64}"})
+                        result_blocks.append({"image": f"data:{part.media_type};base64,{b64}"})
                         has_non_text = True
                     elif isinstance(part, UrlInput) and part.kind is BinaryType.IMAGE:
-                        blocks.append({"image": part.url})
+                        result_blocks.append({"image": part.url})
                         has_non_text = True
                     else:
                         raise UnsupportedInputError(type(part).__name__, "dashscope")
 
-                if not has_non_text and len(blocks) == 1:
-                    content: str | list[dict[str, str]] = blocks[0]["text"]
+                if not has_non_text and len(result_blocks) == 1:
+                    content: str | list[dict[str, str]] = result_blocks[0]["text"]
                 else:
-                    content = blocks
+                    content = result_blocks
                 result.append({"role": "tool", "tool_call_id": r.parent_id, "content": content})
 
     return result

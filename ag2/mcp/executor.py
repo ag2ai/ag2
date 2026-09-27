@@ -148,7 +148,7 @@ class AgentExecutor:
         request_context: "ServerRequestContext[Any, Any]",
     ) -> "CallToolResult | InputRequiredResult":
         if name != self._tool_name:
-            return tool_error(f"Unknown tool: {name!r}.")
+            raise MCPError(code=INVALID_PARAMS, message=f"Unknown tool: {name!r}.")
 
         # A retry answering a question this server asked. Nothing about the
         # original arguments is read again, and nothing needs to be: the boundary

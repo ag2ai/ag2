@@ -8,6 +8,8 @@ from typing import Any, TypedDict
 import httpx2
 from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
 from openai.types import ChatModel
+from openai.types.chat.completion_create_params import PromptCacheOptions
+from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
 from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
@@ -51,6 +53,7 @@ class OpenAIConfigOverrides(TypedDict, total=False):
     modalities: list[str] | None | Omit
     prediction: dict[str, Any] | None | Omit
     prompt_cache_key: str | Omit
+    prompt_cache_options: PromptCacheOptions | Omit
     safety_identifier: str | Omit
     service_tier: str | None | Omit
     store: bool | None | Omit
@@ -92,7 +95,15 @@ class OpenAIConfig(ModelConfig):
     metadata: dict[str, str] | None | Omit = omit
     modalities: list[str] | None | Omit = omit
     prediction: dict[str, Any] | None | Omit = omit
+    # A routing hint, not a partition, and best effort in both directions: a second key
+    # has been measured reading a prefix the first one wrote, and one key has been
+    # measured not reading back its own.
     prompt_cache_key: str | Omit = omit
+    # Supported from ``gpt-5.6`` onwards; an earlier model answers the object with a 400.
+    # ``mode: "explicit"`` turns caching off here rather than tuning it — ag2 exposes no
+    # per-block ``prompt_cache_breakpoint`` for it to write. The deprecated
+    # ``prompt_cache_retention`` and the ``prewarm`` flag are not exposed at all.
+    prompt_cache_options: PromptCacheOptions | Omit = omit
     safety_identifier: str | Omit = omit
     service_tier: str | None | Omit = omit
     store: bool | None | Omit = omit
@@ -131,6 +142,8 @@ class OpenAIConfig(ModelConfig):
             modalities=self.modalities,
             prediction=self.prediction,
             prompt_cache_key=self.prompt_cache_key,
+            # an empty object is not a setting, and a model without the feature 400s on one
+            prompt_cache_options=self.prompt_cache_options or omit,
             safety_identifier=self.safety_identifier,
             service_tier=self.service_tier,
             store=self.store,
@@ -179,6 +192,9 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     parallel_tool_calls: bool
     top_logprobs: int | None | Omit
     metadata: dict[str, str] | None | Omit
+    prompt_cache_key: str | Omit
+    prompt_cache_options: ResponsePromptCacheOptions | Omit
+    prompt_cache_diagnostics: bool
     service_tier: str | None | Omit
     user: str
     truncation: str | None | Omit
@@ -206,6 +222,21 @@ class OpenAIResponsesConfig(ModelConfig):
     parallel_tool_calls: bool = True
     top_logprobs: int | None | Omit = omit
     metadata: dict[str, str] | None | Omit = omit
+    # A routing hint, not a partition, and best effort in both directions: a second key
+    # has been measured reading a prefix the first one wrote, and one key has been
+    # measured not reading back its own.
+    prompt_cache_key: str | Omit = omit
+    # Supported from ``gpt-5.6`` onwards; an earlier model answers the object with a 400.
+    # ``mode: "explicit"`` turns caching off here rather than tuning it — ag2 exposes no
+    # per-block ``prompt_cache_breakpoint`` for it to write. The deprecated
+    # ``prompt_cache_retention`` and the ``prewarm`` flag are not exposed at all.
+    prompt_cache_options: ResponsePromptCacheOptions | Omit = omit
+    # Diagnose each call against the one before it, so an application learns which change
+    # broke the prefix without tracking response ids itself. The chain spans one client:
+    # a turn's tool loop, and any conversation continued through `reply.ask(...)`, which
+    # reuses the originating turn's client. A fresh `agent.ask(...)` builds a new one and
+    # starts over. An explicit `prompt_cache_options["comparison_response_id"]` outranks it.
+    prompt_cache_diagnostics: bool = False
     service_tier: str | None | Omit = omit
     user: str = ""
     truncation: str | None | Omit = omit
@@ -229,6 +260,9 @@ class OpenAIResponsesConfig(ModelConfig):
             parallel_tool_calls=self.parallel_tool_calls,
             top_logprobs=self.top_logprobs,
             metadata=self.metadata,
+            prompt_cache_key=self.prompt_cache_key,
+            # an empty object is not a setting, and a model without the feature 400s on one
+            prompt_cache_options=self.prompt_cache_options or omit,
             service_tier=self.service_tier,
             truncation=self.truncation,
         )
@@ -249,6 +283,7 @@ class OpenAIResponsesConfig(ModelConfig):
             default_query=self.default_query,
             http_client=self.http_client,
             create_options=options,
+            prompt_cache_diagnostics=self.prompt_cache_diagnostics,
         )
 
     def create_files_client(self) -> OpenAIFilesClient:

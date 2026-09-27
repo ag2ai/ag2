@@ -3,13 +3,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from typing import Any
 
 import pytest
+from mcp import ClientSession
+from mcp.shared.exceptions import MCPError
+from mcp.types import INVALID_PARAMS, ErrorData
 
 from ag2 import Agent
 from ag2.mcp import MCPFunctionTool, MCPServer
-from ag2.mcp.testing import connect
+from ag2.mcp.testing import connect, connect_modern
 from ag2.mcp.tools import ToolContext
 
 from ._helpers import first_text, greeter
@@ -33,13 +38,17 @@ class TestErrors:
 
         assert result.is_error is True
 
-    async def test_unknown_tool(self) -> None:
+    @pytest.mark.parametrize("connect_client", [connect, connect_modern], ids=["handshake", "modern"])
+    async def test_unknown_tool_is_a_protocol_error(
+        self, connect_client: Callable[..., AbstractAsyncContextManager[ClientSession]]
+    ) -> None:
         server = MCPServer(greeter())
 
-        async with connect(server, raise_exceptions=False) as session:
-            result = await session.call_tool("nope", {"message": "hi"})
+        async with connect_client(server, raise_exceptions=False) as session:
+            with pytest.raises(MCPError) as caught:
+                await session.call_tool("nope", {"message": "hi"})
 
-        assert result.is_error is True
+        assert caught.value.error == ErrorData(code=INVALID_PARAMS, message="Unknown tool: 'nope'.")
 
     async def test_agent_without_config_surfaces_as_tool_error(self) -> None:
         server = MCPServer(Agent("no-config"))

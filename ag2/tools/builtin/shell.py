@@ -5,7 +5,7 @@
 from collections.abc import Iterable
 from contextlib import AsyncExitStack, ExitStack
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from ag2.annotations import Context, Variable
 from ag2.events import BuiltinToolCallEvent, ToolCallEvent
@@ -41,7 +41,7 @@ class ContainerReferenceEnvironment:
     container_id: str
 
 
-ShellEnvironment = ContainerAutoEnvironment | ContainerReferenceEnvironment
+ShellEnvironment: TypeAlias = ContainerAutoEnvironment | ContainerReferenceEnvironment
 
 
 SHELL_TOOL_NAME = "shell"

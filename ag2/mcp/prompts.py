@@ -6,7 +6,9 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
+from mcp.shared.exceptions import MCPError
 from mcp.types import (
+    INVALID_PARAMS,
     GetPromptRequestParams,
     GetPromptResult,
     ListPromptsResult,
@@ -54,7 +56,8 @@ class Prompt:
 
     ``render`` receives the supplied arguments as a ``{name: value}`` dict and
     returns the messages (a bare ``str`` becomes one ``user`` message). It may be
-    sync or async. ``arguments`` declares the accepted parameters for discovery.
+    sync or async. ``arguments`` declares the accepted parameters for discovery;
+    required arguments must be present before ``render`` is called.
     """
 
     name: str
@@ -86,6 +89,12 @@ class PromptProvider:
         prompt = self._by_name.get(name)
         if prompt is None:
             raise MCPPromptNotFoundError(name)
+        missing = [arg.name for arg in prompt.arguments if arg.required and arg.name not in arguments]
+        if missing:
+            raise MCPError(
+                code=INVALID_PARAMS,
+                message=f"Missing required arguments for prompt {name!r}: {', '.join(missing)}",
+            )
         result = await call_user_fn(prompt.render, dict(arguments))
         return GetPromptResult(description=prompt.description, messages=_to_mcp_messages(result))
 

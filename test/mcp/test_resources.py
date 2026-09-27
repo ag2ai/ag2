@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 from mcp import ClientSession
 from mcp.server.lowlevel import NotificationOptions
-from mcp.types import TextResourceContents
+from mcp.shared.exceptions import MCPError
+from mcp.types import INVALID_PARAMS, ErrorData, TextResourceContents
 
 from ag2.mcp import MCPServer, Resource, ResourceTemplate
 from ag2.mcp.errors import MCPResourceNotFoundError
@@ -177,6 +178,19 @@ class TestResourceTemplateRead:
             result = await session.read_resource(uri)
 
         assert result.contents == [TextResourceContents(uri=uri, mimeType="text/plain", text="cached")]
+
+    async def test_unknown_uri_fails_with_invalid_params(
+        self, connect_client: Callable[..., AbstractAsyncContextManager[ClientSession]]
+    ) -> None:
+        server = MCPServer(greeter(), resource_templates=[ResourceTemplate("weather:///{city}", "weather", dict)])
+
+        async with connect_client(server, raise_exceptions=False) as session:
+            with pytest.raises(MCPError) as caught:
+                await session.read_resource("nope://x")
+
+        assert caught.value.error == ErrorData(
+            code=INVALID_PARAMS, message="No resource matches URI 'nope://x'.", data={"uri": "nope://x"}
+        )
 
 
 class TestResourceCapability:

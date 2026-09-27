@@ -51,6 +51,7 @@ from pydantic_core import to_jsonable_python
 
 from ag2 import Agent, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig
+from ag2.context import strip_reserved_variables
 from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, Usage
 from ag2.hitl import HumanHook
 from ag2.middleware.base import MiddlewareFactory
@@ -388,7 +389,10 @@ async def run_stream(
                 )
             )
 
-        initial_state = (command.incoming.state or {}) | initial_vars
+        # The client authors ``incoming.state``; it seeds this turn's variables
+        # but must not reach the framework's own control-plane keys.
+        client_state = strip_reserved_variables(command.incoming.state or {}, source="inbound AG-UI state")
+        initial_state = client_state | initial_vars
 
         with ExitStack() as stack:
             if interrupter is not None:
@@ -653,9 +657,10 @@ def _get_timestamp() -> int:
 
 
 def _encode_context(context: dict[str, Any] | None) -> dict[str, Any]:
-    """Drop all unserializable values from the context."""
+    """Drop unserializable values and the framework's reserved keys from the context."""
     if not context:
         return {}
 
+    context = strip_reserved_variables(context, source="an outgoing AG-UI state snapshot", warn=False)
     context = to_jsonable_python(context, fallback=lambda _: None, exclude_none=True) or {}
     return {k: v for k, v in context.items() if v is not None}

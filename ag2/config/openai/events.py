@@ -7,6 +7,7 @@ from base64 import b64decode
 from typing import Any, TypeAlias
 
 from openai.types.responses import (
+    Response,
     ResponseCodeInterpreterToolCall,
     ResponseFileSearchToolCall,
     ResponseFunctionShellToolCall,
@@ -14,6 +15,7 @@ from openai.types.responses import (
     ResponseFunctionWebSearch,
     ResponseReasoningItem,
 )
+from openai.types.responses.response import PromptCacheDiagnosticsCacheMiss as CacheMiss
 from openai.types.responses.response_code_interpreter_tool_call import OutputImage, OutputLogs
 from openai.types.responses.response_function_web_search import ActionFind, ActionOpenPage, ActionSearch
 from openai.types.responses.response_output_item import ImageGenerationCall, McpCall, McpListTools
@@ -298,6 +300,66 @@ class OpenAIShellOutputChunk(BaseEvent):
     item_id: str
     stdout: str | None = None
     stderr: str | None = None
+
+
+class OpenAIPromptCacheDiagnostics(BaseEvent):
+    """Why the API did or did not reuse a cached prefix for one response.
+
+    Transient: a fact about a single request, and never part of the reply. The token
+    counts are estimates about a counterfactual, which is why they are here rather than
+    in :class:`~ag2.events.Usage`.
+    """
+
+    __transient__ = True
+
+    outcome: str = Field(kw_only=False)
+    """``cache_hit``, ``cache_miss``, ``comparison_response_not_found`` or ``unavailable``,
+    typed as ``str`` so a later addition is reported rather than read as one of these four."""
+
+    reason: str | None = None
+    """Why reuse did not occur, on a miss. Passed through unrecognised, as ``outcome`` is."""
+
+    cache_missed_tokens: int | None = None
+    """Estimated input tokens affected after the first divergence."""
+
+    comparison_reusable_tokens: int | None = None
+    """Estimated tokens of this request's prefix that the compared response could have supplied."""
+
+    comparison_response_id: str | None = None
+    """The response this one was compared against."""
+
+    @classmethod
+    def from_response(
+        cls,
+        response: Response,
+        *,
+        requested_comparison_id: str | None = None,
+    ) -> "OpenAIPromptCacheDiagnostics | None":
+        """Read the diagnostics off `response`, or ``None`` if it carried none."""
+        diagnostics = response.prompt_cache_diagnostics
+        if diagnostics is None:
+            return None
+
+        outcome = diagnostics.type
+        if not isinstance(outcome, str):
+            # The union is discriminated by ``type``; without one there is no outcome to
+            # report, and inventing a name for it would be the coercion this type avoids.
+            return None
+
+        # Branch on the value, not the class: the SDK resolves an unrecognised ``type`` to
+        # the union's first variant, so a future outcome would arrive typed as a miss.
+        miss = diagnostics if outcome == "cache_miss" and isinstance(diagnostics, CacheMiss) else None
+        echoed = response.prompt_cache_options
+
+        return cls(
+            outcome,
+            reason=miss.reason if miss else None,
+            cache_missed_tokens=miss.cache_missed_tokens if miss else None,
+            comparison_reusable_tokens=miss.comparison_reusable_tokens if miss else None,
+            # The reply echoes the id back; fall back to what was sent, so the report still
+            # names its comparison if the echo ever stops.
+            comparison_response_id=(echoed.comparison_response_id if echoed else None) or requested_comparison_id,
+        )
 
 
 class OpenAIReasoningEvent(ModelReasoning, ProviderReplay):

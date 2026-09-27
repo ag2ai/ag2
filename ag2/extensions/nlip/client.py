@@ -9,7 +9,7 @@ from fast_depends.library.serializer import SerializerProto
 from nlip_sdk.nlip import NLIP_Message
 
 from ag2.config.client import LLMClient
-from ag2.context import ConversationContext
+from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse, TextInput, ToolCallsEvent, Usage
 from ag2.response import ResponseProto
 from ag2.tools.final.function_tool import FunctionToolSchema
@@ -65,7 +65,7 @@ class NlipClient(LLMClient):
         outgoing = build_request_message(
             text,
             history_events=past_events,
-            context=dict(context.variables) or None,
+            context=strip_reserved_variables(context.variables, source="an outgoing NLIP request", warn=False) or None,
             tool_schemas=function_schemas,
         )
 
@@ -76,7 +76,7 @@ class NlipClient(LLMClient):
             raise NlipInputRequiredError(parsed.input_required)
 
         if parsed.context_update:
-            context.variables.update(parsed.context_update)
+            context.variables.update(strip_reserved_variables(parsed.context_update, source="an NLIP peer response"))
 
         message = ModelMessage(parsed.text) if parsed.text else None
         return ModelResponse(

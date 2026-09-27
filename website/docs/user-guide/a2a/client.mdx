@@ -101,6 +101,15 @@ print(reply.response.content)
 
 The remote agent recovers the entire prior context on every turn — there is no server-side session id to manage.
 
+## Conversation Variables
+
+Every request also carries the conversation's variables to the server, and the server's
+reply carries its own back — merged into the calling turn before the local tools run. So
+a variable is readable and writable by the remote end; keep anything the peer should not
+see or set in `#!python dependencies`, which are never synced. Keys under the reserved
+`#!python ag:` / `#!python a2a:` prefixes are stripped in both directions. See
+[Variables over a protocol connection](/docs/user-guide/context/variables#variables-over-a-protocol-connection).
+
 ## Local Tools (forwarded from the server)
 
 Tools declared on the **client** are advertised to the server in the AG2 client-tools extension. When the remote LLM picks one, the call is routed back to the client and executed locally; the tool result is sent back into the server-side LLM loop. The server LLM never sees your local environment.
