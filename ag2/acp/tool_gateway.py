@@ -211,9 +211,7 @@ def partition_tools(tools: "Iterable[ToolSchema]") -> tuple[list[FunctionToolSch
                     f"(server {tool.server_label!r}); remove the filter or connect the server "
                     "as an MCP toolkit so AG2 executes its tools."
                 )
-            headers = [schema.HttpHeader(name=k, value=v) for k, v in (tool.headers or {}).items()]
-            if tool.authorization_token:
-                headers.append(schema.HttpHeader(name="Authorization", value=f"Bearer {tool.authorization_token}"))
+            headers = [schema.HttpHeader(name=k, value=v) for k, v in tool.http_headers().items()]
             external.append(
                 schema.HttpMcpServer(type="http", name=tool.server_label, url=tool.server_url, headers=headers)
             )
