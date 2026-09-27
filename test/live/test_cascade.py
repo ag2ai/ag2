@@ -93,7 +93,10 @@ class FakeStreamingTTS(FakeTTS):
 
 class RecordingConfig(ModelConfig):
     """`TrackingConfig`, but keeping every message list rather than the last
-    message — these tests assert on what the whole history looked like."""
+    message — these tests assert on what the whole history looked like.
+
+    A config, not a middleware: the cascade calls the client directly, so no
+    ``on_llm_call`` hook sees the list it filters."""
 
     def __init__(self, config: ModelConfig) -> None:
         self.config = config
@@ -128,6 +131,28 @@ def cascade(model: ModelConfig, stt: FakeSTT, tts: FakeTTS, **kwargs: Any) -> Ca
         turn_detector=detector,
         **kwargs,
     )
+
+
+class _Hold(BaseEvent):
+    """Scripted ahead of the reply; :class:`_Held` parks the model call on it."""
+
+    __transient__ = True
+
+
+class _Held:
+    """Parks the model call until something cancels it, and records that it did."""
+
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.cancelled = asyncio.Event()
+
+    async def __call__(self, event: _Hold) -> None:
+        self.started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            self.cancelled.set()
+            raise
 
 
 @pytest.mark.asyncio
@@ -271,27 +296,7 @@ class TestBargeIn:
         """Talking over a reply cancels it and tells the player to drop audio
         it has already queued."""
         stt, tts = FakeSTT(), FakeTTS()
-        started = asyncio.Event()
-
-        class SlowConfig(ModelConfig):
-            @property
-            def provider(self) -> ModelProvider:
-                return ModelProvider.OPENAI
-
-            @property
-            def model(self) -> str:
-                return "test-model"
-
-            def copy(self) -> Self:
-                return self
-
-            def create(self) -> LLMClient:
-                async def client(messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-                    started.set()
-                    await asyncio.sleep(10)  # outlives the barge-in
-                    raise AssertionError("an interrupted turn must not finish")
-
-                return client
+        held = _Held()
 
         context = ConversationContext(stream=MemoryStream())
         interrupts: list[AudioInterruptedEvent] = []
@@ -299,14 +304,17 @@ class TestBargeIn:
             lambda e: interrupts.append(e),
         )
 
-        config = cascade(SlowConfig(), stt, tts, barge_in=True)
+        context.stream.where(_Hold).subscribe(held)
+
+        model = TestConfig(_Hold(), "must not be spoken", provider=ModelProvider.OPENAI, model="test-model")
+        config = cascade(model, stt, tts, barge_in=True)
         async with config.session(context, serializer=PydanticSerializer()):
             await speak_one_turn(context)
-            await asyncio.wait_for(started.wait(), timeout=1)
+            await asyncio.wait_for(held.started.wait(), timeout=1)
 
             # A second utterance begins while the model is still thinking.
             await context.send(RecordedAudioEvent(pcm(0.1, 6000)))
-            await asyncio.sleep(0.05)
+            await asyncio.wait_for(held.cancelled.wait(), timeout=1)
 
         assert len(interrupts) == 1
         assert tts.spoken == []

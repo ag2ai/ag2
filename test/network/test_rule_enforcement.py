@@ -41,12 +41,11 @@ from ag2.network import (
 )
 from ag2.network.rule import InboxBlock, parse_duration
 from ag2.task import TaskMetadata, TaskSpec, TaskState
-
-from ._helpers import ScriptedConfig
+from ag2.testing import TestConfig
 
 
 def _agent(name: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig())
+    return Agent(name=name, config=TestConfig())
 
 
 # ── parse_duration ──────────────────────────────────────────────────────────
@@ -377,8 +376,8 @@ async def test_max_concurrent_tasks_blocks_observe() -> None:
 async def test_inbox_max_pending_rejects_when_full() -> None:
     """Substantive sends to a recipient at inbox capacity raise InboxFull.
 
-    The counter increments on dispatch; bob never replies (ScriptedConfig
-    returns ""), so it never decrements. Once at cap, alice's next send
+    The counter increments on dispatch; bob never replies (no scripted
+    replies), so it never decrements. Once at cap, alice's next send
     is rejected before WAL append.
     """
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)

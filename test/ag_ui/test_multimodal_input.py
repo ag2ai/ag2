@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from base64 import b64encode
-from collections.abc import Sequence
 from typing import Any
 
 import pytest
@@ -17,25 +16,22 @@ from ag_ui.core import (
     UserMessage,
     VideoInputContent,
 )
-from typing_extensions import Self
 
-from ag2 import Agent, Context
+from ag2 import Agent
 from ag2.ag_ui import AGUIStream
-from ag2.config import LLMClient, ModelConfig
 from ag2.events import (
     AudioInput,
-    BaseEvent,
     BinaryInput,
     BinaryType,
     DocumentInput,
     ImageInput,
-    ModelMessage,
     ModelRequest,
-    ModelResponse,
     TextInput,
     UrlInput,
     VideoInput,
 )
+from ag2.testing import TestConfig
+from test._helpers import LLMCalls
 
 from .utils import collect_events, create_run_input
 
@@ -46,42 +42,8 @@ RAW_BYTES = b"\xff\xd8\xff\xe0"
 B64_VALUE = b64encode(RAW_BYTES).decode()
 
 
-class _CaptureClient(LLMClient):
-    """LLM client that records the full ``messages`` list handed to the LLM.
-
-    ``TrackingConfig`` only stores ``messages[-1]``, which in the current
-    ``Agent.ask`` flow is an empty placeholder ``ModelRequest`` rather than
-    the user turn we want to assert on. A custom client is needed to inspect
-    the rest of the list (same pattern as ``_StreamingClient`` in
-    ``test_empty_chunks.py``).
-    """
-
-    def __init__(self, captured: list[list[BaseEvent]]) -> None:
-        self.captured = captured
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self.captured.append(list(messages))
-        msg = ModelMessage("ok")
-        await context.send(msg)
-        return ModelResponse(msg)
-
-
-class _CaptureConfig(ModelConfig):
-    def __init__(self) -> None:
-        self.captured: list[list[BaseEvent]] = []
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _CaptureClient:
-        return _CaptureClient(self.captured)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-def _user_request(config: _CaptureConfig) -> ModelRequest:
-    [messages] = config.captured
+def _user_request(calls: LLMCalls) -> ModelRequest:
+    [messages] = calls.messages
     for m in messages:
         if isinstance(m, ModelRequest) and m.parts:
             return m
@@ -89,26 +51,26 @@ def _user_request(config: _CaptureConfig) -> ModelRequest:
 
 
 async def _dispatch(*content_items: object) -> ModelRequest:
-    config = _CaptureConfig()
-    agent = Agent("test_agent", config=config)
+    calls = LLMCalls()
+    agent = Agent("test_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
     stream = AGUIStream(agent)
     run_input = create_run_input(UserMessage(id="msg_1", content=list(content_items)))
 
     await collect_events(stream, run_input)
 
-    return _user_request(config)
+    return _user_request(calls)
 
 
 class TestTextContent:
     async def test_plain_string_content(self) -> None:
-        config = _CaptureConfig()
-        agent = Agent("test_agent", config=config)
+        calls = LLMCalls()
+        agent = Agent("test_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
         stream = AGUIStream(agent)
         run_input = create_run_input(UserMessage(id="msg_1", content="hi there"))
 
         await collect_events(stream, run_input)
 
-        assert _user_request(config).parts == [TextInput("hi there")]
+        assert _user_request(calls).parts == [TextInput("hi there")]
 
     async def test_text_input_content(self) -> None:
         request = await _dispatch(TextInputContent(text="hello"))

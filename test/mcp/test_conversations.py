@@ -31,14 +31,23 @@ from ag2.mcp.sessions import CONVERSATION_META_KEY
 from ag2.mcp.testing import connect, connect_modern, serve
 from ag2.mcp.tools import ToolContext
 from ag2.testing import TestConfig
+from test._helpers import LLMCalls
 
-from ._helpers import RecordingConfig, Weather
+from ._helpers import Weather
 
 _JSON = {"Accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}", "Content-Type": CONTENT_TYPE_JSON}
 
 
-def _agent(config: RecordingConfig) -> Agent:
-    return Agent("greeter", config=config)
+def _agent(calls: LLMCalls, *replies: str) -> Agent:
+    return Agent("greeter", config=TestConfig(*replies), middleware=[calls.middleware()])
+
+
+def _turn_texts(calls: LLMCalls) -> list[list[str]]:
+    """The text inputs replayed on each turn: one list per turn, in order."""
+    return [
+        [part.content for m in call if isinstance(m, ModelRequest) for part in m.parts if isinstance(part, TextInput)]
+        for call in calls.messages
+    ]
 
 
 def _echo(arguments: dict[str, Any], _ctx: ToolContext) -> str:
@@ -179,24 +188,24 @@ class TestModernEraStartsFresh:
     """
 
     async def test_stream_calls_do_not_share_a_conversation(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok"))
 
         async with connect_modern(server) as session:
             await session.call_tool("ask", {"message": "first"})
             await session.call_tool("ask", {"message": "second"})
 
-        assert config.prompts == [["first"], ["second"]]
+        assert _turn_texts(calls) == [["first"], ["second"]]
 
     async def test_http_calls_do_not_share_a_conversation(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        app = MCPServer(_agent(config), json_response=True)
+        calls = LLMCalls()
+        app = MCPServer(_agent(calls, "ok", "ok"), json_response=True)
 
         async with serve(app) as client:
             await _modern_call(client, "first", request_id=1)
             await _modern_call(client, "second", request_id=2)
 
-        assert config.prompts == [["first"], ["second"]]
+        assert _turn_texts(calls) == [["first"], ["second"]]
 
 
 @pytest.mark.asyncio
@@ -208,29 +217,29 @@ class TestHandshakeEraContinuity:
     """
 
     async def test_stdio_style_stream_accumulates(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok"))
 
         async with connect(server) as session:
             await session.call_tool("ask", {"message": "first"})
             await session.call_tool("ask", {"message": "second"})
 
-        assert config.prompts == [["first"], ["first", "second"]]
+        assert _turn_texts(calls) == [["first"], ["first", "second"]]
 
     async def test_http_session_accumulates(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        app = MCPServer(_agent(config), json_response=True)
+        calls = LLMCalls()
+        app = MCPServer(_agent(calls, "ok", "ok"), json_response=True)
 
         async with serve(app) as client:
             headers = await _open_handshake_session(client, request_id=1)
             await _handshake_call(client, headers, "first", request_id=2)
             await _handshake_call(client, headers, "second", request_id=3)
 
-        assert config.prompts == [["first"], ["first", "second"]]
+        assert _turn_texts(calls) == [["first"], ["first", "second"]]
 
     async def test_different_http_sessions_are_isolated(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        app = MCPServer(_agent(config), json_response=True)
+        calls = LLMCalls()
+        app = MCPServer(_agent(calls, "ok", "ok"), json_response=True)
 
         async with serve(app) as client:
             first = await _open_handshake_session(client, request_id=1)
@@ -238,7 +247,7 @@ class TestHandshakeEraContinuity:
             await _handshake_call(client, first, "first", request_id=3)
             await _handshake_call(client, second, "second", request_id=4)
 
-        assert config.prompts == [["first"], ["second"]]
+        assert _turn_texts(calls) == [["first"], ["second"]]
 
 
 def _handle(result: CallToolResult) -> str:
@@ -257,28 +266,28 @@ class TestConversationHandle:
     """Continuity the caller names, which is the only kind the modern era has."""
 
     async def test_modern_era_continues_by_handle(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok"))
 
         async with connect_modern(server) as session:
             first = await session.call_tool("ask", {"message": "first"})
             await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
 
-        assert config.prompts == [["first"], ["first", "second"]]
+        assert _turn_texts(calls) == [["first"], ["first", "second"]]
 
     async def test_handshake_era_continues_by_handle(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok"))
 
         async with connect(server) as session:
             first = await session.call_tool("ask", {"message": "first"})
             await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
 
-        assert config.prompts == [["first"], ["first", "second"]]
+        assert _turn_texts(calls) == [["first"], ["first", "second"]]
 
     async def test_different_handles_stay_isolated(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok", "ok", "ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok", "ok", "ok"))
 
         async with connect_modern(server) as session:
             one = _handle(await session.call_tool("ask", {"message": "one"}))
@@ -287,7 +296,7 @@ class TestConversationHandle:
             await session.call_tool("ask", {"message": "two again", "conversation": two})
 
         assert one != two
-        assert config.prompts == [
+        assert _turn_texts(calls) == [
             ["one"],
             ["two"],
             ["one", "one again"],
@@ -295,7 +304,7 @@ class TestConversationHandle:
         ]
 
     async def test_handle_is_readable_and_machine_readable_and_they_agree(self) -> None:
-        server = MCPServer(_agent(RecordingConfig(TestConfig("hello"))))
+        server = MCPServer(_agent(LLMCalls(), "hello"))
 
         async with connect_modern(server) as session:
             result = await session.call_tool("ask", {"message": "hi"})
@@ -308,7 +317,7 @@ class TestConversationHandle:
         assert handle in trailer.text
 
     async def test_handles_are_unguessable(self) -> None:
-        server = MCPServer(_agent(RecordingConfig(TestConfig("ok", "ok"))))
+        server = MCPServer(_agent(LLMCalls(), "ok", "ok"))
 
         async with connect_modern(server) as session:
             first = _handle(await session.call_tool("ask", {"message": "one"}))
@@ -332,8 +341,8 @@ class TestBlankHandle:
 
     @pytest.mark.parametrize("blank", ["", "   ", "\n"])
     async def test_starts_a_new_conversation_in_the_modern_era(self, blank: str) -> None:
-        config = RecordingConfig(TestConfig("ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok"))
 
         async with connect_modern(server) as session:
             result = await session.call_tool("ask", {"message": "first", "conversation": blank})
@@ -342,21 +351,21 @@ class TestBlankHandle:
         # A handle comes back, so the caller that could not omit the key can still
         # continue what it just started.
         assert UUID(_handle(result)).version == 4
-        assert config.prompts == [["first"]]
+        assert _turn_texts(calls) == [["first"]]
 
     async def test_the_conversation_it_started_continues_by_its_handle(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok"))
 
         async with connect_modern(server) as session:
             first = await session.call_tool("ask", {"message": "first", "conversation": ""})
             await session.call_tool("ask", {"message": "second", "conversation": _handle(first)})
 
-        assert config.prompts == [["first"], ["first", "second"]]
+        assert _turn_texts(calls) == [["first"], ["first", "second"]]
 
     async def test_falls_back_to_the_transport_session_in_the_handshake_era(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok"))
 
         # Naming nothing is what a blank handle means, so the handshake era keys on
         # the session it has — as it does for a call that omits the argument.
@@ -364,7 +373,7 @@ class TestBlankHandle:
             await session.call_tool("ask", {"message": "first", "conversation": ""})
             await session.call_tool("ask", {"message": "second", "conversation": ""})
 
-        assert config.prompts == [["first"], ["first", "second"]]
+        assert _turn_texts(calls) == [["first"], ["first", "second"]]
 
 
 @pytest.mark.asyncio
@@ -377,7 +386,7 @@ class TestUnknownHandle:
     """
 
     async def test_is_an_error_flagged_result_not_a_protocol_error(self) -> None:
-        server = MCPServer(_agent(RecordingConfig(TestConfig("ok"))))
+        server = MCPServer(_agent(LLMCalls(), "ok"))
 
         async with connect_modern(server) as session:
             result = await session.call_tool("ask", {"message": "hi", "conversation": str(uuid4())})
@@ -385,8 +394,8 @@ class TestUnknownHandle:
         assert result.is_error is True
 
     async def test_does_not_start_a_conversation_under_the_supplied_string(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok"))
         chosen = str(uuid4())
 
         async with connect_modern(server) as session:
@@ -396,11 +405,11 @@ class TestUnknownHandle:
         assert rejected.is_error is True
         assert retried.is_error is True
         # Neither call reached the agent, so nothing was adopted under `chosen`.
-        assert config.prompts == []
+        assert _turn_texts(calls) == []
 
     async def test_does_not_fall_back_to_the_transport_session(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        server = MCPServer(_agent(config))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok"))
 
         async with connect(server) as session:
             await session.call_tool("ask", {"message": "first"})
@@ -408,7 +417,7 @@ class TestUnknownHandle:
 
         assert rejected.is_error is True
         # The handshake-era session's own history is untouched by the rejected call.
-        assert config.prompts == [["first"]]
+        assert _turn_texts(calls) == [["first"]]
 
 
 def _conversation_argument(tool: MCPTool) -> dict[str, Any]:
@@ -419,7 +428,7 @@ def _conversation_argument(tool: MCPTool) -> dict[str, Any]:
 @pytest.mark.asyncio
 class TestAdvertisedConversationArgument:
     async def test_present_when_conversations_are_enabled(self) -> None:
-        server = MCPServer(_agent(RecordingConfig(TestConfig("ok"))))
+        server = MCPServer(_agent(LLMCalls(), "ok"))
 
         async with connect(server) as session:
             (tool,) = (await session.list_tools()).tools
@@ -428,7 +437,7 @@ class TestAdvertisedConversationArgument:
         assert tool.input_schema["required"] == ["message"]
 
     async def test_absent_when_conversations_are_disabled(self) -> None:
-        server = MCPServer(_agent(RecordingConfig(TestConfig("ok"))), sessions=False)
+        server = MCPServer(_agent(LLMCalls(), "ok"), sessions=False)
 
         async with connect(server) as session:
             (tool,) = (await session.list_tools()).tools
@@ -437,7 +446,7 @@ class TestAdvertisedConversationArgument:
 
     async def test_description_states_the_configured_lifetime(self) -> None:
         server = MCPServer(
-            _agent(RecordingConfig(TestConfig("ok"))),
+            _agent(LLMCalls(), "ok"),
             sessions=SessionConfig(max_sessions=64, ttl=900.0),
         )
 
@@ -453,8 +462,8 @@ class TestAdvertisedConversationArgument:
         continuity either — which is why this is refused as unsupported rather
         than reported as an unknown handle.
         """
-        config = RecordingConfig(TestConfig("ok"))
-        server = MCPServer(_agent(config), sessions=False)
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok"), sessions=False)
 
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "first", "conversation": str(uuid4())})
@@ -470,7 +479,7 @@ class TestAdvertisedConversationArgument:
             )
         ]
         # Refused before the agent ran: a rejected call is not half a turn.
-        assert config.prompts == []
+        assert _turn_texts(calls) == []
 
 
 @pytest.mark.asyncio
@@ -507,8 +516,8 @@ async def test_stateless_transport_serves_conversations_by_handle() -> None:
     a session id; with handles it means "no transport session, conversations by
     handle", so it constructs without complaint and serves them.
     """
-    config = RecordingConfig(TestConfig("ok", "ok"))
-    app = MCPServer(_agent(config), stateless=True, json_response=True)
+    calls = LLMCalls()
+    app = MCPServer(_agent(calls, "ok", "ok"), stateless=True, json_response=True)
 
     async with serve(app) as client:
         first, response = await _modern_call_with_response(client, "first", request_id=1)
@@ -517,7 +526,7 @@ async def test_stateless_transport_serves_conversations_by_handle() -> None:
         handle = _modern_handle(first)
         await _modern_call(client, "second", request_id=2, conversation=handle)
 
-    assert config.prompts == [["first"], ["first", "second"]]
+    assert _turn_texts(calls) == [["first"], ["first", "second"]]
 
 
 @pytest.mark.asyncio
@@ -525,8 +534,8 @@ class TestRegistryGuaranteesApplyToHandles:
     """The registry keys on an opaque string, so a handle drops into it unchanged."""
 
     async def test_the_bound_evicts_a_handle_named_conversation(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok", "ok"))
-        server = MCPServer(_agent(config), sessions=SessionConfig(max_sessions=1))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok", "ok"), sessions=SessionConfig(max_sessions=1))
 
         async with connect_modern(server) as session:
             evicted = _handle(await session.call_tool("ask", {"message": "one"}))
@@ -537,8 +546,8 @@ class TestRegistryGuaranteesApplyToHandles:
 
     async def test_the_configured_storage_backend_holds_the_history(self) -> None:
         storage = _RecordingStorage()
-        config = RecordingConfig(TestConfig("ok", "ok"))
-        server = MCPServer(_agent(config), sessions=SessionConfig(storage=storage))
+        calls = LLMCalls()
+        server = MCPServer(_agent(calls, "ok", "ok"), sessions=SessionConfig(storage=storage))
 
         async with connect_modern(server) as session:
             first = _handle(await session.call_tool("ask", {"message": "first"}))
@@ -554,7 +563,7 @@ class TestRegistryGuaranteesApplyToHandles:
 async def test_custom_tools_are_untouched() -> None:
     """The handle applies to the conversational tool; a custom tool's state is its own."""
     server = MCPServer(
-        _agent(RecordingConfig(TestConfig("ok"))),
+        _agent(LLMCalls(), "ok"),
         tools=[MCPFunctionTool(name="echo", description="Echo", handler=_echo)],
     )
 
@@ -584,9 +593,9 @@ class _TokenVerifier:
         return _TOKENS.get(token)
 
 
-def _authenticated(config: RecordingConfig) -> MCPServer:
+def _authenticated(agent: Agent) -> MCPServer:
     return MCPServer(
-        _agent(config),
+        agent,
         json_response=True,
         security=require(
             oauth2_scheme(url="https://auth.example.com"),
@@ -606,19 +615,19 @@ class TestPrincipalBinding:
     """
 
     async def test_the_creating_principal_continues_normally(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
+        calls = LLMCalls()
 
-        async with serve(_authenticated(config)) as client:
+        async with serve(_authenticated(_agent(calls, "ok", "ok"))) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
             handle = _modern_handle(first)
             await _modern_call(client, "second", request_id=2, conversation=handle, token="alice")
 
-        assert config.prompts == [["first"], ["first", "second"]]
+        assert _turn_texts(calls) == [["first"], ["first", "second"]]
 
     async def test_another_principal_is_refused_indistinguishably(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok"))
+        calls = LLMCalls()
 
-        async with serve(_authenticated(config)) as client:
+        async with serve(_authenticated(_agent(calls, "ok", "ok"))) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
             handle = _modern_handle(first)
             stolen = await _modern_call(client, "second", request_id=2, conversation=handle, token="bob")
@@ -628,12 +637,12 @@ class TestPrincipalBinding:
         # Byte-for-byte the unknown-handle answer, so it does not disclose that
         # the handle exists.
         assert stolen["content"] == unknown["content"]
-        assert config.prompts == [["first"]]
+        assert _turn_texts(calls) == [["first"]]
 
     async def test_the_binding_is_checked_on_every_call_not_only_at_creation(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok", "ok"))
+        calls = LLMCalls()
 
-        async with serve(_authenticated(config)) as client:
+        async with serve(_authenticated(_agent(calls, "ok", "ok", "ok"))) as client:
             first = await _modern_call(client, "first", request_id=1, token="alice")
             handle = _modern_handle(first)
             continued = await _modern_call(client, "second", request_id=2, conversation=handle, token="alice")
@@ -653,9 +662,9 @@ class TestPrincipalBinding:
         as though the session did not exist, so the swapped caller never reaches
         the conversation to begin with.
         """
-        config = RecordingConfig(TestConfig("ok", "ok"))
+        calls = LLMCalls()
 
-        async with serve(_authenticated(config)) as client:
+        async with serve(_authenticated(_agent(calls, "ok", "ok"))) as client:
             headers = await _open_handshake_session(client, request_id=1, token="alice")
             await _handshake_call(client, headers, "first", request_id=2)
             swapped = await client.post(
@@ -671,12 +680,12 @@ class TestPrincipalBinding:
 
         assert swapped.status_code == 404
         # Alice's turn is the only one the agent ever saw.
-        assert config.prompts == [["first"]]
+        assert _turn_texts(calls) == [["first"]]
 
     async def test_a_token_with_no_subject_binds_via_its_client_id(self) -> None:
-        config = RecordingConfig(TestConfig("ok", "ok", "ok"))
+        calls = LLMCalls()
 
-        async with serve(_authenticated(config)) as client:
+        async with serve(_authenticated(_agent(calls, "ok", "ok", "ok"))) as client:
             first = await _modern_call(client, "first", request_id=1, token="kiosk")
             handle = _modern_handle(first)
             same = await _modern_call(client, "second", request_id=2, conversation=handle, token="kiosk")

@@ -18,7 +18,7 @@ class TestE2EClientTools:
     async def test_round_trip_with_local_tool(self) -> None:
         pair = make_pair(
             ToolCallEvent(name="get_weather", arguments='{"city": "Paris"}'),
-            after_tool="Weather report ready",
+            "Weather report ready",
             client_tools=[get_weather],
             streaming=False,
         )
@@ -31,7 +31,7 @@ class TestE2EClientTools:
         tool_call = ToolCallEvent(name="get_weather", arguments='{"city": "Paris"}')
         pair = make_pair(
             tool_call,
-            after_tool="all good",
+            "all good",
             client_tools=[get_weather],
             streaming=False,
         )
@@ -45,7 +45,7 @@ class TestE2EClientTools:
     async def test_streaming_tool_round_trip(self) -> None:
         pair = make_pair(
             ToolCallEvent(name="get_weather", arguments='{"city": "Paris"}'),
-            after_tool="Done",
+            "Done",
             client_tools=[get_weather],
             streaming=True,
         )

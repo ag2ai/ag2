@@ -43,8 +43,6 @@ from ag2.network.identity import (
 from ag2.task import TaskState
 from ag2.testing import TestConfig
 
-from ._helpers import ScriptedConfig
-
 
 def _agent(name: str, *events: object) -> Agent:
     return Agent(name=name, config=TestConfig(*events))
@@ -346,7 +344,7 @@ async def test_task_mirror_records_observation_on_capability_tagged_task() -> No
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    bob_agent = Agent(name="bob", config=ScriptedConfig("ack"))
+    bob_agent = Agent(name="bob", config=TestConfig("ack", shared_script=True))
     bob = await hub.register(
         bob_agent,
         resume=Resume(claimed_capabilities=["analysis"]),
@@ -445,7 +443,7 @@ async def test_task_capability_survives_hub_hydrate() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         store = DiskKnowledgeStore(Path(tmpdir))
         hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-        bob_agent = Agent(name="bob", config=ScriptedConfig("ack"))
+        bob_agent = Agent(name="bob", config=TestConfig("ack", shared_script=True))
         bob = await hub.register(
             bob_agent,
             resume=Resume(claimed_capabilities=["analysis"]),
@@ -484,7 +482,7 @@ async def test_task_mirror_no_observation_when_capability_absent() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    bob_agent = Agent(name="bob", config=ScriptedConfig("ack"))
+    bob_agent = Agent(name="bob", config=TestConfig("ack", shared_script=True))
     bob = await hub.register(bob_agent)
 
     stream = MemoryStream()

@@ -25,7 +25,7 @@ async def test_server_sees_full_history_on_second_turn(streaming: bool) -> None:
     reply2 = await reply1.ask("second user message")
     assert reply2.response.content == "ok"
 
-    [first_call, second_call] = pair.recording.calls
+    [first_call, second_call] = pair.recording.messages
 
     assert first_call == [ModelRequest([TextInput("first user message")])]
     assert second_call == [

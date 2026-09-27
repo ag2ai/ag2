@@ -2,9 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
+from typing import Any
 
-from ag2.events import BaseEvent, DataInput, Input, ModelReasoning, ProviderReplay, TextInput
+from ag2 import Context
+from ag2.events import BaseEvent, DataInput, Input, ModelReasoning, ModelResponse, ProviderReplay, TextInput
+from ag2.middleware import BaseMiddleware, LLMCall, Middleware
 from ag2.tools import tool
 from ag2.tools.types import FunctionTool, FunctionToolSchema, Tool, ToolSchema
 
@@ -31,6 +34,36 @@ class ProviderTurnState(BaseEvent, ProviderReplay):
     """
 
     __replay_role__ = "turn"
+
+
+class LLMCalls:
+    """What each model call was given, read on a real ``on_llm_call`` hook.
+
+    For assertions past ``TrackingConfig``, which keeps only ``messages[-1]``.
+
+    Pass :meth:`middleware` to ``Agent(middleware=)`` to see the history before
+    assembly, or to ``ask(middleware=)`` to see exactly what the client gets.
+    """
+
+    def __init__(self) -> None:
+        self.messages: list[list[BaseEvent]] = []
+        self.prompts: list[list[str]] = []
+        self.variables: list[dict[str, Any]] = []
+
+    def middleware(self) -> Middleware:
+        return Middleware(_LLMCallRecorder, calls=self)
+
+
+class _LLMCallRecorder(BaseMiddleware):
+    def __init__(self, event: BaseEvent, context: Context, calls: LLMCalls) -> None:
+        super().__init__(event, context)
+        self._calls = calls
+
+    async def on_llm_call(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
+        self._calls.messages.append(list(events))
+        self._calls.prompts.append(list(context.prompt))
+        self._calls.variables.append(dict(context.variables))
+        return await call_next(events, context)
 
 
 @tool

@@ -6,44 +6,18 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
-from typing_extensions import Self
 
-from ag2 import Agent, Context
+from ag2 import Agent
 from ag2.a2ui import A2UIClientCapabilities, a2ui_action
 from ag2.a2ui._runtime import _A2UIRuntime
 from ag2.a2ui.actions import collect_action_declarations, collect_server_actions
 from ag2.a2ui.dispatch import A2UIMessageFrame, A2UIProseFrame, stream_turn
 from ag2.a2ui.request import parse_request
-from ag2.config import LLMClient, ModelConfig
-from ag2.events import BaseEvent, ModelMessage, ModelResponse
+from ag2.middleware import Middleware
 from ag2.testing import TestConfig
+from test._helpers import LLMCalls
 
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
-
-
-class _PromptCaptureConfig(ModelConfig):
-    """Records the resolved ``context.prompt`` the agent sends to the model."""
-
-    def __init__(self) -> None:
-        self.prompts: list[list[str]] = []
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "_PromptCaptureClient":
-        return _PromptCaptureClient(self.prompts)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class _PromptCaptureClient(LLMClient):
-    def __init__(self, sink: list[list[str]]) -> None:
-        self._sink = sink
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self._sink.append(list(context.prompt))
-        return ModelResponse(ModelMessage("ok"))
 
 
 _A2UI_RESPONSE = (
@@ -53,9 +27,11 @@ _A2UI_RESPONSE = (
 )
 
 
-def _agent_and_runtime(config: Any = None, *, validate_responses: bool = True) -> "tuple[Agent, _A2UIRuntime]":
+def _agent_and_runtime(
+    config: Any = None, *, validate_responses: bool = True, middleware: Sequence[Middleware] = ()
+) -> "tuple[Agent, _A2UIRuntime]":
     """Build a plain Agent plus its A2UI runtime (the dispatch path's two inputs)."""
-    agent = Agent(name="t", config=config)
+    agent = Agent(name="t", config=config, middleware=middleware)
     rt = _A2UIRuntime(validate_responses=validate_responses)
     return agent, rt
 
@@ -89,25 +65,25 @@ class TestStreamTurn:
             [f async for f in stream_turn(agent, rt, req)]
 
     async def test_client_capabilities_injected_into_prompt(self) -> None:
-        config = _PromptCaptureConfig()
-        agent, rt = _agent_and_runtime(config, validate_responses=False)
+        calls = LLMCalls()
+        agent, rt = _agent_and_runtime(TestConfig("ok"), validate_responses=False, middleware=[calls.middleware()])
         req = parse_request({"messages": [{"role": "user", "content": "hi"}]}, resolve_action=rt.get_action)
         req.client_capabilities = A2UIClientCapabilities(supported_catalog_ids=["https://other.example/c.json"])
 
         [_ async for _ in stream_turn(agent, rt, req)]
 
-        joined = "\n".join(config.prompts[0])
+        joined = "\n".join(calls.prompts[0])
         assert "## A2UI Client Capabilities" in joined
         assert "did NOT list" in joined
 
     async def test_no_capabilities_no_negotiation_prompt(self) -> None:
-        config = _PromptCaptureConfig()
-        agent, rt = _agent_and_runtime(config, validate_responses=False)
+        calls = LLMCalls()
+        agent, rt = _agent_and_runtime(TestConfig("ok"), validate_responses=False, middleware=[calls.middleware()])
         req = parse_request({"messages": [{"role": "user", "content": "hi"}]}, resolve_action=rt.get_action)
 
         [_ async for _ in stream_turn(agent, rt, req)]
 
-        joined = "\n".join(config.prompts[0])
+        joined = "\n".join(calls.prompts[0])
         assert "## A2UI Client Capabilities" not in joined
 
     async def test_history_is_stateless_per_turn(self) -> None:

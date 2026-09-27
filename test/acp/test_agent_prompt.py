@@ -4,73 +4,30 @@
 
 import base64
 import threading
-from collections.abc import Sequence
 from typing import Any
 
 import acp
 import pytest
 from acp import schema
 from acp.exceptions import RequestError
-from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.acp import ACPAgent
 from ag2.acp.executor import META_VARIABLE, AgentExecutor, UpdateDeliveryError
 from ag2.acp.sessions import SessionStore
 from ag2.acp.testing import RecordingClient, connect
-from ag2.config import LLMClient, ModelConfig
-from ag2.events import BaseEvent, ModelMessageChunk, ModelResponse, ToolCallEvent
+from ag2.events import ModelMessageChunk, ToolCallEvent
 from ag2.testing import TestConfig
-
-
-class _RecordingClient(LLMClient):
-    """Wraps another client, capturing the full message list sent on each call."""
-
-    def __init__(
-        self,
-        client: LLMClient,
-        sink: list[list[BaseEvent]],
-        variables: list[dict[Any, Any]],
-        prompts: list[list[str]],
-    ) -> None:
-        self.client = client
-        self.sink = sink
-        self.variables = variables
-        self.prompts = prompts
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self.sink.append(list(messages))
-        self.variables.append(dict(context.variables))
-        self.prompts.append(list(context.prompt))
-        return await self.client(messages, context=context, **kwargs)
-
-
-class _RecordingConfig(ModelConfig):
-    """Records every message list the framework sends to the LLM, per turn."""
-
-    def __init__(self, config: ModelConfig) -> None:
-        self.config = config
-        self.calls: list[list[BaseEvent]] = []
-        self.variables: list[dict[Any, Any]] = []
-        self.prompts: list[list[str]] = []
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _RecordingClient:
-        return _RecordingClient(self.config.create(), self.calls, self.variables, self.prompts)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
+from test._helpers import LLMCalls
 
 
 def _agent(*turns: object) -> Agent:
     return Agent("workie", config=TestConfig(*(turns or ("ok",))))
 
 
-def _recording_agent(*turns: object) -> tuple[Agent, _RecordingConfig]:
-    config = _RecordingConfig(TestConfig(*(turns or ("ok",))))
-    return Agent("workie", config=config), config
+def _recording_agent(*turns: object) -> tuple[Agent, LLMCalls]:
+    calls = LLMCalls()
+    return Agent("workie", config=TestConfig(*(turns or ("ok",))), middleware=[calls.middleware()]), calls
 
 
 def _texts(updates: list[Any]) -> list[str]:
@@ -97,16 +54,16 @@ class TestPromptTurn:
                 await conn.prompt(session_id="never-issued", prompt=[acp.text_block("hi")])
 
     async def test_prompt_text_reaches_the_agent(self) -> None:
-        agent, config = _recording_agent()
+        agent, calls = _recording_agent()
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hello agent")])
 
-        assert "hello agent" in str(config.calls[-1])
+        assert "hello agent" in str(calls.messages[-1])
 
     async def test_multiple_text_blocks_all_reach_the_agent(self) -> None:
-        agent, config = _recording_agent()
+        agent, calls = _recording_agent()
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
@@ -115,12 +72,12 @@ class TestPromptTurn:
                 prompt=[acp.text_block("first"), acp.text_block("second")],
             )
 
-        rendered = str(config.calls[-1])
+        rendered = str(calls.messages[-1])
         assert "first" in rendered
         assert "second" in rendered
 
     async def test_an_embedded_text_resource_reaches_the_agent(self) -> None:
-        agent, config = _recording_agent()
+        agent, calls = _recording_agent()
         resource = schema.EmbeddedResourceContentBlock(
             type="resource",
             resource=schema.TextResourceContents(uri="file:///notes.md", text="the embedded body"),
@@ -130,7 +87,7 @@ class TestPromptTurn:
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(session_id=session.session_id, prompt=[resource])
 
-        assert "the embedded body" in str(config.calls[-1])
+        assert "the embedded body" in str(calls.messages[-1])
 
     async def test_an_image_block_is_accepted(self) -> None:
         image = schema.ImageContentBlock(
@@ -147,14 +104,14 @@ class TestPromptTurn:
         assert _texts(recorder.updates_for(session.session_id)) == ["saw it"]
 
     async def test_a_resource_link_is_referenced_but_never_fetched(self) -> None:
-        agent, config = _recording_agent()
+        agent, calls = _recording_agent()
         link = schema.ResourceContentBlock(type="resource_link", uri="file:///etc/passwd", name="passwd")
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(session_id=session.session_id, prompt=[link])
 
-        rendered = str(config.calls[-1])
+        rendered = str(calls.messages[-1])
         assert "file:///etc/passwd" in rendered  # the reference is visible
         assert "root:" not in rendered  # the file itself was not read
 
@@ -351,7 +308,7 @@ class TestUpdateProjection:
 @pytest.mark.asyncio
 class TestSessionIsolation:
     async def test_one_session_never_sees_another_prompt(self) -> None:
-        agent, config = _recording_agent()
+        agent, calls = _recording_agent()
 
         async with connect(ACPAgent(agent)) as (conn, _):
             first = await conn.new_session(cwd="/tmp")
@@ -359,18 +316,18 @@ class TestSessionIsolation:
             await conn.prompt(session_id=first.session_id, prompt=[acp.text_block("secret to first")])
             await conn.prompt(session_id=second.session_id, prompt=[acp.text_block("hello second")])
 
-        assert "secret to first" not in str(config.calls[-1])
-        assert "hello second" in str(config.calls[-1])
+        assert "secret to first" not in str(calls.messages[-1])
+        assert "hello second" in str(calls.messages[-1])
 
     async def test_history_accumulates_within_one_session(self) -> None:
-        agent, config = _recording_agent()
+        agent, calls = _recording_agent()
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("remember this")])
             await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("and now")])
 
-        assert "remember this" in str(config.calls[-1])
+        assert "remember this" in str(calls.messages[-1])
 
     async def test_every_update_is_tagged_with_its_own_session(self) -> None:
         async with connect(ACPAgent(_agent("reply"))) as (conn, recorder):
@@ -498,7 +455,7 @@ class TestRequestMetadata:
         assert session.meta == {}
 
     async def test_prompt_meta_reaches_the_agent_as_a_context_variable(self) -> None:
-        agent, config = _recording_agent()
+        agent, calls = _recording_agent()
         server = ACPAgent(agent)
 
         async with connect(server) as (conn, _):
@@ -512,7 +469,7 @@ class TestRequestMetadata:
                 },
             )
 
-        assert config.variables[-1][META_VARIABLE] == {"ag2.space": {"event": "$abc"}}
+        assert calls.variables[-1][META_VARIABLE] == {"ag2.space": {"event": "$abc"}}
 
 
 @pytest.mark.asyncio
@@ -525,7 +482,7 @@ class TestDynamicPrompt:
     """
 
     async def test_a_dynamic_prompt_is_resolved(self) -> None:
-        agent, config = _recording_agent()
+        agent, calls = _recording_agent()
 
         @agent.prompt
         def policy(ctx: Context) -> str:
@@ -535,11 +492,11 @@ class TestDynamicPrompt:
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("refund me")])
 
-        assert config.prompts[-1] == ["POLICY: decline refunds."]
+        assert calls.prompts[-1] == ["POLICY: decline refunds."]
 
     async def test_the_static_prompt_still_comes_first(self) -> None:
-        config = _RecordingConfig(TestConfig("ok"))
-        agent = Agent("workie", prompt="You are workie.", config=config)
+        calls = LLMCalls()
+        agent = Agent("workie", prompt="You are workie.", config=TestConfig("ok"), middleware=[calls.middleware()])
 
         @agent.prompt
         def policy(ctx: Context) -> str:
@@ -549,11 +506,13 @@ class TestDynamicPrompt:
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
 
-        assert config.prompts[-1] == ["You are workie.", "POLICY: decline refunds."]
+        assert calls.prompts[-1] == ["You are workie.", "POLICY: decline refunds."]
 
     async def test_a_dynamic_prompt_reads_a_context_variable(self) -> None:
-        config = _RecordingConfig(TestConfig("ok"))
-        agent = Agent("workie", config=config, variables={"tier": "enterprise"})
+        calls = LLMCalls()
+        agent = Agent(
+            "workie", config=TestConfig("ok"), middleware=[calls.middleware()], variables={"tier": "enterprise"}
+        )
 
         @agent.prompt
         def tiered(ctx: Context) -> str:
@@ -563,11 +522,11 @@ class TestDynamicPrompt:
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
 
-        assert config.prompts[-1] == ["Caller tier: enterprise."]
+        assert calls.prompts[-1] == ["Caller tier: enterprise."]
 
     async def test_a_dynamic_prompt_reads_the_client_meta(self) -> None:
         """The Client's ``_meta`` is per-request, so a hook is where it gets used."""
-        agent, config = _recording_agent()
+        agent, calls = _recording_agent()
 
         @agent.prompt
         def provenance(ctx: Context) -> str:
@@ -584,12 +543,12 @@ class TestDynamicPrompt:
             meta={"ag2.space": {"room": "!r"}},
         )
 
-        assert config.prompts[-1] == ["Room: !r."]
+        assert calls.prompts[-1] == ["Room: !r."]
 
     async def test_the_prompt_matches_what_ask_sends(self) -> None:
         """Parity is the whole point: one agent, one prompt, whatever the transport."""
-        config = _RecordingConfig(TestConfig("ok"))
-        agent = Agent("workie", prompt="You are workie.", config=config)
+        calls = LLMCalls()
+        agent = Agent("workie", prompt="You are workie.", config=TestConfig("ok"), middleware=[calls.middleware()])
 
         @agent.prompt
         def policy(ctx: Context) -> str:
@@ -599,10 +558,10 @@ class TestDynamicPrompt:
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
 
-        over_acp = config.prompts[-1]
+        over_acp = calls.prompts[-1]
         await agent.ask("hi")
 
-        assert over_acp == config.prompts[-1]
+        assert over_acp == calls.prompts[-1]
 
 
 @pytest.mark.asyncio

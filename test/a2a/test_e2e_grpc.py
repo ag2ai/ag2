@@ -32,7 +32,7 @@ class TestE2EGrpc:
             await pair.grpc_server.stop(grace=0)
 
     async def test_multi_turn_history_propagated_through_grpc(self) -> None:
-        pair = await start_grpc_pair("ack", streaming=False)
+        pair = await start_grpc_pair("ack", "ack", streaming=False)
 
         try:
             reply1 = await pair.client.ask("first")

@@ -29,6 +29,7 @@ from ag2.network import (
     Resume,
     parse_hub_urn,
 )
+from ag2.testing import TestConfig
 
 
 class _RecordingProxy:
@@ -204,10 +205,8 @@ class TestDispatchRouting:
 
         from ag2 import Agent
 
-        from ._helpers import ScriptedConfig
-
         alice = await alice_hc.register(
-            Agent(name="alice", config=ScriptedConfig()),
+            Agent(name="alice", config=TestConfig()),
             Passport(name="alice"),
             Resume(),
         )
@@ -258,10 +257,8 @@ class TestDispatchRouting:
 
         from ag2 import Agent
 
-        from ._helpers import ScriptedConfig
-
         alice = await alice_hc.register(
-            Agent(name="alice", config=ScriptedConfig()),
+            Agent(name="alice", config=TestConfig()),
             Passport(name="alice"),
             Resume(),
         )
@@ -316,10 +313,8 @@ class TestDispatchRouting:
 
         from ag2 import Agent
 
-        from ._helpers import ScriptedConfig
-
         alice = await alice_hc.register(
-            Agent(name="alice", config=ScriptedConfig()),
+            Agent(name="alice", config=TestConfig()),
             Passport(name="alice"),
             Resume(),
         )
@@ -376,15 +371,13 @@ class TestDispatchRouting:
 
         from ag2 import Agent
 
-        from ._helpers import ScriptedConfig
-
         alice = await alice_hc.register(
-            Agent(name="alice", config=ScriptedConfig()),
+            Agent(name="alice", config=TestConfig()),
             Passport(name="alice"),
             Resume(),
         )
         carol = await carol_hc.register(
-            Agent(name="carol", config=ScriptedConfig()),
+            Agent(name="carol", config=TestConfig("", shared_script=True)),
             Passport(name="carol"),
             Resume(),
         )

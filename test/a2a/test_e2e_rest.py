@@ -26,7 +26,7 @@ class TestE2ERest:
         assert reply.response.content == "rest streamed"
 
     async def test_multi_turn_history_propagated_through_rest(self) -> None:
-        pair = make_rest_pair("ack", streaming=False)
+        pair = make_rest_pair("ack", "ack", streaming=False)
 
         reply1 = await pair.client.ask("first")
         assert reply1.response.content == "ack"

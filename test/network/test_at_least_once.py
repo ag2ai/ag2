@@ -44,8 +44,9 @@ from ag2.network import (
     WelcomeFrame,
 )
 from ag2.network.ids import make_id
+from ag2.testing import TestConfig
 
-from ._helpers import ScriptedConfig, wait_for_text_count
+from ._helpers import wait_for_text_count
 
 
 def _post_frame(envelope: Envelope) -> RequestFrame:
@@ -55,7 +56,7 @@ def _post_frame(envelope: Envelope) -> RequestFrame:
 
 
 def _agent(name: str, *replies: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig(*replies))
+    return Agent(name=name, config=TestConfig(*replies, shared_script=True))
 
 
 async def _new_hub() -> Hub:
@@ -137,7 +138,7 @@ class TestReceiptCursorAdvance:
         delivery, so the cursor follows the WAL head."""
         hub = await _new_hub()
         alice = await hub.register(_agent("alice"))
-        bob = await hub.register(_agent("bob"))
+        bob = await hub.register(_agent("bob", ""))
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -168,7 +169,8 @@ class TestReceiptCursorAdvance:
 
             hub = await _new_hub()
             alice = await hub.register(_agent("alice"))
-            bob = await hub.register(_agent("bob"))
+            # bob answers each of the 20 messages below with an empty reply.
+            bob = await hub.register(_agent("bob", *[""] * 20))
 
             try:
                 # conversation channel: no turn-taking, so one sender may
@@ -490,7 +492,7 @@ class TestReplayOnReconnect:
         alice_hc = HubClient(link, hub=hub)
         bob_hc = HubClient(link, hub=hub)
         alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        bob = await bob_hc.register(_agent("bob", ""), Passport(name="bob"), Resume())
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -554,7 +556,7 @@ class TestReplayOnReconnect:
         alice_hc = HubClient(link, hub=hub)
         bob_hc = HubClient(link, hub=hub)
         alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        await bob_hc.register(_agent("bob", ""), Passport(name="bob"), Resume())
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -591,7 +593,7 @@ class TestReplayOnReconnect:
         alice_hc = HubClient(link, hub=hub)
         bob_hc = HubClient(link, hub=hub)
         alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        bob = await bob_hc.register(_agent("bob", ""), Passport(name="bob"), Resume())
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -746,7 +748,7 @@ class TestCursorPersistence:
         store = MemoryKnowledgeStore()
         hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
         alice = await hub.register(_agent("alice"))
-        bob = await hub.register(_agent("bob"))
+        bob = await hub.register(_agent("bob", ""))
         channel = await alice.open(type="discussion", target=["bob"])
         await channel.send("hello")
         await wait_for_text_count(hub, channel.channel_id, 1)
@@ -770,7 +772,7 @@ class TestCursorPersistence:
     async def test_unregister_clears_cursor_and_disk_file(self) -> None:
         hub = await _new_hub()
         alice = await hub.register(_agent("alice"))
-        bob = await hub.register(_agent("bob"))
+        bob = await hub.register(_agent("bob", ""))
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -796,7 +798,7 @@ class TestRedeliveryIdempotency:
         conversation channel (free-form turns) so only the dedup guard —
         not turn ordering — can prevent the second reply."""
         hub = await _new_hub()
-        alice = await hub.register(_agent("alice"))
+        alice = await hub.register(_agent("alice", ""))
         bob = await hub.register(_agent("bob", "reply-A", "reply-B"))
 
         try:

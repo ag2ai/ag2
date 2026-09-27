@@ -15,11 +15,10 @@ from ag2.a2ui.a2a import create_a2ui_parts
 from ag2.a2ui.a2a.executor import _extract_a2ui_envelopes
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
+from test._helpers import LLMCalls
 
 from ._helpers import (
     FUNCTION_RESULT_MARK,
-    CallFunctionThenComplete,
-    CapturingConfig,
     MetadataInterceptor,
     client_for,
     subscribe_task_stream,
@@ -155,7 +154,7 @@ class TestIncomingActionRewrite:
         assert reply.response.content == "All set."
 
     async def test_registered_action_is_not_synthesized_into_the_prompt(self) -> None:
-        config = CapturingConfig()
+        calls = LLMCalls()
 
         @a2ui_action(description="Submit the form")
         def submit(email: str) -> str:
@@ -163,12 +162,12 @@ class TestIncomingActionRewrite:
 
         # A registered click is handled on the server, so its name/context must
         # NOT leak into the synthesized user turn (only the "act" message does).
-        agent = Agent(name="ui_agent", config=config)
+        agent = Agent(name="ui_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
         client = client_for(agent, actions=[submit], validate_responses=False)
 
         await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
 
-        synthesized = synthesized_text(config.messages[-1])
+        synthesized = synthesized_text(calls.messages[-1])
         assert "user@example.com" not in synthesized
         assert "clicked" not in synthesized
 
@@ -202,8 +201,9 @@ class TestIncomingActionRewrite:
         assert recorder.emails == ["user@example.com"]
 
     async def test_unregistered_action_becomes_generic_prompt(self) -> None:
-        config = CapturingConfig()
-        agent = Agent(name="ui_agent", config=config)  # no registered actions
+        calls = LLMCalls()
+        # No registered actions.
+        agent = Agent(name="ui_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
         client = client_for(agent, validate_responses=False)
 
         await client.ask("act", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ACTION_ENVELOPE])})
@@ -211,7 +211,7 @@ class TestIncomingActionRewrite:
         # No registered action → the click is rewritten generically (not dropped):
         # the button name and its context still reach the model so the LLM can
         # react to the button it itself rendered.
-        synthesized = synthesized_text(config.messages[-1])
+        synthesized = synthesized_text(calls.messages[-1])
         assert "clicked" in synthesized
         assert "submit" in synthesized
         assert "user@example.com" in synthesized
@@ -219,28 +219,28 @@ class TestIncomingActionRewrite:
 
 @pytest.mark.asyncio
 async def test_incoming_error_envelope_becomes_corrective_prompt() -> None:
-    config = CapturingConfig()
-    agent = Agent(name="ui_agent", config=config)
+    calls = LLMCalls()
+    agent = Agent(name="ui_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
     client = client_for(agent, validate_responses=False)
 
     await client.ask("retry", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([ERROR_ENVELOPE])})
 
-    synthesized = synthesized_text(config.messages[-1])
+    synthesized = synthesized_text(calls.messages[-1])
     assert "VALIDATION_FAILED" in synthesized
     assert "/components/0" in synthesized
 
 
 @pytest.mark.asyncio
 async def test_incoming_function_response_becomes_continuation_prompt() -> None:
-    config = CapturingConfig()
-    agent = Agent(name="ui_agent", config=config)
+    calls = LLMCalls()
+    agent = Agent(name="ui_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
     client = client_for(agent, protocol_version="v1.0", validate_responses=False)
 
     await client.ask(
         "continue", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])}
     )
 
-    synthesized = synthesized_text(config.messages[-1])
+    synthesized = synthesized_text(calls.messages[-1])
     assert "openUrl" in synthesized
     assert "fc-1" in synthesized
 
@@ -258,7 +258,14 @@ class TestCallFunctionPause:
             hitl_prompts.append("called")
             return FUNCTION_RESULT_MARK
 
-        agent = Agent(name="ui_agent", config=CallFunctionThenComplete(_CALL_FUNCTION_BLOCK))
+        # The executor makes a run per request, so the script must carry on
+        # into the continuation that delivers the function result.
+        config = TestConfig(
+            f"Opening the link.\n<a2ui-json>\n{_CALL_FUNCTION_BLOCK}\n</a2ui-json>",
+            "All done.",
+            shared_script=True,
+        )
+        agent = Agent(name="ui_agent", config=config)
         client = client_for(agent, streaming=True, hitl_hook=hitl_hook, protocol_version="v1.0")
         stream = MemoryStream()
         payloads, states = subscribe_task_stream(stream)
@@ -290,22 +297,22 @@ class TestCapabilitiesNegotiation:
     """Client capabilities advertised in message metadata fold into the turn's system prompt."""
 
     async def test_client_caps_injected_into_prompt(self) -> None:
-        config = CapturingConfig()
-        agent = Agent(name="ui_agent", config=config)
+        calls = LLMCalls()
+        agent = Agent(name="ui_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
         caps = {"a2uiClientCapabilities": {VERSION: {"supportedCatalogIds": ["https://other.example/c.json"]}}}
         client = client_for(agent, interceptors=[MetadataInterceptor(caps)], validate_responses=False)
 
         await client.ask("hi")
 
-        prompt = "\n".join(config.prompts[-1])
+        prompt = "\n".join(calls.prompts[-1])
         assert "## A2UI Client Capabilities" in prompt
         assert "did NOT list" in prompt  # agent catalog absent from client's advertised list
 
     async def test_no_caps_no_negotiation_prompt(self) -> None:
-        config = CapturingConfig()
-        agent = Agent(name="ui_agent", config=config)
+        calls = LLMCalls()
+        agent = Agent(name="ui_agent", config=TestConfig("ok"), middleware=[calls.middleware()])
         client = client_for(agent, validate_responses=False)
 
         await client.ask("hi")
 
-        assert "## A2UI Client Capabilities" not in "\n".join(config.prompts[-1])
+        assert "## A2UI Client Capabilities" not in "\n".join(calls.prompts[-1])

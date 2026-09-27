@@ -14,8 +14,9 @@ from ag2.mcp.errors import UnknownConversationError
 from ag2.mcp.executor import AgentExecutor, _session_id
 from ag2.mcp.sessions import STDIO_SESSION, SessionConfig, SessionStore
 from ag2.testing import TestConfig
+from test._helpers import LLMCalls
 
-from ._helpers import Clock, RecordingConfig
+from ._helpers import Clock
 
 
 def _request_context(session_id: str | None) -> SimpleNamespace:
@@ -31,47 +32,63 @@ def _stdio_request_context() -> SimpleNamespace:
 @pytest.mark.asyncio
 class TestMultiTurnHistory:
     async def test_same_session_accumulates_history(self) -> None:
-        config = RecordingConfig(TestConfig("ok"))
-        executor = AgentExecutor(Agent("a", config=config), stream_progress=False, session_store=SessionStore())
+        calls = LLMCalls()
+        executor = AgentExecutor(
+            Agent("a", config=TestConfig("ok"), middleware=[calls.middleware()]),
+            stream_progress=False,
+            session_store=SessionStore(),
+        )
         rc = _request_context("sess-1")
 
         await executor.call("ask", message="first", request_context=rc)
         await executor.call("ask", message="second", request_context=rc)
 
         # Second turn sees the first turn replayed from session history.
-        assert len(config.calls) == 2
-        assert len(config.calls[1]) > len(config.calls[0])
+        assert len(calls.messages) == 2
+        assert len(calls.messages[1]) > len(calls.messages[0])
 
     async def test_different_sessions_are_isolated(self) -> None:
-        config = RecordingConfig(TestConfig("ok"))
-        executor = AgentExecutor(Agent("a", config=config), stream_progress=False, session_store=SessionStore())
+        calls = LLMCalls()
+        executor = AgentExecutor(
+            Agent("a", config=TestConfig("ok"), middleware=[calls.middleware()]),
+            stream_progress=False,
+            session_store=SessionStore(),
+        )
 
         await executor.call("ask", message="first", request_context=_request_context("sess-1"))
         await executor.call("ask", message="hello", request_context=_request_context("sess-2"))
 
         # A brand-new session starts from an empty history, like the first turn.
-        assert len(config.calls[1]) == len(config.calls[0])
+        assert len(calls.messages[1]) == len(calls.messages[0])
 
     async def test_stateless_when_sessions_disabled(self) -> None:
-        config = RecordingConfig(TestConfig("ok"))
-        executor = AgentExecutor(Agent("a", config=config), stream_progress=False, session_store=None)
+        calls = LLMCalls()
+        executor = AgentExecutor(
+            Agent("a", config=TestConfig("ok"), middleware=[calls.middleware()]),
+            stream_progress=False,
+            session_store=None,
+        )
         rc = _request_context("sess-1")
 
         await executor.call("ask", message="first", request_context=rc)
         await executor.call("ask", message="second", request_context=rc)
 
         # No session store -> fresh stream each call -> no accumulation.
-        assert len(config.calls[1]) == len(config.calls[0])
+        assert len(calls.messages[1]) == len(calls.messages[0])
 
     async def test_stateless_http_without_session_id(self) -> None:
-        config = RecordingConfig(TestConfig("ok"))
-        executor = AgentExecutor(Agent("a", config=config), stream_progress=False, session_store=SessionStore())
+        calls = LLMCalls()
+        executor = AgentExecutor(
+            Agent("a", config=TestConfig("ok"), middleware=[calls.middleware()]),
+            stream_progress=False,
+            session_store=SessionStore(),
+        )
 
         # HTTP request but no server-issued mcp-session-id (stateless transport).
         await executor.call("ask", message="first", request_context=_request_context(None))
         await executor.call("ask", message="second", request_context=_request_context(None))
 
-        assert len(config.calls[1]) == len(config.calls[0])
+        assert len(calls.messages[1]) == len(calls.messages[0])
 
 
 @pytest.mark.asyncio

@@ -2,49 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
 from typing import Any
 
 import pytest
 
-from ag2 import Agent, Context
+from ag2 import Agent
 from ag2.a2ui import A2UIMessageEvent, A2UIValidationFailedEvent
 from ag2.a2ui._runtime import _A2UIRuntime
 from ag2.a2ui.middleware import _to_prose_message
-from ag2.config import LLMClient, ModelConfig
 from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
-
-
-class _RecordingClient(LLMClient):
-    """Wraps another client, snapshotting the full events list of each call."""
-
-    def __init__(self, inner: LLMClient, calls: list[list[BaseEvent]]) -> None:
-        self._inner = inner
-        self._calls = calls
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self._calls.append(list(messages))
-        return await self._inner(messages, context=context, **kwargs)
-
-
-class _RecordingConfig(ModelConfig):
-    """A ``ModelConfig`` that records every events list sent to the LLM."""
-
-    def __init__(self, inner: ModelConfig, calls: list[list[BaseEvent]]) -> None:
-        self._inner = inner
-        self._calls = calls
-
-    def copy(self) -> "_RecordingConfig":
-        return self
-
-    def create(self) -> _RecordingClient:
-        return _RecordingClient(self._inner.create(), self._calls)
-
-    def create_files_client(self) -> None:
-        return None
-
+from test._helpers import LLMCalls
 
 VALID_RESPONSE = (
     "Here is your UI.\n<a2ui-json>\n"
@@ -190,9 +159,10 @@ class TestA2UIValidationMiddleware:
         # Regression: the retry must include the prior (invalid) assistant turn as
         # a ModelResponse so the LLM can see what to fix. A bare ModelMessage is
         # silently dropped by provider mappers, defeating the correction.
-        calls: list[list[BaseEvent]] = []
+        # Innermost, behind the A2UI retry: sees every attempt the client gets.
+        calls = LLMCalls()
         agent, rt = _build(
-            _RecordingConfig(TestConfig(INVALID_RESPONSE_MISSING_CATALOG, VALID_RESPONSE), calls),
+            TestConfig(INVALID_RESPONSE_MISSING_CATALOG, VALID_RESPONSE),
             validate_responses=True,
             validation_retries=1,
         )
@@ -200,12 +170,15 @@ class TestA2UIValidationMiddleware:
         stream = _make_collecting_stream(events)
 
         reply = await agent.ask(
-            "Show UI", stream=stream, middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section]
+            "Show UI",
+            stream=stream,
+            middleware=[*rt.middleware_factories(), calls.middleware()],
+            prompt=[rt.system_prompt_section],
         )
 
         assert reply.body == "Here is your UI."
-        assert len(calls) == 2  # the turn was retried
-        retry_events = calls[1]
+        assert len(calls.messages) == 2  # the turn was retried
+        retry_events = calls.messages[1]
         assert any(
             isinstance(e, ModelResponse) and e.message is not None and "createSurface" in (e.message.content or "")
             for e in retry_events
@@ -351,21 +324,25 @@ class TestA2UIExtractionMiddleware:
         # Validation off: even a schema-invalid block is published as-is and
         # stripped from prose — no schema check, no retry. The client validates
         # and degrades gracefully (per the A2UI spec), not the server.
-        calls: list[list[BaseEvent]] = []
+        # Innermost, behind the A2UI retry: sees every attempt the client gets.
+        calls = LLMCalls()
         agent, rt = _build(
-            _RecordingConfig(TestConfig(INVALID_RESPONSE_MISSING_CATALOG), calls),
+            TestConfig(INVALID_RESPONSE_MISSING_CATALOG),
             validate_responses=False,
         )
         events: list[A2UIMessageEvent] = []
         stream = _make_collecting_stream(events)
 
         reply = await agent.ask(
-            "Show UI", stream=stream, middleware=rt.middleware_factories(), prompt=[rt.system_prompt_section]
+            "Show UI",
+            stream=stream,
+            middleware=[*rt.middleware_factories(), calls.middleware()],
+            prompt=[rt.system_prompt_section],
         )
 
         # Block stripped to prose — never leaks raw into the text channel.
         assert reply.body == "Here."
-        assert len(calls) == 1  # no retry when validation is disabled
+        assert len(calls.messages) == 1  # no retry when validation is disabled
         assert [e.message for e in events] == [{"version": "v0.9", "createSurface": {"surfaceId": "s1"}}]
 
     async def test_broken_json_when_disabled_degrades_to_prose(self) -> None:

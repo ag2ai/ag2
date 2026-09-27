@@ -65,7 +65,10 @@ def _tool_names(tools: Iterable[Tool]) -> set[str]:
 
 
 class _ToolRecordingConfig(TestConfig):
-    """A ``TestConfig`` that records the tool names each model call was offered."""
+    """A ``TestConfig`` that records the tool names each model call was offered.
+
+    A config, not a middleware: ``on_llm_call`` never sees ``tools=``, and the
+    subtask agent takes no middleware."""
 
     def __init__(self, *events: Turn) -> None:
         super().__init__(*events)

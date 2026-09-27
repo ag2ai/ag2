@@ -38,8 +38,9 @@ from ag2.network import (
     WsLinkClient,
     serve_ws,
 )
+from ag2.testing import TestConfig
 
-from ._helpers import ScriptedConfig, wait_for_text_count
+from ._helpers import wait_for_text_count
 
 
 class _CapturingExporter(SpanExporter):
@@ -70,7 +71,7 @@ async def _wait_for_notify(client, text: str, timeout: float = 2.0) -> NotifyFra
 
 
 def _agent(name: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig())
+    return Agent(name=name, config=TestConfig())
 
 
 async def _next_frame(client, timeout: float = 2.0):

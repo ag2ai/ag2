@@ -49,7 +49,7 @@ from ag2.network.errors import ProtocolError
 from ag2.network.views.builtin import WindowedSummary
 from ag2.testing import TestConfig, TrackingConfig
 
-from ._helpers import ScriptedConfig, wait_for_text_count
+from ._helpers import wait_for_text_count
 
 
 def _agent(name: str, *events: object) -> Agent:
@@ -57,7 +57,7 @@ def _agent(name: str, *events: object) -> Agent:
 
 
 def _scripted_agent(name: str, *replies: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig(*replies))
+    return Agent(name=name, config=TestConfig(*replies, shared_script=True))
 
 
 @pytest.mark.asyncio
@@ -94,7 +94,7 @@ async def test_conversation_back_and_forth_multi_turn() -> None:
     hub = await Hub.open(store, ttl_sweep_interval=0)
 
     # alice replies to bob's first answer with a follow-up, then halts.
-    alice = await hub.register(_scripted_agent("alice", "follow up question"))
+    alice = await hub.register(_scripted_agent("alice", "follow up question", ""))
     # bob answers alice twice; second reply is empty → halts the chain.
     bob = await hub.register(_scripted_agent("bob", "initial reply", "second answer"))
 
@@ -143,7 +143,7 @@ async def test_adapter_turn_input_list_reaches_the_model_as_separate_parts() -> 
     hub = await Hub.open(store, ttl_sweep_interval=0, register_default_adapters=False)
     hub.register_adapter(_RichInputAdapter())
 
-    bob_config = TrackingConfig(ScriptedConfig())
+    bob_config = TrackingConfig(TestConfig("", shared_script=True))
     alice = await hub.register(_scripted_agent("alice"))
     await hub.register(Agent(name="bob", config=bob_config))
 

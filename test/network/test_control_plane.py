@@ -35,12 +35,13 @@ from ag2.network import (
     WsLink,
     serve_ws,
 )
+from ag2.testing import TestConfig
 
-from ._helpers import ScriptedConfig, wait_for_text_count
+from ._helpers import wait_for_text_count
 
 
 def _agent(name: str, *replies: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig(*replies))
+    return Agent(name=name, config=TestConfig(*replies, shared_script=True))
 
 
 async def _new_hub(auth: AuthRegistry | None = None) -> Hub:
@@ -134,7 +135,7 @@ class TestChannelAndDeliveryOverWire:
             alice_hc = HubClient(WsLink(url))
             bob_hc = HubClient(WsLink(url))
             try:
-                alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+                alice = await alice_hc.register(_agent("alice", ""), Passport(name="alice"), Resume())
                 await bob_hc.register(_agent("bob", "Hi Alice, good to meet you."), Passport(name="bob"), Resume())
 
                 channel = await alice.open(type="discussion", target=["bob"], knobs={"ordering": "round_robin"})
@@ -168,7 +169,7 @@ class TestChannelAndDeliveryOverWire:
             bob_hc1 = HubClient(WsLink(url))
             try:
                 alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-                bob1 = await bob_hc1.register(_agent("bob"), Passport(name="bob"), Resume())
+                bob1 = await bob_hc1.register(_agent("bob", ""), Passport(name="bob"), Resume())
                 bob_id = bob1.agent_id
 
                 channel = await alice.open(type="discussion", target=["bob"], knobs={"ordering": "round_robin"})

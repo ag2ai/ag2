@@ -2,25 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
-from typing import Any
 
 import pytest
 from ag_ui.core import ReasoningMessage, UserMessage
 from dirty_equals import IsPartialDict
-from typing_extensions import Self
 
-from ag2 import Agent, Context
+from ag2 import Agent
 from ag2.ag_ui import AGUIStream
-from ag2.config import LLMClient, ModelConfig
 from ag2.events import (
-    BaseEvent,
-    ModelMessage,
     ModelReasoning,
-    ModelResponse,
-    ToolCallsEvent,
 )
 from ag2.testing import TestConfig, TrackingConfig
+from test._helpers import LLMCalls
 
 from .utils import (
     assert_event_type,
@@ -33,45 +26,10 @@ from .utils import (
 pytestmark = pytest.mark.asyncio
 
 
-class _CapturingClient(LLMClient):
-    """Stores the full ``messages`` sequence handed to the LLM so the test
-    can assert on the entire pre-LLM history. ``TrackingConfig`` only
-    records ``messages[-1]`` and so cannot verify that a particular event
-    sits *anywhere* in the list."""
-
-    def __init__(self) -> None:
-        self.messages: list[BaseEvent] = []
-
-    async def __call__(
-        self,
-        messages: Sequence[BaseEvent],
-        context: Context,
-        **kwargs: Any,
-    ) -> ModelResponse:
-        self.messages = list(messages)
-        message = ModelMessage("Done")
-        await context.send(message)
-        return ModelResponse(message=message, tool_calls=ToolCallsEvent([]))
-
-
-class _CapturingConfig(ModelConfig):
-    def __init__(self) -> None:
-        self.client = _CapturingClient()
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _CapturingClient:
-        return self.client
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
 class TestInboundReasoning:
     async def test_reasoning_message_becomes_model_reasoning_event(self) -> None:
-        config = _CapturingConfig()
-        agent = Agent("test_agent", config=config)
+        calls = LLMCalls()
+        agent = Agent("test_agent", config=TestConfig("Done"), middleware=[calls.middleware()])
         stream = AGUIStream(agent)
 
         run_input = create_run_input(
@@ -84,7 +42,7 @@ class TestInboundReasoning:
         # ReasoningMessage from AG-UI history is restored as a
         # ``ModelReasoning`` event before the agent's turn runs, so the
         # LLM sees it in the messages list.
-        assert ModelReasoning("user is greeting me") in config.client.messages
+        assert ModelReasoning("user is greeting me") in calls.messages[-1]
 
     async def test_empty_reasoning_message_dropped(self) -> None:
         tracking = TrackingConfig(TestConfig("Done"))

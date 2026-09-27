@@ -28,15 +28,16 @@ from ag2.network import (
     Passport,
     Resume,
 )
+from ag2.testing import TestConfig
 
-from ._helpers import ScriptedConfig, wait_for_delivery
+from ._helpers import wait_for_delivery
 
 # Window for a forbidden delivery to show up before a negative assertion runs.
 SETTLE = 0.05
 
 
-def _agent(name: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig())
+def _agent(name: str, *replies: str) -> Agent:
+    return Agent(name=name, config=TestConfig(*replies, shared_script=True))
 
 
 @pytest.mark.asyncio
@@ -74,7 +75,7 @@ async def test_targeted_envelope_delivered_to_only_named_recipient() -> None:
     hc = HubClient(link, hub=hub)
 
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    bob = await hc.register(_agent("bob", ""), Passport(name="bob"), Resume())
     carol = await hc.register(_agent("carol"), Passport(name="carol"), Resume())
 
     # Wrap each agent's notify handler with a capture that preserves the original.
@@ -131,7 +132,7 @@ async def test_broadcast_envelope_delivered_to_all_non_sender() -> None:
     hc = HubClient(link, hub=hub)
 
     alice = await hc.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    bob = await hc.register(_agent("bob", ""), Passport(name="bob"), Resume())
     carol = await hc.register(_agent("carol"), Passport(name="carol"), Resume())
 
     received_bob: list[Envelope] = []
@@ -214,7 +215,7 @@ async def test_two_hub_clients_share_one_hub_isolated_endpoints() -> None:
     hc_b = HubClient(link, hub=hub)
 
     alice = await hc_a.register(_agent("alice"), Passport(name="alice"), Resume())
-    bob = await hc_b.register(_agent("bob"), Passport(name="bob"), Resume())
+    bob = await hc_b.register(_agent("bob", ""), Passport(name="bob"), Resume())
 
     # Different endpoints.
     assert hub._agent_to_endpoint[alice.agent_id] != hub._agent_to_endpoint[bob.agent_id]

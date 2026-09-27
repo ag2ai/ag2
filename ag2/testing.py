@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, TypeAlias
 from unittest.mock import MagicMock
 
@@ -49,8 +49,9 @@ class TestClient(LLMClient):
         self,
         *events: "Turn",
         raise_tool_errors: bool = True,
+        script: Iterator["Turn"] | None = None,
     ) -> None:
-        self.events = iter(events)
+        self.events = iter(events) if script is None else script
         self.raise_tool_errors = raise_tool_errors
 
     async def __call__(
@@ -65,7 +66,10 @@ class TestClient(LLMClient):
                     raise m.error
 
         while True:
-            scripted = next(self.events)
+            try:
+                scripted = next(self.events)
+            except StopIteration:
+                raise RuntimeError("TestConfig script is exhausted") from None
 
             if isinstance(scripted, BaseException):
                 raise scripted
@@ -141,6 +145,7 @@ class TestConfig(ModelConfig):
         provider: ModelProvider | None = None,
         model: str | None = None,
         raise_tool_errors: bool = True,
+        shared_script: bool = False,
     ) -> None:
         """Script the LLM, one :data:`Turn` per positional event.
 
@@ -156,8 +161,36 @@ class TestConfig(ModelConfig):
         handed a failed tool call as an ordinary result and carries on: a test
         asserting that something **ends the turn** needs that, or it is
         asserting this double's behaviour rather than the agent's.
+
+        Each ``create()`` starts the script over, and an agent creates one
+        client per run. A served agent (A2A, the network, …) makes a run per
+        request, so a conversation over a transport would hear turn 1 on every
+        request. ``shared_script=True`` gives every client this config creates
+        one cursor, so the script carries on where the last run left it. It is
+        unsound for concurrent consumers — whichever runs first takes the next
+        turn — and running past the end raises, so script every turn.
+
+        To hold a model call open — for cancellation, concurrency or barge-in —
+        script a transient event of the test's own and park on it in an
+        ``async`` observer. The stream awaits subscribers in the sender's task,
+        so the call waits for the observer, and cancelling the turn lands in
+        its ``await``::
+
+            class Hold(BaseEvent):
+                __transient__ = True
+
+
+            async def hold(event: Hold) -> None:
+                entered.set()
+                await release.wait()
+
+
+            Agent(..., config=TestConfig(Hold(), "reply"), observers=[observer(Hold, hold)])
+
+        A sync observer runs in a thread, where cancellation cannot reach it.
         """
         self.events = events
+        self._shared = iter(events) if shared_script else None
         self._provider = provider
         self._model = model
         self._raise_tool_errors = raise_tool_errors
@@ -176,6 +209,8 @@ class TestConfig(ModelConfig):
         return self
 
     def create(self) -> TestClient:
+        if self._shared is not None:
+            return TestClient(raise_tool_errors=self._raise_tool_errors, script=self._shared)
         return TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
 
     def create_files_client(self) -> "FilesClient":

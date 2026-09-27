@@ -39,7 +39,7 @@ from ag2.network.hub.layout import spans_path
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
-from ._helpers import ScriptedConfig, wait_for_text_count
+from ._helpers import wait_for_text_count
 
 
 class _InMemorySpanExporter(SpanExporter):
@@ -84,8 +84,10 @@ async def test_hub_emits_envelope_span_and_persists_traceparent(otel_setup) -> N
     link = LocalLink(hub)
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(Agent("alice", config=ScriptedConfig("")), Passport(name="alice"), Resume())
-    await bob_hc.register(Agent("bob", config=ScriptedConfig("")), Passport(name="bob"), Resume())
+    alice = await alice_hc.register(
+        Agent("alice", config=TestConfig("", shared_script=True)), Passport(name="alice"), Resume()
+    )
+    await bob_hc.register(Agent("bob", config=TestConfig("", shared_script=True)), Passport(name="bob"), Resume())
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hi there")
@@ -121,8 +123,10 @@ async def test_listener_emits_channel_and_agent_spans_to_disk(otel_setup) -> Non
     link = LocalLink(hub)
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(Agent("alice", config=ScriptedConfig("")), Passport(name="alice"), Resume())
-    await bob_hc.register(Agent("bob", config=ScriptedConfig("")), Passport(name="bob"), Resume())
+    alice = await alice_hc.register(
+        Agent("alice", config=TestConfig("", shared_script=True)), Passport(name="alice"), Resume()
+    )
+    await bob_hc.register(Agent("bob", config=TestConfig("", shared_script=True)), Passport(name="bob"), Resume())
 
     channel = await alice.open(type="conversation", target="bob")
     await alice_hc.close_channel(channel.channel_id, reason="done")
@@ -246,12 +250,20 @@ async def test_traceparent_propagates_to_agent_invoke_span(otel_setup) -> None:
     bob_hc = HubClient(link, hub=hub)
     # alice stays silent (empty reply halts the exchange); bob replies once.
     alice = await alice_hc.register(
-        Agent("alice", config=ScriptedConfig(""), middleware=[TelemetryMiddleware(tracer_provider=provider)]),
+        Agent(
+            "alice",
+            config=TestConfig("", shared_script=True),
+            middleware=[TelemetryMiddleware(tracer_provider=provider)],
+        ),
         Passport(name="alice"),
         Resume(),
     )
     await bob_hc.register(
-        Agent("bob", config=ScriptedConfig("ok"), middleware=[TelemetryMiddleware(tracer_provider=provider)]),
+        Agent(
+            "bob",
+            config=TestConfig("ok", shared_script=True),
+            middleware=[TelemetryMiddleware(tracer_provider=provider)],
+        ),
         Passport(name="bob"),
         Resume(),
     )
@@ -323,8 +335,10 @@ async def test_hub_without_tracer_provider_stays_otel_free() -> None:
     link = LocalLink(hub)
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(Agent("alice", config=ScriptedConfig("")), Passport(name="alice"), Resume())
-    await bob_hc.register(Agent("bob", config=ScriptedConfig("")), Passport(name="bob"), Resume())
+    alice = await alice_hc.register(
+        Agent("alice", config=TestConfig("", shared_script=True)), Passport(name="alice"), Resume()
+    )
+    await bob_hc.register(Agent("bob", config=TestConfig("", shared_script=True)), Passport(name="bob"), Resume())
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hi there")
@@ -383,8 +397,10 @@ async def test_non_recording_provider_does_not_crash_or_write() -> None:
     link = LocalLink(hub)
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(Agent("alice", config=ScriptedConfig("")), Passport(name="alice"), Resume())
-    await bob_hc.register(Agent("bob", config=ScriptedConfig("")), Passport(name="bob"), Resume())
+    alice = await alice_hc.register(
+        Agent("alice", config=TestConfig("", shared_script=True)), Passport(name="alice"), Resume()
+    )
+    await bob_hc.register(Agent("bob", config=TestConfig("", shared_script=True)), Passport(name="bob"), Resume())
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("hi")
@@ -410,8 +426,12 @@ async def test_dispatch_failure_recorded_on_envelope_span(otel_setup) -> None:
     link = LocalLink(hub)
     alice_hc = HubClient(link, hub=hub)
     carol_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(Agent("alice", config=ScriptedConfig("")), Passport(name="alice"), Resume())
-    carol = await carol_hc.register(Agent("carol", config=ScriptedConfig("")), Passport(name="carol"), Resume())
+    alice = await alice_hc.register(
+        Agent("alice", config=TestConfig("", shared_script=True)), Passport(name="alice"), Resume()
+    )
+    carol = await carol_hc.register(
+        Agent("carol", config=TestConfig("", shared_script=True)), Passport(name="carol"), Resume()
+    )
     bob = await hub.register_identity(
         Passport(name="bob", auth=AuthBlock(scheme="a2a"), kind="remote_agent"),
         Resume(),
@@ -480,8 +500,10 @@ async def test_escaped_dispatch_exception_marks_envelope_span_error(otel_setup) 
     link = LocalLink(hub)
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
-    alice = await alice_hc.register(Agent("alice", config=ScriptedConfig("")), Passport(name="alice"), Resume())
-    await bob_hc.register(Agent("bob", config=ScriptedConfig("")), Passport(name="bob"), Resume())
+    alice = await alice_hc.register(
+        Agent("alice", config=TestConfig("", shared_script=True)), Passport(name="alice"), Resume()
+    )
+    await bob_hc.register(Agent("bob", config=TestConfig("", shared_script=True)), Passport(name="bob"), Resume())
 
     channel = await alice.open(type="conversation", target="bob")
     with pytest.raises(RuntimeError, match="arbiter boom"):

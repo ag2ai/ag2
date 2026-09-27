@@ -34,12 +34,11 @@ from ag2.network.channel import (
     Participant,
     ParticipantRole,
 )
-
-from ._helpers import ScriptedConfig
+from ag2.testing import TestConfig
 
 
 def _agent(name: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig())
+    return Agent(name=name, config=TestConfig())
 
 
 def _make_metadata(
@@ -440,8 +439,8 @@ async def test_hydrate_refolds_discussion_state_deterministically() -> None:
         sid = channel.channel_id
 
         await channel.send("a-1", audience=None)
-        # bob's default handler does NOT auto-respond (ScriptedConfig
-        # returns ""), so we send manually for each speaker in turn.
+        # bob's default handler does NOT auto-respond (no scripted
+        # replies), so we send manually for each speaker in turn.
         await bob._hub_client.post_envelope(
             Envelope(
                 channel_id=sid,

@@ -30,12 +30,13 @@ from ag2.network import (
     PendingTurn,
     Resume,
 )
+from ag2.testing import TestConfig
 
-from ._helpers import ScriptedConfig, wait_for_text_count
+from ._helpers import wait_for_text_count
 
 
 def _agent(name: str, *replies: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig(*replies))
+    return Agent(name=name, config=TestConfig(*replies, shared_script=True))
 
 
 async def _new_hub() -> Hub:
@@ -126,7 +127,7 @@ class TestAttachRebind:
 
             # Bob re-attaches via a different HubClient — same name.
             bob_hc_v2 = HubClient(link, hub=hub)
-            bob_v2 = await bob_hc_v2.attach(_agent("bob"), "bob")
+            bob_v2 = await bob_hc_v2.attach(_agent("bob", ""), "bob")
             v2_endpoint_id = bob_hc_v2._client_link.endpoint_id
 
             try:
@@ -307,7 +308,7 @@ class TestResumePendingTurns:
         alice_hc = HubClient(link, hub=hub)
         bob_hc = HubClient(link, hub=hub)
         alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob = await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+        bob = await bob_hc.register(_agent("bob", "", ""), Passport(name="bob"), Resume())
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -378,7 +379,7 @@ class TestResumePendingTurns:
         alice_hc = HubClient(link, hub=hub)
         bob_hc_v1 = HubClient(link, hub=hub)
         alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
-        bob_v1 = await bob_hc_v1.register(_agent("bob"), Passport(name="bob"), Resume())
+        bob_v1 = await bob_hc_v1.register(_agent("bob", ""), Passport(name="bob"), Resume())
 
         try:
             channel = await alice.open(type="discussion", target=["bob"])
@@ -396,7 +397,7 @@ class TestResumePendingTurns:
             # Reconnect via attach. Same name, new connection.
             bob_hc_v2 = HubClient(link, hub=hub)
             try:
-                bob_v2 = await bob_hc_v2.attach(_agent("bob"), "bob")
+                bob_v2 = await bob_hc_v2.attach(_agent("bob", ""), "bob")
                 assert bob_v2.agent_id == bob_id
 
                 captured: list[Envelope] = []

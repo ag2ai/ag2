@@ -6,13 +6,9 @@
 aggregation — every opt-in Agent primitive exercised against a real LLM.
 """
 
-from collections.abc import Sequence
-from typing import Any
-
 import pytest
-from typing_extensions import Self
 
-from ag2 import Agent, Context, KnowledgeConfig
+from ag2 import Agent, KnowledgeConfig
 from ag2.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
@@ -23,13 +19,10 @@ from ag2.compact import (
     SummarizeCompact,
     TailWindowCompact,
 )
-from ag2.config import LLMClient, ModelConfig, ModelProvider
 from ag2.events import (
     AggregationCompleted,
-    BaseEvent,
     CompactionCompleted,
     ModelRequest,
-    ModelResponse,
     TextInput,
 )
 from ag2.knowledge import (
@@ -42,6 +35,7 @@ from ag2.policies import (
     TokenBudgetPolicy,
 )
 from ag2.stream import MemoryStream
+from test._helpers import LLMCalls
 
 pytestmark = pytest.mark.asyncio
 
@@ -69,49 +63,25 @@ async def test_sliding_window_trims_long_history(provider_config) -> None:
     the LLM — instead of the model's reply, which is unreliable across
     providers (assistant responses can echo trimmed words back).
     """
-    sent_payloads: list[list[BaseEvent]] = []
-
-    class _CapturingClient(LLMClient):
-        def __init__(self, inner: LLMClient) -> None:
-            self._inner = inner
-
-        async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-            sent_payloads.append(list(messages))
-            return await self._inner(messages, context=context, **kwargs)
-
-    class _CapturingConfig(ModelConfig):
-        def __init__(self, inner: ModelConfig) -> None:
-            self._inner = inner
-
-        @property
-        def provider(self) -> ModelProvider:
-            return self._inner.provider
-
-        @property
-        def model(self) -> str | None:
-            return self._inner.model
-
-        def copy(self) -> Self:
-            return self
-
-        def create(self) -> _CapturingClient:
-            return _CapturingClient(self._inner.create())
+    # Per-call, so innermost: it sees the trimmed list the client gets.
+    calls = LLMCalls()
+    middleware = [calls.middleware()]
 
     agent = Agent(
         "sliding",
         prompt="Be concise.",
-        config=_CapturingConfig(provider_config),
+        config=provider_config,
         assembly=[ConversationPolicy(), SlidingWindowPolicy(max_events=4)],
     )
 
-    r1 = await agent.ask("Remember the word 'elephant'.")
-    r2 = await r1.ask("Remember the word 'volcano'.")
-    r3 = await r2.ask("Remember the word 'nebula'.")
-    r4 = await r3.ask("Which words have I mentioned?")
+    r1 = await agent.ask("Remember the word 'elephant'.", middleware=middleware)
+    r2 = await r1.ask("Remember the word 'volcano'.", middleware=middleware)
+    r3 = await r2.ask("Remember the word 'nebula'.", middleware=middleware)
+    r4 = await r3.ask("Which words have I mentioned?", middleware=middleware)
     assert r4.body is not None
 
     # Last LLM call is the assembly-trimmed view for r4.
-    last = sent_payloads[-1]
+    last = calls.messages[-1]
     assert len(last) <= 5  # 4 from the window cap + the new ModelRequest
     assert not any(
         isinstance(e, ModelRequest) and any(isinstance(p, TextInput) and "elephant" in p.content for p in e.parts)

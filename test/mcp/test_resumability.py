@@ -23,11 +23,13 @@ import pytest
 from mcp.server.streamable_http import EventCallback, EventId, EventMessage, EventStore, StreamId
 from mcp.types import JSONRPCMessage
 
-from ag2 import Agent
+from ag2 import Agent, observer
+from ag2.events import BaseEvent, ModelMessageChunk
 from ag2.mcp import MCPServer, TransportConfig
+from ag2.testing import TestConfig
 from test._serving import serving
 
-from ._helpers import JSON_HEADERS, ChunkConfig, initialize_request
+from ._helpers import JSON_HEADERS, initialize_request
 
 _HEADERS = {**JSON_HEADERS, "MCP-Protocol-Version": "2025-06-18"}
 """The endpoint is a Starlette ``Mount``, so requests carry the canonical trailing slash."""
@@ -40,6 +42,22 @@ _CALL = {
     "params": {"name": "ask", "arguments": {"message": "go"}, "_meta": {"progressToken": "p1"}},
 }
 """A call asking for progress: the notifications are what the dropped stream misses."""
+
+
+class _Hold(BaseEvent):
+    """Scripted between two chunks; :class:`_Gate` parks the turn on it."""
+
+    __transient__ = True
+
+
+class _Gate:
+    """Parks the turn at ``_Hold`` until :attr:`release` is set."""
+
+    def __init__(self) -> None:
+        self.release = asyncio.Event()
+
+    async def __call__(self, event: _Hold) -> None:
+        await self.release.wait()
 
 
 class RecordingEventStore(EventStore):
@@ -124,7 +142,15 @@ async def test_a_dropped_stream_resumes_and_receives_what_it_missed() -> None:
     connection, and the server issues the other two with nobody listening.
     Reconnecting with a ``Last-Event-ID`` is what gets them delivered.
     """
-    agent = Agent("streamer", config=ChunkConfig("one ", "two ", "three ", pause=0.6))
+    gate = _Gate()
+    config = TestConfig(
+        ModelMessageChunk("one "),
+        _Hold(),
+        ModelMessageChunk("two "),
+        ModelMessageChunk("three "),
+        "one two three ",
+    )
+    agent = Agent("streamer", config=config, observers=[observer(_Hold, gate)])
     app = MCPServer(agent, transport=TransportConfig(event_store=RecordingEventStore()))
 
     async with serving(app) as base_url, httpx.AsyncClient(base_url=base_url, timeout=15.0) as client:
@@ -132,6 +158,7 @@ async def test_a_dropped_stream_resumes_and_receives_what_it_missed() -> None:
         call = asyncio.create_task(client.post(_ENDPOINT, headers=headers, json=_CALL))
 
         before_drop, last_event_id = await _progress_until_dropped(client, headers)
+        gate.release.set()  # the client has walked away; let the rest of the turn run
         answered = await call
         after_resume = await _progress_after(client, {**headers, "Last-Event-ID": last_event_id}, expected=2)
 

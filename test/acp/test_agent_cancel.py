@@ -3,54 +3,41 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import Sequence
 from typing import Any
 
 import acp
 import pytest
 from acp import schema
-from typing_extensions import Self
 
-from ag2 import Agent, Context
+from ag2 import Agent, observer
 from ag2.acp import ACPAgent, SessionConfig, StaticTokenAuth
 from ag2.acp.executor import CANCELLED_TOOL_RESULT
 from ag2.acp.testing import connect
-from ag2.config import LLMClient, ModelConfig
 from ag2.config.openai.mappers import convert_messages
-from ag2.events import BaseEvent, ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
+from ag2.events import BaseEvent, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from ag2.testing import TestConfig
 
 
-class _GatedClient(LLMClient):
-    """Blocks inside the LLM call until released, so a turn can be held mid-flight."""
+class _Hold(BaseEvent):
+    """Scripted ahead of each reply; an observer parks the model call on it."""
 
-    def __init__(self, client: LLMClient, entered: asyncio.Event, release: asyncio.Event) -> None:
-        self.client = client
-        self.entered = entered
-        self.release = release
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self.entered.set()
-        await self.release.wait()
-        return await self.client(messages, context=context, **kwargs)
+    __transient__ = True
 
 
-class _GatedConfig(ModelConfig):
-    """A config whose turns park until :attr:`release` is set."""
+class _Gate:
+    """Parks every model call at ``_Hold`` until :attr:`release` is set."""
 
-    def __init__(self, *turns: object) -> None:
-        self.config = TestConfig(*(turns or ("ok",)))
+    def __init__(self) -> None:
         self.entered = asyncio.Event()
         self.release = asyncio.Event()
 
-    def copy(self) -> Self:
-        return self
+    async def __call__(self, event: _Hold) -> None:
+        self.entered.set()
+        await self.release.wait()
 
-    def create(self) -> _GatedClient:
-        return _GatedClient(self.config.create(), self.entered, self.release)
 
-    def create_files_client(self) -> None:
-        raise NotImplementedError
+def _gated_agent(gate: _Gate, *turns: str) -> Agent:
+    return Agent("workie", config=TestConfig(_Hold(), *(turns or ("ok",))), observers=[observer(_Hold, gate)])
 
 
 class _NullSerializer:
@@ -70,12 +57,12 @@ def _texts(updates: list[Any]) -> list[str]:
 @pytest.mark.asyncio
 class TestCancel:
     async def test_a_cancelled_turn_reports_the_cancelled_stop_reason(self) -> None:
-        config = _GatedConfig("never delivered")
+        gate = _Gate()
 
-        async with connect(ACPAgent(Agent("workie", config=config))) as (conn, _):
+        async with connect(ACPAgent(_gated_agent(gate, "never delivered"))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
-            await config.entered.wait()
+            await gate.entered.wait()
 
             await conn.cancel(session_id=session.session_id)
             response = await turn
@@ -83,12 +70,12 @@ class TestCancel:
         assert response.stop_reason == "cancelled"
 
     async def test_the_agent_never_completes_a_cancelled_turn(self) -> None:
-        config = _GatedConfig("never delivered")
+        gate = _Gate()
 
-        async with connect(ACPAgent(Agent("workie", config=config))) as (conn, recorder):
+        async with connect(ACPAgent(_gated_agent(gate, "never delivered"))) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
             turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
-            await config.entered.wait()
+            await gate.entered.wait()
 
             await conn.cancel(session_id=session.session_id)
             await turn
@@ -97,38 +84,38 @@ class TestCancel:
 
     async def test_updates_already_sent_are_not_retracted(self) -> None:
         """Cancelling stops the turn; it does not undo what the Client already saw."""
-        config = _GatedConfig("second turn text")
+        gate = _Gate()
 
-        async with connect(ACPAgent(Agent("workie", config=config))) as (conn, recorder):
+        async with connect(ACPAgent(_gated_agent(gate, "second turn text"))) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
 
             # A completed turn first, so there is delivered history to preserve.
-            config.release.set()
+            gate.release.set()
             await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("first")])
             delivered = list(recorder.updates_for(session.session_id))
 
-            config.release.clear()
-            config.entered.clear()
+            gate.release.clear()
+            gate.entered.clear()
             turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("second")]))
-            await config.entered.wait()
+            await gate.entered.wait()
             await conn.cancel(session_id=session.session_id)
             await turn
 
         assert recorder.updates_for(session.session_id)[: len(delivered)] == delivered
 
     async def test_cancelling_one_session_leaves_another_running(self) -> None:
-        config = _GatedConfig("reply", "reply")
+        gate = _Gate()
 
-        async with connect(ACPAgent(Agent("workie", config=config))) as (conn, _):
+        async with connect(ACPAgent(_gated_agent(gate, "reply", "reply"))) as (conn, _):
             cancelled = await conn.new_session(cwd="/tmp")
             other = await conn.new_session(cwd="/tmp")
 
             held = asyncio.create_task(conn.prompt(session_id=cancelled.session_id, prompt=[acp.text_block("slow")]))
-            await config.entered.wait()
+            await gate.entered.wait()
             await conn.cancel(session_id=cancelled.session_id)
             assert (await held).stop_reason == "cancelled"
 
-            config.release.set()
+            gate.release.set()
             survivor = await conn.prompt(session_id=other.session_id, prompt=[acp.text_block("fine")])
 
         assert survivor.stop_reason == "end_turn"
@@ -144,16 +131,16 @@ class TestCancel:
         assert response.stop_reason == "end_turn"
 
     async def test_a_session_is_usable_again_after_a_cancel(self) -> None:
-        config = _GatedConfig("first", "after cancel")
+        gate = _Gate()
 
-        async with connect(ACPAgent(Agent("workie", config=config))) as (conn, _):
+        async with connect(ACPAgent(_gated_agent(gate, "first", "after cancel"))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             held = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
-            await config.entered.wait()
+            await gate.entered.wait()
             await conn.cancel(session_id=session.session_id)
             await held
 
-            config.release.set()
+            gate.release.set()
             response = await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("again")])
 
         assert response.stop_reason == "end_turn"
@@ -162,28 +149,28 @@ class TestCancel:
 @pytest.mark.asyncio
 class TestBusySession:
     async def test_a_second_prompt_waits_rather_than_interleaving(self) -> None:
-        config = _GatedConfig("first", "second")
+        gate = _Gate()
 
-        async with connect(ACPAgent(Agent("workie", config=config))) as (conn, _):
+        async with connect(ACPAgent(_gated_agent(gate, "first", "second"))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             first = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("one")]))
-            await config.entered.wait()
+            await gate.entered.wait()
             second = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("two")]))
             await asyncio.sleep(0.01)
 
             assert not second.done()  # queued behind the running turn
 
-            config.release.set()
+            gate.release.set()
             assert (await first).stop_reason == "end_turn"
             assert (await second).stop_reason == "end_turn"
 
     async def test_a_cancel_drops_prompts_queued_behind_the_running_turn(self) -> None:
-        config = _GatedConfig("first", "second")
+        gate = _Gate()
 
-        async with connect(ACPAgent(Agent("workie", config=config))) as (conn, _):
+        async with connect(ACPAgent(_gated_agent(gate, "first", "second"))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             first = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("one")]))
-            await config.entered.wait()
+            await gate.entered.wait()
             second = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("two")]))
             await asyncio.sleep(0.01)
 
@@ -193,13 +180,13 @@ class TestBusySession:
             assert (await second).stop_reason == "cancelled"
 
     async def test_the_queue_is_bounded(self) -> None:
-        config = _GatedConfig(*["reply"] * 6)
-        server = ACPAgent(Agent("workie", config=config), sessions=SessionConfig(max_queued=2))
+        gate = _Gate()
+        server = ACPAgent(_gated_agent(gate, *["reply"] * 6), sessions=SessionConfig(max_queued=2))
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             running = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("one")]))
-            await config.entered.wait()
+            await gate.entered.wait()
 
             queued = [
                 asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("more")]))
@@ -210,7 +197,7 @@ class TestBusySession:
             with pytest.raises(acp.RequestError):
                 await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("overflow")])
 
-            config.release.set()
+            gate.release.set()
             await running
             await asyncio.gather(*queued)
 
@@ -296,13 +283,13 @@ class TestCancelLeavesAUsableSession:
 
     async def test_nothing_is_appended_when_no_tool_was_pending(self) -> None:
         """A cancel between turns must not invent results for calls already answered."""
-        config = _GatedConfig("never delivered")
-        server = ACPAgent(Agent("workie", config=config))
+        gate = _Gate()
+        server = ACPAgent(_gated_agent(gate, "never delivered"))
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")]))
-            await config.entered.wait()
+            await gate.entered.wait()
             await conn.cancel(session_id=session.session_id)
             await turn
 
@@ -510,46 +497,32 @@ class TestParallelToolCancellation:
         assert calls == results == 2
 
 
-class _ConcurrencyProbeConfig(ModelConfig):
-    """Parks every turn inside the LLM call so concurrency can be observed."""
+class _Probe:
+    """Parks every model call at ``_Hold`` and counts how many are parked."""
 
-    def __init__(self, replies: int = 50) -> None:
-        self.config = TestConfig(*["ok"] * replies)
+    def __init__(self) -> None:
         self.running = 0
         self.peak = 0
         self.release = asyncio.Event()
+        self._changed = asyncio.Condition()
 
-    async def wait_until_running(self, n: int, *, timeout: float = 5.0) -> None:
-        """Poll until ``n`` turns are parked; the fixed sleep it replaces raced CI."""
-        deadline = asyncio.get_running_loop().time() + timeout
-        while self.running < n:
-            if asyncio.get_running_loop().time() > deadline:
-                raise TimeoutError(f"only {self.running} of {n} turns parked within {timeout}s")
-            await asyncio.sleep(0.01)
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "_ConcurrencyProbeClient":
-        return _ConcurrencyProbeClient(self.config.create(), self)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class _ConcurrencyProbeClient(LLMClient):
-    def __init__(self, client: LLMClient, probe: _ConcurrencyProbeConfig) -> None:
-        self.client = client
-        self.probe = probe
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self.probe.running += 1
-        self.probe.peak = max(self.probe.peak, self.probe.running)
+    async def __call__(self, event: _Hold) -> None:
+        async with self._changed:
+            self.running += 1
+            self.peak = max(self.peak, self.running)
+            self._changed.notify_all()
         try:
-            await self.probe.release.wait()
-            return await self.client(messages, context=context, **kwargs)
+            await self.release.wait()
         finally:
-            self.probe.running -= 1
+            self.running -= 1
+
+    async def wait_until_running(self, n: int) -> None:
+        async with self._changed:
+            await asyncio.wait_for(self._changed.wait_for(lambda: self.running >= n), timeout=5)
+
+
+def _probed_agent(probe: _Probe) -> Agent:
+    return Agent("workie", config=TestConfig(_Hold(), "ok"), observers=[observer(_Hold, probe)])
 
 
 @pytest.mark.asyncio
@@ -561,9 +534,9 @@ class TestConnectionWideLimits:
     """
 
     async def test_concurrent_turns_are_capped_across_sessions(self) -> None:
-        probe = _ConcurrencyProbeConfig()
+        probe = _Probe()
         server = ACPAgent(
-            Agent("workie", config=probe),
+            _probed_agent(probe),
             sessions=SessionConfig(max_concurrent_turns=3, max_active_prompts=6),
         )
 
@@ -583,9 +556,9 @@ class TestConnectionWideLimits:
 
     async def test_prompts_past_the_cap_wait_rather_than_fail(self) -> None:
         """A burst across separate conversations is traffic, not abuse."""
-        probe = _ConcurrencyProbeConfig()
+        probe = _Probe()
         server = ACPAgent(
-            Agent("workie", config=probe),
+            _probed_agent(probe),
             sessions=SessionConfig(max_concurrent_turns=2, max_active_prompts=6),
         )
 
@@ -604,9 +577,9 @@ class TestConnectionWideLimits:
         assert all(r.stop_reason == "end_turn" for r in responses)
 
     async def test_admission_is_refused_past_max_active_prompts(self) -> None:
-        probe = _ConcurrencyProbeConfig()
+        probe = _Probe()
         server = ACPAgent(
-            Agent("workie", config=probe),
+            _probed_agent(probe),
             sessions=SessionConfig(max_concurrent_turns=2, max_active_prompts=4),
         )
 
@@ -623,9 +596,9 @@ class TestConnectionWideLimits:
             await asyncio.gather(*turns)
 
     async def test_a_slot_frees_up_once_a_turn_finishes(self) -> None:
-        probe = _ConcurrencyProbeConfig()
+        probe = _Probe()
         server = ACPAgent(
-            Agent("workie", config=probe),
+            _probed_agent(probe),
             sessions=SessionConfig(max_concurrent_turns=1, max_active_prompts=2),
         )
 

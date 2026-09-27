@@ -31,18 +31,16 @@ from ag2.network import (
     Resume,
 )
 from ag2.network.channel import ChannelState
-
-from ._helpers import ScriptedConfig
+from ag2.testing import TestConfig
 
 
 def _agent(name: str) -> Agent:
-    # ScriptedConfig() with no replies returns "" — the default notify
-    # handler treats an empty body as "don't send," so no reply
-    # cascades. The default handler still auto-acks invites, which is
-    # what these tests need (the alternative — overriding on_envelope
-    # to silence the agent — would break invite acks and hang
-    # channel creation at invite_ack_timeout).
-    return Agent(name=name, config=ScriptedConfig())
+    # No scripted replies, so no reply cascades: a turn that did reach
+    # the model would fail and post nothing. The default handler still
+    # auto-acks invites, which is what these tests need (the alternative
+    # — overriding on_envelope to silence the agent — would break invite
+    # acks and hang channel creation at invite_ack_timeout).
+    return Agent(name=name, config=TestConfig())
 
 
 # ── Registration races ──────────────────────────────────────────────────────

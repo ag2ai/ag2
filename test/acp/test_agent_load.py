@@ -18,13 +18,12 @@ import acp
 import pytest
 from acp import schema
 from acp.exceptions import RequestError
-from typing_extensions import Self
 
-from ag2 import Agent, Context
+from ag2 import Agent, Context, observer
 from ag2.acp import ACPAgent, SessionConfig, StaticTokenAuth
 from ag2.acp.executor import CANCELLED_TOOL_RESULT
 from ag2.acp.testing import RecordingClient, connect
-from ag2.config import LLMClient, ModelConfig
+from ag2.config import ModelConfig
 from ag2.events import (
     BaseEvent,
     ModelRequest,
@@ -69,30 +68,21 @@ def _kinds(updates: Sequence[Any]) -> list[type]:
     return [type(u) for u in updates]
 
 
-class _HeldClient(LLMClient):
-    def __init__(self, entered: asyncio.Event) -> None:
-        self.entered = entered
+class _Hold(BaseEvent):
+    """Scripted as the whole turn; :class:`_Held` parks the model call on it."""
 
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self.entered.set()
-        await asyncio.Event().wait()
-        raise AssertionError("never finishes")  # pragma: no cover
+    __transient__ = True
 
 
-class _HeldConfig(ModelConfig):
-    """A config whose turn parks inside the LLM call until cancelled."""
+class _Held:
+    """Parks the model call until something cancels it."""
 
     def __init__(self) -> None:
         self.entered = asyncio.Event()
 
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _HeldClient:
-        return _HeldClient(self.entered)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
+    async def __call__(self, event: _Hold) -> None:
+        self.entered.set()
+        await asyncio.Event().wait()
 
 
 @pytest.mark.asyncio
@@ -414,13 +404,13 @@ class TestHealGate:
 @pytest.mark.asyncio
 class TestRefusals:
     async def test_a_session_mid_turn_is_not_loaded_underneath_it(self) -> None:
-        config = _HeldConfig()
-        server = ACPAgent(Agent("workie", config=config))
+        held = _Held()
+        server = ACPAgent(Agent("workie", config=TestConfig(_Hold()), observers=[observer(_Hold, held)]))
 
         async with connect(server) as (conn, _):
             sid = (await conn.new_session(cwd="/tmp")).session_id
             turn = asyncio.create_task(conn.prompt(session_id=sid, prompt=[acp.text_block("slow")]))
-            await asyncio.wait_for(config.entered.wait(), timeout=5)
+            await asyncio.wait_for(held.entered.wait(), timeout=5)
 
             with pytest.raises(RequestError) as caught:
                 await conn.load_session(session_id=sid, cwd="/tmp")

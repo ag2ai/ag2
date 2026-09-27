@@ -18,7 +18,8 @@ Covers:
 * Hub auto-registers the adapter on ``Hub.open``.
 * ``validate_create`` rejects unsupported ordering modes.
 
-This suite uses ``ScriptedConfig`` so it runs offline and fast.
+This suite scripts replies with ``TestConfig()`` so it runs
+offline and fast.
 """
 
 import contextlib
@@ -52,7 +53,7 @@ from ag2.network.client.agent_client import AgentClient
 from ag2.network.errors import ProtocolError
 from ag2.testing import TestConfig
 
-from ._helpers import ScriptedConfig, wait_for_text_count
+from ._helpers import wait_for_text_count
 
 
 def _agent(name: str, *events: object) -> Agent:
@@ -60,7 +61,7 @@ def _agent(name: str, *events: object) -> Agent:
 
 
 def _scripted_agent(name: str, *replies: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig(*replies))
+    return Agent(name=name, config=TestConfig(*replies, shared_script=True))
 
 
 def _make_rejecter(client: AgentClient) -> Callable[[Envelope], Awaitable[None]]:
@@ -313,7 +314,7 @@ async def test_discussion_llm_driven_round_robin_3_way() -> None:
 
     # alice's manual send opens turn 1; her LLM speaks again on her turn 2.
     alice = await hub.register(_scripted_agent("alice", "alice 2"))
-    bob = await hub.register(_scripted_agent("bob", "bob 1"))
+    bob = await hub.register(_scripted_agent("bob", "bob 1", ""))
     carol = await hub.register(_scripted_agent("carol", "carol 1"))
 
     channel = await alice.open(

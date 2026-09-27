@@ -43,12 +43,11 @@ from ag2.network.hub.layout import (
     rule_path,
     skill_path,
 )
-
-from ._helpers import ScriptedConfig
+from ag2.testing import TestConfig
 
 
 def _agent(name: str) -> Agent:
-    return Agent(name=name, config=ScriptedConfig())
+    return Agent(name=name, config=TestConfig())
 
 
 @pytest.mark.asyncio

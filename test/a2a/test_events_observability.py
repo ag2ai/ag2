@@ -51,7 +51,7 @@ class TestA2AEventsReachClientStream:
         ]
 
     async def test_streaming_carries_final_text_on_completion_status(self) -> None:
-        # ``StatelessScript`` emits a complete ``ModelMessage`` rather than
+        # A scripted ``str`` turn emits a complete ``ModelMessage`` rather than
         # per-token ``ModelMessageChunk``s, so the server finalises via
         # ``updater.complete(message=...)`` and the wire surfaces the text on
         # the COMPLETED ``status.message``, not as a separate message payload.

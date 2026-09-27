@@ -22,18 +22,10 @@ from mcp.types import (
 from mcp.types import Tool as MCPTool
 from mcp_types.version import LATEST_HANDSHAKE_VERSION
 from pydantic import BaseModel
-from typing_extensions import Self
 
 from ag2 import Agent, Context
-from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig
 from ag2.events import (
-    BaseEvent,
-    ModelMessage,
-    ModelMessageChunk,
-    ModelRequest,
-    ModelResponse,
-    TextInput,
     ToolCallEvent,
 )
 from ag2.hitl import HumanHook
@@ -297,85 +289,3 @@ def initialize_request(*, request_id: int = 1, version: str = LATEST_HANDSHAKE_V
             "clientInfo": {"name": "test", "version": "1"},
         },
     }
-
-
-class ChunkConfig(ModelConfig):
-    """Test config whose client streams ``ModelMessageChunk`` events before the final reply.
-
-    ``pause`` holds the turn open between chunks, which is what lets a test drop
-    a stream part-way through one.
-    """
-
-    def __init__(self, *chunks: str, final: str | None = None, pause: float = 0.0) -> None:
-        self._chunks = chunks
-        self._final = final if final is not None else "".join(chunks)
-        self._pause = pause
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "ChunkClient":
-        return ChunkClient(self._chunks, self._final, self._pause)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class ChunkClient(LLMClient):
-    def __init__(self, chunks: Sequence[str], final: str, pause: float = 0.0) -> None:
-        self._chunks = chunks
-        self._final = final
-        self._pause = pause
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        for chunk in self._chunks:
-            await context.send(ModelMessageChunk(chunk))
-            if self._pause:
-                await asyncio.sleep(self._pause)
-        message = ModelMessage(self._final)
-        await context.send(message)
-        return ModelResponse(message=message)
-
-
-class RecordingConfig(ModelConfig):
-    """Records the whole message list the framework sends the LLM on each turn.
-
-    Continuity tests read it back through :attr:`prompts`.
-    """
-
-    def __init__(self, config: ModelConfig) -> None:
-        self.config = config
-        self.calls: list[list[BaseEvent]] = []
-
-    @property
-    def prompts(self) -> list[list[str]]:
-        """The text inputs replayed on each turn: one list per turn, in order."""
-        return [
-            [
-                part.content
-                for m in call
-                if isinstance(m, ModelRequest)
-                for part in m.parts
-                if isinstance(part, TextInput)
-            ]
-            for call in self.calls
-        ]
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "RecordingClient":
-        return RecordingClient(self.config.create(), self.calls)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class RecordingClient(LLMClient):
-    def __init__(self, client: LLMClient, sink: list[list[BaseEvent]]) -> None:
-        self.client = client
-        self.sink = sink
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self.sink.append(list(messages))
-        return await self.client(messages, context=context, **kwargs)

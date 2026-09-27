@@ -3,57 +3,42 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import Sequence
 from typing import Any
 
 import acp
 import pytest
 from acp import schema
 from acp.core import ClientSideConnection
-from typing_extensions import Self
 
-from ag2 import Agent, Context
+from ag2 import Agent, Context, observer
 from ag2.acp import ACPAgent, SessionConfig
 from ag2.acp.guard import serve
 from ag2.acp.testing import RecordingClient, connect, duplex
-from ag2.config import LLMClient, ModelConfig
-from ag2.events import BaseEvent, ModelResponse, ToolCallEvent
+from ag2.events import BaseEvent, ToolCallEvent
 from ag2.history import MemoryStorage
 from ag2.testing import TestConfig
 
 
-class _HeldClient(LLMClient):
-    """Parks inside the LLM call and records whether the turn was cancelled there."""
+class _Hold(BaseEvent):
+    """Scripted as the whole turn; :class:`_Held` parks the model call on it."""
 
-    def __init__(self, entered: asyncio.Event, cancelled: asyncio.Event) -> None:
-        self.entered = entered
-        self.cancelled = cancelled
+    __transient__ = True
 
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+
+class _Held:
+    """Parks the model call until something cancels it, and records that it did."""
+
+    def __init__(self) -> None:
+        self.entered = asyncio.Event()
+        self.cancelled = asyncio.Event()
+
+    async def __call__(self, event: _Hold) -> None:
         self.entered.set()
         try:
             await asyncio.Event().wait()
         except asyncio.CancelledError:
             self.cancelled.set()
             raise
-        raise AssertionError("the held turn was never meant to finish")  # pragma: no cover
-
-
-class _HeldConfig(ModelConfig):
-    """A config whose turns hang until something cancels them."""
-
-    def __init__(self) -> None:
-        self.entered = asyncio.Event()
-        self.cancelled = asyncio.Event()
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _HeldClient:
-        return _HeldClient(self.entered, self.cancelled)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
 
 
 class _StaticAgent:
@@ -126,28 +111,28 @@ class TestSessionsDoNotOutliveTheirConnection:
 @pytest.mark.asyncio
 class TestTeardownStopsLiveWork:
     async def test_a_turn_still_running_at_disconnect_is_cancelled(self) -> None:
-        config = _HeldConfig()
-        server = ACPAgent(Agent("workie", config=config))
+        held = _Held()
+        server = ACPAgent(Agent("workie", config=TestConfig(_Hold()), observers=[observer(_Hold, held)]))
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
-            await asyncio.wait_for(config.entered.wait(), timeout=5)
+            await asyncio.wait_for(held.entered.wait(), timeout=5)
 
-        assert config.cancelled.is_set()
+        assert held.cancelled.is_set()
         # The request dies with the connection instead of being answered.
         with pytest.raises(ConnectionError):
             await asyncio.wait_for(turn, timeout=5)
 
     async def test_a_busy_session_is_still_dropped_from_the_registry(self) -> None:
         """A turn in flight must not be able to hold its connection's scope open."""
-        config = _HeldConfig()
-        server = ACPAgent(Agent("workie", config=config))
+        held = _Held()
+        server = ACPAgent(Agent("workie", config=TestConfig(_Hold()), observers=[observer(_Hold, held)]))
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
-            await asyncio.wait_for(config.entered.wait(), timeout=5)
+            await asyncio.wait_for(held.entered.wait(), timeout=5)
 
         assert len(server.sessions) == 0
         with pytest.raises(ConnectionError):
