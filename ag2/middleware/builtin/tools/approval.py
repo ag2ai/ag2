@@ -19,6 +19,10 @@ class ApprovalRequired:
 
     Callable, so it satisfies :data:`~ag2.middleware.ToolMiddleware` wherever a
     hook is accepted. Approval state lives in ``context.variables``, not here.
+
+    An "always" answer is granted to the tool implementation handling the call
+    (:attr:`ToolCallEvent.source`), so another tool of the same name is still
+    asked about. A call with no ``source`` is granted by name.
     """
 
     def __init__(
@@ -53,10 +57,9 @@ class ApprovalRequired:
         event: ToolCallEvent,
         context: Context,
     ) -> ToolResultType:
-        if self._allow_always:
-            bypass_dict = context.variables.get(BYPASS_KEY, {})
-            if bypass_dict.get(event.name):
-                return await call_next(event, context)
+        grant = event.source or event.name
+        if self._allow_always and context.variables.get(BYPASS_KEY, {}).get(grant):
+            return await call_next(event, context)
 
         # Asked as a request that names the call, so a transport putting the
         # question to a remote human can render it as the approval it is. To
@@ -69,7 +72,7 @@ class ApprovalRequired:
         user_result = (await context.ask(request)).lower()
 
         if self._allow_always and user_result == "always":
-            context.variables[BYPASS_KEY] = {**context.variables.get(BYPASS_KEY, {}), event.name: True}
+            context.variables[BYPASS_KEY] = {**context.variables.get(BYPASS_KEY, {}), grant: True}
             return await call_next(event, context)
 
         elif user_result in ("y", "yes", "1"):
@@ -101,7 +104,8 @@ def approval_required(
             does not run.
         allow_always: When ``True``, the user can respond with ``always`` to
             approve the current and all subsequent calls of the same tool in the
-            same context.
+            same context. The answer covers only the tool implementation that was
+            asked about: a different tool with the same name is still asked.
 
     Returns:
         An :class:`ApprovalRequired` hook that can be passed to the

@@ -83,7 +83,8 @@ from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
+from .tools.final import FunctionTool, Toolkit, tool
+from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
@@ -1347,21 +1348,13 @@ class Agent(PluginTarget, Generic[TResult]):
             all_tools: tuple[Tool, ...] = tuple(chain(self.tools, self._additional_tools, additional_tools))
 
             all_schemas: list[ToolSchema] = []
-            known_tools: set[str] = set()
             tool_search_schema: ToolSearchToolSchema | None = None
-            for t in all_tools:
-                schemas = await t.schemas(context)
-
-                for schema in schemas:
-                    if isinstance(schema, FunctionToolSchema):
-                        known_tools.add(schema.function.name)
-                    else:
-                        known_tools.add(schema.type)
-
-                    if isinstance(schema, ToolSearchToolSchema):
-                        tool_search_schema = schema
-                    else:
-                        all_schemas.append(schema)
+            resolved_tools = await resolve_tools(all_tools, context)
+            for schema in resolved_tools.schemas:
+                if isinstance(schema, ToolSearchToolSchema):
+                    tool_search_schema = schema
+                else:
+                    all_schemas.append(schema)
 
             if tool_search_schema is not None:
                 all_schemas.append(tool_search_schema)
@@ -1443,8 +1436,8 @@ class Agent(PluginTarget, Generic[TResult]):
                 self._tool_executor.register(
                     stack,
                     context,
-                    tools=all_tools,
-                    known_tools=known_tools,
+                    tools=resolved_tools.tools,
+                    known_tools=resolved_tools.known_tools,
                     middleware=middleware_instances,
                 )
 

@@ -81,6 +81,14 @@ class FunctionTool(Tool):
         self.name = name
 
     @property
+    def source(self) -> str:
+        """The implementation behind this tool: its function and the name it is called by."""
+        call = self.model.call
+        module = getattr(call, "__module__", None) or type(call).__module__
+        qualname = getattr(call, "__qualname__", None) or type(call).__qualname__
+        return f"function:{module}:{qualname}:{self.name}"
+
+    @property
     def middleware(self) -> tuple[DescribedMiddleware, ...]:
         """Tool-scoped middleware, in execution order.
 
@@ -125,7 +133,7 @@ class FunctionTool(Tool):
             execution = _wrap_middleware(mw.on_tool_execution, execution)
 
         async def execute(event: "ToolCallEvent", context: "Context") -> None:
-            result = await execution(event, context)
+            result = await execution(event.handled_by(self.source), context)
             await context.send(result)
 
         stack.enter_context(context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(execute))

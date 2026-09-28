@@ -133,7 +133,7 @@ remote = Agent(
 reply = await remote.ask("What time is it on my machine? Use get_local_time.")
 ```
 
-The same agent can mix client-side and server-side tools — server tools execute remotely, client tools execute locally, and the LLM picks freely between them within one turn.
+The same agent can mix client-side and server-side tools — server tools execute remotely, client tools execute locally, and the LLM picks freely between them within one turn. A client tool never replaces a server tool with the same name: the server keeps its own tool and drops the client one with a warning.
 
 !!! warning
     If the remote `#!python AgentCard` does not advertise the `#!python urn:ag2:client-tools:v1` extension, passing `#!python tools=...` raises `#!python A2AClientToolsNotSupportedError`. Only AG2-backed servers support client-side tool forwarding today.

@@ -130,6 +130,8 @@ A run that stops on client tool calls finishes with a success outcome naming
 them, in call order, in `pendingToolCallIds`. The client answers them in the next
 run's messages, and a tool message may carry content parts, not only a string.
 
+A frontend tool never replaces a backend tool with the same name: the backend tool is kept and the frontend one is dropped with a warning. Give frontend tools names of their own.
+
 For a production-ready React/Next.js client that supports frontend tools, backend tools, streaming, and shared state, see the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart){.internal-link} and CopilotKit’s docs on:
 
 - [Backend tools](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools){.external-link target="_blank"}
