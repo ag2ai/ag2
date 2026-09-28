@@ -173,7 +173,7 @@ class FilesystemToolkit(Toolkit):
         base_path: str | os.PathLike[str] | None = None,
         *,
         name: str = "update_file",
-        description: str = "Update a file by replacing the first occurrence of old_content with new_content.",
+        description: str = "Update a file by replacing the first occurrence of non-empty old_content with new_content.",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         base_dir = _resolve_dir(base_path, self.base_dir)
@@ -186,7 +186,7 @@ class FilesystemToolkit(Toolkit):
             ],
             old_content: Annotated[
                 str,
-                Field(description="The exact text to find and replace."),
+                Field(description="The non-empty exact text to find and replace."),
             ],
             new_content: Annotated[
                 str,
@@ -194,6 +194,8 @@ class FilesystemToolkit(Toolkit):
             ],
         ) -> str:
             target = _resolve_path(base_dir, path)
+            if not old_content:
+                raise ValueError("old_content must not be empty")
             # See _read_file / _write_file: pin UTF-8 so update_file reads
             # back the exact bytes it (or any other UTF-8 writer) produced,
             # and writes the modified payload back in the same encoding.
