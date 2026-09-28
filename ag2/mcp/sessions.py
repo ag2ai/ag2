@@ -34,8 +34,10 @@ class SessionConfig:
     Attributes:
         max_sessions: LRU cap on conversations held at once. Every call naming
             none, with no MCP session to fall back on, mints one — so size for
-            the call rate and set a ``ttl``.
-        ttl: Idle expiry in seconds; ``None`` means no expiry.
+            the call rate and set a ``ttl``. A conversation mid-turn is never
+            evicted, so the cap gives way while all of them are.
+        ttl: Idle expiry in seconds since last use — a call, or the end of a
+            turn or of a resumed round; ``None`` means no expiry.
         storage: History backend shared across conversations. The handle-to-
             history registry is per-process either way, so a shared backend does
             not make a handle portable.
@@ -70,7 +72,7 @@ class Conversation:
 
 
 class _Entry:
-    __slots__ = ("stream_id", "handle", "principal", "last", "turn_lock")
+    __slots__ = ("stream_id", "handle", "principal", "last", "turn_lock", "resumed")
 
     def __init__(self, stream_id: UUID, handle: str, principal: str | None, last: float) -> None:
         self.stream_id = stream_id
@@ -90,6 +92,14 @@ class _Entry:
         # caller that releases it while a run is still inside ``ask`` (the
         # modern-era pause) must keep the next call away by other means.
         self.turn_lock = asyncio.Lock()
+        # Paused runs continuing right now, each without the turn lock it
+        # released when it paused.
+        self.resumed = 0
+
+    @property
+    def in_turn(self) -> bool:
+        """Whether a turn is running on this conversation, which makes it ineligible for eviction."""
+        return self.turn_lock.locked() or self.resumed > 0
 
 
 class SessionStore:
@@ -165,20 +175,26 @@ class SessionStore:
         async with self._held(entry) as conversation:
             yield conversation
 
-    async def touch(self, handle: str) -> None:
-        """Mark ``handle``'s conversation as used just now, without holding it.
+    @asynccontextmanager
+    async def resumed(self, handle: str) -> AsyncGenerator[None]:
+        """Keep ``handle``'s conversation from eviction while a paused run continues on it.
 
-        For work that keeps a conversation alive without going through the
-        serving methods, such as resuming a paused run. Silent for an unknown
-        handle: the callers that must refuse one raise where it is resolved.
+        Raises:
+            UnknownConversationError: The conversation was evicted while the run
+                was paused, so there is no history left to continue.
         """
         async with self._lock:
             key = self._by_handle.get(handle)
             entry = self._entries.get(key) if key is not None else None
-            if key is None or entry is None:
-                return
-            entry.last = self._clock()
-            self._entries.move_to_end(key)
+            if entry is None:
+                raise UnknownConversationError()
+            self._refresh(entry)
+            entry.resumed += 1
+        try:
+            yield
+        finally:
+            entry.resumed -= 1
+            self._refresh(entry)
 
     async def acquire(self, session_id: str, *, principal: str | None = None) -> MemoryStream:
         """Return a stream carrying ``session_id``'s accumulated conversation.
@@ -191,9 +207,25 @@ class SessionStore:
 
     @asynccontextmanager
     async def _held(self, entry: _Entry) -> AsyncGenerator[Conversation]:
-        """Yield ``entry``'s conversation while holding its turn lock."""
+        """Yield ``entry``'s conversation while holding its turn lock.
+
+        The turn counts as use, so its end restarts the idle window — before the
+        lock is released, or maintenance could expire it in between.
+        """
         async with entry.turn_lock:
-            yield Conversation(stream=MemoryStream(storage=self._storage, id=entry.stream_id), handle=entry.handle)
+            try:
+                yield Conversation(stream=MemoryStream(storage=self._storage, id=entry.stream_id), handle=entry.handle)
+            finally:
+                self._refresh(entry)
+
+    def _refresh(self, entry: _Entry) -> None:
+        # Synchronous, so a cancelled turn cannot lose it to a contended
+        # ``_lock``: no maintenance pass holds a view of the registry across an
+        # await, so nothing it has read goes stale.
+        key = self._by_handle.get(entry.handle)
+        if key is not None and self._entries.get(key) is entry:
+            entry.last = self._clock()
+            self._entries.move_to_end(key)
 
     async def _entry(self, key: str, *, principal: str | None, handle: str | None = None) -> _Entry:
         async with self._lock:
@@ -207,7 +239,7 @@ class SessionStore:
             else:
                 entry.last = now
                 self._entries.move_to_end(key)
-            await self._evict_overflow()
+            await self._evict_overflow(serving=key)
             return entry
 
     async def _handle_entry(self, handle: str, principal: str | None) -> _Entry:
@@ -228,27 +260,17 @@ class SessionStore:
     async def _evict_expired(self, now: float) -> None:
         if self._ttl is None:
             return
-        expired = [
-            sid
-            for sid, e in self._entries.items()
-            # Skip sessions with a turn in flight: `last` is only refreshed at
-            # turn start, so a turn slower than the TTL would otherwise have
-            # its history dropped while it is still running.
-            if now - e.last > self._ttl and not e.turn_lock.locked()
-        ]
+        expired = [sid for sid, e in self._entries.items() if now - e.last > self._ttl and not e.in_turn]
         for sid in expired:
             await self._drop(sid)
 
-    async def _evict_overflow(self) -> None:
+    async def _evict_overflow(self, *, serving: str) -> None:
+        # ``serving`` is the conversation being handed out: its turn lock is not
+        # taken yet, so it would otherwise read as the oldest idle one.
         while len(self._entries) > self._max:
-            # Never evict a session with a turn in flight; drop the oldest idle
-            # entry instead.
-            victim = next(
-                (sid for sid, e in self._entries.items() if not e.turn_lock.locked()),
-                None,
-            )
+            victim = next((sid for sid, e in self._entries.items() if sid != serving and not e.in_turn), None)
             if victim is None:
-                break
+                return
             await self._drop(victim)
 
     async def _drop(self, key: str) -> None:
