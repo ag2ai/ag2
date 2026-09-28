@@ -27,29 +27,8 @@ from ag2.events import (
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 from ag2.tools.subagents import background_agent_tool
+from test.live._announcements import Announcements
 from test.live._helpers import created, done, function_call, live_agent
-
-
-class Announcements:
-    """Counts `MessageEnqueued` events once every earlier subscriber has handled them.
-
-    Subscribed after the session opens, so `LiveAgent`'s own subscriber runs
-    first: once `wait(n)` returns, the session has finished reacting to the
-    first `n` announcements.
-    """
-
-    def __init__(self) -> None:
-        self._seen = 0
-        self._changed = asyncio.Condition()
-
-    async def on_enqueued(self, event: MessageEnqueued) -> None:
-        async with self._changed:
-            self._seen += 1
-            self._changed.notify_all()
-
-    async def wait(self, count: int) -> None:
-        async with self._changed:
-            await asyncio.wait_for(self._changed.wait_for(lambda: self._seen >= count), timeout=3.0)
 
 
 class Hold:

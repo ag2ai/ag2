@@ -19,6 +19,7 @@ from ag2.events import (
     DataInput,
     ModelMessage,
     ModelMessageChunk,
+    ModelRequest,
     ModelResponse,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
@@ -33,6 +34,7 @@ from ag2.events import (
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
+from ._input import request_texts
 from .realtime import RealtimeConfig
 
 # Gemini Live audio I/O is fixed by the API contract:
@@ -40,6 +42,8 @@ from .realtime import RealtimeConfig
 INPUT_SAMPLE_RATE = 16_000
 OUTPUT_SAMPLE_RATE = 24_000
 INPUT_MIME_TYPE = f"audio/pcm;rate={INPUT_SAMPLE_RATE}"
+
+_PROVIDER = "gemini live"
 
 
 LiveVoice = Literal[
@@ -104,9 +108,10 @@ class RealTimeConfig(RealtimeConfig):
     """Realtime config backed by Gemini's bidirectional Live API.
 
     Implements the `RealtimeConfig` protocol — call `session(...)` to
-    open a websocket connection that pumps captured audio into the API
-    and emits transcription, audio, and tool-call events on the supplied
-    context.
+    open a websocket connection that pumps captured audio into the API,
+    adds each `ModelRequest` published on the context's stream to the
+    conversation as one user turn, and emits transcription, audio, and
+    tool-call events on the supplied context.
     """
 
     def __init__(
@@ -195,6 +200,7 @@ class RealTimeConfig(RealtimeConfig):
         final_config = self._build_session(instructions=instructions, tools=tools)
 
         async with self.client.aio.live.connect(model=self.model, config=final_config) as session:
+            gate = _ResponseGate(session)
 
             async def _pump_audio(event: RecordedAudioEvent) -> None:
                 await session.send_realtime_input(
@@ -204,11 +210,15 @@ class RealTimeConfig(RealtimeConfig):
             async def _forward_tool_result(event: ToolResultEvent) -> None:
                 await _send_tool_result(session, event, serializer)
 
+            async def _forward_request(event: ModelRequest) -> None:
+                await _send_request(session, gate, event, serializer)
+
             with (
                 context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
                 context.stream.where(ToolResultEvent).sub_scope(_forward_tool_result),
+                context.stream.where(ModelRequest).sub_scope(_forward_request),
             ):
-                recv_task = asyncio.create_task(_pump_events(session, context, self.model))
+                recv_task = asyncio.create_task(_pump_events(session, gate, context, self.model))
 
                 try:
                     yield
@@ -236,11 +246,89 @@ def _ensure_object_schema(params: dict[str, Any] | None) -> dict[str, Any]:
     return params
 
 
+class _ResponseGate:
+    """The per-session rule for when the model may be asked to answer.
+
+    Gemini Live answers a client turn as soon as it is completed
+    (`send_client_content(turn_complete=True)`) and interrupts a response it
+    is producing to do so. The gate tracks whether a response is active: its
+    own request, or a turn the server starts on its own (automatic activity
+    detection on audio, the model continuing after a tool response), seen as
+    the turn's first model output or tool call. A request made while a
+    response is active is deferred to the response boundary
+    (`turn_complete`), where all deferred requests collapse into one. A
+    boundary that reports more server work under way (`interaction_status`
+    `IN_PROGRESS`) keeps the gate busy and the request deferred until a
+    boundary that does not.
+
+    Known limits: a request made between a tool response and the model's
+    first output after it is sent at once and may cut that output short. Gemini
+    gives turns no ids, so a `turn_complete` cannot be attributed to a
+    specific turn: when the gate's request merges with or interrupts a turn
+    the server started, the first `turn_complete` frees the gate even if
+    that turn still runs.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._active = False
+        self._deferred = False
+
+    async def request(self) -> None:
+        """Ask for a response now, or at the next response boundary if one is active."""
+        if self._active:
+            self._deferred = True
+        else:
+            await self._complete_turn()
+
+    def response_started(self) -> None:
+        """Mark a response active — the gate's own or one the server started."""
+        self._active = True
+
+    async def turn_complete(self, *, more_coming: bool) -> None:
+        """Handle the response boundary: send the deferred request unless more server work is under way."""
+        self._active = more_coming
+        if self._deferred and not self._active:
+            self._deferred = False
+            await self._complete_turn()
+
+    async def _complete_turn(self) -> None:
+        self._active = True
+        await self._session.send_client_content(turn_complete=True)
+
+
+async def _send_request(
+    session: AsyncSession,
+    gate: _ResponseGate,
+    event: ModelRequest,
+    serializer: SerializerProto,
+) -> None:
+    """Add the request to the conversation as one user turn, then ask the gate for a response.
+
+    The turn is sent open (`turn_complete=False`), so it enters the context at
+    once without making the model answer; the gate completes it. A request
+    with no content to send adds nothing and asks for nothing.
+    """
+    texts = request_texts(event, serializer, provider=_PROVIDER)
+    if not texts:
+        return
+    await session.send_client_content(
+        turns=[{"role": "user", "parts": [{"text": text} for text in texts]}],
+        turn_complete=False,
+    )
+    await gate.request()
+
+
 async def _send_tool_result(
     session: AsyncSession,
     event: ToolResultEvent,
     serializer: SerializerProto,
 ) -> None:
+    """Send the tool response without asking for a response.
+
+    Gemini decides on its own whether and when to continue after a tool
+    response; the gate sees that continuation as model output.
+    """
     chunks: list[str] = []
     for part in event.result.parts:
         if isinstance(part, TextInput):
@@ -273,6 +361,7 @@ def normalize_realtime_usage(metadata: "gtypes.UsageMetadata | None") -> Usage:
 
 async def _pump_events(
     session: AsyncSession,
+    gate: _ResponseGate,
     context: ConversationContext,
     model: str,
 ) -> None:
@@ -285,6 +374,9 @@ async def _pump_events(
         had_message = False
         async for message in session.receive():
             had_message = True
+
+            if _is_model_output(message):
+                gate.response_started()
 
             emitted = await _handle_server_content(message.server_content, context)
             text += emitted
@@ -320,9 +412,23 @@ async def _pump_events(
                 )
                 text = ""
                 usage = Usage()
+                await gate.turn_complete(
+                    more_coming=message.server_content.interaction_status == gtypes.InteractionStatus.IN_PROGRESS,
+                )
 
         if not had_message:
             return
+
+
+def _is_model_output(message: gtypes.LiveServerMessage) -> bool:
+    """Whether the message carries part of a model turn.
+
+    Transcriptions are not ordered with the model turn, so a late one never
+    counts as the start of a response.
+    """
+    if message.tool_call is not None:
+        return True
+    return message.server_content is not None and message.server_content.model_turn is not None
 
 
 async def _handle_server_content(
