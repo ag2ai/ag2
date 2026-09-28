@@ -80,7 +80,15 @@ def make_peers_tool(agent_client: "AgentClient") -> object:
             if sort_by == "name":
                 results.sort(key=lambda r: r["name"])
             elif sort_by == "cost":
-                results.sort(key=lambda r: (r["cost"] or {}).get("input_per_mtok") or float("inf"))
+                # Sort cheapest first; peers with *unknown* cost (no profile
+                # or no input price) sort last. A price of 0.0 is a real,
+                # cheapest value — distinguish it from None so free/local
+                # models don't get ranked as the most expensive.
+                def _cost_key(r: dict) -> float:
+                    price = (r["cost"] or {}).get("input_per_mtok")
+                    return price if price is not None else float("inf")
+
+                results.sort(key=_cost_key)
             elif sort_by == "track_record":
                 results.sort(
                     key=lambda r: r["observed_success_rate"] or 0.0,
