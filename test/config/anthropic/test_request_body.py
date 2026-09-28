@@ -19,7 +19,7 @@ from fast_depends.use import SerializerCls
 
 from ag2 import Context, MemoryStream
 from ag2.config.anthropic import AnthropicClient, AnthropicConfig
-from ag2.events import ModelRequest, TextInput
+from ag2.events import ImageInput, ModelRequest, ModelResponse, TextInput
 from ag2.exceptions import WebFetchOptionUnsupportedError, WebFetchUrlSourceToolNotFoundError
 from ag2.tools.builtin.mcp_server import MCPServerTool
 from ag2.tools.builtin.web_fetch import ExceptTools, OnlyTools, UrlSources, WebFetchTool
@@ -605,3 +605,72 @@ async def test_a_source_outside_the_pair_is_sent_as_written(context: Context) ->
     body = captured["body"]
     assert isinstance(body, dict)
     assert body["tools"][0]["url_sources"] == {"user_input": {"type": "All"}}
+
+
+async def _send(config: AnthropicConfig, *messages: ModelRequest | ModelResponse) -> None:
+    await config.create()(
+        messages=list(messages),
+        context=Context(stream=MemoryStream(), prompt=["Be brief."]),
+        response_schema=None,
+        serializer=SerializerCls,
+        tools=[],
+    )
+
+
+@pytest.mark.asyncio
+class TestPromptCacheBreakpoint:
+    PNG = b"\x89PNG\r\n"
+
+    async def test_a_plain_text_last_turn_becomes_a_marked_text_block(self) -> None:
+        captured: dict[str, object] = {}
+        config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+
+        await _send(
+            config,
+            ModelRequest([TextInput("first")]),
+            ModelResponse(TextInput("ok")),
+            ModelRequest([TextInput("second")]),
+        )
+
+        assert captured["body"] == IsPartialDict({
+            "system": [{"type": "text", "text": "Be brief.", "cache_control": {"type": "ephemeral"}}],
+            "messages": [
+                {"role": "user", "content": "first"},
+                {"role": "assistant", "content": [{"type": "text", "text": "ok"}]},
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "second", "cache_control": {"type": "ephemeral"}}],
+                },
+            ],
+        })
+
+    async def test_only_the_last_block_of_a_multi_part_turn_is_marked(self) -> None:
+        captured: dict[str, object] = {}
+        config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+
+        await _send(config, ModelRequest([TextInput("look"), ImageInput(data=self.PNG, media_type="image/png")]))
+
+        body = captured["body"]
+        assert isinstance(body, dict)
+        assert body["messages"] == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "look"},
+                    IsPartialDict({"type": "image", "cache_control": {"type": "ephemeral"}}),
+                ],
+            }
+        ]
+
+    async def test_nothing_is_marked_with_caching_off(self) -> None:
+        captured: dict[str, object] = {}
+        config = AnthropicConfig(
+            model="claude-haiku-4-5", api_key="test", prompt_caching=False, http_client=_capturing_client(captured)
+        )
+
+        await _send(config, ModelRequest([TextInput("hi")]))
+
+        assert captured["body"] == IsPartialDict({
+            "system": "Be brief.",
+            "messages": [{"role": "user", "content": "hi"}],
+        })

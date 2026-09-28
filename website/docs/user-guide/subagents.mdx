@@ -239,7 +239,7 @@ It means that subagent has no information about previous calls or results. It ju
 | What | Behavior | Why |
 |---|---|---|
 | **Dependencies** | Copied | Isolated — child mutations don't affect parent |
-| **Variables** | Copied; synced back on success | Concurrent-safe — user variable mutations propagate back |
+| **Variables** | Copied; not synced back. `approval_required` "always" answers are not inherited | Concurrent-safe — child mutations stay scoped to the child; the sub-task asks for approval again |
 | **History** | Fresh stream | Clean context — the LLM passes relevant info via `context` parameter |
 | **Depth counter** | Incremented in child; excluded from sync-back | Internal bookkeeping — never leaks to parent |
 | **Agent prompt, tools, config** | Inherited | The sub-agent brings its own capabilities |

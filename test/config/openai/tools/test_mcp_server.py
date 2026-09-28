@@ -134,6 +134,20 @@ class TestResponsesApi:
         assert result["headers"] == {"Authorization": "Custom auth"}
 
     @pytest.mark.asyncio
+    async def test_auth_token_is_merged_into_headers_without_authorization(self, context: Context) -> None:
+        tool = MCPServerTool(
+            server_url="https://mcp.example.com/sse",
+            server_label="example-mcp",
+            authorization_token="token123",
+            headers={"X-Custom": "value"},
+        )
+
+        [schema] = await tool.schemas(context)
+
+        result = tool_to_responses_api(schema)
+        assert result["headers"] == {"X-Custom": "value", "Authorization": "Bearer token123"}
+
+    @pytest.mark.asyncio
     async def test_with_description(self, context: Context) -> None:
         tool = MCPServerTool(
             server_url="https://mcp.example.com/sse",

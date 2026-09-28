@@ -31,7 +31,9 @@ import pytest
 
 pytest.importorskip("mcp")
 
-from ag2 import Agent, Context
+from starlette.datastructures import Headers
+
+from ag2 import Agent, Context, Variable
 from ag2.events import (
     HumanInputRequest,
     HumanMessage,
@@ -55,7 +57,7 @@ def echo(message: str) -> str:
 
 @asynccontextmanager
 async def _live_mcp_server(
-    headers_seen: list[dict[str, str]] | None = None,
+    headers_seen: list[Headers] | None = None,
 ) -> AsyncGenerator[str]:
     """Serve an AG2 ``MCPServer`` on a loopback port, yielding the MCP endpoint URL.
 
@@ -82,12 +84,12 @@ async def _serving_mcp(app: Any) -> AsyncGenerator[str]:
         yield f"{base_url}/mcp/"
 
 
-def _recording(app: Any, headers_seen: list[dict[str, str]]) -> Any:
+def _recording(app: Any, headers_seen: list[Headers]) -> Any:
     """Wrap an ASGI app, recording each HTTP request's headers."""
 
     async def recording(scope: dict[str, Any], receive: Callable[..., Any], send: Callable[..., Any]) -> None:
         if scope["type"] == "http":
-            headers_seen.append({k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]})
+            headers_seen.append(Headers(scope=scope))
         await app(scope, receive, send)
 
     return recording
@@ -150,7 +152,7 @@ async def test_a_tool_call_round_trips_over_the_real_transport(context: Context)
 @pytest.mark.asyncio
 async def test_configured_headers_reach_the_server(context: Context) -> None:
     """A bearer-token MCP server is reached this way, so no request may skip them."""
-    headers_seen: list[dict[str, str]] = []
+    headers_seen: list[Headers] = []
 
     async with _live_mcp_server(headers_seen) as url:
         toolkit = MCPToolkit(MCPServerConfig(server_url=url, headers={"X-Tenant": "acme"}, authorization_token="t0ken"))
@@ -158,7 +160,37 @@ async def test_configured_headers_reach_the_server(context: Context) -> None:
 
     assert headers_seen, "no HTTP request reached the server"
     assert all(h.get("x-tenant") == "acme" for h in headers_seen)
-    assert all(h.get("authorization") == "Bearer t0ken" for h in headers_seen)
+    assert all(h.getlist("authorization") == ["Bearer t0ken"] for h in headers_seen)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("header_name", ["Authorization", "authorization", "aUtHoRiZaTiOn"])
+@pytest.mark.parametrize("use_variables", [False, True], ids=["static", "variables"])
+async def test_explicit_authorization_header_takes_precedence(
+    context: Context, header_name: str, use_variables: bool
+) -> None:
+    headers = {header_name: "Bearer explicit-token", "X-Tenant": "acme"}
+    headers_seen: list[Headers] = []
+    context.variables.update({"mcp_headers": headers, "mcp_token": "fallback-token"})
+
+    async with _live_mcp_server(headers_seen) as url:
+        toolkit = MCPToolkit(
+            MCPServerConfig(
+                server_url=url,
+                headers=Variable("mcp_headers") if use_variables else headers,
+                authorization_token=Variable("mcp_token") if use_variables else "fallback-token",
+            )
+        )
+        await toolkit.schemas(context)
+        proxy = next(t for t in toolkit.tools if t.name == "echo")
+        result = await proxy(ToolCallEvent(name="echo", arguments='{"message": "hi"}'), context)
+
+    assert isinstance(result, ToolResultEvent)
+    assert result.result.parts == [TextInput(content="echo: hi")]
+    assert headers_seen, "no HTTP request reached the server"
+    assert all(h.getlist("authorization") == ["Bearer explicit-token"] for h in headers_seen)
+    assert all(h.get("x-tenant") == "acme" for h in headers_seen)
+    assert headers == {header_name: "Bearer explicit-token", "X-Tenant": "acme"}
 
 
 @pytest.mark.asyncio

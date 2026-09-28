@@ -18,6 +18,8 @@ surface stays the same.
 
 from typing import TYPE_CHECKING, Literal
 
+from pydantic import Field
+
 from ag2.tools import tool
 
 from ...envelope import EV_TEXT, Envelope, visible_to
@@ -49,8 +51,8 @@ def make_context_tool(agent_client: "AgentClient") -> object:
         query: str | None = None,
         scope: Literal["channel", "knowledge"] = "channel",
         speaker: str | None = None,
-        recent_n: int = 1,
-        limit: int = 10,
+        recent_n: int = Field(default=1, ge=1),
+        limit: int = Field(default=10, ge=1),
         channel_id: str | None = None,
         client: AgentClientInject = None,
         channel: ChannelInject = None,

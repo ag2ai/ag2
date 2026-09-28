@@ -193,7 +193,9 @@ class LocalRuntime(SkillRuntime):
         self._install_dir.mkdir(parents=True, exist_ok=True)
 
     def install(self, source: Path, name: str) -> None:
-        dest = self._install_dir / name
+        dest = (self._install_dir / name).resolve()
+        if not dest.is_relative_to(self._install_dir.resolve()):
+            raise ValueError(f"Cannot install '{name}': path traversal detected")
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(source, dest)

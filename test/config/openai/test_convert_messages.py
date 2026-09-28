@@ -20,8 +20,10 @@ from ag2.events import (
     FileIdInput,
     ImageInput,
     ModelRequest,
+    ModelResponse,
     TextInput,
     ToolCallEvent,
+    ToolCallsEvent,
     ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
@@ -189,6 +191,14 @@ class TestAudioBinaryInput:
             "content": [{"type": "input_audio", "input_audio": {"data": expected_b64, "format": "mp3"}}],
         }
 
+    @pytest.mark.parametrize("media_type", ["audio/flac", "audio/ogg", "audio/aac", "audio/aiff"])
+    def test_completions_rejects_formats_the_api_refuses(self, media_type: str) -> None:
+        # The API answers these with `400 Invalid value: 'flac'. Supported values are: 'wav' and 'mp3'.`
+        with pytest.raises(UnsupportedInputError, match=f"{media_type}.*openai-completions"):
+            convert_messages(
+                [], [ModelRequest([AudioInput(data=self.SAMPLE_BYTES, media_type=media_type)])], SerializerCls
+            )
+
 
 class TestBinaryInput:
     SAMPLE_BYTES = b"\x89PNG\r\n\x1a\nfake"
@@ -225,6 +235,14 @@ class TestBinaryInput:
             "role": "user",
             "content": [{"type": "image_url", "image_url": {"url": expected_url, "detail": "low"}}],
         }
+
+    def test_completions_rejects_invalid_detail(self) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"detail": "ultra"}, kind=BinaryType.IMAGE
+        )
+
+        with pytest.raises(UnsupportedInputError, match="detail='ultra'.*openai-completions"):
+            convert_messages([], [ModelRequest([image])], SerializerCls)
 
     def test_completions_image_path_no_vendor_leak(self, tmp_path) -> None:
         """ImageInput(path=...) auto-sets vendor_metadata={'filename': ...}; mapper must not leak it."""
@@ -303,6 +321,29 @@ class TestBinaryInput:
         )
 
         assert result[0]["content"][0] == IsPartialDict({"type": "input_image", "detail": "high"})
+
+    def test_responses_image_with_original_detail(self) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="image/png",
+            vendor_metadata={"detail": "original"},
+            kind=BinaryType.IMAGE,
+        )
+
+        result = events_to_responses_input([ModelRequest([image])], SerializerCls)
+
+        assert result == [
+            {"role": "user", "content": [IsPartialDict({"type": "input_image", "detail": "original"})]},
+        ]
+
+    def test_responses_rejects_invalid_detail(self) -> None:
+        # The API answers `Invalid value: 'ultra'. Supported values are: 'low', 'high', 'auto', and 'original'.`
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"detail": "ultra"}, kind=BinaryType.IMAGE
+        )
+
+        with pytest.raises(UnsupportedInputError, match="detail='ultra'.*openai-responses"):
+            events_to_responses_input([ModelRequest([image])], SerializerCls)
 
     def test_responses_document_with_vendor_metadata(self) -> None:
         result = events_to_responses_input(
@@ -603,6 +644,67 @@ class TestResponsesToolResult:
         )
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*openai-responses"):
             events_to_responses_input([event], SerializerCls)
+
+
+class TestResponsesAssistantTurn:
+    def test_text_replays_as_a_string_message(self) -> None:
+        result = events_to_responses_input([ModelResponse(message=TextInput("Hi."))], SerializerCls)
+
+        assert result == [{"role": "assistant", "content": "Hi."}]
+
+    def test_text_then_function_calls(self) -> None:
+        response = ModelResponse(
+            message=TextInput("Checking."),
+            tool_calls=ToolCallsEvent([ToolCallEvent(id="c1", name="get_weather", arguments='{"city": "Paris"}')]),
+        )
+
+        result = events_to_responses_input([response], SerializerCls)
+
+        assert result == [
+            {"role": "assistant", "content": "Checking."},
+            {"type": "function_call", "call_id": "c1", "name": "get_weather", "arguments": '{"city": "Paris"}'},
+        ]
+
+    def test_function_calls_without_text(self) -> None:
+        response = ModelResponse(tool_calls=ToolCallsEvent([ToolCallEvent(id="c1", name="now")]))
+
+        result = events_to_responses_input([response], SerializerCls)
+
+        assert result == [{"type": "function_call", "call_id": "c1", "name": "now", "arguments": "{}"}]
+
+
+class TestCompletionsAssistantTurn:
+    def test_text_and_tool_calls(self) -> None:
+        response = ModelResponse(
+            message=TextInput("Checking the weather."),
+            tool_calls=ToolCallsEvent([ToolCallEvent(id="c1", name="get_weather", arguments='{"city": "Paris"}')]),
+        )
+
+        result = convert_messages([], [response], SerializerCls)
+
+        assert result[1] == {
+            "role": "assistant",
+            "content": "Checking the weather.",
+            "tool_calls": [
+                {"id": "c1", "type": "function", "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'}},
+            ],
+        }
+
+    def test_tool_calls_without_text(self) -> None:
+        response = ModelResponse(tool_calls=ToolCallsEvent([ToolCallEvent(id="c1", name="now")]))
+
+        result = convert_messages([], [response], SerializerCls)
+
+        assert result[1] == {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "now", "arguments": "{}"}}],
+        }
+
+    def test_text_only(self) -> None:
+        result = convert_messages([], [ModelResponse(message=TextInput("Hi."))], SerializerCls)
+
+        assert result[1] == {"role": "assistant", "content": "Hi."}
 
 
 def _hallucinated_tool_call() -> ToolResultsEvent:

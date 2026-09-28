@@ -48,6 +48,7 @@ class ResponseSchema(ResponseProto[T]):
         description: str | None = None,
         embed: bool = True,
     ) -> None:
+        self.types = types
         self._adapter, self._embedded_type = make_adapter(types, embed=embed)
         schema = self._adapter.json_schema() if self._adapter else None
 

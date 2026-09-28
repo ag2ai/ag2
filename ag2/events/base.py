@@ -5,6 +5,7 @@
 import operator
 import time
 from collections.abc import Callable
+from copy import copy
 from types import EllipsisType
 from typing import Any
 
@@ -83,6 +84,9 @@ class ProviderReplay:
 
 
 class Field:
+    # Set only on the copies ``__get__`` binds to an owner class.
+    event_class: type
+
     def __init__(
         self,
         default: Any = Ellipsis,
@@ -111,9 +115,13 @@ class Field:
         return self._default
 
     def __get__(self, instance: Any | None, owner: type) -> Any:
-        self.event_class = owner
         if instance is None:
-            return self
+            # A copy bound to ``owner``: subclasses share this descriptor, and
+            # recording the owner on it lets any other read retarget a
+            # condition between ``Event.field`` and its comparison.
+            bound = copy(self)
+            bound.event_class = owner
+            return bound
         return instance.__dict__.get(self.name)
 
     def __set__(self, instance: Any, value: Any) -> None:

@@ -25,21 +25,14 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.testing import TestConfig
 from ag2.tools import tool
 from test._helpers import lookup
-
-from .utils import (
-    collect_events,
-    create_run_input,
-    exploding_agent,
-    frames_of_failing_run,
-    leaf_exceptions,
-)
+from test.ag_ui.harness import dispatch_run, exploding_agent, frames_of_failing_run, leaf_exceptions, run_input
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _frames(agent: Agent) -> list[dict[str, Any]]:
     """The SSE frames one run yields, decoded but not parsed."""
-    return await collect_events(AGUIStream(agent), create_run_input(UserMessage(id="msg_1", content="go")))
+    return await dispatch_run(AGUIStream(agent), run_input(UserMessage(id="msg_1", content="go")))
 
 
 async def _finished(agent: Agent) -> RunFinishedEvent:
@@ -54,8 +47,8 @@ async def _finished(agent: Agent) -> RunFinishedEvent:
 
 async def _run_error(agent: Agent) -> RunErrorEvent:
     """The terminating event of a failing run, emitted before ``dispatch`` re-raises."""
-    run_input = create_run_input(UserMessage(id="msg_1", content="go"))
-    return RunErrorEvent.model_validate((await frames_of_failing_run(agent, run_input))[-1])
+    incoming = run_input(UserMessage(id="msg_1", content="go"))
+    return RunErrorEvent.model_validate((await frames_of_failing_run(agent, incoming))[-1])
 
 
 class TestCompletedRun:
@@ -659,9 +652,9 @@ class TestFailedRun:
         """Covered for the bare failure path in ``test_run_error.py``; pinned again here
         with usage on the event, since that is the mapping that could raise in its place."""
         agent = exploding_agent(Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300))
-        run_input = create_run_input(UserMessage(id="msg_1", content="go"))
+        incoming = run_input(UserMessage(id="msg_1", content="go"))
 
         with pytest.raises(Exception) as exc_info:
-            await collect_events(AGUIStream(agent), run_input)
+            await dispatch_run(AGUIStream(agent), incoming)
 
         assert [type(e) for e in leaf_exceptions(exc_info.value)] == [RuntimeError]

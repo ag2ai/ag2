@@ -510,7 +510,7 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
 
     headers = dict(_resolve_value(config.headers, context) or {})
     auth = _resolve_value(config.authorization_token, context)
-    if auth and "Authorization" not in headers:
+    if auth and not any(key.lower() == "authorization" for key in headers):
         headers["Authorization"] = f"Bearer {auth}"
 
     return replace(

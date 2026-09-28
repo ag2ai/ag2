@@ -17,8 +17,7 @@ from ag_ui.core import EventType, RunErrorEvent, RunFinishedEvent, RunStartedEve
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream
 from ag2.testing import TestConfig
-
-from .utils import collect_events, create_run_input, exploding_agent, frames_of_failing_run, leaf_exceptions
+from test.ag_ui.harness import dispatch_run, exploding_agent, frames_of_failing_run, leaf_exceptions, run_input
 
 pytestmark = pytest.mark.asyncio
 
@@ -26,9 +25,9 @@ pytestmark = pytest.mark.asyncio
 class TestRunError:
     async def test_run_error_reports_the_failure(self) -> None:
         """The event names what went wrong and is stamped."""
-        run_input = create_run_input(UserMessage(id="msg_1", content="go"))
+        incoming = run_input(UserMessage(id="msg_1", content="go"))
 
-        frames = await frames_of_failing_run(exploding_agent(), run_input)
+        frames = await frames_of_failing_run(exploding_agent(), incoming)
 
         error = RunErrorEvent.model_validate(frames[-1])
         assert "downstream is down" in error.message
@@ -47,12 +46,12 @@ class TestRunError:
         Asserted on the raw frames rather than the parsed models: extras only exist on
         the wire, so parsing is exactly what would hide the failure this pins.
         """
-        run_input = create_run_input(UserMessage(id="msg_1", content="go"))
+        incoming = run_input(UserMessage(id="msg_1", content="go"))
 
-        frames = await frames_of_failing_run(exploding_agent(), run_input)
+        frames = await frames_of_failing_run(exploding_agent(), incoming)
 
         started = RunStartedEvent.model_validate(frames[0])
-        assert (started.thread_id, started.run_id) == (run_input.thread_id, run_input.run_id)
+        assert (started.thread_id, started.run_id) == (incoming.thread_id, incoming.run_id)
 
         run_error = frames[-1]
         assert "threadId" not in run_error
@@ -62,10 +61,10 @@ class TestRunError:
 
     async def test_original_exception_reaches_the_caller(self) -> None:
         """The run's real cause must not be swallowed or replaced by the error event."""
-        run_input = create_run_input(UserMessage(id="msg_1", content="go"))
+        incoming = run_input(UserMessage(id="msg_1", content="go"))
 
         with pytest.raises(Exception) as exc_info:
-            await collect_events(AGUIStream(exploding_agent()), run_input)
+            await dispatch_run(AGUIStream(exploding_agent()), incoming)
 
         leaves = leaf_exceptions(exc_info.value)
         assert [type(e) for e in leaves] == [RuntimeError]
@@ -73,9 +72,9 @@ class TestRunError:
 
     async def test_events_emitted_before_the_failure_are_observable(self) -> None:
         """Everything sent before the re-raise is still available to assert on."""
-        run_input = create_run_input(UserMessage(id="msg_1", content="go"))
+        incoming = run_input(UserMessage(id="msg_1", content="go"))
 
-        frames = await frames_of_failing_run(exploding_agent(), run_input)
+        frames = await frames_of_failing_run(exploding_agent(), incoming)
 
         RunStartedEvent.model_validate(frames[0])
         RunErrorEvent.model_validate(frames[-1])
@@ -84,12 +83,12 @@ class TestRunError:
     async def test_a_successful_run_still_finishes_cleanly(self) -> None:
         """The failure path must not disturb the success path."""
         agent = Agent("test_agent", config=TestConfig("all good"))
-        run_input = create_run_input(UserMessage(id="msg_1", content="go"))
+        incoming = run_input(UserMessage(id="msg_1", content="go"))
 
-        frames = await collect_events(AGUIStream(agent), run_input)
+        frames = await dispatch_run(AGUIStream(agent), incoming)
 
         finished = RunFinishedEvent.model_validate(frames[-1])
-        assert (finished.thread_id, finished.run_id) == (run_input.thread_id, run_input.run_id)
+        assert (finished.thread_id, finished.run_id) == (incoming.thread_id, incoming.run_id)
 
         started = RunStartedEvent.model_validate(frames[0])
-        assert (started.thread_id, started.run_id) == (run_input.thread_id, run_input.run_id)
+        assert (started.thread_id, started.run_id) == (incoming.thread_id, incoming.run_id)
