@@ -99,6 +99,20 @@ class TestLiveAgentInbox:
             assert user_texts(conn.created_items()) == [["left over"]]
             assert conn.response_requests() == 1
 
+    async def test_media_left_before_open_is_dropped_and_the_text_delivered_at_open(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        stream = MemoryStream()
+        stream.enqueue("left over", ImageInput("https://example.com/cat.png"))
+        agent, conn = live_agent(stream=stream)
+
+        with caplog.at_level(logging.WARNING):
+            async with agent.run():
+                assert user_texts(conn.created_items()) == [["left over"]]
+
+        assert any("UrlInput(image)" in r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+
     async def test_message_drained_at_open_reaches_observers(self) -> None:
         stream = MemoryStream()
         stream.enqueue("left over")
@@ -121,6 +135,23 @@ class TestLiveAgentInbox:
             assert user_texts(conn.created_items()) == [["typed"]]
             assert conn.response_requests() == 1
             assert await model_requests(stream) == [["typed"]]
+
+    async def test_enqueue_during_response_is_answered_at_boundary(self) -> None:
+        agent, conn = live_agent()
+
+        async with agent.run() as context:
+            await conn.emit(created("resp-1"))
+            announcements = Announcements()
+            with context.stream.where(MessageEnqueued).sub_scope(announcements.on_enqueued):
+                context.enqueue("typed")
+                await announcements.wait(1)
+
+            assert user_texts(conn.created_items()) == [["typed"]]
+            assert conn.response_requests() == 0
+
+            await conn.emit(done("resp-1"))
+
+            assert conn.response_requests() == 1
 
     async def test_enqueues_close_together_are_delivered_once_each(self) -> None:
         agent, conn = live_agent()

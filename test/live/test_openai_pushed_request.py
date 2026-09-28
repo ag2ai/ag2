@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from uuid import UUID
+
 import pytest
 
 pytest.importorskip("openai")
@@ -9,6 +13,12 @@ pytest.importorskip("openai")
 from ag2.events import DataInput, ImageInput, ModelRequest, TextInput
 from ag2.exceptions import UnsupportedInputError
 from test.live._helpers import created, done, live_agent
+
+
+@dataclass
+class Booking:
+    id: UUID
+    at: datetime
 
 
 @pytest.mark.asyncio
@@ -52,6 +62,22 @@ class TestPushedModelRequest:
 
             assert conn.response_requests() == 1
 
+    async def test_pushes_during_one_response_share_one_request(self) -> None:
+        agent, conn = live_agent()
+
+        async with agent.run() as context:
+            await conn.emit(created("resp-1"))
+            await context.send(ModelRequest([TextInput("first")]))
+            await context.send(ModelRequest([TextInput("second")]))
+            await context.send(ModelRequest([TextInput("third")]))
+
+            assert len(conn.created_items()) == 3
+            assert conn.response_requests() == 0
+
+            await conn.emit(done("resp-1"))
+
+            assert conn.response_requests() == 1
+
     async def test_empty_request_sends_nothing(self) -> None:
         agent, conn = live_agent()
 
@@ -61,13 +87,22 @@ class TestPushedModelRequest:
 
             assert conn.calls == calls_before
 
-    async def test_pushed_data_input_is_sent_serialized(self) -> None:
+    async def test_pushed_data_input_is_sent_with_the_agent_serializer(self) -> None:
         agent, conn = live_agent()
+        booking = Booking(
+            id=UUID("12345678-1234-5678-1234-567812345678"),
+            at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc),
+        )
 
         async with agent.run() as context:
-            await context.send(ModelRequest([DataInput({"city": "Paris"})]))
+            await context.send(ModelRequest([DataInput(booking)]))
 
-            assert conn.created_items()[0]["content"] == [{"type": "input_text", "text": '{"city":"Paris"}'}]
+            assert conn.created_items()[0]["content"] == [
+                {
+                    "type": "input_text",
+                    "text": '{"id":"12345678-1234-5678-1234-567812345678","at":"2026-01-02T03:04:05Z"}',
+                },
+            ]
 
     async def test_pushed_media_input_raises_to_the_caller(self) -> None:
         agent, _ = live_agent()
