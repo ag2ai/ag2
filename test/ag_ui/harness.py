@@ -19,7 +19,7 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from ag_ui.core import Message, RunAgentInput, Tool
+from ag_ui.core import PROTOCOL_VERSION, Message, RunAgentInput, Tool
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream
@@ -48,11 +48,17 @@ def run_input(
     tools: list[Tool] | None = None,
     thread_id: str | None = None,
     state: Any = None,
+    protocol_version: str | None = PROTOCOL_VERSION,
 ) -> RunAgentInput:
-    """One `RunAgentInput`, with the ids a client would have generated."""
+    """One `RunAgentInput`, with the ids a client would have generated.
+
+    From a 1.0 client unless `protocol_version` says otherwise; `None` is a
+    client predating 1.0, which declares nothing.
+    """
     return RunAgentInput(
         thread_id=thread_id or str(uuid4()),
         run_id=str(uuid4()),
+        protocol_version=protocol_version,
         messages=list(messages),
         state=dict(state) if state else {},
         context=[],

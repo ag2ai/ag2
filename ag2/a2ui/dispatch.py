@@ -12,11 +12,21 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import Union
 
 from ag2.agent import Agent
 from ag2.annotations import Context
 from ag2.context import ConversationContext, strip_reserved_variables
-from ag2.events import BaseEvent, HumanInputRequest, ModelRequest, TextInput, UsageEvent
+from ag2.events import (
+    BaseEvent,
+    HumanInputRequest,
+    ModelRequest,
+    TaskCompleted,
+    TaskFailed,
+    TaskStarted,
+    TextInput,
+    UsageEvent,
+)
 from ag2.stream import MemoryStream
 from ag2.usage import collect_usage_events
 
@@ -51,6 +61,13 @@ A2UIFrame = A2UIProseFrame | A2UIMessageFrame
 # optional AG-UI one, and this module must import without it.
 Interrupter = Callable[[HumanInputRequest, Context], Awaitable[BaseEvent | None]]
 
+# A delegation starting or ending. ``Union``, not ``|``: on event classes ``|``
+# builds a stream Condition, which is no type for a subscriber's annotation.
+TaskEvent = Union[TaskStarted, TaskCompleted, TaskFailed]  # noqa: UP007
+
+# What a transport hands in to hear of each delegation starting and ending.
+TaskObserver = Callable[[TaskEvent], Awaitable[None]]
+
 # Shared immutable default so the keyword arg never aliases a mutable {}.
 _NO_SERVER_ACTIONS: Mapping[str, A2UIAction] = MappingProxyType({})
 
@@ -63,6 +80,7 @@ async def stream_turn(
     server_actions: Mapping[str, A2UIAction] = _NO_SERVER_ACTIONS,
     usage_records: list[UsageEvent] | None = None,
     interrupter: Interrupter | None = None,
+    on_task: TaskObserver | None = None,
 ) -> AsyncIterator[A2UIFrame]:
     """Execute one turn and yield its prose then A2UI message frames.
 
@@ -90,6 +108,9 @@ async def stream_turn(
         interrupter: Where a question the agent asks goes. Supplied only by a
             transport that can put it to whoever is connected, and only when the
             agent has no hook of its own.
+        on_task: Called with each ``TaskStarted`` / ``TaskCompleted`` /
+            ``TaskFailed`` on the turn's stream, for a transport that reports
+            delegations.
 
     Yields:
         Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
@@ -148,6 +169,8 @@ async def stream_turn(
 
     if usage_records is not None:
         stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
+    if on_task is not None:
+        stream.where((TaskStarted, TaskCompleted, TaskFailed)).subscribe(on_task)
 
     # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
     # prompt section, fold in negotiated client capabilities so the LLM only
@@ -216,12 +239,14 @@ class _A2UITurnCore:
         *,
         usage_records: list[UsageEvent] | None = None,
         interrupter: Interrupter | None = None,
+        on_task: TaskObserver | None = None,
     ) -> AsyncIterator[A2UIFrame]:
         """Run one turn and yield its prose then A2UI message frames.
 
         Pass ``usage_records`` to have the turn's token accounting collected into
-        it, and ``interrupter`` to answer the agent's questions from wherever the
-        transport can reach a human; see :func:`stream_turn`.
+        it, ``interrupter`` to answer the agent's questions from wherever the
+        transport can reach a human, and ``on_task`` to hear of its delegations;
+        see :func:`stream_turn`.
         """
         return stream_turn(
             self.agent,
@@ -230,7 +255,8 @@ class _A2UITurnCore:
             server_actions=self.server_actions,
             usage_records=usage_records,
             interrupter=interrupter,
+            on_task=on_task,
         )
 
 
-__all__ = ("A2UIFrame", "A2UIMessageFrame", "A2UIProseFrame", "Interrupter", "stream_turn")
+__all__ = ("A2UIFrame", "A2UIMessageFrame", "A2UIProseFrame", "Interrupter", "TaskEvent", "TaskObserver", "stream_turn")

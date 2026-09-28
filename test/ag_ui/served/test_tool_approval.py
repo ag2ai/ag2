@@ -149,5 +149,5 @@ class TestItBehavesLikeAnyOtherInterrupt:
             ),
         )
 
-        assert outcome_of(events) == {"type": "success"}
+        assert outcome_of(events) == {"type": "cancelled"}
         assert ran == []

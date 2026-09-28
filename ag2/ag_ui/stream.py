@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from base64 import b64decode
+import logging
+from base64 import b64decode, b64encode
 from collections.abc import AsyncIterator, Callable, Iterable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
@@ -14,13 +15,12 @@ from uuid import uuid4
 
 from ag_ui.core import (
     AgentCapabilities,
-    AudioInputContent,
-    BinaryInputContent,
-    DocumentInputContent,
-    ImageInputContent,
-    InputContent,
-    InputContentDataSource,
-    InputContentUrlSource,
+    AudioPart,
+    ContentPart,
+    DataSource,
+    DocumentPart,
+    FileSource,
+    ImagePart,
     ReasoningEndEvent,
     ReasoningMessageContentEvent,
     ReasoningMessageEndEvent,
@@ -30,20 +30,22 @@ from ag_ui.core import (
     RunErrorEvent,
     RunFinishedEvent,
     StateSnapshotEvent,
-    StepFinishedEvent,
-    StepStartedEvent,
-    TextInputContent,
+    SubagentErrorEvent,
+    SubagentFinishedEvent,
+    SubagentStartedEvent,
     TextMessageChunkEvent,
     TextMessageContentEvent,
     TextMessageEndEvent,
     TextMessageStartEvent,
+    TextPart,
     TokenUsage,
     ToolCallArgsEvent,
     ToolCallChunkEvent,
     ToolCallEndEvent,
     ToolCallResultEvent,
     ToolCallStartEvent,
-    VideoInputContent,
+    UrlSource,
+    VideoPart,
 )
 from ag_ui.encoder import EventEncoder
 from fast_depends.library.serializer import SerializerProto
@@ -70,7 +72,6 @@ from .interrupts import (
     TurnOutput,
     interrupt_capabilities,
     serve_exchange,
-    success_outcome,
     timestamp_ms,
     utc_now,
 )
@@ -80,6 +81,18 @@ try:
 except ImportError:
     # Fallback to Any until Starlette is installed
     HTTPEndpoint = Any  # type: ignore[misc,assignment]
+
+logger = logging.getLogger("ag2.ag_ui")
+
+# The media part each kind of ag2 input travels as. An input of no particular
+# kind is sent as a document, the one part that makes no claim about its bytes.
+_PART_OF_KIND: dict[BinaryType, type[ImagePart | AudioPart | VideoPart | DocumentPart]] = {
+    BinaryType.IMAGE: ImagePart,
+    BinaryType.AUDIO: AudioPart,
+    BinaryType.VIDEO: VideoPart,
+    BinaryType.DOCUMENT: DocumentPart,
+    BinaryType.BINARY: DocumentPart,
+}
 
 
 class AGUIStream:
@@ -211,13 +224,18 @@ async def run_stream(
     """
     client_tools = []
     client_tools_names = set()
-    for t in command.incoming.tools:
+    for t in command.incoming.tools or ():
         func = t.model_dump(exclude_none=True)
         tool = ClientTool({"function": func})
         client_tools.append(tool)
         client_tools_names.add(tool.name)
 
-    extracted_prompt, history_messages, current_turn = map_agui_messages_to_events(command)
+    extracted_prompt, history_messages, current_turn = map_agui_messages_to_events(
+        command, provider=provider_of(command.config or agent.config)
+    )
+    # A client that declares no version predates 1.0, and its schema reads a
+    # tool result as a string only.
+    predates_parts = command.incoming.protocol_version is None
     if extracted_prompt:
         command.prompt.extend(extracted_prompt)
     if client_tools:
@@ -357,28 +375,19 @@ async def run_stream(
             )
 
         elif isinstance(event, events.ToolResultEvent):
-            text_parts = []
-            for p in event.result.parts:
-                if isinstance(p, events.TextInput):
-                    text_parts.append(p.content)
-                elif isinstance(p, events.DataInput):
-                    text_parts.append(agent._serializer.encode(p.data).decode())
-
+            parts = map_tool_result_to_ag_ui(event.result, agent._serializer)
             await output.send(
                 ToolCallResultEvent(
                     tool_call_id=event.parent_id,
-                    content=_stringify_tool_result(event.result, agent._serializer),
+                    content=downgrade_tool_result(parts) if predates_parts else parts,
                     message_id=str(uuid4()),
                     timestamp=_get_timestamp(),
                     role="tool",
                 )
             )
 
-        elif isinstance(event, events.TaskStarted):
-            await output.send(StepStartedEvent(step_name=f"task:{event.agent_name}"))
-
-        elif isinstance(event, events.TaskCompleted):
-            await output.send(StepFinishedEvent(step_name=f"task:{event.agent_name}"))
+        elif isinstance(event, _TASK_LIFECYCLE):
+            await output.send(map_task_event_to_ag_ui(event))
 
         elif isinstance(event, AGUIEvent):
             await output.send(event.event)
@@ -444,7 +453,7 @@ async def run_stream(
                 run_id=output.run_id,
                 timestamp=_get_timestamp(),
                 usage=await _run_token_usage(stream),
-                outcome=success_outcome(),
+                outcome=output.success_outcome(),
             )
         )
 
@@ -453,6 +462,39 @@ async def run_stream(
         # the channel is the turn's: closed here, once there is nothing more
         # to say, on every path including cancellation while held.
         await output.aclose()
+
+
+# The task lifecycle events a delegation reaches the client through.
+_TASK_LIFECYCLE = (events.TaskStarted, events.TaskCompleted, events.TaskFailed)
+
+
+def map_task_event_to_ag_ui(
+    event: events.TaskStarted | events.TaskCompleted | events.TaskFailed,
+) -> SubagentStartedEvent | SubagentFinishedEvent | SubagentErrorEvent:
+    """One delegation's lifecycle event as the subagent invocation event the client reads."""
+    # Under the task's own id: two parallel delegations to one agent must be
+    # told apart, and its name cannot do that. No usage rides on these: the
+    # run's own total already holds the delegated spend.
+    if isinstance(event, events.TaskStarted):
+        return SubagentStartedEvent(
+            subagent_run_id=event.task_id,
+            name=event.agent_name,
+            description=event.objective,
+            timestamp=_get_timestamp(),
+        )
+    if isinstance(event, events.TaskCompleted):
+        return SubagentFinishedEvent(
+            subagent_run_id=event.task_id,
+            result=to_jsonable_python(event.result, fallback=str),
+            timestamp=_get_timestamp(),
+        )
+    # The run carries on: the delegating tool reports the failure to the
+    # parent's model, which may well recover from it.
+    return SubagentErrorEvent(
+        subagent_run_id=event.task_id,
+        message=str(event.error) or type(event.error).__name__,
+        timestamp=_get_timestamp(),
+    )
 
 
 async def _run_token_usage(stream: MemoryStream) -> list[TokenUsage] | None:
@@ -469,9 +511,9 @@ def map_usage_events_to_ag_ui(usage_events: Iterable[events.BaseEvent]) -> list[
 
 
 def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsage] | None:
-    """Attributed spend, as AG-UI's per-(provider, model) list.
+    """Attributed spend, as AG-UI's per-(provider, model) list, in the protocol's accounting.
 
-    Counts a provider did not report are omitted, never zero-filled or derived.
+    Counts a provider did not report are omitted, never zero-filled.
     """
     # Records, not the report's by_model / by_provider: those are independent
     # maps, so the (provider, model) pair cannot be recovered from them, and each
@@ -484,34 +526,57 @@ def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsag
     # provider that reports reasoning tokens with one that does not would read as
     # a complete measurement. Within a pair the calls are summed, because there an
     # absent additive count does mean the provider had nothing to report.
-    # cache_creation_input_tokens is dropped rather than folded into a neighbour —
-    # providers disagree on whether cached tokens already sit in the prompt count.
     entries = []
     for (provider, model), usages in grouped.items():
         summed = sum(usages, Usage())
+        input_tokens = _token_count(_input_total(provider, summed))
+        output_tokens = _token_count(_output_total(provider, summed))
         entries.append(
             TokenUsage(
                 provider=provider,
                 model=model,
-                input_tokens=_token_count(summed.prompt_tokens),
-                output_tokens=_token_count(summed.completion_tokens),
-                total_tokens=_token_count(_reported_total(usages)),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                # Computed, never copied: a provider's own total need not count
+                # the way the two totals beside it now do.
+                total_tokens=None if input_tokens is None or output_tokens is None else input_tokens + output_tokens,
                 reasoning_tokens=_token_count(summed.thinking_tokens),
                 cached_input_tokens=_token_count(summed.cache_read_input_tokens),
+                cache_write_input_tokens=_token_count(summed.cache_creation_input_tokens),
             )
         )
     return entries or None
 
 
-def _reported_total(usages: Iterable[Usage]) -> float | None:
-    # An absent total does not mean zero, unlike the additive counts: a call that
-    # ran had a total whatever the provider said about it. Summing anyway puts a
-    # figure on the wire smaller than the input and output beside it — 100+10 with
-    # a total of 110, then 40+4 with none, reads as 140 in, 14 out, 110 altogether.
-    totals = [usage.total_tokens for usage in usages]
-    if any(total is None for total in totals):
-        return None
-    return sum(total for total in totals if total is not None)
+# The correction to AG-UI 1.0's accounting is made here, where usage leaves for
+# the wire, and nowhere else. `Usage` keeps each provider's numbers as the
+# provider reported them, because budgets and limiters read them that way;
+# "fixing" the provider normalizers instead would shift every one of those.
+# AG-UI's input and output are totals, and its cache and reasoning counts parts
+# of them, so where a provider reports those beside a smaller count, they are
+# added in here.
+
+# Providers whose prompt count leaves out the tokens read from and written to
+# the cache. Bedrock is not among them until a live call confirms that Converse
+# counts the way Anthropic does.
+_CACHE_OUTSIDE_PROMPT = frozenset({"anthropic"})
+
+# Providers whose completion count leaves out the reasoning tokens:
+# Gemini's `thoughts_token_count` sits beside `candidates_token_count`. xAI's
+# reasoning count is not known to do either, so it is left as reported.
+_REASONING_OUTSIDE_COMPLETION = frozenset({"google"})
+
+
+def _input_total(provider: str | None, usage: Usage) -> float | None:
+    if usage.prompt_tokens is None or provider not in _CACHE_OUTSIDE_PROMPT:
+        return usage.prompt_tokens
+    return usage.prompt_tokens + (usage.cache_read_input_tokens or 0) + (usage.cache_creation_input_tokens or 0)
+
+
+def _output_total(provider: str | None, usage: Usage) -> float | None:
+    if usage.completion_tokens is None or provider not in _REASONING_OUTSIDE_COMPLETION:
+        return usage.completion_tokens
+    return usage.completion_tokens + (usage.thinking_tokens or 0)
 
 
 def _token_count(value: float | None) -> int | None:
@@ -523,38 +588,60 @@ def _token_count(value: float | None) -> int | None:
     return int(value)
 
 
-def map_agui_content_to_input(content: InputContent) -> events.Input:
-    if isinstance(content, BinaryInputContent):
-        raise ValueError(
-            "AG-UI 'binary' content type is deprecated; "
-            "use ImageInputContent / AudioInputContent / "
-            "VideoInputContent / DocumentInputContent instead."
-        )
+def provider_of(config: ModelConfig | None) -> str | None:
+    """The provider `config` serves from, in ag2's vocabulary, or `None` if it does not say."""
+    if config is None:
+        return None
+    try:
+        return config.provider.value
+    except NotImplementedError:
+        return None
 
-    if isinstance(content, TextInputContent):
+
+def map_agui_content_to_input(content: ContentPart, *, provider: str | None = None) -> events.Input | None:
+    """One AG-UI content part as the ag2 input it carries, or `None` for a part to skip.
+
+    `provider` is the run's, which a provider file handle has to belong to.
+    """
+    if isinstance(content, TextPart):
         return events.TextInput(content.text)
 
     match content:
-        case DocumentInputContent():
+        case DocumentPart():
             kind = BinaryType.DOCUMENT
-        case AudioInputContent():
+        case AudioPart():
             kind = BinaryType.AUDIO
-        case VideoInputContent():
+        case VideoPart():
             kind = BinaryType.VIDEO
-        case ImageInputContent():
+        case ImagePart():
             kind = BinaryType.IMAGE
         case _:
             raise ValueError(f"Unexpected content type: {type(content).__name__}")
 
     source = content.source
-    if isinstance(source, InputContentDataSource):
+    inp: events.Input
+    if isinstance(source, DataSource):
         inp = events.BinaryInput(
             b64decode(source.value),
             media_type=source.mime_type,
             kind=kind,
         )
-    elif isinstance(source, InputContentUrlSource):
+    elif isinstance(source, UrlSource):
         inp = events.UrlInput(source.value, kind=kind)
+    elif isinstance(source, FileSource):
+        # A handle is opaque and only the provider that minted it can resolve
+        # it. An untagged one is taken to be the run's own, since the client
+        # need not say; one tagged for another provider is useless here, and
+        # the protocol forbids failing the run over it. Never log the value.
+        if source.provider is not None and source.provider != provider:
+            logger.warning(
+                "skipping a %s part holding a file handle issued by %s: this run's provider is %s",
+                content.type,
+                source.provider,
+                provider or "unknown",
+            )
+            return None
+        inp = events.FileIdInput(source.value)
     else:
         raise ValueError(f"Unexpected source type: {type(source).__name__}")
 
@@ -563,8 +650,17 @@ def map_agui_content_to_input(content: InputContent) -> events.Input:
     return inp
 
 
+def map_agui_parts_to_inputs(content: str | list[ContentPart], *, provider: str | None = None) -> list[events.Input]:
+    """A message body, plain or in parts, as the ag2 inputs it carries."""
+    if isinstance(content, str):
+        return [events.TextInput(content)]
+    return [inp for c in content if (inp := map_agui_content_to_input(c, provider=provider)) is not None]
+
+
 def map_agui_messages_to_events(
     command: AGStreamInput,
+    *,
+    provider: str | None = None,
 ) -> tuple[list[str], list[events.BaseEvent], list[events.Input]]:
     """Translate AG-UI history into the parts `run_stream` hands to the agent.
 
@@ -574,20 +670,16 @@ def map_agui_messages_to_events(
     `Agent.ask` always constructs a `ModelRequest` from `*msg` and sends
     it as the loop's initial event — putting the current turn there gives the
     LLM a meaningful `messages[-1]` instead of an empty placeholder.
+
+    `provider` is the run's, resolved where its configuration is known; a
+    provider file handle issued by anyone else is skipped.
     """
     prompt, messages = [], []
 
     input_buffer: list[events.Input] = []
     for m in command.incoming.messages:
         if m.role == "user":
-            content = m.content
-            if isinstance(content, str):
-                input_buffer.append(events.TextInput(content))
-                continue
-
-            for c in content:
-                input_buffer.append(map_agui_content_to_input(c))
-
+            input_buffer.extend(map_agui_parts_to_inputs(m.content, provider=provider))
             continue
 
         if input_buffer:
@@ -619,11 +711,13 @@ def map_agui_messages_to_events(
                 messages.append(events.ModelReasoning(m.content))
 
         elif m.role == "tool":
+            # An error is what the model must hear, whatever came with it.
+            parts = [m.error] if m.error else map_agui_parts_to_inputs(m.content, provider=provider)
             messages.append(
                 events.ToolResultsEvent([
                     events.ToolResultEvent(
                         parent_id=m.tool_call_id,
-                        result=ToolResult([m.error or m.content]),
+                        result=ToolResult(parts=parts),
                     )
                 ])
             )
@@ -631,29 +725,51 @@ def map_agui_messages_to_events(
     return prompt, messages, input_buffer
 
 
-def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> str:
-    """Flatten a multi-part `ToolResult` into a string.
+def map_tool_result_to_ag_ui(result: ToolResult, serializer: SerializerProto) -> str | list[ContentPart]:
+    """A tool result as a 1.0 client reads it: a lone text as a string, anything else in parts."""
+    parts = [_content_part(part, serializer) for part in result.parts]
+    if not parts:
+        return ""
+    if len(parts) == 1 and isinstance(parts[0], TextPart) and parts[0].metadata is None:
+        return parts[0].text
+    return parts
 
-    AG-UI's `ToolCallResultEvent.content` is a plain string, while an AG2 tool
-    result is a list of `Input` parts.
+
+def downgrade_tool_result(content: str | list[ContentPart]) -> str:
+    """A tool result for a client predating 1.0, which reads only a string.
+
+    Its text, in order. Media cannot be put into a string without inventing
+    something in their place, so they are dropped, and the loss is logged.
     """
-    chunks: list[str] = []
-    for part in result.parts:
-        if isinstance(part, TextInput):
-            chunks.append(part.content)
-        elif isinstance(part, DataInput):
-            chunks.append(serializer.encode(part.data).decode())
-        elif isinstance(part, UrlInput):
-            chunks.append(part.url)
-        elif isinstance(part, FileIdInput):
-            chunks.append(f"[file:{part.file_id}]")
-        elif isinstance(part, BinaryInput):
-            chunks.append(f"[binary:{part.media_type} {len(part.data)}B]")
-        else:
-            chunks.append(repr(part))
-    if len(chunks) == 1:
-        return chunks[0]
-    return "\n".join(chunks)
+    if isinstance(content, str):
+        return content
+    dropped = sorted({part.type for part in content if not isinstance(part, TextPart)})
+    if dropped:
+        logger.warning(
+            "dropping the %s parts of a tool result for an AG-UI client that declares no protocol version; "
+            "upgrade the client to @ag-ui/* 1.0 to receive them",
+            ", ".join(dropped),
+        )
+    return "\n".join(part.text for part in content if isinstance(part, TextPart))
+
+
+def _content_part(part: events.Input, serializer: SerializerProto) -> ContentPart:
+    metadata = part.metadata or None
+    if isinstance(part, TextInput):
+        return TextPart(text=part.content, metadata=metadata)
+    if isinstance(part, DataInput):
+        # The protocol has no JSON part: structured output travels as its text.
+        return TextPart(text=serializer.encode(part.data).decode(), metadata=metadata)
+    if isinstance(part, UrlInput):
+        return _PART_OF_KIND[part.kind](source=UrlSource(value=part.url), metadata=metadata)
+    if isinstance(part, BinaryInput):
+        source = DataSource(value=b64encode(part.data).decode(), mime_type=part.media_type)
+        return _PART_OF_KIND[part.kind](source=source, metadata=metadata)
+    if isinstance(part, FileIdInput):
+        # Named as a file at a provider, never as something to fetch. Which
+        # provider is not recorded on the input, so it is not claimed here.
+        return DocumentPart(source=FileSource(value=part.file_id), metadata=metadata)
+    raise TypeError(f"no AG-UI content part for {type(part).__name__}")
 
 
 def _get_timestamp() -> int:

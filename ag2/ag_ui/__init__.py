@@ -17,6 +17,7 @@ from .interrupts import (
     NO_HELD_TURN,
     PAYLOAD_REFUSED,
     TOOL_CALL_REASON,
+    UNSUPPORTED_PROTOCOL_VERSION,
     Retention,
 )
 from .stream import AGUIStream
@@ -29,6 +30,7 @@ __all__ = (
     "NO_HELD_TURN",
     "PAYLOAD_REFUSED",
     "TOOL_CALL_REASON",
+    "UNSUPPORTED_PROTOCOL_VERSION",
     "AGUIEvent",
     "AGUIStream",
     "Retention",

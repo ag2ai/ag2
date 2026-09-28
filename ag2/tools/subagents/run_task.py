@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+import copy
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from ag2.annotations import Context
 from ag2.events import (
@@ -42,17 +43,19 @@ class TaskResult:
     error: Exception | None = None
 
 
-def _make_hitl_bridge(parent_context: Context):
+def _make_hitl_bridge(parent_context: Context, task_id: str) -> Callable[[HumanInputRequest, Context], Awaitable[None]]:
     """Forward ``HumanInputRequest`` events from the child stream to the parent.
 
-    Defined at module level so it isn't re-created per ``run_task`` call (per
-    AGENTS.md: no nested functions in runtime execution paths). The closure
-    over ``parent_context`` is captured here, at definition time of the
-    bridge, not inside any hot loop.
+    A copy stamped with ``task_id`` is forwarded: on the parent's stream it is
+    this delegation asking. A nested delegation's own stamp is replaced, since
+    the parent never saw that one start. The copy keeps the request's ``id``,
+    which is what the answer is matched on.
     """
 
     async def _bridge_hitl(event: HumanInputRequest, ctx: Context) -> None:
-        await parent_context.stream.send(event, ctx)
+        forwarded = copy.copy(event)
+        forwarded.task_id = task_id
+        await parent_context.stream.send(forwarded, ctx)
 
     return _bridge_hitl
 
@@ -146,10 +149,10 @@ async def run_task(
     # Bridge HITL events to the parent stream so the parent's hook can handle
     # them. If the subagent has its own HITL hook, it is registered as an
     # interrupter and swallows the event first.
-    sub_id: str | None = None
+    sub_id: UUID | None = None
     if not agent._hitl_hook:
         sub_id = task_stream.where(HumanInputRequest).subscribe(
-            _make_hitl_bridge(parent_context),
+            _make_hitl_bridge(parent_context, task_id),
             interrupt=True,
         )
 

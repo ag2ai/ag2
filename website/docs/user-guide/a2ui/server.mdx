@@ -161,5 +161,7 @@ if __name__ == "__main__":
 
 The turn is served at `#!python POST /` by default (pass `#!python AgUiTransport(path="/agent")` to change it) and the request body is an AG-UI `#!python RunAgentInput`. Each validated A2UI message reaches the renderer as an `#!python ACTIVITY_SNAPSHOT` event with `#!python activityType="a2ui-surface"` and the operations under `#!python content["a2ui_operations"]`; the prose arrives as `#!python TEXT_MESSAGE_CHUNK`. A CopilotKit button click rides `#!python forwardedProps.a2uiAction` and is rewritten into the next turn — the same click round-trip as REST (see [Actions](/docs/user-guide/a2ui/actions)).
 
+It speaks the same AG-UI 1.0 as `#!python AGUIStream`: the same [protocol version](/docs/user-guide/ag-ui/overview#protocol-version) on every `#!python RUN_STARTED` and the same refusal of another major, the same run outcomes (an abandoned question ends the run as `#!python cancelled`), the same [delegations](/docs/user-guide/ag-ui/overview#delegations) as subagent invocations, and the same [token usage](/docs/user-guide/ag-ui/overview#token-usage) accounting.
+
 !!! tip
     For a runnable AG-UI round-trip — text + `#!python ACTIVITY_SNAPSHOT` emission and a `#!python forwardedProps` button click — see `#!python test/a2ui/transports/test_e2e_ag_ui.py` in the repository.

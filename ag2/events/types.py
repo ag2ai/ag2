@@ -206,6 +206,12 @@ class HumanInputRequest(BaseEvent):
     id: str = Field(default_factory=lambda: str(uuid4()), compare=False)
     content: str = Field(kw_only=False)
     timeout: float | None = Field(default=None, compare=False)
+    task_id: str | None = Field(default=None, compare=False)
+    """The delegation this request reached the stream through, or ``None`` if raised on it directly.
+
+    Stamped by ``run_task`` as it forwards a sub-task's question to its parent,
+    so a transport can say which delegation is asking.
+    """
 
 
 class ToolApprovalRequest(HumanInputRequest):

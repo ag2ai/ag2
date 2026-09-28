@@ -99,13 +99,11 @@ class TestCompletedRun:
             TokenUsage(provider="openai", model="gpt-5", input_tokens=140, output_tokens=14, total_tokens=154)
         ]
 
-    async def test_a_total_a_call_did_not_report_is_absent_not_partial(self) -> None:
-        """An unreported total is unknown, not zero, so the pair reports none at all.
+    async def test_the_total_is_input_plus_output_whatever_the_provider_reported(self) -> None:
+        """AG-UI's total is the sum of its two totals, so it is computed rather than copied.
 
-        Summing would put a figure on the wire smaller than the input and output beside
-        it — 140 in, 14 out, 110 altogether — which is not a total of anything. It is left
-        absent rather than derived from input and output, and the additive counts, whose
-        absence really does mean zero, are still reported in full.
+        Copying would put a figure on the wire smaller than the input and output beside
+        it — 140 in, 14 out, 110 altogether — which is not a total of anything.
         """
 
         agent = Agent(
@@ -128,15 +126,13 @@ class TestCompletedRun:
         )
 
         assert (await _finished(agent)).usage == [
-            TokenUsage(provider="openai", model="gpt-5", input_tokens=140, output_tokens=14)
+            TokenUsage(provider="openai", model="gpt-5", input_tokens=140, output_tokens=14, total_tokens=154)
         ]
 
     async def test_additive_counts_are_summed_across_calls_in_one_pair(self) -> None:
-        """The deliberate asymmetry with the total above.
-
-        A provider omits ``thinking_tokens`` on a call that did no reasoning, so within
+        """A provider omits ``thinking_tokens`` on a call that did no reasoning, so within
         one provider/model pair an absent additive count means zero and summing it is the
-        measurement. Only the total gets the all-or-nothing treatment.
+        measurement.
         """
 
         agent = Agent(
@@ -174,7 +170,7 @@ class TestCompletedRun:
         """``Usage`` counts are floats, so a provider mapper can hand over a value the
         protocol's non-negative integer field would refuse. It is omitted rather than
         sent, which is also what keeps the mapping from raising on the failure path in
-        place of the run's own cause.
+        place of the run's own cause — and with it the total it would have been part of.
         """
         agent = Agent(
             "test_agent",
@@ -189,7 +185,7 @@ class TestCompletedRun:
         )
 
         assert (await _finished(agent)).usage == [
-            TokenUsage(provider="anthropic", model="claude-sonnet-4", output_tokens=4, total_tokens=14)
+            TokenUsage(provider="anthropic", model="claude-sonnet-4", output_tokens=4)
         ]
 
     async def test_reported_spend_agrees_with_the_run_s_own_usage_report(self) -> None:
@@ -305,10 +301,10 @@ class TestCompletedRun:
         ]
 
     async def test_omits_fields_the_provider_did_not_report(self) -> None:
-        """Absence, never a zero or a derived figure standing in for an unmeasured value.
+        """Absence, never a zero standing in for an unmeasured value.
 
-        The whole-object comparison is what pins it: a total derived from 10 + 4 would
-        show up here as ``total_tokens=14``.
+        The total is the one figure derived, because the protocol defines it as the
+        sum of the two beside it.
         """
         agent = Agent(
             "test_agent",
@@ -323,7 +319,7 @@ class TestCompletedRun:
         )
 
         assert (await _finished(agent)).usage == [
-            TokenUsage(provider="anthropic", model="claude-sonnet-4", input_tokens=10, output_tokens=4)
+            TokenUsage(provider="anthropic", model="claude-sonnet-4", input_tokens=10, output_tokens=4, total_tokens=14)
         ]
 
     async def test_unreported_fields_are_absent_on_the_wire_not_null(self) -> None:
@@ -351,10 +347,11 @@ class TestCompletedRun:
             "model": "claude-sonnet-4",
             "inputTokens": 10,
             "outputTokens": 4,
+            "totalTokens": 14,
         }
 
-    async def test_cache_write_tokens_appear_nowhere(self) -> None:
-        """Cache-write is not cached-input, and is not folded into input either."""
+    async def test_cache_writes_are_reported_apart_from_cache_reads(self) -> None:
+        """Priced differently, so reported in a field of their own — and inside the input."""
         agent = Agent(
             "test_agent",
             config=TestConfig(
@@ -376,9 +373,11 @@ class TestCompletedRun:
             TokenUsage(
                 provider="anthropic",
                 model="claude-sonnet-4",
-                input_tokens=10,
+                input_tokens=530,
                 output_tokens=4,
+                total_tokens=534,
                 cached_input_tokens=8,
+                cache_write_input_tokens=512,
             )
         ]
 
@@ -437,8 +436,8 @@ class TestCompletedRun:
             ),
         ]
 
-    async def test_a_delegation_omits_a_total_no_call_of_it_fully_reported(self) -> None:
-        """A rollup does not put a total on the wire that its calls did not measure."""
+    async def test_a_delegation_s_total_is_its_input_plus_output(self) -> None:
+        """A rollup's total is computed like any other, whatever its calls reported."""
         worker = Agent(
             "worker",
             config=TestConfig(
@@ -485,7 +484,7 @@ class TestCompletedRun:
                 model="claude-haiku-4",
                 input_tokens=140,
                 output_tokens=14,
-                total_tokens=None,
+                total_tokens=154,
             ),
         ]
 
@@ -540,6 +539,90 @@ class TestCompletedRun:
             TokenUsage(provider="openai", model="gpt-5", input_tokens=30, output_tokens=13, total_tokens=43),
             TokenUsage(provider=None, model=None, input_tokens=200, output_tokens=60, total_tokens=260),
         ]
+
+
+def _answering(usage: Usage, *, provider: str, model: str = "m") -> Agent:
+    return Agent(
+        "test_agent",
+        config=TestConfig(ModelResponse(ModelMessage("done"), usage=usage, model=model, provider=provider)),
+    )
+
+
+class TestProtocolAccounting:
+    """AG-UI's input and output are totals, and its cache and reasoning counts parts of them.
+
+    Corrected per provider where usage leaves for the wire; ``Usage`` itself keeps the
+    provider's own figures.
+    """
+
+    async def test_a_missing_cache_count_adds_nothing(self) -> None:
+        agent = _answering(
+            Usage(prompt_tokens=10, completion_tokens=2, cache_read_input_tokens=4), provider="anthropic"
+        )
+
+        assert (await _finished(agent)).usage == [
+            TokenUsage(
+                provider="anthropic",
+                model="m",
+                input_tokens=14,
+                output_tokens=2,
+                total_tokens=16,
+                cached_input_tokens=4,
+            )
+        ]
+
+    async def test_a_missing_prompt_count_leaves_input_absent_whatever_was_cached(self) -> None:
+        """Cache counts alone are not the input: they are only part of it."""
+        agent = _answering(Usage(completion_tokens=2, cache_read_input_tokens=4), provider="anthropic")
+
+        assert (await _finished(agent)).usage == [
+            TokenUsage(provider="anthropic", model="m", output_tokens=2, cached_input_tokens=4)
+        ]
+
+    async def test_a_missing_completion_count_leaves_output_absent_whatever_was_reasoned(self) -> None:
+        agent = _answering(Usage(prompt_tokens=5, thinking_tokens=30), provider="google")
+
+        assert (await _finished(agent)).usage == [
+            TokenUsage(provider="google", model="m", input_tokens=5, reasoning_tokens=30)
+        ]
+
+    @pytest.mark.parametrize("provider", ["openai", "xai", "bedrock"])
+    async def test_other_providers_are_reported_as_they_count(self, provider: str) -> None:
+        """OpenAI counts cache and reasoning inside its totals already. xAI's reasoning,
+        and Bedrock's cache, are not known to sit outside them, so neither is added in.
+        """
+        usage = Usage(
+            prompt_tokens=100,
+            completion_tokens=30,
+            thinking_tokens=18,
+            cache_read_input_tokens=64,
+            cache_creation_input_tokens=8,
+        )
+
+        assert (await _finished(_answering(usage, provider=provider))).usage == [
+            TokenUsage(
+                provider=provider,
+                model="m",
+                input_tokens=100,
+                output_tokens=30,
+                total_tokens=130,
+                reasoning_tokens=18,
+                cached_input_tokens=64,
+                cache_write_input_tokens=8,
+            )
+        ]
+
+    async def test_ag2_s_own_usage_figures_stay_as_the_provider_reported_them(self) -> None:
+        agent = _answering(
+            Usage(prompt_tokens=10, completion_tokens=2, total_tokens=12, cache_read_input_tokens=100),
+            provider="anthropic",
+        )
+
+        reply = await agent.ask("go")
+
+        assert (await reply.usage()).total == Usage(
+            prompt_tokens=10, completion_tokens=2, total_tokens=12, cache_read_input_tokens=100
+        )
 
 
 class TestInternalMaintenanceSpend:

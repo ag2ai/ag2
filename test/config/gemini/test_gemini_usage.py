@@ -54,11 +54,12 @@ class TestNormalizeUsage:
         assert result == Usage(prompt_tokens=50)
 
     def test_includes_thinking_tokens(self):
-        result = normalize_usage(_make_metadata(thoughts=296))
+        # Gemini counts thoughts beside the candidates, and both inside the total.
+        result = normalize_usage(_make_metadata(thoughts=296, total=416))
         assert result == Usage(
             prompt_tokens=100,
             completion_tokens=20,
-            total_tokens=120,
+            total_tokens=416,
             thinking_tokens=296,
         )
 

@@ -46,15 +46,20 @@ from ag2.ag_ui.interrupts import (
     TurnOutput,
     interrupt_capabilities,
     serve_exchange,
-    success_outcome,
     timestamp_ms,
     utc_now,
 )
-from ag2.ag_ui.stream import AGStreamInput, map_agui_messages_to_events, map_usage_events_to_ag_ui
+from ag2.ag_ui.stream import (
+    AGStreamInput,
+    map_agui_messages_to_events,
+    map_task_event_to_ag_ui,
+    map_usage_events_to_ag_ui,
+    provider_of,
+)
 from ag2.events import TextInput, UsageEvent
 
 from .._types import JsonObject, ServerToClientMessage
-from ..dispatch import A2UIMessageFrame, A2UIProseFrame
+from ..dispatch import A2UIMessageFrame, A2UIProseFrame, TaskEvent
 from ..incoming import iter_incoming_prompts, parse_incoming_interactions
 from ..request import A2UIServerRequest
 
@@ -173,6 +178,7 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     variables = incoming.state if isinstance(incoming.state, dict) else {}
     prompt, history, current_inputs = map_agui_messages_to_events(
         AGStreamInput(incoming=incoming, variables=variables),
+        provider=provider_of(core.agent.config),
     )
     envelopes = _click_envelopes(incoming.forwarded_props)
     current_inputs.extend(TextInput(p) for p in iter_incoming_prompts(envelopes, core.runtime.get_action))
@@ -236,7 +242,12 @@ async def _run_turn(
     usage_records: list[UsageEvent] = []
 
     try:
-        async for frame in core.run_turn(request, usage_records=usage_records, interrupter=interrupter):
+        async for frame in core.run_turn(
+            request,
+            usage_records=usage_records,
+            interrupter=interrupter,
+            on_task=functools.partial(_report_delegation, output),
+        ):
             if isinstance(frame, A2UIProseFrame):
                 if frame.text:
                     await output.send(
@@ -267,7 +278,7 @@ async def _run_turn(
                 run_id=output.run_id,
                 timestamp=timestamp_ms(),
                 usage=map_usage_events_to_ag_ui(usage_records),
-                outcome=success_outcome(),
+                outcome=output.success_outcome(),
             )
         )
     finally:
@@ -275,6 +286,10 @@ async def _run_turn(
         # channel is the turn's: closed here, on every path including
         # cancellation while held.
         await output.aclose()
+
+
+async def _report_delegation(output: TurnOutput, event: TaskEvent) -> None:
+    await output.send(map_task_event_to_ag_ui(event))
 
 
 __all__ = ("AgUiTransport",)

@@ -21,10 +21,12 @@ from dirty_equals import IsPartialDict, IsStr
 pytest.importorskip("ag_ui")
 pytest.importorskip("starlette")
 
+from ag_ui.core import PROTOCOL_VERSION  # noqa: E402
+
 from ag2 import Agent, Context  # noqa: E402
 from ag2.a2ui import A2UIServer  # noqa: E402
 from ag2.a2ui.transports import AgUiTransport  # noqa: E402
-from ag2.ag_ui import NOT_PROVEN, NO_HELD_TURN, TOOL_CALL_REASON, Retention
+from ag2.ag_ui import NOT_PROVEN, NO_HELD_TURN, TOOL_CALL_REASON, UNSUPPORTED_PROTOCOL_VERSION, Retention  # noqa: E402
 from ag2.ag_ui.interrupts import AG2_METADATA_KEY, PROOF_KEY
 from ag2.events import HumanInputRequest, ToolCallEvent  # noqa: E402
 from ag2.exceptions import HumanInputError  # noqa: E402
@@ -143,7 +145,7 @@ class TestParityWithTheOtherTransport:
         interrupt = await ask_once(app)
         events = await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=abandon(interrupt)))
 
-        assert outcome_of(events) == {"type": "success"}
+        assert outcome_of(events) == {"type": "cancelled"}
         assert await asked.ending_within() == "cancelled"
 
     async def test_an_unknown_interrupt_is_refused(self) -> None:
@@ -189,7 +191,25 @@ class TestParityWithTheOtherTransport:
         assert response.status_code == 200
         assert response.json() == IsPartialDict({
             "humanInTheLoop": IsPartialDict({"supported": True, "interrupts": True}),
+            "tools": {"supported": True, "clientProvided": True},
+            "reasoning": {"encrypted": False},
         })
+
+    async def test_every_run_declares_the_version_it_speaks(self) -> None:
+        app, _ = asking_server(transport=AgUiTransport())
+
+        events = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+
+        assert only(events, "RUN_STARTED") == IsPartialDict({"protocolVersion": PROTOCOL_VERSION})
+
+    async def test_a_client_on_another_major_is_refused_before_any_run_starts(self) -> None:
+        app, asked = asking_server(transport=AgUiTransport())
+
+        events = await post_run(app, {**run_body(thread_id="t1", run_id="r1"), "protocolVersion": "2.0"})
+
+        assert types_of(events) == ["RUN_ERROR"]
+        assert only(events, "RUN_ERROR") == IsPartialDict({"code": UNSUPPORTED_PROTOCOL_VERSION})
+        assert asked.answers == []
 
 
 class TestAToolCallAsksForApproval:
@@ -258,3 +278,70 @@ class TestWhatItCostsTheServer:
         await shut_down(app)
 
         assert await asked.ending_within() == "cancelled"
+
+
+def _delegating_server(worker: Agent) -> A2UIServer:
+    """An A2UI server whose agent delegates once to `worker`, then answers with a surface."""
+    parent = Agent(
+        "parent",
+        config=TestConfig(ToolCallEvent(name="task_worker", arguments='{"objective": "find out"}'), _A2UI_RESPONSE),
+        tools=[worker.as_tool(description="Delegate to the worker.")],
+    )
+    return A2UIServer(parent, transport=AgUiTransport())
+
+
+class TestDelegations:
+    """Reported as subagent invocations, as the other AG-UI transport reports them."""
+
+    async def test_a_delegation_starts_and_finishes_with_its_result(self) -> None:
+        app = _delegating_server(Agent("worker", config=TestConfig("researched")))
+
+        events = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+
+        started = only(events, "SUBAGENT_STARTED")
+        assert started == IsPartialDict({"subagentRunId": IsStr(), "name": "worker", "description": "find out"})
+        assert only(events, "SUBAGENT_FINISHED") == IsPartialDict({
+            "subagentRunId": started["subagentRunId"],
+            "result": "researched",
+        })
+        assert outcome_of(events) == {"type": "success"}
+
+    async def test_a_failed_delegation_is_a_subagent_error(self) -> None:
+        app = _delegating_server(Agent("worker", config=TestConfig(RuntimeError("the worker fell over"))))
+
+        events = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+
+        started = only(events, "SUBAGENT_STARTED")
+        assert only(events, "SUBAGENT_ERROR") == IsPartialDict({
+            "subagentRunId": started["subagentRunId"],
+            "message": "the worker fell over",
+        })
+        assert outcome_of(events) == {"type": "success"}
+
+    async def test_a_delegated_question_names_its_invocation_and_suspends_it(self) -> None:
+        worker = Agent("worker", config=TestConfig(ToolCallEvent(name="ask_human", arguments="{}"), "worked it out"))
+
+        @worker.tool
+        async def ask_human(context: Context) -> str:
+            """Ask the human."""
+            return await context.input(QUESTION)
+
+        app = _delegating_server(worker)
+
+        first = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+        second = await post_run(
+            app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(sole_interrupt(first), "blue"))
+        )
+
+        invocation = only(first, "SUBAGENT_STARTED")["subagentRunId"]
+        interrupt = sole_interrupt(first)
+        assert interrupt == IsPartialDict({"subagentRunId": invocation})
+        assert only(first, "SUBAGENT_FINISHED") == IsPartialDict({
+            "subagentRunId": invocation,
+            "outcome": {"type": "suspended", "interruptIds": [interrupt["id"]]},
+        })
+        assert types_of(second)[:2] == ["RUN_STARTED", "SUBAGENT_STARTED"]
+        assert only(second, "SUBAGENT_FINISHED") == IsPartialDict({
+            "subagentRunId": invocation,
+            "result": "worked it out",
+        })

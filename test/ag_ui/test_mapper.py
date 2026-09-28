@@ -2,27 +2,27 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
+import logging
 from base64 import b64encode
 from typing import Any
 
 import pytest
 from ag_ui.core import (
     AssistantMessage,
-    AudioInputContent,
-    BinaryInputContent,
-    DocumentInputContent,
+    AudioPart,
+    DataSource,
+    DocumentPart,
+    FileSource,
     FunctionCall,
-    ImageInputContent,
-    InputContentDataSource,
-    InputContentUrlSource,
+    ImagePart,
     ReasoningMessage,
     SystemMessage,
-    TextInputContent,
+    TextPart,
     ToolCall,
     ToolMessage,
+    UrlSource,
     UserMessage,
-    VideoInputContent,
+    VideoPart,
 )
 
 from ag2 import ToolResult
@@ -32,6 +32,7 @@ from ag2.events import (
     BinaryInput,
     BinaryType,
     DocumentInput,
+    FileIdInput,
     ImageInput,
     ModelMessage,
     ModelReasoning,
@@ -67,7 +68,7 @@ class TestUserMessageString:
         assert current_turn == [TextInput("hello")]
 
     def test_text_content_becomes_text_input(self) -> None:
-        command = _command(UserMessage(id="m1", content=[TextInputContent(text="hi")]))
+        command = _command(UserMessage(id="m1", content=[TextPart(text="hi")]))
 
         _, messages, current_turn = map_agui_messages_to_events(command)
 
@@ -78,16 +79,16 @@ class TestUserMessageString:
 @pytest.mark.parametrize(
     "content_cls,factory,kind,mime",
     [
-        (ImageInputContent, ImageInput, BinaryType.IMAGE, "image/jpeg"),
-        (AudioInputContent, AudioInput, BinaryType.AUDIO, "audio/wav"),
-        (VideoInputContent, VideoInput, BinaryType.VIDEO, "video/mp4"),
-        (DocumentInputContent, DocumentInput, BinaryType.DOCUMENT, "application/pdf"),
+        (ImagePart, ImageInput, BinaryType.IMAGE, "image/jpeg"),
+        (AudioPart, AudioInput, BinaryType.AUDIO, "audio/wav"),
+        (VideoPart, VideoInput, BinaryType.VIDEO, "video/mp4"),
+        (DocumentPart, DocumentInput, BinaryType.DOCUMENT, "application/pdf"),
     ],
 )
 class TestMediaContentMapping:
     def test_url_source_maps_to_url_input(self, content_cls: type, factory: Any, kind: BinaryType, mime: str) -> None:
         url = "https://example.com/file"
-        content = content_cls(source=InputContentUrlSource(value=url))
+        content = content_cls(source=UrlSource(value=url))
         command = _command(UserMessage(id="m1", content=[content]))
 
         _, messages, current_turn = map_agui_messages_to_events(command)
@@ -101,7 +102,7 @@ class TestMediaContentMapping:
     def test_data_source_maps_to_binary_input(
         self, content_cls: type, factory: Any, kind: BinaryType, mime: str
     ) -> None:
-        content = content_cls(source=InputContentDataSource(value=B64_VALUE, mime_type=mime))
+        content = content_cls(source=DataSource(value=B64_VALUE, mime_type=mime))
         command = _command(UserMessage(id="m1", content=[content]))
 
         _, messages, current_turn = map_agui_messages_to_events(command)
@@ -113,26 +114,15 @@ class TestMediaContentMapping:
         assert part.kind == kind
 
 
-class TestBinaryContentRejected:
-    def test_binary_type_raises(self) -> None:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            binary = BinaryInputContent(mime_type="application/octet-stream", url="https://x/blob")
-        command = _command(UserMessage(id="m1", content=[binary]))
-
-        with pytest.raises(ValueError, match="deprecated"):
-            map_agui_messages_to_events(command)
-
-
 class TestMetadata:
     def test_content_metadata_propagates_to_input_metadata(self) -> None:
         command = _command(
             UserMessage(
                 id="m1",
                 content=[
-                    TextInputContent(text="hi"),
-                    ImageInputContent(
-                        source=InputContentUrlSource(value="https://x/i.png"),
+                    TextPart(text="hi"),
+                    ImagePart(
+                        source=UrlSource(value="https://x/i.png"),
                         metadata={"alt": "cat"},
                     ),
                 ],
@@ -152,8 +142,8 @@ class TestMetadata:
             UserMessage(
                 id="m1",
                 content=[
-                    DocumentInputContent(
-                        source=InputContentDataSource(value=B64_VALUE, mime_type="application/pdf"),
+                    DocumentPart(
+                        source=DataSource(value=B64_VALUE, mime_type="application/pdf"),
                         metadata={"source_filename": "report.pdf"},
                     ),
                 ],
@@ -245,7 +235,42 @@ class TestNonUserRoles:
                 None,
                 tool_calls=ToolCallsEvent([ToolCallEvent(id="t1", name="do", arguments="{}")]),
             ),
-            ToolResultsEvent([ToolResultEvent(parent_id="t1", result=ToolResult(["42"]))]),
+            ToolResultsEvent([ToolResultEvent(parent_id="t1", result=ToolResult("42"))]),
+        ]
+
+    def test_a_tool_message_in_parts_becomes_a_tool_result_of_those_parts(self) -> None:
+        """A screenshot beside its caption reaches the model as both, not as a string."""
+        command = _command(
+            ToolMessage(
+                id="tm1",
+                tool_call_id="t1",
+                content=[
+                    TextPart(text="the page"),
+                    ImagePart(source=DataSource(value=B64_VALUE, mime_type="image/jpeg")),
+                ],
+            ),
+        )
+
+        _, messages, _ = map_agui_messages_to_events(command)
+
+        assert messages == [
+            ToolResultsEvent([
+                ToolResultEvent(
+                    parent_id="t1",
+                    result=ToolResult(TextInput("the page"), ImageInput(data=RAW_BYTES, media_type="image/jpeg")),
+                )
+            ]),
+        ]
+
+    def test_a_tool_message_s_error_is_what_the_model_hears(self) -> None:
+        command = _command(
+            ToolMessage(id="tm1", tool_call_id="t1", content=[TextPart(text="partial")], error="it broke"),
+        )
+
+        _, messages, _ = map_agui_messages_to_events(command)
+
+        assert messages == [
+            ToolResultsEvent([ToolResultEvent(parent_id="t1", result=ToolResult("it broke"))]),
         ]
 
 
@@ -276,3 +301,58 @@ class TestCurrentTurnSplit:
 
         assert messages == []
         assert current_turn == [TextInput("hello"), TextInput("and more")]
+
+
+class TestProviderFileHandles:
+    """A handle only the provider that minted it can resolve, and never fetched or parsed."""
+
+    def test_an_untagged_handle_is_taken_to_be_the_run_s_own(self) -> None:
+        command = _command(UserMessage(id="m1", content=[DocumentPart(source=FileSource(value="file-abc"))]))
+
+        _, _, current_turn = map_agui_messages_to_events(command, provider="anthropic")
+
+        assert current_turn == [FileIdInput("file-abc")]
+
+    def test_a_handle_tagged_with_the_run_s_provider_reaches_it(self) -> None:
+        command = _command(
+            UserMessage(id="m1", content=[ImagePart(source=FileSource(value="file-abc", provider="anthropic"))])
+        )
+
+        _, _, current_turn = map_agui_messages_to_events(command, provider="anthropic")
+
+        assert current_turn == [FileIdInput("file-abc")]
+
+    def test_another_provider_s_handle_is_skipped_and_said_so(self, caplog: pytest.LogCaptureFixture) -> None:
+        command = _command(
+            UserMessage(
+                id="m1",
+                content=[
+                    TextPart(text="look"),
+                    DocumentPart(source=FileSource(value="file-secret", provider="openai")),
+                ],
+            )
+        )
+
+        with caplog.at_level(logging.WARNING, logger="ag2.ag_ui"):
+            _, _, current_turn = map_agui_messages_to_events(command, provider="anthropic")
+
+        assert current_turn == [TextInput("look")]
+        [record] = caplog.records
+        assert "openai" in record.getMessage()
+        assert "anthropic" in record.getMessage()
+        assert "file-secret" not in record.getMessage()
+
+    def test_a_skipped_handle_in_a_tool_message_leaves_the_rest_of_the_result(self) -> None:
+        command = _command(
+            ToolMessage(
+                id="tm1",
+                tool_call_id="t1",
+                content=[TextPart(text="done"), DocumentPart(source=FileSource(value="f", provider="openai"))],
+            ),
+        )
+
+        _, messages, _ = map_agui_messages_to_events(command, provider="gemini")
+
+        assert messages == [
+            ToolResultsEvent([ToolResultEvent(parent_id="t1", result=ToolResult("done"))]),
+        ]
