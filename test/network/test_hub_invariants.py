@@ -39,8 +39,11 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_CHANNEL_INVITE,
     EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_OPENED,
     EV_TEXT,
     AccessDeniedError,
+    Decision,
+    Deny,
     Envelope,
     Hub,
     HubClient,
@@ -50,6 +53,7 @@ from ag2.network import (
     ProtocolError,
     Resume,
     Rule,
+    RuleBasedArbiter,
 )
 from ag2.network.adapters.conversation import (
     CONVERSATION_TYPE,
@@ -393,6 +397,64 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
     assert "42" in result
 
     await hub.close()
+
+
+class _RejectTextArbiter(RuleBasedArbiter):
+    async def authorize_send(
+        self,
+        envelope: Envelope,
+        sender: Passport,
+        sender_rule: Rule,
+        recipients: list[Passport],
+    ) -> Decision:
+        if envelope.event_type == EV_TEXT:
+            return Deny(reason="prompt rejected")
+        return await super().authorize_send(envelope, sender, sender_rule, recipients)
+
+
+class _CloseFailingHub(Hub):
+    async def close_channel(self, channel_id: str, *, reason: str = "") -> ChannelMetadata:
+        raise RuntimeError("channel cleanup failed")
+
+
+@pytest.mark.asyncio
+async def test_delegate_closes_channel_when_prompt_send_fails() -> None:
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    try:
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
+        hub.register_arbiter(_RejectTextArbiter())
+
+        result = await _invoke(make_delegate_tool(alice), {"target": "bob", "prompt": "hi"})
+
+        assert result == "Error: prompt send failed: prompt rejected"
+        [channel] = await hub.list_channels(agent_id=alice.agent_id)
+        assert channel.manifest.type == "consulting"
+        events = await hub.read_wal(channel.channel_id)
+        assert EV_CHANNEL_OPENED in [event.event_type for event in events]
+        assert all(event.event_type != EV_TEXT for event in events)
+        assert await hub.list_channels(state=ChannelState.ACTIVE) == []
+        assert channel.state == ChannelState.CLOSED
+        assert channel.close_reason == "prompt_send_failed"
+    finally:
+        await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_delegate_preserves_prompt_send_error_when_channel_close_fails() -> None:
+    store = MemoryKnowledgeStore()
+    hub = await _CloseFailingHub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    try:
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
+        hub.register_arbiter(_RejectTextArbiter())
+
+        result = await _invoke(make_delegate_tool(alice), {"target": "bob", "prompt": "hi"})
+
+        assert result == "Error: prompt send failed: prompt rejected"
+    finally:
+        await hub.close()
 
 
 @pytest.mark.asyncio
