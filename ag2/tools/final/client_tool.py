@@ -16,10 +16,14 @@ from .function_tool import FunctionToolSchema
 
 
 class ClientTool(Tool):
+    """A tool a remote client declares on the wire and executes itself."""
+
     __slots__ = (
         "schema",
         "name",
     )
+
+    declared_in_code = False
 
     def __init__(self, schema: dict[str, Any]) -> None:
         self.schema = FunctionToolSchema.from_dict(schema)
