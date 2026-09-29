@@ -17,8 +17,8 @@ from dirty_equals import IsPartialDict
 from ag2 import Agent, Context
 from ag2.ag_ui import AGUIStream
 from ag2.events import ToolCallEvent
+from ag2.middleware import ToolExecution, ToolResultType
 from ag2.testing import TestConfig
-from ag2.tools.subagents.run_task import run_task
 from test.ag_ui.harness import every, only, outcome_of, sole_interrupt, types_of
 from test.ag_ui.serving import QUESTION, abandon, answer, app_for, post_run, run_body
 
@@ -152,26 +152,29 @@ def _racing_the_pause(delay: int) -> Agent:
         return "waited"
 
     late = Agent("late", config=TestConfig("late done"))
+
+    # A function, not an object holding `asked`: an agent deep-copies its tools, middleware included.
+    async def after_the_question(call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
+        await asked.wait()
+        await _turns_of_the_loop(delay)
+        return await call_next(event, context)
+
     parent = Agent(
         "parent",
         config=TestConfig(
             [
                 ToolCallEvent(name="task_asker", arguments='{"objective": "ask"}'),
                 ToolCallEvent(name="task_sibling", arguments='{"objective": "wait"}'),
-                ToolCallEvent(name="start_late"),
+                ToolCallEvent(name="task_late", arguments='{"objective": "late"}'),
             ],
             "summarised",
         ),
-        tools=[asker.as_tool(description="Ask."), sibling.as_tool(description="Wait.")],
+        tools=[
+            asker.as_tool(description="Ask."),
+            sibling.as_tool(description="Wait."),
+            late.as_tool(description="Start late.", middleware=[after_the_question]),
+        ],
     )
-
-    @parent.tool
-    async def start_late(context: Context) -> str:
-        """Delegate once the question has been asked."""
-        await asked.wait()
-        await _turns_of_the_loop(delay)
-        return (await run_task(late, "late", parent_context=context)).result or ""
-
     return parent
 
 

@@ -6,7 +6,8 @@
 
 Unrecognised material is not an error, and a malformed known value is. What a
 newer client sends that this server does not describe — a property, a message
-role, a content part kind — is stripped with a warning, and the run is served.
+role, a content part kind or source kind, a resume status — is stripped with a
+warning, and the run is served.
 """
 
 import json
@@ -23,6 +24,8 @@ logger = logging.getLogger("ag2.ag_ui")
 # unrecognised.
 _ROLES = frozenset({"developer", "system", "assistant", "user", "tool", "activity", "reasoning"})
 _PART_TYPES = frozenset({"text", "image", "audio", "video", "document"})
+_SOURCE_TYPES = frozenset({"data", "url", "file"})
+_RESUME_STATUSES = frozenset({"resolved", "cancelled"})
 
 # The messages whose content may be a list of parts.
 _PART_ROLES = frozenset({"user", "tool"})
@@ -58,6 +61,8 @@ def _strip_unknown_members(raw: dict[str, Any]) -> None:
     # Before validation, since a union member the SDK cannot place fails it.
     # Only a member of an object shape naming a kind this server lacks is taken
     # out: anything else malformed is left for validation to refuse.
+    if isinstance(resume := raw.get("resume"), list):
+        raw["resume"] = _known_entries(resume)
     messages = raw.get("messages")
     if not isinstance(messages, list):
         return
@@ -73,12 +78,31 @@ def _strip_unknown_members(raw: dict[str, Any]) -> None:
     raw["messages"] = kept
 
 
+def _known_entries(entries: list[Any]) -> list[Any]:
+    # `status` is required, so an entry whose status is unknown goes whole. The
+    # interrupt it answered is then uncovered, which the exchange refuses.
+    kept = []
+    for index, entry in enumerate(entries):
+        status = entry.get("status") if isinstance(entry, dict) else None
+        if isinstance(status, str) and status not in _RESUME_STATUSES:
+            _warn(f"/resume/{index}", f"a resume entry of status {status!r}")
+            continue
+        kept.append(entry)
+    return kept
+
+
 def _known_parts(parts: list[Any], path: str) -> list[Any]:
     kept = []
     for index, part in enumerate(parts):
         kind = part.get("type") if isinstance(part, dict) else None
         if isinstance(kind, str) and kind not in _PART_TYPES:
             _warn(f"{path}/{index}", f"a content part of type {kind!r}")
+            continue
+        # A part left without its source would be malformed, so the part goes whole.
+        source = part.get("source") if isinstance(part, dict) else None
+        source_kind = source.get("type") if isinstance(source, dict) else None
+        if isinstance(source_kind, str) and source_kind not in _SOURCE_TYPES:
+            _warn(f"{path}/{index}", f"a {kind} part whose source is of type {source_kind!r}")
             continue
         kept.append(part)
     return kept

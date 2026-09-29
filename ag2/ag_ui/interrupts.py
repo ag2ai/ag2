@@ -90,7 +90,7 @@ APPROVAL_SCHEMA: dict[str, Any] = {
 # Codes on the `RUN_ERROR` a refused resume produces, so a client can branch
 # without parsing prose.
 NO_HELD_TURN = "INTERRUPT_NOT_HELD"
-NOT_OUTSTANDING = "INTERRUPT_NOT_OUTSTANDING"
+NOT_COVERED = "INTERRUPT_NOT_COVERED"
 PAYLOAD_REFUSED = "INTERRUPT_PAYLOAD_REFUSED"
 NOT_PROVEN = "INTERRUPT_NOT_PROVEN"
 
@@ -156,7 +156,7 @@ class ResumeRefusedError(AG2Error):
     __slots__ = ("code",)
 
     code: str
-    """One of `NO_HELD_TURN`, `NOT_OUTSTANDING`, `NOT_PROVEN`, `PAYLOAD_REFUSED`.
+    """One of `NO_HELD_TURN`, `NOT_COVERED`, `NOT_PROVEN`, `PAYLOAD_REFUSED`.
 
     Branch on this rather than on the message.
     """
@@ -663,11 +663,10 @@ class ServedTurns:
         self._live.discard(turn)
         self.discard(turn)
 
-    def release_thread(self, thread_id: str) -> None:
-        """Cancel whatever `thread_id` was holding, because it has moved on."""
-        turn = self._held.pop(thread_id, None)
-        if turn is not None:
-            turn.release()
+    def holds(self, thread_id: str) -> bool:
+        """Whether `thread_id` holds a question that can still be answered."""
+        self._evict_expired()
+        return thread_id in self._held
 
     async def release_all(self) -> None:
         """Cancel every turn this process is running, and wait for them to unwind.
@@ -867,7 +866,8 @@ def resume_held_turn(
     legitimate answer arriving in time still resumes it.
     """
     turn = turns.take(incoming.thread_id)
-    if turn is None or turns.expired(turn):
+    outstanding = turn.outstanding if turn is not None else None
+    if turn is None or outstanding is None or turns.expired(turn):
         # Refused under the same code either way: whether a turn past its
         # deadline is still in the registry or was already swept by someone
         # else's traffic is timing, and a client cannot be told two different
@@ -879,14 +879,21 @@ def resume_held_turn(
             f"thread {incoming.thread_id} is not holding an interrupt: it is unknown, already answered, or expired",
         )
 
-    outstanding = turn.outstanding
-    entry = next((e for e in resume_entry(incoming) if e.interrupt_id == outstanding.id), None) if outstanding else None
-    if outstanding is None or entry is None:
+    entry = None
+    for candidate in resume_entry(incoming):
+        if candidate.interrupt_id == outstanding.id and entry is None:
+            entry = candidate
+        else:
+            # An answer to something this thread is not asking: the protocol
+            # says to carry on without it, and to say so.
+            logger.warning(
+                "ignoring an AG-UI resume entry for interrupt %r: thread %s is not waiting on it",
+                candidate.interrupt_id,
+                incoming.thread_id,
+            )
+    if entry is None:
         turns.restore(turn)
-        raise ResumeRefusedError(
-            NOT_OUTSTANDING,
-            f"thread {incoming.thread_id} is not waiting on any interrupt this run addresses",
-        )
+        raise ResumeRefusedError(NOT_COVERED, _uncovered(incoming.thread_id))
 
     try:
         # Before the payload is so much as looked at, and before "cancelled" is
@@ -935,6 +942,21 @@ async def serve_exchange(
 
     send, receive = create_memory_object_stream[BaseEvent]()
 
+    # Before RUN_STARTED, like the version check: a resume that cannot be
+    # honoured is refused before anything is sent.
+    try:
+        turn = begin_turn(turns, incoming, send, start)
+    except ResumeRefusedError as refused:
+        yield encoder.encode(refused.as_event(timestamp_ms()))  # noqa: ASYNC119
+        return
+    except Exception as error:
+        # A stream that just stops leaves the client with no outcome to act on.
+        logger.exception("failed to begin an AG-UI turn for thread %s", incoming.thread_id)
+        yield encoder.encode(  # noqa: ASYNC119
+            RunErrorEvent(message=str(error) or type(error).__name__, timestamp=timestamp_ms())
+        )
+        return
+
     # Emitted by the exchange, not by the turn: a resumed turn started under an
     # earlier run id in an earlier exchange, and it is *this* run that is
     # starting. The version is this server's own, never an echo of the client's.
@@ -946,20 +968,6 @@ async def serve_exchange(
             timestamp=timestamp_ms(),
         )
     )
-
-    try:
-        turn = begin_turn(turns, incoming, send, start)
-    except ResumeRefusedError as refused:
-        yield encoder.encode(refused.as_event(timestamp_ms()))  # noqa: ASYNC119
-        return
-    except Exception as error:
-        # A run already started on the wire is always terminated on the wire: a
-        # stream that just stops leaves the client with no outcome to act on.
-        logger.exception("failed to begin an AG-UI turn for thread %s", incoming.thread_id)
-        yield encoder.encode(  # noqa: ASYNC119
-            RunErrorEvent(message=str(error) or type(error).__name__, timestamp=timestamp_ms())
-        )
-        return
 
     if isinstance(turn, Abandoned):
         async for chunk in _cancel(turn.turn, incoming, encoder):
@@ -1092,16 +1100,24 @@ def begin_turn(
     """The turn this run drives — a held one resumed, or a fresh one started.
 
     `Abandoned` when the run gives up on the question it addresses. Raises
-    `ResumeRefusedError` if it addresses one that cannot be honoured.
+    `ResumeRefusedError` if it addresses one that cannot be honoured, or leaves
+    the question the thread holds unanswered.
     """
     if resume_entry(incoming):
         return resume_held_turn(turns, incoming, send)
 
-    # A fresh run on a thread still holding a question has abandoned it — the
-    # protocol's own client will not send one — and the turn behind it would
-    # otherwise sit here until its deadline.
-    turns.release_thread(incoming.thread_id)
+    # Omission is not abandonment: the question stays held until it is answered,
+    # given up with a "cancelled" entry, or expires.
+    if turns.holds(incoming.thread_id):
+        raise ResumeRefusedError(NOT_COVERED, _uncovered(incoming.thread_id))
     return start(TurnOutput(thread_id=incoming.thread_id, run_id=incoming.run_id, send=send))
+
+
+def _uncovered(thread_id: str) -> str:
+    return (
+        f"thread {thread_id} is waiting on an interrupt this run does not answer: "
+        'resume it, or give it up with a "cancelled" entry'
+    )
 
 
 def is_interrupt(event: BaseEvent) -> bool:
@@ -1113,7 +1129,7 @@ __all__ = (
     "AG2_METADATA_KEY",
     "DEFAULT_RETENTION",
     "INPUT_REQUIRED_REASON",
-    "NOT_OUTSTANDING",
+    "NOT_COVERED",
     "NOT_PROVEN",
     "NO_HELD_TURN",
     "PAYLOAD_REFUSED",

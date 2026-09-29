@@ -12,11 +12,11 @@ import logging
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
 
-from ag2 import Agent
+from ag2 import Agent, ToolResult
 from ag2.ag_ui import AGUIStream, read_run_input
-from ag2.events import ModelRequest, TextInput
+from ag2.ag_ui.stream import AGStreamInput, map_agui_messages_to_events
+from ag2.events import ModelRequest, TextInput, ToolResultEvent, ToolResultsEvent
 from ag2.testing import TestConfig, TrackingConfig
 from test.ag_ui.harness import dispatch_run, outcome_of
 
@@ -108,13 +108,46 @@ async def test_open_objects_keep_what_the_protocol_does_not_describe(caplog: pyt
     assert _warnings(caplog) == []
 
 
-async def test_a_source_of_an_unknown_kind_is_refused() -> None:
-    """Source kinds are a closed set in 1.0: an unknown one is malformed, not a newer protocol."""
+async def test_a_part_whose_source_is_of_an_unknown_kind_is_stripped_whole(caplog: pytest.LogCaptureFixture) -> None:
+    """A part left without its source would be malformed, so the whole part goes."""
     body = _body({
         "id": "m1",
         "role": "user",
-        "content": [{"type": "image", "source": {"type": "ipfs", "value": "Qm..."}}],
+        "content": [{"type": "text", "text": "look"}, {"type": "image", "source": {"type": "ipfs", "value": "Qm..."}}],
     })
 
-    with pytest.raises(ValidationError):
-        read_run_input(body)
+    with caplog.at_level(logging.WARNING, logger="ag2.ag_ui"):
+        frames, tracking = await _served(body)
+
+    assert outcome_of(frames) == {"type": "success"}
+    [(sent,)] = [call.args for call in tracking.mock.call_args_list]
+    assert sent == ModelRequest([TextInput("look")])
+    [warning] = _warnings(caplog)
+    assert "/messages/0/content/1" in warning
+
+
+async def test_a_tool_message_whose_only_part_is_stripped_is_answered_with_the_empty_string(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    body = _body(
+        {"id": "m1", "role": "user", "content": "weather?"},
+        {
+            "id": "a1",
+            "role": "assistant",
+            "toolCalls": [{"id": "c1", "type": "function", "function": {"name": "get_weather", "arguments": "{}"}}],
+        },
+        {
+            "id": "t1",
+            "role": "tool",
+            "toolCallId": "c1",
+            "content": [{"type": "image", "source": {"type": "ipfs", "value": "Qm..."}}],
+        },
+    )
+
+    with caplog.at_level(logging.WARNING, logger="ag2.ag_ui"):
+        incoming = read_run_input(body)
+
+    _, history, _ = map_agui_messages_to_events(AGStreamInput(incoming=incoming, variables={}))
+    assert history[-1] == ToolResultsEvent([ToolResultEvent(parent_id="c1", name="get_weather", result=ToolResult(""))])
+    [warning] = _warnings(caplog)
+    assert "/messages/2/content/0" in warning

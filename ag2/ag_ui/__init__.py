@@ -12,7 +12,7 @@ from .events import AGUIEvent
 from .interrupts import (
     DEFAULT_RETENTION,
     INPUT_REQUIRED_REASON,
-    NOT_OUTSTANDING,
+    NOT_COVERED,
     NOT_PROVEN,
     NO_HELD_TURN,
     PAYLOAD_REFUSED,
@@ -26,7 +26,7 @@ from .stream import AGUIStream
 __all__ = (
     "DEFAULT_RETENTION",
     "INPUT_REQUIRED_REASON",
-    "NOT_OUTSTANDING",
+    "NOT_COVERED",
     "NOT_PROVEN",
     "NO_HELD_TURN",
     "PAYLOAD_REFUSED",

@@ -17,11 +17,12 @@ from typing import Any
 
 import httpx
 import pytest
+from dirty_equals import IsPartialDict
 
 from ag2 import Agent
 from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import AgUiTransport
-from ag2.ag_ui import AGUIStream
+from ag2.ag_ui import NO_HELD_TURN, AGUIStream
 from ag2.testing import TestConfig
 from test.ag_ui.harness import decode
 from test.ag_ui.serving import app_for, run_body
@@ -63,10 +64,17 @@ async def test_a_run_that_starts_answers_200_as_an_event_stream(make_app: Callab
 @_APPS
 @pytest.mark.parametrize("fixture", sorted((_FIXTURES / "valid").glob("*.json")), ids=lambda p: p.stem)
 async def test_every_valid_upstream_input_is_served(make_app: Callable[[], Any], fixture: Path) -> None:
-    response = await _post(make_app(), fixture.read_bytes())
+    body = fixture.read_bytes()
+
+    response = await _post(make_app(), body)
 
     assert response.status_code == 200
-    assert decode(response.text.splitlines())[0]["type"] == "RUN_STARTED"
+    [first, *_] = decode(response.text.splitlines())
+    if json.loads(body).get("resume"):
+        # Accepted, then refused as a resume: a fresh server holds no interrupt.
+        assert first == IsPartialDict({"type": "RUN_ERROR", "code": NO_HELD_TURN})
+    else:
+        assert first["type"] == "RUN_STARTED"
 
 
 @_APPS
@@ -79,6 +87,28 @@ async def test_every_invalid_upstream_input_is_refused_before_any_stream(
     assert response.status_code == 400
     assert response.headers["content-type"] == "application/json"
     assert "error" in response.json()
+
+
+@_APPS
+async def test_a_part_whose_source_is_of_an_unknown_kind_is_stripped_and_the_run_served(
+    make_app: Callable[[], Any],
+) -> None:
+    body = run_body(thread_id="t1", run_id="r1")
+    body["messages"] = [
+        {
+            "id": "m1",
+            "role": "user",
+            "content": [{"type": "text", "text": "look"}, {"type": "image", "source": {"type": "ipfs", "value": "Qm"}}],
+        }
+    ]
+
+    response = await _post(make_app(), json.dumps(body).encode())
+
+    assert response.status_code == 200
+    assert decode(response.text.splitlines())[-1] == IsPartialDict({
+        "type": "RUN_FINISHED",
+        "outcome": {"type": "success"},
+    })
 
 
 @_APPS

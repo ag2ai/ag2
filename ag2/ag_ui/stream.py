@@ -603,6 +603,8 @@ def map_agui_messages_to_events(
     provider file handle issued by anyone else is skipped.
     """
     prompt, messages = [], []
+    # A tool message carries only the call id; the name is the restated call's.
+    tool_names: dict[str, str] = {}
 
     input_buffer: list[events.Input] = []
     for m in command.incoming.messages:
@@ -626,6 +628,7 @@ def map_agui_messages_to_events(
                 )
                 for t in (m.tool_calls or ())
             ]
+            tool_names.update((t.id, t.name) for t in tool_calls)
 
             messages.append(
                 events.ModelResponse(
@@ -649,6 +652,7 @@ def map_agui_messages_to_events(
                 events.ToolResultsEvent([
                     events.ToolResultEvent(
                         parent_id=m.tool_call_id,
+                        name=tool_names.get(m.tool_call_id),
                         result=ToolResult(parts=parts),
                     )
                 ])

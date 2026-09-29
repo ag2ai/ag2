@@ -235,7 +235,7 @@ class TestNonUserRoles:
                 None,
                 tool_calls=ToolCallsEvent([ToolCallEvent(id="t1", name="do", arguments="{}")]),
             ),
-            ToolResultsEvent([ToolResultEvent(parent_id="t1", result=ToolResult("42"))]),
+            ToolResultsEvent([ToolResultEvent(parent_id="t1", name="do", result=ToolResult("42"))]),
         ]
 
     def test_a_tool_message_in_parts_becomes_a_tool_result_of_those_parts(self) -> None:
@@ -356,3 +356,11 @@ class TestProviderFileHandles:
         assert messages == [
             ToolResultsEvent([ToolResultEvent(parent_id="t1", result=ToolResult("done"))]),
         ]
+
+
+def test_a_tool_message_answering_no_restated_call_stays_unnamed() -> None:
+    command = _command(ToolMessage(id="tm1", tool_call_id="elsewhere", content="sunny"))
+
+    _, messages, _ = map_agui_messages_to_events(command)
+
+    assert messages == [ToolResultsEvent([ToolResultEvent(parent_id="elsewhere", result=ToolResult("sunny"))])]

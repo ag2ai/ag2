@@ -16,7 +16,7 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from ag2 import Agent, Context
-from ag2.ag_ui import NOT_OUTSTANDING, NO_HELD_TURN, PAYLOAD_REFUSED, AGUIStream, Retention
+from ag2.ag_ui import NOT_COVERED, NO_HELD_TURN, PAYLOAD_REFUSED, AGUIStream, Retention
 from ag2.events import ToolCallEvent, ToolResultEvent
 from ag2.observers import observer
 from ag2.testing import TestConfig
@@ -43,9 +43,12 @@ SECOND_QUESTION = "And your favourite number?"
 async def refusal(
     app: Any, *, thread_id: str = "t1", run_id: str = "r2", resume: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Drive one exchange expected to be refused, and return its run error."""
+    """Drive one exchange expected to be refused, and return its run error.
+
+    Refused before the run starts: the stream is the error alone.
+    """
     events = await post_run(app, run_body(thread_id=thread_id, run_id=run_id, text=None, resume=resume))
-    assert types_of(events)[-1] == "RUN_ERROR", f"the client was left without a terminating event: {types_of(events)}"
+    assert types_of(events) == ["RUN_ERROR"], f"not refused before the run started: {types_of(events)}"
     return only(events, "RUN_ERROR")
 
 
@@ -141,7 +144,7 @@ class TestAnswersThatCannotBeHonoured:
         await ask_once(app)
         error = await refusal(app, resume=resolved("no-such-interrupt", "blue"))
 
-        assert error == IsPartialDict({"code": NOT_OUTSTANDING})
+        assert error == IsPartialDict({"code": NOT_COVERED})
         assert asked.answers == []
 
     async def test_an_interrupt_that_was_already_answered(self) -> None:
@@ -182,7 +185,7 @@ class TestAnswersThatCannotBeHonoured:
 
         error = await refusal(app, run_id="r3", resume=answer(first, "red"))
 
-        assert error == IsPartialDict({"code": NOT_OUTSTANDING})
+        assert error == IsPartialDict({"code": NOT_COVERED})
         assert asked.answers == ["blue"]
         assert sole_interrupt(second) == IsPartialDict({"message": SECOND_QUESTION})
 

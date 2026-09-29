@@ -280,14 +280,17 @@ and `A2UIServer` strip it before validation:
 
 - a property the protocol does not define, on the input or on anything in it;
 - a message with a role this server does not know;
-- a content part of a type this server does not know.
+- a content part of a type this server does not know;
+- a content part whose `source` is of a kind this server does not know. The whole
+  part goes, since one left without its source would be malformed.
 
-Each removal logs one warning on the `ag2.ag_ui` logger, naming its JSON Pointer,
+A message left with no parts is treated like any other empty message: a user
+message adds nothing to the turn, and a tool message still answers its call, with
+the empty string. Each removal logs one warning on the `ag2.ag_ui` logger, naming its JSON Pointer,
 such as `/messages/0/content/1`. Open objects — `state`, `forwardedProps`,
 `metadata`, a tool's `parameters` — are values rather than protocol members and
 are passed on whole. A known field carrying a value the schema rejects is
-malformed, not unrecognised, and the body is refused with `400`. So is a content
-part whose `source` is of a kind this server does not know. `dispatch` strips
+malformed, not unrecognised, and the body is refused with `400`. `dispatch` strips
 unknown properties from a `RunAgentInput` you validated yourself, but a role or
 part type your own validation rejected never reaches it.
 

@@ -4,8 +4,8 @@
 
 """Each delegation reaches the client as one subagent invocation, started and then ended."""
 
-import asyncio
 import logging
+from uuid import uuid4
 
 import pytest
 from ag_ui.core import UserMessage
@@ -13,9 +13,8 @@ from dirty_equals import IsInt, IsPartialDict, IsStr
 
 from ag2 import Agent, Context
 from ag2.ag_ui import AGUIStream
-from ag2.events import ToolCallEvent
+from ag2.events import TaskCompleted, TaskStarted, ToolCallEvent
 from ag2.testing import TestConfig
-from ag2.tools.subagents.run_task import run_task
 from test.ag_ui.harness import dispatch_run, every, outcome_of, run_input, types_of
 
 pytestmark = pytest.mark.asyncio
@@ -91,15 +90,15 @@ async def test_delegations_are_no_longer_steps() -> None:
 async def test_a_task_id_already_announced_in_the_run_is_not_announced_again(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A caller-supplied id can repeat; the wire must still never see one invocation twice."""
-    worker = Agent("worker", config=TestConfig("researched"))
+    """An id a tool picks itself can repeat; the wire must still never see one invocation twice."""
     parent = Agent("parent", config=TestConfig(ToolCallEvent(name="delegate_twice"), "summarised"))
 
     @parent.tool
     async def delegate_twice(context: Context) -> str:
-        """Delegate twice under one id."""
-        await run_task(worker, "first", parent_context=context, task_id="same")
-        await run_task(worker, "second", parent_context=context, task_id="same")
+        """Report two delegations under one id."""
+        for objective in ("first", "second"):
+            await context.send(TaskStarted(task_id="same", agent_name="worker", objective=objective))
+            await context.send(_completed("same", objective, "researched"))
         return "delegated"
 
     with caplog.at_level(logging.WARNING, logger="ag2.ag_ui"):
@@ -113,27 +112,15 @@ async def test_a_task_id_already_announced_in_the_run_is_not_announced_again(
 
 async def test_a_task_id_still_open_stays_open_until_its_last_delegation_ends() -> None:
     """Ends under one id cannot be told apart, so the first to arrive is not the one sent."""
-    running, released = asyncio.Event(), asyncio.Event()
-    slow = Agent("slow", config=TestConfig(ToolCallEvent(name="wait"), "slow result"))
-
-    @slow.tool
-    async def wait() -> str:
-        """Hold the slow delegation open."""
-        running.set()
-        await released.wait()
-        return "waited"
-
-    fast = Agent("fast", config=TestConfig("fast result"))
     parent = Agent("parent", config=TestConfig(ToolCallEvent(name="delegate_twice"), "summarised"))
 
     @parent.tool
     async def delegate_twice(context: Context) -> str:
-        """Delegate twice under one id, the second while the first is still running."""
-        first = asyncio.ensure_future(run_task(slow, "first", parent_context=context, task_id="same"))
-        await running.wait()
-        await run_task(fast, "second", parent_context=context, task_id="same")
-        released.set()
-        await first
+        """Report a second delegation under one id that ends while the first still runs."""
+        await context.send(TaskStarted(task_id="same", agent_name="slow", objective="first"))
+        await context.send(TaskStarted(task_id="same", agent_name="fast", objective="second"))
+        await context.send(_completed("same", "second", "fast result"))
+        await context.send(_completed("same", "first", "slow result"))
         return "delegated"
 
     events = await _run(parent)
@@ -142,6 +129,10 @@ async def test_a_task_id_still_open_stays_open_until_its_last_delegation_ends() 
     assert started == IsPartialDict({"subagentRunId": "same", "description": "first"})
     assert every(events, "SUBAGENT_FINISHED") == [IsPartialDict({"subagentRunId": "same", "result": "slow result"})]
     assert outcome_of(events) == {"type": "success"}
+
+
+def _completed(task_id: str, objective: str, result: str) -> TaskCompleted:
+    return TaskCompleted(task_id=task_id, agent_name="worker", objective=objective, result=result, task_stream=uuid4())
 
 
 class TestAnInvocationThatEndsWithoutFinishing:
