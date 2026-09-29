@@ -7,7 +7,14 @@ from typing import TYPE_CHECKING
 
 from ag2.tools.sandbox.base import ExecResult, Sandbox
 from ag2.tools.sandbox.factory import SandboxFactory, SingletonFactory, WorkdirAware
-from ag2.tools.sandbox.filter import READONLY_COMMANDS, check_ignore, contains_shell_operator, matches
+from ag2.tools.sandbox.filter import (
+    READONLY_COMMANDS,
+    check_ignore,
+    contains_shell_operator,
+    matches,
+    matches_argv,
+    split_command,
+)
 
 if TYPE_CHECKING:
     from ag2.context import ConversationContext
@@ -29,7 +36,9 @@ class ShellAdapter:
                  :class:`SandboxFactory` (opened per :meth:`run` so
                  :class:`~ag2.annotations.Variable` parameters
                  get resolved against the active Context).
-        allowed / blocked / ignore / readonly: command filter set.
+        allowed / blocked / ignore / readonly: command filter set. ``allowed``
+                 (or ``readonly``) switches on restricted mode, where the command
+                 runs as its checked argv without a shell.
                  ``blocked`` is best-effort: it only matches the head command's
                  prefix, so chaining (``;`` / ``|`` / ``&&`` / ``$(...)``) can
                  bypass it. It is **not** a security boundary — use ``allowed`` /
@@ -82,15 +91,24 @@ class ShellAdapter:
             return host
         return sandbox.workdir
 
-    def _filter(self, command: str) -> str | None:
+    @property
+    def restricted(self) -> bool:
+        """Whether commands run as a checked argv, without a shell."""
+        return self._allowed is not None
+
+    def _argv(self, command: str) -> list[str] | None:
+        # Restricted mode runs exactly the argv it checks: through ``sh -c`` the
+        # shell would expand braces, variables and globs after the check.
+        if self._allowed is None:
+            return ["sh", "-c", command]
+        return split_command(command)
+
+    def _filter(self, command: str, argv: list[str]) -> str | None:
         if self._allowed is not None:
-            if not any(matches(p, command) for p in self._allowed):
+            if not any(matches_argv(p, argv) for p in self._allowed):
                 return f"Command not allowed: {command!r}"
-            # In restricted mode, shell operators (redirection, pipes,
-            # chaining, command substitution) would let an allowed head
-            # command spawn or redirect to disallowed ones — block them.
             if contains_shell_operator(command):
-                return f"Command not allowed (shell operators are not permitted in restricted mode): {command!r}"
+                return f"Command not allowed (shell syntax is not available in restricted mode): {command!r}"
         if self._blocked is not None and any(matches(p, command) for p in self._blocked):
             return f"Command not allowed: {command!r}"
         if self._ignore is not None:
@@ -108,21 +126,17 @@ class ShellAdapter:
         *,
         context: "ConversationContext | None" = None,
     ) -> str:
-        denied = self._filter(command)
+        """Run ``command`` and return its output, or the reason it was refused."""
+        argv = self._argv(command)
+        if argv is None:
+            return f"Command not allowed (unbalanced quotes): {command!r}"
+        denied = self._filter(command, argv)
         if denied is not None:
             return denied
 
-        result = await self._exec_async(command, context)
-        return _format(result)
-
-    async def _exec_async(
-        self,
-        command: str,
-        context: "ConversationContext | None",
-    ) -> ExecResult:
-        argv = ["sh", "-c", command]
         async with self._factory.open(context) as sandbox:
-            return await sandbox.exec(argv, env=self._env, timeout=self._timeout)
+            result = await sandbox.exec(argv, env=self._env, timeout=self._timeout)
+        return _format(result)
 
 
 def _format(result: ExecResult) -> str:
