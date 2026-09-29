@@ -682,9 +682,9 @@ config = AnthropicConfig(
 
 `BedrockConfig` authenticates in either of two ways, both resolved by the underlying AWS SDK:
 
-**1. AWS credentials (SigV4)** - explicit keys, a `profile_name`, or the standard environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`). Recommended for production; credentials refresh automatically through botocore.
+**1. AWS credentials (SigV4)** - explicit keys, a `profile_name`, or the standard environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`). Recommended for production; credentials refresh automatically through aiobotocore.
 
-**2. Bedrock API keys (bearer token)** - set the [Amazon Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html) as an environment variable and boto3 uses bearer-token auth for Bedrock calls automatically (no other credentials needed):
+**2. Bedrock API keys (bearer token)** - set the [Amazon Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html) as an environment variable and botocore uses bearer-token auth for Bedrock calls automatically (no other credentials needed):
 
 ```bash
 export AWS_BEARER_TOKEN_BEDROCK=<your-bedrock-api-key>
@@ -703,6 +703,29 @@ A region is always required - pass `region_name=` or set `AWS_DEFAULT_REGION`. N
 - **Short-term keys** expire with the console session that minted them (max 12 hours) and are region-bound - generate the key in the same region you call.
 - **Long-term keys** are backed by an auto-created IAM user; AWS recommends them for exploration only.
 - API keys work only for Bedrock / Bedrock Runtime actions. If both a bearer token and AWS credentials are present, the bearer token wins for Bedrock calls.
+
+#### Custom Session
+
+`BedrockConfig` is built on [aiobotocore](https://aiobotocore.aio-libs.org/), so `session` takes an `aiobotocore.session.AioSession` - a `boto3.Session` is not accepted. Sharing one session across configs resolves credentials and loads the Bedrock service model once:
+
+```python
+from aiobotocore.session import AioSession
+from ag2.config import BedrockConfig
+
+session = AioSession()
+
+planner = BedrockConfig(
+    model="global.anthropic.claude-sonnet-5",
+    region_name="us-east-1",
+    session=session,
+)
+writer = BedrockConfig(
+    model="global.anthropic.claude-sonnet-5",
+    region_name="us-east-1",
+    streaming=True,
+    session=session,
+)
+```
 
 ### Google Vertex AI (Gemini)
 
@@ -5031,6 +5054,9 @@ def math_op(a: int, b: int) -> int:
 !!! note
     Explicitly setting the name and description overrides the automatically generated values.
 
+!!! note
+    An agent exposes one tool per name in a turn. If tools declared in code share a name (the agent's `tools`, toolkits, plugins, or tools passed to `ask()`), the later one replaces the earlier one and a warning names both. For example, `Agent(tools=[toolkit, my_deploy])` uses `my_deploy` instead of the toolkit's `deploy`. Tools a remote peer provides never replace tools declared in code: neither tools an MCP server reports (see [MCP servers](mcp_servers.md)) nor tools a client sends over AG-UI or A2A.
+
 ### Deep Schema Customization with Pydantic
 
 Under the hood, arguments are serialized and validated using [Pydantic](https://docs.pydantic.dev/latest/) schemas. This means you can use standard `pydantic.Field` annotations to deeply customize individual schema parameters, providing the LLM with strict guidelines on what values are acceptable.
@@ -5892,7 +5918,7 @@ toolkit = MCPToolkit(
 ```
 
 !!! warning
-    Namespacing is opt-in. Two servers exposing the same tool name **without** distinct prefixes still collide: both proxies answer the same tool call, so the tool runs twice for one request.
+    Namespacing is opt-in. A tool an MCP server reports never replaces a tool declared in code with the same name, wherever the toolkit sits in the list. The server's tool is dropped with a warning. If two servers expose the same name without distinct prefixes, the first server's tool wins and the others are dropped with a warning. To use a server's tool anyway, remove the local tool or set a `tool_name_prefix`.
 
 ### Declare what a server may ask you for
 
@@ -6030,7 +6056,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | field | default | what it is for |
 |---|---|---|
 | `server_url` | - | where the server listens, including the MCP endpoint path |
-| `authorization_token` | `None` | bearer token sent on every request |
+| `authorization_token` | `None` | bearer token sent unless `headers` already contains `Authorization` (case-insensitive) |
 | `headers` | `None` | extra HTTP headers |
 | `connection_timeout` | `30.0` | seconds to wait on the server |
 | `proxy` | `None` | HTTP proxy to route through |
@@ -6082,7 +6108,7 @@ agent_with_mcp = Agent(
 )
 ```
 
-`MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime.
+`MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime. As with `MCPToolkit`, `authorization_token` is sent as a bearer `Authorization` header unless `headers` already contains `Authorization` (case-insensitive). Anthropic does not forward `headers` - only `authorization_token` is sent.
 
 !!! warning "`blocked_tools` is not enforceable on every provider"
 
@@ -6466,8 +6492,8 @@ app = MCPServer(
 )
 ```
 
-- `max_sessions` - LRU cap; the least-recently-used conversation's history is dropped once the cap is exceeded.
-- `ttl` - idle expiry in seconds; a conversation untouched for longer has its history dropped (`None`, the default, means no expiry).
+- `max_sessions` - LRU cap; the least-recently-used conversation's history is dropped once the cap is exceeded. A conversation with a turn running on it is never dropped, so while every other one is mid-turn the cap gives way until a turn ends.
+- `ttl` - idle expiry in seconds; a conversation untouched for longer has its history dropped (`None`, the default, means no expiry). Idle time counts from the last call or the end of the last turn, so a turn that runs longer than the `ttl` is neither cut off nor expired the moment it finishes.
 - `storage` - the history backend.
 
 Both bounds are quoted in the `conversation` argument's own description, so a client can judge whether an old handle is still worth presenting.
@@ -6537,7 +6563,7 @@ Leave `security_settings` alone and AG2 puts the protection up itself - provided
 
 `SessionConfig(max_sessions=...)` and `TransportConfig(max_mcp_sessions=...)` sit side by side and bound different things:
 
-- `max_sessions` caps **conversation** sessions - how much history the server remembers. Overflowing it drops the least-recently-used conversation; nothing is refused.
+- `max_sessions` caps **conversation** sessions - how much history the server remembers. Overflowing it drops the least-recently-used conversation that has no turn running; nothing is refused.
 - `max_mcp_sessions` caps concurrent **MCP** sessions - the transport's own handshake-era sessions. A request that would open one beyond the cap is answered `503`.
 
 ### Stateless transports and the idle timeout
@@ -7735,15 +7761,15 @@ agent = Agent(
 )
 ```
 
-| Parameter | Anthropic | OpenAI |
-| :--- | :---: | :---: |
-| `server_url` | ✓ | ✓ |
-| `server_label` | ✓ | ✓ |
-| `authorization_token` | ✓ | ✗ |
-| `description` | ✓ | ✗ |
-| `allowed_tools` | ✓ | ✓ |
-| `blocked_tools` | ✓ | ✗ |
-| `headers` | ✗ | ✓ |
+| Parameter | Anthropic | OpenAI | xAI |
+| :--- | :---: | :---: | :---: |
+| `server_url` | ✓ | ✓ | ✓ |
+| `server_label` | ✓ | ✓ | ✓ |
+| `authorization_token` | ✓ | ✓ | ✓ |
+| `description` | ✓ | ✓ | ✓ |
+| `allowed_tools` | ✓ | ✓ | ✓ |
+| `blocked_tools` | ✓ | ✗ | ✗ |
+| `headers` | ✗ | ✓ | ✓ |
 
 ## Image Generation
 
@@ -8142,10 +8168,10 @@ sh = SandboxShellTool(
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
 | `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment` / `TenkiEnvironment`. `None` -> `LocalEnvironment()` |
-| `allowed` | `None` | Whitelist of command prefixes. `None` -> all commands allowed |
+| `allowed` | `None` | Whitelist of command prefixes, matched word by word. Setting it switches on [restricted mode](#restricted-mode). `None` -> all commands allowed |
 | `blocked` | `None` | Blacklist of command prefixes. `None` -> nothing blocked |
 | `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"` |
-| `readonly` | `False` | When `True` and `allowed` is not set, restricts to a built-in read-only list (`cat`, `ls`, `grep`, `git log`, ...) |
+| `readonly` | `False` | When `True` and `allowed` is not set, restricts to a built-in list of commands that cannot write files or run programs (`cat`, `ls`, `grep`, ...) in [restricted mode](#restricted-mode) |
 
 ### LocalEnvironment Parameters
 
@@ -8161,10 +8187,10 @@ sh = SandboxShellTool(
 
 Filtering is applied in this order on every `run_shell_command(command)` call:
 
-1. **`allowed`** - if set, the command must match at least one prefix. Otherwise: `"Command not allowed: <cmd>"`.
+1. **`allowed`** - if set, the command must match at least one prefix and use no shell syntax (pipes, redirects, chaining). Otherwise: `"Command not allowed: <cmd>"`.
 2. **`blocked`** - if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
 3. **`ignore`** - literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
-4. **Execute** - the command runs in the environment.
+4. **Execute** - the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
 
 !!! note
     `ignore` checks only literal path tokens in the command string. Paths computed dynamically inside the shell (variable substitution, command substitution, glob expansion) are not inspected.
@@ -8179,7 +8205,26 @@ from ag2.tools import SandboxShellTool, LocalEnvironment
 sh = SandboxShellTool(LocalEnvironment("/my/codebase"), readonly=True)
 ```
 
-This restricts commands to `cat`, `head`, `tail`, `ls`, `grep`, `find`, `git log`, `git diff`, `git status`, and a few others. Pass an explicit `allowed` list to override this set.
+This restricts commands to `cat`, `head`, `tail`, `ls`, `grep`, `wc`, `diff`, `stat`, and a few others: only commands that have no option to write a file or run another program.
+
+`find`, `file` and `git` are not in the list, because each can write or run programs through its arguments (`find -exec`, `file -C`, `git diff --output`, and programs named in `.git/config`). To give a read-only agent `git log` or `find`, list them in `allowed`. An explicit `allowed` replaces the built-in set, and what its commands can do is then your call:
+
+```python
+sh = SandboxShellTool(LocalEnvironment("/my/codebase"), allowed=["cat", "ls", "grep", "git log", "git diff"])
+```
+
+For real isolation, use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment`.
+
+## Restricted Mode
+
+Setting `allowed` or `readonly=True` switches on restricted mode. The command is split into words once, the same way a POSIX shell quotes them, and that exact argv is checked and then run **without a shell**. Nothing can expand after the check, so none of these work:
+
+- pipes, redirects and chaining (`|`, `>`, `<`, `;`, `&`, `&&`, `||`, newlines), rejected with a clear error;
+- globs: `ls *.py` passes `*.py` to `ls` literally, so use `grep -r --include='*.py'` or `ls` instead;
+- variables, `~`, brace expansion and command substitution;
+- shell builtins: `echo` and `pwd` run the programs found on `PATH`.
+
+Without `allowed` and `readonly`, commands run through `sh -c` with full shell syntax.
 
 ## Accessing the Working Directory
 
@@ -8473,10 +8518,12 @@ Y/N?
 
 Typing **y** lets the tool run. Any other input denies it - the agent receives the denied message and can adjust.
 
-With `allow_always=True` (the default), typing **always** approves this call and every later call of the same tool in this agent's conversation. It does not carry across [sub-task delegation](../subagents.md) in either direction: a sub-task asks again, and its "always" does not reach the parent.
+With `allow_always=True` (the default), typing **always** approves this call and every later call of the same tool in this agent's conversation. The answer belongs to the tool that was asked about, identified by its implementation (the Python function, or the MCP server and its tool name), not by its name alone: another tool with the same name is still asked about, even behind the same `approval_required()` hook. The answer survives a restart as long as the conversation's variables do. It does not carry across [sub-task delegation](../subagents.md) in either direction: a sub-task asks again, and its "always" does not reach the parent.
 
 !!! note
     `approval_required()` relies on the agent's `hitl_hook` to collect user input. With no `hitl_hook` configured there is nobody to ask, so `context.input()` raises `HumanInputNotProvidedError` and **the turn ends** - the gated tool does not run, and the model is not handed a tool failure it could route around. Read more about [Human in the Loop](../context/human_in_the_loop.md) to learn how to configure a HITL hook.
+
+    An agent **served over AG-UI** is the exception: with no hook, the call is put to the connected client as an interrupt instead of ending the turn, and the client approves or refuses it. See [Gating a tool call](../ag-ui/overview.md#gating-a-tool-call-instead-of-asking-a-question).
 
 ## Waiting for the answer
 
@@ -8992,6 +9039,10 @@ A tool that raises is recorded as a failed tool call and the turn carries on: th
 | Nobody answered within `timeout=` | `HumanInputTimeoutError` |
 
 All three are `HumanInputError`, which is the type tool execution refuses to record as a tool result. The same holds one level down: a sub-agent whose question nobody could answer fails the delegating turn rather than reporting a failed sub-task.
+
+!!! note "Served over AG-UI, there is somebody to ask"
+
+    The first row is about a process with nobody in it. An agent served through [`AGUIStream`](../ag-ui/overview.md#asking-the-human-a-question) has a connected client, so a run with no hook puts the question to it as an interrupt rather than raising: the turn is held, and a later run on the same thread answers it. The other two rows are unchanged - a hook that raised, and a deadline that passed, end the turn there too.
 
 The difference matters most under `approval_required()`. An approval that could never be requested is not the same as a tool that broke - reported as a tool failure, it invites the model to look for another route to the same effect, which is the opposite of what the middleware is for. The gated tool does not run in any of the three cases, including the timeout.
 
@@ -12138,6 +12189,13 @@ stream = RedisStream("redis://localhost:6379")
 stream = RedisStream("redis://localhost:6379", serializer=Serializer.PICKLE)
 ```
 
+!!! danger "Pickle trusts everything in Redis"
+    Deserializing pickle runs arbitrary code. With `Serializer.PICKLE`, anyone who can write to the stream's Redis keys or publish to its Pub/Sub channel can execute code in every process that reads the stream - the same as giving them a shell on those hosts.
+
+    Use pickle only when the Redis instance is fully trusted: not reachable from untrusted networks, protected by authentication (and ACLs if it is shared), and written to only by your own processes.
+
+    The default JSON serializer does not make an untrusted Redis safe either: the stream restores whatever it reads, so anyone who can write to it can forge history and messages for your agents. Lock Redis down with either format.
+
 ### Cross-Process Communication
 
 Multiple `RedisStream` instances sharing the same `id` automatically receive each other's events via Redis Pub/Sub:
@@ -13595,7 +13653,7 @@ class ResponseLengthAggregate:
 
 # AG-UI (Agent-User Interaction) Integration
 
-Source: https://docs.ag2.ai/docs/user-guide/ag-ui/index/
+Source: https://docs.ag2.ai/docs/user-guide/ag-ui/overview/
 
 ## Overview
 
@@ -13625,10 +13683,12 @@ Use AG-UI when you want a reusable UI contract across clients and frameworks.
 Verified AG-UI features are supported in AG2:
 
 * [x] Streaming text events (`TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END`, `TEXT_MESSAGE_CHUNK`)
-* [x] [Backend tool lifecycle events](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools) (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_RESULT`, `TOOL_CALL_END`)
+* [x] [Backend tool lifecycle events](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools) (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END`, `TOOL_CALL_RESULT`)
 * [x] [Frontend-tool dispatch](https://docs.copilotkit.ai/ag2/generative-ui/frontend-tools) (`TOOL_CALL_CHUNK` for client tools in `RunAgentInput.tools`)
 * [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state) (`STATE_SNAPSHOT`) from context and agent state
 * [x] [Human input checkpoints](https://docs.copilotkit.ai/ag2/human-in-the-loop) (`input_required` surfaced as user-visible message events)
+* [x] Run interrupts: an agent pauses on a question and a later run on the same thread answers it (`RUN_FINISHED` with an `interrupt` outcome, resumed through `resume`) - see [Asking the human a question](#asking-the-human-a-question)
+* [x] Tool-call approval: a gated tool puts the call itself to the client before it runs, over the same interrupt lifecycle - see [Gating a tool call instead of asking a question](#gating-a-tool-call-instead-of-asking-a-question)
 
 ## Installation
 
@@ -13677,16 +13737,21 @@ uvicorn run_ag_ui:app --reload --port 8000
 ```
 
 !!! note "Simpler way"
-    If you want to use ASGI endpoint without additional logic, you can use the `AGUIStream.build_asgi()` method to build an ASGI endpoint and mount it to your ASGI application.
+    If you want the endpoint without any logic of your own around it, `AGUIStream.build_asgi()` builds the whole thing - an ASGI endpoint class you add as a route:
 
-    ```python linenums="1" hl_lines="5-6"
+    ```python linenums="1" hl_lines="6-7"
     from ag2.ag_ui import AGUIStream
     from fastapi import FastAPI
+    from starlette.routing import Route
 
     app = FastAPI()
     stream = AGUIStream(agent)
-    app.mount("/chat", stream.build_asgi())
+    app.routes.append(Route("/chat", stream.build_asgi()))
     ```
+
+    Added as a route rather than mounted: `app.mount("/chat", ...)` serves the
+    endpoint at `/chat/` and answers `/chat` with a `307` redirect, which the
+    curl below - and many HTTP clients - will not follow on a `POST`.
 
 ### Test the endpoint
 
@@ -13761,6 +13826,224 @@ The A2UI AG-UI transport (`A2UIServer(..., transport=AgUiTransport())`) reports
 the same field on the same two events, so what a client can show does not depend
 on which endpoint it connected to.
 
+## Asking the human a question
+
+An agent can stop mid-run and ask. When a tool calls `context.input(...)`, the
+question leaves as the outcome of the run that raised it, and the turn is held
+in the server - suspended exactly where it stopped - until a later run on the
+same thread answers it.
+
+```python
+@agent.tool
+async def book_flight(context: Context, flight: str) -> str:
+    """Book a flight, once the traveller confirms it."""
+    answer = await context.input(f"Book {flight}? (yes/no)")
+    return "Booked." if answer.strip().lower() == "yes" else "Cancelled."
+```
+
+The exchange ends normally - not with an error - carrying the question:
+
+```text
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
+       "outcome":{"type":"interrupt","interrupts":[
+         {"id":"e2c1...","reason":"input_required","message":"Book LH441? (yes/no)",
+          "responseSchema":{"type":"string","title":"Answer"},
+          "expiresAt":"2026-01-01T12:15:00+00:00",
+          "metadata":{"ag2":{"proof":"g7Qk..."{{ "}}" }}}]{{ "}}" }}
+```
+
+The client answers with a **new run id on the same thread**, naming the
+interrupt in `resume`:
+
+```json
+{"threadId": "thread-1", "runId": "run-2", "messages": [],
+ "resume": [{"interruptId": "e2c1...", "status": "resolved", "payload": "yes",
+             "metadata": {"ag2": {"proof": "g7Qk..."{{ "}}" }}}]}
+```
+
+`context.input` returns `"yes"` inside the tool, and the turn runs on to
+completion in that second exchange - `RUN_STARTED` for the resuming run, then
+whatever the agent does next. A client that has given up sends
+`"status": "cancelled"` instead; the turn ends and the run finishes with a
+success outcome, having delivered nothing.
+
+!!! warning "A paused tool call's lifecycle spans two runs"
+
+    The tool call that asked the question has not produced its result when its
+    run ends, so its events are split across the two exchanges. The first emits
+    the whole call - `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END` - and
+    the second only its `TOOL_CALL_RESULT`, under a **different `runId`**:
+
+    ```text
+    run-1:  RUN_STARTED -> TOOL_CALL_START -> TOOL_CALL_ARGS -> TOOL_CALL_END -> RUN_FINISHED (interrupt)
+    run-2:  RUN_STARTED -> TOOL_CALL_RESULT -> TEXT_MESSAGE_CHUNK -> RUN_FINISHED
+    ```
+
+    Key tool calls by `threadId`, not by `runId`. A client that drops that state
+    when a run finishes will see a `TOOL_CALL_RESULT` for a call it has no record
+    of, and has nothing to attach the result to. `@ag-ui/client` keeps it.
+
+A paused turn keeps working while it waits: another tool call from the same
+model response can finish in the meantime. Nothing it emits is lost - it is sent
+at the start of the run that resumes the turn. Questions asked at once - two
+parallel tool calls each calling `context.input` - go out one per run: the run
+that answers the first ends on the second question, and a queued question's
+`expiresAt` already counts the time it spent waiting for its turn.
+
+Two things must travel back untouched: the **interrupt id**, and the
+**`metadata` envelope**. The envelope carries proof that the answer comes from
+whoever the question was put to - an answer attributed to a human is the input an
+agent trusts most, and an interrupt id alone is a bare string in a request body.
+A resume without it is refused. The protocol does not make clients echo it, and
+`@ag-ui/client` does not do it for you: copy the interrupt's `metadata` into the
+resume entry yourself.
+
+```typescript
+import { buildResumeArray } from "@ag-ui/client";
+
+const [interrupt] = agent.pendingInterrupts;
+await agent.runAgent({
+  resume: buildResumeArray(agent.pendingInterrupts, {
+    [interrupt.id]: { status: "resolved", payload: "yes", metadata: interrupt.metadata },
+  }),
+});
+```
+
+A client that cannot set a resume entry's `metadata` cannot answer these
+interrupts. CopilotKit's `useInterrupt` is one: its `resolve()` and `cancel()`
+send no metadata.
+
+Every refusal arrives as `RUN_ERROR` with a machine-readable `code`, never as a
+stream that simply stops:
+
+| `code` | What happened |
+| --- | --- |
+| `INTERRUPT_NOT_HELD` | Nothing is held for this thread: unknown id, already answered, or expired |
+| `INTERRUPT_NOT_OUTSTANDING` | Something is held, but it is not waiting on the interrupt this run names |
+| `INTERRUPT_NOT_PROVEN` | The envelope's proof is missing, malformed, or not the one issued |
+| `INTERRUPT_PAYLOAD_REFUSED` | The payload is not what the interrupt asked for |
+
+A refusal that is not the turn's own fault - a bad payload, an id it is not
+waiting on - leaves the held turn resumable by a legitimate answer, without
+extending its deadline.
+
+A runnable version of this exchange - server and client in one script - is in
+`examples/ag_ui/human_input.py`.
+
+### Gating a tool call instead of asking a question
+
+A tool wrapped in [`approval_required()`](../tools/approval_required.md)
+pauses the same way, over the same `resume`. But the client is being asked to
+approve a call rather than to type an answer, and it should not have to read the
+prose to tell the two apart - so the interrupt says which it is:
+
+| Field | A question (`context.input`) | A tool call awaiting approval |
+| --- | --- | --- |
+| `reason` | `input_required` | `tool_call` |
+| `toolCallId` | absent | the `toolCallId` of this run's `TOOL_CALL_START` |
+| `responseSchema` | `{"type": "string"}` | `{"type": ["string", "boolean"]}` |
+
+```text
+data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",
+       "outcome":{"type":"interrupt","interrupts":[
+         {"id":"9236...","reason":"tool_call",
+          "message":"Agent wants to call the tool:\n`delete_account`, {\"user_id\": \"abc-123\"}\n...",
+          "toolCallId":"7880...",
+          "responseSchema":{"type":["string","boolean"],"title":"Approval"},
+          "expiresAt":"2026-01-01T12:15:00+00:00",
+          "metadata":{"ag2":{"proof":"g7Qk..."{{ "}}" }}}]{{ "}}" }}
+```
+
+Answer it with `true` or `false` - a client that drew a pair of buttons should
+not have to know which words this server accepts:
+
+```json
+{"threadId": "thread-1", "runId": "run-2", "messages": [],
+ "resume": [{"interruptId": "9236...", "status": "resolved", "payload": true,
+             "metadata": {"ag2": {"proof": "g7Qk..."{{ "}}" }}}]}
+```
+
+`false` **refuses the call without failing the turn**: the model is handed the
+middleware's refusal as the tool's result and carries on, and the run still
+finishes with a success outcome. Because a gated call is a paused tool call, it
+splits across the two exchanges exactly as above - `toolCallId` names the
+`TOOL_CALL_START` the first exchange already emitted, so a client has something
+to attach the prompt to.
+
+### With a hook, nothing changes
+
+Supplying a human-input hook (`Agent(..., hitl_hook=...)`, or `hitl_hook=` on
+`dispatch`) keeps today's behaviour exactly: the question is answered in
+process, no interrupt is emitted, and the run finishes in one exchange. The
+interrupt path is what a run with *no* hook now does - where it used to fail
+with "nobody could be asked", it now asks the client.
+
+### Retention, and the deadline clients are shown
+
+How long a held turn survives, and how many may be held at once, is
+`Retention` - set where the transport is constructed, on both of them:
+
+```python
+from ag2.ag_ui import AGUIStream, Retention
+from ag2.a2ui import A2UIServer
+from ag2.a2ui.transports import AgUiTransport
+
+retention = Retention(ttl=900.0, max_held=128)  # the defaults
+
+stream = AGUIStream(agent, retention=retention)
+server = A2UIServer(agent, transport=AgUiTransport(retention=retention))
+```
+
+`ttl` is not an internal detail: it is what a client is shown as the interrupt's
+`expiresAt`, so changing it changes what clients are told. The advertised
+deadline is the **earlier** of `ttl` and the deadline implied by any `timeout=`
+passed to `context.input` - the protocol treats an absent deadline as a promise
+that the interrupt never expires, and clients reject late answers locally on the
+strength of it, so the figure on the wire is always the one that will in fact
+apply. Past it the turn is gone and its task cancelled; a `max_held` overflow
+cancels the oldest.
+
+That deadline is kept by the server's own clock, not by the next request to
+arrive: a turn nobody ever answers is released when it expires, on a process
+that has gone quiet as much as on a busy one.
+
+**Memory is proportional to retention.** A held turn is a suspended coroutine
+with its whole conversation history, not a record - `ttl` × arrival rate, capped
+by `max_held`, is roughly what a pausing server holds.
+
+### Deployment: a held turn lives in one process
+
+This is invisible on the wire - the two exchanges look the same either way - and
+it is the constraint that matters most when you deploy:
+
+- **Sticky routing is required.** A resume must reach the process holding the
+  turn. Route by `threadId`; behind a round-robin load balancer, resumes will
+  land on a process that knows nothing and be refused with
+  `INTERRUPT_NOT_HELD`.
+- **A restart drops every held turn.** After a deploy or a crash, a client
+  answering a question asked by the old process gets `RUN_ERROR` /
+  `INTERRUPT_NOT_HELD` - the same code as an expired one. Treat it as "ask
+  again", not as a bug.
+- **Close the stream on the way down.** `A2UIServer` does it for you (it runs
+  `AgUiTransport.aclose()` on ASGI shutdown). `AGUIStream` is not an app, so
+  nothing can hang a shutdown hook on it for you - call `await stream.aclose()`
+  from your own, or use it as an async context manager, so held turns are
+  cancelled rather than left running into the void.
+
+### Why a resume does not replay the run
+
+Because the call is suspended *inside your Python function*. `context.input`
+stopped mid-way through `book_flight`, with its local variables, its loop
+position and whatever it had already done still live. A message history cannot
+rebuild that: replaying the run would re-enter the tool from the top and redo
+whatever it did before it asked.
+
+That is also why held turns cannot be moved to Redis or a database and shared
+across processes: a suspended coroutine is not serialisable. A durable,
+cross-process version of this is a different feature - one where the agent's
+continuation is expressed as resumable state rather than as a paused
+function - not a setting on this one.
+
 ## UI clients
 
 Any AG-UI client works with this endpoint.
@@ -13771,9 +14054,9 @@ For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs bec
 - Tool UI rendering hooks/components
 - Shared state patterns for interactive workflows
 
-Start from the [CopilotKit UI quickstart](./copilotkit-quickstart.md).
+Start from the [CopilotKit UI quickstart](copilotkit-quickstart.md).
 
-The same endpoint can also power a bot in Slack and other messaging platforms - see [Channels](./channels.md).
+The same endpoint can also power a bot in Slack and other messaging platforms - see [Channels](channels.md).
 
 ## AG-UI Dojo
 
@@ -13784,9 +14067,9 @@ For protocol-level testing and event inspection, use the AG2 Dojo profile:
 ## Next steps
 
 1. Build the AG-UI endpoint from the minimal example above.
-2. Follow the [CopilotKit UI quickstart](./copilotkit-quickstart.md) to connect a React/Next.js client.
+2. Follow the [CopilotKit UI quickstart](copilotkit-quickstart.md) to connect a React/Next.js client.
 3. Validate runtime behavior with the [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat).
-4. Run the same endpoint as a bot in Slack and other messaging platforms with [Channels](./channels.md).
+4. Run the same endpoint as a bot in Slack and other messaging platforms with [Channels](channels.md).
 
 ---
 
@@ -14085,7 +14368,7 @@ The same AG2 agent that powers your in-app copilot can also run as a bot in mess
 
 ## How it fits together
 
-Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](index.md#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels), connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence). Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn over a persistent gateway connection to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
+Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](overview.md#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels), connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence). Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn over a persistent gateway connection to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
 
 ```text
 Slack  ──►  CopilotKit Intelligence  ──►  channel process (Node)  ──►  AG2 server (AGUIStream)
@@ -14156,7 +14439,7 @@ const listener = createCopilotNodeListener({ runtime });
 await listener.channels.ready({ timeoutMs: 15_000 }); // fail startup loudly on a broken config
 ```
 
-Run the channel process alongside the AG-UI server from the [basic server example](index.md#basic-server-example). Both credentials come from the Intelligence dashboard - the API key under **API Keys**, the Code on the Channel you created there:
+Run the channel process alongside the AG-UI server from the [basic server example](overview.md#basic-server-example). Both credentials come from the Intelligence dashboard - the API key under **API Keys**, the Code on the Channel you created there:
 
 ```bash
 uvicorn run_ag_ui:app --reload --port 8000   # terminal 1 - AG2 server
@@ -14190,7 +14473,7 @@ Discord, Teams, Telegram, and WhatsApp connect the same way - a managed connecti
 
 ## Next steps
 
-1. Build the AG-UI endpoint from the [basic server example](index.md#basic-server-example) if you have not already.
+1. Build the AG-UI endpoint from the [basic server example](overview.md#basic-server-example) if you have not already.
 2. Create the Channel in CopilotKit Intelligence and connect Slack there, then export the API key and the Channel's Code.
 3. Start the channel process, invite the app to a Slack channel, and mention it.
 4. For a web UI on the same endpoint, follow the [CopilotKit UI quickstart](copilotkit-quickstart.md).
@@ -14203,7 +14486,7 @@ Source: https://docs.ag2.ai/docs/user-guide/ag-ui/backend-deepdive/
 
 This page expands on the backend of the AG-UI integration: how to secure your endpoint, how tool calls are represented in the protocol, and how to pass per-request context into your tools.
 
-If you haven't set up an AG-UI endpoint yet, start with the [AG-UI overview](index.md){.internal-link}.
+If you haven't set up an AG-UI endpoint yet, start with the [AG-UI overview](overview.md){.internal-link}.
 
 ## Authentication
 
@@ -14320,6 +14603,8 @@ In this setup:
 - The **agent** can call those tools during the run.
 - The **frontend** executes/handles the tool and renders the UI.
 
+A frontend tool never replaces a backend tool with the same name: the backend tool is kept and the frontend one is dropped with a warning. Give frontend tools names of their own.
+
 For a production-ready React/Next.js client that supports frontend tools, backend tools, streaming, and shared state, see the [CopilotKit UI quickstart](copilotkit-quickstart.md){.internal-link} and CopilotKit's docs on:
 
 - [Backend tools](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools)
@@ -14328,7 +14613,7 @@ For a production-ready React/Next.js client that supports frontend tools, backen
 
 ## See also
 
-- [AG-UI overview](index.md){.internal-link}
+- [AG-UI overview](overview.md){.internal-link}
 - [CopilotKit quickstart](copilotkit-quickstart.md){.internal-link}
 
 ---
@@ -14879,7 +15164,7 @@ remote = Agent(
 reply = await remote.ask("What time is it on my machine? Use get_local_time.")
 ```
 
-The same agent can mix client-side and server-side tools - server tools execute remotely, client tools execute locally, and the LLM picks freely between them within one turn.
+The same agent can mix client-side and server-side tools - server tools execute remotely, client tools execute locally, and the LLM picks freely between them within one turn. A client tool never replaces a server tool with the same name: the server keeps its own tool and drops the client one with a warning.
 
 !!! warning
     If the remote `AgentCard` does not advertise the `urn:ag2:client-tools:v1` extension, passing `tools=...` raises `A2AClientToolsNotSupportedError`. Only AG2-backed servers support client-side tool forwarding today.
