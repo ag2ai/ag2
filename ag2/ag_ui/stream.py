@@ -560,7 +560,7 @@ def map_agui_content_to_input(content: ContentPart, *, provider: str | None = No
         )
     elif isinstance(source, UrlSource):
         inp = events.UrlInput(source.value, kind=kind)
-    else:
+    elif isinstance(source, FileSource):
         # A handle is opaque and only the provider that minted it can resolve
         # it. An untagged one is taken to be the run's own, since the client
         # need not say; one tagged for another provider is useless here, and
@@ -574,6 +574,8 @@ def map_agui_content_to_input(content: ContentPart, *, provider: str | None = No
             )
             return None
         inp = events.FileIdInput(source.value)
+    else:
+        assert_never(source)
 
     if content.metadata:
         inp.metadata = content.metadata
@@ -679,7 +681,12 @@ def map_tool_result_to_ag_ui(result: ToolResult, serializer: SerializerProto) ->
     parts = [_content_part(part, serializer) for part in result.parts]
     if not parts:
         return ""
-    if len(parts) == 1 and isinstance(parts[0], TextPart) and parts[0].metadata is None:
+    if (
+        len(parts) == 1
+        and isinstance(parts[0], TextPart)
+        and isinstance(parts[0].text, str)
+        and parts[0].metadata is None
+    ):
         return parts[0].text
     return parts
 

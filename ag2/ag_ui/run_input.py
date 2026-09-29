@@ -12,18 +12,24 @@ warning, and the run is served.
 
 import json
 import logging
-from typing import Literal, TypeAlias, get_args
+from typing import get_args
 
-from ag_ui.core import ResumeStatus, Role, RunAgentInput
+from ag_ui.core import (
+    AudioPart,
+    DataSource,
+    DocumentPart,
+    FileSource,
+    ImagePart,
+    ResumeStatus,
+    Role,
+    RunAgentInput,
+    TextPart,
+    UrlSource,
+    VideoPart,
+)
 from pydantic import BaseModel, JsonValue
 
 logger = logging.getLogger("ag2.ag_ui")
-
-_PartType: TypeAlias = Literal["text", "image", "audio", "video", "document"]
-"""The `type` of each `ContentPart` member."""
-
-_SourceType: TypeAlias = Literal["data", "url", "file"]
-"""The `type` of each `PartSource` member."""
 
 _PART_ROLES: tuple[Role, ...] = ("user", "tool")
 """The messages whose content may be a list of parts."""
@@ -95,12 +101,22 @@ def _known_parts(parts: list[JsonValue], path: str) -> list[JsonValue]:
     kept: list[JsonValue] = []
     for index, part in enumerate(parts):
         kind = _tag(part, "type")
-        if kind is not None and kind not in get_args(_PartType):
+        if kind is not None and kind not in (
+            TextPart.model_fields["type"].default,
+            ImagePart.model_fields["type"].default,
+            AudioPart.model_fields["type"].default,
+            VideoPart.model_fields["type"].default,
+            DocumentPart.model_fields["type"].default,
+        ):
             _warn(f"{path}/{index}", f"a content part of type {kind!r}")
             continue
         # A part left without its source would be malformed, so the part goes whole.
         source_kind = _tag(part.get("source") if isinstance(part, dict) else None, "type")
-        if source_kind is not None and source_kind not in get_args(_SourceType):
+        if source_kind is not None and source_kind not in (
+            DataSource.model_fields["type"].default,
+            UrlSource.model_fields["type"].default,
+            FileSource.model_fields["type"].default,
+        ):
             _warn(f"{path}/{index}", f"a {kind} part whose source is of type {source_kind!r}")
             continue
         kept.append(part)

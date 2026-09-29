@@ -24,11 +24,13 @@ def _model_calls(usage_events: Iterable[BaseEvent]) -> list[BaseEvent]:
     # A delegation's rollup is replaced by the calls it sums. Each provider
     # counts its own way, so the correction below has to see each call under
     # its own provider: a rollup spanning two models carries neither label.
-    return [
-        call
-        for event in usage_events
-        for call in (event.parts if isinstance(event, UsageEvent) and event.parts else [event])
-    ]
+    calls: list[BaseEvent] = []
+    for event in usage_events:
+        if isinstance(event, UsageEvent) and event.parts:
+            calls.extend(event.parts)
+        else:
+            calls.append(event)
+    return calls
 
 
 def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsage] | None:
