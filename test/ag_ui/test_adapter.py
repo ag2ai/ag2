@@ -229,6 +229,34 @@ class TestFrontendTools:
 
         only(events, "RUN_FINISHED")
 
+    async def test_frontend_tool_does_not_replace_a_backend_tool_of_the_same_name(self) -> None:
+        runs: list[str] = []
+
+        def get_weather(location: str) -> str:
+            runs.append(location)
+            return "sunny"
+
+        agent = Agent(
+            "test_agent",
+            tools=[get_weather],
+            config=TestConfig(
+                ToolCallEvent(name="get_weather", arguments='{"location":"Paris"}'),
+                "Sunny in Paris.",
+            ),
+        )
+
+        stream = AGUIStream(agent)
+        incoming = run_input(
+            UserMessage(id="msg_1", content="What's the weather in Paris?"),
+            tools=[weather_tool()],
+        )
+
+        events = await dispatch_run(stream, incoming)
+
+        assert runs == ["Paris"]
+        assert every(events, "TOOL_CALL_CHUNK") == []
+        only(events, "RUN_FINISHED")
+
     async def test_frontend_tool_with_result(self) -> None:
         agent = Agent(
             "test_agent",

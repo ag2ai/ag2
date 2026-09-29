@@ -14,6 +14,12 @@ from ag2.tools.sandbox import LocalEnvironment, SandboxFactory
 from ag2.tools.sandbox.adapter import ShellAdapter
 from ag2.tools.tool import Tool
 
+_DESCRIPTION = "Execute a shell command in the working directory: {workdir}"
+_RESTRICTED_DESCRIPTION = (
+    "Execute a command in the working directory: {workdir}. It runs without a shell, "
+    "so pipes, redirects, chaining, globs and variables are not available."
+)
+
 
 class SandboxShellTool(Tool):
     """Exposes a single ``run_shell_command(command)`` function that runs
@@ -51,8 +57,10 @@ class SandboxShellTool(Tool):
                      (``LocalEnvironment`` / ``DockerEnvironment`` /
                      ``DaytonaEnvironment``). ``None`` defaults to a
                      local subprocess (``LocalEnvironment()``).
-        allowed: Whitelist of command prefixes. When ``readonly`` is set and
-                 ``allowed`` is ``None``, a read-only command set is used.
+        allowed: Whitelist of command prefixes, matched word by word. Setting it
+                 (or ``readonly``) switches on restricted mode: the command is split
+                 into argv once and run without a shell, so pipes, redirects,
+                 globs, variables and brace expansion are not available.
         blocked: Blacklist of command prefixes. Best-effort only: it matches
                  just the head command's prefix, so chaining (``;`` / ``|`` /
                  ``&&`` / ``$(...)``) bypasses it (``echo x; rm -rf ~`` is not
@@ -60,8 +68,12 @@ class SandboxShellTool(Tool):
                  boundary — use ``allowed`` / ``readonly`` or an isolated
                  container backend for that.
         ignore: Glob patterns of paths that may not appear in a command.
-        readonly: Restrict to read-only commands (cat/ls/grep/…).
-        name / description / middleware: Tool wiring.
+        readonly: Restrict to commands that cannot write files or run other
+                  programs (cat/ls/grep/…), in restricted mode. Ignored when
+                  ``allowed`` is given.
+        description: Tool description; ``{workdir}`` is filled in. ``None`` picks
+                     one that tells the model whether it has a full shell.
+        name / middleware: Tool wiring.
     """
 
     def __init__(
@@ -73,7 +85,7 @@ class SandboxShellTool(Tool):
         ignore: list[str] | None = None,
         readonly: bool = False,
         name: str = "run_shell_command",
-        description: str = "Execute a shell command in the working directory: {workdir}",
+        description: str | None = None,
         middleware: Iterable["ToolMiddleware"] = (),
     ) -> None:
         backend: SandboxFactory = environment if environment is not None else LocalEnvironment()
@@ -97,7 +109,7 @@ class SandboxShellTool(Tool):
         self._tool: FunctionTool = tool(
             run_shell_command,
             name=name,
-            description=description.format(workdir=adapter.workdir),
+            description=_description(description, adapter.restricted).format(workdir=adapter.workdir),
             middleware=middleware,
         )
         self.name = name
@@ -118,3 +130,9 @@ class SandboxShellTool(Tool):
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
         self._tool.register(stack, context, middleware=middleware)
+
+
+def _description(description: str | None, restricted: bool) -> str:
+    if description is not None:
+        return description
+    return _RESTRICTED_DESCRIPTION if restricted else _DESCRIPTION

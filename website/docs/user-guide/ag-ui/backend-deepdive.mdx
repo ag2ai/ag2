@@ -123,6 +123,8 @@ In this setup:
 - The **agent** can call those tools during the run.
 - The **frontend** executes/handles the tool and renders the UI.
 
+A frontend tool never replaces a backend tool with the same name: the backend tool is kept and the frontend one is dropped with a warning. Give frontend tools names of their own.
+
 For a production-ready React/Next.js client that supports frontend tools, backend tools, streaming, and shared state, see the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart){.internal-link} and CopilotKit’s docs on:
 
 - [Backend tools](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools){.external-link target="_blank"}

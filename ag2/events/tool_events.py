@@ -5,6 +5,7 @@
 import json
 import traceback
 from collections.abc import Iterable
+from copy import copy
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Any
@@ -72,6 +73,13 @@ class ToolCallEvent(ToolEvent):
     # back verbatim (Anthropic's ``caller`` / ``toolset_name``). Same role as
     # ``BinaryInput.vendor_metadata``.
     vendor_metadata: dict[str, Any] = Field(default_factory=dict)
+    source: str | None = Field(default=None, compare=False)
+    """The tool implementation handling this call, e.g. ``function:app.ops:deploy:deploy``.
+
+    Set by the tool on its own copy of the call (:meth:`handled_by`) before its
+    middleware runs, so a value the model or a peer put here never reaches them.
+    ``None`` on the call the model emitted.
+    """
 
     _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False, compare=False)
 
@@ -84,6 +92,12 @@ class ToolCallEvent(ToolEvent):
     @serialized_arguments.setter
     def serialized_arguments(self, value: dict[str, Any]) -> None:
         self._serialized_arguments = value
+
+    def handled_by(self, source: str) -> "ToolCallEvent":
+        """A copy of this call whose :attr:`source` is ``source``."""
+        call = copy(self)
+        call.source = source
+        return call
 
     def __repr__(self) -> str:
         text = f"id={self.id}, name='{self.name}'"

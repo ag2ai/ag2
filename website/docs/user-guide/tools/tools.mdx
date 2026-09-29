@@ -126,6 +126,9 @@ def math_op(a: int, b: int) -> int:
 !!! note
     Explicitly setting the name and description overrides the automatically generated values.
 
+!!! note
+    An agent exposes one tool per name in a turn. If tools declared in code share a name (the agent's `tools`, toolkits, plugins, or tools passed to `ask()`), the later one replaces the earlier one and a warning names both. For example, `Agent(tools=[toolkit, my_deploy])` uses `my_deploy` instead of the toolkit's `deploy`. Tools a remote peer provides never replace tools declared in code: neither tools an MCP server reports (see [MCP servers](/docs/user-guide/tools/mcp_servers)) nor tools a client sends over AG-UI or A2A.
+
 ### Deep Schema Customization with Pydantic
 
 Under the hood, arguments are serialized and validated using [Pydantic](https://docs.pydantic.dev/latest/){.external-link target="_blank"} schemas. This means you can use standard `pydantic.Field` annotations to deeply customize individual schema parameters, providing the LLM with strict guidelines on what values are acceptable.
