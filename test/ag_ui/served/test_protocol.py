@@ -6,7 +6,6 @@
 
 import asyncio
 
-import httpx
 import pytest
 from ag_ui.core import PROTOCOL_VERSION
 from dirty_equals import IsPartialDict
@@ -21,22 +20,6 @@ from test.ag_ui.harness import every, only, outcome_of, sole_interrupt, types_of
 from test.ag_ui.serving import QUESTION, answer, app_for, ask_once, asking_agent, post_run, run_body
 
 pytestmark = pytest.mark.asyncio
-
-
-async def test_the_capabilities_say_it_takes_client_tools_and_sends_readable_reasoning() -> None:
-    agent, _ = asking_agent()
-    transport = httpx.ASGITransport(app=app_for(AGUIStream(agent)))
-    async with httpx.AsyncClient(transport=transport, base_url="http://ag-ui.test") as client:
-        response = await client.get("/")
-
-    capabilities = response.json()
-    assert capabilities == IsPartialDict({
-        "tools": {"supported": True, "clientProvided": True},
-        "reasoning": {"encrypted": False},
-    })
-    # Omitted, which the protocol reads as undeclared rather than unsupported.
-    assert "multiAgent" not in capabilities
-    assert "multimodal" not in capabilities
 
 
 async def test_a_refused_version_leaves_a_held_question_answerable() -> None:

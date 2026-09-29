@@ -22,12 +22,8 @@ from typing import Any
 
 from ag_ui.core import (
     PROTOCOL_VERSION,
-    AgentCapabilities,
     BaseEvent,
-    HumanInTheLoopCapabilities,
-    IdentityCapabilities,
     Interrupt,
-    ReasoningCapabilities,
     ReasoningEndEvent,
     ReasoningMessageEndEvent,
     ReasoningMessageStartEvent,
@@ -46,11 +42,11 @@ from ag_ui.core import (
     SubagentStartedEvent,
     TextMessageEndEvent,
     TextMessageStartEvent,
+    TokenUsage,
     ToolCallChunkEvent,
     ToolCallEndEvent,
     ToolCallResultEvent,
     ToolCallStartEvent,
-    ToolsCapabilities,
 )
 from ag_ui.encoder import EventEncoder
 from anyio import BrokenResourceError, ClosedResourceError, create_memory_object_stream
@@ -58,8 +54,11 @@ from anyio.streams.memory import MemoryObjectSendStream
 
 from ag2.annotations import Context
 from ag2.events import BaseEvent as AG2Event
-from ag2.events import HumanInputRequest, HumanMessage, ToolApprovalRequest
+from ag2.events import HumanInputRequest, HumanMessage, ToolApprovalRequest, UsageEvent
 from ag2.exceptions import AG2Error, HumanInputTimeoutError
+
+from .run_input import strip_unrecognised
+from .usage import map_usage_events_to_ag_ui
 
 logger = logging.getLogger(__name__)
 
@@ -184,11 +183,16 @@ class TurnOutput:
     tool calls, subagent invocations — read off the events as they are sent, so
     a run can be closed in order however it ends, and of the tool calls the
     current run left unanswered.
+
+    And the meter of what the turn spent: each run reports what was spent since
+    the run before it reported, so a turn carried by several runs is counted once.
     """
 
     __slots__ = (
         "thread_id",
         "run_id",
+        "usage",
+        "_metered",
         "_send",
         "_paused",
         "_kept",
@@ -202,6 +206,10 @@ class TurnOutput:
     def __init__(self, *, thread_id: str, run_id: str, send: MemoryObjectSendStream[BaseEvent]) -> None:
         self.thread_id = thread_id
         self.run_id = run_id
+        self.usage: list[UsageEvent] = []
+        """Everything the turn has spent, as it is spent. The transport running it appends here."""
+        self._metered = 0
+        """How much of `usage` a run has already reported."""
         self._send = send
         self._paused = False
         self._kept: list[BaseEvent] = []
@@ -229,6 +237,16 @@ class TurnOutput:
         # follow its re-announcement, and the invocation is still open.
         self._kept[:0] = self._take_reannouncements()
 
+    @property
+    def paused(self) -> bool:
+        """Whether the turn is waiting on a question, its run already ending or ended."""
+        return self._paused
+
+    def take_usage(self) -> list[TokenUsage] | None:
+        """What the turn spent since a run last reported, for the run reporting now."""
+        spent, self._metered = self.usage[self._metered :], len(self.usage)
+        return map_usage_events_to_ag_ui(spent)
+
     def is_open_subagent(self, subagent_run_id: str | None) -> bool:
         """Whether `subagent_run_id` names an invocation open on the wire."""
         return subagent_run_id is not None and ("subagent", subagent_run_id) in self._open
@@ -244,13 +262,22 @@ class TurnOutput:
 
     async def pause(self, interrupt: RunFinishedEvent) -> None:
         """End the current exchange on `interrupt`, keeping what follows for the next."""
-        while self._kept:
-            await self._deliver(self._kept.pop(0))
+        # Paused before anything is awaited: each send below can wait for the
+        # exchange to read it, and whatever the turn sends meanwhile — a sibling
+        # delegation finishing, or a new one starting — belongs to the run that
+        # resumes it, not between the closes below and the RUN_FINISHED.
+        self._paused = True
+        owed, self._kept = self._kept, []
         # No run finishes with an invocation open, so each is closed as
         # suspended — naming the interrupts it raised itself — and announced
-        # again when the turn resumes. It stays open in the ledger meanwhile.
+        # again when the turn resumes. It stays open in the ledger meanwhile,
+        # so an end sent while paused is kept for after its re-announcement.
+        suspended = [e for e in self._open.values() if isinstance(e, SubagentStartedEvent)]
+        self._reannounce.extend(suspended)
+        for event in owed:
+            await self._deliver(event)
         interrupts = interrupt.outcome.interrupts if isinstance(interrupt.outcome, RunFinishedInterruptOutcome) else []
-        for started in [e for e in self._open.values() if isinstance(e, SubagentStartedEvent)]:
+        for started in suspended:
             raised = [i.id for i in interrupts if i.subagent_run_id == started.subagent_run_id]
             await self._deliver(
                 SubagentFinishedEvent(
@@ -259,12 +286,43 @@ class TurnOutput:
                     timestamp=timestamp_ms(),
                 )
             )
-            self._reannounce.append(started)
-        # Paused before the interrupt is sent, not after: the send can wait for
-        # the exchange to read it, and an event sent meanwhile would land behind
-        # the RUN_FINISHED it no longer belongs to.
-        self._paused = True
         await self._deliver(interrupt)
+
+    async def succeed(self) -> None:
+        """Finish the current run as a success, closing first whatever it left open."""
+        await self._close_open("the run ended before this invocation finished")
+        await self.send(
+            RunFinishedEvent(
+                thread_id=self.thread_id,
+                run_id=self.run_id,
+                timestamp=timestamp_ms(),
+                usage=self.take_usage(),
+                outcome=self.success_outcome(),
+            )
+        )
+
+    async def stop(self) -> None:
+        """Finish the current run as cancelled, because the server stopped it."""
+        await self._close_open("the run was cancelled before this invocation finished")
+        await self.send(
+            RunFinishedEvent(
+                thread_id=self.thread_id,
+                run_id=self.run_id,
+                timestamp=timestamp_ms(),
+                usage=self.take_usage(),
+                outcome=RunFinishedCancelledOutcome(),
+            )
+        )
+
+    async def fail(self, error: Exception) -> None:
+        """End the current run on `error`. Nothing needs closing: the client abandons it all."""
+        await self.send(RunErrorEvent(message=repr(error), timestamp=timestamp_ms(), usage=self.take_usage()))
+
+    async def _close_open(self, message: str) -> None:
+        # Every start refused as a repeat is moot once its invocation is closed here.
+        self._repeats = {}
+        for kind, entity_id in reversed(list(self._open)):
+            await self.send(_closing(kind, entity_id, message))
 
     async def send(self, event: BaseEvent) -> None:
         if not self._admit(event):
@@ -283,7 +341,10 @@ class TurnOutput:
         open, innermost first. Call once the turn has stopped sending.
         """
         owed = [*self._take_reannouncements(), *self._kept]
-        owed.extend(_closing(*key) for key in reversed(self._open))
+        owed.extend(
+            _closing(kind, entity_id, "the run was cancelled before this invocation finished")
+            for kind, entity_id in reversed(self._open)
+        )
         self._kept, self._open, self._repeats = [], {}, {}
         return owed
 
@@ -356,16 +417,15 @@ class TurnOutput:
         await self._send.aclose()
 
 
-def _closing(kind: str, entity_id: str) -> BaseEvent:
-    """The event that ends an open entity, for a run stopped before it did."""
+def _closing(kind: str, entity_id: str, message: str) -> BaseEvent:
+    """The event that ends an open entity, for a run ending before it did.
+
+    `message` is what an invocation closed this way is told.
+    """
     now = timestamp_ms()
     match kind:
         case "subagent":
-            return SubagentErrorEvent(
-                subagent_run_id=entity_id,
-                message="the run was cancelled before this invocation finished",
-                timestamp=now,
-            )
+            return SubagentErrorEvent(subagent_run_id=entity_id, message=message, timestamp=now)
         case "message":
             return TextMessageEndEvent(message_id=entity_id, timestamp=now)
         case "reasoning":
@@ -413,14 +473,20 @@ class ServedTurn:
         self._task = task
         return task
 
-    async def result(self) -> None:
-        """Wait for the turn to end, re-raising whatever it raised.
+    async def settle(self) -> None:
+        """Wait for the turn to end.
 
-        Never call this on a *held* turn: nothing will end it but the answer
-        that has not arrived.
+        Whatever it raised is not raised here: the turn reported that on the
+        wire itself. Cancelled while waiting, it cancels the turn too, since
+        nothing else is carrying it. Never call this on a *held* turn: nothing
+        will end it but the answer that has not arrived.
         """
-        assert self._task is not None, "result() before start()"
-        await self._task
+        assert self._task is not None, "settle() before start()"
+        try:
+            await asyncio.wait({self._task})
+        except asyncio.CancelledError:
+            self.release()
+            raise
 
     def suspend(self, interrupt: Interrupt, answer: "asyncio.Future[str]") -> None:
         """Park the turn on `interrupt` until `answer` is resolved.
@@ -516,6 +582,9 @@ class ServedTurns:
                     thread_id=turn.output.thread_id,
                     run_id=turn.output.run_id,
                     timestamp=timestamp_ms(),
+                    # Spent up to the pause: the run resuming the turn reports
+                    # only what it spends itself.
+                    usage=turn.output.take_usage(),
                     outcome=RunFinishedInterruptOutcome(interrupts=[interrupt]),
                 )
             )
@@ -856,6 +925,9 @@ async def serve_exchange(
 
     Wrap in `contextlib.aclosing`: this holds a channel open across yields.
     """
+    # Here as well as where a body is read: a caller building the input itself
+    # has the SDK's models, which keep what they do not recognise.
+    strip_unrecognised(incoming)
     if (unsupported := refuse_protocol_version(incoming)) is not None:
         # Before RUN_STARTED: no run starts that this server cannot speak to.
         yield encoder.encode(unsupported)  # noqa: ASYNC119
@@ -894,20 +966,29 @@ async def serve_exchange(
             yield chunk  # noqa: ASYNC119
         return
 
-    held = False
+    ended = held = False
     async with receive:
         async for event in receive:
             yield encoder.encode(event)  # noqa: ASYNC119
             if isinstance(event, (RunFinishedEvent, RunErrorEvent)):
                 # The exchange ends on the event that terminates the run, not on
                 # the turn's own end: a turn can outlive this response.
-                held = is_interrupt(event)
+                ended, held = True, is_interrupt(event)
                 break
+
+    if not ended:
+        # The turn let go of the run without ending it — stopped while it was
+        # pausing, which leaves nothing that can be closed in order. A run that
+        # started on the wire is always ended on it.
+        logger.error("an AG-UI turn for thread %s stopped without ending run %s", incoming.thread_id, incoming.run_id)
+        yield encoder.encode(  # noqa: ASYNC119
+            RunErrorEvent(message="the run was stopped before it could finish", timestamp=timestamp_ms())
+        )
 
     if not held:
         # A held turn is waiting for an answer this exchange will not bring, so
         # awaiting it would never return.
-        await turn.result()
+        await turn.settle()
 
 
 async def _cancel(turn: ServedTurn, incoming: RunAgentInput, encoder: EventEncoder) -> AsyncIterator[str]:
@@ -933,9 +1014,37 @@ async def _cancel(turn: ServedTurn, incoming: RunAgentInput, encoder: EventEncod
             thread_id=incoming.thread_id,
             run_id=incoming.run_id,
             timestamp=timestamp_ms(),
+            usage=turn.output.take_usage(),
             outcome=RunFinishedCancelledOutcome(),
         )
     )
+
+
+async def drive_run(output: TurnOutput, work: Coroutine[Any, Any, None]) -> None:
+    """Carry out a turn's `work`, then end its run on the wire however the work ended.
+
+    A failure is logged and reported as `RUN_ERROR`, not raised: the run has
+    already answered, and raising would cut its body short behind the event. A
+    stop the server makes — shutdown, eviction — closes what the run opened and
+    finishes it as cancelled, unless the turn was pausing, whose run is ending
+    on its interrupt already.
+    """
+    try:
+        await work
+    except asyncio.CancelledError:
+        if not output.paused:
+            await output.stop()
+        raise
+    except Exception as error:
+        logger.exception("AG-UI run %s on thread %s failed", output.run_id, output.thread_id)
+        await output.fail(error)
+    else:
+        await output.succeed()
+    finally:
+        # The exchange reading this turn ends on its terminating event, but
+        # the channel is the turn's: closed here, once there is nothing more
+        # to say, on every path including cancellation while held.
+        await output.aclose()
 
 
 def refuse_protocol_version(incoming: RunAgentInput) -> RunErrorEvent | None:
@@ -1000,18 +1109,6 @@ def is_interrupt(event: BaseEvent) -> bool:
     return isinstance(event, RunFinishedEvent) and isinstance(event.outcome, RunFinishedInterruptOutcome)
 
 
-def interrupt_capabilities(agent_name: str) -> AgentCapabilities:
-    """What this agent tells a client it can do, at connect time."""
-    # Multi-agent and multimodal are left undeclared rather than declared
-    # unsupported: the protocol reads an omitted field as saying nothing.
-    return AgentCapabilities(
-        identity=IdentityCapabilities(name=agent_name, type="ag2"),
-        tools=ToolsCapabilities(supported=True, client_provided=True),
-        reasoning=ReasoningCapabilities(encrypted=False),
-        human_in_the_loop=HumanInTheLoopCapabilities(supported=True, interrupts=True),
-    )
-
-
 __all__ = (
     "AG2_METADATA_KEY",
     "DEFAULT_RETENTION",
@@ -1028,7 +1125,7 @@ __all__ = (
     "ServedTurn",
     "ServedTurns",
     "TurnOutput",
-    "interrupt_capabilities",
+    "drive_run",
     "serve_exchange",
     "timestamp_ms",
     "utc_now",

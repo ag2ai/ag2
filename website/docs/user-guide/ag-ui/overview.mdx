@@ -34,7 +34,8 @@ AG2 speaks AG-UI 1.0. Verified AG-UI features are supported in AG2:
 * [x] Streaming text events (`TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END`, `TEXT_MESSAGE_CHUNK`)
 * [x] [Backend tool lifecycle events](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools){.external-link target="_blank"} (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END`, `TOOL_CALL_RESULT`)
 * [x] [Frontend-tool dispatch](https://docs.copilotkit.ai/ag2/generative-ui/frontend-tools){.external-link target="_blank"} (`TOOL_CALL_CHUNK` for client tools in `RunAgentInput.tools`)
-* [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state){.external-link target="_blank"} (`STATE_SNAPSHOT`) from context and agent state
+* [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state){.external-link target="_blank"} (`STATE_SNAPSHOT`) of the client's state and the server's variables — see [Shared state](#shared-state)
+* [x] Application context (`RunAgentInput.context`) reaches the model — see [Application context](#application-context)
 * [x] [Human input checkpoints](https://docs.copilotkit.ai/ag2/human-in-the-loop){.external-link target="_blank"} (`input_required` surfaced as user-visible message events)
 * [x] Run interrupts: an agent pauses on a question and a later run on the same thread answers it (`RUN_FINISHED` with an `interrupt` outcome, resumed through `resume`) — see [Asking the human a question](#asking-the-human-a-question)
 * [x] Tool-call approval: a gated tool puts the call itself to the client before it runs, over the same interrupt lifecycle — see [Gating a tool call instead of asking a question](#gating-a-tool-call-instead-of-asking-a-question)
@@ -42,6 +43,9 @@ AG2 speaks AG-UI 1.0. Verified AG-UI features are supported in AG2:
 * [x] Delegations as subagent invocations (`SUBAGENT_STARTED`, `SUBAGENT_FINISHED`, `SUBAGENT_ERROR`) — see [Delegations](#delegations)
 * [x] Pending client tool calls named on the run's success outcome (`pendingToolCallIds`)
 * [x] Protocol version declared on every `RUN_STARTED` — see [Protocol version](#protocol-version)
+* [x] Capabilities declared before any run starts (`GET`) — see [Capabilities](#capabilities)
+* [x] Input from a newer client served, with what the server does not recognise stripped — see [Input from a newer client](#input-from-a-newer-client)
+* [x] Every run ends with `RUN_FINISHED` or `RUN_ERROR` — see [How a run ends](#how-a-run-ends)
 
 ## Installation
 
@@ -58,12 +62,12 @@ backend sits beside a frontend on `@ag-ui/*` 1.0.
 
 Use the manual-dispatch pattern when you want full control over auth, logging, and middleware:
 
-```python title="run_ag_ui.py" linenums="1" hl_lines="14 17-25"
-from fastapi import FastAPI, Header
-from fastapi.responses import StreamingResponse
+```python title="run_ag_ui.py" linenums="1" hl_lines="14 17-26"
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ag2 import Agent
-from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.ag_ui import AGUIStream, read_run_input
 from ag2.config import OpenAIConfig
 
 agent = Agent(
@@ -76,15 +80,25 @@ stream = AGUIStream(agent)
 app = FastAPI()
 
 @app.post("/chat")
-async def run_agent(
-    message: RunAgentInput,
-    accept: str | None = Header(None),
-) -> StreamingResponse:
+async def run_agent(request: Request) -> Response:
+    try:
+        message = read_run_input(await request.body())
+    except ValueError:
+        return JSONResponse({"error": "invalid AG-UI RunAgentInput body"}, status_code=400)
     return StreamingResponse(
-        stream.dispatch(message, accept=accept),
-        media_type=accept or "text/event-stream",
+        stream.dispatch(message, accept=request.headers.get("accept")),
+        media_type="text/event-stream",
     )
 ```
+
+The body is read with `read_run_input` rather than declared as a `RunAgentInput`
+parameter. A newer client may send a message role or content part this server
+does not know, and FastAPI would refuse the whole request with `422`;
+`read_run_input` strips it and serves the run (see
+[Input from a newer client](#input-from-a-newer-client)). A body it cannot read
+is refused with `400` before any stream starts. The stream is Server-Sent Events
+whatever `Accept` says, so the content type is `text/event-stream`, never the
+client's `Accept` copied back.
 
 Run it:
 
@@ -134,6 +148,21 @@ data: {"type":"TEXT_MESSAGE_CHUNK","delta":"Hello! How can I help?",...}
 data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",...}
 ```
 
+## How a run ends
+
+Every run ends with exactly one `RUN_FINISHED` or `RUN_ERROR`, and the response
+body then closes normally.
+
+- **A failure inside the run** — the model call, a tool, input that cannot be
+  mapped — ends it with `RUN_ERROR`, and is logged with its traceback on the
+  `ag2.ag_ui` logger. `dispatch` does not re-raise it: the response has already
+  started `200 OK`, and the failure has been reported on it. Watch the logger,
+  not your endpoint's exception handler.
+- **A run the server stops** — `await stream.aclose()`, or `A2UIServer`'s
+  shutdown — first closes whatever it had open (a text message, a tool call, a
+  subagent invocation), then finishes with `RUN_FINISHED` and a `cancelled`
+  outcome.
+
 ## Token usage
 
 Both run-terminating events carry the run's token usage, broken down per
@@ -179,9 +208,15 @@ one for the same run: for Anthropic, `prompt_tokens` excludes the cache counts
 that `inputTokens` includes.
 
 One entry is emitted per distinct provider/model pair, in order of first
-appearance in the run. A delegated sub-agent that used a single configuration is
-attributed to it; one that spanned several arrives with `provider` and `model`
-unset rather than mislabelled. A run that spent nothing omits `usage` entirely.
+appearance in the run. A delegated sub-agent's calls are attributed to the
+pairs that made them, however many it used. A run that spent nothing omits
+`usage` entirely.
+
+Usage is reported per run, not per turn. A turn that pauses on a
+[question](#asking-the-human-a-question) is carried by several runs, and each
+reports only its own spend: the run that ends on the interrupt reports what was
+spent up to the pause, and the run that resumes the turn — or cancels it —
+reports what was spent after.
 
 The A2UI AG-UI transport (`A2UIServer(..., transport=AgUiTransport())`) reports
 the same field on the same two events, so what a client can show does not depend
@@ -200,10 +235,107 @@ Every `RUN_STARTED` declares the AG-UI version AG2 speaks, as
 | A newer minor, such as `1.9`, or a value it cannot read | Serves it, and logs a warning on the `ag2.ag_ui` logger. |
 | Another major, such as `2.0` | Refuses it. The stream is a lone `RUN_ERROR` with code `UNSUPPORTED_PROTOCOL_VERSION` (exported from `ag2.ag_ui`), and no run starts. |
 
-A `GET` on the endpoint returns the agent's capabilities before any run starts.
-They declare that the agent accepts client-provided tools
-(`"tools": {"supported": true, "clientProvided": true}`) and that its reasoning
-is not encrypted (`"reasoning": {"encrypted": false}`).
+## Capabilities
+
+A `GET` on the endpoint returns what the agent can do, in the protocol's
+`AgentCapabilities` shape, before any run starts. A `GET` on
+`{path}/capabilities` returns the same document: that is where other AG-UI
+integrations serve it. `A2UIServer` serves both paths. `build_asgi()` returns one
+endpoint, so add it on both:
+
+```python linenums="1" hl_lines="3-4"
+endpoint = stream.build_asgi()
+
+app.routes.append(Route("/chat", endpoint))
+app.routes.append(Route("/chat/capabilities", endpoint))
+```
+
+| Group | Declared | When |
+|---|---|---|
+| `identity` | `name` (the agent's), `type: "ag2"` | Always |
+| `transport` | `streaming: true` | Always |
+| `tools` | `supported: true`, `clientProvided: true` | `clientProvided` on `AGUIStream` only: the A2UI transport ignores `RunAgentInput.tools` |
+| `state` | `snapshots: true` | `AGUIStream` only |
+| `multiAgent` | `supported: true`, `delegation: true` | The agent is built with `tasks=TaskConfig(...)` |
+| `reasoning` | `encrypted: false` | Always |
+| `multimodal` | `input`: `image`, `audio`, `video`, `pdf` | Always |
+| `humanInTheLoop` | `supported: true`, `interrupts` | `interrupts` is `false` when the agent has its own `hitl_hook` |
+
+The document is read off the agent, because it is served before any run: a
+`hitl_hook` or `tools` passed to one `dispatch` call are not known to it. A group
+AG2 cannot vouch for is omitted, which the protocol reads as "says nothing", not
+as "unsupported". A delegation tool from `agent.as_tool(...)` does not record the
+agent behind it, so an agent that only delegates through one declares no
+`multiAgent`.
+
+`multimodal.input` names the parts AG2 turns into model input. It does not know
+what the configured model accepts: a part the model cannot take, such as audio
+for a model without audio input, still fails the run with `RUN_ERROR`.
+
+## Input from a newer client
+
+AG-UI 1.0 lets a newer client send what an older server does not describe, and
+requires the server to serve the run anyway. `read_run_input`, `build_asgi()`
+and `A2UIServer` strip it before validation:
+
+- a property the protocol does not define, on the input or on anything in it;
+- a message with a role this server does not know;
+- a content part of a type this server does not know.
+
+Each removal logs one warning on the `ag2.ag_ui` logger, naming its JSON Pointer,
+such as `/messages/0/content/1`. Open objects — `state`, `forwardedProps`,
+`metadata`, a tool's `parameters` — are values rather than protocol members and
+are passed on whole. A known field carrying a value the schema rejects is
+malformed, not unrecognised, and the body is refused with `400`. So is a content
+part whose `source` is of a kind this server does not know. `dispatch` strips
+unknown properties from a `RunAgentInput` you validated yourself, but a role or
+part type your own validation rejected never reaches it.
+
+## Shared state
+
+The run's `state` seeds the turn's variables: tool code reads the client's keys
+from `context.variables`. They are merged with the agent's own variables and the
+`variables=` passed to `dispatch`, and the framework's reserved keys are removed
+from what the client sent.
+
+A `STATE_SNAPSHOT` replaces the client's state wholesale, so each one carries all
+of it: the client's keys and the server's variables together. One is sent as the
+run starts, when that differs from what the client sent, and one as it ends,
+when the variables changed since the last one sent. A value with no JSON form,
+such as a client or a connection object, is left out; `None` is kept.
+
+!!! warning "Server variables reach the client"
+
+    Anything in the agent's variables or in `dispatch(variables=...)` that
+    serializes to JSON is sent to the browser in `STATE_SNAPSHOT`. Do not put
+    secrets there: pass them to `dispatch(dependencies=...)`, which never leaves
+    the server.
+
+A `state` that is not a JSON object, such as a list or a string, is served but
+seeds no variables, and no snapshot is sent for it.
+
+The A2UI transport seeds variables from `state` the same way, and sends no
+snapshots.
+
+## Application context
+
+`RunAgentInput.context` carries entries the application shares with the agent,
+such as the page the user is on. They reach the model as one block, added to the
+run's system prompt after the agent's own prompt:
+
+```text
+## Context from the application
+
+- Current page: /billing/invoices
+- Plan: pro
+```
+
+Each line is an entry's `description`, then its `value` exactly as the client
+sent it. The entries are prose for the model, not variables: tool code does not
+see them. To render them differently, pass `dispatch` a `context_prompt=`
+function that takes the entries and returns the block, or `None` for no block.
+`context_prompt=None` leaves the entries out. The A2UI transport adds the same
+block.
 
 ## Tool results
 
@@ -230,7 +362,8 @@ with a list of parts, such as a screenshot next to its caption, and the model se
 each part. A part with a provider file handle (a `file` source) reaches the model
 when it names no provider, or names the provider the run is configured with.
 A handle issued by another provider is skipped, and a warning names both
-providers, never the handle.
+providers, never the handle. A tool message left with no parts after that still
+answers its call: the model sees the empty string.
 
 ## Delegations
 
@@ -245,7 +378,11 @@ SUBAGENT_FINISHED {"subagentRunId":"4f1c...","result":"<what it returned>"}
 
 A failed delegation ends with `SUBAGENT_ERROR` carrying the error message, and
 the run carries on: the parent's model is told the delegation failed and may
-recover. The invocation events carry no usage. The run's own `usage` already
+recover. A delegation that is cancelled or runs out of time ends with
+`SUBAGENT_ERROR` too, with the message `cancelled` (`cancelled: <reason>` when
+there is one) or `expired`: the protocol has no outcome for a stopped
+invocation. Every invocation is closed before its run ends. One still open
+when the run finishes is closed with `SUBAGENT_ERROR`. The invocation events carry no usage. The run's own `usage` already
 includes what the delegation spent. Delegations are no longer reported as
 `STEP_STARTED` / `STEP_FINISHED`.
 
@@ -464,7 +601,8 @@ it is the constraint that matters most when you deploy:
   `AgUiTransport.aclose()` on ASGI shutdown). `AGUIStream` is not an app, so
   nothing can hang a shutdown hook on it for you — call `await stream.aclose()`
   from your own, or use it as an async context manager, so held turns are
-  cancelled rather than left running into the void.
+  cancelled rather than left running into the void. A run still streaming when
+  that happens ends with a `cancelled` outcome.
 
 ### Why a resume does not replay the run
 

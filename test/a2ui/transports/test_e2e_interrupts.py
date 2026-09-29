@@ -191,7 +191,8 @@ class TestParityWithTheOtherTransport:
         assert response.status_code == 200
         assert response.json() == IsPartialDict({
             "humanInTheLoop": IsPartialDict({"supported": True, "interrupts": True}),
-            "tools": {"supported": True, "clientProvided": True},
+            # No `clientProvided`: this transport ignores the run's `tools`.
+            "tools": {"supported": True},
             "reasoning": {"encrypted": False},
         })
 

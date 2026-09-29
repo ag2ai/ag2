@@ -142,3 +142,42 @@ async def test_a_task_id_still_open_stays_open_until_its_last_delegation_ends() 
     assert started == IsPartialDict({"subagentRunId": "same", "description": "first"})
     assert every(events, "SUBAGENT_FINISHED") == [IsPartialDict({"subagentRunId": "same", "result": "slow result"})]
     assert outcome_of(events) == {"type": "success"}
+
+
+class TestAnInvocationThatEndsWithoutFinishing:
+    """Stopped, expired or never ended: each invocation still closes before its run does."""
+
+    @staticmethod
+    def _owning(end: str) -> Agent:
+        parent = Agent("parent", config=TestConfig(ToolCallEvent(name="research"), "done"))
+
+        @parent.tool
+        async def research(context: Context) -> str:
+            """Research, and stop the task the given way."""
+            task = parent.task("research", context=context)
+            await task.__aenter__()
+            if end == "cancel":
+                await task.cancel("no longer needed")
+            elif end == "expire":
+                await task.expire()
+            return "stopped"
+
+        return parent
+
+    @pytest.mark.parametrize(("end", "message"), [("cancel", "cancelled: no longer needed"), ("expire", "expired")])
+    async def test_a_stopped_task_is_a_subagent_error(self, end: str, message: str) -> None:
+        events = await _run(self._owning(end))
+
+        [started] = every(events, "SUBAGENT_STARTED")
+        assert every(events, "SUBAGENT_ERROR") == [
+            IsPartialDict({"subagentRunId": started["subagentRunId"], "message": message})
+        ]
+        assert outcome_of(events) == {"type": "success"}
+
+    async def test_an_invocation_still_open_when_the_run_ends_is_closed_first(self) -> None:
+        events = await _run(self._owning("never"))
+
+        [started] = every(events, "SUBAGENT_STARTED")
+        assert types_of(events)[-2:] == ["SUBAGENT_ERROR", "RUN_FINISHED"]
+        assert every(events, "SUBAGENT_ERROR") == [IsPartialDict({"subagentRunId": started["subagentRunId"]})]
+        assert outcome_of(events) == {"type": "success"}

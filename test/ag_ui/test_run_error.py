@@ -4,12 +4,12 @@
 
 """The AG-UI failure path: what a client sees when a run dies partway through.
 
-``dispatch`` re-raises after emitting ``RUN_ERROR``, and anyio surfaces that out of
-its task group wrapped in an exception group — so a test must expect the group and
-unwrap it. The event still arrives first: the memory object stream carrying events to
-the encoder is unbuffered, so the send blocks until the consumer takes it and only
-then does the re-raise run.
+``dispatch`` ends on ``RUN_ERROR`` and then returns: the run has already answered, so
+the failure is reported on the wire and logged on the server, never raised into the
+response body.
 """
+
+import logging
 
 import pytest
 from ag_ui.core import EventType, RunErrorEvent, RunFinishedEvent, RunStartedEvent, UserMessage
@@ -17,7 +17,7 @@ from ag_ui.core import EventType, RunErrorEvent, RunFinishedEvent, RunStartedEve
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream
 from ag2.testing import TestConfig
-from test.ag_ui.harness import dispatch_run, exploding_agent, frames_of_failing_run, leaf_exceptions, run_input
+from test.ag_ui.harness import dispatch_run, exploding_agent, frames_of_failing_run, run_input
 
 pytestmark = pytest.mark.asyncio
 
@@ -59,19 +59,19 @@ class TestRunError:
         assert "thread_id" not in run_error
         assert "run_id" not in run_error
 
-    async def test_original_exception_reaches_the_caller(self) -> None:
-        """The run's real cause must not be swallowed or replaced by the error event."""
+    async def test_original_exception_reaches_the_server_log(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The run's real cause is kept, traceback and all, where the operator looks."""
         incoming = run_input(UserMessage(id="msg_1", content="go"))
 
-        with pytest.raises(Exception) as exc_info:
+        with caplog.at_level(logging.ERROR, logger="ag2.ag_ui"):
             await dispatch_run(AGUIStream(exploding_agent()), incoming)
 
-        leaves = leaf_exceptions(exc_info.value)
-        assert [type(e) for e in leaves] == [RuntimeError]
-        assert str(leaves[0]) == "downstream is down"
+        [record] = caplog.records
+        assert record.exc_info is not None
+        assert (type(record.exc_info[1]), str(record.exc_info[1])) == (RuntimeError, "downstream is down")
 
     async def test_events_emitted_before_the_failure_are_observable(self) -> None:
-        """Everything sent before the re-raise is still available to assert on."""
+        """Everything sent before the failure still reaches the client."""
         incoming = run_input(UserMessage(id="msg_1", content="go"))
 
         frames = await frames_of_failing_run(exploding_agent(), incoming)

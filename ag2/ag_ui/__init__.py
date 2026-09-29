@@ -20,6 +20,7 @@ from .interrupts import (
     UNSUPPORTED_PROTOCOL_VERSION,
     Retention,
 )
+from .run_input import read_run_input
 from .stream import AGUIStream
 
 __all__ = (
@@ -35,4 +36,5 @@ __all__ = (
     "AGUIStream",
     "Retention",
     "RunAgentInput",
+    "read_run_input",
 )

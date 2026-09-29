@@ -4,7 +4,9 @@
 
 from typing import TYPE_CHECKING
 
-from ag_ui.core import RunAgentInput
+from ag_ui.encoder import EventEncoder
+
+from .run_input import read_run_input
 
 try:
     from starlette.endpoints import HTTPEndpoint
@@ -29,12 +31,18 @@ def build_asgi(stream: "AGUIStream") -> type[HTTPEndpoint]:
         async def post(
             endpoint,  # noqa: N805
             request: Request,
-        ) -> StreamingResponse:
+        ) -> StreamingResponse | JSONResponse:
+            try:
+                incoming = read_run_input(await request.body())
+            except ValueError:
+                # Refused before any stream: a run that never started has no
+                # event stream for a RUN_ERROR to travel on.
+                return JSONResponse({"error": "invalid AG-UI RunAgentInput body"}, status_code=400)
+            accept = request.headers.get("accept")
             return StreamingResponse(
-                stream.dispatch(
-                    RunAgentInput.model_validate_json(await request.body()),
-                    accept=request.headers.get("accept"),
-                )
+                stream.dispatch(incoming, accept=accept),
+                # The encoder's own type, never the client's `Accept` copied back.
+                media_type=EventEncoder(accept=accept).get_content_type(),  # type: ignore[arg-type]
             )
 
     return AGUIEndpoint

@@ -21,7 +21,9 @@ from ag2.events import (
     BaseEvent,
     HumanInputRequest,
     ModelRequest,
+    TaskCancelled,
     TaskCompleted,
+    TaskExpired,
     TaskFailed,
     TaskStarted,
     TextInput,
@@ -63,7 +65,7 @@ Interrupter = Callable[[HumanInputRequest, Context], Awaitable[BaseEvent | None]
 
 # A delegation starting or ending. ``Union``, not ``|``: on event classes ``|``
 # builds a stream Condition, which is no type for a subscriber's annotation.
-TaskEvent = Union[TaskStarted, TaskCompleted, TaskFailed]  # noqa: UP007
+TaskEvent = Union[TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired]  # noqa: UP007
 
 # What a transport hands in to hear of each delegation starting and ending.
 TaskObserver = Callable[[TaskEvent], Awaitable[None]]
@@ -109,8 +111,8 @@ async def stream_turn(
             transport that can put it to whoever is connected, and only when the
             agent has no hook of its own.
         on_task: Called with each ``TaskStarted`` / ``TaskCompleted`` /
-            ``TaskFailed`` on the turn's stream, for a transport that reports
-            delegations.
+            ``TaskFailed`` / ``TaskCancelled`` / ``TaskExpired`` on the turn's
+            stream, for a transport that reports delegations.
 
     Yields:
         Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
@@ -170,7 +172,7 @@ async def stream_turn(
     if usage_records is not None:
         stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
     if on_task is not None:
-        stream.where((TaskStarted, TaskCompleted, TaskFailed)).subscribe(on_task)
+        stream.where((TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired)).subscribe(on_task)
 
     # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
     # prompt section, fold in negotiated client capabilities so the LLM only

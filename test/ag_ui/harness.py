@@ -18,8 +18,8 @@ from collections.abc import Iterable
 from typing import Any
 from uuid import uuid4
 
-import pytest
 from ag_ui.core import PROTOCOL_VERSION, Message, RunAgentInput, Tool
+from dirty_equals import IsPartialDict
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream
@@ -33,7 +33,6 @@ __all__ = (
     "every",
     "exploding_agent",
     "frames_of_failing_run",
-    "leaf_exceptions",
     "only",
     "outcome_of",
     "run_input",
@@ -60,7 +59,7 @@ def run_input(
         run_id=str(uuid4()),
         protocol_version=protocol_version,
         messages=list(messages),
-        state=dict(state) if state else {},
+        state={} if state is None else state,
         context=[],
         tools=tools or [],
         forwarded_props=None,
@@ -77,24 +76,9 @@ def decode(lines: Iterable[str]) -> list[dict[str, Any]]:
     return frames
 
 
-async def dispatch_run(
-    stream: AGUIStream,
-    incoming: RunAgentInput,
-    *,
-    into: list[dict[str, Any]] | None = None,
-    **kwargs: Any,
-) -> list[dict[str, Any]]:
-    """Drive one exchange over the generator seam and decode its frames.
-
-    Pass `into` when the run is expected to fail: a failing run emits
-    `RUN_ERROR` and then re-raises, so the return value never arrives. Frames
-    are appended to `into` as they are decoded, leaving them available to
-    assert on after the exception has been caught.
-    """
-    frames = into if into is not None else []
-    async for chunk in stream.dispatch(incoming, **kwargs):
-        frames.extend(decode([chunk]))
-    return frames
+async def dispatch_run(stream: AGUIStream, incoming: RunAgentInput, **kwargs: Any) -> list[dict[str, Any]]:
+    """Drive one exchange over the generator seam and decode its frames."""
+    return [frame async for chunk in stream.dispatch(incoming, **kwargs) for frame in decode([chunk])]
 
 
 def types_of(frames: list[dict[str, Any]]) -> list[str]:
@@ -163,32 +147,12 @@ def exploding_agent(usage: Usage | None = None) -> Agent:
 
 
 async def frames_of_failing_run(agent: Agent, incoming: RunAgentInput) -> list[dict[str, Any]]:
-    """The frames a run expected to fail emits before `dispatch` re-raises.
+    """The frames of a run expected to fail on `exploding_agent`'s own error.
 
-    The re-raise is swallowed here because these are the callers asserting on the
-    frames; the ones asserting on the exception itself use `pytest.raises` directly
-    so they can reach it through `leaf_exceptions`.
-
-    Swallowing is narrowed to the failure these callers stage — `exploding_agent`'s
-    `RuntimeError`. A run that died for some unrelated reason would otherwise still
-    hand back frames, and every caller would still pass while asserting on a run
-    that failed for a reason nobody wrote down.
+    Narrowed to that failure: a run that died for some unrelated reason would
+    otherwise still end on `RUN_ERROR`, and every caller would pass while
+    asserting on a run that failed for a reason nobody wrote down.
     """
-    frames: list[dict[str, Any]] = []
-    with pytest.raises(Exception) as exc_info:
-        await dispatch_run(AGUIStream(agent), incoming, into=frames)
-    assert [type(e) for e in leaf_exceptions(exc_info.value)] == [RuntimeError]
+    frames = await dispatch_run(AGUIStream(agent), incoming)
+    assert frames[-1] == IsPartialDict({"type": "RUN_ERROR", "message": "RuntimeError('downstream is down')"})
     return frames
-
-
-def leaf_exceptions(exc: BaseException) -> list[BaseException]:
-    """Flatten anyio's exception groups down to the errors that actually happened.
-
-    `dispatch` runs the agent in a task group, so a failure surfaces wrapped in an
-    exception group. The nesting is unwrapped by duck-typing `exceptions` rather
-    than naming the group class, which is a builtin only from Python 3.11.
-    """
-    nested = getattr(exc, "exceptions", None)
-    if nested is None:
-        return [exc]
-    return [leaf for inner in nested for leaf in leaf_exceptions(inner)]

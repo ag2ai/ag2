@@ -81,7 +81,21 @@ async def _emit_rollup(parent_context: Context, agent_name: str, incurred: list[
         return
 
     provider, model = _sole_pair(incurred)
-    await parent_context.send(UsageEvent(usage, kind="subtask", label=agent_name, provider=provider, model=model))
+    await parent_context.send(
+        UsageEvent(
+            usage,
+            kind="subtask",
+            label=agent_name,
+            provider=provider,
+            model=model,
+            parts=_model_calls(incurred),
+        )
+    )
+
+
+def _model_calls(incurred: Iterable[UsageEvent]) -> list[UsageEvent]:
+    """The labelled calls behind this spend, a nested delegation's taken from its own rollup."""
+    return [call for event in incurred if event.usage for call in (event.parts or [event])]
 
 
 def _rollup_usage(incurred: Iterable[UsageEvent]) -> Usage:

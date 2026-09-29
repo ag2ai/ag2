@@ -8,6 +8,7 @@ The invocation that asks is closed as suspended before its run ends, and the
 resuming run announces it again, under the same id, before anything else about it.
 """
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -17,6 +18,7 @@ from ag2 import Agent, Context
 from ag2.ag_ui import AGUIStream
 from ag2.events import ToolCallEvent
 from ag2.testing import TestConfig
+from ag2.tools.subagents.run_task import run_task
 from test.ag_ui.harness import every, only, outcome_of, sole_interrupt, types_of
 from test.ag_ui.serving import QUESTION, abandon, answer, app_for, post_run, run_body
 
@@ -109,3 +111,82 @@ async def test_a_question_the_parent_asks_itself_names_no_invocation() -> None:
     events = await post_run(app_for(AGUIStream(parent)), run_body(thread_id="t1", run_id="r1"))
 
     assert "subagentRunId" not in sole_interrupt(events)
+
+
+def _closes_per_invocation(events: list[dict[str, Any]]) -> dict[str, int]:
+    closes: dict[str, int] = {}
+    for event in events:
+        if event["type"] in ("SUBAGENT_FINISHED", "SUBAGENT_ERROR"):
+            closes[event["subagentRunId"]] = closes.get(event["subagentRunId"], 0) + 1
+    return closes
+
+
+async def _turns_of_the_loop(count: int) -> None:
+    for _ in range(count):
+        await asyncio.sleep(0)
+
+
+def _racing_the_pause(delay: int) -> Agent:
+    """Three parallel delegations: one asks, and `delay` loop turns later one finishes and one starts.
+
+    Swept over `delay` rather than timed: the pause spans a few turns of the
+    loop, and which ones depends on how the exchange is read.
+    """
+    asked = asyncio.Event()
+
+    asker = Agent("asker", config=TestConfig(ToolCallEvent(name="ask_human", arguments="{}"), "asked"))
+
+    @asker.tool
+    async def ask_human(context: Context) -> str:
+        """Ask the human."""
+        asked.set()
+        return await context.input(QUESTION)
+
+    sibling = Agent("sibling", config=TestConfig(ToolCallEvent(name="wait_for_the_question"), "sibling done"))
+
+    @sibling.tool
+    async def wait_for_the_question() -> str:
+        """Finish once the question has been asked."""
+        await asked.wait()
+        await _turns_of_the_loop(delay)
+        return "waited"
+
+    late = Agent("late", config=TestConfig("late done"))
+    parent = Agent(
+        "parent",
+        config=TestConfig(
+            [
+                ToolCallEvent(name="task_asker", arguments='{"objective": "ask"}'),
+                ToolCallEvent(name="task_sibling", arguments='{"objective": "wait"}'),
+                ToolCallEvent(name="start_late"),
+            ],
+            "summarised",
+        ),
+        tools=[asker.as_tool(description="Ask."), sibling.as_tool(description="Wait.")],
+    )
+
+    @parent.tool
+    async def start_late(context: Context) -> str:
+        """Delegate once the question has been asked."""
+        await asked.wait()
+        await _turns_of_the_loop(delay)
+        return (await run_task(late, "late", parent_context=context)).result or ""
+
+    return parent
+
+
+@pytest.mark.parametrize("delay", range(12))
+async def test_delegations_ending_and_starting_during_a_pause_belong_to_the_resuming_run(delay: int) -> None:
+    app = app_for(AGUIStream(_racing_the_pause(delay)))
+
+    first = await post_run(app, run_body(thread_id="t1", run_id="r1"))
+    second = await post_run(
+        app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(sole_interrupt(first), "blue"))
+    )
+
+    assert _open_invocations(first) == set()
+    assert set(_closes_per_invocation(first).values()) == {1}
+    assert _open_invocations(second) == set()
+    assert set(_closes_per_invocation(second).values()) == {1}
+    assert {e["subagentRunId"] for e in every(second, "SUBAGENT_STARTED")} == set(_closes_per_invocation(second))
+    assert outcome_of(second) == {"type": "success"}

@@ -4,12 +4,11 @@
 
 import logging
 from base64 import b64decode, b64encode
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
-from math import isfinite
 from typing import Any
 from uuid import uuid4
 
@@ -27,8 +26,6 @@ from ag_ui.core import (
     ReasoningMessageStartEvent,
     ReasoningStartEvent,
     RunAgentInput,
-    RunErrorEvent,
-    RunFinishedEvent,
     StateSnapshotEvent,
     SubagentErrorEvent,
     SubagentFinishedEvent,
@@ -38,7 +35,6 @@ from ag_ui.core import (
     TextMessageEndEvent,
     TextMessageStartEvent,
     TextPart,
-    TokenUsage,
     ToolCallArgsEvent,
     ToolCallChunkEvent,
     ToolCallEndEvent,
@@ -47,21 +43,25 @@ from ag_ui.core import (
     UrlSource,
     VideoPart,
 )
+from ag_ui.core import (
+    Context as ContextEntry,
+)
 from ag_ui.encoder import EventEncoder
 from fast_depends.library.serializer import SerializerProto
-from pydantic_core import to_jsonable_python
+from pydantic_core import PydanticSerializationError, to_jsonable_python
 
-from ag2 import Agent, MemoryStream, ToolResult, events
+from ag2 import Agent, Context, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig
 from ag2.context import strip_reserved_variables
-from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, Usage
+from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, UsageEvent
 from ag2.hitl import HumanHook
-from ag2.middleware.base import MiddlewareFactory
+from ag2.middleware.base import AgentTurn, BaseMiddleware, Middleware, MiddlewareFactory
 from ag2.observers import Observer
 from ag2.tools.final import ClientTool
 from ag2.tools.tool import Tool
-from ag2.usage import UsageRecord, UsageReport
+from ag2.usage import collect_usage_events
 
+from .capabilities import served_capabilities
 from .events import AGUIEvent
 from .interrupts import (
     DEFAULT_RETENTION,
@@ -70,7 +70,7 @@ from .interrupts import (
     ServedTurn,
     ServedTurns,
     TurnOutput,
-    interrupt_capabilities,
+    drive_run,
     serve_exchange,
     timestamp_ms,
     utc_now,
@@ -93,6 +93,18 @@ _PART_OF_KIND: dict[BinaryType, type[ImagePart | AudioPart | VideoPart | Documen
     BinaryType.DOCUMENT: DocumentPart,
     BinaryType.BINARY: DocumentPart,
 }
+
+
+def client_context_prompt(entries: Sequence[ContextEntry]) -> str | None:
+    """A run input's `context`, as the prompt block the model reads it in.
+
+    A heading, then one `description: value` line per entry, each value exactly
+    as the client sent it. `None` when there are no entries.
+    """
+    if not entries:
+        return None
+    lines = "\n".join(f"- {entry.description}: {entry.value}" for entry in entries)
+    return f"## Context from the application\n\n{lines}"
 
 
 class AGUIStream:
@@ -130,8 +142,11 @@ class AGUIStream:
         await self.__turns.release_all()
 
     def capabilities(self) -> AgentCapabilities:
-        """What this agent tells a client it can do, before any run starts."""
-        return interrupt_capabilities(self.__agent.name)
+        """What this agent tells a client it can do, before any run starts.
+
+        Read off the agent: a hook passed to one `dispatch` is not known here.
+        """
+        return served_capabilities(self.__agent, client_tools=True, state_snapshots=True)
 
     def build_asgi(self) -> "type[HTTPEndpoint]":
         """Build an ASGI endpoint serving this stream: POST runs, GET capabilities."""
@@ -153,12 +168,15 @@ class AGUIStream:
         observers: Iterable[Observer] = (),
         hitl_hook: HumanHook | None = None,
         accept: str | None = None,
+        context_prompt: Callable[[Sequence[ContextEntry]], str | None] | None = client_context_prompt,
     ) -> AsyncIterator[str]:
         """Run `incoming` and yield encoded AG-UI events.
 
-        `accept` is the request's `Accept` header, selecting SSE or NDJSON.
+        `accept` is the request's `Accept` header. The stream is SSE whatever it says.
         `hitl_hook` is where a question the agent asks goes — omit it and the
         question is put to the client as an interrupt instead.
+        `context_prompt` renders the input's `context` entries into one prompt
+        block for the model; `None` leaves them out.
 
         Wrap the returned iterator in `contextlib.aclosing`: it holds a
         channel open across yields.
@@ -173,6 +191,7 @@ class AGUIStream:
             middleware=list(middleware),
             observers=list(observers),
             hitl_hook=hitl_hook,
+            context_prompt=context_prompt,
         )
 
         # EventEncoder typed incompletely, so we need to ignore the type error
@@ -208,6 +227,7 @@ class AGStreamInput:
     middleware: list[MiddlewareFactory] = field(default_factory=list)
     observers: list[Observer] = field(default_factory=list)
     hitl_hook: HumanHook | None = None
+    context_prompt: Callable[[Sequence[ContextEntry]], str | None] | None = client_context_prompt
 
 
 async def run_stream(
@@ -222,6 +242,15 @@ async def run_stream(
     supplied no hook of its own; `None` leaves the agent's own human-input
     arrangements untouched.
     """
+    await drive_run(output, _serve_turn(command, agent, output, interrupter))
+
+
+async def _serve_turn(
+    command: AGStreamInput,
+    agent: Agent,
+    output: TurnOutput,
+    interrupter: ClientInterrupter | None,
+) -> None:
     client_tools = []
     client_tools_names = set()
     for t in command.incoming.tools or ():
@@ -230,6 +259,8 @@ async def run_stream(
         client_tools.append(tool)
         client_tools_names.add(tool.name)
 
+    # Inside the run rather than ahead of it: input that cannot be mapped fails
+    # a run that has already started, and that failure has to reach the client.
     extracted_prompt, history_messages, current_turn = map_agui_messages_to_events(
         command, provider=provider_of(command.config or agent.config)
     )
@@ -238,11 +269,19 @@ async def run_stream(
     predates_parts = command.incoming.protocol_version is None
     if extracted_prompt:
         command.prompt.extend(extracted_prompt)
+    # Prose for the model, not state: the application shares it to be read.
+    # Added to the prompt the turn resolves rather than passed as one, which
+    # would stand in for the agent's own.
+    if command.context_prompt is not None and (shared := command.context_prompt(command.incoming.context or [])):
+        command.middleware.append(Middleware(_SharedContext, block=shared))
     if client_tools:
         command.tools.extend(client_tools)
 
     stream = MemoryStream()
     await stream.history.replace(history_messages)
+    # Metered as it is spent, not read back from history: a turn carried by
+    # several runs reports each run's own share.
+    stream.where(UsageEvent).subscribe(collect_usage_events(output.usage))
 
     streaming_msg_id: str | None = None
     reasoning_msg_id: str | None = None
@@ -392,84 +431,60 @@ async def run_stream(
         elif isinstance(event, AGUIEvent):
             await output.send(event.event)
 
-    try:
-        initial_vars = agent._agent_variables | command.variables
-        if vars := _encode_context(initial_vars):
-            await output.send(
-                StateSnapshotEvent(
-                    snapshot=vars,
-                    timestamp=_get_timestamp(),
-                )
+    # A snapshot replaces the client's state wholesale, so each one sent is the
+    # whole of it: the client's keys and the server's variables together, and
+    # only when that differs from what the client already holds. A state that
+    # is not an object has no keys to merge variables into; it seeds nothing
+    # and is left as the client sent it.
+    incoming_state = {} if command.incoming.state is None else command.incoming.state
+    shares_state = isinstance(incoming_state, dict)
+    # The client authors ``incoming.state``; it seeds this turn's variables
+    # but must not reach the framework's own control-plane keys.
+    client_state = strip_reserved_variables(incoming_state, source="inbound AG-UI state") if shares_state else {}
+    initial_state = client_state | agent._agent_variables | command.variables
+
+    held_by_client = _encode_context(incoming_state) if shares_state else None
+    if shares_state and (opening := _encode_context(initial_state)) != held_by_client:
+        await output.send(StateSnapshotEvent(snapshot=opening, timestamp=_get_timestamp()))
+        held_by_client = opening
+
+    with ExitStack() as stack:
+        if interrupter is not None:
+            # Registered *before* `ask` so it runs ahead of the "nobody
+            # could be asked" default the agent registers for itself.
+            stack.enter_context(
+                stream.where(events.HumanInputRequest).sub_scope(interrupter, interrupt=True),
             )
 
-        # The client authors ``incoming.state``; it seeds this turn's variables
-        # but must not reach the framework's own control-plane keys.
-        client_state = strip_reserved_variables(command.incoming.state or {}, source="inbound AG-UI state")
-        initial_state = client_state | initial_vars
-
-        with ExitStack() as stack:
-            if interrupter is not None:
-                # Registered *before* `ask` so it runs ahead of the "nobody
-                # could be asked" default the agent registers for itself.
-                stack.enter_context(
-                    stream.where(events.HumanInputRequest).sub_scope(interrupter, interrupt=True),
-                )
-
-            result = await agent.ask(
-                *current_turn,
-                prompt=command.prompt,
-                tools=command.tools,
-                variables=initial_state,
-                dependencies=command.dependencies,
-                config=command.config,
-                middleware=command.middleware,
-                observers=command.observers,
-                hitl_hook=command.hitl_hook,
-                stream=stream,
-            )
-
-        if (vars := _encode_context(result.context.variables)) != initial_state:
-            await output.send(
-                StateSnapshotEvent(
-                    snapshot=vars,
-                    timestamp=_get_timestamp(),
-                )
-            )
-
-    except Exception as e:
-        await output.send(
-            RunErrorEvent(
-                message=repr(e),
-                timestamp=_get_timestamp(),
-                usage=await _run_token_usage(stream),
-            )
-        )
-        raise e
-
-    else:
-        await output.send(
-            RunFinishedEvent(
-                thread_id=output.thread_id,
-                run_id=output.run_id,
-                timestamp=_get_timestamp(),
-                usage=await _run_token_usage(stream),
-                outcome=output.success_outcome(),
-            )
+        result = await agent.ask(
+            *current_turn,
+            prompt=command.prompt,
+            tools=command.tools,
+            variables=initial_state,
+            dependencies=command.dependencies,
+            config=command.config,
+            middleware=command.middleware,
+            observers=command.observers,
+            hitl_hook=command.hitl_hook,
+            stream=stream,
         )
 
-    finally:
-        # The exchange reading this turn ends on its terminating event, but
-        # the channel is the turn's: closed here, once there is nothing more
-        # to say, on every path including cancellation while held.
-        await output.aclose()
+    if shares_state and (closing := _encode_context(result.context.variables)) != held_by_client:
+        await output.send(StateSnapshotEvent(snapshot=closing, timestamp=_get_timestamp()))
 
 
 # The task lifecycle events a delegation reaches the client through.
-_TASK_LIFECYCLE = (events.TaskStarted, events.TaskCompleted, events.TaskFailed)
+_TASK_LIFECYCLE = (
+    events.TaskStarted,
+    events.TaskCompleted,
+    events.TaskFailed,
+    events.TaskCancelled,
+    events.TaskExpired,
+)
 
 
 def map_task_event_to_ag_ui(
-    event: events.TaskStarted | events.TaskCompleted | events.TaskFailed,
+    event: events.TaskStarted | events.TaskCompleted | events.TaskFailed | events.TaskCancelled | events.TaskExpired,
 ) -> SubagentStartedEvent | SubagentFinishedEvent | SubagentErrorEvent:
     """One delegation's lifecycle event as the subagent invocation event the client reads."""
     # Under the task's own id: two parallel delegations to one agent must be
@@ -488,104 +503,17 @@ def map_task_event_to_ag_ui(
             result=to_jsonable_python(event.result, fallback=str),
             timestamp=_get_timestamp(),
         )
-    # The run carries on: the delegating tool reports the failure to the
-    # parent's model, which may well recover from it.
-    return SubagentErrorEvent(
-        subagent_run_id=event.task_id,
-        message=str(event.error) or type(event.error).__name__,
-        timestamp=_get_timestamp(),
-    )
-
-
-async def _run_token_usage(stream: MemoryStream) -> list[TokenUsage] | None:
-    # Safe on the failure path: the stream awaits its subscribers on send, so
-    # persistence has seen every usage event emitted before the exception.
-    return map_usage_events_to_ag_ui(await stream.history.get_events())
-
-
-def map_usage_events_to_ag_ui(usage_events: Iterable[events.BaseEvent]) -> list[TokenUsage] | None:
-    """Attributed spend for a set of events, as AG-UI's per-(provider, model) list."""
-    # Both AG-UI transports call this, so the two cannot compose attribution and
-    # grouping differently. They differ only in where the events come from.
-    return map_usage_records_to_ag_ui(UsageReport.from_events(usage_events).records)
-
-
-def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsage] | None:
-    """Attributed spend, as AG-UI's per-(provider, model) list, in the protocol's accounting.
-
-    Counts a provider did not report are omitted, never zero-filled.
-    """
-    # Records, not the report's by_model / by_provider: those are independent
-    # maps, so the (provider, model) pair cannot be recovered from them, and each
-    # drops what the other side did not label — where a sub-agent's spend lives.
-    grouped: dict[tuple[str | None, str | None], list[Usage]] = {}
-    for record in records:
-        grouped.setdefault((record.provider, record.model), []).append(record.usage)
-
-    # Pairs are never folded together: absent counts add as zero, so merging a
-    # provider that reports reasoning tokens with one that does not would read as
-    # a complete measurement. Within a pair the calls are summed, because there an
-    # absent additive count does mean the provider had nothing to report.
-    entries = []
-    for (provider, model), usages in grouped.items():
-        summed = sum(usages, Usage())
-        input_tokens = _token_count(_input_total(provider, summed))
-        output_tokens = _token_count(_output_total(provider, summed))
-        entries.append(
-            TokenUsage(
-                provider=provider,
-                model=model,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                # Computed, never copied: a provider's own total need not count
-                # the way the two totals beside it now do.
-                total_tokens=None if input_tokens is None or output_tokens is None else input_tokens + output_tokens,
-                reasoning_tokens=_token_count(summed.thinking_tokens),
-                cached_input_tokens=_token_count(summed.cache_read_input_tokens),
-                cache_write_input_tokens=_token_count(summed.cache_creation_input_tokens),
-            )
-        )
-    return entries or None
-
-
-# The correction to AG-UI 1.0's accounting is made here, where usage leaves for
-# the wire, and nowhere else. `Usage` keeps each provider's numbers as the
-# provider reported them, because budgets and limiters read them that way;
-# "fixing" the provider normalizers instead would shift every one of those.
-# AG-UI's input and output are totals, and its cache and reasoning counts parts
-# of them, so where a provider reports those beside a smaller count, they are
-# added in here.
-
-# Providers whose prompt count leaves out the tokens read from and written to
-# the cache. Bedrock is not among them until a live call confirms that Converse
-# counts the way Anthropic does.
-_CACHE_OUTSIDE_PROMPT = frozenset({"anthropic"})
-
-# Providers whose completion count leaves out the reasoning tokens:
-# Gemini's `thoughts_token_count` sits beside `candidates_token_count`. xAI's
-# reasoning count is not known to do either, so it is left as reported.
-_REASONING_OUTSIDE_COMPLETION = frozenset({"google"})
-
-
-def _input_total(provider: str | None, usage: Usage) -> float | None:
-    if usage.prompt_tokens is None or provider not in _CACHE_OUTSIDE_PROMPT:
-        return usage.prompt_tokens
-    return usage.prompt_tokens + (usage.cache_read_input_tokens or 0) + (usage.cache_creation_input_tokens or 0)
-
-
-def _output_total(provider: str | None, usage: Usage) -> float | None:
-    if usage.completion_tokens is None or provider not in _REASONING_OUTSIDE_COMPLETION:
-        return usage.completion_tokens
-    return usage.completion_tokens + (usage.thinking_tokens or 0)
-
-
-def _token_count(value: float | None) -> int | None:
-    # The wire type admits only non-negative integers, and this runs on the
-    # failure path before the run's own exception is re-raised — so a value the
-    # wire would reject is omitted rather than left to raise over the real cause.
-    if value is None or not isfinite(value) or value < 0:
-        return None
-    return int(value)
+    # A stopped invocation did not succeed, and the protocol has no outcome
+    # for it on SUBAGENT_FINISHED: success and suspension are all it names.
+    if isinstance(event, events.TaskCancelled):
+        message = f"cancelled: {event.reason}" if event.reason else "cancelled"
+    elif isinstance(event, events.TaskExpired):
+        message = "expired"
+    else:
+        # The run carries on: the delegating tool reports the failure to the
+        # parent's model, which may well recover from it.
+        message = str(event.error) or type(event.error).__name__
+    return SubagentErrorEvent(subagent_run_id=event.task_id, message=message, timestamp=_get_timestamp())
 
 
 def provider_of(config: ModelConfig | None) -> str | None:
@@ -712,7 +640,11 @@ def map_agui_messages_to_events(
 
         elif m.role == "tool":
             # An error is what the model must hear, whatever came with it.
-            parts = [m.error] if m.error else map_agui_parts_to_inputs(m.content, provider=provider)
+            # Still answered when every part was skipped: the call is owed a
+            # result, and one of no parts is the empty string.
+            parts = (
+                [m.error] if m.error else (map_agui_parts_to_inputs(m.content, provider=provider) or [TextInput("")])
+            )
             messages.append(
                 events.ToolResultsEvent([
                     events.ToolResultEvent(
@@ -772,15 +704,33 @@ def _content_part(part: events.Input, serializer: SerializerProto) -> ContentPar
     raise TypeError(f"no AG-UI content part for {type(part).__name__}")
 
 
+class _SharedContext(BaseMiddleware):
+    """Adds the application's shared context to the prompt of the turn it runs in."""
+
+    def __init__(self, event: events.BaseEvent, context: Context, *, block: str) -> None:
+        super().__init__(event, context)
+        self._block = block
+
+    async def on_turn(self, call_next: AgentTurn, event: events.BaseEvent, context: Context) -> events.ModelResponse:
+        context.prompt.append(self._block)
+        return await call_next(event, context)
+
+
 def _get_timestamp() -> int:
     return timestamp_ms()
 
 
-def _encode_context(context: dict[str, Any] | None) -> dict[str, Any]:
-    """Drop unserializable values and the framework's reserved keys from the context."""
-    if not context:
-        return {}
+def _encode_context(context: dict[str, Any]) -> dict[str, Any]:
+    """The context as state: the framework's reserved keys and unserializable values left out.
 
-    context = strip_reserved_variables(context, source="an outgoing AG-UI state snapshot", warn=False)
-    context = to_jsonable_python(context, fallback=lambda _: None, exclude_none=True) or {}
-    return {k: v for k, v in context.items() if v is not None}
+    A `None` value is data, and is kept.
+    """
+    encoded = {}
+    for key, value in strip_reserved_variables(context, source="an outgoing AG-UI state snapshot", warn=False).items():
+        try:
+            encoded[key] = to_jsonable_python(value)
+        except PydanticSerializationError:
+            # Server-side values — a client, a connection — have no JSON form,
+            # and the client has no use for one.
+            continue
+    return encoded

@@ -25,7 +25,7 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.testing import TestConfig
 from ag2.tools import tool
 from test._helpers import lookup
-from test.ag_ui.harness import dispatch_run, exploding_agent, frames_of_failing_run, leaf_exceptions, run_input
+from test.ag_ui.harness import dispatch_run, exploding_agent, frames_of_failing_run, run_input
 
 pytestmark = pytest.mark.asyncio
 
@@ -46,7 +46,7 @@ async def _finished(agent: Agent) -> RunFinishedEvent:
 
 
 async def _run_error(agent: Agent) -> RunErrorEvent:
-    """The terminating event of a failing run, emitted before ``dispatch`` re-raises."""
+    """The terminating event of a failing run."""
     incoming = run_input(UserMessage(id="msg_1", content="go"))
     return RunErrorEvent.model_validate((await frames_of_failing_run(agent, incoming))[-1])
 
@@ -488,12 +488,11 @@ class TestCompletedRun:
             ),
         ]
 
-    async def test_a_mixed_pair_delegation_reports_unlabelled_rather_than_mislabelled(self) -> None:
-        """A sub-agent that spanned two configurations has no honest label.
+    async def test_a_mixed_pair_delegation_reports_each_call_under_its_own_pair(self) -> None:
+        """A sub-agent that spanned two configurations is reported per configuration.
 
-        Naming either one — or the parent's — would show an attribution that is not true
-        and that a client cannot detect. Absence says "real spend, unattributable", which
-        it can render. The tokens are still counted in full.
+        Its rollup carries no single honest label, so each call it sums is reported under
+        the pair that served it — each counted in its own provider's accounting.
         """
 
         worker = Agent(
@@ -537,7 +536,10 @@ class TestCompletedRun:
 
         assert (await _finished(parent)).usage == [
             TokenUsage(provider="openai", model="gpt-5", input_tokens=30, output_tokens=13, total_tokens=43),
-            TokenUsage(provider=None, model=None, input_tokens=200, output_tokens=60, total_tokens=260),
+            TokenUsage(
+                provider="anthropic", model="claude-haiku-4", input_tokens=100, output_tokens=20, total_tokens=120
+            ),
+            TokenUsage(provider="openai", model="gpt-5-mini", input_tokens=100, output_tokens=40, total_tokens=140),
         ]
 
 
@@ -623,6 +625,42 @@ class TestProtocolAccounting:
         assert (await reply.usage()).total == Usage(
             prompt_tokens=10, completion_tokens=2, total_tokens=12, cache_read_input_tokens=100
         )
+
+    async def test_a_delegation_across_two_models_is_corrected_call_by_call(self) -> None:
+        """Its rollup names neither model, so it is counted from the calls it sums."""
+        cached = Usage(prompt_tokens=10, completion_tokens=2, cache_read_input_tokens=100)
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="lookup", arguments="{}")]),
+                    usage=cached,
+                    model="claude-haiku-4",
+                    provider="anthropic",
+                ),
+                ModelResponse(ModelMessage("researched"), usage=cached, model="claude-sonnet-4", provider="anthropic"),
+            ),
+            tools=[lookup],
+        )
+        parent = Agent(
+            "test_agent",
+            config=TestConfig(ToolCallEvent(name="task_worker", arguments='{"objective": "go"}'), "summarised"),
+            tools=[worker.as_tool(description="Delegate research to the worker.")],
+        )
+
+        usage = (await _finished(parent)).usage
+
+        assert usage == [
+            TokenUsage(
+                provider="anthropic",
+                model=model,
+                input_tokens=110,
+                output_tokens=2,
+                total_tokens=112,
+                cached_input_tokens=100,
+            )
+            for model in ("claude-haiku-4", "claude-sonnet-4")
+        ]
 
 
 class TestInternalMaintenanceSpend:
@@ -732,12 +770,7 @@ class TestFailedRun:
         assert (await _run_error(exploding_agent())).usage is None
 
     async def test_usage_reporting_does_not_replace_the_run_s_own_failure(self) -> None:
-        """Covered for the bare failure path in ``test_run_error.py``; pinned again here
-        with usage on the event, since that is the mapping that could raise in its place."""
+        """Pinned with usage on the event, since that is the mapping that could fail in its place."""
         agent = exploding_agent(Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300))
-        incoming = run_input(UserMessage(id="msg_1", content="go"))
 
-        with pytest.raises(Exception) as exc_info:
-            await dispatch_run(AGUIStream(agent), incoming)
-
-        assert [type(e) for e in leaf_exceptions(exc_info.value)] == [RuntimeError]
+        assert "downstream is down" in (await _run_error(agent)).message
