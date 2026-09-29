@@ -59,8 +59,11 @@ subscription, so it never feeds its own speech back in.
 - The contract is passive: a provider that forgets to subscribe drops pushed input
   silently, and no type check catches it. Each provider needs a test that a pushed
   `ModelRequest` reaches its connection.
-- Timing rules (add to the conversation now, answer at the next response boundary, one
-  answer for several pushes) live in each provider, which is where the constraints are.
+- Timing rules (answer at the next response boundary without interrupting, one answer for
+  several pushes) live in each provider, which is where the constraints are. They also
+  decide when the input itself enters the conversation: OpenAI accepts a conversation item
+  during a response, so input goes in at once; Gemini Live cuts a response off on any
+  client content, so input is held until the boundary.
   Every request for a response — for pushed input or for tool results — goes through that
   one per-provider rule, which also accounts for responses the provider starts on its own
   (turn detection), so no request collides with an already active response.

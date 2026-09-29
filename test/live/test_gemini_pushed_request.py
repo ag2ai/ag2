@@ -10,6 +10,8 @@ import pytest
 
 pytest.importorskip("google.genai")
 
+from google.genai import types as gtypes
+
 from ag2.events import DataInput, ModelRequest, TextInput
 from test.live._gemini_helpers import live_agent, speech, turn_complete
 
@@ -32,37 +34,42 @@ class TestPushedModelRequest:
                 "send_client_content",
                 {
                     "turns": [{"role": "user", "parts": [{"text": "first"}, {"text": "second"}]}],
-                    "turn_complete": False,
+                    "turn_complete": True,
                 },
             ) in session.calls
 
-    async def test_push_to_idle_session_adds_turn_then_requests_response(self) -> None:
+    async def test_push_to_idle_session_is_sent_and_answered_at_once(self) -> None:
         agent, session = live_agent()
 
         async with agent.run() as context:
             await context.send(ModelRequest([TextInput("hello")]))
 
-            assert session.calls[-2:] == [
+            assert session.calls[-1:] == [
                 (
                     "send_client_content",
-                    {"turns": [{"role": "user", "parts": [{"text": "hello"}]}], "turn_complete": False},
+                    {"turns": [{"role": "user", "parts": [{"text": "hello"}]}], "turn_complete": True},
                 ),
-                ("send_client_content", {"turn_complete": True}),
             ]
 
-    async def test_push_during_response_is_added_now_and_answered_at_boundary(self) -> None:
+    async def test_push_during_response_sends_nothing_until_boundary(self) -> None:
         agent, session = live_agent()
 
         async with agent.run() as context:
             await session.emit(speech())
+            calls_before = list(session.calls)
             await context.send(ModelRequest([TextInput("hello")]))
 
-            assert len(session.added_turns()) == 1
-            assert session.response_requests() == 0
+            # Any client content would cut the response off.
+            assert session.calls == calls_before
 
             await session.emit(turn_complete())
 
-            assert session.response_requests() == 1
+            assert session.calls[-1:] == [
+                (
+                    "send_client_content",
+                    {"turns": [{"role": "user", "parts": [{"text": "hello"}]}], "turn_complete": True},
+                ),
+            ]
 
     async def test_pushes_during_one_response_share_one_request(self) -> None:
         agent, session = live_agent()
@@ -73,12 +80,12 @@ class TestPushedModelRequest:
             await context.send(ModelRequest([TextInput("second")]))
             await context.send(ModelRequest([TextInput("third")]))
 
-            assert len(session.added_turns()) == 3
             assert session.response_requests() == 0
 
             await session.emit(turn_complete())
 
             assert session.response_requests() == 1
+            assert len(session.added_turns()) == 3
 
     async def test_requested_response_counts_as_active_until_its_turn_completes(self) -> None:
         agent, session = live_agent()
@@ -93,6 +100,10 @@ class TestPushedModelRequest:
 
             assert session.response_requests() == 2
 
+    @pytest.mark.skipif(
+        not hasattr(gtypes, "InteractionStatus"),
+        reason="google-genai before 2.18 reports no interaction_status",
+    )
     async def test_deferred_request_waits_while_the_server_reports_more_work(self) -> None:
         agent, session = live_agent()
 

@@ -85,7 +85,7 @@ def _completes_interaction(message: gtypes.LiveServerMessage) -> bool:
     content = message.server_content
     if content is None or not content.turn_complete:
         return False
-    return content.interaction_status != gtypes.InteractionStatus.IN_PROGRESS
+    return getattr(content, "interaction_status", None) != "IN_PROGRESS"
 
 
 class FakeClient:
@@ -120,13 +120,19 @@ def speech(text: str = "Hello.") -> gtypes.LiveServerMessage:
 
 
 def turn_complete(*, more_coming: bool = False) -> gtypes.LiveServerMessage:
-    """The response boundary; `more_coming` marks a turn the server has already started after it."""
-    return gtypes.LiveServerMessage(
-        server_content=gtypes.LiveServerContent(
-            turn_complete=True,
-            interaction_status=(gtypes.InteractionStatus.IN_PROGRESS if more_coming else gtypes.InteractionStatus.IDLE),
-        ),
-    )
+    """The response boundary; `more_coming` marks a turn the server has already started after it.
+
+    Without `more_coming` the boundary carries no `interaction_status`, as with
+    google-genai releases that predate the field.
+    """
+    if more_coming:
+        return gtypes.LiveServerMessage(
+            server_content=gtypes.LiveServerContent(
+                turn_complete=True,
+                interaction_status=gtypes.InteractionStatus.IN_PROGRESS,
+            ),
+        )
+    return gtypes.LiveServerMessage(server_content=gtypes.LiveServerContent(turn_complete=True))
 
 
 def tool_call(call_id: str, name: str = "lookup", args: dict[str, Any] | None = None) -> gtypes.LiveServerMessage:

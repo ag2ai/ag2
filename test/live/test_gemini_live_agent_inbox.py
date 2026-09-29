@@ -29,7 +29,7 @@ class TestLiveAgentInbox:
             assert user_texts(session.added_turns()) == [["left over"]]
             assert session.response_requests() == 1
 
-    async def test_enqueue_during_response_is_delivered_and_answered_at_boundary(self) -> None:
+    async def test_enqueue_during_response_is_delivered_at_boundary(self) -> None:
         agent, session = live_agent()
 
         async with agent.run() as context:
@@ -39,9 +39,9 @@ class TestLiveAgentInbox:
                 context.enqueue("typed")
                 await announcements.wait(1)
 
-            assert user_texts(session.added_turns()) == [["typed"]]
-            assert session.response_requests() == 0
+            assert session.added_turns() == []
 
             await session.emit(turn_complete())
 
+            assert user_texts(session.added_turns()) == [["typed"]]
             assert session.response_requests() == 1
