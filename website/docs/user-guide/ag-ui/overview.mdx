@@ -49,10 +49,10 @@ AG2 speaks AG-UI 1.0. Verified AG-UI features are supported in AG2:
 
 ## Installation
 
-Install AG2 with AG-UI support, plus the extra for the model provider your agent uses — `openai` in the examples below:
+Install AG2 with AG-UI support, the extra for your model provider (`openai` below), and the HTTP server used in the examples:
 
 ```bash
-pip install "ag2[ag-ui,openai]"
+pip install "ag2[ag-ui,openai]" fastapi uvicorn
 ```
 
 `ag2[ag-ui]` installs `ag-ui-protocol` 1.x, the Python SDK for AG-UI 1.0, so the
@@ -62,7 +62,7 @@ backend sits beside a frontend on `@ag-ui/*` 1.0.
 
 Use the manual-dispatch pattern when you want full control over auth, logging, and middleware:
 
-```python title="run_ag_ui.py" linenums="1" hl_lines="14 17-26"
+```python title="run_ag_ui.py" linenums="1"
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
@@ -79,6 +79,11 @@ agent = Agent(
 stream = AGUIStream(agent)
 app = FastAPI()
 
+@app.get("/chat")
+@app.get("/chat/capabilities")
+async def capabilities() -> JSONResponse:
+    return JSONResponse(stream.capabilities().model_dump(by_alias=True, exclude_none=True))
+
 @app.post("/chat")
 async def run_agent(request: Request) -> Response:
     try:
@@ -91,7 +96,8 @@ async def run_agent(request: Request) -> Response:
     )
 ```
 
-The body is read with `read_run_input` rather than declared as a `RunAgentInput`
+The `GET` routes expose the agent's [capabilities](#capabilities). The body of a
+`POST` is read with `read_run_input` rather than declared as a `RunAgentInput`
 parameter. A newer client may send a message role or content part this server
 does not know, and FastAPI would refuse the whole request with `422`;
 `read_run_input` strips it and serves the run (see
@@ -109,14 +115,23 @@ uvicorn run_ag_ui:app --reload --port 8000
 !!! note "Simpler way"
     If you want the endpoint without any logic of your own around it, `AGUIStream.build_asgi()` builds the whole thing — an ASGI endpoint class you add as a route:
 
-    ```python linenums="1" hl_lines="6-7"
+    ```python linenums="1"
+    from ag2 import Agent
     from ag2.ag_ui import AGUIStream
+    from ag2.config import OpenAIConfig
     from fastapi import FastAPI
     from starlette.routing import Route
 
+    agent = Agent(
+        name="support_bot",
+        prompt="You help users with billing questions.",
+        config=OpenAIConfig(model="gpt-4o-mini"),
+    )
     app = FastAPI()
     stream = AGUIStream(agent)
-    app.routes.append(Route("/chat", stream.build_asgi()))
+    endpoint = stream.build_asgi()
+    app.routes.append(Route("/chat", endpoint))
+    app.routes.append(Route("/chat/capabilities", endpoint))
     ```
 
     Added as a route rather than mounted: `app.mount("/chat", ...)` serves the
@@ -125,18 +140,26 @@ uvicorn run_ag_ui:app --reload --port 8000
 
 ### Test the endpoint
 
+Check capability discovery before starting a run:
+
+```bash
+curl http://127.0.0.1:8000/chat/capabilities
+```
+
+Then start a run:
+
 ```bash
 curl -N -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{
-    "thread_id": "thread-1",
-    "run_id": "run-1",
+    "threadId": "thread-1",
+    "runId": "run-1",
+    "protocolVersion": "1.0",
     "messages": [{"id": "m1", "role": "user", "content": "Hello"}],
     "state": {},
     "context": [],
-    "tools": [],
-    "forwardedProps": null
+    "tools": []
   }'
 ```
 
@@ -240,15 +263,9 @@ Every `RUN_STARTED` declares the AG-UI version AG2 speaks, as
 A `GET` on the endpoint returns what the agent can do, in the protocol's
 `AgentCapabilities` shape, before any run starts. A `GET` on
 `{path}/capabilities` returns the same document: that is where other AG-UI
-integrations serve it. `A2UIServer` serves both paths. `build_asgi()` returns one
-endpoint, so add it on both:
-
-```python linenums="1" hl_lines="3-4"
-endpoint = stream.build_asgi()
-
-app.routes.append(Route("/chat", endpoint))
-app.routes.append(Route("/chat/capabilities", endpoint))
-```
+integrations serve it. Both routes are registered in the [basic server example](#basic-server-example).
+`A2UIServer` serves both paths automatically; with `build_asgi()`, register its
+endpoint on both routes as shown in the simpler example above.
 
 | Group | Declared | When |
 |---|---|---|
@@ -638,7 +655,9 @@ function — not a setting on this one.
 
 ## UI clients
 
-Any AG-UI client works with this endpoint.
+Any AG-UI client can consume ordinary runs from this endpoint. To resume an
+interrupt, the client must copy its `metadata` into the resume entry, as shown
+in [Asking the human a question](#asking-the-human-a-question).
 
 For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs because it provides:
 

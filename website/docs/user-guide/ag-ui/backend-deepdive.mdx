@@ -10,11 +10,11 @@ If you haven’t set up an AG-UI endpoint yet, start with the [AG-UI overview](/
 
 ## Authentication
 
-Because AG-UI integration works on top of simple HTTP SSE endpoints, you can use the same authentication mechanisms as you would for any other HTTP endpoint - validate headers/tokens before streaming events.
+Because AG-UI integration works on top of HTTP SSE endpoints, you can validate headers or tokens before streaming events.
 
 Example: protect `/chat` with a shared token header.
 
-```python title="run_ag_ui_auth.py" linenums="1" hl_lines="22 24-25"
+```python title="run_ag_ui_auth.py" linenums="1"
 from typing import Annotated
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -57,15 +57,16 @@ that this server does not recognise, and the content type is always
 Notes:
 
 - **Do not** put secrets (API keys, auth tokens) in the browser bundle. Protect the Next.js runtime route (`/api/copilotkit`) and forward credentials server-to-server.
-- If you don’t need auth/middleware, you can mount the generated ASGI endpoint with `AGUIStream.build_asgi()`, but you’ll have less control over request handling.
+- If you expose a capabilities `GET` route alongside this `POST` route, apply the same authentication check there.
+- If you don’t need auth or middleware, add the generated `AGUIStream.build_asgi()` endpoint as a route, as shown in the [basic server example](/docs/user-guide/ag-ui/overview#basic-server-example){.internal-link}.
 
 ## Tools context
 
 You often need to pass **per-request context** (user ID, org ID, plan, permissions) into tools without baking it into prompts or trusting client-provided text.
 
-AG2 supports this via `ContextVariables`. Your tool can accept a `context` parameter, and you provide values when dispatching.
+AG2 supports this through injected `Context` and `dispatch(variables=...)`. Your tool reads values from `context.variables`.
 
-```python title="tools_context.py" linenums="1" hl_lines="1 6-7 20"
+```python title="tools_context.py" linenums="1"
 from ag2 import Agent, Context, tool
 from ag2.ag_ui import AGUIStream, RunAgentInput
 from ag2.config import OpenAIConfig
@@ -84,8 +85,8 @@ agent = Agent(
 
 stream = AGUIStream(agent)
 
-async def dispatch_with_context(message: RunAgentInput):
-    return stream.dispatch(message, variables={"user_id": "1234567890"})
+def dispatch_with_context(message: RunAgentInput, user_id: str):
+    return stream.dispatch(message, variables={"user_id": user_id})
 ```
 
 !!! warning "Variables are shared state"
@@ -98,7 +99,7 @@ async def dispatch_with_context(message: RunAgentInput):
 
 ## Backend tools (Python functions)
 
-Backend tools are regular Python callables registered on the agent (for example via `functions=[...]`). When the agent invokes a tool during a run, the AG-UI stream emits tool lifecycle events that a UI can render in real time.
+Backend tools are regular Python callables registered on the agent (for example via `tools=[...]`). When the agent invokes a tool during a run, the AG-UI stream emits tool lifecycle events that a UI can render in real time.
 
 Example backend tool:
 
