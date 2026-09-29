@@ -37,7 +37,7 @@ from ag2.stream import MemoryStream
 
 from .elicitation import ClientElicitor
 from .errors import MCPAgentConfigError, MCPSamplingUnavailableError, UnknownConversationError
-from .info import build_ask_tool, object_output_schema
+from .info import build_ask_tool
 from .mappers import reply_to_content, to_structured_dict, tool_error
 from .pause import PauseState, PausedRuns, SuspendedTurn
 from .sampling import CLIENT_MODEL_MAX_TOKENS, ClientModelConfig, client_can_sample
@@ -83,7 +83,7 @@ class AgentExecutor:
     __slots__ = (
         "_agent",
         "_tool_name",
-        "_tool_description",
+        "_tool",
         "_stream_progress",
         "_context_provider",
         "_session_store",
@@ -107,7 +107,6 @@ class AgentExecutor:
     ) -> None:
         self._agent = agent
         self._tool_name = tool_name
-        self._tool_description = tool_description
         self._stream_progress = stream_progress
         self._context_provider = context_provider
         self._session_store = session_store
@@ -119,6 +118,15 @@ class AgentExecutor:
         # built directly, with no ``requestState`` protection installed) leaves
         # the era without the pause transport: nowhere safe to put the state.
         self._paused = paused_runs
+        # The declaration and the result use the same output contract. Derive it
+        # once, not on every listing or agent reply.
+        self._tool = build_ask_tool(
+            agent,
+            tool_name=tool_name,
+            tool_description=tool_description,
+            response_schema=agent.response_schema,
+            conversation_bounds=session_store.bounds if session_store is not None else None,
+        )
 
     @property
     def context_provider(self) -> "ContextProvider | None":
@@ -126,15 +134,7 @@ class AgentExecutor:
         return self._context_provider
 
     def list_tools(self) -> list[MCPTool]:
-        return [
-            build_ask_tool(
-                self._agent,
-                tool_name=self._tool_name,
-                tool_description=self._tool_description,
-                response_schema=self._agent._response_schema,
-                conversation_bounds=self._session_store.bounds if self._session_store is not None else None,
-            )
-        ]
+        return [self._tool]
 
     async def call(
         self,
@@ -435,7 +435,7 @@ class AgentExecutor:
         )
 
     def _has_object_output(self) -> bool:
-        return object_output_schema(self._agent._response_schema) is not None
+        return self._tool.output_schema is not None
 
 
 def _progress_scope(
