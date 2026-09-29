@@ -12,23 +12,21 @@ warning, and the run is served.
 
 import json
 import logging
-from typing import Any
+from typing import Literal, TypeAlias, get_args
 
-from ag_ui.core import RunAgentInput
-from pydantic import BaseModel
+from ag_ui.core import ResumeStatus, Role, RunAgentInput
+from pydantic import BaseModel, JsonValue
 
 logger = logging.getLogger("ag2.ag_ui")
 
-# The union members 1.0 describes, by the discriminator that names them. Kept by
-# hand: a later minor adds members, and that is exactly what this reads as
-# unrecognised.
-_ROLES = frozenset({"developer", "system", "assistant", "user", "tool", "activity", "reasoning"})
-_PART_TYPES = frozenset({"text", "image", "audio", "video", "document"})
-_SOURCE_TYPES = frozenset({"data", "url", "file"})
-_RESUME_STATUSES = frozenset({"resolved", "cancelled"})
+_PartType: TypeAlias = Literal["text", "image", "audio", "video", "document"]
+"""The `type` of each `ContentPart` member."""
 
-# The messages whose content may be a list of parts.
-_PART_ROLES = frozenset({"user", "tool"})
+_SourceType: TypeAlias = Literal["data", "url", "file"]
+"""The `type` of each `PartSource` member."""
+
+_PART_ROLES: tuple[Role, ...] = ("user", "tool")
+"""The messages whose content may be a list of parts."""
 
 
 def read_run_input(body: str | bytes) -> RunAgentInput:
@@ -39,7 +37,7 @@ def read_run_input(body: str | bytes) -> RunAgentInput:
     carries a known field with a value the schema rejects, raises
     `ValueError` (`pydantic.ValidationError` for the latter).
     """
-    raw = json.loads(body)
+    raw: JsonValue = json.loads(body)
     if isinstance(raw, dict):
         _strip_unknown_members(raw)
     return strip_unrecognised(RunAgentInput.model_validate(raw))
@@ -57,68 +55,78 @@ def strip_unrecognised(incoming: RunAgentInput) -> RunAgentInput:
     return incoming
 
 
-def _strip_unknown_members(raw: dict[str, Any]) -> None:
+def _strip_unknown_members(raw: dict[str, JsonValue]) -> None:
     # Before validation, since a union member the SDK cannot place fails it.
     # Only a member of an object shape naming a kind this server lacks is taken
     # out: anything else malformed is left for validation to refuse.
     if isinstance(resume := raw.get("resume"), list):
         raw["resume"] = _known_entries(resume)
-    messages = raw.get("messages")
-    if not isinstance(messages, list):
-        return
-    kept = []
+    if isinstance(messages := raw.get("messages"), list):
+        raw["messages"] = _known_messages(messages)
+
+
+def _known_messages(messages: list[JsonValue]) -> list[JsonValue]:
+    kept: list[JsonValue] = []
     for index, message in enumerate(messages):
-        role = message.get("role") if isinstance(message, dict) else None
-        if isinstance(role, str) and role not in _ROLES:
+        role = _tag(message, "role")
+        if role is not None and role not in get_args(Role):
             _warn(f"/messages/{index}", f"a message of role {role!r}")
             continue
-        if role in _PART_ROLES and isinstance(content := message.get("content"), list):
+        if isinstance(message, dict) and role in _PART_ROLES and isinstance(content := message.get("content"), list):
             message["content"] = _known_parts(content, f"/messages/{index}/content")
         kept.append(message)
-    raw["messages"] = kept
+    return kept
 
 
-def _known_entries(entries: list[Any]) -> list[Any]:
+def _known_entries(entries: list[JsonValue]) -> list[JsonValue]:
     # `status` is required, so an entry whose status is unknown goes whole. The
     # interrupt it answered is then uncovered, which the exchange refuses.
-    kept = []
+    kept: list[JsonValue] = []
     for index, entry in enumerate(entries):
-        status = entry.get("status") if isinstance(entry, dict) else None
-        if isinstance(status, str) and status not in _RESUME_STATUSES:
+        status = _tag(entry, "status")
+        if status is not None and status not in get_args(ResumeStatus):
             _warn(f"/resume/{index}", f"a resume entry of status {status!r}")
             continue
         kept.append(entry)
     return kept
 
 
-def _known_parts(parts: list[Any], path: str) -> list[Any]:
-    kept = []
+def _known_parts(parts: list[JsonValue], path: str) -> list[JsonValue]:
+    kept: list[JsonValue] = []
     for index, part in enumerate(parts):
-        kind = part.get("type") if isinstance(part, dict) else None
-        if isinstance(kind, str) and kind not in _PART_TYPES:
+        kind = _tag(part, "type")
+        if kind is not None and kind not in get_args(_PartType):
             _warn(f"{path}/{index}", f"a content part of type {kind!r}")
             continue
         # A part left without its source would be malformed, so the part goes whole.
-        source = part.get("source") if isinstance(part, dict) else None
-        source_kind = source.get("type") if isinstance(source, dict) else None
-        if isinstance(source_kind, str) and source_kind not in _SOURCE_TYPES:
+        source_kind = _tag(part.get("source") if isinstance(part, dict) else None, "type")
+        if source_kind is not None and source_kind not in get_args(_SourceType):
             _warn(f"{path}/{index}", f"a {kind} part whose source is of type {source_kind!r}")
             continue
         kept.append(part)
     return kept
 
 
-def _strip_extras(value: object, path: str) -> None:
-    if isinstance(value, BaseModel):
-        extra = value.__pydantic_extra__ or {}
-        for key in list(extra):
-            _warn(f"{path}/{key}", "a property")
-            del extra[key]
-        for name, info in type(value).model_fields.items():
-            _strip_extras(getattr(value, name), f"{path}/{info.alias or name}")
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            _strip_extras(item, f"{path}/{index}")
+def _tag(value: JsonValue, discriminator: str) -> str | None:
+    """The kind `value` names, when it is an object naming one with a string."""
+    tag = value.get(discriminator) if isinstance(value, dict) else None
+    return tag if isinstance(tag, str) else None
+
+
+def _strip_extras(model: BaseModel, path: str) -> None:
+    extra = model.__pydantic_extra__ or {}
+    for key in list(extra):
+        _warn(f"{path}/{key}", "a property")
+        del extra[key]
+    for name, info in type(model).model_fields.items():
+        field_path = f"{path}/{info.alias or name}"
+        value = getattr(model, name)
+        if isinstance(value, BaseModel):
+            _strip_extras(value, field_path)
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                if isinstance(item, BaseModel):
+                    _strip_extras(item, f"{field_path}/{index}")
 
 
 def _warn(path: str, what: str) -> None:

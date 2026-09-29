@@ -9,18 +9,22 @@ from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from ag_ui.core import (
+    ActivityMessage,
     AgentCapabilities,
+    AssistantMessage,
     AudioPart,
     ContentPart,
     DataSource,
+    DeveloperMessage,
     DocumentPart,
     FileSource,
     ImagePart,
     ReasoningEndEvent,
+    ReasoningMessage,
     ReasoningMessageContentEvent,
     ReasoningMessageEndEvent,
     ReasoningMessageStartEvent,
@@ -30,6 +34,7 @@ from ag_ui.core import (
     SubagentErrorEvent,
     SubagentFinishedEvent,
     SubagentStartedEvent,
+    SystemMessage,
     TextMessageChunkEvent,
     TextMessageContentEvent,
     TextMessageEndEvent,
@@ -40,7 +45,9 @@ from ag_ui.core import (
     ToolCallEndEvent,
     ToolCallResultEvent,
     ToolCallStartEvent,
+    ToolMessage,
     UrlSource,
+    UserMessage,
     VideoPart,
 )
 from ag_ui.core import (
@@ -49,6 +56,7 @@ from ag_ui.core import (
 from ag_ui.encoder import EventEncoder
 from fast_depends.library.serializer import SerializerProto
 from pydantic_core import PydanticSerializationError, to_jsonable_python
+from typing_extensions import assert_never
 
 from ag2 import Agent, Context, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig
@@ -76,11 +84,8 @@ from .interrupts import (
     utc_now,
 )
 
-try:
+if TYPE_CHECKING:
     from starlette.endpoints import HTTPEndpoint
-except ImportError:
-    # Fallback to Any until Starlette is installed
-    HTTPEndpoint = Any  # type: ignore[misc,assignment]
 
 logger = logging.getLogger("ag2.ag_ui")
 
@@ -531,10 +536,9 @@ def map_agui_content_to_input(content: ContentPart, *, provider: str | None = No
 
     `provider` is the run's, which a provider file handle has to belong to.
     """
-    if isinstance(content, TextPart):
-        return events.TextInput(content.text)
-
     match content:
+        case TextPart():
+            return events.TextInput(content.text)
         case DocumentPart():
             kind = BinaryType.DOCUMENT
         case AudioPart():
@@ -544,7 +548,7 @@ def map_agui_content_to_input(content: ContentPart, *, provider: str | None = No
         case ImagePart():
             kind = BinaryType.IMAGE
         case _:
-            raise ValueError(f"Unexpected content type: {type(content).__name__}")
+            assert_never(content)
 
     source = content.source
     inp: events.Input
@@ -556,7 +560,7 @@ def map_agui_content_to_input(content: ContentPart, *, provider: str | None = No
         )
     elif isinstance(source, UrlSource):
         inp = events.UrlInput(source.value, kind=kind)
-    elif isinstance(source, FileSource):
+    else:
         # A handle is opaque and only the provider that minted it can resolve
         # it. An untagged one is taken to be the run's own, since the client
         # need not say; one tagged for another provider is useless here, and
@@ -570,8 +574,6 @@ def map_agui_content_to_input(content: ContentPart, *, provider: str | None = No
             )
             return None
         inp = events.FileIdInput(source.value)
-    else:
-        raise ValueError(f"Unexpected source type: {type(source).__name__}")
 
     if content.metadata:
         inp.metadata = content.metadata
@@ -602,13 +604,14 @@ def map_agui_messages_to_events(
     `provider` is the run's, resolved where its configuration is known; a
     provider file handle issued by anyone else is skipped.
     """
-    prompt, messages = [], []
+    prompt: list[str] = []
+    messages: list[events.BaseEvent] = []
     # A tool message carries only the call id; the name is the restated call's.
     tool_names: dict[str, str] = {}
 
     input_buffer: list[events.Input] = []
     for m in command.incoming.messages:
-        if m.role == "user":
+        if isinstance(m, UserMessage):
             input_buffer.extend(map_agui_parts_to_inputs(m.content, provider=provider))
             continue
 
@@ -616,47 +619,57 @@ def map_agui_messages_to_events(
             messages.append(events.ModelRequest(input_buffer))
             input_buffer = []
 
-        if m.role in ["system", "developer"]:
-            prompt.append(m.content)
+        match m:
+            case SystemMessage() | DeveloperMessage():
+                prompt.append(m.content)
 
-        elif m.role == "assistant":
-            tool_calls = [
-                events.ToolCallEvent(
-                    id=t.id,
-                    name=t.function.name,
-                    arguments=t.function.arguments,
-                )
-                for t in (m.tool_calls or ())
-            ]
-            tool_names.update((t.id, t.name) for t in tool_calls)
-
-            messages.append(
-                events.ModelResponse(
-                    events.ModelMessage(m.content) if m.content else None,
-                    tool_calls=events.ToolCallsEvent(tool_calls),
-                )
-            )
-
-        elif m.role == "reasoning":
-            if m.content:
-                messages.append(events.ModelReasoning(m.content))
-
-        elif m.role == "tool":
-            # An error is what the model must hear, whatever came with it.
-            # Still answered when every part was skipped: the call is owed a
-            # result, and one of no parts is the empty string.
-            parts = (
-                [m.error] if m.error else (map_agui_parts_to_inputs(m.content, provider=provider) or [TextInput("")])
-            )
-            messages.append(
-                events.ToolResultsEvent([
-                    events.ToolResultEvent(
-                        parent_id=m.tool_call_id,
-                        name=tool_names.get(m.tool_call_id),
-                        result=ToolResult(parts=parts),
+            case AssistantMessage():
+                tool_calls = [
+                    events.ToolCallEvent(
+                        id=t.id,
+                        name=t.function.name,
+                        arguments=t.function.arguments,
                     )
-                ])
-            )
+                    for t in (m.tool_calls or ())
+                ]
+                tool_names.update((t.id, t.name) for t in tool_calls)
+
+                messages.append(
+                    events.ModelResponse(
+                        events.ModelMessage(m.content) if m.content else None,
+                        tool_calls=events.ToolCallsEvent(tool_calls),
+                    )
+                )
+
+            case ReasoningMessage():
+                if m.content:
+                    messages.append(events.ModelReasoning(m.content))
+
+            case ToolMessage():
+                # An error is what the model must hear, whatever came with it.
+                # Still answered when every part was skipped: the call is owed a
+                # result, and one of no parts is the empty string.
+                parts = (
+                    [m.error]
+                    if m.error
+                    else (map_agui_parts_to_inputs(m.content, provider=provider) or [TextInput("")])
+                )
+                messages.append(
+                    events.ToolResultsEvent([
+                        events.ToolResultEvent(
+                            parent_id=m.tool_call_id,
+                            name=tool_names.get(m.tool_call_id),
+                            result=ToolResult(parts=parts),
+                        )
+                    ])
+                )
+
+            case ActivityMessage():
+                # Not part of the model's conversation.
+                pass
+
+            case _:
+                assert_never(m)
 
     return prompt, messages, input_buffer
 

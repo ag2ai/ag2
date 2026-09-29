@@ -24,6 +24,7 @@ from ag_ui.core import (
     PROTOCOL_VERSION,
     BaseEvent,
     Interrupt,
+    Metadata,
     ReasoningEndEvent,
     ReasoningMessageEndEvent,
     ReasoningMessageStartEvent,
@@ -51,6 +52,7 @@ from ag_ui.core import (
 from ag_ui.encoder import EventEncoder
 from anyio import BrokenResourceError, ClosedResourceError, create_memory_object_stream
 from anyio.streams.memory import MemoryObjectSendStream
+from typing_extensions import assert_never
 
 from ag2.annotations import Context
 from ag2.events import BaseEvent as AG2Event
@@ -810,7 +812,7 @@ def check_proof(entry: ResumeEntry, interrupt: Interrupt) -> None:
         )
 
 
-def _proof_in(metadata: "dict[str, Any] | None") -> bytes:
+def _proof_in(metadata: Metadata | None) -> bytes:
     # Absent and malformed are one case: both mean nothing was proved, and
     # telling them apart would only say which half to fix. Bytes, not str: a
     # proof off the wire is arbitrary text and `compare_digest` raises
@@ -901,10 +903,13 @@ def resume_held_turn(
         # answering it.
         check_proof(entry, outstanding)
 
-        if entry.status == "cancelled":
-            return Abandoned(turn)
-
-        payload = answer_from(entry, outstanding)
+        match entry.status:
+            case "cancelled":
+                return Abandoned(turn)
+            case "resolved":
+                payload = answer_from(entry, outstanding)
+            case _:
+                assert_never(entry.status)
     except Exception:
         # Anything short of delivering the answer puts the turn back, so a
         # legitimate resume inside the deadline still reaches it. Not only
