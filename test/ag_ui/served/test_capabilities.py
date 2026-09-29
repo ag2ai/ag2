@@ -30,6 +30,7 @@ from ag2.a2ui.transports import AgUiTransport
 from ag2.ag_ui import AGUIStream
 from ag2.events import HumanInputRequest, HumanMessage
 from ag2.testing import TestConfig
+from ag2.tools import Toolkit
 
 _FIXTURES = Path(__file__).parent.parent / "fixtures"
 
@@ -152,6 +153,24 @@ async def test_an_agent_that_runs_subtasks_declares_delegation(make_app: Callabl
     document = await _capabilities(make_app(_agent(tasks=TaskConfig())))
 
     assert document["multiAgent"] == {"supported": True, "delegation": True}
+
+
+@_APPS
+@pytest.mark.parametrize("in_toolkit", [False, True])
+@pytest.mark.asyncio
+async def test_an_agent_delegated_as_a_tool_is_declared(
+    make_app: Callable[[Agent], Any], in_toolkit: bool, capabilities_schema: Draft202012Validator
+) -> None:
+    delegate = _agent().as_tool(description="Gathers sources.")
+    tools = [Toolkit(delegate)] if in_toolkit else [delegate]
+    document = await _capabilities(make_app(_agent(tools=tools)))
+
+    assert document["multiAgent"] == {
+        "supported": True,
+        "delegation": True,
+        "subagents": [{"name": "test_agent", "description": "Gathers sources."}],
+    }
+    capabilities_schema.validate(document)
 
 
 @_APPS

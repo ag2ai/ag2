@@ -4,6 +4,7 @@
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
+from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias, overload
@@ -26,6 +27,8 @@ from ag2.tools.tool import Tool
 from ag2.utils import CONTEXT_OPTION_NAME, build_model
 
 FunctionParameters: TypeAlias = dict[str, Any]
+
+_CURRENT_TOOL_CALL_ID: ContextVar[str | None] = ContextVar("ag2_current_tool_call_id", default=None)
 
 
 @dataclass(slots=True)
@@ -139,6 +142,7 @@ class FunctionTool(Tool):
         stack.enter_context(context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(execute))
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent":
+        token = _CURRENT_TOOL_CALL_ID.set(event.id)
         try:
             async with AsyncExitStack() as stack:
                 result = await self.model.asolve(
@@ -158,6 +162,8 @@ class FunctionTool(Tool):
 
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)
+        finally:
+            _CURRENT_TOOL_CALL_ID.reset(token)
 
 
 @overload

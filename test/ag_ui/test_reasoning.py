@@ -13,6 +13,7 @@ Reasoning arriving *inbound*, in an AG-UI history, is the mapper's job and is
 tested there — see `TestReasoningMessages` in `test_mapper.py`.
 """
 
+from base64 import b64encode
 from typing import Any
 
 import pytest
@@ -21,9 +22,10 @@ from dirty_equals import IsPartialDict
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream
+from ag2.config.gemini.events import GeminiToolCallEvent
 from ag2.events import ModelReasoning
 from ag2.testing import TestConfig, Turn
-from test.ag_ui.harness import dispatch_run, every, only, run_input, types_of
+from test.ag_ui.harness import dispatch_run, every, only, run_input, types_of, weather_tool
 
 pytestmark = pytest.mark.asyncio
 
@@ -79,3 +81,23 @@ async def test_a_run_that_did_no_reasoning_opens_no_session() -> None:
     frames = await frames_of("Hello")
 
     assert [t for t in types_of(frames) if t in REASONING_FRAMES] == []
+
+
+async def test_gemini_tool_signature_is_sent_for_client_replay() -> None:
+    signature = b"gemini-signature"
+    agent = Agent(
+        "test_agent",
+        config=TestConfig(
+            GeminiToolCallEvent(id="call-1", name="get_weather", arguments="{}", thought_signature=signature)
+        ),
+    )
+
+    frames = await dispatch_run(
+        AGUIStream(agent), run_input(UserMessage(id="m1", content="weather?"), tools=[weather_tool()])
+    )
+
+    assert only(frames, "REASONING_ENCRYPTED_VALUE") == IsPartialDict({
+        "subtype": "tool-call",
+        "entityId": "call-1",
+        "encryptedValue": b64encode(signature).decode(),
+    })

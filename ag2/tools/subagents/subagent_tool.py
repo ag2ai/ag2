@@ -3,12 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable
+from contextlib import AsyncExitStack, ExitStack
+from copy import deepcopy
 from typing import TYPE_CHECKING, TypeAlias
 
 from ag2.annotations import Context
-from ag2.middleware.base import ToolMiddleware
+from ag2.middleware.base import BaseMiddleware, ToolMiddleware
 from ag2.stream import Stream
 from ag2.tools.final import FunctionTool, tool
+from ag2.tools.final.function_tool import FunctionToolSchema
+from ag2.tools.tool import Tool
 
 from .run_task import run_task
 
@@ -19,6 +23,36 @@ StreamFactory: TypeAlias = Callable[["Agent", Context], Stream]
 StreamOrFactory: TypeAlias = Stream | StreamFactory
 
 
+class SubagentTool(Tool):
+    """A delegation tool that keeps its target visible to capability discovery."""
+
+    def __init__(self, agent: "Agent", description: str, delegate: FunctionTool) -> None:
+        self.agent = agent
+        self.description = description
+        self._tool = delegate
+        self.name = delegate.name
+
+    def __deepcopy__(self, memo: dict[int, object]) -> "SubagentTool":
+        # The target Agent owns locks and live state; tool registration must
+        # retain it, while isolating the wrapper's tool configuration.
+        return SubagentTool(self.agent, self.description, deepcopy(self._tool, memo))
+
+    def with_middleware(self, *middleware: ToolMiddleware) -> "SubagentTool":
+        return SubagentTool(self.agent, self.description, self._tool.with_middleware(*middleware))
+
+    async def schemas(self, context: Context) -> list[FunctionToolSchema]:
+        return await self._tool.schemas(context)
+
+    def register(
+        self,
+        stack: ExitStack | AsyncExitStack,
+        context: Context,
+        *,
+        middleware: Iterable[BaseMiddleware] = (),
+    ) -> None:
+        self._tool.register(stack, context, middleware=middleware)
+
+
 def subagent_tool(
     agent: "Agent",
     *,
@@ -26,7 +60,7 @@ def subagent_tool(
     name: str | None = None,
     stream: StreamOrFactory | None = None,
     middleware: Iterable[ToolMiddleware] = (),
-) -> FunctionTool:
+) -> SubagentTool:
     """Expose ``agent`` as a delegation tool that runs it as a sub-task.
 
     ``stream=`` accepts three shapes:
@@ -71,7 +105,7 @@ def subagent_tool(
             return f"Sub-task '{agent.name}' failed: {result.error}"
         return result.result or ""
 
-    return delegate
+    return SubagentTool(agent, description, delegate)
 
 
 def _resolve_stream_argument(

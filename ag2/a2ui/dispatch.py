@@ -27,6 +27,8 @@ from ag2.events import (
     TaskFailed,
     TaskStarted,
     TextInput,
+    ToolCallEvent,
+    ToolResultEvent,
     UsageEvent,
 )
 from ag2.stream import MemoryStream
@@ -69,6 +71,8 @@ TaskEvent = Union[TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExp
 
 # What a transport hands in to hear of each delegation starting and ending.
 TaskObserver = Callable[[TaskEvent], Awaitable[None]]
+ToolCallObserver = Callable[[ToolCallEvent], Awaitable[None]]
+ToolResultObserver = Callable[[ToolResultEvent], Awaitable[None]]
 
 # Shared immutable default so the keyword arg never aliases a mutable {}.
 _NO_SERVER_ACTIONS: Mapping[str, A2UIAction] = MappingProxyType({})
@@ -83,6 +87,8 @@ async def stream_turn(
     usage_records: list[UsageEvent] | None = None,
     interrupter: Interrupter | None = None,
     on_task: TaskObserver | None = None,
+    on_tool_call: ToolCallObserver | None = None,
+    on_tool_result: ToolResultObserver | None = None,
 ) -> AsyncIterator[A2UIFrame]:
     """Execute one turn and yield its prose then A2UI message frames.
 
@@ -113,6 +119,8 @@ async def stream_turn(
         on_task: Called with each ``TaskStarted`` / ``TaskCompleted`` /
             ``TaskFailed`` / ``TaskCancelled`` / ``TaskExpired`` on the turn's
             stream, for a transport that reports delegations.
+        on_tool_call: Called with each tool call on the turn's stream.
+        on_tool_result: Called with each tool result on the turn's stream.
 
     Yields:
         Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
@@ -173,6 +181,10 @@ async def stream_turn(
         stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
     if on_task is not None:
         stream.where((TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired)).subscribe(on_task)
+    if on_tool_call is not None:
+        stream.where(ToolCallEvent).subscribe(on_tool_call)
+    if on_tool_result is not None:
+        stream.where(ToolResultEvent).subscribe(on_tool_result)
 
     # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
     # prompt section, fold in negotiated client capabilities so the LLM only
@@ -242,6 +254,8 @@ class _A2UITurnCore:
         usage_records: list[UsageEvent] | None = None,
         interrupter: Interrupter | None = None,
         on_task: TaskObserver | None = None,
+        on_tool_call: ToolCallObserver | None = None,
+        on_tool_result: ToolResultObserver | None = None,
     ) -> AsyncIterator[A2UIFrame]:
         """Run one turn and yield its prose then A2UI message frames.
 
@@ -258,7 +272,19 @@ class _A2UITurnCore:
             usage_records=usage_records,
             interrupter=interrupter,
             on_task=on_task,
+            on_tool_call=on_tool_call,
+            on_tool_result=on_tool_result,
         )
 
 
-__all__ = ("A2UIFrame", "A2UIMessageFrame", "A2UIProseFrame", "Interrupter", "TaskEvent", "TaskObserver", "stream_turn")
+__all__ = (
+    "A2UIFrame",
+    "A2UIMessageFrame",
+    "A2UIProseFrame",
+    "Interrupter",
+    "TaskEvent",
+    "TaskObserver",
+    "ToolCallObserver",
+    "ToolResultObserver",
+    "stream_turn",
+)

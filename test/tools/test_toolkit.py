@@ -269,6 +269,31 @@ async def test_toolkit_middleware_applied_to_all_tools(mock: MagicMock) -> None:
 
 
 @pytest.mark.asyncio()
+async def test_toolkit_middleware_wraps_subagent_tool(mock: MagicMock) -> None:
+    async def logging_middleware(
+        call_next: ToolExecution,
+        event: ToolCallEvent,
+        context: Context,
+    ) -> ToolResultType:
+        mock(event.name)
+        return await call_next(event, context)
+
+    child = Agent("child", config=TestConfig("child answer"))
+    toolkit = Toolkit(child.as_tool(description="Delegate work"), middleware=[logging_middleware])
+    parent = Agent(
+        "parent",
+        config=TestConfig(
+            ToolCallEvent(name="task_child", arguments=json.dumps({"objective": "work"})),
+            "done",
+        ),
+        tools=[toolkit],
+    )
+
+    assert (await parent.ask("Hi!")).body == "done"
+    mock.assert_called_once_with("task_child")
+
+
+@pytest.mark.asyncio()
 async def test_toolkit_middleware_applied_to_decorator_tools(mock: MagicMock) -> None:
     """Toolkit middleware also wraps tools added via the .tool() decorator."""
 

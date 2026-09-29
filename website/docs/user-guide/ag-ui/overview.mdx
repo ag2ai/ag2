@@ -256,21 +256,27 @@ app.routes.append(Route("/chat/capabilities", endpoint))
 | `transport` | `streaming: true` | Always |
 | `tools` | `supported: true`, `clientProvided: true` | `clientProvided` on `AGUIStream` only: the A2UI transport ignores `RunAgentInput.tools` |
 | `state` | `snapshots: true` | `AGUIStream` only |
-| `multiAgent` | `supported: true`, `delegation: true` | The agent is built with `tasks=TaskConfig(...)` |
-| `reasoning` | `encrypted: false` | Always |
-| `multimodal` | `input`: `image`, `audio`, `video`, `pdf` | Always |
+| `multiAgent` | `supported: true`, `delegation: true`; named `subagents` for `as_tool` | The agent is built with `tasks=TaskConfig(...)` or has delegation tools |
+| `reasoning` | `encrypted: true` for Gemini function-call signatures | Gemini agents only |
+| `multimodal` | `input`: media the configured provider mapper accepts | Always |
 | `humanInTheLoop` | `supported: true`, `interrupts` | `interrupts` is `false` when the agent has its own `hitl_hook` |
 
 The document is read off the agent, because it is served before any run: a
 `hitl_hook` or `tools` passed to one `dispatch` call are not known to it. A group
 AG2 cannot vouch for is omitted, which the protocol reads as "says nothing", not
-as "unsupported". A delegation tool from `agent.as_tool(...)` does not record the
-agent behind it, so an agent that only delegates through one declares no
-`multiAgent`.
+as "unsupported". A delegation tool from `agent.as_tool(...)` records the
+agent behind it, including when placed inside a `Toolkit`.
 
-`multimodal.input` names the parts AG2 turns into model input. It does not know
-what the configured model accepts: a part the model cannot take, such as audio
-for a model without audio input, still fails the run with `RUN_ERROR`.
+`multimodal.input` follows the configured provider mapper. It cannot know the
+capabilities of an individual model. An inbound part the provider cannot take
+is skipped with a warning naming its kind and media type; the run continues.
+An empty user message adds nothing, and an empty tool result answers with the
+empty string. Outside AG-UI, provider mappers still reject unsupported input.
+Invalid options on an otherwise supported part remain errors.
+
+Gemini function calls carry their `thought_signature` as
+`REASONING_ENCRYPTED_VALUE`, bound to the tool call id. Clients must restate its
+`encryptedValue` on the call in later run history so Gemini can continue it.
 
 ## Input from a newer client
 
@@ -283,6 +289,8 @@ and `A2UIServer` strip it before validation:
 - a content part of a type this server does not know;
 - a content part whose `source` is of a kind this server does not know. The whole
   part goes, since one left without its source would be malformed.
+- a resume entry with a `status` this server does not know. The whole entry
+  goes, leaving any held interrupt unanswered.
 
 A message left with no parts is treated like any other empty message: a user
 message adds nothing to the turn, and a tool message still answers its call, with
@@ -495,13 +503,20 @@ stream that simply stops:
 | `code` | What happened |
 | --- | --- |
 | `INTERRUPT_NOT_HELD` | Nothing is held for this thread: unknown id, already answered, or expired |
-| `INTERRUPT_NOT_OUTSTANDING` | Something is held, but it is not waiting on the interrupt this run names |
+| `INTERRUPT_NOT_COVERED` | A held interrupt has no matching resume entry, including a fresh run on its thread |
 | `INTERRUPT_NOT_PROVEN` | The envelope's proof is missing, malformed, or not the one issued |
 | `INTERRUPT_PAYLOAD_REFUSED` | The payload is not what the interrupt asked for |
 
 A refusal that is not the turn's own fault — a bad payload, an id it is not
 waiting on — leaves the held turn resumable by a legitimate answer, without
 extending its deadline.
+
+Every refusal is a lone `RUN_ERROR` before `RUN_STARTED`. A fresh run on a
+thread with a held interrupt is refused; omitting an answer does not release
+the turn. An unrecognised entry beside a valid one is dropped with a warning,
+and the valid answer is applied. When no turn is held, AG2 refuses an unknown
+entry with `INTERRUPT_NOT_HELD`. This departs from the protocol's recommendation
+to proceed without that entry: continuing would silently discard the answer.
 
 A runnable version of this exchange — server and client in one script — is in
 `examples/ag_ui/human_input.py`.

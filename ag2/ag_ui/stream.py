@@ -23,6 +23,7 @@ from ag_ui.core import (
     DocumentPart,
     FileSource,
     ImagePart,
+    ReasoningEncryptedValueEvent,
     ReasoningEndEvent,
     ReasoningMessage,
     ReasoningMessageContentEvent,
@@ -60,6 +61,7 @@ from typing_extensions import assert_never
 
 from ag2 import Agent, Context, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig
+from ag2.config.gemini.events import GeminiToolCallEvent
 from ag2.context import strip_reserved_variables
 from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, UsageEvent
 from ag2.hitl import HumanHook
@@ -71,6 +73,7 @@ from ag2.usage import collect_usage_events
 
 from .capabilities import served_capabilities
 from .events import AGUIEvent
+from .input_acceptance import accepts_input
 from .interrupts import (
     DEFAULT_RETENTION,
     ClientInterrupter,
@@ -267,7 +270,7 @@ async def _serve_turn(
     # Inside the run rather than ahead of it: input that cannot be mapped fails
     # a run that has already started, and that failure has to reach the client.
     extracted_prompt, history_messages, current_turn = map_agui_messages_to_events(
-        command, provider=provider_of(command.config or agent.config)
+        command, provider=provider_of(command.config or agent.config), config=command.config or agent.config
     )
     # A client that declares no version predates 1.0, and its schema reads a
     # tool result as a string only.
@@ -390,6 +393,15 @@ async def _serve_turn(
             )
 
         elif isinstance(event, events.ToolCallEvent):
+            if isinstance(event, GeminiToolCallEvent) and event.thought_signature is not None:
+                await output.send(
+                    ReasoningEncryptedValueEvent(
+                        subtype="tool-call",
+                        entity_id=event.id,
+                        encrypted_value=b64encode(event.thought_signature).decode(),
+                        timestamp=_get_timestamp(),
+                    )
+                )
             if event.name in client_tools_names:
                 return
 
@@ -500,6 +512,7 @@ def map_task_event_to_ag_ui(
             subagent_run_id=event.task_id,
             name=event.agent_name,
             description=event.objective,
+            parent_tool_call_id=event.parent_tool_call_id,
             timestamp=_get_timestamp(),
         )
     if isinstance(event, events.TaskCompleted):
@@ -593,6 +606,7 @@ def map_agui_messages_to_events(
     command: AGStreamInput,
     *,
     provider: str | None = None,
+    config: ModelConfig | None = None,
 ) -> tuple[list[str], list[events.BaseEvent], list[events.Input]]:
     """Translate AG-UI history into the parts `run_stream` hands to the agent.
 
@@ -614,7 +628,7 @@ def map_agui_messages_to_events(
     input_buffer: list[events.Input] = []
     for m in command.incoming.messages:
         if isinstance(m, UserMessage):
-            input_buffer.extend(map_agui_parts_to_inputs(m.content, provider=provider))
+            input_buffer.extend(_accepted_parts(m.content, provider=provider, config=config, position="user"))
             continue
 
         if input_buffer:
@@ -626,14 +640,21 @@ def map_agui_messages_to_events(
                 prompt.append(m.content)
 
             case AssistantMessage():
-                tool_calls = [
-                    events.ToolCallEvent(
-                        id=t.id,
-                        name=t.function.name,
-                        arguments=t.function.arguments,
-                    )
-                    for t in (m.tool_calls or ())
-                ]
+                tool_calls: list[events.ToolCallEvent] = []
+                for t in m.tool_calls or ():
+                    if provider == "gemini" and t.encrypted_value is not None:
+                        tool_calls.append(
+                            GeminiToolCallEvent(
+                                id=t.id,
+                                name=t.function.name,
+                                arguments=t.function.arguments,
+                                thought_signature=b64decode(t.encrypted_value),
+                            )
+                        )
+                    else:
+                        tool_calls.append(
+                            events.ToolCallEvent(id=t.id, name=t.function.name, arguments=t.function.arguments)
+                        )
                 tool_names.update((t.id, t.name) for t in tool_calls)
 
                 messages.append(
@@ -654,7 +675,9 @@ def map_agui_messages_to_events(
                 parts = (
                     [m.error]
                     if m.error
-                    else (map_agui_parts_to_inputs(m.content, provider=provider) or [TextInput("")])
+                    else (
+                        _accepted_parts(m.content, provider=provider, config=config, position="tool") or [TextInput("")]
+                    )
                 )
                 messages.append(
                     events.ToolResultsEvent([
@@ -674,6 +697,20 @@ def map_agui_messages_to_events(
                 assert_never(m)
 
     return prompt, messages, input_buffer
+
+
+def _accepted_parts(
+    content: str | list[ContentPart], *, provider: str | None, config: ModelConfig | None, position: str
+) -> list[events.Input]:
+    result = []
+    for part in map_agui_parts_to_inputs(content, provider=provider):
+        if accepts_input(config, position, part):
+            result.append(part)
+            continue
+        kind = part.kind.value if isinstance(part, (BinaryInput, UrlInput)) else "file"
+        media_type = part.media_type if isinstance(part, BinaryInput) else "unknown"
+        logger.warning("skipping %s part (%s) for %s in a %s message", kind, media_type, provider, position)
+    return result
 
 
 def map_tool_result_to_ag_ui(result: ToolResult, serializer: SerializerProto) -> str | list[ContentPart]:

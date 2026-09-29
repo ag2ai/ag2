@@ -20,6 +20,7 @@ from ag2.events import (
 from ag2.exceptions import HumanInputError
 from ag2.middleware.builtin.tools.approval import BYPASS_KEY
 from ag2.stream import MemoryStream, Stream
+from ag2.tools.final.function_tool import _CURRENT_TOOL_CALL_ID
 from ag2.usage import UsageReport, collect_usage_events
 
 if TYPE_CHECKING:
@@ -158,7 +159,14 @@ async def run_task(
         prompt = f"{objective}\n\n## Context\n{context}"
 
     if emit_events:
-        await parent_context.send(TaskStarted(task_id=task_id, agent_name=agent.name, objective=objective))
+        await parent_context.send(
+            TaskStarted(
+                task_id=task_id,
+                agent_name=agent.name,
+                objective=objective,
+                parent_tool_call_id=_CURRENT_TOOL_CALL_ID.get(),
+            )
+        )
 
     # Bridge HITL events to the parent stream so the parent's hook can handle
     # them. If the subagent has its own HITL hook, it is registered as an

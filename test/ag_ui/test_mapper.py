@@ -27,6 +27,8 @@ from ag_ui.core import (
 
 from ag2 import ToolResult
 from ag2.ag_ui.stream import AGStreamInput, map_agui_messages_to_events
+from ag2.config import OpenAIConfig
+from ag2.config.gemini.events import GeminiToolCallEvent
 from ag2.events import (
     AudioInput,
     BinaryInput,
@@ -74,6 +76,61 @@ class TestUserMessageString:
 
         assert messages == []
         assert current_turn == [TextInput("hi")]
+
+
+def test_gemini_restated_tool_call_keeps_its_signature() -> None:
+    command = _command(
+        AssistantMessage(
+            id="a1",
+            tool_calls=[
+                ToolCall(id="call-1", function=FunctionCall(name="lookup", arguments="{}"), encrypted_value=B64_VALUE)
+            ],
+        )
+    )
+
+    _, [response], _ = map_agui_messages_to_events(command, provider="gemini")
+    [call] = response.tool_calls.calls
+    assert isinstance(call, GeminiToolCallEvent)
+    assert call.thought_signature == RAW_BYTES
+
+    _, [other], _ = map_agui_messages_to_events(command, provider="openai")
+    [other_call] = other.tool_calls.calls
+    assert type(other_call) is ToolCallEvent
+
+
+def test_unsupported_user_part_is_skipped_with_a_warning(caplog: pytest.LogCaptureFixture) -> None:
+    command = _command(
+        UserMessage(
+            id="m1",
+            content=[TextPart(text="hello"), VideoPart(source=DataSource(value=B64_VALUE, mime_type="video/mp4"))],
+        )
+    )
+
+    _, _, current = map_agui_messages_to_events(command, provider="openai", config=OpenAIConfig(model="gpt-4o"))
+
+    assert current == [TextInput("hello")]
+    assert len(caplog.records) == 1
+    assert "video" in caplog.text and "video/mp4" in caplog.text
+    assert B64_VALUE not in caplog.text
+
+
+def test_unsupported_tool_part_still_answers_with_empty_text(caplog: pytest.LogCaptureFixture) -> None:
+    command = _command(
+        AssistantMessage(
+            id="a1", tool_calls=[ToolCall(id="call-1", function=FunctionCall(name="lookup", arguments="{}"))]
+        ),
+        ToolMessage(
+            id="t1",
+            tool_call_id="call-1",
+            content=[ImagePart(source=DataSource(value=B64_VALUE, mime_type="image/png"))],
+        ),
+    )
+
+    _, messages, _ = map_agui_messages_to_events(command, provider="openai", config=OpenAIConfig(model="gpt-4o"))
+
+    result = messages[-1].results[0].result
+    assert result.parts == [TextInput("")]
+    assert len(caplog.records) == 1
 
 
 @pytest.mark.parametrize(

@@ -12,6 +12,7 @@ shared code, and what is tested here is that this transport reaches them.
 """
 
 import asyncio
+from base64 import b64encode
 from typing import Any
 
 import httpx
@@ -28,6 +29,7 @@ from ag2.a2ui import A2UIServer  # noqa: E402
 from ag2.a2ui.transports import AgUiTransport  # noqa: E402
 from ag2.ag_ui import NOT_PROVEN, NO_HELD_TURN, TOOL_CALL_REASON, UNSUPPORTED_PROTOCOL_VERSION, Retention  # noqa: E402
 from ag2.ag_ui.interrupts import AG2_METADATA_KEY, PROOF_KEY
+from ag2.config.gemini.events import GeminiToolCallEvent  # noqa: E402
 from ag2.events import HumanInputRequest, ToolCallEvent  # noqa: E402
 from ag2.exceptions import HumanInputError  # noqa: E402
 from ag2.middleware import approval_required  # noqa: E402
@@ -301,11 +303,36 @@ class TestDelegations:
 
         started = only(events, "SUBAGENT_STARTED")
         assert started == IsPartialDict({"subagentRunId": IsStr(), "name": "worker", "description": "find out"})
+        assert started["parentToolCallId"] == IsStr()
+        assert only(events, "TOOL_CALL_START")["toolCallId"] == started["parentToolCallId"]
         assert only(events, "SUBAGENT_FINISHED") == IsPartialDict({
             "subagentRunId": started["subagentRunId"],
             "result": "researched",
         })
         assert outcome_of(events) == {"type": "success"}
+
+    async def test_a_gemini_tool_signature_is_sent_with_its_call(self) -> None:
+        signature = b"gemini-signature"
+        agent = Agent(
+            "parent",
+            config=TestConfig(
+                GeminiToolCallEvent(id="call-1", name="lookup", arguments="{}", thought_signature=signature),
+                "done",
+            ),
+        )
+
+        @agent.tool
+        def lookup() -> str:
+            """Look something up."""
+            return "found"
+
+        events = await post_run(A2UIServer(agent, transport=AgUiTransport()), run_body(thread_id="t1", run_id="r1"))
+
+        assert only(events, "REASONING_ENCRYPTED_VALUE") == IsPartialDict({
+            "subtype": "tool-call",
+            "entityId": "call-1",
+            "encryptedValue": b64encode(signature).decode(),
+        })
 
     async def test_a_failed_delegation_is_a_subagent_error(self) -> None:
         app = _delegating_server(Agent("worker", config=TestConfig(RuntimeError("the worker fell over"))))

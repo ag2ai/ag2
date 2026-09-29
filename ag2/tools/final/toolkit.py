@@ -40,7 +40,10 @@ class Toolkit(Tool):
         return tuple(self._tools.values())
 
     def _add_tool(self, tool: Tool | Callable[..., Any], *, unsafe: bool = False) -> None:
-        t = FunctionTool.ensure_tool(tool).with_middleware(*self._middleware)
+        t = FunctionTool.ensure_tool(tool)
+        with_middleware = getattr(t, "with_middleware", None)
+        if callable(with_middleware):
+            t = with_middleware(*self._middleware)
 
         if not unsafe and t.name in self._tools:
             raise ToolConflictError(t.name)

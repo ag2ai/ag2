@@ -87,7 +87,7 @@ from .tools.final import FunctionTool, Toolkit, tool
 from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
-from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
+from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
 from .types import Omittable, SendableMessage, omit
 from .usage import UsageReport, collect_usage_events
@@ -1549,7 +1549,7 @@ class Agent(PluginTarget, Generic[TResult]):
         name: str | None = None,
         stream: StreamOrFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
-    ) -> FunctionTool:
+    ) -> SubagentTool:
         """Expose this agent as a delegation tool for another agent.
 
         ``stream=`` accepts ``None`` (a fresh stream per delegation), a

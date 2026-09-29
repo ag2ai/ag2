@@ -20,6 +20,7 @@ text. Importing this module requires Starlette and ``ag2[ag-ui]``.
 
 import functools
 import logging
+from base64 import b64encode
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -27,8 +28,13 @@ from uuid import uuid4
 
 from ag_ui.core import (
     ActivitySnapshotEvent,
+    ReasoningEncryptedValueEvent,
     RunAgentInput,
     TextMessageChunkEvent,
+    ToolCallArgsEvent,
+    ToolCallEndEvent,
+    ToolCallResultEvent,
+    ToolCallStartEvent,
 )
 from ag_ui.encoder import EventEncoder
 from starlette.requests import Request
@@ -51,11 +57,14 @@ from ag2.ag_ui.run_input import read_run_input
 from ag2.ag_ui.stream import (
     AGStreamInput,
     client_context_prompt,
+    downgrade_tool_result,
     map_agui_messages_to_events,
     map_task_event_to_ag_ui,
+    map_tool_result_to_ag_ui,
     provider_of,
 )
-from ag2.events import TextInput
+from ag2.config.gemini.events import GeminiToolCallEvent
+from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
 
 from .._types import JsonObject, ServerToClientMessage
 from ..dispatch import A2UIMessageFrame, A2UIProseFrame, TaskEvent
@@ -63,6 +72,8 @@ from ..incoming import iter_incoming_prompts, parse_incoming_interactions
 from ..request import A2UIServerRequest
 
 if TYPE_CHECKING:
+    from ag2.agent import Agent
+
     from ..dispatch import _A2UITurnCore
 
 logger = logging.getLogger(__name__)
@@ -188,6 +199,7 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     prompt, history, current_inputs = map_agui_messages_to_events(
         AGStreamInput(incoming=incoming, variables=variables),
         provider=provider_of(core.agent.config),
+        config=core.agent.config,
     )
     if shared := client_context_prompt(incoming.context or []):
         prompt.append(shared)
@@ -265,6 +277,8 @@ async def _serve_turn(
         usage_records=output.usage,
         interrupter=interrupter,
         on_task=functools.partial(_report_delegation, output),
+        on_tool_call=functools.partial(_report_tool_call, output),
+        on_tool_result=functools.partial(_report_tool_result, output, core.agent, incoming.protocol_version is None),
     ):
         if isinstance(frame, A2UIProseFrame):
             if frame.text:
@@ -288,6 +302,41 @@ async def _serve_turn(
 
 async def _report_delegation(output: TurnOutput, event: TaskEvent) -> None:
     await output.send(map_task_event_to_ag_ui(event))
+
+
+async def _report_tool_call(output: TurnOutput, event: ToolCallEvent) -> None:
+    timestamp = int(utc_now().timestamp() * 1000)
+    if isinstance(event, GeminiToolCallEvent) and event.thought_signature is not None:
+        await output.send(
+            ReasoningEncryptedValueEvent(
+                subtype="tool-call",
+                entity_id=event.id,
+                encrypted_value=b64encode(event.thought_signature).decode(),
+                timestamp=timestamp,
+            )
+        )
+    await output.send(
+        ToolCallStartEvent(
+            tool_call_id=event.id,
+            tool_call_name=event.name,
+            timestamp=timestamp,
+        )
+    )
+    await output.send(ToolCallArgsEvent(tool_call_id=event.id, delta=event.arguments, timestamp=timestamp))
+    await output.send(ToolCallEndEvent(tool_call_id=event.id, timestamp=timestamp))
+
+
+async def _report_tool_result(output: TurnOutput, agent: "Agent", predates_parts: bool, event: ToolResultEvent) -> None:
+    content = map_tool_result_to_ag_ui(event.result, agent._serializer)
+    await output.send(
+        ToolCallResultEvent(
+            tool_call_id=event.parent_id,
+            content=downgrade_tool_result(content) if predates_parts else content,
+            message_id=uuid4().hex,
+            timestamp=int(utc_now().timestamp() * 1000),
+            role="tool",
+        )
+    )
 
 
 __all__ = ("AgUiTransport",)

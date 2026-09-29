@@ -43,6 +43,7 @@ async def test_a_delegation_starts_with_its_agent_and_objective_and_finishes_wit
         "subagentRunId": IsStr(),
         "name": "worker",
         "description": "look into it",
+        "parentToolCallId": IsStr(),
         "timestamp": IsInt(),
     }
     [finished] = every(events, "SUBAGENT_FINISHED")
@@ -62,6 +63,15 @@ async def test_two_parallel_delegations_to_one_agent_are_told_apart() -> None:
     finished = {e["subagentRunId"] for e in every(events, "SUBAGENT_FINISHED")}
     assert len(started) == 2
     assert finished == started
+
+
+async def test_parallel_delegations_name_their_spawning_tool_calls() -> None:
+    events = await _run(_delegating(Agent("worker", config=TestConfig("researched")), "first", "second"))
+
+    calls = {event["toolCallId"] for event in every(events, "TOOL_CALL_START")}
+    parents = {event["parentToolCallId"] for event in every(events, "SUBAGENT_STARTED")}
+    assert len(calls) == 2
+    assert parents == calls
 
 
 async def test_a_failed_delegation_is_a_subagent_error_and_the_run_carries_on() -> None:
