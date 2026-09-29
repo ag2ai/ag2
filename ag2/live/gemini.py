@@ -110,8 +110,8 @@ class RealTimeConfig(RealtimeConfig):
     Implements the `RealtimeConfig` protocol — call `session(...)` to
     open a websocket connection that pumps captured audio into the API,
     adds each `ModelRequest` published on the context's stream to the
-    conversation as one user turn, and emits transcription, audio, and
-    tool-call events on the supplied context.
+    conversation as one user turn once no response is active, and emits
+    transcription, audio, and tool-call events on the supplied context.
     """
 
     def __init__(
@@ -211,7 +211,7 @@ class RealTimeConfig(RealtimeConfig):
                 await _send_tool_result(session, event, serializer)
 
             async def _forward_request(event: ModelRequest) -> None:
-                await _send_request(session, gate, event, serializer)
+                await _send_request(gate, event, serializer)
 
             with (
                 context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
@@ -247,76 +247,71 @@ def _ensure_object_schema(params: dict[str, Any] | None) -> dict[str, Any]:
 
 
 class _ResponseGate:
-    """The per-session rule for when the model may be asked to answer.
+    """The per-session rule for when pushed turns reach the model.
 
-    Gemini Live answers a client turn as soon as it is completed
-    (`send_client_content(turn_complete=True)`) and interrupts a response it
-    is producing to do so. The gate tracks whether a response is active: its
-    own request, or a turn the server starts on its own (automatic activity
-    detection on audio, the model continuing after a tool response), seen as
-    the turn's first model output or tool call. A request made while a
-    response is active is deferred to the response boundary
-    (`turn_complete`), where all deferred requests collapse into one. A
+    Any client content interrupts a response Gemini Live is producing, even a
+    turn sent open (`turn_complete=False`), so a pushed turn cannot enter the
+    conversation ahead of its answer without cutting the model off. The gate
+    tracks whether a response is active: its own request, or a turn the server
+    starts on its own (automatic activity detection on audio, the model
+    continuing after a tool response), seen as the turn's first model output or
+    tool call. A turn pushed while no response is active is sent at once and
+    completed, so the model answers it. A turn pushed while a response is active
+    is held until the response boundary (`turn_complete`), where every held
+    turn is sent in one completed client message and gets one answer. A
     boundary that reports more server work under way (`interaction_status`
-    `IN_PROGRESS`) keeps the gate busy and the request deferred until a
-    boundary that does not.
+    `IN_PROGRESS`) keeps the gate busy and the turns held until a boundary that
+    does not.
 
-    Known limits: a request made between a tool response and the model's
-    first output after it is sent at once and may cut that output short. Gemini
-    gives turns no ids, so a `turn_complete` cannot be attributed to a
-    specific turn: when the gate's request merges with or interrupts a turn
-    the server started, the first `turn_complete` frees the gate even if
-    that turn still runs.
+    Known limits: a turn pushed between a tool response and the model's first
+    output after it is sent at once and may cut that output short. Gemini gives
+    turns no ids, so a `turn_complete` cannot be attributed to a specific turn:
+    when the gate's request merges with or interrupts a turn the server
+    started, the first `turn_complete` frees the gate even if that turn still
+    runs.
     """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._active = False
-        self._deferred = False
+        self._held: list[gtypes.Content | gtypes.ContentDict] = []
 
-    async def request(self) -> None:
-        """Ask for a response now, or at the next response boundary if one is active."""
+    async def push(self, turn: gtypes.ContentDict) -> None:
+        """Send `turn` and have the model answer it now, or hold both until the next boundary if a response is active."""
         if self._active:
-            self._deferred = True
+            self._held.append(turn)
         else:
-            await self._complete_turn()
+            await self._send([turn])
 
     def response_started(self) -> None:
         """Mark a response active — the gate's own or one the server started."""
         self._active = True
 
     async def turn_complete(self, *, more_coming: bool) -> None:
-        """Handle the response boundary: send the deferred request unless more server work is under way."""
+        """Handle the response boundary: send the held turns unless more server work is under way."""
         self._active = more_coming
-        if self._deferred and not self._active:
-            self._deferred = False
-            await self._complete_turn()
+        if self._held and not self._active:
+            held, self._held = self._held, []
+            await self._send(held)
 
-    async def _complete_turn(self) -> None:
+    async def _send(self, turns: list[gtypes.Content | gtypes.ContentDict]) -> None:
         self._active = True
-        await self._session.send_client_content(turn_complete=True)
+        await self._session.send_client_content(turns=turns, turn_complete=True)
 
 
 async def _send_request(
-    session: AsyncSession,
     gate: _ResponseGate,
     event: ModelRequest,
     serializer: SerializerProto,
 ) -> None:
-    """Add the request to the conversation as one user turn, then ask the gate for a response.
+    """Hand the request to the gate as one user turn.
 
-    The turn is sent open (`turn_complete=False`), so it enters the context at
-    once without making the model answer; the gate completes it. A request
-    with no content to send adds nothing and asks for nothing.
+    A request with no content to send adds nothing and asks for nothing.
     """
     texts = request_texts(event, serializer, provider=_PROVIDER)
     if not texts:
         return
-    await session.send_client_content(
-        turns=[{"role": "user", "parts": [{"text": text} for text in texts]}],
-        turn_complete=False,
-    )
-    await gate.request()
+    await gate.push({"role": "user", "parts": [{"text": text} for text in texts]})
 
 
 async def _send_tool_result(
@@ -412,12 +407,19 @@ async def _pump_events(
                 )
                 text = ""
                 usage = Usage()
-                await gate.turn_complete(
-                    more_coming=message.server_content.interaction_status == gtypes.InteractionStatus.IN_PROGRESS,
-                )
+                await gate.turn_complete(more_coming=_more_coming(message.server_content))
 
         if not had_message:
             return
+
+
+def _more_coming(content: gtypes.LiveServerContent) -> bool:
+    """Whether the server reports more work under way past this boundary.
+
+    google-genai releases before 2.18 have no `interaction_status`; there no
+    boundary reports more work.
+    """
+    return getattr(content, "interaction_status", None) == "IN_PROGRESS"
 
 
 def _is_model_output(message: gtypes.LiveServerMessage) -> bool:

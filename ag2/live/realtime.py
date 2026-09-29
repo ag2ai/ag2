@@ -40,10 +40,12 @@ class RealtimeConfig(Protocol):
 
     The session also consumes `ModelRequest` from the stream: each one is a
     user turn pushed into the running conversation (typed text, or messages
-    `LiveAgent` drains from the inbox). The session adds it to the provider's
-    conversation at once and has the model answer it at the next point the
-    provider allows — immediately when the model is silent, otherwise after
-    the current response, without interrupting it. Nothing enforces this
+    `LiveAgent` drains from the inbox). The model answers it at the next point
+    the provider allows — immediately when the model is silent, otherwise after
+    the current response, without interrupting it. The session adds it to the
+    provider's conversation as early as that allows: at once where the provider
+    accepts content during a response (OpenAI), at the response boundary where
+    any content would cut the response off (Gemini). Nothing enforces this
     subscription, so each provider needs a test that a pushed `ModelRequest`
     reaches its connection. A provider that publishes a `ModelRequest` of its
     own (such as a transcript of captured audio) publishes a marker subclass
