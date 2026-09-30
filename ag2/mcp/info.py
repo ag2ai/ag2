@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import is_dataclass
 from types import GenericAlias
 from typing import TYPE_CHECKING, Any, cast
 
@@ -90,9 +91,13 @@ def object_output_schema(response_schema: "ResponseProto[Any] | None") -> dict[s
     json_schema = response_schema.json_schema if response_schema is not None else None
     if isinstance(json_schema, dict) and isinstance(response_schema, ResponseSchema):
         model = response_schema.types
-        if isinstance(model, type) and not isinstance(model, GenericAlias) and issubclass(model, BaseModel):
+        if (
+            isinstance(model, type)
+            and not isinstance(model, GenericAlias)
+            and (issubclass(model, BaseModel) or is_dataclass(model))
+        ):
             # The LLM schema describes validation input; MCP describes the value
-            # after to_structured_dict calls model_dump(mode="json").
+            # after to_structured_dict dumps it in JSON mode.
             output_schema = TypeAdapter(model).json_schema(mode="serialization", schema_generator=_OutputSchema)
             # ResponseSchema lifts these into its name/description unless the
             # caller supplied them explicitly. Keep that presentation unchanged.

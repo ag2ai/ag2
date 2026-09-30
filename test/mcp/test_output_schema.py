@@ -435,3 +435,38 @@ def test_response_schema_root_metadata_is_preserved(explicit_metadata: bool) -> 
     listed = build_ask_tool(Agent("reporter"), response_schema=schema)
 
     assert listed.output_schema == expected
+
+
+@dataclass
+class PlainAliasedDataclass:
+    item_id: str = Field(alias="itemId")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("connector", [connect, connect_modern])
+async def test_plain_dataclass_alias_is_dumped_like_its_schema(
+    connector: Callable[..., AbstractAsyncContextManager[ClientSession]],
+) -> None:
+    # A stdlib dataclass cannot be built from its alias by hand, but the LLM's
+    # reply is validated through Pydantic, which does accept it.
+    agent = Agent("items", config=TestConfig('{"itemId": "a"}'), response_schema=PlainAliasedDataclass)
+
+    async with connector(MCPServer(agent)) as session:
+        result = await session.call_tool("ask", {"message": "report"})
+
+    assert result.structured_content == {"item_id": "a"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("connector", [connect, connect_modern])
+async def test_typed_tool_plain_dataclass_alias_is_dumped_like_its_schema(
+    connector: Callable[..., AbstractAsyncContextManager[ClientSession]],
+) -> None:
+    @mcp_tool
+    def get_item() -> PlainAliasedDataclass:
+        return PlainAliasedDataclass(item_id="a")
+
+    async with connector(MCPServer(Agent("items"), tools=[get_item])) as session:
+        result = await session.call_tool("get_item", {})
+
+    assert result.structured_content == {"item_id": "a"}
