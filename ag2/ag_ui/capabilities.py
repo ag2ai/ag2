@@ -29,7 +29,7 @@ def _subagents(tools: tuple[Tool, ...]) -> list[SubagentInfo]:
     result = []
     for tool in tools:
         if isinstance(tool, SubagentTool):
-            result.append(SubagentInfo(name=tool.agent.name, description=tool.description))
+            result.append(SubagentInfo(name=tool.agent.name, description=tool.schema.function.description))
         elif isinstance(tool, Toolkit):
             result.extend(_subagents(tool.tools))
     return result
@@ -58,7 +58,7 @@ def served_capabilities(agent: Agent, *, client_tools: bool, state_snapshots: bo
         reasoning=ReasoningCapabilities(encrypted=provider_of(agent.config) in GEMINI_FAMILY),
         multimodal=MultimodalCapabilities(input=MultimodalInputCapabilities(**modalities)) if modalities else None,
         # A question the agent's own hook answers never reaches the client.
-        human_in_the_loop=HumanInTheLoopCapabilities(supported=True, interrupts=agent._hitl_hook is None),
+        human_in_the_loop=HumanInTheLoopCapabilities(supported=True, interrupts=not agent.has_hitl_hook),
     )
 
 

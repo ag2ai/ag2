@@ -238,7 +238,7 @@ def _start_turn(
     # This transport's turn core carries a plain agent, so the only hook
     # there can be is the one the agent was constructed with. With none,
     # the question goes to the client rather than killing the turn.
-    interrupter = None if core.agent._hitl_hook is not None else ClientInterrupter(turn, turns)
+    interrupter = None if core.agent.has_hitl_hook else ClientInterrupter(turn, turns)
     turns.track(turn, turn.start(_run_turn(core, incoming, output, interrupter)))
     return turn
 
@@ -324,7 +324,7 @@ async def _report_tool_result(output: TurnOutput, agent: "Agent", predates_parts
     await output.send(
         tool_result_event(
             event,
-            agent._serializer,
+            agent.serializer,
             predates_parts,
             message_id=uuid4().hex,
             timestamp=timestamp_ms(),

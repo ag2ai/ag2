@@ -227,7 +227,7 @@ class AGUIStream:
     def __answers_in_process(self, hitl_hook: HumanHook | None) -> bool:
         # Read off what was supplied, never off the core's "nobody to ask"
         # default: only a run that passed no hook has its question sent out.
-        return hitl_hook is not None or self.__agent._hitl_hook is not None
+        return hitl_hook is not None or self.__agent.has_hitl_hook
 
 
 @dataclass(slots=True)
@@ -438,7 +438,7 @@ async def _serve_turn(
         elif isinstance(event, events.ToolResultEvent):
             await output.send(
                 tool_result_event(
-                    event, agent._serializer, predates_parts, message_id=str(uuid4()), timestamp=timestamp_ms()
+                    event, agent.serializer, predates_parts, message_id=str(uuid4()), timestamp=timestamp_ms()
                 )
             )
 
@@ -458,7 +458,7 @@ async def _serve_turn(
     # The client authors ``incoming.state``; it seeds this turn's variables
     # but must not reach the framework's own control-plane keys.
     client_state = strip_reserved_variables(incoming_state, source="inbound AG-UI state") if shares_state else {}
-    initial_state = client_state | agent._agent_variables | command.variables
+    initial_state = client_state | dict(agent.variables) | command.variables
 
     held_by_client = _encode_context(incoming_state) if shares_state else None
     if shares_state and (opening := _encode_context(initial_state)) != held_by_client:

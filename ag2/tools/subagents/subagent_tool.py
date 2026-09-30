@@ -3,16 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable
-from contextlib import AsyncExitStack, ExitStack
-from copy import deepcopy
+from copy import copy, deepcopy
 from typing import TYPE_CHECKING, TypeAlias
 
 from ag2.annotations import Context
-from ag2.middleware.base import BaseMiddleware, ToolMiddleware
+from ag2.middleware.base import ToolMiddleware
 from ag2.stream import Stream
 from ag2.tools.final import FunctionTool, tool
-from ag2.tools.final.function_tool import FunctionToolSchema
-from ag2.tools.tool import Tool
 
 from .run_task import run_task
 
@@ -23,34 +20,30 @@ StreamFactory: TypeAlias = Callable[["Agent", Context], Stream]
 StreamOrFactory: TypeAlias = Stream | StreamFactory
 
 
-class SubagentTool(Tool):
+class SubagentTool(FunctionTool):
     """A delegation tool that keeps its target visible to capability discovery."""
 
-    def __init__(self, agent: "Agent", description: str, delegate: FunctionTool) -> None:
+    __slots__ = ("agent",)
+
+    def __init__(self, agent: "Agent", delegate: FunctionTool) -> None:
+        function = delegate.schema.function
+        super().__init__(
+            delegate.model,
+            name=function.name,
+            description=function.description,
+            schema=function.parameters,
+            middleware=delegate._middleware,
+        )
         self.agent = agent
-        self.description = description
-        self._tool = delegate
-        self.name = delegate.name
 
     def __deepcopy__(self, memo: dict[int, object]) -> "SubagentTool":
         # The target Agent owns locks and live state; tool registration must
-        # retain it, while isolating the wrapper's tool configuration.
-        return SubagentTool(self.agent, self.description, deepcopy(self._tool, memo))
-
-    def with_middleware(self, *middleware: ToolMiddleware) -> "SubagentTool":
-        return SubagentTool(self.agent, self.description, self._tool.with_middleware(*middleware))
-
-    async def schemas(self, context: Context) -> list[FunctionToolSchema]:
-        return await self._tool.schemas(context)
-
-    def register(
-        self,
-        stack: ExitStack | AsyncExitStack,
-        context: Context,
-        *,
-        middleware: Iterable[BaseMiddleware] = (),
-    ) -> None:
-        self._tool.register(stack, context, middleware=middleware)
+        # retain it, while isolating the tool's own configuration.
+        cloned = copy(self)
+        cloned.model = deepcopy(self.model, memo)
+        cloned.schema = deepcopy(self.schema, memo)
+        cloned._middleware = deepcopy(self._middleware, memo)
+        return cloned
 
 
 def subagent_tool(
@@ -105,7 +98,7 @@ def subagent_tool(
             return f"Sub-task '{agent.name}' failed: {result.error}"
         return result.result or ""
 
-    return SubagentTool(agent, description, delegate)
+    return SubagentTool(agent, delegate)
 
 
 def _resolve_stream_argument(

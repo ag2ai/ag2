@@ -30,6 +30,7 @@ from typing import Any, Generic, Literal, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
@@ -827,6 +828,18 @@ class Agent(PluginTarget, Generic[TResult]):
         """Variables available to this agent."""
 
         return types.MappingProxyType(self._agent_variables)
+
+    @property
+    def has_hitl_hook(self) -> bool:
+        """Whether a hook answers this agent's questions to a human, rather than the caller's."""
+
+        return self._hitl_hook is not None
+
+    @property
+    def serializer(self) -> SerializerProto:
+        """The serializer that encodes this agent's tool results."""
+
+        return self._serializer
 
     @property
     def response_schema(self) -> ResponseProto[TResult] | None:
