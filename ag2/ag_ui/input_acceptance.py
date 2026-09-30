@@ -100,12 +100,12 @@ _MEDIA: dict[type[object], set[tuple[str, str, BinaryType | None]]] = {
 
 
 def _described(config: ModelConfig | None) -> type[object] | None:
-    """The config class the table describes `config` by: its own, or its nearest described base."""
+    """The config class the table describes `config` by, or `None` if it does not."""
     if config is None:
         return None
     # Compared by identity, never `isinstance`: a provider whose extra is not
     # installed is a stand-in here, not a class.
-    return next((cls for cls in type(config).__mro__ if cls in _MEDIA), None)
+    return type(config) if type(config) in _MEDIA else None
 
 
 def accepts_input(config: ModelConfig | None, position: str, part: Input) -> bool:

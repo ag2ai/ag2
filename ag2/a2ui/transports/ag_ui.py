@@ -27,12 +27,10 @@ from uuid import uuid4
 
 from ag_ui.core import (
     ActivitySnapshotEvent,
-    ReasoningEncryptedValueEvent,
     RunAgentInput,
     TextMessageChunkEvent,
     ToolCallArgsEvent,
     ToolCallEndEvent,
-    ToolCallResultEvent,
     ToolCallStartEvent,
 )
 from ag_ui.encoder import EventEncoder
@@ -57,12 +55,11 @@ from ag2.ag_ui.run_input import read_run_input
 from ag2.ag_ui.stream import (
     AGStreamInput,
     client_context_prompt,
-    downgrade_tool_result,
     map_agui_messages_to_events,
     map_task_event_to_ag_ui,
-    map_tool_result_to_ag_ui,
+    tool_result_event,
 )
-from ag2.ag_ui.thought_signature import encrypted_signature_of
+from ag2.ag_ui.thought_signature import encrypted_signature_of, signature_event
 from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
 
 from .._types import JsonObject, ServerToClientMessage
@@ -317,24 +314,19 @@ async def _report_tool_call(output: TurnOutput, event: ToolCallEvent) -> None:
     )
     # After the start: a consumer may drop a value whose entity it has not seen.
     if (signature := encrypted_signature_of(event)) is not None:
-        await output.send(
-            ReasoningEncryptedValueEvent(
-                subtype="tool-call", entity_id=event.id, encrypted_value=signature, timestamp=timestamp
-            )
-        )
+        await output.send(signature_event(event.id, signature, timestamp))
     await output.send(ToolCallArgsEvent(tool_call_id=event.id, delta=event.arguments, timestamp=timestamp))
     await output.send(ToolCallEndEvent(tool_call_id=event.id, timestamp=timestamp))
 
 
 async def _report_tool_result(output: TurnOutput, agent: "Agent", predates_parts: bool, event: ToolResultEvent) -> None:
-    content = map_tool_result_to_ag_ui(event.result, agent._serializer)
     await output.send(
-        ToolCallResultEvent(
-            tool_call_id=event.parent_id,
-            content=downgrade_tool_result(content) if predates_parts else content,
+        tool_result_event(
+            event,
+            agent._serializer,
+            predates_parts,
             message_id=uuid4().hex,
             timestamp=int(utc_now().timestamp() * 1000),
-            role="tool",
         )
     )
 

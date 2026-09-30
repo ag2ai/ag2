@@ -495,9 +495,12 @@ Two things must travel back untouched: the **interrupt id**, and the
 **`metadata` envelope**. The envelope carries proof that the answer comes from
 whoever the question was put to — an answer attributed to a human is the input an
 agent trusts most, and an interrupt id alone is a bare string in a request body.
-A resume without it is refused. The protocol does not make clients echo it, and
-`@ag-ui/client` does not do it for you: copy the interrupt's `metadata` into the
-resume entry yourself.
+A resume that carries the envelope must carry the one issued; a resume that
+carries none is accepted unless the server is built with
+`require_resume_proof=True` (on `AGUIStream` and on the A2UI `AgUiTransport`).
+The protocol does not make clients echo it, and `@ag-ui/client` does not do it
+for you: to get the check, copy the interrupt's `metadata` into the resume entry
+yourself.
 
 ```typescript
 import { buildResumeArray } from "@ag-ui/client";
@@ -511,7 +514,7 @@ await agent.runAgent({
 ```
 
 A client that cannot set a resume entry's `metadata` cannot answer these
-interrupts. CopilotKit's `useInterrupt` is one: its `resolve()` and `cancel()`
+interrupts on a server running with `require_resume_proof=True`. CopilotKit's `useInterrupt` is one: its `resolve()` and `cancel()`
 send no metadata.
 
 Every refusal arrives as `RUN_ERROR` with a machine-readable `code`, never as a
@@ -519,9 +522,8 @@ stream that simply stops:
 
 | `code` | What happened |
 | --- | --- |
-| `INTERRUPT_NOT_HELD` | Nothing is held for this thread: unknown id, already answered, or expired |
 | `INTERRUPT_NOT_COVERED` | A held interrupt has no matching resume entry, including a fresh run on its thread |
-| `INTERRUPT_NOT_PROVEN` | The envelope's proof is missing, malformed, or not the one issued |
+| `INTERRUPT_NOT_PROVEN` | The envelope's proof is malformed or not the one issued; also missing, under `require_resume_proof=True` |
 | `INTERRUPT_PAYLOAD_REFUSED` | The payload is not what the interrupt asked for |
 
 A refusal that is not the turn's own fault — a bad payload, an id it is not
@@ -531,9 +533,9 @@ extending its deadline.
 Every refusal is a lone `RUN_ERROR` before `RUN_STARTED`. A fresh run on a
 thread with a held interrupt is refused; omitting an answer does not release
 the turn. An unrecognised entry beside a valid one is dropped with a warning,
-and the valid answer is applied. When no turn is held, AG2 refuses an unknown
-entry with `INTERRUPT_NOT_HELD`. This departs from the protocol's recommendation
-to proceed without that entry: continuing would silently discard the answer.
+and the valid answer is applied. When no turn is held for the thread — unknown id,
+already answered, expired, or lost to a restart — the `resume` is dropped with a
+warning and the request runs as an ordinary run, as the protocol recommends.
 
 A runnable version of this exchange — server and client in one script — is in
 `examples/ag_ui/human_input.py`.
@@ -626,12 +628,12 @@ it is the constraint that matters most when you deploy:
 
 - **Sticky routing is required.** A resume must reach the process holding the
   turn. Route by `threadId`; behind a round-robin load balancer, resumes will
-  land on a process that knows nothing and be refused with
-  `INTERRUPT_NOT_HELD`.
+  land on a process that knows nothing; it drops the `resume` with a warning and
+  starts a fresh run instead of continuing the paused one.
 - **A restart drops every held turn.** After a deploy or a crash, a client
-  answering a question asked by the old process gets `RUN_ERROR` /
-  `INTERRUPT_NOT_HELD` — the same code as an expired one. Treat it as "ask
-  again", not as a bug.
+  answering a question asked by the old process has its `resume` dropped with a
+  warning and gets an ordinary run — the same as for an expired one. Treat it as
+  "ask again", not as a bug.
 - **Close the stream on the way down.** `A2UIServer` does it for you (it runs
   `AgUiTransport.aclose()` on ASGI shutdown). `AGUIStream` is not an app, so
   nothing can hang a shutdown hook on it for you — call `await stream.aclose()`

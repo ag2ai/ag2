@@ -23,7 +23,6 @@ from ag_ui.core import (
     DocumentPart,
     FileSource,
     ImagePart,
-    ReasoningEncryptedValueEvent,
     ReasoningEndEvent,
     ReasoningMessage,
     ReasoningMessageContentEvent,
@@ -86,7 +85,7 @@ from .interrupts import (
     utc_now,
 )
 from .provider import is_same_provider, provider_of
-from .thought_signature import encrypted_signature_of, restore_tool_call
+from .thought_signature import encrypted_signature_of, restore_tool_call, signature_event
 
 if TYPE_CHECKING:
     from starlette.endpoints import HTTPEndpoint
@@ -437,14 +436,9 @@ async def _serve_turn(
             )
 
         elif isinstance(event, events.ToolResultEvent):
-            parts = map_tool_result_to_ag_ui(event.result, agent._serializer)
             await output.send(
-                ToolCallResultEvent(
-                    tool_call_id=event.parent_id,
-                    content=downgrade_tool_result(parts) if predates_parts else parts,
-                    message_id=str(uuid4()),
-                    timestamp=_get_timestamp(),
-                    role="tool",
+                tool_result_event(
+                    event, agent._serializer, predates_parts, message_id=str(uuid4()), timestamp=_get_timestamp()
                 )
             )
 
@@ -498,14 +492,7 @@ async def _serve_turn(
 
 async def _send_signature(output: "TurnOutput", signatures: dict[str, str], call_id: str) -> None:
     if (value := signatures.pop(call_id, None)) is not None:
-        await output.send(
-            ReasoningEncryptedValueEvent(
-                subtype="tool-call",
-                entity_id=call_id,
-                encrypted_value=value,
-                timestamp=_get_timestamp(),
-            )
-        )
+        await output.send(signature_event(call_id, value, _get_timestamp()))
 
 
 # The task lifecycle events a delegation reaches the client through.
@@ -729,6 +716,25 @@ def map_tool_result_to_ag_ui(result: ToolResult, serializer: SerializerProto) ->
     ):
         return parts[0].text
     return parts
+
+
+def tool_result_event(
+    event: events.ToolResultEvent,
+    serializer: SerializerProto,
+    predates_parts: bool,
+    *,
+    message_id: str,
+    timestamp: int,
+) -> ToolCallResultEvent:
+    """The wire event for a tool's result, as a string for a client that predates content parts."""
+    content = map_tool_result_to_ag_ui(event.result, serializer)
+    return ToolCallResultEvent(
+        tool_call_id=event.parent_id,
+        content=downgrade_tool_result(content) if predates_parts else content,
+        message_id=message_id,
+        timestamp=timestamp,
+        role="tool",
+    )
 
 
 def downgrade_tool_result(content: str | list[ContentPart]) -> str:

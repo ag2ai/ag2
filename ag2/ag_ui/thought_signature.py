@@ -6,6 +6,8 @@
 
 from base64 import b64decode, b64encode
 
+from ag_ui.core import ReasoningEncryptedValueEvent
+
 from ag2 import events
 
 # `ag2[ag-ui]` does not install google-genai. Without it no Gemini call can
@@ -23,6 +25,13 @@ def encrypted_signature_of(event: events.ToolCallEvent) -> str | None:
     return b64encode(event.thought_signature).decode()
 
 
+def signature_event(call_id: str, signature: str, timestamp: int) -> ReasoningEncryptedValueEvent:
+    """The encrypted value that carries a call's signature. Send it after the call starts: a consumer may drop a value whose entity it has not seen."""
+    return ReasoningEncryptedValueEvent(
+        subtype="tool-call", entity_id=call_id, encrypted_value=signature, timestamp=timestamp
+    )
+
+
 def restore_tool_call(
     provider: str | None,
     *,
@@ -37,4 +46,4 @@ def restore_tool_call(
     return events.ToolCallEvent(id=id, name=name, arguments=arguments)
 
 
-__all__ = ("encrypted_signature_of", "restore_tool_call")
+__all__ = ("encrypted_signature_of", "restore_tool_call", "signature_event")

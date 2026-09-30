@@ -23,6 +23,7 @@ from typing import Any
 from ag_ui.core import (
     PROTOCOL_VERSION,
     BaseEvent,
+    EventType,
     Interrupt,
     Metadata,
     ReasoningEndEvent,
@@ -214,7 +215,7 @@ class TurnOutput:
         self._send = send
         self._paused = False
         self._kept: list[BaseEvent] = []
-        self._open: dict[tuple[str, str], BaseEvent] = {}
+        self._open: dict[tuple[EventType, str], BaseEvent] = {}
         """Every entity opened and not yet closed, by (kind, id), in opening order."""
         self._announced: set[str] = set()
         """Every subagent invocation id this turn has announced."""
@@ -250,7 +251,7 @@ class TurnOutput:
 
     def is_open_subagent(self, subagent_run_id: str | None) -> bool:
         """Whether `subagent_run_id` names an invocation open on the wire."""
-        return subagent_run_id is not None and ("subagent", subagent_run_id) in self._open
+        return subagent_run_id is not None and (EventType.SUBAGENT_STARTED, subagent_run_id) in self._open
 
     def success_outcome(self) -> RunFinishedSuccessOutcome:
         """The outcome of the current run finishing, naming the calls it left for the client."""
@@ -367,37 +368,37 @@ class TurnOutput:
                     )
                     # Ends under one id cannot be told apart, so the invocation
                     # stays open until the last delegation under it has ended.
-                    if ("subagent", event.subagent_run_id) in self._open:
+                    if (EventType.SUBAGENT_STARTED, event.subagent_run_id) in self._open:
                         self._repeats[event.subagent_run_id] = self._repeats.get(event.subagent_run_id, 0) + 1
                     return False
                 self._announced.add(event.subagent_run_id)
-                self._open["subagent", event.subagent_run_id] = event
+                self._open[EventType.SUBAGENT_STARTED, event.subagent_run_id] = event
             case SubagentFinishedEvent() | SubagentErrorEvent() if event.subagent_run_id in self._repeats:
                 if (left := self._repeats.pop(event.subagent_run_id) - 1) > 0:
                     self._repeats[event.subagent_run_id] = left
                 return False
             case SubagentFinishedEvent() | SubagentErrorEvent():
-                if self._open.pop(("subagent", event.subagent_run_id), None) is None:
+                if self._open.pop((EventType.SUBAGENT_STARTED, event.subagent_run_id), None) is None:
                     logger.warning(
                         "not ending subagent invocation %s: it is not open on the wire", event.subagent_run_id
                     )
                     return False
             case TextMessageStartEvent():
-                self._open["message", event.message_id] = event
+                self._open[EventType.TEXT_MESSAGE_START, event.message_id] = event
             case TextMessageEndEvent():
-                self._open.pop(("message", event.message_id), None)
+                self._open.pop((EventType.TEXT_MESSAGE_START, event.message_id), None)
             case ReasoningStartEvent():
-                self._open["reasoning", event.message_id] = event
+                self._open[EventType.REASONING_START, event.message_id] = event
             case ReasoningEndEvent():
-                self._open.pop(("reasoning", event.message_id), None)
+                self._open.pop((EventType.REASONING_START, event.message_id), None)
             case ReasoningMessageStartEvent():
-                self._open["reasoning_message", event.message_id] = event
+                self._open[EventType.REASONING_MESSAGE_START, event.message_id] = event
             case ReasoningMessageEndEvent():
-                self._open.pop(("reasoning_message", event.message_id), None)
+                self._open.pop((EventType.REASONING_MESSAGE_START, event.message_id), None)
             case ToolCallStartEvent():
-                self._open["tool_call", event.tool_call_id] = event
+                self._open[EventType.TOOL_CALL_START, event.tool_call_id] = event
             case ToolCallEndEvent():
-                self._open.pop(("tool_call", event.tool_call_id), None)
+                self._open.pop((EventType.TOOL_CALL_START, event.tool_call_id), None)
         self._record_call(event)
         return True
 
@@ -418,22 +419,22 @@ class TurnOutput:
         await self._send.aclose()
 
 
-def _closing(kind: str, entity_id: str, message: str) -> BaseEvent:
+def _closing(kind: EventType, entity_id: str, message: str) -> BaseEvent:
     """The event that ends an open entity, for a run ending before it did.
 
     `message` is what an invocation closed this way is told.
     """
     now = timestamp_ms()
     match kind:
-        case "subagent":
+        case EventType.SUBAGENT_STARTED:
             return SubagentErrorEvent(subagent_run_id=entity_id, message=message, timestamp=now)
-        case "message":
+        case EventType.TEXT_MESSAGE_START:
             return TextMessageEndEvent(message_id=entity_id, timestamp=now)
-        case "reasoning":
+        case EventType.REASONING_START:
             return ReasoningEndEvent(message_id=entity_id, timestamp=now)
-        case "reasoning_message":
+        case EventType.REASONING_MESSAGE_START:
             return ReasoningMessageEndEvent(message_id=entity_id, timestamp=now)
-        case "tool_call":
+        case EventType.TOOL_CALL_START:
             return ToolCallEndEvent(tool_call_id=entity_id, timestamp=now)
     raise AssertionError(f"no closing event for a {kind}")
 
