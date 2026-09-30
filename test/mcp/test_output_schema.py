@@ -247,6 +247,36 @@ class TestModelOutputSchema:
         assert result.structured_content == expected
         assert response_schema.json_schema == validation_schema
 
+    @pytest.mark.parametrize("serialize_by_alias", [False, True])
+    async def test_required_nullable_fields_remain_present(
+        self,
+        connector: Callable[..., AbstractAsyncContextManager[ClientSession]],
+        tool_name: str,
+        serialize_by_alias: bool,
+    ) -> None:
+        class NullableReport(BaseModel):
+            model_config = ConfigDict(serialize_by_alias=serialize_by_alias)
+            value: int | None = Field(validation_alias="inputValue", serialization_alias="outputValue")
+
+        input_data = {"inputValue": None}
+        agent = Agent("reporter", config=TestConfig(json.dumps(input_data)), response_schema=NullableReport)
+
+        @mcp_tool
+        def report() -> NullableReport:
+            return NullableReport.model_validate(input_data)
+
+        async with connector(MCPServer(agent, tools=[report], sessions=False)) as session:
+            listed = tool_named(await session.list_tools(), tool_name)
+            result = await session.call_tool(tool_name, {"message": "report"} if tool_name == "ask" else {})
+
+        output_key = "outputValue" if serialize_by_alias else "value"
+        assert listed.output_schema == IsPartialDict({
+            "properties": {output_key: IsPartialDict({"anyOf": [{"type": "integer"}, {"type": "null"}]})},
+            "required": [output_key],
+        })
+        assert result.is_error is False
+        assert result.structured_content == {output_key: None}
+
     async def test_alias_schema_describes_output_keys(
         self,
         connector: Callable[..., AbstractAsyncContextManager[ClientSession]],
