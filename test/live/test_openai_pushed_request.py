@@ -48,6 +48,25 @@ class TestPushedModelRequest:
 
             assert [name for name, _ in conn.calls[-2:]] == ["conversation.item.create", "response.create"]
 
+    async def test_push_before_own_request_is_acknowledged_is_answered_once(self) -> None:
+        agent, conn = live_agent()
+
+        async with agent.run() as context:
+            await context.send(ModelRequest([TextInput("first")]))
+            await context.send(ModelRequest([TextInput("second")]))
+
+            # The response the first request starts must not be able to see "second".
+            assert len(conn.created_items()) == 1
+
+            await conn.emit(created("resp-1"))
+
+            assert len(conn.created_items()) == 2
+            assert conn.response_requests() == 1
+
+            await conn.emit(done("resp-1"))
+
+            assert conn.response_requests() == 2
+
     async def test_push_during_response_is_added_now_and_answered_at_boundary(self) -> None:
         agent, conn = live_agent()
 

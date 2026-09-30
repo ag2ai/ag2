@@ -38,6 +38,29 @@ class TestResponseGate:
 
             assert conn.response_requests() == 2
 
+    async def test_tool_result_before_own_request_is_acknowledged_is_held_until_it_is(self) -> None:
+        agent, conn = live_agent(lookup)
+
+        async with agent.run() as context:
+            await context.send(ToolResultEvent(parent_id="call-1", name="lookup", result=ToolResult("42")))
+            await context.send(ToolResultEvent(parent_id="call-2", name="lookup", result=ToolResult("43")))
+
+            assert [item["call_id"] for item in conn.created_items()] == ["call-1"]
+
+            await conn.emit(created("resp-1"))
+
+            assert [item["call_id"] for item in conn.created_items()] == ["call-1", "call-2"]
+
+    async def test_items_held_for_a_rejected_request_are_added(self) -> None:
+        agent, conn = live_agent(lookup)
+
+        async with agent.run() as context:
+            await context.send(ToolResultEvent(parent_id="call-1", name="lookup", result=ToolResult("42")))
+            await context.send(ToolResultEvent(parent_id="call-2", name="lookup", result=ToolResult("43")))
+            await conn.emit(active_response_rejection(conn.last_response_request_id()))
+
+            assert [item["call_id"] for item in conn.created_items()] == ["call-1", "call-2"]
+
     async def test_rejected_request_is_retried_at_boundary(self) -> None:
         agent, conn = live_agent(lookup)
 
