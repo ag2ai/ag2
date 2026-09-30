@@ -59,7 +59,7 @@ from pydantic_core import PydanticSerializationError, to_jsonable_python
 from typing_extensions import assert_never
 
 from ag2 import Agent, Context, MemoryStream, ToolResult, events
-from ag2.config import ModelConfig
+from ag2.config import ModelConfig, ModelProvider
 from ag2.context import strip_reserved_variables
 from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, UsageEvent
 from ag2.hitl import HumanHook
@@ -539,7 +539,7 @@ def map_task_event_to_ag_ui(
     return SubagentErrorEvent(subagent_run_id=event.task_id, message=message, timestamp=timestamp_ms())
 
 
-def map_agui_content_to_input(content: ContentPart, *, provider: str | None = None) -> events.Input | None:
+def map_agui_content_to_input(content: ContentPart, *, provider: ModelProvider | None = None) -> events.Input | None:
     """One AG-UI content part as the ag2 input it carries, or `None` for a part to skip.
 
     `provider` is the run's, which a provider file handle has to belong to.
@@ -578,7 +578,7 @@ def map_agui_content_to_input(content: ContentPart, *, provider: str | None = No
                 "skipping a %s part holding a file handle issued by %s: this run's provider is %s",
                 content.type,
                 source.provider,
-                provider or "unknown",
+                provider.value if provider else "unknown",
             )
             return None
         inp = events.FileIdInput(source.value)
@@ -590,7 +590,9 @@ def map_agui_content_to_input(content: ContentPart, *, provider: str | None = No
     return inp
 
 
-def map_agui_parts_to_inputs(content: str | list[ContentPart], *, provider: str | None = None) -> list[events.Input]:
+def map_agui_parts_to_inputs(
+    content: str | list[ContentPart], *, provider: ModelProvider | None = None
+) -> list[events.Input]:
     """A message body, plain or in parts, as the ag2 inputs it carries."""
     if isinstance(content, str):
         return [events.TextInput(content)]
@@ -600,7 +602,7 @@ def map_agui_parts_to_inputs(content: str | list[ContentPart], *, provider: str 
 def map_agui_messages_to_events(
     command: AGStreamInput,
     *,
-    provider: str | None = None,
+    provider: ModelProvider | None = None,
     config: ModelConfig | None = None,
 ) -> tuple[list[str], list[events.BaseEvent], list[events.Input]]:
     """Translate AG-UI history into the parts `run_stream` hands to the agent.
@@ -690,7 +692,7 @@ def map_agui_messages_to_events(
 
 
 def _accepted_parts(
-    content: str | list[ContentPart], *, provider: str | None, config: ModelConfig | None, position: str
+    content: str | list[ContentPart], *, provider: ModelProvider | None, config: ModelConfig | None, position: str
 ) -> list[events.Input]:
     result = []
     for part in map_agui_parts_to_inputs(content, provider=provider):
@@ -699,7 +701,13 @@ def _accepted_parts(
             continue
         kind = part.kind.value if isinstance(part, (BinaryInput, UrlInput)) else "file"
         media_type = part.media_type if isinstance(part, BinaryInput) else "unknown"
-        logger.warning("skipping %s part (%s) for %s in a %s message", kind, media_type, provider, position)
+        logger.warning(
+            "skipping %s part (%s) for %s in a %s message",
+            kind,
+            media_type,
+            provider.value if provider else "unknown",
+            position,
+        )
     return result
 
 

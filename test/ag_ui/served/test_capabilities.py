@@ -30,6 +30,7 @@ from ag2 import Agent, TaskConfig
 from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import AgUiTransport
 from ag2.ag_ui import AGUIStream
+from ag2.config import ModelProvider
 from ag2.events import HumanInputRequest, HumanMessage
 from ag2.testing import TestConfig
 from ag2.tools import Toolkit
@@ -103,6 +104,19 @@ async def test_both_servers_declare_what_every_run_does(make_app: Callable[[Agen
     })
     # A config whose mapper cannot be read promises no modality.
     assert "multimodal" not in document
+
+
+@_APPS
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", [ModelProvider.GEMINI, ModelProvider.VERTEXAI])
+async def test_gemini_and_vertex_declare_encrypted_reasoning(
+    make_app: Callable[[Agent], Any], provider: ModelProvider
+) -> None:
+    agent = Agent("test_agent", config=TestConfig("hello", provider=provider))
+
+    document = await _capabilities(make_app(agent))
+
+    assert document["reasoning"] == {"encrypted": True}
 
 
 @pytest.mark.asyncio

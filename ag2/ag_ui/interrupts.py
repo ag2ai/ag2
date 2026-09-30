@@ -224,15 +224,17 @@ class TurnOutput:
         self._repeats: dict[str, int] = {}
         """Starts refused for an invocation id still open, each owed one silenced end."""
         self._calls: dict[str, bool] = {}
-        """Tool calls the turn started, in call order, and whether it answered them."""
+        """Tool calls the current run started, in call order, and whether it answered them."""
 
     def rebind(self, *, run_id: str, send: MemoryObjectSendStream[BaseEvent]) -> None:
         """Point the turn at the exchange now carrying it."""
         self.run_id = run_id
         self._send = send
         self._paused = False
-        # What an earlier run of this turn left unanswered stays owed: the run
-        # that paused did not end as a success, so it reported none of it.
+        # A run reports the calls it started: the protocol has it list exactly
+        # those, and a call an earlier run announced is that run's. The events
+        # kept across the pause go out now, so they are this run's.
+        self._calls = {}
         for event in self._kept:
             self._record_call(event)
         # Ahead of anything kept: an event about a suspended invocation must

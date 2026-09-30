@@ -130,6 +130,26 @@ class TestCompletedRun:
             TokenUsage(provider="openai", model="gpt-5", input_tokens=140, output_tokens=14, total_tokens=154)
         ]
 
+    async def test_the_total_of_a_pair_matches_its_grouped_input_and_output_when_a_call_reports_no_output(self) -> None:
+        """A call with no output count has no total of its own, but the pair's still adds up."""
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="lookup", arguments="{}")]),
+                    usage=Usage(prompt_tokens=10, completion_tokens=5),
+                    model="m",
+                    provider="openai",
+                ),
+                ModelResponse(ModelMessage("it is 42"), usage=Usage(prompt_tokens=7), model="m", provider="openai"),
+            ),
+            tools=[lookup],
+        )
+
+        assert (await _finished(agent)).usage == [
+            TokenUsage(provider="openai", model="m", input_tokens=17, output_tokens=5, total_tokens=22)
+        ]
+
     async def test_additive_counts_are_summed_across_calls_in_one_pair(self) -> None:
         """A provider omits ``thinking_tokens`` on a call that did no reasoning, so within
         one provider/model pair an absent additive count means zero and summing it is the

@@ -95,8 +95,8 @@ async def test_a_client_call_made_while_the_question_waited_is_pending_on_the_re
     assert outcome_of(second) == {"type": "success", "pendingToolCallIds": [chunk["toolCallId"]]}
 
 
-async def test_a_client_call_made_before_the_question_is_pending_on_the_resumed_run() -> None:
-    """The run that paused ended on the question, so it reported no call; the run that finishes must."""
+async def test_a_client_call_made_before_the_question_is_not_pending_on_the_resumed_run() -> None:
+    """The call went out in the run that paused: the run that finishes lists only what it started."""
     agent = Agent(
         "test_agent",
         config=TestConfig([
@@ -117,5 +117,6 @@ async def test_a_client_call_made_before_the_question_is_pending_on_the_resumed_
     resume = run_body(thread_id="t1", run_id="r2", text=None, resume=answer(sole_interrupt(first), "blue"))
     second = await post_run(app, {**resume, "tools": tools})
 
-    [chunk] = every(first, "TOOL_CALL_CHUNK")
-    assert outcome_of(second) == {"type": "success", "pendingToolCallIds": [chunk["toolCallId"]]}
+    assert len(every(first, "TOOL_CALL_CHUNK")) == 1
+    assert every(second, "TOOL_CALL_CHUNK") == []
+    assert outcome_of(second) == {"type": "success"}

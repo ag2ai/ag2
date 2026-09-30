@@ -48,7 +48,16 @@ def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsag
     # not would read as a complete measurement. Within a pair an absent count stays
     # unset unless some call reported it.
     entries = [_token_usage(record) for record in records]
-    return aggregate_token_usage(entries) or None
+    # The SDK sums each field on its own, so a call with no output count would
+    # leave the grouped total short of input plus output: recompute it.
+    return [_with_total(entry) for entry in aggregate_token_usage(entries)] or None
+
+
+def _with_total(entry: TokenUsage) -> TokenUsage:
+    total = (
+        None if entry.input_tokens is None or entry.output_tokens is None else entry.input_tokens + entry.output_tokens
+    )
+    return entry.model_copy(update={"total_tokens": total})
 
 
 def _token_usage(record: UsageRecord) -> TokenUsage:
@@ -69,10 +78,11 @@ def _token_usage(record: UsageRecord) -> TokenUsage:
     )
 
 
-# The correction to AG-UI 1.0's accounting is made here, where usage leaves for
-# the wire, and nowhere else. `Usage` keeps each provider's numbers as the
-# provider reported them, because budgets and limiters read them that way;
-# "fixing" the provider normalizers instead would shift every one of those.
+# The cache and reasoning corrections to AG-UI 1.0's accounting are made here,
+# where usage leaves for the wire. `Usage` keeps those counts as the provider
+# reported them, because budgets and limiters read them that way. (Gemini's
+# tool-use prompt tokens are the exception: they are billed as prompt, and
+# `normalize_usage` folds them into `prompt_tokens` itself.)
 # AG-UI's input and output are totals, and its cache and reasoning counts parts
 # of them, so where a provider reports those beside a smaller count, they are
 # added in here.

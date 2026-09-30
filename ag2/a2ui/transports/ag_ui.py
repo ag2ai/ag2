@@ -48,6 +48,7 @@ from ag2.ag_ui.interrupts import (
     TurnOutput,
     drive_run,
     serve_exchange,
+    timestamp_ms,
     utc_now,
 )
 from ag2.ag_ui.provider import provider_of
@@ -304,7 +305,7 @@ async def _report_delegation(output: TurnOutput, event: TaskEvent) -> None:
 
 
 async def _report_tool_call(output: TurnOutput, event: ToolCallEvent) -> None:
-    timestamp = int(utc_now().timestamp() * 1000)
+    timestamp = timestamp_ms()
     await output.send(
         ToolCallStartEvent(
             tool_call_id=event.id,
@@ -326,7 +327,7 @@ async def _report_tool_result(output: TurnOutput, agent: "Agent", predates_parts
             agent._serializer,
             predates_parts,
             message_id=uuid4().hex,
-            timestamp=int(utc_now().timestamp() * 1000),
+            timestamp=timestamp_ms(),
         )
     )
 

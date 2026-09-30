@@ -142,7 +142,9 @@ In this setup:
 - The **frontend** executes/handles the tool and renders the UI.
 
 A run that stops on client tool calls finishes with a success outcome naming
-them, in call order, in `pendingToolCallIds`. The client answers them in the next
+the calls it started, in call order, in `pendingToolCallIds`. A call an earlier
+run announced is not repeated: the run that paused on a question ended on an
+interrupt outcome, which carries no pending ids. The client answers them in the next
 run's messages, and a tool message may carry content parts, not only a string.
 
 This frontend-tool round trip is separate from an AG2 `context.input()`

@@ -305,7 +305,8 @@ class TestHistoryRoles:
         assert model.history == [ModelRequest([TextInput("Hi")])]
 
 
-async def test_gemini_restated_tool_call_keeps_its_signature() -> None:
+@pytest.mark.parametrize("provider", [ModelProvider.GEMINI, ModelProvider.VERTEXAI])
+async def test_gemini_restated_tool_call_keeps_its_signature(provider: ModelProvider) -> None:
     incoming = run_input(
         AssistantMessage(
             id="a1",
@@ -315,7 +316,7 @@ async def test_gemini_restated_tool_call_keeps_its_signature() -> None:
         )
     )
 
-    gemini = await _model_input(incoming, config=_as(ModelProvider.GEMINI))
+    gemini = await _model_input(incoming, config=_as(provider))
     openai = await _model_input(incoming, config=_as(ModelProvider.OPENAI))
 
     [call] = gemini.history[0].tool_calls.calls

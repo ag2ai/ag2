@@ -9,6 +9,9 @@ from base64 import b64decode, b64encode
 from ag_ui.core import ReasoningEncryptedValueEvent
 
 from ag2 import events
+from ag2.config import ModelProvider
+
+from .provider import GEMINI_FAMILY
 
 # `ag2[ag-ui]` does not install google-genai. Without it no Gemini call can
 # exist, so there is no signature to read and none to restore.
@@ -33,7 +36,7 @@ def signature_event(call_id: str, signature: str, timestamp: int) -> ReasoningEn
 
 
 def restore_tool_call(
-    provider: str | None,
+    provider: ModelProvider | None,
     *,
     id: str,
     name: str,
@@ -41,7 +44,7 @@ def restore_tool_call(
     encrypted_value: str | None,
 ) -> events.ToolCallEvent:
     """A replayed tool call, carrying its signature back where the provider needs one."""
-    if provider == "gemini" and encrypted_value is not None and GeminiToolCallEvent is not None:
+    if provider in GEMINI_FAMILY and encrypted_value is not None and GeminiToolCallEvent is not None:
         return GeminiToolCallEvent(id=id, name=name, arguments=arguments, thought_signature=b64decode(encrypted_value))
     return events.ToolCallEvent(id=id, name=name, arguments=arguments)
 

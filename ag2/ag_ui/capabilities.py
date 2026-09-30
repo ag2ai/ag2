@@ -22,7 +22,7 @@ from ag2.tools.subagents.subagent_tool import SubagentTool
 from ag2.tools.tool import Tool
 
 from .input_acceptance import input_modalities
-from .provider import provider_of
+from .provider import GEMINI_FAMILY, provider_of
 
 
 def _subagents(tools: tuple[Tool, ...]) -> list[SubagentInfo]:
@@ -55,7 +55,7 @@ def served_capabilities(agent: Agent, *, client_tools: bool, state_snapshots: bo
         multi_agent=MultiAgentCapabilities(supported=True, delegation=True, subagents=subagents or None)
         if agent.tasks is not None or subagents
         else None,
-        reasoning=ReasoningCapabilities(encrypted=provider_of(agent.config) == "gemini"),
+        reasoning=ReasoningCapabilities(encrypted=provider_of(agent.config) in GEMINI_FAMILY),
         multimodal=MultimodalCapabilities(input=MultimodalInputCapabilities(**modalities)) if modalities else None,
         # A question the agent's own hook answers never reaches the client.
         human_in_the_loop=HumanInTheLoopCapabilities(supported=True, interrupts=agent._hitl_hook is None),
