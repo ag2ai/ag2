@@ -4,6 +4,7 @@
 
 """Offline unit tests for E2BEnvironment; the E2B SDK is fully mocked."""
 
+import asyncio
 from copy import deepcopy
 from pathlib import PurePosixPath
 from types import SimpleNamespace
@@ -34,6 +35,20 @@ def _fake_remote(sandbox_id: str = "sbx-1") -> Any:
         is_running=AsyncMock(return_value=True),
         kill=AsyncMock(return_value=True),
     )
+
+
+def _first_call_waits(gate: asyncio.Event) -> Any:
+    # The first call blocks until the test releases it; later calls succeed at once.
+    calls = 0
+
+    async def call(*args: Any, **kwargs: Any) -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            await gate.wait()
+        return True
+
+    return call
 
 
 def _patch_create(*remotes: Any) -> Any:
@@ -170,6 +185,39 @@ class TestOpen:
             await factory.aclose()
             await factory.aclose()
         assert remote.kill.await_count == 2
+
+    async def test_close_retries_a_sandbox_whose_setup_and_kill_failed(self) -> None:
+        failed, fresh = _fake_remote("sbx-failed"), _fake_remote("sbx-fresh")
+        failed.files.make_dir = AsyncMock(side_effect=RuntimeError("read-only"))
+        failed.kill = AsyncMock(side_effect=[RuntimeError("network"), RuntimeError("network"), True])
+        with _patch_create(failed, fresh):
+            factory = E2BEnvironment(workdir="/workspace")
+            with pytest.raises(RuntimeError, match="read-only"):
+                async with factory.open():
+                    pass
+            # A retried open replaces the cache entry; the failed sandbox must not be forgotten.
+            async with factory.open() as sandbox:
+                assert sandbox.sandbox_id == "sbx-fresh"
+            await factory.aclose()
+        assert failed.kill.await_count == 3
+        fresh.kill.assert_awaited_once()
+
+    async def test_cancelled_close_leaves_the_rest_for_the_next_close(self) -> None:
+        first, second = _fake_remote("sbx-a"), _fake_remote("sbx-b")
+        hang = asyncio.Event()
+        first.kill = AsyncMock(side_effect=_first_call_waits(hang))
+        with _patch_create(first, second):
+            factory = E2BEnvironment(api_key=Variable("key"))
+            for key in ("a", "b"):
+                async with factory.open(Context(stream=MagicMock(), variables={"key": key})):
+                    pass
+            closing = asyncio.create_task(factory.aclose())
+            await asyncio.sleep(0.01)
+            closing.cancel()
+            await asyncio.gather(closing, return_exceptions=True)
+            await factory.aclose()
+        assert first.kill.await_count == 2
+        second.kill.assert_awaited_once()
 
     async def test_tools_share_one_sandbox(self) -> None:
         remote = _fake_remote()

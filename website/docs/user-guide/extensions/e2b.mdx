@@ -79,7 +79,7 @@ env = E2BEnvironment(
 
 ## Lifecycle
 
-E2B reclaims a sandbox once its server-side lifetime runs out. A command extends that lifetime back to `sandbox_timeout` when less than half of it is left, and always far enough to cover the command's own `timeout`, so a running command is not cut off. The lifetime is never shortened. An idle sandbox therefore lives between half of `sandbox_timeout` and the full value after its last command. Set `sandbox_timeout` above the longest pause you expect between tool calls, such as a slow model turn or a human-in-the-loop wait.
+E2B reclaims a sandbox once its server-side lifetime runs out. A command extends that lifetime back to `sandbox_timeout` when less than half of it is left, and always far enough to cover the command's own `timeout`, so a running command is not cut off. The lifetime is never shortened. How long an idle sandbox survives after its last command depends on when that command ran relative to the last refresh, so set `sandbox_timeout` with a comfortable margin above the longest pause you expect between tool calls, such as a slow model turn or a human-in-the-loop wait.
 
 Once a sandbox is gone, the next command reports it, and the environment does not silently create a new one, because a new sandbox would not have the old one's files.
 

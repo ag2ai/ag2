@@ -58,10 +58,6 @@ class TestConstruction:
         with pytest.raises(ValueError, match="sandbox_timeout"):
             E2BSandbox(sandbox_timeout=0)
 
-    def test_create_options_cannot_shadow_arguments(self) -> None:
-        with pytest.raises(ValueError, match="envs"):
-            E2BSandbox(create_options={"envs": {"A": "1"}})
-
     def test_workdir_defaults_to_e2b_home_and_is_posix(self) -> None:
         assert E2BSandbox().workdir == PurePosixPath("/home/user")
         assert E2BSandbox(workdir="/srv").workdir == PurePosixPath("/srv")
@@ -294,6 +290,20 @@ class TestLifecycle:
         sync_kill.assert_called_once_with("sbx-1", api_key="test", domain="e2b.example")  # pragma: allowlist secret
 
 
+def _first_call_waits(gate: asyncio.Event) -> Any:
+    # The first call blocks until the test releases it; later calls succeed at once.
+    calls = 0
+
+    async def call(*args: Any, **kwargs: Any) -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            await gate.wait()
+        return True
+
+    return call
+
+
 def _gated(result: Any = None) -> tuple[asyncio.Event, Any]:
     # An SDK call that blocks until the test releases it, like a slow network round-trip.
     gate = asyncio.Event()
@@ -360,6 +370,28 @@ class TestConcurrency:
                 await opening
         remote.kill.assert_awaited_once()
         assert sandbox.sandbox_id is None
+
+    async def test_late_cleanup_of_a_failed_setup_keeps_the_new_sandbox(self) -> None:
+        # A cancelled caller's shielded kill of its failed sandbox finishes only
+        # after a later call already replaced it; the new handle must survive.
+        failed, fresh = _fake_remote(), _fake_remote()
+        fresh.sandbox_id = "sbx-2"
+        failed.files.make_dir = AsyncMock(side_effect=RuntimeError("read-only"))
+        gate = asyncio.Event()
+        failed.kill = AsyncMock(side_effect=_first_call_waits(gate))
+        create = AsyncMock(side_effect=[failed, fresh])
+        with patch("ag2.extensions.e2b.sandbox.AsyncSandbox.create", create):
+            sandbox = E2BSandbox(workdir="/workspace")
+            first = asyncio.create_task(sandbox.exec(["a"]))
+            await asyncio.sleep(0.01)
+            first.cancel()
+            await asyncio.gather(first, return_exceptions=True)
+            await sandbox.exec(["b"])
+            gate.set()
+            await asyncio.sleep(0.01)
+            assert sandbox.sandbox_id == "sbx-2"
+            await sandbox.aclose()
+        fresh.kill.assert_awaited_once()
 
 
 @pytest.mark.asyncio

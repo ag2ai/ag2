@@ -73,7 +73,7 @@ class E2BEnvironment:
 
         Raises:
             ValueError: If ``timeout`` or ``sandbox_timeout`` is not positive,
-                or ``create_options`` repeats an argument of this constructor.
+                or ``create_options`` contains ``api_key``.
         """
         if timeout <= 0:
             raise ValueError("`timeout` must be greater than 0 seconds.")
@@ -166,11 +166,13 @@ class E2BEnvironment:
         try:
             await sandbox.__aenter__()
         except BaseException:
-            with self._cache_lock:
-                if self._cache.get(key) is sandbox:
-                    self._cache.pop(key)
             with suppress(BaseException):
                 await sandbox.aclose()
+            # The closed cache entry is replaced on the next open; if setup and
+            # kill both failed, keep the sandbox for the next `aclose` to retry.
+            if sandbox.sandbox_id is not None:
+                with self._cache_lock:
+                    self._unkilled.append(sandbox)
             raise
         # The factory owns the lifecycle so cached state survives this scope.
         yield sandbox
@@ -182,10 +184,13 @@ class E2BEnvironment:
             sandboxes = [*self._cache.values(), *self._unkilled]
             self._cache.clear()
             self._unkilled = []
-        for sandbox in sandboxes:
-            await sandbox.aclose()
-        with self._cache_lock:
-            self._unkilled.extend(sandbox for sandbox in sandboxes if sandbox.sandbox_id is not None)
+        try:
+            for sandbox in sandboxes:
+                await sandbox.aclose()
+        finally:
+            # Also on cancellation: whatever is not killed yet stays for the next call.
+            with self._cache_lock:
+                self._unkilled.extend(sandbox for sandbox in sandboxes if sandbox.sandbox_id is not None)
 
     async def __aenter__(self) -> "E2BEnvironment":
         return self

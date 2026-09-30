@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 _LIFETIME_GRACE = 30
 
 _API_PARAMS = frozenset(ApiParams.__annotations__)
-_RESERVED_CREATE_OPTIONS = frozenset({"template", "timeout", "envs"})
 
 
 class E2BSandbox(SandboxBase):
@@ -51,6 +50,9 @@ class E2BSandbox(SandboxBase):
     sandbox therefore lives at least half of ``sandbox_timeout`` after its
     last command. A sandbox that is gone is reported as an error and is never
     silently recreated, since a new one would not have its files.
+
+    Use one instance from one event loop at a time; creation, refreshes and
+    close are serialized per loop.
 
     Args:
         template: E2B template name or ID. ``None`` uses the SDK default.
@@ -86,12 +88,6 @@ class E2BSandbox(SandboxBase):
             raise ValueError("`timeout` must be greater than 0 seconds.")
         if sandbox_timeout is not None and sandbox_timeout <= 0:
             raise ValueError("`sandbox_timeout` must be greater than 0 seconds.")
-        reserved = _RESERVED_CREATE_OPTIONS.intersection(create_options or {})
-        if reserved:
-            raise ValueError(
-                f"Pass {sorted(reserved)} as E2BSandbox arguments (template, env_vars, sandbox_timeout), "
-                "not through `create_options`."
-            )
 
         self._template = template
         self._env_vars = env_vars
@@ -111,7 +107,6 @@ class E2BSandbox(SandboxBase):
         self._lock: asyncio.Lock | None = None
         self._lock_loop: asyncio.AbstractEventLoop | None = None
         self._closed = False
-        self._atexit_registered = False
 
     @property
     def workdir(self) -> PurePosixPath:
@@ -214,8 +209,6 @@ class E2BSandbox(SandboxBase):
         deadline later, which keeps it covering every command already running.
         """
         needed = math.ceil(exec_timeout) + _LIFETIME_GRACE
-        if self._expires_at - time.monotonic() > max(needed, self._lifetime / 2):
-            return
         async with self._loop_lock():
             now = time.monotonic()
             if self._expires_at - now > max(needed, self._lifetime / 2):
@@ -247,7 +240,7 @@ class E2BSandbox(SandboxBase):
                 **self._create_options,
             )
             self._sandbox = sandbox
-            self._register_atexit()
+            atexit.register(self._atexit_close)
             try:
                 await sandbox.files.make_dir(str(self._workdir))
             except BaseException:
@@ -278,26 +271,19 @@ class E2BSandbox(SandboxBase):
                 await self._kill()
 
     async def _kill(self) -> bool:
-        assert self._sandbox is not None
+        sandbox = self._sandbox
+        assert sandbox is not None
         try:
-            await self._sandbox.kill()
+            await sandbox.kill()
         except Exception as e:
             logger.debug("Suppressed exception during E2B sandbox kill: %s", e)
             return False
-        self._sandbox = None
-        self._ready = False
-        self._unregister_atexit()
-        return True
-
-    def _register_atexit(self) -> None:
-        if not self._atexit_registered:
-            atexit.register(self._atexit_close)
-            self._atexit_registered = True
-
-    def _unregister_atexit(self) -> None:
-        if self._atexit_registered:
+        # A shielded kill can finish after a later call already replaced the handle.
+        if self._sandbox is sandbox:
+            self._sandbox = None
+            self._ready = False
             atexit.unregister(self._atexit_close)
-            self._atexit_registered = False
+        return True
 
     def _atexit_close(self) -> None:
         if self._sandbox is None:
