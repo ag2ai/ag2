@@ -229,7 +229,7 @@ async def test_update_file(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_file_rejects_empty_old_content(tmp_path: Path) -> None:
+async def test_update_file_rejects_empty_old_content_on_non_empty_file(tmp_path: Path) -> None:
     target = tmp_path / "data.txt"
     target.write_text("original", encoding="utf-8")
 
@@ -247,6 +247,26 @@ async def test_update_file_rejects_empty_old_content(tmp_path: Path) -> None:
         await agent.ask("update it")
 
     assert target.read_text(encoding="utf-8") == "original"
+
+
+@pytest.mark.asyncio
+async def test_update_file_empty_old_content_fills_empty_file(tmp_path: Path) -> None:
+    target = tmp_path / "data.txt"
+    target.write_text("", encoding="utf-8")
+
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+    config = TestConfig(
+        ToolCallEvent(
+            name="update_file",
+            arguments=json.dumps({"path": "data.txt", "old_content": "", "new_content": "filled"}),
+        ),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+
+    await agent.ask("fill it")
+
+    assert target.read_text(encoding="utf-8") == "filled"
 
 
 @pytest.mark.asyncio
