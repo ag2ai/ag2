@@ -1,0 +1,90 @@
+---
+title: E2B Sandbox Integration
+sidebarTitle: E2B Sandbox
+---
+
+The `ag2.extensions.e2b` module runs AG2 shell and code tools in isolated [E2B](https://e2b.dev/){.external-link target="_blank"} cloud sandboxes. It implements AG2's native sandbox factory, so one environment keeps files across tool calls and cleans up deterministically.
+
+## Installation
+
+Install AG2, your model provider, and E2B's Python SDK:
+
+```bash
+pip install "ag2[anthropic]" "e2b>=2.0.0,<3"
+```
+
+Create an API key in the [E2B dashboard](https://e2b.dev/dashboard){.external-link target="_blank"} and export it:
+
+```bash
+export E2B_API_KEY="e2b_your_api_key"
+```
+
+## Use E2B with an agent
+
+Use the environment as an async context manager. Every shell and code call inside the scope runs in the same sandbox, and the sandbox is killed when the scope exits.
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.e2b import E2BEnvironment
+from ag2.tools import SandboxCodeTool, SandboxShellTool
+
+async def main() -> None:
+    env = E2BEnvironment()
+    async with env:
+        agent = Agent(
+            "developer",
+            config=AnthropicConfig(model="claude-sonnet-5"),
+            tools=[SandboxShellTool(env), SandboxCodeTool(env)],
+        )
+        reply = await agent.ask("Write hello.txt, then read it with Python.")
+        print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The default template ships `python` and `node`, so `SandboxCodeTool(env, languages=("python", "bash", "javascript"))` works without a custom template. TypeScript needs a template with `ts-node`.
+
+## Configure the sandbox
+
+```python linenums="1"
+from ag2.extensions.e2b import E2BEnvironment
+
+env = E2BEnvironment(
+    template="my-template",
+    env_vars={"APP_ENV": "sandbox"},
+    timeout=60,
+    sandbox_timeout=600,
+    workdir="/home/user/project",
+    create_options={"metadata": {"app": "my-agent"}, "allow_internet_access": False},
+)
+```
+
+| Parameter | Default | Purpose |
+| :--- | :--- | :--- |
+| `api_key` | `E2B_API_KEY` | API authentication |
+| `template` | E2B default template | Template name or ID the sandbox starts from |
+| `env_vars` | `{}` | Environment variables set for every command |
+| `timeout` | `60` seconds | Per-command timeout; a command that runs longer is killed and returns exit code `124` |
+| `sandbox_timeout` | E2B default (`300` seconds) | Idle lifetime; each command extends it |
+| `workdir` | `/home/user` | Working directory for commands and files, created if missing |
+| `create_options` | `{}` | Extra keyword arguments forwarded to `AsyncSandbox.create`, such as `domain`, `metadata`, `secure`, `allow_internet_access`, `network`, or `lifecycle` |
+
+`api_key`, `template`, and `env_vars` accept [`Variable`](/docs/user-guide/context/variables) values for per-request resolution, for example per-tenant credentials. Sandboxes are cached by their resolved values, so each tenant gets its own sandbox.
+
+`E2BEnvironment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py){.external-link target="_blank"}, so `SandboxShellTool(env)` reports the real working directory to the model.
+
+## Lifecycle
+
+E2B reclaims a sandbox once its server-side lifetime runs out. While the agent is working, every command extends that lifetime, and always past the command's own `timeout`, so an active agent is not cut off mid-run. A sandbox left idle for longer than `sandbox_timeout` expires. The next command then reports that the sandbox is gone, and the environment does not silently create a new one, because the files of the old sandbox are lost.
+
+Always close the environment with `async with` or `await env.aclose()`. An `atexit` fallback kills sandboxes that are still open when the process exits, and the idle lifetime is the backstop if neither runs.
+
+## Testing
+
+The bundled unit tests mock the E2B SDK and run offline, so no E2B account is needed for the AG2 test suite. Exercising the integration against real sandboxes requires an E2B account and an `E2B_API_KEY`.
+
+Maintainer: E2B.
