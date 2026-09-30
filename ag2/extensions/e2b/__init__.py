@@ -8,7 +8,7 @@ Runs agent shell commands and code in E2B cloud sandboxes through
 :class:`E2BEnvironment`, a backend for :class:`~ag2.tools.SandboxShellTool`
 and :class:`~ag2.tools.SandboxCodeTool`.
 
-Maintained by E2B.
+Maintained by @OndrejDrapalik and E2B.
 """
 
 from ag2.exceptions import missing_additional_dependency
