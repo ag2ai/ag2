@@ -7,7 +7,7 @@
 from collections.abc import Iterable
 from math import isfinite
 
-from ag_ui.core import TokenUsage
+from ag_ui.core import TokenUsage, aggregate_token_usage
 
 from ag2.events import BaseEvent, Usage, UsageEvent
 from ag2.usage import UsageRecord, UsageReport
@@ -41,34 +41,32 @@ def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsag
     # Records, not the report's by_model / by_provider: those are independent
     # maps, so the (provider, model) pair cannot be recovered from them, and each
     # drops what the other side did not label — where a sub-agent's spend lives.
-    grouped: dict[tuple[str | None, str | None], list[Usage]] = {}
-    for record in records:
-        grouped.setdefault((record.provider, record.model), []).append(record.usage)
+    #
+    # Each call is corrected under its own provider, then the SDK sums them per
+    # (provider, model). Pairs are never folded together: absent counts add as
+    # zero, so merging a provider that reports reasoning tokens with one that does
+    # not would read as a complete measurement. Within a pair an absent count stays
+    # unset unless some call reported it.
+    entries = [_token_usage(record) for record in records]
+    return aggregate_token_usage(entries) or None
 
-    # Pairs are never folded together: absent counts add as zero, so merging a
-    # provider that reports reasoning tokens with one that does not would read as
-    # a complete measurement. Within a pair the calls are summed, because there an
-    # absent additive count does mean the provider had nothing to report.
-    entries = []
-    for (provider, model), usages in grouped.items():
-        summed = sum(usages, Usage())
-        input_tokens = _token_count(_input_total(provider, summed))
-        output_tokens = _token_count(_output_total(provider, summed))
-        entries.append(
-            TokenUsage(
-                provider=provider,
-                model=model,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                # Computed, never copied: a provider's own total need not count
-                # the way the two totals beside it now do.
-                total_tokens=None if input_tokens is None or output_tokens is None else input_tokens + output_tokens,
-                reasoning_tokens=_token_count(summed.thinking_tokens),
-                cached_input_tokens=_token_count(summed.cache_read_input_tokens),
-                cache_write_input_tokens=_token_count(summed.cache_creation_input_tokens),
-            )
-        )
-    return entries or None
+
+def _token_usage(record: UsageRecord) -> TokenUsage:
+    usage = record.usage
+    input_tokens = _token_count(_input_total(record.provider, usage))
+    output_tokens = _token_count(_output_total(record.provider, usage))
+    return TokenUsage(
+        provider=record.provider,
+        model=record.model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        # Computed, never copied: a provider's own total need not count
+        # the way the two totals beside it now do.
+        total_tokens=None if input_tokens is None or output_tokens is None else input_tokens + output_tokens,
+        reasoning_tokens=_token_count(usage.thinking_tokens),
+        cached_input_tokens=_token_count(usage.cache_read_input_tokens),
+        cache_write_input_tokens=_token_count(usage.cache_creation_input_tokens),
+    )
 
 
 # The correction to AG-UI 1.0's accounting is made here, where usage leaves for

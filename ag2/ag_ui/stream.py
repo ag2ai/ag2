@@ -312,13 +312,13 @@ async def _serve_turn(
             await output.send(
                 ReasoningMessageEndEvent(
                     message_id=reasoning_msg_id,
-                    timestamp=_get_timestamp(),
+                    timestamp=timestamp_ms(),
                 )
             )
             await output.send(
                 ReasoningEndEvent(
                     message_id=reasoning_msg_id,
-                    timestamp=_get_timestamp(),
+                    timestamp=timestamp_ms(),
                 )
             )
             reasoning_msg_id = None
@@ -332,14 +332,14 @@ async def _serve_turn(
                 await output.send(
                     ReasoningStartEvent(
                         message_id=reasoning_msg_id,
-                        timestamp=_get_timestamp(),
+                        timestamp=timestamp_ms(),
                     )
                 )
                 await output.send(
                     ReasoningMessageStartEvent(
                         message_id=reasoning_msg_id,
                         role="reasoning",
-                        timestamp=_get_timestamp(),
+                        timestamp=timestamp_ms(),
                     )
                 )
 
@@ -347,7 +347,7 @@ async def _serve_turn(
                 ReasoningMessageContentEvent(
                     message_id=reasoning_msg_id,
                     delta=event.content,
-                    timestamp=_get_timestamp(),
+                    timestamp=timestamp_ms(),
                 )
             )
             return
@@ -361,7 +361,7 @@ async def _serve_turn(
                 await output.send(
                     TextMessageStartEvent(
                         message_id=streaming_msg_id,
-                        timestamp=_get_timestamp(),
+                        timestamp=timestamp_ms(),
                     )
                 )
 
@@ -369,7 +369,7 @@ async def _serve_turn(
                 TextMessageContentEvent(
                     message_id=streaming_msg_id,
                     delta=event.content,
-                    timestamp=_get_timestamp(),
+                    timestamp=timestamp_ms(),
                 )
             )
 
@@ -378,7 +378,7 @@ async def _serve_turn(
                 await output.send(
                     TextMessageEndEvent(
                         message_id=streaming_msg_id,
-                        timestamp=_get_timestamp(),
+                        timestamp=timestamp_ms(),
                     )
                 )
                 streaming_msg_id = None
@@ -388,7 +388,7 @@ async def _serve_turn(
                     TextMessageChunkEvent(
                         message_id=str(uuid4()),
                         delta=event.content,
-                        timestamp=_get_timestamp(),
+                        timestamp=timestamp_ms(),
                     )
                 )
 
@@ -398,7 +398,7 @@ async def _serve_turn(
                     tool_call_id=event.id,
                     tool_call_name=event.name,
                     delta=event.arguments,
-                    timestamp=_get_timestamp(),
+                    timestamp=timestamp_ms(),
                 )
             )
             await _send_signature(output, signatures, event.id)
@@ -413,7 +413,7 @@ async def _serve_turn(
                 ToolCallStartEvent(
                     tool_call_id=event.id,
                     tool_call_name=event.name,
-                    timestamp=_get_timestamp(),
+                    timestamp=timestamp_ms(),
                 )
             )
             await _send_signature(output, signatures, event.id)
@@ -421,7 +421,7 @@ async def _serve_turn(
                 ToolCallArgsEvent(
                     tool_call_id=event.id,
                     delta=event.arguments,
-                    timestamp=_get_timestamp(),
+                    timestamp=timestamp_ms(),
                 )
             )
             # Closed as soon as its arguments are complete, not after it runs: a
@@ -431,14 +431,14 @@ async def _serve_turn(
             await output.send(
                 ToolCallEndEvent(
                     tool_call_id=event.id,
-                    timestamp=_get_timestamp(),
+                    timestamp=timestamp_ms(),
                 )
             )
 
         elif isinstance(event, events.ToolResultEvent):
             await output.send(
                 tool_result_event(
-                    event, agent._serializer, predates_parts, message_id=str(uuid4()), timestamp=_get_timestamp()
+                    event, agent._serializer, predates_parts, message_id=str(uuid4()), timestamp=timestamp_ms()
                 )
             )
 
@@ -462,7 +462,7 @@ async def _serve_turn(
 
     held_by_client = _encode_context(incoming_state) if shares_state else None
     if shares_state and (opening := _encode_context(initial_state)) != held_by_client:
-        await output.send(StateSnapshotEvent(snapshot=opening, timestamp=_get_timestamp()))
+        await output.send(StateSnapshotEvent(snapshot=opening, timestamp=timestamp_ms()))
         held_by_client = opening
 
     with ExitStack() as stack:
@@ -487,12 +487,12 @@ async def _serve_turn(
         )
 
     if shares_state and (closing := _encode_context(result.context.variables)) != held_by_client:
-        await output.send(StateSnapshotEvent(snapshot=closing, timestamp=_get_timestamp()))
+        await output.send(StateSnapshotEvent(snapshot=closing, timestamp=timestamp_ms()))
 
 
 async def _send_signature(output: "TurnOutput", signatures: dict[str, str], call_id: str) -> None:
     if (value := signatures.pop(call_id, None)) is not None:
-        await output.send(signature_event(call_id, value, _get_timestamp()))
+        await output.send(signature_event(call_id, value, timestamp_ms()))
 
 
 # The task lifecycle events a delegation reaches the client through.
@@ -518,13 +518,13 @@ def map_task_event_to_ag_ui(
             name=event.agent_name,
             description=event.objective,
             parent_tool_call_id=event.parent_tool_call_id,
-            timestamp=_get_timestamp(),
+            timestamp=timestamp_ms(),
         )
     if isinstance(event, events.TaskCompleted):
         return SubagentFinishedEvent(
             subagent_run_id=event.task_id,
             result=to_jsonable_python(event.result, fallback=str),
-            timestamp=_get_timestamp(),
+            timestamp=timestamp_ms(),
         )
     # A stopped invocation did not succeed, and the protocol has no outcome
     # for it on SUBAGENT_FINISHED: success and suspension are all it names.
@@ -536,7 +536,7 @@ def map_task_event_to_ag_ui(
         # The run carries on: the delegating tool reports the failure to the
         # parent's model, which may well recover from it.
         message = str(event.error) or type(event.error).__name__
-    return SubagentErrorEvent(subagent_run_id=event.task_id, message=message, timestamp=_get_timestamp())
+    return SubagentErrorEvent(subagent_run_id=event.task_id, message=message, timestamp=timestamp_ms())
 
 
 def map_agui_content_to_input(content: ContentPart, *, provider: str | None = None) -> events.Input | None:
@@ -784,10 +784,6 @@ class _SharedContext(BaseMiddleware):
     async def on_turn(self, call_next: AgentTurn, event: events.BaseEvent, context: Context) -> events.ModelResponse:
         context.prompt.append(self._block)
         return await call_next(event, context)
-
-
-def _get_timestamp() -> int:
-    return timestamp_ms()
 
 
 def _encode_context(context: dict[str, Any]) -> dict[str, Any]:
