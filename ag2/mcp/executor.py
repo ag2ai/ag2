@@ -4,7 +4,13 @@
 
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from contextlib import AbstractAsyncContextManager, AbstractContextManager, ExitStack, asynccontextmanager
+from contextlib import (
+    AbstractAsyncContextManager,
+    AbstractContextManager,
+    AsyncExitStack,
+    ExitStack,
+    asynccontextmanager,
+)
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -245,23 +251,25 @@ class AgentExecutor:
         if state is None or turn is None:
             # A protocol error, not a tool error: the remedy is to start the call
             # again, which the model cannot reach by rewording.
-            raise MCPError(
-                code=INVALID_PARAMS,
-                message="Invalid or expired requestState",
-                data={"reason": "invalid_request_state"},
-            )
-        # Without this a turn that pauses for longer than the idle TTL is
-        # evicted mid-question, and the eviction reclaims the run being resumed.
-        if self._session_store is not None and turn.conversation is not None:
-            await self._session_store.touch(turn.conversation)
-        answer = (input_responses or {}).get(state.request_key)
-        if answer is not None:
-            # A refused answer consumes nothing and the current question is asked
-            # again below. Whether it is the right *kind* of answer is the
-            # asker's to judge, not this frame's.
-            turn.answer(state.request_key, answer)
+            raise _invalid_request_state()
         try:
-            return await self._advance(turn, turn.stream, request_context)
+            async with AsyncExitStack() as stack:
+                if self._session_store is not None and turn.conversation is not None:
+                    # The run continues without the turn lock it released when it
+                    # paused, so without this a round slower than the idle TTL is
+                    # evicted as it works.
+                    try:
+                        await stack.enter_async_context(self._session_store.resumed(turn.conversation))
+                    except UnknownConversationError:
+                        # Evicted since ``take``: the history the run would continue is gone.
+                        raise _invalid_request_state() from None
+                answer = (input_responses or {}).get(state.request_key)
+                if answer is not None:
+                    # A refused answer consumes nothing and the current question is asked
+                    # again below. Whether it is the right *kind* of answer is the
+                    # asker's to judge, not this frame's.
+                    turn.answer(state.request_key, answer)
+                return await self._advance(turn, turn.stream, request_context)
         except asyncio.CancelledError:
             # The round went away — a disconnect, a cancellation notification —
             # but the run did not, and the client's state still names it. Put it
@@ -486,6 +494,14 @@ class _Counter:
     def next(self) -> float:
         self._value += 1.0
         return self._value
+
+
+def _invalid_request_state() -> MCPError:
+    return MCPError(
+        code=INVALID_PARAMS,
+        message="Invalid or expired requestState",
+        data={"reason": "invalid_request_state"},
+    )
 
 
 @asynccontextmanager

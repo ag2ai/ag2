@@ -369,8 +369,8 @@ app = MCPServer(
 )
 ```
 
-- `max_sessions` — LRU cap; the least-recently-used conversation's history is dropped once the cap is exceeded.
-- `ttl` — idle expiry in seconds; a conversation untouched for longer has its history dropped (`None`, the default, means no expiry).
+- `max_sessions` — LRU cap; the least-recently-used conversation's history is dropped once the cap is exceeded. A conversation with a turn running on it is never dropped, so while every other one is mid-turn the cap gives way until a turn ends.
+- `ttl` — idle expiry in seconds; a conversation untouched for longer has its history dropped (`None`, the default, means no expiry). Idle time counts from the last call or the end of the last turn, so a turn that runs longer than the `ttl` is neither cut off nor expired the moment it finishes.
 - `storage` — the history backend.
 
 Both bounds are quoted in the `conversation` argument's own description, so a client can judge whether an old handle is still worth presenting.
@@ -440,7 +440,7 @@ Leave `security_settings` alone and AG2 puts the protection up itself — provid
 
 `SessionConfig(max_sessions=...)` and `TransportConfig(max_mcp_sessions=...)` sit side by side and bound different things:
 
-- `max_sessions` caps **conversation** sessions — how much history the server remembers. Overflowing it drops the least-recently-used conversation; nothing is refused.
+- `max_sessions` caps **conversation** sessions — how much history the server remembers. Overflowing it drops the least-recently-used conversation that has no turn running; nothing is refused.
 - `max_mcp_sessions` caps concurrent **MCP** sessions — the transport's own handshake-era sessions. A request that would open one beyond the cap is answered `503`.
 
 ### Stateless transports and the idle timeout
