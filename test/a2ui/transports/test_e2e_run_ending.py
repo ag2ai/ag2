@@ -27,22 +27,6 @@ from test.ag_ui.serving import post_run, run_body, shut_down  # noqa: E402
 pytestmark = pytest.mark.asyncio
 
 
-async def test_a_part_that_cannot_be_decoded_ends_the_run_with_run_error() -> None:
-    server = A2UIServer(Agent("ui", config=TestConfig("never reached")), transport=AgUiTransport())
-    body = run_body(thread_id="t1", run_id="r1")
-    body["messages"] = [
-        {
-            "id": "m1",
-            "role": "user",
-            "content": [{"type": "image", "source": {"type": "data", "value": "a", "mimeType": "image/png"}}],
-        }
-    ]
-
-    frames = await post_run(server, body)
-
-    assert types_of(frames) == ["RUN_STARTED", "RUN_ERROR"]
-
-
 async def test_a_tool_that_raises_ends_the_body_after_run_error() -> None:
     server = A2UIServer(exploding_agent(), transport=AgUiTransport(), validate_responses=False)
 

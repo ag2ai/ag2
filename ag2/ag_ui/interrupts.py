@@ -91,7 +91,6 @@ APPROVAL_SCHEMA: dict[str, Any] = {
 
 # Codes on the `RUN_ERROR` a refused resume produces, so a client can branch
 # without parsing prose.
-NO_HELD_TURN = "INTERRUPT_NOT_HELD"
 NOT_COVERED = "INTERRUPT_NOT_COVERED"
 PAYLOAD_REFUSED = "INTERRUPT_PAYLOAD_REFUSED"
 NOT_PROVEN = "INTERRUPT_NOT_PROVEN"
@@ -158,7 +157,7 @@ class ResumeRefusedError(AG2Error):
     __slots__ = ("code",)
 
     code: str
-    """One of `NO_HELD_TURN`, `NOT_COVERED`, `NOT_PROVEN`, `PAYLOAD_REFUSED`.
+    """One of `NOT_COVERED`, `NOT_PROVEN`, `PAYLOAD_REFUSED`.
 
     Branch on this rather than on the message.
     """
@@ -184,7 +183,7 @@ class TurnOutput:
     Also the ledger of what the turn has open on the wire — messages, reasoning,
     tool calls, subagent invocations — read off the events as they are sent, so
     a run can be closed in order however it ends, and of the tool calls the
-    current run left unanswered.
+    turn has left unanswered.
 
     And the meter of what the turn spent: each run reports what was spent since
     the run before it reported, so a turn carried by several runs is counted once.
@@ -224,15 +223,15 @@ class TurnOutput:
         self._repeats: dict[str, int] = {}
         """Starts refused for an invocation id still open, each owed one silenced end."""
         self._calls: dict[str, bool] = {}
-        """Tool calls the current run started, in call order, and whether it answered them."""
+        """Tool calls the turn started, in call order, and whether it answered them."""
 
     def rebind(self, *, run_id: str, send: MemoryObjectSendStream[BaseEvent]) -> None:
         """Point the turn at the exchange now carrying it."""
         self.run_id = run_id
         self._send = send
         self._paused = False
-        # Kept events are delivered in this run, so the calls they start are its own.
-        self._calls = {}
+        # What an earlier run of this turn left unanswered stays owed: the run
+        # that paused did not end as a success, so it reported none of it.
         for event in self._kept:
             self._record_call(event)
         # Ahead of anything kept: an event about a suspended invocation must
@@ -539,17 +538,19 @@ class ServedTurns:
     `asyncio` task nobody references may be collected mid-flight.
     """
 
-    __slots__ = ("_live", "_held", "retention", "_now")
+    __slots__ = ("_live", "_held", "retention", "require_proof", "_now")
 
     def __init__(
         self,
         *,
         retention: Retention = DEFAULT_RETENTION,
+        require_proof: bool = False,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._live: set[ServedTurn] = set()
         self._held: dict[str, ServedTurn] = {}
         self.retention = retention
+        self.require_proof = require_proof
         self._now = now
 
     def track(self, turn: ServedTurn, task: "asyncio.Task[None]") -> None:
@@ -800,11 +801,18 @@ def issue_proof() -> str:
     return secrets.token_urlsafe(_PROOF_BYTES)
 
 
-def check_proof(entry: ResumeEntry, interrupt: Interrupt) -> None:
-    """Verify that `entry` carries the proof `interrupt` was issued with.
+def check_proof(entry: ResumeEntry, interrupt: Interrupt, *, required: bool) -> None:
+    """Verify the proof `entry` carries against the one `interrupt` was issued with.
 
-    Raises `ResumeRefusedError` under `NOT_PROVEN` if it does not.
+    A proof that is present must be the one issued. One that is absent is
+    refused only when `required`: a standard client copies nothing from an
+    interrupt's metadata, and the protocol does not ask a producer to check
+    what it was told to keep.
+
+    Raises `ResumeRefusedError` under `NOT_PROVEN` if the check fails.
     """
+    if not required and not _has_proof(entry.metadata):
+        return
     if not secrets.compare_digest(_proof_in(entry.metadata), _proof_in(interrupt.metadata)):
         raise ResumeRefusedError(
             NOT_PROVEN,
@@ -812,11 +820,17 @@ def check_proof(entry: ResumeEntry, interrupt: Interrupt) -> None:
         )
 
 
+def _has_proof(metadata: Metadata | None) -> bool:
+    envelope = (metadata or {}).get(AG2_METADATA_KEY)
+    return isinstance(envelope, dict) and PROOF_KEY in envelope
+
+
 def _proof_in(metadata: Metadata | None) -> bytes:
-    # Absent and malformed are one case: both mean nothing was proved, and
-    # telling them apart would only say which half to fix. Bytes, not str: a
-    # proof off the wire is arbitrary text and `compare_digest` raises
-    # TypeError on a non-ASCII str rather than reporting a mismatch.
+    # A malformed proof and a missing one are one case when a proof is required:
+    # both mean nothing was proved, and telling them apart would only say which
+    # half to fix. Bytes, not str: a proof off the wire is arbitrary text and
+    # `compare_digest` raises TypeError on a non-ASCII str rather than reporting
+    # a mismatch.
     envelope = (metadata or {}).get(AG2_METADATA_KEY)
     proof = envelope.get(PROOF_KEY) if isinstance(envelope, dict) else None
     return proof.encode("utf-8", "surrogatepass") if isinstance(proof, str) else b""
@@ -857,29 +871,26 @@ def resume_held_turn(
     turns: ServedTurns,
     incoming: RunAgentInput,
     send: MemoryObjectSendStream[BaseEvent],
-) -> "ServedTurn | Abandoned":
+) -> "ServedTurn | Abandoned | None":
     """Hand a resume to the turn it addresses, and point that turn at this exchange.
 
-    Returns the turn now carrying the run, or `Abandoned` when the client gave
-    up on the question: the turn is to be stopped, not carried.
+    Returns the turn now carrying the run, `Abandoned` when the client gave up
+    on the question (the turn is to be stopped, not carried), or `None` when
+    the thread holds no question to answer.
 
-    A resume that cannot be honoured raises `ResumeRefusedError`. Except under
-    `NO_HELD_TURN` the turn is put back with its deadline unchanged, so a
-    legitimate answer arriving in time still resumes it.
+    A resume that cannot be honoured raises `ResumeRefusedError`, and the turn
+    is put back with its deadline unchanged, so a legitimate answer arriving in
+    time still resumes it.
     """
     turn = turns.take(incoming.thread_id)
     outstanding = turn.outstanding if turn is not None else None
     if turn is None or outstanding is None or turns.expired(turn):
-        # Refused under the same code either way: whether a turn past its
-        # deadline is still in the registry or was already swept by someone
-        # else's traffic is timing, and a client cannot be told two different
-        # things about one answer arriving too late.
+        # Unknown, already answered, expired, or held by another process: which
+        # of them is timing or routing, and none is the client's error. What it
+        # sent answers nothing this server asked.
         if turn is not None:
             turn.release()
-        raise ResumeRefusedError(
-            NO_HELD_TURN,
-            f"thread {incoming.thread_id} is not holding an interrupt: it is unknown, already answered, or expired",
-        )
+        return None
 
     entry = None
     for candidate in resume_entry(incoming):
@@ -901,7 +912,7 @@ def resume_held_turn(
         # Before the payload is so much as looked at, and before "cancelled" is
         # honoured: ending someone else's turn is not a lesser act than
         # answering it.
-        check_proof(entry, outstanding)
+        check_proof(entry, outstanding, required=turns.require_proof)
 
         match entry.status:
             case "cancelled":
@@ -1106,10 +1117,22 @@ def begin_turn(
 
     `Abandoned` when the run gives up on the question it addresses. Raises
     `ResumeRefusedError` if it addresses one that cannot be honoured, or leaves
-    the question the thread holds unanswered.
+    the question the thread holds unanswered. A resume on a thread holding none
+    is dropped with a warning, and the run starts as an ordinary one.
     """
     if resume_entry(incoming):
-        return resume_held_turn(turns, incoming, send)
+        if (held := resume_held_turn(turns, incoming, send)) is not None:
+            return held
+        # Answers to nothing this server holds: the protocol has a producer
+        # treat them as unrecognised, proceed without them and say so — a
+        # restart, or another worker, is no reason to fail the run.
+        for entry in resume_entry(incoming):
+            logger.warning(
+                "ignoring an AG-UI resume entry for interrupt %r: thread %s holds no interrupt",
+                entry.interrupt_id,
+                incoming.thread_id,
+            )
+        incoming.resume = None
 
     # Omission is not abandonment: the question stays held until it is answered,
     # given up with a "cancelled" entry, or expires.
@@ -1136,7 +1159,6 @@ __all__ = (
     "INPUT_REQUIRED_REASON",
     "NOT_COVERED",
     "NOT_PROVEN",
-    "NO_HELD_TURN",
     "PAYLOAD_REFUSED",
     "PROOF_KEY",
     "TOOL_CALL_REASON",

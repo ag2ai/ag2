@@ -80,9 +80,10 @@ def map_usage_records_to_ag_ui(records: Iterable[UsageRecord]) -> list[TokenUsag
 # added in here.
 
 # Providers whose prompt count leaves out the tokens read from and written to
-# the cache. Bedrock is not among them until a live call confirms that Converse
-# counts the way Anthropic does.
-_CACHE_OUTSIDE_PROMPT = frozenset({"anthropic"})
+# the cache. Bedrock's Converse counts like Anthropic: its prompt-caching guide
+# has the total input be `inputTokens` plus `cacheReadInputTokens` and
+# `cacheWriteInputTokens`.
+_CACHE_OUTSIDE_PROMPT = frozenset({"anthropic", "bedrock"})
 
 # Providers whose completion count leaves out the reasoning tokens:
 # Gemini's `thoughts_token_count` sits beside `candidates_token_count`. xAI's

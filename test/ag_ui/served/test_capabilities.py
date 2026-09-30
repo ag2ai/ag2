@@ -99,9 +99,10 @@ async def test_both_servers_declare_what_every_run_does(make_app: Callable[[Agen
         "identity": {"name": "test_agent", "type": "ag2"},
         "transport": {"streaming": True},
         "reasoning": {"encrypted": False},
-        "multimodal": {"input": {"image": True, "audio": True, "video": True, "pdf": True}},
         "humanInTheLoop": {"supported": True, "interrupts": True},
     })
+    # A config whose mapper cannot be read promises no modality.
+    assert "multimodal" not in document
 
 
 @pytest.mark.asyncio

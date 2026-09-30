@@ -61,7 +61,6 @@ from typing_extensions import assert_never
 
 from ag2 import Agent, Context, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig
-from ag2.config.gemini.events import GeminiToolCallEvent
 from ag2.context import strip_reserved_variables
 from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, UsageEvent
 from ag2.hitl import HumanHook
@@ -86,11 +85,13 @@ from .interrupts import (
     timestamp_ms,
     utc_now,
 )
+from .provider import is_same_provider, provider_of
+from .thought_signature import encrypted_signature_of, restore_tool_call
 
 if TYPE_CHECKING:
     from starlette.endpoints import HTTPEndpoint
 
-logger = logging.getLogger("ag2.ag_ui")
+logger = logging.getLogger(__name__)
 
 # The media part each kind of ag2 input travels as. An input of no particular
 # kind is sent as a document, the one part that makes no claim about its bytes.
@@ -129,15 +130,21 @@ class AGUIStream:
         agent: Agent,
         *,
         retention: Retention = DEFAULT_RETENTION,
+        require_resume_proof: bool = False,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         """Serve `agent`, holding a turn paused on a question for `retention`.
+
+        Every interrupt is issued with a proof in its `metadata`. A resume that
+        carries one must carry the one issued; `require_resume_proof` also
+        refuses a resume that carries none, which a client that does not copy an
+        interrupt's metadata into its answer cannot satisfy.
 
         `now` is the clock deadlines are read off, for tests that would
         otherwise have to outlast a retention bound to reach one.
         """
         self.__agent = agent
-        self.__turns = ServedTurns(retention=retention, now=now)
+        self.__turns = ServedTurns(retention=retention, require_proof=require_resume_proof, now=now)
 
     async def __aenter__(self) -> "AGUIStream":
         return self
@@ -293,6 +300,10 @@ async def _serve_turn(
 
     streaming_msg_id: str | None = None
     reasoning_msg_id: str | None = None
+    # A signature belongs to its call and may only follow the call's start: a
+    # consumer may drop a value whose entity it has not seen. A client tool's
+    # call is announced later, from its own event.
+    signatures: dict[str, str] = {}
 
     @stream.subscribe
     async def map_events_to_ag_ui(event: events.BaseEvent) -> None:
@@ -391,17 +402,11 @@ async def _serve_turn(
                     timestamp=_get_timestamp(),
                 )
             )
+            await _send_signature(output, signatures, event.id)
 
         elif isinstance(event, events.ToolCallEvent):
-            if isinstance(event, GeminiToolCallEvent) and event.thought_signature is not None:
-                await output.send(
-                    ReasoningEncryptedValueEvent(
-                        subtype="tool-call",
-                        entity_id=event.id,
-                        encrypted_value=b64encode(event.thought_signature).decode(),
-                        timestamp=_get_timestamp(),
-                    )
-                )
+            if (signature := encrypted_signature_of(event)) is not None:
+                signatures[event.id] = signature
             if event.name in client_tools_names:
                 return
 
@@ -412,6 +417,7 @@ async def _serve_turn(
                     timestamp=_get_timestamp(),
                 )
             )
+            await _send_signature(output, signatures, event.id)
             await output.send(
                 ToolCallArgsEvent(
                     tool_call_id=event.id,
@@ -490,6 +496,18 @@ async def _serve_turn(
         await output.send(StateSnapshotEvent(snapshot=closing, timestamp=_get_timestamp()))
 
 
+async def _send_signature(output: "TurnOutput", signatures: dict[str, str], call_id: str) -> None:
+    if (value := signatures.pop(call_id, None)) is not None:
+        await output.send(
+            ReasoningEncryptedValueEvent(
+                subtype="tool-call",
+                entity_id=call_id,
+                encrypted_value=value,
+                timestamp=_get_timestamp(),
+            )
+        )
+
+
 # The task lifecycle events a delegation reaches the client through.
 _TASK_LIFECYCLE = (
     events.TaskStarted,
@@ -534,16 +552,6 @@ def map_task_event_to_ag_ui(
     return SubagentErrorEvent(subagent_run_id=event.task_id, message=message, timestamp=_get_timestamp())
 
 
-def provider_of(config: ModelConfig | None) -> str | None:
-    """The provider `config` serves from, in ag2's vocabulary, or `None` if it does not say."""
-    if config is None:
-        return None
-    try:
-        return config.provider.value
-    except NotImplementedError:
-        return None
-
-
 def map_agui_content_to_input(content: ContentPart, *, provider: str | None = None) -> events.Input | None:
     """One AG-UI content part as the ag2 input it carries, or `None` for a part to skip.
 
@@ -578,7 +586,7 @@ def map_agui_content_to_input(content: ContentPart, *, provider: str | None = No
         # it. An untagged one is taken to be the run's own, since the client
         # need not say; one tagged for another provider is useless here, and
         # the protocol forbids failing the run over it. Never log the value.
-        if source.provider is not None and source.provider != provider:
+        if source.provider is not None and not is_same_provider(source.provider, provider):
             logger.warning(
                 "skipping a %s part holding a file handle issued by %s: this run's provider is %s",
                 content.type,
@@ -642,19 +650,15 @@ def map_agui_messages_to_events(
             case AssistantMessage():
                 tool_calls: list[events.ToolCallEvent] = []
                 for t in m.tool_calls or ():
-                    if provider == "gemini" and t.encrypted_value is not None:
-                        tool_calls.append(
-                            GeminiToolCallEvent(
-                                id=t.id,
-                                name=t.function.name,
-                                arguments=t.function.arguments,
-                                thought_signature=b64decode(t.encrypted_value),
-                            )
+                    tool_calls.append(
+                        restore_tool_call(
+                            provider,
+                            id=t.id,
+                            name=t.function.name,
+                            arguments=t.function.arguments,
+                            encrypted_value=t.encrypted_value,
                         )
-                    else:
-                        tool_calls.append(
-                            events.ToolCallEvent(id=t.id, name=t.function.name, arguments=t.function.arguments)
-                        )
+                    )
                 tool_names.update((t.id, t.name) for t in tool_calls)
 
                 messages.append(
@@ -669,16 +673,15 @@ def map_agui_messages_to_events(
                     messages.append(events.ModelReasoning(m.content))
 
             case ToolMessage():
-                # An error is what the model must hear, whatever came with it.
-                # Still answered when every part was skipped: the call is owed a
-                # result, and one of no parts is the empty string.
-                parts = (
-                    [m.error]
-                    if m.error
-                    else (
-                        _accepted_parts(m.content, provider=provider, config=config, position="tool") or [TextInput("")]
-                    )
-                )
+                # An error is what the model must hear, and leads; what came with
+                # it is kept, so a partial result survives. Still answered when
+                # every part was skipped: the call is owed a result, and one of
+                # no parts is the empty string.
+                parts = _accepted_parts(m.content, provider=provider, config=config, position="tool")
+                if m.error:
+                    parts = [TextInput(m.error), *parts]
+                elif not parts:
+                    parts = [TextInput("")]
                 messages.append(
                     events.ToolResultsEvent([
                         events.ToolResultEvent(

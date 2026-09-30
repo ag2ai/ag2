@@ -20,7 +20,6 @@ from ag2.events import (
 from ag2.exceptions import HumanInputError
 from ag2.middleware.builtin.tools.approval import BYPASS_KEY
 from ag2.stream import MemoryStream, Stream
-from ag2.tools.final.function_tool import _CURRENT_TOOL_CALL_ID
 from ag2.usage import UsageReport, collect_usage_events
 
 if TYPE_CHECKING:
@@ -164,7 +163,7 @@ async def run_task(
                 task_id=task_id,
                 agent_name=agent.name,
                 objective=objective,
-                parent_tool_call_id=_CURRENT_TOOL_CALL_ID.get(),
+                parent_tool_call_id=parent_context.tool_call_id,
             )
         )
 

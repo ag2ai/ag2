@@ -589,10 +589,28 @@ class TestProtocolAccounting:
             TokenUsage(provider="google", model="m", input_tokens=5, reasoning_tokens=30)
         ]
 
-    @pytest.mark.parametrize("provider", ["openai", "xai", "bedrock"])
+    async def test_bedrock_cache_is_added_to_its_input(self) -> None:
+        """Converse's `inputTokens` leaves out what was read from and written to the cache."""
+        usage = Usage(
+            prompt_tokens=100, completion_tokens=30, cache_read_input_tokens=64, cache_creation_input_tokens=8
+        )
+
+        assert (await _finished(_answering(usage, provider="bedrock"))).usage == [
+            TokenUsage(
+                provider="bedrock",
+                model="m",
+                input_tokens=172,
+                output_tokens=30,
+                total_tokens=202,
+                cached_input_tokens=64,
+                cache_write_input_tokens=8,
+            )
+        ]
+
+    @pytest.mark.parametrize("provider", ["openai", "xai"])
     async def test_other_providers_are_reported_as_they_count(self, provider: str) -> None:
-        """OpenAI counts cache and reasoning inside its totals already. xAI's reasoning,
-        and Bedrock's cache, are not known to sit outside them, so neither is added in.
+        """OpenAI counts cache and reasoning inside its totals already. xAI's reasoning
+        is not known to sit outside them, so it is not added in.
         """
         usage = Usage(
             prompt_tokens=100,

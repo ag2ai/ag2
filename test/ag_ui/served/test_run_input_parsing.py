@@ -21,7 +21,7 @@ from dirty_equals import IsPartialDict
 from ag2 import Agent
 from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import AgUiTransport
-from ag2.ag_ui import NO_HELD_TURN, AGUIStream
+from ag2.ag_ui import AGUIStream
 from ag2.testing import TestConfig
 from test.ag_ui.harness import decode
 from test.ag_ui.serving import app_for, run_body
@@ -73,6 +73,33 @@ _INVALID_INPUTS: dict[str, dict[str, Any]] = {
     "tools-item-not-a-tool": {**_RUN, "tools": [42]},
     "context-item-not-a-context": {**_RUN, "context": [42]},
     "resume-item-not-a-resume-entry": {**_RUN, "resume": [42]},
+    "data-source-not-base64": {
+        **_RUN,
+        "messages": [
+            {
+                "id": "m1",
+                "role": "user",
+                "content": [{"type": "image", "source": {"type": "data", "value": "a", "mimeType": "image/png"}}],
+            }
+        ],
+    },
+    "encrypted-value-not-base64": {
+        **_RUN,
+        "messages": [
+            {
+                "id": "m1",
+                "role": "assistant",
+                "toolCalls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "search", "arguments": "{}"},
+                        "encryptedValue": "a",
+                    }
+                ],
+            }
+        ],
+    },
 }
 
 
@@ -112,11 +139,8 @@ async def test_every_valid_input_is_served(make_app: Callable[[], Any], body: di
 
     assert response.status_code == 200
     [first, *_] = decode(response.text.splitlines())
-    if body.get("resume"):
-        # Accepted, then refused as a resume: a fresh server holds no interrupt.
-        assert first == IsPartialDict({"type": "RUN_ERROR", "code": NO_HELD_TURN})
-    else:
-        assert first["type"] == "RUN_STARTED"
+    # A resume on a fresh server, which holds no interrupt, is set aside.
+    assert first["type"] == "RUN_STARTED"
 
 
 @_APPS

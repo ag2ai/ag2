@@ -99,9 +99,23 @@ _MEDIA: dict[type[object], set[tuple[str, str, BinaryType | None]]] = {
 }
 
 
+def _described(config: ModelConfig | None) -> type[object] | None:
+    """The config class the table describes `config` by: its own, or its nearest described base."""
+    if config is None:
+        return None
+    # Compared by identity, never `isinstance`: a provider whose extra is not
+    # installed is a stand-in here, not a class.
+    return next((cls for cls in type(config).__mro__ if cls in _MEDIA), None)
+
+
 def accepts_input(config: ModelConfig | None, position: str, part: Input) -> bool:
-    """Whether the config's mapper accepts this media in this position."""
-    if config is None or type(config) not in _MEDIA:
+    """Whether the config's mapper accepts this media in this position.
+
+    A config the table does not describe is taken to accept anything: its mapper
+    cannot be read from here.
+    """
+    described = _described(config)
+    if described is None:
         return True
     if isinstance(part, BinaryInput):
         source = "data"
@@ -114,10 +128,10 @@ def accepts_input(config: ModelConfig | None, position: str, part: Input) -> boo
         kind = None
     else:
         return True
-    if (position, source, kind) not in _MEDIA[type(config)]:
+    if (position, source, kind) not in _MEDIA[described]:
         return False
     if isinstance(part, BinaryInput):
-        if isinstance(config, BedrockConfig):
+        if described is BedrockConfig:
             supported_media = {
                 BinaryType.IMAGE: {"image/png", "image/jpeg", "image/gif", "image/webp"},
                 BinaryType.DOCUMENT: {
@@ -143,20 +157,25 @@ def accepts_input(config: ModelConfig | None, position: str, part: Input) -> boo
                 },
             }
             return kind is not None and part.media_type in supported_media.get(kind, set())
-        if isinstance(config, OpenAIConfig) and kind is BinaryType.AUDIO:
+        if described is OpenAIConfig and kind is BinaryType.AUDIO:
             return part.media_type in ("audio/wav", "audio/mpeg", "audio/mp3")
-        if isinstance(config, AnthropicConfig) and kind is BinaryType.IMAGE:
+        if described is AnthropicConfig and kind is BinaryType.IMAGE:
             return part.media_type in ("image/jpeg", "image/png", "image/gif", "image/webp")
-        if isinstance(config, AnthropicConfig) and kind is BinaryType.DOCUMENT:
+        if described is AnthropicConfig and kind is BinaryType.DOCUMENT:
             return part.media_type in ("application/pdf", "text/plain")
     return True
 
 
 def input_modalities(config: ModelConfig | None) -> dict[str, bool]:
-    """Media kinds accepted in user messages, in AG-UI capability vocabulary."""
-    if config is None or type(config) not in _MEDIA:
-        return dict.fromkeys(("image", "audio", "video", "pdf"), True)
-    accepted = _MEDIA[type(config)]
+    """Media kinds accepted in user messages, in AG-UI capability vocabulary.
+
+    Empty for a config the table does not describe: a modality left undeclared
+    says nothing, where `True` would promise what cannot be checked.
+    """
+    described = _described(config)
+    if described is None:
+        return {}
+    accepted = _MEDIA[described]
     return {
         name: any(position == "user" and kind is binary_kind for position, _, kind in accepted)
         for name, binary_kind in (

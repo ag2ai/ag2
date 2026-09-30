@@ -17,12 +17,12 @@ from ag_ui.core import (
 )
 
 from ag2 import Agent
-from ag2.config.gemini.config import GeminiConfig
 from ag2.tools.final import Toolkit
 from ag2.tools.subagents.subagent_tool import SubagentTool
 from ag2.tools.tool import Tool
 
 from .input_acceptance import input_modalities
+from .provider import provider_of
 
 
 def _subagents(tools: tuple[Tool, ...]) -> list[SubagentInfo]:
@@ -46,6 +46,7 @@ def served_capabilities(agent: Agent, *, client_tools: bool, state_snapshots: bo
     # Undeclared rather than declared false where ag2 cannot tell: the protocol
     # reads an omitted field as saying nothing.
     subagents = _subagents(tuple(agent.tools))
+    modalities = input_modalities(agent.config)
     return AgentCapabilities(
         identity=IdentityCapabilities(name=agent.name, type="ag2"),
         transport=TransportCapabilities(streaming=True),
@@ -54,8 +55,8 @@ def served_capabilities(agent: Agent, *, client_tools: bool, state_snapshots: bo
         multi_agent=MultiAgentCapabilities(supported=True, delegation=True, subagents=subagents or None)
         if agent.tasks is not None or subagents
         else None,
-        reasoning=ReasoningCapabilities(encrypted=isinstance(agent.config, GeminiConfig)),
-        multimodal=MultimodalCapabilities(input=MultimodalInputCapabilities(**input_modalities(agent.config))),
+        reasoning=ReasoningCapabilities(encrypted=provider_of(agent.config) == "gemini"),
+        multimodal=MultimodalCapabilities(input=MultimodalInputCapabilities(**modalities)) if modalities else None,
         # A question the agent's own hook answers never reaches the client.
         human_in_the_loop=HumanInTheLoopCapabilities(supported=True, interrupts=agent._hitl_hook is None),
     )

@@ -93,3 +93,29 @@ async def test_a_client_call_made_while_the_question_waited_is_pending_on_the_re
     assert every(first, "TOOL_CALL_CHUNK") == []
     [chunk] = every(second, "TOOL_CALL_CHUNK")
     assert outcome_of(second) == {"type": "success", "pendingToolCallIds": [chunk["toolCallId"]]}
+
+
+async def test_a_client_call_made_before_the_question_is_pending_on_the_resumed_run() -> None:
+    """The run that paused ended on the question, so it reported no call; the run that finishes must."""
+    agent = Agent(
+        "test_agent",
+        config=TestConfig([
+            ToolCallEvent(name="get_weather", arguments='{"location":"Paris"}'),
+            ToolCallEvent(name="ask_human", arguments="{}"),
+        ]),
+    )
+
+    @agent.tool
+    async def ask_human(context: Context) -> str:
+        """Ask the human."""
+        return await context.input(QUESTION)
+
+    app = app_for(AGUIStream(agent))
+    tools = [weather_tool().model_dump(by_alias=True)]
+
+    first = await post_run(app, {**run_body(thread_id="t1", run_id="r1"), "tools": tools})
+    resume = run_body(thread_id="t1", run_id="r2", text=None, resume=answer(sole_interrupt(first), "blue"))
+    second = await post_run(app, {**resume, "tools": tools})
+
+    [chunk] = every(first, "TOOL_CALL_CHUNK")
+    assert outcome_of(second) == {"type": "success", "pendingToolCallIds": [chunk["toolCallId"]]}

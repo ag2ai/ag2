@@ -124,6 +124,9 @@ class ConversationContext:
 
     prompt: list[str] = field(default_factory=list)
 
+    tool_call_id: str | None = field(default=None, repr=False)
+    """The tool call this context was handed to, when it is a tool's; `None` for the agent's own."""
+
     @property
     def pending_messages(self) -> list[ModelRequest]:
         """Read-through view of the underlying stream's inbox."""

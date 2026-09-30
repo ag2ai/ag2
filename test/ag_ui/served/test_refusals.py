@@ -16,7 +16,7 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from ag2 import Agent, Context
-from ag2.ag_ui import NOT_COVERED, NO_HELD_TURN, PAYLOAD_REFUSED, AGUIStream, Retention
+from ag2.ag_ui import NOT_COVERED, PAYLOAD_REFUSED, AGUIStream, Retention
 from ag2.events import ToolCallEvent, ToolResultEvent
 from ag2.observers import observer
 from ag2.testing import TestConfig
@@ -50,6 +50,20 @@ async def refusal(
     events = await post_run(app, run_body(thread_id=thread_id, run_id=run_id, text=None, resume=resume))
     assert types_of(events) == ["RUN_ERROR"], f"not refused before the run started: {types_of(events)}"
     return only(events, "RUN_ERROR")
+
+
+async def ignored(
+    app: Any, *, thread_id: str = "t1", run_id: str = "r2", resume: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Drive one exchange whose resume answers nothing the thread holds, and return its events.
+
+    The protocol has a producer treat such entries as unrecognised: the run
+    starts without them, and never fails over an answer nobody asked for.
+    """
+    events = await post_run(app, run_body(thread_id=thread_id, run_id=run_id, text=None, resume=resume))
+    assert types_of(events)[0] == "RUN_STARTED", f"the run did not start: {types_of(events)}"
+    assert "RUN_ERROR" not in types_of(events)
+    return events
 
 
 class TestGivingUp:
@@ -122,20 +136,19 @@ class TestGivingUp:
         interrupt = await ask_once(app)
         await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=abandon(interrupt)))
 
-        error = await refusal(app, run_id="r3", resume=answer(interrupt, "blue"))
+        await ignored(app, run_id="r3", resume=answer(interrupt, "blue"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
         assert asked.answers == []
 
 
 class TestAnswersThatCannotBeHonoured:
-    async def test_an_interrupt_nobody_is_holding(self) -> None:
-        agent, _ = asking_agent()
+    async def test_an_interrupt_nobody_is_holding_is_ignored(self) -> None:
+        agent, asked = asking_agent()
         app = app_for(AGUIStream(agent))
 
-        error = await refusal(app, resume=resolved("no-such-interrupt", "blue"))
+        await ignored(app, resume=resolved("no-such-interrupt", "blue"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
+        assert asked.answers == []
 
     async def test_an_unknown_id_on_a_thread_that_is_holding_one(self) -> None:
         agent, asked = asking_agent()
@@ -147,19 +160,18 @@ class TestAnswersThatCannotBeHonoured:
         assert error == IsPartialDict({"code": NOT_COVERED})
         assert asked.answers == []
 
-    async def test_an_interrupt_that_was_already_answered(self) -> None:
+    async def test_an_interrupt_that_was_already_answered_is_ignored(self) -> None:
         agent, asked = asking_agent()
         app = app_for(AGUIStream(agent))
 
         interrupt = await ask_once(app)
         await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")))
 
-        error = await refusal(app, run_id="r3", resume=answer(interrupt, "red"))
+        await ignored(app, run_id="r3", resume=answer(interrupt, "red"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
         assert asked.answers == ["blue"]
 
-    async def test_an_answer_arriving_after_the_deadline(self) -> None:
+    async def test_an_answer_arriving_after_the_deadline_is_ignored(self) -> None:
         clock = Clock()
         agent, asked = asking_agent()
         app = app_for(AGUIStream(agent, retention=Retention(ttl=TTL), now=clock))
@@ -167,9 +179,8 @@ class TestAnswersThatCannotBeHonoured:
         interrupt = await ask_once(app)
         clock.advance(TTL + 1)
 
-        error = await refusal(app, resume=answer(interrupt, "blue"))
+        await ignored(app, resume=answer(interrupt, "blue"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
         assert asked.answers == []
 
     async def test_an_answer_to_an_earlier_round(self) -> None:
@@ -243,7 +254,6 @@ class TestWhatARefusalLeavesBehind:
         await refusal(app, resume=answer(interrupt, 42))
         clock.advance(2)
 
-        error = await refusal(app, run_id="r3", resume=answer(interrupt, "blue"))
+        await ignored(app, run_id="r3", resume=answer(interrupt, "blue"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
         assert asked.answers == []

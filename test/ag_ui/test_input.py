@@ -272,14 +272,19 @@ class TestHistoryRoles:
             ])
         ]
 
-    async def test_a_tool_message_s_error_is_what_the_model_hears(self) -> None:
+    async def test_a_tool_message_s_error_leads_and_its_content_is_kept(self) -> None:
         incoming = run_input(
             ToolMessage(id="tm1", tool_call_id="t1", content=[TextPart(text="partial")], error="it broke")
         )
 
         model = await _model_input(incoming)
 
-        assert model.history == [ToolResultsEvent([ToolResultEvent(parent_id="t1", result=ToolResult("it broke"))])]
+        # The error leads, and what came with it is kept: a partial result survives.
+        assert model.history == [
+            ToolResultsEvent([
+                ToolResultEvent(parent_id="t1", result=ToolResult(parts=[TextInput("it broke"), TextInput("partial")]))
+            ])
+        ]
 
     async def test_a_reasoning_message_is_history_not_part_of_this_turn(self) -> None:
         incoming = run_input(
@@ -378,6 +383,24 @@ class TestProviderFileHandles:
         model = await _model_input(incoming, config=_as(ModelProvider.ANTHROPIC))
 
         assert model.turn == [FileIdInput("file-abc")]
+
+    @pytest.mark.parametrize(
+        ("config", "tag"),
+        [
+            (ModelProvider.GEMINI, "google"),
+            (ModelProvider.VERTEXAI, "google"),
+            (ModelProvider.GEMINI, "gemini"),
+        ],
+    )
+    async def test_a_handle_tagged_with_the_vendor_reaches_the_run(self, config: ModelProvider, tag: str) -> None:
+        """The protocol names a provider by vendor (`google`); ag2's names are for the API."""
+        incoming = run_input(
+            UserMessage(id="m1", content=[DocumentPart(source=FileSource(value="files/abc", provider=tag))])
+        )
+
+        model = await _model_input(incoming, config=_as(config))
+
+        assert model.turn == [FileIdInput("files/abc")]
 
     async def test_another_provider_s_handle_is_skipped_and_said_so(self, caplog: pytest.LogCaptureFixture) -> None:
         incoming = run_input(

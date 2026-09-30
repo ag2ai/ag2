@@ -10,11 +10,14 @@ role, a content part kind or source kind, a resume status — is stripped with a
 warning, and the run is served.
 """
 
+import binascii
 import json
 import logging
+from base64 import b64decode
 from typing import get_args
 
 from ag_ui.core import (
+    AssistantMessage,
     AudioPart,
     DataSource,
     DocumentPart,
@@ -24,12 +27,14 @@ from ag_ui.core import (
     Role,
     RunAgentInput,
     TextPart,
+    ToolMessage,
     UrlSource,
+    UserMessage,
     VideoPart,
 )
 from pydantic import BaseModel, JsonValue
 
-logger = logging.getLogger("ag2.ag_ui")
+logger = logging.getLogger(__name__)
 
 _PART_ROLES: tuple[Role, ...] = ("user", "tool")
 """The messages whose content may be a list of parts."""
@@ -40,13 +45,16 @@ def read_run_input(body: str | bytes) -> RunAgentInput:
 
     Material this server does not recognise is removed, with one `ag2.ag_ui`
     warning per removal naming its path. A body that is not JSON, or that
-    carries a known field with a value the schema rejects, raises
-    `ValueError` (`pydantic.ValidationError` for the latter).
+    carries a known field with a value the schema rejects, or a base64 value
+    that does not decode, raises `ValueError` (`pydantic.ValidationError` for
+    the schema case).
     """
     raw: JsonValue = json.loads(body)
     if isinstance(raw, dict):
         _strip_unknown_members(raw)
-    return strip_unrecognised(RunAgentInput.model_validate(raw))
+    incoming = strip_unrecognised(RunAgentInput.model_validate(raw))
+    _check_base64(incoming)
+    return incoming
 
 
 def strip_unrecognised(incoming: RunAgentInput) -> RunAgentInput:
@@ -59,6 +67,28 @@ def strip_unrecognised(incoming: RunAgentInput) -> RunAgentInput:
     """
     _strip_extras(incoming, "")
     return incoming
+
+
+def _check_base64(incoming: RunAgentInput) -> None:
+    # A malformed value is refused before the run starts, through the transport's
+    # error path, rather than failing a run the client already sees as begun.
+    for index, message in enumerate(incoming.messages):
+        if isinstance(message, (UserMessage, ToolMessage)) and isinstance(message.content, list):
+            for part_index, part in enumerate(message.content):
+                if isinstance(part, TextPart) or not isinstance(part.source, DataSource):
+                    continue
+                _decode(part.source.value, f"/messages/{index}/content/{part_index}/source/value")
+        elif isinstance(message, AssistantMessage):
+            for call_index, call in enumerate(message.tool_calls or ()):
+                if call.encrypted_value is not None:
+                    _decode(call.encrypted_value, f"/messages/{index}/toolCalls/{call_index}/encryptedValue")
+
+
+def _decode(value: str, path: str) -> None:
+    try:
+        b64decode(value)
+    except (binascii.Error, ValueError) as e:
+        raise ValueError(f"malformed base64 at {path}") from e
 
 
 def _strip_unknown_members(raw: dict[str, JsonValue]) -> None:
@@ -147,3 +177,6 @@ def _strip_extras(model: BaseModel, path: str) -> None:
 
 def _warn(path: str, what: str) -> None:
     logger.warning("stripping %s at %s from an AG-UI run input: this server does not recognise it", what, path)
+
+
+__all__ = ("read_run_input", "strip_unrecognised")

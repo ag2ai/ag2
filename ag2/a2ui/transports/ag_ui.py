@@ -20,7 +20,6 @@ text. Importing this module requires Starlette and ``ag2[ag-ui]``.
 
 import functools
 import logging
-from base64 import b64encode
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -53,6 +52,7 @@ from ag2.ag_ui.interrupts import (
     serve_exchange,
     utc_now,
 )
+from ag2.ag_ui.provider import provider_of
 from ag2.ag_ui.run_input import read_run_input
 from ag2.ag_ui.stream import (
     AGStreamInput,
@@ -61,9 +61,8 @@ from ag2.ag_ui.stream import (
     map_agui_messages_to_events,
     map_task_event_to_ag_ui,
     map_tool_result_to_ag_ui,
-    provider_of,
 )
-from ag2.config.gemini.events import GeminiToolCallEvent
+from ag2.ag_ui.thought_signature import encrypted_signature_of
 from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
 
 from .._types import JsonObject, ServerToClientMessage
@@ -98,6 +97,8 @@ class AgUiTransport:
         path: The route path, serving POST runs and GET capabilities; GET
             ``{path}/capabilities`` serves them too.
         retention: How long an unanswered question is held, and how many at once.
+        require_resume_proof: Refuse a resume that carries no proof of the
+            interrupt it answers; one that carries a proof must always match.
         now: The clock deadlines are read off. For tests.
     """
 
@@ -108,10 +109,11 @@ class AgUiTransport:
         *,
         path: str = "/",
         retention: Retention = DEFAULT_RETENTION,
+        require_resume_proof: bool = False,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._path = path
-        self._turns = ServedTurns(retention=retention, now=now)
+        self._turns = ServedTurns(retention=retention, require_proof=require_resume_proof, now=now)
 
     def routes(self, core: "_A2UITurnCore") -> list[Route]:
         endpoint = functools.partial(_endpoint, self._turns, core)
@@ -306,15 +308,6 @@ async def _report_delegation(output: TurnOutput, event: TaskEvent) -> None:
 
 async def _report_tool_call(output: TurnOutput, event: ToolCallEvent) -> None:
     timestamp = int(utc_now().timestamp() * 1000)
-    if isinstance(event, GeminiToolCallEvent) and event.thought_signature is not None:
-        await output.send(
-            ReasoningEncryptedValueEvent(
-                subtype="tool-call",
-                entity_id=event.id,
-                encrypted_value=b64encode(event.thought_signature).decode(),
-                timestamp=timestamp,
-            )
-        )
     await output.send(
         ToolCallStartEvent(
             tool_call_id=event.id,
@@ -322,6 +315,13 @@ async def _report_tool_call(output: TurnOutput, event: ToolCallEvent) -> None:
             timestamp=timestamp,
         )
     )
+    # After the start: a consumer may drop a value whose entity it has not seen.
+    if (signature := encrypted_signature_of(event)) is not None:
+        await output.send(
+            ReasoningEncryptedValueEvent(
+                subtype="tool-call", entity_id=event.id, encrypted_value=signature, timestamp=timestamp
+            )
+        )
     await output.send(ToolCallArgsEvent(tool_call_id=event.id, delta=event.arguments, timestamp=timestamp))
     await output.send(ToolCallEndEvent(tool_call_id=event.id, timestamp=timestamp))
 

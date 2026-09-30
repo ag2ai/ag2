@@ -27,7 +27,7 @@ from ag_ui.core import PROTOCOL_VERSION  # noqa: E402
 from ag2 import Agent, Context  # noqa: E402
 from ag2.a2ui import A2UIServer  # noqa: E402
 from ag2.a2ui.transports import AgUiTransport  # noqa: E402
-from ag2.ag_ui import NOT_PROVEN, NO_HELD_TURN, TOOL_CALL_REASON, UNSUPPORTED_PROTOCOL_VERSION, Retention  # noqa: E402
+from ag2.ag_ui import NOT_PROVEN, TOOL_CALL_REASON, UNSUPPORTED_PROTOCOL_VERSION, Retention  # noqa: E402
 from ag2.ag_ui.interrupts import AG2_METADATA_KEY, PROOF_KEY
 from ag2.config.gemini.events import GeminiToolCallEvent  # noqa: E402
 from ag2.events import HumanInputRequest, ToolCallEvent  # noqa: E402
@@ -150,29 +150,30 @@ class TestParityWithTheOtherTransport:
         assert outcome_of(events) == {"type": "cancelled"}
         assert await asked.ending_within() == "cancelled"
 
-    async def test_an_unknown_interrupt_is_refused(self) -> None:
-        app, _ = asking_server(transport=AgUiTransport())
+    async def test_an_unknown_interrupt_is_ignored(self) -> None:
+        app, asked = asking_server(transport=AgUiTransport())
 
         events = await post_run(
             app,
             run_body(thread_id="t1", run_id="r1", text=None, resume=resolved("no-such-interrupt", "blue")),
         )
 
-        assert types_of(events)[-1] == "RUN_ERROR"
-        assert only(events, "RUN_ERROR") == IsPartialDict({"code": NO_HELD_TURN})
+        assert types_of(events)[0] == "RUN_STARTED"
+        assert "RUN_ERROR" not in types_of(events)
+        assert asked.answers == []
 
-    async def test_a_stale_id_is_refused(self) -> None:
+    async def test_a_stale_id_is_ignored(self) -> None:
         app, asked = asking_server(transport=AgUiTransport())
 
         interrupt = await ask_once(app)
         await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")))
         events = await post_run(app, run_body(thread_id="t1", run_id="r3", text=None, resume=answer(interrupt, "red")))
 
-        assert only(events, "RUN_ERROR") == IsPartialDict({"code": NO_HELD_TURN})
+        assert "RUN_ERROR" not in types_of(events)
         assert asked.answers == ["blue"]
 
-    async def test_an_unproven_resume_is_refused(self) -> None:
-        app, asked = asking_server(transport=AgUiTransport())
+    async def test_an_unproven_resume_is_refused_when_proof_is_required(self) -> None:
+        app, asked = asking_server(transport=AgUiTransport(require_resume_proof=True))
 
         interrupt = await ask_once(app)
         events = await post_run(
@@ -263,7 +264,7 @@ class TestWhatItCostsTheServer:
 
         assert interrupt["expiresAt"] == clock.ahead(TTL)
 
-    async def test_a_turn_past_its_deadline_is_gone(self) -> None:
+    async def test_a_turn_past_its_deadline_is_gone_and_its_answer_ignored(self) -> None:
         clock = Clock()
         app, asked = asking_server(transport=AgUiTransport(retention=Retention(ttl=TTL), now=clock))
 
@@ -271,7 +272,7 @@ class TestWhatItCostsTheServer:
         clock.advance(TTL + 1)
         events = await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")))
 
-        assert only(events, "RUN_ERROR") == IsPartialDict({"code": NO_HELD_TURN})
+        assert "RUN_ERROR" not in types_of(events)
         assert asked.answers == []
 
     async def test_shutting_the_server_down_cancels_a_held_turn(self) -> None:
@@ -333,6 +334,8 @@ class TestDelegations:
             "entityId": "call-1",
             "encryptedValue": b64encode(signature).decode(),
         })
+        kinds = types_of(events)
+        assert kinds.index("REASONING_ENCRYPTED_VALUE") > kinds.index("TOOL_CALL_START")
 
     async def test_a_failed_delegation_is_a_subagent_error(self) -> None:
         app = _delegating_server(Agent("worker", config=TestConfig(RuntimeError("the worker fell over"))))

@@ -31,6 +31,7 @@ from ag_ui.core import (
     SubagentFinishedEvent,
     SubagentStartedEvent,
     TextMessageChunkEvent,
+    ToolCallChunkEvent,
     ToolCallStartEvent,
     UserMessage,
 )
@@ -111,6 +112,39 @@ class TestReasoning:
             "entityId": "call-1",
             "encryptedValue": b64encode(signature).decode(),
         }
+
+    async def test_a_client_tool_s_signature_follows_the_call_it_belongs_to(self) -> None:
+        """A consumer may drop a value whose entity it has not seen."""
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(
+                GeminiToolCallEvent(id="call-1", name="get_weather", arguments="{}", thought_signature=b"sig")
+            ),
+        )
+        incoming = run_input(UserMessage(id="m1", content="weather?"), tools=[weather_tool()])
+
+        events = await dispatch_events(AGUIStream(agent), incoming)
+
+        kinds = kinds_of(events)
+        assert kinds.index(ReasoningEncryptedValueEvent) > kinds.index(ToolCallChunkEvent)
+
+    async def test_a_server_tool_s_signature_follows_the_call_s_start(self) -> None:
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(
+                GeminiToolCallEvent(id="call-1", name="lookup", arguments="{}", thought_signature=b"sig"), "done"
+            ),
+        )
+
+        @agent.tool
+        def lookup() -> str:
+            """Look something up."""
+            return "found"
+
+        events = await dispatch_events(AGUIStream(agent), run_input(UserMessage(id="m1", content="go")))
+
+        kinds = kinds_of(events)
+        assert kinds.index(ReasoningEncryptedValueEvent) > kinds.index(ToolCallStartEvent)
 
 
 def _delegating(worker: Agent, *objectives: str) -> Agent:

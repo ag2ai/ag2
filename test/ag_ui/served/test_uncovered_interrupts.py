@@ -20,8 +20,8 @@ from dirty_equals import IsPartialDict
 from ag2 import Agent
 from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import AgUiTransport
-from ag2.ag_ui import NOT_COVERED, NO_HELD_TURN, AGUIStream
-from test.ag_ui.harness import outcome_of
+from ag2.ag_ui import NOT_COVERED, AGUIStream
+from test.ag_ui.harness import outcome_of, types_of
 from test.ag_ui.serving import answer, app_for, ask_once, asking_agent, post_run, resolved, run_body
 
 pytestmark = pytest.mark.asyncio
@@ -128,16 +128,20 @@ async def test_an_entry_for_an_interrupt_not_raised_alone_leaves_the_question_un
 
 
 @_APPS
-async def test_a_resume_on_a_thread_holding_nothing_is_refused_before_it_starts(
-    make_app: Callable[[Agent], Any],
+async def test_a_resume_on_a_thread_holding_nothing_is_set_aside_with_a_warning(
+    make_app: Callable[[Agent], Any], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A departure from the spec's SHOULD: proceeding would drop the user's answer unseen."""
+    """The protocol has a producer treat such entries as unrecognised and serve the run."""
     agent, asked = asking_agent()
     app = make_app(agent)
 
-    events = await post_run(
-        app, run_body(thread_id="t1", run_id="r1", text=None, resume=resolved("no-such-interrupt", "blue"))
-    )
+    with caplog.at_level(logging.WARNING, logger="ag2.ag_ui"):
+        events = await post_run(
+            app, run_body(thread_id="t1", run_id="r1", text=None, resume=resolved("no-such-interrupt", "blue"))
+        )
 
-    assert events == [IsPartialDict({"type": "RUN_ERROR", "code": NO_HELD_TURN})]
+    assert events[0] == IsPartialDict({"type": "RUN_STARTED"})
+    assert "RUN_ERROR" not in types_of(events)
+    [warning] = _warnings(caplog)
+    assert "no-such-interrupt" in warning
     assert asked.answers == []
