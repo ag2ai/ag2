@@ -5,10 +5,12 @@
 """What each AG-UI server declares it can do, read the way a client reads it.
 
 The document is checked against the protocol's own schema: the SDK's models
-accept unknown and mistyped members, so they cannot say whether it conforms.
-`test/ag_ui/fixtures/schema.json` and `fixtures/agent_capabilities/` are copied
-verbatim from upstream `ag-ui-protocol/ag-ui` at `024332cb`
-(`spec/1.0/schema.json`, `spec/1.0/fixtures/AgentCapabilities/`).
+accept unknown and mistyped members (a schema generated from `AgentCapabilities`
+lets through `custom: null`, `metadata: null` and the old `subagents` key that
+upstream's fixtures forbid), so they cannot say whether it conforms.
+`test/ag_ui/fixtures/schema.json` is `spec/1.0/schema.json` copied verbatim from
+upstream `ag-ui-protocol/ag-ui` at `024332cb`. To follow a later spec, replace it
+with the file from the new commit and update this sentence.
 """
 
 import json
@@ -75,24 +77,6 @@ async def _capabilities(app: Any, route: str = "/agent/capabilities") -> dict[st
     assert response.status_code == 200
     document: dict[str, Any] = response.json()
     return document
-
-
-@pytest.mark.parametrize("fixture", sorted((_FIXTURES / "agent_capabilities" / "valid").glob("*.json")), ids=str)
-def test_the_schema_accepts_upstreams_valid_declarations(
-    fixture: Path, capabilities_schema: Draft202012Validator
-) -> None:
-    capabilities_schema.validate(json.loads(fixture.read_text()))
-
-
-@pytest.mark.parametrize(
-    "fixture",
-    sorted(p for p in (_FIXTURES / "agent_capabilities" / "invalid").glob("*.json") if ".expect" not in p.suffixes),
-    ids=str,
-)
-def test_the_schema_refuses_upstreams_invalid_declarations(
-    fixture: Path, capabilities_schema: Draft202012Validator
-) -> None:
-    assert not capabilities_schema.is_valid(json.loads(fixture.read_text()))
 
 
 @_APPS

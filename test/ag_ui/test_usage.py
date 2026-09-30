@@ -25,7 +25,7 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.testing import TestConfig
 from ag2.tools import tool
 from test._helpers import lookup
-from test.ag_ui.harness import dispatch_run, exploding_agent, frames_of_failing_run, run_input
+from test.ag_ui.harness import dispatch_events, dispatch_run, events_of_failing_run, exploding_agent, run_input
 
 pytestmark = pytest.mark.asyncio
 
@@ -38,17 +38,18 @@ async def _frames(agent: Agent) -> list[dict[str, Any]]:
 async def _finished(agent: Agent) -> RunFinishedEvent:
     """The terminating event of a completed run.
 
-    Taken as the last frame and parsed by the class the implementation sends. The class
-    rejects a frame of any other type, so this also pins that the run really did end on
-    ``RUN_FINISHED`` — no separate search by type is needed.
+    The run must end on it: a run that ended any other way fails here, not in the assertion.
     """
-    return RunFinishedEvent.model_validate((await _frames(agent))[-1])
+    *_, last = await dispatch_events(AGUIStream(agent), run_input(UserMessage(id="msg_1", content="go")))
+    assert isinstance(last, RunFinishedEvent)
+    return last
 
 
 async def _run_error(agent: Agent) -> RunErrorEvent:
     """The terminating event of a failing run."""
-    incoming = run_input(UserMessage(id="msg_1", content="go"))
-    return RunErrorEvent.model_validate((await frames_of_failing_run(agent, incoming))[-1])
+    *_, last = await events_of_failing_run(agent, run_input(UserMessage(id="msg_1", content="go")))
+    assert isinstance(last, RunErrorEvent)
+    return last
 
 
 class TestCompletedRun:

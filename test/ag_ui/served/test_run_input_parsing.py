@@ -5,14 +5,13 @@
 """Both AG-UI endpoints answer as the HTTP + SSE binding says.
 
 A run that starts answers `200` with `Content-Type: text/event-stream`; input that
-cannot be read is refused with `400` before any stream. The fixtures under
-`test/ag_ui/fixtures/run_agent_input/` are copied verbatim from upstream
-`ag-ui-protocol/ag-ui` at `024332cb`, `spec/1.0/fixtures/RunAgentInput/`.
+cannot be read is refused with `400` before any stream. The inputs below are the shapes
+upstream's `RunAgentInput` conformance fixtures cover (`spec/1.0/fixtures/RunAgentInput/` in
+`ag-ui-protocol/ag-ui`), written out here so that nothing has to be copied or kept in step.
 """
 
 import json
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -29,7 +28,52 @@ from test.ag_ui.serving import app_for, run_body
 
 pytestmark = pytest.mark.asyncio
 
-_FIXTURES = Path(__file__).parent.parent / "fixtures" / "run_agent_input"
+_RUN: dict[str, Any] = {"threadId": "t1", "runId": "r1", "messages": []}
+
+_EVERY_ROLE: list[dict[str, Any]] = [
+    {"id": "1", "role": "developer", "content": "be brief"},
+    {"id": "2", "role": "system", "content": "you are an agent"},
+    {"id": "3", "role": "user", "content": "hello"},
+    {
+        "id": "4",
+        "role": "assistant",
+        "content": "hi",
+        "toolCalls": [{"id": "c1", "type": "function", "function": {"name": "search", "arguments": '{"q":"x"}'}}],
+    },
+    {"id": "5", "role": "tool", "content": "3 results", "toolCallId": "c1"},
+    {"id": "6", "role": "activity", "activityType": "search", "content": {"hits": 3}},
+    {"id": "7", "role": "reasoning", "content": "weighing options"},
+]
+
+_VALID_INPUTS: dict[str, dict[str, Any]] = {
+    "minimal": _RUN,
+    "every-role": {**_RUN, "messages": _EVERY_ROLE},
+    "full": {
+        **_RUN,
+        "runId": "r2",
+        "parentRunId": "r1",
+        "messages": _EVERY_ROLE,
+        "tools": [{"name": "search", "description": "Searches", "parameters": {}}],
+        "context": [{"description": "locale", "value": "en-GB"}],
+        "resume": [{"interruptId": "i1", "status": "resolved", "payload": True}],
+    },
+    **{
+        f"state-{kind}": {**_RUN, "state": value}
+        for kind, value in [("array", [1, 2]), ("number", 42), ("object", {"a": 1}), ("string", "text")]
+    },
+    **{
+        f"forwarded-props-{kind}": {**_RUN, "forwardedProps": value}
+        for kind, value in [("array", [1, 2]), ("number", 42), ("object", {"a": 1}), ("string", "text")]
+    },
+}
+
+_INVALID_INPUTS: dict[str, dict[str, Any]] = {
+    "messages-missing": {"threadId": "t1", "runId": "r1"},
+    "messages-item-not-a-message": {**_RUN, "messages": [42]},
+    "tools-item-not-a-tool": {**_RUN, "tools": [42]},
+    "context-item-not-a-context": {**_RUN, "context": [42]},
+    "resume-item-not-a-resume-entry": {**_RUN, "resume": [42]},
+}
 
 
 def _ag_ui_app() -> Any:
@@ -62,15 +106,13 @@ async def test_a_run_that_starts_answers_200_as_an_event_stream(make_app: Callab
 
 
 @_APPS
-@pytest.mark.parametrize("fixture", sorted((_FIXTURES / "valid").glob("*.json")), ids=lambda p: p.stem)
-async def test_every_valid_upstream_input_is_served(make_app: Callable[[], Any], fixture: Path) -> None:
-    body = fixture.read_bytes()
-
-    response = await _post(make_app(), body)
+@pytest.mark.parametrize("body", _VALID_INPUTS.values(), ids=list(_VALID_INPUTS))
+async def test_every_valid_input_is_served(make_app: Callable[[], Any], body: dict[str, Any]) -> None:
+    response = await _post(make_app(), json.dumps(body).encode())
 
     assert response.status_code == 200
     [first, *_] = decode(response.text.splitlines())
-    if json.loads(body).get("resume"):
+    if body.get("resume"):
         # Accepted, then refused as a resume: a fresh server holds no interrupt.
         assert first == IsPartialDict({"type": "RUN_ERROR", "code": NO_HELD_TURN})
     else:
@@ -78,11 +120,11 @@ async def test_every_valid_upstream_input_is_served(make_app: Callable[[], Any],
 
 
 @_APPS
-@pytest.mark.parametrize("fixture", sorted((_FIXTURES / "invalid").glob("*.json")), ids=lambda p: p.stem)
-async def test_every_invalid_upstream_input_is_refused_before_any_stream(
-    make_app: Callable[[], Any], fixture: Path
+@pytest.mark.parametrize("body", _INVALID_INPUTS.values(), ids=list(_INVALID_INPUTS))
+async def test_every_invalid_input_is_refused_before_any_stream(
+    make_app: Callable[[], Any], body: dict[str, Any]
 ) -> None:
-    response = await _post(make_app(), fixture.read_bytes())
+    response = await _post(make_app(), json.dumps(body).encode())
 
     assert response.status_code == 400
     assert response.headers["content-type"] == "application/json"
