@@ -10,6 +10,8 @@ import pytest
 from mcp_types.version import LATEST_HANDSHAKE_VERSION
 
 from ag2 import Agent
+from ag2.context import ConversationContext
+from ag2.events import ModelRequest, TextInput
 from ag2.mcp.errors import UnknownConversationError
 from ag2.mcp.executor import AgentExecutor, _session_id
 from ag2.mcp.sessions import STDIO_SESSION, SessionConfig, SessionStore
@@ -258,48 +260,119 @@ def test_session_config_defaults() -> None:
     assert cfg.storage is None
 
 
-class TestEvictionSkipsActiveTurns:
-    @pytest.mark.asyncio
-    async def test_ttl_eviction_skips_session_with_turn_in_flight(self) -> None:
-        from ag2.context import ConversationContext
-        from ag2.events import ModelRequest, TextInput
+@pytest.mark.asyncio
+class TestEvictionSparesTurnsInFlight:
+    """A turn holds its conversation for its whole scope, so neither bound may drop it midway."""
 
-        t = {"now": 1000.0}
-        store = SessionStore(max_sessions=1024, ttl=100.0, clock=lambda: t["now"])
-        evicted: list[str] = []
-        store.on_evict = evicted.append
+    async def test_idle_expiry_keeps_the_history_of_a_turn_slower_than_the_ttl(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+        request = ModelRequest(TextInput("hello"))
 
-        async with store.session("sess-A") as convo:
-            ctx = ConversationContext(stream=convo.stream)
-            await convo.stream.send(ModelRequest(TextInput("hello")), ctx)
-            t["now"] += 100.01  # the turn is slower than the idle TTL
-
-            # another client's request runs store maintenance
-            async with store.fresh():
+        async with store.session("a") as held:
+            await held.stream.send(request, ConversationContext(stream=held.stream))
+            clock.advance(20.0)
+            async with store.fresh():  # another caller's request runs maintenance
                 pass
 
-            events = list(await convo.stream.history.get_events())
-            assert len(events) == 1, "mid-turn history was dropped while the turn lock was held"
-            assert evicted == []
+            assert list(await held.stream.history.get_events()) == [request]
 
-    @pytest.mark.asyncio
-    async def test_overflow_eviction_skips_session_with_turn_in_flight(self) -> None:
-        from ag2.context import ConversationContext
-        from ag2.events import ModelRequest, TextInput
+    async def test_a_turn_that_outlived_the_ttl_can_be_continued(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
 
+        async with store.session("a") as held:
+            handle, stream_id = held.handle, held.stream.id
+            clock.advance(20.0)
+        assert handle is not None
+        clock.advance(1.0)
+
+        # The turn is what used the conversation, so its end restarts the idle window.
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_overflow_drops_the_oldest_idle_conversation(self) -> None:
+        store = SessionStore(max_sessions=2)
+
+        async with store.session("a") as held:
+            handle, stream_id = held.handle, held.stream.id
+            async with store.fresh() as idle:
+                idle_handle = idle.handle
+            async with store.fresh():  # over the bound: "a" is older, but mid-turn
+                pass
+        assert handle is not None
+        assert idle_handle is not None
+
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+        with pytest.raises(UnknownConversationError):
+            async with store.by_handle(idle_handle):
+                pass
+
+    async def test_overflow_never_drops_the_conversation_it_is_serving(self) -> None:
         store = SessionStore(max_sessions=1)
-        evicted: list[str] = []
-        store.on_evict = evicted.append
 
-        async with store.session("sess-A") as convo:
-            ctx = ConversationContext(stream=convo.stream)
-            await convo.stream.send(ModelRequest(TextInput("hello")), ctx)
-            # force LRU overflow while sess-A's turn is still in flight
+        async with store.session("a"), store.fresh() as minted:
+            handle, stream_id = minted.handle, minted.stream.id
+        assert handle is not None
+
+        # With every other conversation mid-turn the bound gives way until one ends.
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_idle_expiry_keeps_the_history_of_a_resumed_run(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+        request = ModelRequest(TextInput("hello"))
+        async with store.fresh() as paused:
+            handle, stream = paused.handle, paused.stream
+            await stream.send(request, ConversationContext(stream=stream))
+        assert handle is not None
+
+        # A resumed run works without the turn lock, which it released when it paused.
+        async with store.resumed(handle):
+            clock.advance(20.0)
             async with store.fresh():
                 pass
 
-            events = list(await convo.stream.history.get_events())
-            assert len(events) == 1, "active conversation was evicted by LRU overflow"
-            # the idle filler session is the one that had to go
-            assert len(evicted) == 1
-            assert evicted != [convo.handle]
+            assert list(await stream.history.get_events()) == [request]
+
+    async def test_a_resumed_run_that_outlived_the_ttl_can_be_continued(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+        async with store.fresh() as paused:
+            handle, stream_id = paused.handle, paused.stream.id
+        assert handle is not None
+
+        async with store.resumed(handle):
+            clock.advance(20.0)
+        clock.advance(1.0)
+
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_overflow_spares_a_resumed_run(self) -> None:
+        store = SessionStore(max_sessions=1)
+        async with store.fresh() as paused:
+            handle, stream_id = paused.handle, paused.stream.id
+        assert handle is not None
+
+        async with store.resumed(handle), store.fresh():
+            pass
+
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_resuming_an_evicted_conversation_is_refused(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+        async with store.fresh() as paused:
+            handle = paused.handle
+        assert handle is not None
+        clock.advance(20.0)
+        async with store.fresh():  # sweeps the paused conversation
+            pass
+
+        with pytest.raises(UnknownConversationError):
+            async with store.resumed(handle):
+                pass

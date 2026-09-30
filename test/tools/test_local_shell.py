@@ -381,6 +381,22 @@ class TestShellExecution:
         description = schemas[0].function.description
         assert str(tmp_path) in description, f"workdir not in description: {description!r}"
 
+    @pytest.mark.asyncio
+    async def test_restricted_description_says_there_is_no_shell(self, tmp_path: Path) -> None:
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), readonly=True)
+
+        schemas = await shell.schemas(None)  # type: ignore[arg-type]
+        description = schemas[0].function.description
+        assert "without a shell" in description
+        assert str(tmp_path) in description
+
+    @pytest.mark.asyncio
+    async def test_custom_description_is_kept_in_restricted_mode(self, tmp_path: Path) -> None:
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), readonly=True, description="Inspect {workdir}")
+
+        schemas = await shell.schemas(None)  # type: ignore[arg-type]
+        assert schemas[0].function.description == f"Inspect {tmp_path}"
+
 
 class _LoopRecordingSandbox:
     """Minimal Sandbox that records the event loop each exec runs on."""

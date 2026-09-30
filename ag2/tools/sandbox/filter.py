@@ -14,50 +14,40 @@ deadlock).
 import fnmatch
 import posixpath
 import shlex
+from collections.abc import Sequence
 from pathlib import Path, PurePath, PurePosixPath
 
-# Commands that only read state and never modify the filesystem.
-# Used when ``ShellAdapter.readonly=True`` and no explicit ``allowed``
-# list is provided. Best-effort: ``echo`` can still redirect output
-# (``echo x > file``) because shell processing happens in the OS shell
-# after our prefix check.
+# What ``readonly=True`` allows when no ``allowed`` list is given: commands with
+# no option to write a file or run another program, so the guarantee can be
+# checked by reading this list. ``find`` (``-exec``), ``file`` (``-C``) and
+# ``git`` (``--output``, programs named in ``.git/config``) are left out on
+# purpose; a user who needs them lists them in ``allowed``.
 READONLY_COMMANDS: tuple[str, ...] = (
     "cat",
     "head",
     "tail",
     "ls",
-    "ll",
-    "la",
     "grep",
     "egrep",
     "fgrep",
-    "find",
     "wc",
     "du",
     "df",
     "diff",
     "stat",
-    "file",
     "which",
     "pwd",
     "echo",
-    "env",
     "printenv",
-    "sort",
-    "uniq",
     "cut",
-    "git log",
-    "git diff",
-    "git status",
-    "git show",
-    "git branch",
 )
 
 
-# Shell metacharacters that let a single allowed head-command spawn or
-# redirect to other commands, bypassing the allow-list. Blocked while a
-# restricted ``allowed`` set is active (see :meth:`ShellAdapter._filter`).
-_SHELL_OPERATORS: tuple[str, ...] = (">", ">>", "|", ";", "&&", "||", "`", "$(")
+# Shell syntax a model may try in restricted mode. Restricted mode runs the
+# parsed argv without a shell, so none of it takes effect; rejecting it up
+# front gives the model a clear error instead of a confusing one from the
+# command (``cat: '>': No such file``).
+_SHELL_OPERATORS: tuple[str, ...] = (">", ">>", "<", "|", ";", "&", "&&", "||", "\n", "\r", "`", "$(")
 
 
 def matches(pattern: str, command: str) -> bool:
@@ -73,16 +63,30 @@ def matches(pattern: str, command: str) -> bool:
     return rest == "" or rest[0] == " "
 
 
-def contains_shell_operator(command: str) -> bool:
-    """Return True if *command* contains shell operators that could bypass
-    the allowed-command whitelist (redirection, pipes, chaining, backtick
-    or ``$(...)`` command substitution).
+def matches_argv(pattern: str, argv: Sequence[str]) -> bool:
+    """Return True if ``argv`` starts with the words of ``pattern``.
+
+    ``"git log"`` matches ``["git", "log", "-5"]`` but not ``["git", "-c", "x", "log"]``.
     """
+    words = pattern.split()
+    return list(argv[: len(words)]) == words
+
+
+def split_command(command: str) -> list[str] | None:
+    """Split ``command`` into argv with POSIX shell quoting, or return None if the quotes do not balance."""
+    try:
+        return shlex.split(command)
+    except ValueError:
+        return None
+
+
+def contains_shell_operator(command: str) -> bool:
+    """Return True if *command* contains any of ``_SHELL_OPERATORS``."""
     return any(op in command for op in _SHELL_OPERATORS)
 
 
 def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) -> str | None:
-    """Return ``"Access denied: <path>"`` if any literal path in *command* matches *patterns*.
+    """Return ``"Access denied: <path>"`` if any literal path in *command* leaves *workdir* or matches *patterns*.
 
     Tokens are extracted via :func:`shlex.split` to handle quoted paths. Each
     token is resolved relative to *workdir* and checked against each pattern.

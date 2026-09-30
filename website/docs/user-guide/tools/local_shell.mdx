@@ -83,10 +83,10 @@ sh = SandboxShellTool(
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
 | `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment` / `TenkiEnvironment` / `E2BEnvironment`. `None` → `LocalEnvironment()` |
-| `allowed` | `None` | Whitelist of command prefixes. `None` → all commands allowed |
+| `allowed` | `None` | Whitelist of command prefixes, matched word by word. Setting it switches on [restricted mode](#restricted-mode). `None` → all commands allowed |
 | `blocked` | `None` | Blacklist of command prefixes. `None` → nothing blocked |
 | `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"` |
-| `readonly` | `False` | When `True` and `allowed` is not set, restricts to a built-in read-only list (`cat`, `ls`, `grep`, `git log`, …) |
+| `readonly` | `False` | When `True` and `allowed` is not set, restricts to a built-in list of commands that cannot write files or run programs (`cat`, `ls`, `grep`, …) in [restricted mode](#restricted-mode) |
 
 ### LocalEnvironment Parameters
 
@@ -102,10 +102,10 @@ sh = SandboxShellTool(
 
 Filtering is applied in this order on every `run_shell_command(command)` call:
 
-1. **`allowed`** — if set, the command must match at least one prefix. Otherwise: `"Command not allowed: <cmd>"`.
+1. **`allowed`** — if set, the command must match at least one prefix and use no shell syntax (pipes, redirects, chaining). Otherwise: `"Command not allowed: <cmd>"`.
 2. **`blocked`** — if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
 3. **`ignore`** — literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
-4. **Execute** — the command runs in the environment.
+4. **Execute** — the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
 
 !!! note
     `ignore` checks only literal path tokens in the command string. Paths computed dynamically inside the shell (variable substitution, command substitution, glob expansion) are not inspected.
@@ -120,7 +120,26 @@ from ag2.tools import SandboxShellTool, LocalEnvironment
 sh = SandboxShellTool(LocalEnvironment("/my/codebase"), readonly=True)
 ```
 
-This restricts commands to `cat`, `head`, `tail`, `ls`, `grep`, `find`, `git log`, `git diff`, `git status`, and a few others. Pass an explicit `allowed` list to override this set.
+This restricts commands to `cat`, `head`, `tail`, `ls`, `grep`, `wc`, `diff`, `stat`, and a few others: only commands that have no option to write a file or run another program.
+
+`find`, `file` and `git` are not in the list, because each can write or run programs through its arguments (`find -exec`, `file -C`, `git diff --output`, and programs named in `.git/config`). To give a read-only agent `git log` or `find`, list them in `allowed`. An explicit `allowed` replaces the built-in set, and what its commands can do is then your call:
+
+```python linenums="1"
+sh = SandboxShellTool(LocalEnvironment("/my/codebase"), allowed=["cat", "ls", "grep", "git log", "git diff"])
+```
+
+For real isolation, use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment`.
+
+## Restricted Mode
+
+Setting `allowed` or `readonly=True` switches on restricted mode. The command is split into words once, the same way a POSIX shell quotes them, and that exact argv is checked and then run **without a shell**. Nothing can expand after the check, so none of these work:
+
+- pipes, redirects and chaining (`|`, `>`, `<`, `;`, `&`, `&&`, `||`, newlines), rejected with a clear error;
+- globs: `ls *.py` passes `*.py` to `ls` literally, so use `grep -r --include='*.py'` or `ls` instead;
+- variables, `~`, brace expansion and command substitution;
+- shell builtins: `echo` and `pwd` run the programs found on `PATH`.
+
+Without `allowed` and `readonly`, commands run through `sh -c` with full shell syntax.
 
 ## Accessing the Working Directory
 
