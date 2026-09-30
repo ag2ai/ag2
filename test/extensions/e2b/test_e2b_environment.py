@@ -159,6 +159,18 @@ class TestOpen:
 
         assert create.await_count == 2
 
+    async def test_close_retries_a_failed_kill(self) -> None:
+        remote = _fake_remote()
+        remote.kill = AsyncMock(side_effect=[RuntimeError("network"), True])
+        with _patch_create(remote):
+            factory = E2BEnvironment()
+            async with factory.open():
+                pass
+            await factory.aclose()
+            await factory.aclose()
+            await factory.aclose()
+        assert remote.kill.await_count == 2
+
     async def test_tools_share_one_sandbox(self) -> None:
         remote = _fake_remote()
         with _patch_create(remote) as create:

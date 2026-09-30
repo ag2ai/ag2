@@ -69,19 +69,21 @@ env = E2BEnvironment(
 | `template` | E2B default template | Template name or ID the sandbox starts from |
 | `env_vars` | `{}` | Environment variables set for every command |
 | `timeout` | `60` seconds | Per-command timeout; a command that runs longer is killed and returns exit code `124` |
-| `sandbox_timeout` | E2B default (`300` seconds) | Idle lifetime; each command extends it |
+| `sandbox_timeout` | E2B default (`300` seconds) | Server-side lifetime that commands keep extending; see [Lifecycle](#lifecycle) |
 | `workdir` | `/home/user` | Working directory for commands and files, created if missing |
-| `create_options` | `{}` | Extra keyword arguments forwarded to `AsyncSandbox.create`, such as `domain`, `metadata`, `secure`, `allow_internet_access`, `network`, or `lifecycle` |
+| `create_options` | `{}` | Extra keyword arguments forwarded to `AsyncSandbox.create`, such as `domain`, `metadata`, `secure`, `allow_internet_access`, `network` (`e2b>=2.7.0`), or `lifecycle` (`e2b>=2.15.0`) |
 
-`api_key`, `template`, and `env_vars` accept [`Variable`](/docs/user-guide/context/variables) values for per-request resolution, for example per-tenant credentials. Sandboxes are cached by their resolved values, so each tenant gets its own sandbox.
+`api_key`, `template`, and `env_vars` accept [`Variable`](/docs/user-guide/context/variables) values for per-request resolution, for example per-tenant credentials. Sandboxes are cached by their resolved values: opens that resolve to different values get different sandboxes, and opens that resolve to the same values share one, whichever conversation makes them.
 
 `E2BEnvironment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py){.external-link target="_blank"}, so `SandboxShellTool(env)` reports the real working directory to the model.
 
 ## Lifecycle
 
-E2B reclaims a sandbox once its server-side lifetime runs out. While the agent is working, every command extends that lifetime, and always past the command's own `timeout`, so an active agent is not cut off mid-run. A sandbox left idle for longer than `sandbox_timeout` expires. The next command then reports that the sandbox is gone, and the environment does not silently create a new one, because the files of the old sandbox are lost.
+E2B reclaims a sandbox once its server-side lifetime runs out. A command extends that lifetime back to `sandbox_timeout` when less than half of it is left, and always far enough to cover the command's own `timeout`, so a running command is not cut off. The lifetime is never shortened. An idle sandbox therefore lives between half of `sandbox_timeout` and the full value after its last command. Set `sandbox_timeout` above the longest pause you expect between tool calls, such as a slow model turn or a human-in-the-loop wait.
 
-Always close the environment with `async with` or `await env.aclose()`. An `atexit` fallback kills sandboxes that are still open when the process exits, and the idle lifetime is the backstop if neither runs.
+Once a sandbox is gone, the next command reports it, and the environment does not silently create a new one, because a new sandbox would not have the old one's files.
+
+Always close the environment with `async with` or `await env.aclose()`. Closing waits for a sandbox that is still being created and kills it too, and calling `aclose()` again retries a kill that failed. An `atexit` fallback kills sandboxes that are still open when the process exits. The server-side lifetime is the backstop when neither runs, for example when a task is cancelled while E2B is still creating its sandbox.
 
 ## Testing
 

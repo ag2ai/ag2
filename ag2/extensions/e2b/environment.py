@@ -34,9 +34,10 @@ class E2BEnvironment:
     ``E2B_API_KEY`` is read by the SDK when ``api_key`` is omitted.
 
     Sandboxes are cached by their resolved parameters: opens with the same
-    values reuse one sandbox, so files survive across tool calls, and
-    distinct values get distinct sandboxes. Cached sandboxes live until
-    :meth:`aclose`, an atexit fallback, or their idle ``sandbox_timeout``.
+    values reuse one sandbox, whichever conversation makes them, so files
+    survive across tool calls, and distinct values get distinct sandboxes.
+    Cached sandboxes live until :meth:`aclose`, an atexit fallback, or their
+    ``sandbox_timeout``.
     """
 
     def __init__(
@@ -90,6 +91,8 @@ class E2BEnvironment:
         self._create_options = dict(create_options or {})
 
         self._cache: dict[Hashable, E2BSandbox] = {}
+        # Sandboxes whose kill failed, retried by the next `aclose`.
+        self._unkilled: list[E2BSandbox] = []
         self._cache_lock = threading.Lock()
 
     @property
@@ -173,12 +176,16 @@ class E2BEnvironment:
         yield sandbox
 
     async def aclose(self) -> None:
-        """Kill every cached sandbox. Safe to call multiple times."""
+        """Kill every cached sandbox. Safe to call multiple times; a call
+        retries the sandboxes a previous one failed to kill."""
         with self._cache_lock:
-            sandboxes = list(self._cache.values())
+            sandboxes = [*self._cache.values(), *self._unkilled]
             self._cache.clear()
+            self._unkilled = []
         for sandbox in sandboxes:
             await sandbox.aclose()
+        with self._cache_lock:
+            self._unkilled.extend(sandbox for sandbox in sandboxes if sandbox.sandbox_id is not None)
 
     async def __aenter__(self) -> "E2BEnvironment":
         return self

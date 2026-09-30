@@ -46,18 +46,18 @@ class E2BSandbox(SandboxBase):
     killed on ``__aexit__`` / :meth:`aclose`. E2B reclaims a sandbox once its
     server-side lifetime runs out, which bounds a leak when client cleanup
     never runs. While the sandbox is in use, every command extends that
-    lifetime, so an active agent is not cut off mid-run; an idle one expires
-    ``sandbox_timeout`` seconds after its last command, or 30 seconds past
-    that command's own timeout when that is longer. A sandbox that has
-    expired is reported as an error and is never silently recreated, since
-    its files would be gone.
+    lifetime once less than half of it is left, and always far enough to
+    cover the command's own timeout; the lifetime is never shortened. An idle
+    sandbox therefore lives at least half of ``sandbox_timeout`` after its
+    last command. A sandbox that is gone is reported as an error and is never
+    silently recreated, since a new one would not have its files.
 
     Args:
         template: E2B template name or ID. ``None`` uses the SDK default.
         env_vars: Environment variables set for every command.
         timeout: Default per-command timeout in seconds.
-        sandbox_timeout: Server-side idle lifetime in seconds, raised to cover
-            a command's timeout. ``None`` uses the SDK default.
+        sandbox_timeout: Server-side lifetime in seconds that commands keep
+            extending. ``None`` uses the SDK default.
         workdir: Sandbox-side directory commands and relative paths resolve
             against. Created on startup if it does not exist.
         create_options: Extra keyword arguments forwarded to
@@ -103,7 +103,10 @@ class E2BSandbox(SandboxBase):
         # the async handle once the event loop that owns it is gone.
         self._api_params = {k: v for k, v in self._create_options.items() if k in _API_PARAMS}
 
+        # Set as soon as E2B returns a sandbox, so cleanup can reach it; handed
+        # to callers only once `_ready`, after setup succeeded.
         self._sandbox: AsyncSandbox | None = None
+        self._ready = False
         self._expires_at = 0.0
         self._lock: asyncio.Lock | None = None
         self._lock_loop: asyncio.AbstractEventLoop | None = None
@@ -124,10 +127,11 @@ class E2BSandbox(SandboxBase):
 
     @property
     def sandbox_id(self) -> str | None:
-        """ID of the live E2B sandbox, or ``None`` before creation / after close."""
+        """ID of the E2B sandbox this object still owns, or ``None`` once it is killed."""
         return self._sandbox.sandbox_id if self._sandbox is not None else None
 
-    def _creation_lock(self) -> asyncio.Lock:
+    def _loop_lock(self) -> asyncio.Lock:
+        # Serializes creation, lifetime refreshes and close on one event loop.
         loop = asyncio.get_running_loop()
         if self._lock is None or self._lock_loop is not loop:
             self._lock = asyncio.Lock()
@@ -170,7 +174,15 @@ class E2BSandbox(SandboxBase):
         except TimeoutException as e:
             # E2B also reports a sandbox that is gone as a timeout, so ask
             # before telling the model its command merely ran too long.
-            if await _is_running(sandbox):
+            try:
+                running = await sandbox.is_running()
+            except Exception as check_error:
+                return ExecResult(
+                    output=f"E2B execution timed out after {exec_timeout}s, and the sandbox state "
+                    f"could not be checked: {check_error}",
+                    exit_code=1,
+                )
+            if running:
                 return ExecResult(output=f"E2B execution timed out after {exec_timeout}s", exit_code=124)
             return _gone(e)
         except NotFoundException as e:
@@ -197,27 +209,35 @@ class E2BSandbox(SandboxBase):
         """Extend the server-side lifetime when it would lapse soon.
 
         Refreshes at most once per half lifetime, and always when the command
-        about to run could outlast what is left.
+        about to run could outlast what is left. E2B's ``set_timeout`` can also
+        shorten a lifetime, so refreshes are serialized and only ever move the
+        deadline later, which keeps it covering every command already running.
         """
-        now = time.monotonic()
         needed = math.ceil(exec_timeout) + _LIFETIME_GRACE
-        if self._expires_at - now > max(needed, self._lifetime / 2):
+        if self._expires_at - time.monotonic() > max(needed, self._lifetime / 2):
             return
-        lifetime = max(self._lifetime, needed)
-        await sandbox.set_timeout(lifetime)
-        self._expires_at = now + lifetime
+        async with self._loop_lock():
+            now = time.monotonic()
+            if self._expires_at - now > max(needed, self._lifetime / 2):
+                return
+            lifetime = max(self._lifetime, needed)
+            await sandbox.set_timeout(lifetime)
+            self._expires_at = now + lifetime
 
     async def _ensure_sandbox(self) -> AsyncSandbox:
         if self._closed:
             raise RuntimeError("E2BSandbox has been closed.")
-        if self._sandbox is not None:
+        if self._ready and self._sandbox is not None:
             return self._sandbox
 
-        async with self._creation_lock():
+        async with self._loop_lock():
             if self._closed:
                 raise RuntimeError("E2BSandbox has been closed.")
-            if self._sandbox is not None:
+            if self._ready and self._sandbox is not None:
                 return self._sandbox
+            # A sandbox left behind by a failed setup must be gone before a new one exists.
+            if self._sandbox is not None and not await self._kill():
+                raise RuntimeError("An E2B sandbox from a failed setup could not be killed; retry later.")
 
             started = time.monotonic()
             sandbox = await AsyncSandbox.create(
@@ -227,38 +247,47 @@ class E2BSandbox(SandboxBase):
                 **self._create_options,
             )
             self._sandbox = sandbox
-            self._expires_at = started + self._lifetime
             self._register_atexit()
             try:
                 await sandbox.files.make_dir(str(self._workdir))
             except BaseException:
-                try:
-                    await asyncio.shield(sandbox.kill())
-                except BaseException as cleanup_error:
-                    logger.debug("Failed to kill E2B sandbox after setup error: %s", cleanup_error)
-                self._sandbox = None
-                self._unregister_atexit()
+                # On failure the handle stays for `aclose` and the atexit fallback to retry.
+                await asyncio.shield(self._kill())
                 raise
 
+            if self._closed:
+                # `aclose` ran while this creation was in flight.
+                await self._kill()
+                raise RuntimeError("E2BSandbox has been closed.")
+            self._expires_at = started + self._lifetime
+            self._ready = True
             logger.info("E2B sandbox created (id=%s)", sandbox.sandbox_id)
             return sandbox
 
     async def aclose(self) -> None:
         """Kill the sandbox. Safe to call repeatedly.
 
-        A kill that fails keeps the handle so a later call can retry, and
-        leaves the atexit fallback armed for the case where no retry comes.
+        Waits for a creation in progress on the same event loop, so a sandbox
+        that is still being created is killed too. A kill that fails keeps the
+        handle so a later call can retry, and leaves the atexit fallback armed
+        for the case where no retry comes.
         """
         self._closed = True
-        if self._sandbox is None:
-            return
+        async with self._loop_lock():
+            if self._sandbox is not None:
+                await self._kill()
+
+    async def _kill(self) -> bool:
+        assert self._sandbox is not None
         try:
             await self._sandbox.kill()
         except Exception as e:
             logger.debug("Suppressed exception during E2B sandbox kill: %s", e)
-            return
+            return False
         self._sandbox = None
+        self._ready = False
         self._unregister_atexit()
+        return True
 
     def _register_atexit(self) -> None:
         if not self._atexit_registered:
@@ -279,15 +308,8 @@ class E2BSandbox(SandboxBase):
             logger.debug("Suppressed exception during atexit E2B sandbox cleanup: %s", e)
 
 
-async def _is_running(sandbox: AsyncSandbox) -> bool:
-    try:
-        return await sandbox.is_running()
-    except Exception:
-        return False
-
-
 def _gone(error: Exception) -> ExecResult:
     return ExecResult(
-        output=f"E2B sandbox is no longer running (expired or killed); its files are lost: {error}",
+        output=f"E2B sandbox is no longer available (it expired, was paused, or was killed): {error}",
         exit_code=1,
     )

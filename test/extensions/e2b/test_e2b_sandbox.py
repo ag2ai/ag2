@@ -122,7 +122,7 @@ class TestExec:
         with _patch_create(remote):
             actual = await E2BSandbox().exec(["ls"])
         assert actual.exit_code == 1
-        assert "no longer running" in actual.output
+        assert "no longer available" in actual.output
 
     async def test_not_found_is_reported_as_gone(self) -> None:
         remote = _fake_remote()
@@ -134,7 +134,7 @@ class TestExec:
             # Never silently recreated: the old files would be gone.
             await sandbox.exec(["make"], timeout=600)
         assert actual.exit_code == 1
-        assert "no longer running" in actual.output
+        assert "no longer available" in actual.output
         create.assert_awaited_once()
 
     async def test_other_sdk_errors_become_results(self) -> None:
@@ -292,3 +292,100 @@ class TestLifecycle:
             on_exit()
         # Only connection settings are forwarded; creation options are not.
         sync_kill.assert_called_once_with("sbx-1", api_key="test", domain="e2b.example")  # pragma: allowlist secret
+
+
+def _gated(result: Any = None) -> tuple[asyncio.Event, Any]:
+    # An SDK call that blocks until the test releases it, like a slow network round-trip.
+    gate = asyncio.Event()
+
+    async def call(*args: Any, **kwargs: Any) -> Any:
+        await gate.wait()
+        return result
+
+    return gate, call
+
+
+@pytest.mark.asyncio
+class TestConcurrency:
+    async def test_concurrent_refreshes_never_shorten_the_lifetime(self) -> None:
+        # set_timeout can shorten a lifetime, so a 430 s refresh landing after a
+        # 630 s one would cut the 600 s command short.
+        remote = _fake_remote()
+        gate, slow_set_timeout = _gated()
+        remote.set_timeout = AsyncMock(side_effect=slow_set_timeout)
+        with _patch_create(remote):
+            sandbox = E2BSandbox(sandbox_timeout=300)
+            await sandbox.__aenter__()
+            long_run = asyncio.create_task(sandbox.exec(["make"], timeout=600))
+            shorter_run = asyncio.create_task(sandbox.exec(["make"], timeout=400))
+            await asyncio.sleep(0.01)
+            gate.set()
+            await asyncio.gather(long_run, shorter_run)
+        remote.set_timeout.assert_awaited_once_with(630)
+
+    async def test_concurrent_first_use_waits_for_the_workdir(self) -> None:
+        remote = _fake_remote()
+        gate, slow_make_dir = _gated(True)
+        remote.files.make_dir = AsyncMock(side_effect=slow_make_dir)
+        workdir_ready = []
+
+        async def write(*args: Any, **kwargs: Any) -> None:
+            workdir_ready.append(gate.is_set())
+
+        remote.files.write = write
+        with _patch_create(remote):
+            sandbox = E2BSandbox(workdir="/workspace")
+            first = asyncio.create_task(sandbox.put_file(PurePosixPath("a.txt"), b"a"))
+            await asyncio.sleep(0.01)
+            second = asyncio.create_task(sandbox.put_file(PurePosixPath("b.txt"), b"b"))
+            await asyncio.sleep(0.01)
+            gate.set()
+            await asyncio.gather(first, second)
+        assert workdir_ready == [True, True]
+
+    async def test_close_during_creation_kills_the_new_sandbox(self) -> None:
+        remote = _fake_remote()
+        gate, slow_create = _gated(remote)
+        with patch("ag2.extensions.e2b.sandbox.AsyncSandbox.create", AsyncMock(side_effect=slow_create)):
+            sandbox = E2BSandbox()
+            opening = asyncio.create_task(sandbox.__aenter__())
+            await asyncio.sleep(0.01)
+            closing = asyncio.create_task(sandbox.aclose())
+            await asyncio.sleep(0.01)
+            gate.set()
+            await closing
+            # The kill is done by the time `aclose` returns, not left to the creator.
+            remote.kill.assert_awaited_once()
+            with pytest.raises(RuntimeError, match="closed"):
+                await opening
+        remote.kill.assert_awaited_once()
+        assert sandbox.sandbox_id is None
+
+
+@pytest.mark.asyncio
+class TestFailureReporting:
+    async def test_unverifiable_state_is_not_reported_as_gone(self) -> None:
+        remote = _fake_remote()
+        remote.commands.run = AsyncMock(side_effect=TimeoutException("Request timed out"))
+        remote.is_running = AsyncMock(side_effect=ConnectionError("network blip"))
+        with _patch_create(remote):
+            actual = await E2BSandbox().exec(["sleep", "99"], timeout=5)
+        assert actual == ExecResult(
+            output="E2B execution timed out after 5s, and the sandbox state could not be checked: network blip",
+            exit_code=1,
+        )
+
+    async def test_failed_kill_after_failed_setup_stays_retryable(self) -> None:
+        remote = _fake_remote()
+        remote.files.make_dir = AsyncMock(side_effect=RuntimeError("read-only"))
+        remote.kill = AsyncMock(side_effect=[RuntimeError("server unreachable"), True])
+        with _patch_create(remote), patch("ag2.extensions.e2b.sandbox.atexit") as exit_hooks:
+            sandbox = E2BSandbox(workdir="/workspace")
+            with pytest.raises(RuntimeError, match="read-only"):
+                await sandbox.__aenter__()
+            assert sandbox.sandbox_id == "sbx-1"
+            exit_hooks.unregister.assert_not_called()
+            await sandbox.aclose()
+        assert remote.kill.await_count == 2
+        assert sandbox.sandbox_id is None
+        exit_hooks.unregister.assert_called_once()
