@@ -191,6 +191,7 @@ class TestLiveAgentInbox:
             ):
                 context.enqueue("look", ImageInput("https://example.com/cat.png"))
                 await announcements.wait(1)
+                await conn.emit(created("resp-1"))
                 context.enqueue("still here")
                 await announcements.wait(2)
 

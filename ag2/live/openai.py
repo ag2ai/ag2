@@ -17,6 +17,7 @@ from openai.resources.realtime.realtime import AsyncRealtimeConnection
 from openai.types.audio.speech_create_params import Voice
 from openai.types.realtime import (
     AudioTranscriptionParam,
+    ConversationItemParam,
     RealtimeAudioConfigInputParam,
     RealtimeAudioConfigOutputParam,
     RealtimeAudioConfigParam,
@@ -316,10 +317,10 @@ class RealTimeConfig(RealtimeConfig):
                 await conn.input_audio_buffer.append(audio=base64.b64encode(event.content).decode())
 
             async def _forward_tool_result(event: ToolResultEvent) -> None:
-                await _send_tool_result(conn, gate, event, serializer)
+                await _send_tool_result(gate, event, serializer)
 
             async def _forward_request(event: ModelRequest) -> None:
-                await _send_request(conn, gate, event, serializer)
+                await _send_request(gate, event, serializer)
 
             with (
                 context.stream.where(RecordedAudioEvent).sub_scope(_pump_audio),
@@ -360,6 +361,14 @@ class _ResponseGate:
     is sent only if no other response is active at the boundary: a response
     active at the boundary is assumed to include the deferred input. A
     rejected request is deferred to the next boundary.
+
+    Conversation items go through the gate too. An item added while the
+    gate's own request awaits acknowledgement may or may not be part of the
+    response that request starts — the server reads the conversation when it
+    starts the response — so answering it at the boundary could answer it
+    twice. The gate holds such items and adds them once the request is
+    acknowledged or rejected, so the response it started never sees them and
+    they are answered exactly once, at the boundary.
     """
 
     def __init__(self, conn: AsyncRealtimeConnection) -> None:
@@ -368,10 +377,18 @@ class _ResponseGate:
         self._requested = False
         self._request_id: str | None = None
         self._deferred = False
+        self._held: list[ConversationItemParam] = []
 
     @property
     def _busy(self) -> bool:
         return self._requested or self._active > 0
+
+    async def add(self, item: ConversationItemParam) -> None:
+        """Add `item` to the conversation, or hold it until the gate's own request is acknowledged."""
+        if self._requested:
+            self._held.append(item)
+        else:
+            await self._conn.conversation.item.create(item=item)
 
     async def request(self) -> None:
         """Ask for a response now, or at the next response boundary if one is active."""
@@ -380,10 +397,11 @@ class _ResponseGate:
         else:
             await self._create()
 
-    def response_created(self) -> None:
-        """Mark a response active — the gate's own or one turn detection started."""
+    async def response_created(self) -> None:
+        """Mark a response active — the gate's own or one turn detection started — and add the held items."""
         self._requested = False
         self._active += 1
+        await self._add_held()
 
     async def response_done(self) -> None:
         """Handle the response boundary: send the deferred request unless a response is still active."""
@@ -393,12 +411,18 @@ class _ResponseGate:
             if not self._busy:
                 await self._create()
 
-    def request_rejected(self, client_event_id: str | None) -> None:
-        """Defer the gate's own request to the next boundary if the server rejected it."""
+    async def request_rejected(self, client_event_id: str | None) -> None:
+        """Defer the gate's own request to the next boundary if the server rejected it, and add the held items."""
         if client_event_id is not None and client_event_id == self._request_id:
             self._requested = False
             self._request_id = None
             self._deferred = True
+            await self._add_held()
+
+    async def _add_held(self) -> None:
+        held, self._held = self._held, []
+        for item in held:
+            await self._conn.conversation.item.create(item=item)
 
     async def _create(self) -> None:
         self._requested = True
@@ -407,7 +431,6 @@ class _ResponseGate:
 
 
 async def _send_tool_result(
-    conn: AsyncRealtimeConnection,
     gate: _ResponseGate,
     event: ToolResultEvent,
     serializer: SerializerProto,
@@ -421,8 +444,8 @@ async def _send_tool_result(
         else:
             chunks.append(str(part))
 
-    await conn.conversation.item.create(
-        item={
+    await gate.add(
+        {
             "type": "function_call_output",
             "call_id": event.parent_id,
             "output": "\n".join(chunks),
@@ -432,7 +455,6 @@ async def _send_tool_result(
 
 
 async def _send_request(
-    conn: AsyncRealtimeConnection,
     gate: _ResponseGate,
     event: ModelRequest,
     serializer: SerializerProto,
@@ -444,7 +466,7 @@ async def _send_request(
     content = _user_message_content(event, serializer)
     if not content:
         return
-    await conn.conversation.item.create(item={"type": "message", "role": "user", "content": content})
+    await gate.add({"type": "message", "role": "user", "content": content})
     await gate.request()
 
 
@@ -526,9 +548,9 @@ async def _pump_events(
                     ),
                 )
         elif event.type == "response.created":
-            gate.response_created()
+            await gate.response_created()
         elif event.type == "error":
-            gate.request_rejected(event.error.event_id)
+            await gate.request_rejected(event.error.event_id)
         elif event.type == "response.done":
             # done event emits after all text and audio chunks are emitted
             # so, we can emit the final message and usage here
