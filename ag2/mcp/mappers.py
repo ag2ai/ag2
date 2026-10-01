@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
-from dataclasses import asdict, is_dataclass
+from dataclasses import is_dataclass
 from typing import TYPE_CHECKING, Any
 
 import jsonschema
@@ -16,7 +16,7 @@ from mcp.types import (
     ImageContent,
     TextContent,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from ag2.events import BinaryResult
 
@@ -106,7 +106,10 @@ def to_structured_dict(value: Any) -> dict[str, Any] | None:
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
     if is_dataclass(value) and not isinstance(value, type):
-        return asdict(value)
+        # Pydantic's dump, not ``asdict``: it honours ``serialize_by_alias`` and
+        # JSON-encodes nested values, which is what the advertised schema describes.
+        dumped: dict[str, Any] = TypeAdapter(type(value)).dump_python(value, mode="json")
+        return dumped
     if isinstance(value, dict):
         return value
     return None
