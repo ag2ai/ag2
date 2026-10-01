@@ -58,6 +58,8 @@ from openai.types.responses.tool_param import (
     Mcp,
 )
 from openai.types.responses.web_search_tool_param import UserLocation as WebSearchUserLocation
+from openai.types.shared_params import ResponseFormatJSONSchema
+from openai.types.shared_params.response_format_json_schema import JSONSchema
 
 from ag2.compact import CompactionSummary
 from ag2.config.openai.events import (
@@ -117,14 +119,13 @@ def _kind_label(kind: BinaryType | str) -> str:
     return kind.value if isinstance(kind, BinaryType) else str(kind)
 
 
-def response_proto_to_schema(response: ResponseProto | None) -> dict[str, Any] | None:
+def response_proto_to_schema(response: ResponseProto[Any] | None) -> ResponseFormatJSONSchema | None:
     """Convert a ResponseProto to Chat Completions response_format."""
     if not response or not response.json_schema:
         return None
 
-    strict_schema = _strictify_schema(response.json_schema)
-    schema: dict[str, Any] = {
-        "schema": strict_schema,
+    schema: JSONSchema = {
+        "schema": _strictify_schema(response.json_schema),
         "name": response.name,
         "strict": True,
     }
@@ -541,7 +542,7 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def tool_to_api(t: ToolSchema) -> dict[str, Any]:
+def tool_to_api(t: ToolSchema) -> ChatCompletionFunctionToolParam:
     """Chat Completions API tool format."""
     if isinstance(t, FunctionToolSchema):
         if t.defer_loading:
@@ -550,7 +551,7 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
             # instead of silently sending the tool eagerly (which would defeat
             # defer_loading and give no error). Use the Responses API instead.
             raise UnsupportedToolError("function with defer_loading (use the Responses API)", "openai-completions")
-        fn_tool: ChatCompletionFunctionToolParam = {
+        return {
             "type": "function",
             "function": {
                 "name": t.function.name,
@@ -558,7 +559,6 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
                 "parameters": _ensure_object_schema(t.function.parameters),
             },
         }
-        return dict(fn_tool)
 
     raise UnsupportedToolError(t.type, "openai-completions")
 

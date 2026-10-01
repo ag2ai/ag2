@@ -399,6 +399,9 @@ python_version = "3.10"
 files = [
     "ag2/_import_utils.py",
     "ag2/config/bedrock/bedrock_client.py",
+    "ag2/config/anthropic/files.py",
+    "ag2/config/gemini/events.py",
+    "ag2/config/openai/openai_client.py",
     "ag2/config/bedrock/mappers.py",
     "ag2/config/anthropic/mappers.py",
     "ag2/config/dashscope/mappers.py",
@@ -408,6 +411,9 @@ files = [
     "ag2/config/openai/mappers.py",
     "ag2/config/xai/mappers.py",
     "ag2/config/zai/mappers.py",
+    "ag2/live/gemini.py",
+    "ag2/mcp/apps.py",
+    "ag2/mcp/tools.py",
 ]
 
 strict = true
