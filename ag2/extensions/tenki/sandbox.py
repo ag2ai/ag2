@@ -146,7 +146,7 @@ class TenkiSandbox(SandboxBase):
                 timeout=exec_timeout,
             )
         except (CommandTimeoutError, TimeoutError) as e:
-            return ExecResult(output=f"Tenki execution timed out: {e}", exit_code=124)
+            return ExecResult(output=f"Tenki execution timed out after {exec_timeout}s: {e}", exit_code=124)
         except SandboxError as e:
             return ExecResult(output=f"Tenki error: {e}", exit_code=1)
 

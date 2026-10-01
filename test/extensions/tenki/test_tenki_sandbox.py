@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from tenki import CommandResult
+from tenki import CommandResult, CommandTimeoutError
 
 from ag2.annotations import Variable
 from ag2.extensions.tenki.sandbox import TenkiSandbox
@@ -219,6 +219,19 @@ class TestExec:
 
         assert await sandbox.exec(["sleep", "10"]) == ExecResult(
             output="Tenki execution timed out after 2s",
+            exit_code=124,
+        )
+
+    async def test_timeout_error_reports_the_budget(self) -> None:
+        remote = _fake_remote()
+        remote.exec = AsyncMock(side_effect=CommandTimeoutError("deadline exceeded"))
+        sandbox = TenkiSandbox(
+            client=_fake_client(remote),
+            create_options={"workspace_id": "workspace-1"},
+        )
+
+        assert await sandbox.exec(["sleep", "10"], timeout=2) == ExecResult(
+            output="Tenki execution timed out after 2s: deadline exceeded",
             exit_code=124,
         )
 
