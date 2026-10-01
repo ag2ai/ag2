@@ -52,5 +52,5 @@ class ConversationPolicy:
         events: list[BaseEvent],
         context: Context,
     ) -> tuple[list[str], list[BaseEvent]]:
-        filtered = [e for e in events if isinstance(e, CONVERSATION_TYPES)]
+        filtered: list[BaseEvent] = [e for e in events if isinstance(e, CONVERSATION_TYPES)]
         return prompts, filtered

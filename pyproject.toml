@@ -398,6 +398,15 @@ python_version = "3.10"
 # that already pass under `strict = true`.
 files = [
     "ag2/_import_utils.py",
+    "ag2/__init__.py",
+    "ag2/acp/client.py",
+    "ag2/acp/elicitation.py",
+    "ag2/eval/pairwise.py",
+    "ag2/eval/results/result.py",
+    "ag2/eval/scorers/correctness.py",
+    "ag2/network/client/checkpoint.py",
+    "ag2/network/transport/frames.py",
+    "ag2/policies/conversation.py",
     "ag2/config/bedrock/bedrock_client.py",
     "ag2/config/bedrock/mappers.py",
     "ag2/config/anthropic/mappers.py",
@@ -406,6 +415,7 @@ files = [
     "ag2/config/mistral/mappers.py",
     "ag2/config/ollama/mappers.py",
     "ag2/config/openai/mappers.py",
+    "ag2/config/xai/config.py",
     "ag2/config/xai/mappers.py",
     "ag2/config/zai/mappers.py",
 ]
