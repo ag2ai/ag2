@@ -33,17 +33,14 @@ logger = logging.getLogger(__name__)
 def _posix_exit_code(result: CommandResult) -> int:
     """Map a Tenki result onto the POSIX codes ``ExecResult`` promises.
 
-    Tenki reports ``exit_code == -1`` whenever the command produced no real
-    wait status — it timed out, was signalled, or could never be exec'd. A
-    negative code is not a POSIX status and means nothing to a model reading
-    tool output, so translate it the way a shell would.
+    Timeouts take precedence over the exit code. Negative codes indicate no
+    real wait status and are translated to shell-style failure codes.
     """
+    # A command can exhaust its budget even when it exits successfully.
+    if result.timed_out or result.reason == "timeout":
+        return 124
     if result.exit_code >= 0:
         return result.exit_code
-    # A timeout is also reported with signal="terminated", so it has to be read
-    # before the signal case, or every timeout would surface as a plain kill.
-    if result.reason == "timeout":
-        return 124
     if result.signal:
         # 128 is the base a shell adds a signal number to. Tenki reports the
         # signal by name ("killed", "terminated"), so the number isn't available
@@ -154,7 +151,7 @@ class TenkiSandbox(SandboxBase):
             return ExecResult(output=f"Tenki error: {e}", exit_code=1)
 
         output = (result.stdout_text + result.stderr_text).strip()
-        if result.reason == "timeout":
+        if result.timed_out or result.reason == "timeout":
             note = f"Tenki execution timed out after {exec_timeout}s"
             output = f"{output}\n{note}" if output else note
         else:
