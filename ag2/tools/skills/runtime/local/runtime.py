@@ -149,12 +149,12 @@ class LocalRuntime(SkillRuntime):
 
         *context* is part of the runtime protocol; a subprocess script ignores it.
         """
+        skill = self._loader.get_skill(name)
         if isinstance(args, dict):
             raise TypeError(
                 f"file-based script {script!r} requires positional string arguments (an array); "
                 "named arguments (an object) are only supported for in-process scripts"
             )
-        skill = self._loader.get_skill(name)
         scripts_dir = self._loader.get_path(name) / "scripts"
         resolved_script = _resolve_within(scripts_dir / script, scripts_dir)
         if script not in {s.name for s in skill.scripts} or resolved_script is None:
