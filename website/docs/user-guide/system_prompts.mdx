@@ -90,6 +90,59 @@ reply = await agent.ask(
 )
 ```
 
+## Plugins for one invocation
+
+Pass `plugins=` to `Agent.ask()`, `Agent.run()`, `Agent.resume()`, or a reply's
+`ask()` / `run()` to add capabilities for that call. Constructor plugins remain
+attached to the agent; invocation plugins contribute only while that turn's
+scope is open.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.tools.skills import LocalRuntime, SkillPlugin
+
+runtime = LocalRuntime("./skills")
+agent = Agent(
+    "assistant",
+    prompt="You are a helpful assistant.",
+    config=OpenAIConfig(model="gpt-5-mini"),
+)
+
+# Construct a fresh catalog and activation-tool schemas for this message.
+reply = await agent.ask("Help with my project", plugins=[SkillPlugin(runtime)])
+
+# After changing the installed skills, invalidate discovery and rebuild the plugin.
+runtime.invalidate()
+reply = await agent.ask(
+    "Use the newly installed skill",
+    stream=reply.context.stream,
+    plugins=[SkillPlugin(runtime)],
+)
+```
+
+Plugins contribute tools, static and dynamic prompt fragments, middleware,
+observers, assembly policies, dependency and variable defaults, and a HITL hook.
+Their prompt fragments follow the resolved prompt, including an explicit
+`prompt=` override; invocation dynamic hooks run once per call. An explicit
+`prompt=` still replaces the agent's base prompt and skips its dynamic hooks.
+
+Later invocation plugins override earlier defaults and same-named tools.
+Existing context values take precedence over plugin defaults; explicit call
+`tools=` take precedence over plugin tools. HITL uses the explicit call hook,
+then the agent's hook, then the first invocation plugin hook. Plugin policies
+follow the agent's policies in the same assembler.
+
+Plugin prompt fragments and newly supplied defaults are removed when the scope
+closes, including failure or cancellation. They do not carry into `reply.ask()`
+or `reply.run()` unless you pass the plugin again. Changes to other context
+variables remain available to continuations. The agent itself is unchanged, so
+concurrent calls on separate streams can use different plugins.
+
+A fresh `SkillPlugin(runtime)` builds a fresh snapshot; passing the same plugin
+again preserves its existing snapshot. Runtime discovery caches must still be
+invalidated when their source changes.
+
 ## Prompt updates
 
 For continuous and event-driven prompt updates, you can mutate `context.prompt` dynamically from an event subscriber. This allows you to respond to specific events in the stream and adjust the agent's behavior on the fly during an ongoing conversation. See the [Stream](/docs/user-guide/advanced/stream) documentation for more details on this advanced feature.
