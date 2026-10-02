@@ -22,7 +22,7 @@ import logging
 import weakref
 from asyncio.subprocess import Process
 from collections.abc import Awaitable, Callable, Iterable, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import acp
 from acp import schema
@@ -42,8 +42,10 @@ from .tool_gateway import GATEWAY_SERVER_NAME, ToolGateway, partition_tools
 from .transport import ACPTransportError
 
 if TYPE_CHECKING:
+    from ag2.hitl import ElicitationPolicy
+
     from .bridge import BridgeState
-    from .config import ACPConfig, ElicitationPolicy
+    from .config import ACPConfig
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +169,7 @@ class ACPClient:
         context: ConversationContext,
         *,
         tools: Iterable[ToolSchema],
-        response_schema: "ResponseProto | None",
+        response_schema: "ResponseProto[Any] | None",
         serializer: SerializerProto,
     ) -> ModelResponse:
         session = await self._session_for(context, list(tools))

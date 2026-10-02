@@ -55,7 +55,7 @@ def final_answer_matches(
         if actual is None:
             return False
         if matcher == "exact":
-            return actual == expected
+            return bool(actual == expected)
         if matcher == "casefold":
             return str(actual).casefold() == str(expected).casefold()
         return str(expected) in str(actual)

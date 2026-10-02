@@ -242,7 +242,7 @@ types = [
     # `disallow_any_unimported`. Type-check only — never a published constraint.
     "types-aiobotocore[bedrock-runtime]",
     { include-group = "test" },
-    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui]",
+    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui, acp]",
 ]
 
 lint = ["ruff==0.16.8", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -398,7 +398,19 @@ python_version = "3.10"
 # that already pass under `strict = true`.
 files = [
     "ag2/_import_utils.py",
+    "ag2/__init__.py",
+    "ag2/acp/client.py",
+    "ag2/acp/elicitation.py",
+    "ag2/eval/pairwise.py",
+    "ag2/eval/results/result.py",
+    "ag2/eval/scorers/correctness.py",
+    "ag2/network/client/checkpoint.py",
+    "ag2/network/transport/frames.py",
+    "ag2/policies/conversation.py",
     "ag2/config/bedrock/bedrock_client.py",
+    "ag2/config/anthropic/files.py",
+    "ag2/config/gemini/events.py",
+    "ag2/config/openai/openai_client.py",
     "ag2/config/bedrock/mappers.py",
     "ag2/config/anthropic/mappers.py",
     "ag2/config/dashscope/mappers.py",
@@ -406,8 +418,12 @@ files = [
     "ag2/config/mistral/mappers.py",
     "ag2/config/ollama/mappers.py",
     "ag2/config/openai/mappers.py",
+    "ag2/config/xai/config.py",
     "ag2/config/xai/mappers.py",
     "ag2/config/zai/mappers.py",
+    "ag2/live/gemini.py",
+    "ag2/mcp/apps.py",
+    "ag2/mcp/tools.py",
     "ag2/ag_ui/run_input.py",
     "ag2/ag_ui/stream.py",
     "ag2/ag_ui/__init__.py",

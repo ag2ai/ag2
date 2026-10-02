@@ -9,12 +9,21 @@ import pytest
 pytest.importorskip("google.genai")
 
 from google.genai import Client
-from google.genai.types import Modality
+from google.genai.types import LiveConnectConfig, Modality
+from pydantic import BaseModel
 
 from ag2.live import gemini
 from ag2.tools.final import FunctionDefinition, FunctionToolSchema
 
 pytestmark = pytest.mark.gemini
+
+
+class Inner(BaseModel):
+    x: int
+
+
+class Outer(BaseModel):
+    inner: Inner
 
 
 @pytest.fixture
@@ -197,7 +206,7 @@ class TestTools:
                     {
                         "name": "sum_numbers",
                         "description": "Sum two integers",
-                        "parameters": {
+                        "parameters_json_schema": {
                             "type": "object",
                             "properties": {
                                 "a": {"type": "integer"},
@@ -208,6 +217,23 @@ class TestTools:
                 ]
             }
         ]
+
+    def test_nested_model_parameters_are_accepted(self, gemini_client: Client) -> None:
+        schema = FunctionToolSchema(
+            function=FunctionDefinition(
+                name="nested",
+                description="Takes a nested model",
+                parameters=Outer.model_json_schema(),
+            )
+        )
+        payload = _build(
+            gemini.RealTimeConfig("gemini-2.0-flash-live-001", client=gemini_client),
+            tools=(schema,),
+        )
+
+        config = LiveConnectConfig.model_validate(payload)
+
+        assert config.tools is not None
 
 
 class TestMergeOrder:

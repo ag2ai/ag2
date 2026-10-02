@@ -39,7 +39,7 @@ from .mappers import (
     tool_to_api,
 )
 
-__all__ = ["CreateOptions", "IncludeOption", "ReasoningEffort", "XAIClient"]
+__all__ = ["CreateOptions", "IncludeOption", "ReasoningEffort", "ToolMode", "XAIClient"]
 
 
 class CreateOptions(TypedDict, total=False):
