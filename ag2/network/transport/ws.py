@@ -47,6 +47,8 @@ __all__ = ("WsLink", "WsLinkClient", "WsLinkEndpoint", "serve_ws")
 
 logger = logging.getLogger(__name__)
 
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
 
 class WsLinkClient:
     """Tenant-side WebSocket link to a hub.
@@ -267,6 +269,7 @@ async def serve_ws(
     ssl_context: Any = None,
     ping_interval: float | None = 20.0,
     ping_timeout: float | None = 20.0,
+    allow_unauthenticated: bool = False,
 ) -> AsyncGenerator["_WsServer"]:
     """Run a WebSocket server bound to a hub.
 
@@ -279,7 +282,19 @@ async def serve_ws(
 
     The context manager closes the server on exit and waits for all
     handler tasks to finish so the hub's endpoint registry is clean.
+
+    A hub whose registry holds ``NoAuth`` admits any client as any agent,
+    so it is served only on a loopback ``host`` unless
+    ``allow_unauthenticated=True``; otherwise :class:`ValueError` is raised.
     """
+    if "none" in hub.auth_schemes and host not in _LOOPBACK_HOSTS:
+        if not allow_unauthenticated:
+            raise ValueError(
+                f"serve_ws on {host!r} would accept the 'none' auth scheme: any client could register or "
+                "re-attach as any agent. Serve an AuthRegistry without NoAuth, bind a loopback host, "
+                "or pass allow_unauthenticated=True."
+            )
+        logger.warning("serve_ws on %s accepts the 'none' auth scheme: any client can act as any agent.", host)
     server = await _ws_serve(
         functools.partial(_serve_connection, hub),
         host,

@@ -14,6 +14,7 @@ flat surface keeps the LLM's tool list short — ``say`` and
 """
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from ag2.tools import tool
@@ -166,6 +167,8 @@ def make_delegate_tool(agent_client: "AgentClient") -> object:
                     depth=actual_client.current_handling_depth + 1,
                 )
             except Exception as exc:
+                with contextlib.suppress(Exception):
+                    await channel.close(reason="prompt_send_failed")
                 return f"Error: prompt send failed: {exc}"
 
             # Wait for the respondent's reply OR a terminal channel

@@ -9,37 +9,50 @@ One run is one exchange here: `dispatch_run` builds the input, drives
 pauses on a question spans two exchanges and cannot be expressed this way —
 `test.ag_ui.serving` drives those over in-process HTTP instead.
 
-Both seams speak the same vocabulary: a run is a `list[dict]` of decoded
-frames, read with `types_of`, `only` and `every`.
+A run is read as typed AG-UI events (`dispatch_events`, then `sole`, `each`, `kinds_of`,
+and `wire` when what is asserted is how an event looks on the wire). The served-endpoint
+tests and the A2UI transport tests still read decoded frames as `list[dict]` with
+`dispatch_run`, `types_of`, `only` and `every`.
 """
 
 import json
-from collections.abc import Iterable
-from typing import Any
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from typing import Any, TypeVar
 from uuid import uuid4
 
-import pytest
-from ag_ui.core import Message, RunAgentInput, Tool
+from ag_ui.core import PROTOCOL_VERSION, Event, Message, RunAgentInput, Tool
+from dirty_equals import IsPartialDict
+from pydantic import TypeAdapter
 
-from ag2 import Agent
+from ag2 import Agent, Context
 from ag2.ag_ui import AGUIStream
-from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
+from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
+from ag2.middleware import BaseMiddleware, LLMCall, Middleware
 from ag2.testing import TestConfig
 from ag2.tools import tool
 
 __all__ = (
+    "ModelCall",
+    "ModelHistory",
     "decode",
+    "decode_events",
+    "dispatch_events",
     "dispatch_run",
+    "each",
+    "events_of_failing_run",
     "every",
     "exploding_agent",
-    "frames_of_failing_run",
-    "leaf_exceptions",
+    "kinds_of",
     "only",
     "outcome_of",
+    "recording_history",
     "run_input",
+    "sole",
     "sole_interrupt",
     "types_of",
     "weather_tool",
+    "wire",
 )
 
 
@@ -48,13 +61,19 @@ def run_input(
     tools: list[Tool] | None = None,
     thread_id: str | None = None,
     state: Any = None,
+    protocol_version: str | None = PROTOCOL_VERSION,
 ) -> RunAgentInput:
-    """One `RunAgentInput`, with the ids a client would have generated."""
+    """One `RunAgentInput`, with the ids a client would have generated.
+
+    From a 1.0 client unless `protocol_version` says otherwise; `None` is a
+    client predating 1.0, which declares nothing.
+    """
     return RunAgentInput(
         thread_id=thread_id or str(uuid4()),
         run_id=str(uuid4()),
+        protocol_version=protocol_version,
         messages=list(messages),
-        state=dict(state) if state else {},
+        state={} if state is None else state,
         context=[],
         tools=tools or [],
         forwarded_props=None,
@@ -71,24 +90,76 @@ def decode(lines: Iterable[str]) -> list[dict[str, Any]]:
     return frames
 
 
-async def dispatch_run(
-    stream: AGUIStream,
-    incoming: RunAgentInput,
-    *,
-    into: list[dict[str, Any]] | None = None,
-    **kwargs: Any,
-) -> list[dict[str, Any]]:
-    """Drive one exchange over the generator seam and decode its frames.
+async def dispatch_run(stream: AGUIStream, incoming: RunAgentInput, **kwargs: Any) -> list[dict[str, Any]]:
+    """Drive one exchange over the generator seam and decode its frames."""
+    return [frame async for chunk in stream.dispatch(incoming, **kwargs) for frame in decode([chunk])]
 
-    Pass `into` when the run is expected to fail: a failing run emits
-    `RUN_ERROR` and then re-raises, so the return value never arrives. Frames
-    are appended to `into` as they are decoded, leaving them available to
-    assert on after the exception has been caught.
+
+_EVENT: TypeAdapter[Event] = TypeAdapter(Event)
+_E = TypeVar("_E", bound=Event)
+
+
+def decode_events(lines: Iterable[str]) -> list[Event]:
+    """The typed AG-UI events carried by encoded stream output."""
+    return [_EVENT.validate_python(frame) for frame in decode(lines)]
+
+
+async def dispatch_events(stream: AGUIStream, incoming: RunAgentInput, **kwargs: Any) -> list[Event]:
+    """Drive one exchange and return what the client receives, as typed AG-UI events."""
+    return [event async for chunk in stream.dispatch(incoming, **kwargs) for event in decode_events([chunk])]
+
+
+def wire(event: Event) -> dict[str, Any]:
+    """What `event` looks like on the wire, without its timestamp (every event is stamped, and only `test_dispatch` says so)."""
+    return event.model_dump(mode="json", by_alias=True, exclude_none=True, exclude={"timestamp"})
+
+
+def kinds_of(events: Sequence[Event]) -> list[type[Event]]:
+    """Every event's class, in the order they were emitted."""
+    return [type(event) for event in events]
+
+
+def each(events: Sequence[Event], kind: type[_E]) -> list[_E]:
+    """Every event of `kind`, in order. Empty when the run emitted none."""
+    return [event for event in events if isinstance(event, kind)]
+
+
+def sole(events: Sequence[Event], kind: type[_E]) -> _E:
+    """The one event of `kind` — an assertion that there is exactly one."""
+    [event] = each(events, kind)
+    return event
+
+
+@dataclass(frozen=True)
+class ModelCall:
+    """One call the model was given: the prompt it ran under and the history it was handed."""
+
+    prompt: list[str]
+    events: list[BaseEvent]
+
+
+class ModelHistory(BaseMiddleware):
+    """Records every model call; with `reply` set, answers it instead of reaching the provider."""
+
+    def __init__(self, event: BaseEvent, context: Context, *, calls: list[ModelCall], reply: str | None) -> None:
+        super().__init__(event, context)
+        self.calls = calls
+        self.reply = reply
+
+    async def on_llm_call(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
+        self.calls.append(ModelCall(prompt=list(context.prompt), events=list(events)))
+        if self.reply is not None:
+            return ModelResponse(ModelMessage(self.reply))
+        return await call_next(events, context)
+
+
+def recording_history(*, reply: str | None = None) -> tuple[Middleware, list[ModelCall]]:
+    """A middleware for `dispatch_*(..., middleware=[...])` and the list it fills, one entry per model call.
+
+    Give `reply` to keep the run off the network when it is served with a real provider config.
     """
-    frames = into if into is not None else []
-    async for chunk in stream.dispatch(incoming, **kwargs):
-        frames.extend(decode([chunk]))
-    return frames
+    calls: list[ModelCall] = []
+    return Middleware(ModelHistory, calls=calls, reply=reply), calls
 
 
 def types_of(frames: list[dict[str, Any]]) -> list[str]:
@@ -156,33 +227,13 @@ def exploding_agent(usage: Usage | None = None) -> Agent:
     return Agent("test_agent", config=TestConfig(response), tools=[explode])
 
 
-async def frames_of_failing_run(agent: Agent, incoming: RunAgentInput) -> list[dict[str, Any]]:
-    """The frames a run expected to fail emits before `dispatch` re-raises.
+async def events_of_failing_run(agent: Agent, incoming: RunAgentInput) -> list[Event]:
+    """The events of a run expected to fail on `exploding_agent`'s own error.
 
-    The re-raise is swallowed here because these are the callers asserting on the
-    frames; the ones asserting on the exception itself use `pytest.raises` directly
-    so they can reach it through `leaf_exceptions`.
-
-    Swallowing is narrowed to the failure these callers stage — `exploding_agent`'s
-    `RuntimeError`. A run that died for some unrelated reason would otherwise still
-    hand back frames, and every caller would still pass while asserting on a run
-    that failed for a reason nobody wrote down.
+    Narrowed to that failure: a run that died for some unrelated reason would
+    otherwise still end on `RUN_ERROR`, and every caller would pass while
+    asserting on a run that failed for a reason nobody wrote down.
     """
-    frames: list[dict[str, Any]] = []
-    with pytest.raises(Exception) as exc_info:
-        await dispatch_run(AGUIStream(agent), incoming, into=frames)
-    assert [type(e) for e in leaf_exceptions(exc_info.value)] == [RuntimeError]
-    return frames
-
-
-def leaf_exceptions(exc: BaseException) -> list[BaseException]:
-    """Flatten anyio's exception groups down to the errors that actually happened.
-
-    `dispatch` runs the agent in a task group, so a failure surfaces wrapped in an
-    exception group. The nesting is unwrapped by duck-typing `exceptions` rather
-    than naming the group class, which is a builtin only from Python 3.11.
-    """
-    nested = getattr(exc, "exceptions", None)
-    if nested is None:
-        return [exc]
-    return [leaf for inner in nested for leaf in leaf_exceptions(inner)]
+    events = await dispatch_events(AGUIStream(agent), incoming)
+    assert wire(events[-1]) == IsPartialDict({"type": "RUN_ERROR", "message": "RuntimeError('downstream is down')"})
+    return events

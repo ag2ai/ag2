@@ -20,6 +20,7 @@ import json
 import logging
 import threading
 import types
+import warnings
 import weakref
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
@@ -30,6 +31,7 @@ from typing import Any, Generic, Literal, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
@@ -83,12 +85,13 @@ from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
+from .tools.final import FunctionTool, Toolkit, tool
+from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
-from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
+from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
-from .types import Omittable, SendableMessage, omit
+from .types import Omit, Omittable, SendableMessage, omit
 from .usage import UsageReport, collect_usage_events
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
@@ -212,6 +215,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -227,6 +231,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -242,6 +247,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -257,6 +263,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -270,6 +277,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -277,22 +285,16 @@ class AgentReply(Generic[TResult, TAgent]):
     ) -> "AgentReply[Any, Any]":
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        context = self.context
-        if dependencies:
-            context.dependencies.update(dependencies)
-        if variables:
-            context.variables.update(variables)
-        if prompt:
-            context.prompt = list(prompt)
-
         client = config.create() if config else self.__client
 
         return await self.__agent._execute(
             initial_event,
-            context=context,
+            context=self.context,
             client=client,
+            context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
             hitl_hook=hitl_hook,
             additional_tools=tools,
+            additional_plugins=plugins,
             additional_middleware=middleware,
             additional_observers=observers,
             response_schema=response_schema,
@@ -307,6 +309,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -322,6 +325,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -337,6 +341,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -352,6 +357,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -365,6 +371,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -378,27 +385,89 @@ class AgentReply(Generic[TResult, TAgent]):
         """
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        context = self.context
-        if dependencies:
-            context.dependencies.update(dependencies)
-        if variables:
-            context.variables.update(variables)
-        if prompt:
-            context.prompt = list(prompt)
-
         client = config.create() if config else self.__client
 
         return self.__agent._make_run(
             initial_event,
-            context=context,
+            context=self.context,
+            context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
             hitl_hook=hitl_hook,
             client=client,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class _ContextOverrides:
+    """Continuation values applied only after acquiring the stream turn lock."""
+
+    dependencies: Mapping[Any, Any]
+    variables: Mapping[str, Any]
+    prompt: tuple[str, ...]
+
+    def apply(self, context: Context) -> None:
+        context.dependencies.update(self.dependencies)
+        context.variables.update(self.variables)
+        if self.prompt:
+            context.prompt = list(self.prompt)
+
+
+class _PluginPrompt(str):
+    """Give a bound prompt fragment its own identity without changing its text."""
+
+    __slots__ = ()
+
+    def __copy__(self) -> "_PluginPrompt":
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "_PluginPrompt":
+        return self
+
+
+def _remove_plugin_prompts(context: Context, fragments: Sequence[str]) -> None:
+    owned = {id(fragment) for fragment in fragments}
+    context.prompt[:] = [fragment for fragment in context.prompt if id(fragment) not in owned]
+
+
+def _remove_plugin_default(context: Context, attribute: str, key: Any, value: Any) -> None:
+    target: dict[Any, Any] = getattr(context, attribute)
+    if target.get(key) is value:
+        target.pop(key, None)
+
+
+class _TurnPlugins:
+    """Snapshot the contributions of plugins passed to one invocation."""
+
+    def __init__(self, plugins: Iterable[Plugin]) -> None:
+        self.static_prompt: list[str] = []
+        self.dynamic_prompt: list[Callable[..., Awaitable[str]]] = []
+        self.tools: list[Tool] = []
+        self.middleware: list[MiddlewareFactory] = []
+        self.observers: list[Observer] = []
+        self.policies: list[AssemblyPolicy] = []
+        self.dependencies: dict[Any, Any] = {}
+        self.variables: dict[Any, Any] = {}
+        self.hitl_hook: HumanHook | None = None
+        self.has_conflicting_hitl_hooks = False
+        for plugin in plugins:
+            self.static_prompt.extend(plugin._system_prompt)
+            self.dynamic_prompt.extend(plugin._dynamic_prompt)
+            self.tools.extend(FunctionTool.ensure_tool(t) for t in plugin._tools)
+            self.middleware.extend(plugin._middleware)
+            self.observers.extend(plugin._observers)
+            self.policies.extend(plugin._policies)
+            self.dependencies.update(plugin._dependencies)
+            self.variables.update(plugin._variables)
+            if plugin._hitl_hook is not None:
+                if self.hitl_hook is not None:
+                    self.has_conflicting_hitl_hooks = True
+                else:
+                    self.hitl_hook = plugin._hitl_hook
 
 
 class AgentRun(Generic[TResult, TAgent]):
@@ -438,17 +507,21 @@ class AgentRun(Generic[TResult, TAgent]):
         context: Context,
         config: ModelConfig | None,
         tools: Iterable[Tool],
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
+        context_overrides: _ContextOverrides | None = None,
     ) -> None:
         self.__agent = agent
         self.__trigger = trigger
         self.__context = context
+        self.__context_overrides = context_overrides
         self.__config = config
         self.__tools = tools
+        self.__plugins = tuple(plugins)
         self.__middleware = middleware
         self.__observers = observers
         self.__response_schema = response_schema
@@ -484,14 +557,14 @@ class AgentRun(Generic[TResult, TAgent]):
         self.__context.enqueue(*content)
 
     async def __aenter__(self) -> "AgentRun[TResult, TAgent]":
-        client = self.__client
-        if client is None:
-            client = await self.__agent._prepare_turn(self.__trigger, self.__context, self.__config)
         self.__driver = await self.__stack.enter_async_context(
             self.__agent._turn_scope(
                 self.__trigger,
                 context=self.__context,
-                client=client,
+                client=self.__client,
+                config=self.__config,
+                context_overrides=self.__context_overrides,
+                additional_plugins=self.__plugins,
                 hitl_hook=self.__hitl_hook,
                 additional_tools=self.__tools,
                 additional_middleware=self.__middleware,
@@ -828,6 +901,18 @@ class Agent(PluginTarget, Generic[TResult]):
         return types.MappingProxyType(self._agent_variables)
 
     @property
+    def has_hitl_hook(self) -> bool:
+        """Whether a hook answers this agent's questions to a human, rather than the caller's."""
+
+        return self._hitl_hook is not None
+
+    @property
+    def serializer(self) -> SerializerProto:
+        """The serializer that encodes this agent's tool results."""
+
+        return self._serializer
+
+    @property
     def response_schema(self) -> ResponseProto[TResult] | None:
         """The response schema, or ``None`` when replies are free text."""
 
@@ -912,6 +997,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -929,6 +1015,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -946,6 +1033,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -963,6 +1051,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -977,6 +1066,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -992,6 +1082,7 @@ class Agent(PluginTarget, Generic[TResult]):
             prompt=prompt,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1009,6 +1100,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -1026,6 +1118,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -1043,6 +1136,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -1060,6 +1154,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -1074,6 +1169,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1094,6 +1190,7 @@ class Agent(PluginTarget, Generic[TResult]):
             prompt=prompt,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1109,6 +1206,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str],
         config: ModelConfig | None,
         tools: Iterable[Tool],
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
@@ -1130,6 +1228,7 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1143,11 +1242,13 @@ class Agent(PluginTarget, Generic[TResult]):
         context: Context,
         config: ModelConfig | None,
         tools: Iterable[Tool],
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
+        context_overrides: _ContextOverrides | None = None,
     ) -> "AgentRun[Any, Any]":
         """The launch primitive: wrap a ``(trigger, context)`` turn as an ``AgentRun``.
 
@@ -1162,11 +1263,13 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
             hitl_hook=hitl_hook,
             client=client,
+            context_overrides=context_overrides,
         )
 
     async def resume(
@@ -1178,6 +1281,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1211,6 +1315,7 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1224,6 +1329,7 @@ class Agent(PluginTarget, Generic[TResult]):
         context: Context,
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1235,6 +1341,7 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1275,8 +1382,10 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         context: Context,
         client: LLMClient,
+        context_overrides: _ContextOverrides | None = None,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
+        additional_plugins: Iterable[Plugin] = (),
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1292,8 +1401,10 @@ class Agent(PluginTarget, Generic[TResult]):
             event,
             context=context,
             client=client,
+            context_overrides=context_overrides,
             hitl_hook=hitl_hook,
             additional_tools=additional_tools,
+            additional_plugins=additional_plugins,
             additional_middleware=additional_middleware,
             additional_observers=additional_observers,
             response_schema=response_schema,
@@ -1306,9 +1417,70 @@ class Agent(PluginTarget, Generic[TResult]):
         event: BaseEvent,
         *,
         context: Context,
+        client: LLMClient | None = None,
+        config: ModelConfig | None = None,
+        context_overrides: _ContextOverrides | None = None,
+        hitl_hook: HumanHook | None = None,
+        additional_tools: Iterable[Tool] = (),
+        additional_plugins: Iterable[Plugin] = (),
+        additional_middleware: Iterable[MiddlewareFactory] = (),
+        additional_observers: Iterable[Observer] = (),
+        response_schema: ResponseProto[Any] | type | None | Omit = omit,
+    ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
+        """Resolve invocation plugins and bracket their context contributions."""
+        plugins = _TurnPlugins(additional_plugins)
+        async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
+            if context_overrides is not None:
+                context_overrides.apply(context)
+            if plugins.has_conflicting_hitl_hooks:
+                warnings.warn("Multiple invocation plugins set hitl_hook; the first wins.", stacklevel=2)
+            for attribute, defaults in (
+                ("dependencies", plugins.dependencies),
+                ("variables", plugins.variables),
+            ):
+                target = getattr(context, attribute)
+                for key, value in defaults.items():
+                    if key not in target:
+                        target[key] = value
+                        stack.callback(_remove_plugin_default, context, attribute, key, value)
+
+            if client is None:
+                client = await self._prepare_turn(event, context, config)
+
+            if plugins.static_prompt or plugins.dynamic_prompt:
+                fragments: list[str] = [_PluginPrompt(prompt) for prompt in plugins.static_prompt]
+                context.prompt = [*context.prompt, *fragments]
+                stack.callback(_remove_plugin_prompts, context, fragments)
+                for prompt in plugins.dynamic_prompt:
+                    fragment = _PluginPrompt(await prompt(event, context))
+                    fragments.append(fragment)
+                    context.prompt.append(fragment)
+
+            async with self._drive_scope(
+                event,
+                context=context,
+                client=client,
+                hitl_hook=hitl_hook,
+                plugin_hitl_hook=plugins.hitl_hook,
+                additional_tools=(*plugins.tools, *additional_tools),
+                additional_middleware=(*plugins.middleware, *additional_middleware),
+                additional_observers=(*plugins.observers, *additional_observers),
+                additional_policies=plugins.policies,
+                response_schema=response_schema,
+            ) as drive:
+                yield drive
+
+    @asynccontextmanager
+    async def _drive_scope(
+        self,
+        event: BaseEvent,
+        *,
+        context: Context,
         client: LLMClient,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
+        additional_policies: Iterable[AssemblyPolicy] = (),
+        plugin_hitl_hook: HumanHook | None = None,
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1336,8 +1508,7 @@ class Agent(PluginTarget, Generic[TResult]):
         no-contention acquire. Sub-tasks spawn on their own stream, so they never
         contend with the parent turn's lock.
         """
-        stream_lock = _get_stream_turn_lock(context.stream)
-        async with stream_lock, self._knowledge_context.enter(context):
+        async with self._knowledge_context.enter(context):
             if response_schema is omit:
                 final_schema = self._response_schema
             else:
@@ -1347,21 +1518,13 @@ class Agent(PluginTarget, Generic[TResult]):
             all_tools: tuple[Tool, ...] = tuple(chain(self.tools, self._additional_tools, additional_tools))
 
             all_schemas: list[ToolSchema] = []
-            known_tools: set[str] = set()
             tool_search_schema: ToolSearchToolSchema | None = None
-            for t in all_tools:
-                schemas = await t.schemas(context)
-
-                for schema in schemas:
-                    if isinstance(schema, FunctionToolSchema):
-                        known_tools.add(schema.function.name)
-                    else:
-                        known_tools.add(schema.type)
-
-                    if isinstance(schema, ToolSearchToolSchema):
-                        tool_search_schema = schema
-                    else:
-                        all_schemas.append(schema)
+            resolved_tools = await resolve_tools(all_tools, context)
+            for schema in resolved_tools.schemas:
+                if isinstance(schema, ToolSearchToolSchema):
+                    tool_search_schema = schema
+                else:
+                    all_schemas.append(schema)
 
             if tool_search_schema is not None:
                 all_schemas.append(tool_search_schema)
@@ -1376,7 +1539,20 @@ class Agent(PluginTarget, Generic[TResult]):
                 serializer=self._serializer,
             )
 
-            for m in reversed(tuple(chain(self._middleware, additional_middleware))):
+            factories = list(self._middleware)
+            policies = list(additional_policies)
+            if policies:
+                policies = [*self._policies, *policies]
+                for warning in AssemblerMiddleware.validate_order(policies):
+                    logger.warning("Assembly policy ordering: %s", warning)
+                for index, factory in enumerate(factories):
+                    if isinstance(factory, _AssemblerMiddlewareFactory):
+                        factories[index] = _AssemblerMiddlewareFactory(policies)
+                        break
+                else:
+                    factories.extend((_AssemblerMiddlewareFactory(policies), _HaltCheckMiddlewareFactory()))
+
+            for m in reversed(tuple(chain(factories, additional_middleware))):
                 mw = m(event, context)
                 middleware_instances.append(mw)
 
@@ -1425,6 +1601,8 @@ class Agent(PluginTarget, Generic[TResult]):
                 )
 
                 hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
+                if hitl_hook_maker is None and plugin_hitl_hook is not None:
+                    hitl_hook_maker = wrap_hitl(plugin_hitl_hook)
                 if hitl_hook_maker is not None:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
@@ -1443,8 +1621,8 @@ class Agent(PluginTarget, Generic[TResult]):
                 self._tool_executor.register(
                     stack,
                     context,
-                    tools=all_tools,
-                    known_tools=known_tools,
+                    tools=resolved_tools.tools,
+                    known_tools=resolved_tools.known_tools,
                     middleware=middleware_instances,
                 )
 
@@ -1556,7 +1734,7 @@ class Agent(PluginTarget, Generic[TResult]):
         name: str | None = None,
         stream: StreamOrFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
-    ) -> FunctionTool:
+    ) -> SubagentTool:
         """Expose this agent as a delegation tool for another agent.
 
         ``stream=`` accepts ``None`` (a fresh stream per delegation), a

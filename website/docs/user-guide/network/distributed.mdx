@@ -40,7 +40,7 @@ from ag2.network import Hub, serve_ws
 
 async def main() -> None:
     hub = await Hub.open(MemoryKnowledgeStore())
-    async with serve_ws(hub, "0.0.0.0", 8765) as server:
+    async with serve_ws(hub, "127.0.0.1", 8765) as server:
         host, port = server.sockets[0].getsockname()[:2]
         print(f"listening on ws://{host}:{port}", flush=True)
         with contextlib.suppress(asyncio.CancelledError):
@@ -52,9 +52,13 @@ asyncio.run(main())
 
 `#!python serve_ws(hub, host, port)` is an async context manager. It binds a WebSocket server, hands each incoming connection its own `#!python WsLinkEndpoint`, and lets the hub dispatch from there. Pass `#!python port=0` to bind an ephemeral port and read the real one from `#!python server.sockets[0].getsockname()[1]`.
 
+!!! warning "Reachable addresses need real authentication"
+
+    The default auth registry includes `#!python NoAuth`, which lets any client act as any agent. `#!python serve_ws` therefore raises `#!python ValueError` when such a hub is bound to a non-loopback host. To listen on a reachable address, build the hub with an `#!python AuthRegistry` without `#!python NoAuth` (see [Authentication](#authentication)), or pass `#!python allow_unauthenticated=True` to accept the risk.
+
 ## Connecting a Remote Agent
 
-From any other process — same machine, different container, or across a real network:
+From any other process — same machine, different container, or across a real network. The example connects to `ws://hub-host:8765`; reaching a hub from another machine needs it bound to a reachable address with real authentication (see the warning above), while on one machine you can use `ws://127.0.0.1:8765`:
 
 ```python linenums="1"
 import asyncio
@@ -143,6 +147,30 @@ bob = await hub_client.register(agent, passport)
 
 The hub's `#!python AuthRegistry` validates the claim before binding the connection. Raise `#!python AuthError` from a custom `#!python AuthAdapter` (a `#!python Protocol`) to reject any scheme you define.
 
+### What a connection may do
+
+Every request on a connection runs as the agents bound to it — the ones it registered, or re-attached to with `#!python attach`. One connection may hold several agents. The hub rejects, with `#!python AccessDeniedError`, a request that:
+
+- changes another agent's resume, skill, or rule, unregisters it, or acts on its behalf (`#!python create_channel`, `#!python pending_turns_for`, …);
+- posts an envelope whose `sender_id` is not bound to the connection;
+- reads or closes a channel none of the connection's agents participates in;
+- updates, checkpoints, or reads the checkpoint of a task another agent owns — for a checkpoint the hub has no task record for, the owner is whichever connection's agents wrote it first over the wire. A checkpoint written in-process (or by an older hub) has no recorded writer, so it is readable by any connection and claimed by the first wire writer.
+
+Independently, a channel accepts events only from its participants — except a task cancel request (as the `tasks` tool's `cancel` action sends it) addressed to the owner of a live task in that channel. A non-participant may send at most one cancel request per task; a retry gets `#!python ProtocolError` — and `#!python attach` must present the auth scheme the identity registered with. Registering a `kind="remote_agent"` identity over the wire is off unless the hub is opened with `#!python allow_remote_agent_registration=True`; then it needs a connection that already holds one of your agents; those agents own it, and only a connection holding an owner can re-attach it. Enable it only if you trust your clients with naming: remote-agent registration skips authentication, so any admitted client can take any *unused* name first, and the `auth.scheme` / `auth.claim` it registers become the routing data your `RemoteAgentProxy` dispatches with — the client chooses where the proxy sends that agent's traffic. Task ids must be a single path segment (letters, digits, `.`, `_`, `-`). Agent names may not equal, or look like, an agent id (32 lowercase hex characters), and `#!python get_agent` resolves an exact id before a name. Over the wire, `#!python fire_task_event` accepts only the task mirror's `mirror_failed` report — its `owner_id` must be one of the connection's agents and its `channel_id` the task's own channel (or, for a task the hub hasn't observed, a channel that agent is in); terminal task events come from the hub itself when `#!python update_task` finishes a task. Names that only resemble an id or another name (upper-case hex, dashed UUIDs, look-alike characters) are accepted, so show ids alongside names wherever identity matters.
+
+```python linenums="1"
+from ag2.network import AccessDeniedError
+
+try:
+    await mallory_client.set_skill(bob_agent_id, "...")
+except AccessDeniedError:
+    ...  # "connection is not bound to agent '...'"
+```
+
+`#!python list_channels()` without an `agent_id` lists only the channels of the connection's own agents. Discovery reads — `#!python get_agent`, `#!python list_agents`, resumes, skills, rules — stay open to every connection. `#!python get_task` and `#!python list_tasks` show a task only to its owner and to the participants of its channel. An envelope's `audience` may name only participants of its channel. Once `#!python attach` re-binds an agent to a new connection, the old connection can no longer act as it.
+
+In-process clients (`#!python LocalLink` with a hub reference) call the hub directly and are not subject to these checks.
+
 ## At-Least-Once Delivery
 
 The hub guarantees each envelope is delivered at least once across reconnects:
@@ -154,11 +182,11 @@ The hub guarantees each envelope is delivered at least once across reconnects:
 ```python linenums="1"
 hub_client = HubClient(WsLink(url))
 await hub_client.open()
-bob = await hub_client.attach(agent, name="bob", since_envelope_id=last_acked_id)
+bob = await hub_client.attach(agent, name="bob", passport=bob_passport, since_envelope_id=last_acked_id)
 await hub_client.resume_pending_turns(bob)
 ```
 
-`#!python attach` re-binds an existing identity to a fresh connection. `#!python resume_pending_turns` re-fires any turns the protocol still expects from this agent. The default notify handler is idempotent under redelivery — causation-id deduplication short-circuits duplicate model turns without double-posting.
+`#!python attach` re-binds an existing identity to a fresh connection. Pass the identity's own passport (with its `#!python AuthBlock` credential): the hub never returns another agent's — or your own — auth claim, so it cannot be recovered from `#!python get_agent`. Keep the passport you registered with: the `#!python AgentClient.passport` a remote `#!python register` returns has no claim and cannot re-attach a credentialed identity. `#!python resume_pending_turns` re-fires any turns the protocol still expects from this agent. The default notify handler is idempotent under redelivery — causation-id deduplication short-circuits duplicate model turns without double-posting.
 
 ## Task Durability
 
@@ -183,7 +211,7 @@ recovered = await agent.resume_from(task_id, checkpoint_store)
 | Concern | Recommendation |
 |---|---|
 | TLS | Pass an `ssl_context` to `serve_ws(...)` and use `wss://` in `WsLink`. |
-| Auth | Build the hub with `AuthRegistry([ApiKeyAuth(keys=...)])` and pass `Passport(auth=AuthBlock(...))` from each agent. |
+| Auth | Required beyond loopback: `serve_ws` refuses a hub with `NoAuth` there. Build the hub with `AuthRegistry([ApiKeyAuth(keys=...)])` and pass `Passport(auth=AuthBlock(...))` from each agent. |
 | Durability | Use `DiskKnowledgeStore(path)` on the hub so the registry and channel WALs survive a restart. |
 | Reconnect | On disconnect, build a fresh `HubClient`, call `open()`, then `attach(agent, name=..., since_envelope_id=last_id)`. The hub replays any unacked envelopes past that cursor. |
 | Federation | Register a `RemoteAgentProxy` on the hub to route envelopes addressed to agents with `kind="remote_agent"` across hub boundaries. |

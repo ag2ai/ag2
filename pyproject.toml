@@ -27,7 +27,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-version = "1.1.0"
+version = "1.1.1"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -76,7 +76,7 @@ acp = [
     "starlette>=0.40,<2",
     "uvicorn>=0.51.0,<1",
 ]
-ag-ui = ["ag-ui-protocol>=0.1.21,<0.2"]
+ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=3.9.0,<4"]
@@ -177,7 +177,7 @@ optionals = [
     "websockets>=14.0,<17",  # WsLink (ag2.network)
     "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
     "daytona>=0.171.0,<1",
-    "tenki>=0.5.4,<2",
+    "tenki>=1.4.0,<2",
     "tinyfish>=0.5,<0.6; python_version>='3.11'",
     "exa-py>=2.12.1,<3",
     # providers
@@ -202,7 +202,7 @@ docs = [
     # Extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.5,<0.6; python_version>='3.11'",
     "daytona>=0.171.0,<1",
-    "tenki>=0.5.4,<2",
+    "tenki>=1.4.0,<2",
     "exa-py>=2.12.1,<3",
     "docker>=6.0.0,<8",                # Code execution tools are exposed in the public API by the optional `ag2.tools` module
     "nlip-sdk>=0.1.0,<1",              # NLIP is exposed in the public API by the optional `autogen.extensions.nlip` module
@@ -223,7 +223,7 @@ docs = [
     "mkdocs-literate-nav==0.6.3",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
-    "mkdocs-git-revision-date-localized-plugin==1.5.4",
+    "mkdocs-git-revision-date-localized-plugin==1.6.0",
     "typer>=0.22,<0.28",
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.5.0",                      # includes with variables
@@ -242,10 +242,10 @@ types = [
     # `disallow_any_unimported`. Type-check only — never a published constraint.
     "types-aiobotocore[bedrock-runtime]",
     { include-group = "test" },
-    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui]",
+    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui, acp]",
 ]
 
-lint = ["ruff==0.16.7", "codespell==2.4.3", "zizmor==1.30.1"]
+lint = ["ruff==0.16.8", "codespell==2.4.3", "zizmor==1.30.1"]
 
 dev = [
     { include-group = "lint" },
@@ -398,7 +398,19 @@ python_version = "3.10"
 # that already pass under `strict = true`.
 files = [
     "ag2/_import_utils.py",
+    "ag2/__init__.py",
+    "ag2/acp/client.py",
+    "ag2/acp/elicitation.py",
+    "ag2/eval/pairwise.py",
+    "ag2/eval/results/result.py",
+    "ag2/eval/scorers/correctness.py",
+    "ag2/network/client/checkpoint.py",
+    "ag2/network/transport/frames.py",
+    "ag2/policies/conversation.py",
     "ag2/config/bedrock/bedrock_client.py",
+    "ag2/config/anthropic/files.py",
+    "ag2/config/gemini/events.py",
+    "ag2/config/openai/openai_client.py",
     "ag2/config/bedrock/mappers.py",
     "ag2/config/anthropic/mappers.py",
     "ag2/config/dashscope/mappers.py",
@@ -406,8 +418,19 @@ files = [
     "ag2/config/mistral/mappers.py",
     "ag2/config/ollama/mappers.py",
     "ag2/config/openai/mappers.py",
+    "ag2/config/xai/config.py",
     "ag2/config/xai/mappers.py",
     "ag2/config/zai/mappers.py",
+    "ag2/live/gemini.py",
+    "ag2/mcp/apps.py",
+    "ag2/mcp/tools.py",
+    "ag2/ag_ui/run_input.py",
+    "ag2/ag_ui/stream.py",
+    "ag2/ag_ui/__init__.py",
+    "ag2/ag_ui/asgi.py",
+    "ag2/ag_ui/capabilities.py",
+    "ag2/ag_ui/interrupts.py",
+    "ag2/ag_ui/usage.py",
 ]
 
 strict = true
@@ -435,6 +458,12 @@ disallow_any_unimported = true
 [[tool.mypy.overrides]]
 module = "xai_sdk.*"
 follow_untyped_imports = true
+
+# AG-UI's SDK does not ship typing metadata, so values crossing that boundary
+# are Any even though this module's own functions remain checked strictly.
+[[tool.mypy.overrides]]
+module = "ag2.ag_ui.*"
+disable_error_code = ["no-any-unimported"]
 
 # numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
 # under python_version = "3.10"; skip analysing numpy entirely (it is not our code).

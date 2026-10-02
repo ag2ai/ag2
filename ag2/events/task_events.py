@@ -20,6 +20,7 @@ class TaskEvent(BaseEvent):
 
 
 class TaskStarted(TaskEvent):
+    parent_tool_call_id: str | None = None
     # Optional ``TaskSpec`` describing what the task is doing. Set by the
     # framework-core ``Task`` primitive (``ag2.task``); legacy
     # ``run_task`` callers leave it ``None``.

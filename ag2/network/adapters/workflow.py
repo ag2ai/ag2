@@ -597,7 +597,9 @@ def _resolve_routing(
             }
         handoff = _extract_handoff(result_event) if result_event else None
         if handoff is not None:
-            target = name_to_id.get(handoff.target, handoff.target)
+            # An exact agent id wins over a name, as in ``Hub.get_agent``.
+            known_ids = set(name_to_id.values())
+            target = handoff.target if handoff.target in known_ids else name_to_id.get(handoff.target, handoff.target)
             return {
                 "kind": "handoff",
                 "tool": call.name,

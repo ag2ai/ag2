@@ -144,7 +144,7 @@ async def test_a_second_question_is_asked_and_answered() -> None:
 
 
 class TestTheHeldTurnIsFoundByThread:
-    async def test_a_resume_on_another_thread_is_refused(self) -> None:
+    async def test_a_resume_on_another_thread_is_ignored(self) -> None:
         agent, asked = asking_agent()
         app = app_for(AGUIStream(agent))
 
@@ -154,7 +154,7 @@ class TestTheHeldTurnIsFoundByThread:
             run_body(thread_id="other", run_id="r2", text=None, resume=answer(sole_interrupt(first), "blue")),
         )
 
-        assert types_of(events)[-1] == "RUN_ERROR"
+        assert "RUN_ERROR" not in types_of(events)
         assert asked.answers == []
 
     async def test_retrieving_a_held_turn_removes_it(self) -> None:
@@ -170,7 +170,7 @@ class TestTheHeldTurnIsFoundByThread:
             run_body(thread_id="t1", run_id="r3", text=None, resume=answer(interrupt, "red")),
         )
 
-        assert types_of(again)[-1] == "RUN_ERROR"
+        assert "RUN_ERROR" not in types_of(again)
         assert asked.answers == ["blue"]
 
     async def test_two_resumes_racing_one_thread_cannot_both_drive_it(self) -> None:
@@ -190,8 +190,10 @@ class TestTheHeldTurnIsFoundByThread:
             post_run(app, run_body(thread_id="t1", run_id="r3", text=None, resume=answer(interrupt, "red"))),
         )
 
-        endings = sorted(types_of(events)[-1] for events in both)
-        assert endings == ["RUN_ERROR", "RUN_FINISHED"]
+        # The loser's answer is to nothing held, so its run starts afresh and stops
+        # on the question again.
+        outcomes = sorted(outcome_of(events)["type"] for events in both)
+        assert outcomes == ["interrupt", "success"]
         assert asked.answers in (["blue"], ["red"])
 
 

@@ -95,6 +95,17 @@ class TestResolveRouting:
         assert routing["tool"] == "delegate_a"
         assert routing["reason"] == "first"
 
+    def test_dynamic_handoff_to_an_exact_agent_id_is_not_shadowed_by_a_name(self) -> None:
+        graph = _graph("delegate_a")
+        call = _call("smart_route", call_id="c1")
+        result = _result("c1", name="smart_route", value=Handoff(target="id-bob", reason="picked"))
+        routing = _resolve_routing(
+            [call, result],
+            graph,
+            name_to_id={"bob": "id-bob", "id-bob": "id-mallory"},
+        )
+        assert routing["target"] == "id-bob"
+
     def test_dynamic_handoff_resolves_target(self) -> None:
         """A ToolResultEvent carrying a Handoff dataclass produces
         dynamic routing with the resolved target id."""

@@ -65,7 +65,7 @@ Two halves: **active actions** (the agent is inside its own `#!python agent.task
 | `#!python "list"` | observation | `#!python scope="own"\|"all", state="active"\|"all", limit=20` | Task summaries. |
 | `#!python "status"` | observation | `#!python task_id` | Refreshed `#!python TaskMetadata`. |
 | `#!python "wait"` | observation | `#!python task_id, timeout=300, poll_interval=0.1` | Blocks until the task reaches a terminal state. |
-| `#!python "cancel"` | — | — | Not implemented; returns an error placeholder. |
+| `#!python "cancel"` | observation | `#!python task_id, reason?` | Posts an `ag2.task.cancel_request` to the task's owner in the task's channel; the owner decides whether to cancel. An agent outside that channel may send one request per task — a retry returns an error. |
 
 `#!python "start"` is intentionally **not** a tool — calling it from the LLM would bypass the `#!python async with agent.task(...)` lifecycle that scopes `#!python TaskInject` correctly. Owners start tasks in their own code; the LLM uses `#!python "progress"`/`#!python "complete"` once a task is active, and `#!python delegate` for one-shot remote work.
 
