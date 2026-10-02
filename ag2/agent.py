@@ -30,6 +30,7 @@ from typing import Any, Generic, Literal, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
@@ -87,7 +88,7 @@ from .tools.final import FunctionTool, Toolkit, tool
 from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
-from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
+from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
 from .types import Omittable, SendableMessage, omit
 from .usage import UsageReport, collect_usage_events
@@ -829,6 +830,18 @@ class Agent(PluginTarget, Generic[TResult]):
         return types.MappingProxyType(self._agent_variables)
 
     @property
+    def has_hitl_hook(self) -> bool:
+        """Whether a hook answers this agent's questions to a human, rather than the caller's."""
+
+        return self._hitl_hook is not None
+
+    @property
+    def serializer(self) -> SerializerProto:
+        """The serializer that encodes this agent's tool results."""
+
+        return self._serializer
+
+    @property
     def response_schema(self) -> ResponseProto[TResult] | None:
         """The response schema, or ``None`` when replies are free text."""
 
@@ -1549,7 +1562,7 @@ class Agent(PluginTarget, Generic[TResult]):
         name: str | None = None,
         stream: StreamOrFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
-    ) -> FunctionTool:
+    ) -> SubagentTool:
         """Expose this agent as a delegation tool for another agent.
 
         ``stream=`` accepts ``None`` (a fresh stream per delegation), a

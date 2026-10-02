@@ -10,18 +10,18 @@ If you haven’t set up an AG-UI endpoint yet, start with the [AG-UI overview](/
 
 ## Authentication
 
-Because AG-UI integration works on top of simple HTTP SSE endpoints, you can use the same authentication mechanisms as you would for any other HTTP endpoint - validate headers/tokens before streaming events.
+Because AG-UI integration works on top of HTTP SSE endpoints, you can validate headers or tokens before streaming events.
 
 Example: protect `/chat` with a shared token header.
 
-```python title="run_ag_ui_auth.py" linenums="1" hl_lines="22 25-26"
+```python title="run_ag_ui_auth.py" linenums="1"
 from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ag2 import Agent
-from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.ag_ui import AGUIStream, read_run_input
 from ag2.config import OpenAIConfig
 
 agent = Agent(
@@ -35,37 +35,44 @@ app = FastAPI()
 
 @app.post("/chat")
 async def run_agent(
-    message: RunAgentInput,
+    request: Request,
     token: Annotated[str, Header(..., description="Authentication token")],
-    accept: str | None = Header(None),
-) -> StreamingResponse:
+) -> Response:
     if token != "1234567890":
         raise HTTPException(status_code=401, detail="Invalid token")
-
+    try:
+        message = read_run_input(await request.body())
+    except ValueError:
+        return JSONResponse({"error": "invalid AG-UI RunAgentInput body"}, status_code=400)
     return StreamingResponse(
-        stream.dispatch(message, accept=accept),
-        media_type=accept or "text/event-stream",
+        stream.dispatch(message, accept=request.headers.get("accept")),
+        media_type="text/event-stream",
     )
 ```
+
+The body goes through `read_run_input`, which strips what a newer client sends
+that this server does not recognise, and the content type is always
+`text/event-stream` (see the [overview](/docs/user-guide/ag-ui/overview#basic-server-example){.internal-link}).
 
 Notes:
 
 - **Do not** put secrets (API keys, auth tokens) in the browser bundle. Protect the Next.js runtime route (`/api/copilotkit`) and forward credentials server-to-server.
-- If you don’t need auth/middleware, you can mount the generated ASGI endpoint with `AGUIStream.build_asgi()`, but you’ll have less control over request handling.
+- If you expose a capabilities `GET` route alongside this `POST` route, apply the same authentication check there.
+- If you don’t need auth or middleware, add the generated `AGUIStream.build_asgi()` endpoint as a route, as shown in the [basic server example](/docs/user-guide/ag-ui/overview#basic-server-example){.internal-link}.
 
 ## Tools context
 
 You often need to pass **per-request context** (user ID, org ID, plan, permissions) into tools without baking it into prompts or trusting client-provided text.
 
-AG2 supports this via `ContextVariables`. Your tool can accept a `context` parameter, and you provide values when dispatching.
+AG2 supports this through injected `Context` and `dispatch(variables=...)`. Your tool reads values from `context.variables`.
 
-```python title="tools_context.py" linenums="1" hl_lines="1 6-7 20"
+```python title="tools_context.py" linenums="1"
 from ag2 import Agent, Context, tool
 from ag2.ag_ui import AGUIStream, RunAgentInput
 from ag2.config import OpenAIConfig
 
 @tool
-def get_user_profile(user_id: Context) -> str:
+def get_user_profile(context: Context) -> str:
     user_id = context.variables.get("user_id")
     return f"User profile for user {user_id}"
 
@@ -78,13 +85,21 @@ agent = Agent(
 
 stream = AGUIStream(agent)
 
-async def dispatch_with_context(message: RunAgentInput):
-    return stream.dispatch(message, variables={"user_id": "1234567890"})
+def dispatch_with_context(message: RunAgentInput, user_id: str):
+    return stream.dispatch(message, variables={"user_id": user_id})
 ```
+
+!!! warning "Variables are shared state"
+
+    Variables reach the client too: each `STATE_SNAPSHOT` carries the client's
+    state and the server's variables together (see
+    [Shared state](/docs/user-guide/ag-ui/overview#shared-state){.internal-link}).
+    A user id is fine to share. A token or an API key is not: pass it to
+    `dispatch(dependencies=...)`, which never leaves the server.
 
 ## Backend tools (Python functions)
 
-Backend tools are regular Python callables registered on the agent (for example via `functions=[...]`). When the agent invokes a tool during a run, the AG-UI stream emits tool lifecycle events that a UI can render in real time.
+Backend tools are regular Python callables registered on the agent (for example via `tools=[...]`). When the agent invokes a tool during a run, the AG-UI stream emits tool lifecycle events that a UI can render in real time.
 
 Example backend tool:
 
@@ -104,6 +119,9 @@ agent = Agent(
 )
 ```
 
+A tool may return more than text. An image, a document or structured data
+reaches a 1.0 client as content parts (see [Tool results](/docs/user-guide/ag-ui/overview#tool-results){.internal-link}).
+
 In an AG-UI-compatible UI, you typically render these as:
 
 - Status updates (tool started / finished)
@@ -122,6 +140,17 @@ In this setup:
 - The **frontend** advertises available tools in `RunAgentInput.tools`.
 - The **agent** can call those tools during the run.
 - The **frontend** executes/handles the tool and renders the UI.
+
+A run that stops on client tool calls finishes with a success outcome naming
+the calls it started, in call order, in `pendingToolCallIds`. A call an earlier
+run announced is not repeated: the run that paused on a question ended on an
+interrupt outcome, which carries no pending ids. The client answers them in the next
+run's messages, and a tool message may carry content parts, not only a string.
+
+This frontend-tool round trip is separate from an AG2 `context.input()`
+interrupt. To resume an interrupt, the client must echo its `metadata` in the
+resume entry; CopilotKit's `useInterrupt().resolve()` and `.cancel()` do not send
+that metadata. See [Asking the human a question](/docs/user-guide/ag-ui/overview#asking-the-human-a-question).
 
 A frontend tool never replaces a backend tool with the same name: the backend tool is kept and the frontend one is dropped with a warning. Give frontend tools names of their own.
 
