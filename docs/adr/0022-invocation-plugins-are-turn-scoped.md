@@ -14,9 +14,10 @@ affect concurrent calls.
 ## Decision
 
 Bind invocation plugins to the existing turn scope under its stream lock.
-Restore the original prompt and remove newly supplied defaults on scope
-exit, including failure and cancellation. Continuations require the caller to
-pass the plugin again, so temporary capabilities cannot silently persist.
+On scope exit, remove only the bound plugin prompt fragments and unreplaced
+default values, including failure and cancellation. Track prompt fragments by
+identity so equal text and unrelated conversation updates survive cleanup.
+Continuations require the caller to pass the plugin again.
 
 ## Consequences
 
@@ -24,3 +25,5 @@ The agent and its resources remain reusable across calls with different plugins.
 Callers own refresh timing: a fresh `SkillPlugin` rebuilds its catalog and schemas
 after runtime cache invalidation; reusing the plugin keeps its snapshot.
 Constructor plugins retain their existing lifetime.
+Reassigned defaults and other conversation updates persist. Cleanup tracks
+framework-bound contributions; it does not roll back arbitrary plugin code.

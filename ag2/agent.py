@@ -417,6 +417,29 @@ class _ContextOverrides:
             context.prompt = list(self.prompt)
 
 
+class _PluginPrompt(str):
+    """Give a bound prompt fragment its own identity without changing its text."""
+
+    __slots__ = ()
+
+    def __copy__(self) -> "_PluginPrompt":
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "_PluginPrompt":
+        return self
+
+
+def _remove_plugin_prompts(context: Context, fragments: Sequence[str]) -> None:
+    owned = {id(fragment) for fragment in fragments}
+    context.prompt[:] = [fragment for fragment in context.prompt if id(fragment) not in owned]
+
+
+def _remove_plugin_default(context: Context, attribute: str, key: Any, value: Any) -> None:
+    target: dict[Any, Any] = getattr(context, attribute)
+    if target.get(key) is value:
+        target.pop(key, None)
+
+
 class _TurnPlugins:
     """Snapshot the contributions of plugins passed to one invocation."""
 
@@ -1411,24 +1434,27 @@ class Agent(PluginTarget, Generic[TResult]):
                 context_overrides.apply(context)
             for _ in range(plugins.conflicting_hitl_hooks):
                 warnings.warn("Multiple invocation plugins set hitl_hook; the first wins.", stacklevel=3)
-            for target, defaults in (
-                (context.dependencies, plugins.dependencies),
-                (context.variables, plugins.variables),
+            for attribute, defaults in (
+                ("dependencies", plugins.dependencies),
+                ("variables", plugins.variables),
             ):
+                target = getattr(context, attribute)
                 for key, value in defaults.items():
                     if key not in target:
                         target[key] = value
-                        stack.callback(target.pop, key, None)
+                        stack.callback(_remove_plugin_default, context, attribute, key, value)
 
             if client is None:
                 client = await self._prepare_turn(event, context, config)
 
             if plugins.static_prompt or plugins.dynamic_prompt:
-                original_prompt = context.prompt
-                context.prompt = [*original_prompt, *plugins.static_prompt]
-                stack.callback(setattr, context, "prompt", original_prompt)
+                fragments: list[str] = [_PluginPrompt(prompt) for prompt in plugins.static_prompt]
+                context.prompt = [*context.prompt, *fragments]
+                stack.callback(_remove_plugin_prompts, context, fragments)
                 for prompt in plugins.dynamic_prompt:
-                    context.prompt.append(await prompt(event, context))
+                    fragment = _PluginPrompt(await prompt(event, context))
+                    fragments.append(fragment)
+                    context.prompt.append(fragment)
 
             async with self._drive_scope(
                 event,

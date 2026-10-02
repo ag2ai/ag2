@@ -124,9 +124,10 @@ context defaults, and HITL. Their rules are:
   defaults and same-named tools; explicit `tools=` override plugin tools.
 - Policies follow agent policies in one assembler. HITL uses the explicit call
   hook, then the agent hook, then the first plugin hook.
-- Contributions are cleaned up on scope exit, including failure or cancellation.
-  Pass the plugin again for a continuation. Changes to other context variables
-  persist; constructor plugins remain attached to the agent.
+- Scope exit removes the plugin's bound prompt fragments and unreplaced defaults,
+  including failure or cancellation. Prompt updates and reassigned defaults
+  persist. Pass the plugin again for a continuation; constructor plugins remain
+  attached to the agent. Arbitrary side effects of plugin code are not rolled back.
 
 The agent is unchanged, so separate streams can use different plugins concurrently.
 Reusing a `SkillPlugin` preserves its snapshot.

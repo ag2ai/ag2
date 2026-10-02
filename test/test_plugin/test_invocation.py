@@ -5,6 +5,7 @@
 import asyncio
 import json
 from collections.abc import Sequence
+from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -147,6 +148,104 @@ class ResponseRecorder:
 
     def capture(self, event: ModelResponse, ctx: Context) -> None:
         self.labels.append(ctx.variables["label"])
+
+
+def shared_prompt() -> str:
+    return "shared"
+
+
+@dataclass
+class PromptUpdater:
+    mode: str
+
+    def update(self, event: BaseEvent, ctx: Context) -> None:
+        if self.mode == "append":
+            ctx.prompt.extend(["persistent", "shared"])
+        elif self.mode == "copy":
+            ctx.prompt = [*ctx.prompt, "persistent", "shared"]
+        elif self.mode == "deepcopy":
+            ctx.prompt = [*deepcopy(ctx.prompt), "persistent", "shared"]
+        elif self.mode == "copy_fragments":
+            ctx.prompt = [*(copy(fragment) for fragment in ctx.prompt), "persistent", "shared"]
+        elif self.mode == "replace":
+            ctx.prompt = ["persistent", "shared"]
+        else:
+            ctx.prompt.clear()
+
+
+@dataclass
+class DefaultsUpdater:
+    replace_mappings: bool
+
+    def update(self, event: BaseEvent, ctx: Context) -> None:
+        if self.replace_mappings:
+            ctx.variables = dict(ctx.variables)
+            ctx.dependencies = dict(ctx.dependencies)
+        ctx.variables["label"] = "updated"
+        ctx.dependencies["source"] = "updated"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["append", "copy", "deepcopy", "copy_fragments", "replace", "clear"])
+async def test_cleanup_preserves_subscriber_prompt_updates(mode: str) -> None:
+    config = RecordingConfig("done", "next")
+    agent = Agent("a", prompt="shared", config=config)
+    stream = MemoryStream()
+    updater = PromptUpdater(mode)
+    with stream.where(ModelResponse).sub_scope(updater.update):
+        reply = await agent.ask("go", stream=stream, plugins=[Plugin(prompt=["shared", shared_prompt])])
+    expected = {
+        "append": ["shared", "persistent", "shared"],
+        "copy": ["shared", "persistent", "shared"],
+        "deepcopy": ["shared", "persistent", "shared"],
+        "copy_fragments": ["shared", "persistent", "shared"],
+        "replace": ["persistent", "shared"],
+        "clear": [],
+    }[mode]
+    assert config.calls[0].prompt == ["shared", "shared", "shared"]
+    assert reply.context.prompt == expected
+    await reply.ask("again")
+    assert config.calls[-1].prompt == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replace_mappings", [False, True])
+async def test_cleanup_preserves_reassigned_defaults(replace_mappings: bool) -> None:
+    config = RecordingConfig("done", "next")
+    agent = Agent("a", config=config)
+    stream = MemoryStream()
+    updater = DefaultsUpdater(replace_mappings)
+    plugin = Plugin(
+        variables={"label": "plugin", "temporary": "remove"},
+        dependencies={"source": "plugin", "temporary": "remove"},
+    )
+    with stream.where(ModelResponse).sub_scope(updater.update):
+        reply = await agent.ask("go", stream=stream, plugins=[plugin])
+    assert reply.context.variables == {"label": "updated"}
+    assert reply.context.dependencies == IsPartialDict({"source": "updated"})
+    assert "temporary" not in reply.context.dependencies
+    await reply.ask("again")
+    assert config.calls[-1].variables == {"label": "updated"}
+    assert config.calls[-1].dependencies == IsPartialDict({"source": "updated"})
+
+
+@pytest.mark.asyncio
+async def test_failure_preserves_subscriber_updates() -> None:
+    agent = Agent("a", prompt="shared", config=RecordingConfig("initial"))
+    reply = await agent.ask("initial")
+    prompt_updater = PromptUpdater("append")
+    defaults_updater = DefaultsUpdater(False)
+    stream = reply.context.stream
+    plugin = Plugin(prompt="shared", variables={"label": "plugin"}, dependencies={"source": "plugin"})
+    with (
+        stream.where(ModelRequest).sub_scope(prompt_updater.update),
+        stream.where(ModelRequest).sub_scope(defaults_updater.update),
+        pytest.raises(RuntimeError, match="failure"),
+    ):
+        await reply.ask("go", config=RecordingConfig(RuntimeError("failure")), plugins=[plugin])
+    assert reply.context.prompt == ["shared", "persistent", "shared"]
+    assert reply.context.variables == {"label": "updated"}
+    assert reply.context.dependencies == IsPartialDict({"source": "updated"})
 
 
 @pytest.mark.asyncio
@@ -304,21 +403,25 @@ async def test_failure_cleans_plugin_context_and_tools() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancellation_restores_context() -> None:
+async def test_cancellation_cleans_only_plugin_contributions() -> None:
     gate = asyncio.Event()
     config = RecordingConfig("first")
     agent = Agent("a", prompt="base", config=config)
     reply = await agent.ask("initial")
     config.gate = gate
     config.started.clear()
-    async with reply.run("go", config=config, plugins=[Plugin(prompt="plugin", variables={"label": "one"})]) as run:
+    async with reply.run(
+        "go", config=config, plugins=[Plugin(prompt="plugin", variables={"label": "one", "temporary": "remove"})]
+    ) as run:
         task = asyncio.create_task(run.result())
         await config.started.wait()
+        reply.context.prompt.append("persistent")
+        reply.context.variables["label"] = "updated"
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
-    assert reply.context.prompt == ["base"]
-    assert "label" not in reply.context.variables
+    assert reply.context.prompt == ["base", "persistent"]
+    assert reply.context.variables == {"label": "updated"}
 
 
 @pytest.mark.asyncio
