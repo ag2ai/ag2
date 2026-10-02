@@ -453,7 +453,7 @@ class _TurnPlugins:
         self.dependencies: dict[Any, Any] = {}
         self.variables: dict[Any, Any] = {}
         self.hitl_hook: HumanHook | None = None
-        self.conflicting_hitl_hooks = 0
+        self.has_conflicting_hitl_hooks = False
         for plugin in plugins:
             self.static_prompt.extend(plugin._system_prompt)
             self.dynamic_prompt.extend(plugin._dynamic_prompt)
@@ -465,7 +465,7 @@ class _TurnPlugins:
             self.variables.update(plugin._variables)
             if plugin._hitl_hook is not None:
                 if self.hitl_hook is not None:
-                    self.conflicting_hitl_hooks += 1
+                    self.has_conflicting_hitl_hooks = True
                 else:
                     self.hitl_hook = plugin._hitl_hook
 
@@ -1432,8 +1432,8 @@ class Agent(PluginTarget, Generic[TResult]):
         async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
             if context_overrides is not None:
                 context_overrides.apply(context)
-            for _ in range(plugins.conflicting_hitl_hooks):
-                warnings.warn("Multiple invocation plugins set hitl_hook; the first wins.", stacklevel=3)
+            if plugins.has_conflicting_hitl_hooks:
+                warnings.warn("Multiple invocation plugins set hitl_hook; the first wins.", stacklevel=2)
             for attribute, defaults in (
                 ("dependencies", plugins.dependencies),
                 ("variables", plugins.variables),

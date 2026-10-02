@@ -132,6 +132,12 @@ context defaults, and HITL. Their rules are:
 The agent is unchanged, so separate streams can use different plugins concurrently.
 Reusing a `SkillPlugin` preserves its snapshot.
 
+Invocation plugins add to the agent's constructor plugins; they do not replace them.
+A `SkillPlugin` attached to the agent and another passed to `plugins=` render two
+catalogs in the prompt, so attach a refreshed skill catalog in only one place.
+Cleanup of a default compares by identity: if code later assigns the identical object
+to the same key, the value is treated as the plugin's own and removed.
+
 ## Prompt updates
 
 For continuous and event-driven prompt updates, you can mutate `context.prompt` dynamically from an event subscriber. This allows you to respond to specific events in the stream and adjust the agent's behavior on the fly during an ongoing conversation. See the [Stream](/docs/user-guide/advanced/stream) documentation for more details on this advanced feature.
