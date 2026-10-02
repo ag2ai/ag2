@@ -11,7 +11,6 @@ from ag2.tools.sandbox.filter import (
     READONLY_COMMANDS,
     check_ignore,
     contains_shell_operator,
-    matches,
     matches_argv,
     split_command,
 )
@@ -36,13 +35,13 @@ class ShellAdapter:
                  :class:`SandboxFactory` (opened per :meth:`run` so
                  :class:`~ag2.annotations.Variable` parameters
                  get resolved against the active Context).
-        allowed / blocked / ignore / readonly: command filter set. ``allowed``
-                 (or ``readonly``) switches on restricted mode, where the command
-                 runs as its checked argv without a shell.
-                 ``blocked`` is best-effort: it only matches the head command's
-                 prefix, so chaining (``;`` / ``|`` / ``&&`` / ``$(...)``) can
-                 bypass it. It is **not** a security boundary — use ``allowed`` /
-                 ``readonly`` or an isolated container for that.
+        allowed / blocked / ignore / readonly: command filter set. Any of them
+                 switches on restricted mode, where the command runs as its
+                 checked argv without a shell, so nothing can expand or chain
+                 after the check. ``blocked`` matches the argv word by word
+                 (the program by its base name), so it cannot stop a program
+                 that runs another one (``sh -c``, ``env``, ``xargs``): use
+                 ``allowed`` / ``readonly`` or an isolated container for that.
         env: Extra environment variables passed into each command.
         timeout: Per-command timeout in seconds. ``None`` lets the
                  backend pick its default.
@@ -94,23 +93,25 @@ class ShellAdapter:
     @property
     def restricted(self) -> bool:
         """Whether commands run as a checked argv, without a shell."""
-        return self._allowed is not None
+        return self._allowed is not None or self._blocked is not None or self._ignore is not None
 
     def _argv(self, command: str) -> list[str] | None:
         # Restricted mode runs exactly the argv it checks: through ``sh -c`` the
-        # shell would expand braces, variables and globs after the check.
-        if self._allowed is None:
+        # shell would expand braces, variables, globs and ``$(...)`` after the check.
+        if not self.restricted:
             return ["sh", "-c", command]
         return split_command(command)
 
     def _filter(self, command: str, argv: list[str]) -> str | None:
-        if self._allowed is not None:
-            if not any(matches_argv(p, argv) for p in self._allowed):
-                return f"Command not allowed: {command!r}"
-            if contains_shell_operator(command):
-                return f"Command not allowed (shell syntax is not available in restricted mode): {command!r}"
-        if self._blocked is not None and any(matches(p, command) for p in self._blocked):
+        if self._allowed is not None and not any(matches_argv(p, argv) for p in self._allowed):
             return f"Command not allowed: {command!r}"
+        if self.restricted and contains_shell_operator(command):
+            return f"Command not allowed (shell syntax is not available in restricted mode): {command!r}"
+        if self._blocked is not None and argv:
+            # The program by its base name, so ``/bin/rm`` is matched by ``rm``.
+            head = [PurePosixPath(argv[0]).name, *argv[1:]]
+            if any(matches_argv(p, head) for p in self._blocked):
+                return f"Command not allowed: {command!r}"
         if self._ignore is not None:
             # self.workdir gives a host Path for local backends and a
             # PurePosixPath for remote/container ones — check_ignore handles
