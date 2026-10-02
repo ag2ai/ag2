@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
+from ag_ui.core import PROTOCOL_VERSION
 from starlette.applications import Starlette
 from starlette.routing import Route
 
@@ -168,10 +169,11 @@ def run_body(
     text: str | None = "go",
     resume: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """One `RunAgentInput`, spelled the way a browser client spells it."""
+    """One `RunAgentInput`, spelled the way a 1.0 browser client spells it."""
     body: dict[str, Any] = {
         "threadId": thread_id,
         "runId": run_id,
+        "protocolVersion": PROTOCOL_VERSION,
         "state": {},
         "messages": [{"id": "m1", "role": "user", "content": text}] if text is not None else [],
         "tools": [],

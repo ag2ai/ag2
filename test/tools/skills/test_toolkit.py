@@ -75,6 +75,27 @@ async def test_run_script_falls_through_on_skill_not_found(tmp_path: Path, conte
 
 
 @pytest.mark.asyncio
+async def test_run_skill_script_executes_nested_script(tmp_path: Path, context: Context) -> None:
+    skills_root = tmp_path / "skills"
+    skill_dir = skills_root / "nested-script"
+    scripts_dir = skill_dir / "scripts" / "helpers"
+    scripts_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: nested-script\ndescription: Runs a nested script\n---\n# Nested script\n"
+    )
+    (scripts_dir / "report.py").write_text('print("NESTED SCRIPT RAN")\n')
+    run_tool = SkillsToolkit(LocalRuntime(dir=skills_root)).run_skill_script()
+
+    args = json.dumps({"name": "nested-script", "script": "helpers/report.py"})
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    [output] = result.result.parts
+    assert isinstance(output, TextInput)
+    assert "NESTED SCRIPT RAN" in output.content
+
+
+@pytest.mark.asyncio
 async def test_run_script_routes_named_args_to_memory_runtime(tmp_path: Path, context: Context) -> None:
     skill = MemorySkill(name="calc", description="Double a number")
 

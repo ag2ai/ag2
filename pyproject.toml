@@ -76,7 +76,7 @@ acp = [
     "starlette>=0.40,<2",
     "uvicorn>=0.51.0,<1",
 ]
-ag-ui = ["ag-ui-protocol>=0.1.21,<0.2"]
+ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=3.9.0,<4"]
@@ -414,6 +414,13 @@ files = [
     "ag2/live/gemini.py",
     "ag2/mcp/apps.py",
     "ag2/mcp/tools.py",
+    "ag2/ag_ui/run_input.py",
+    "ag2/ag_ui/stream.py",
+    "ag2/ag_ui/__init__.py",
+    "ag2/ag_ui/asgi.py",
+    "ag2/ag_ui/capabilities.py",
+    "ag2/ag_ui/interrupts.py",
+    "ag2/ag_ui/usage.py",
 ]
 
 strict = true
@@ -441,6 +448,12 @@ disallow_any_unimported = true
 [[tool.mypy.overrides]]
 module = "xai_sdk.*"
 follow_untyped_imports = true
+
+# AG-UI's SDK does not ship typing metadata, so values crossing that boundary
+# are Any even though this module's own functions remain checked strictly.
+[[tool.mypy.overrides]]
+module = "ag2.ag_ui.*"
+disable_error_code = ["no-any-unimported"]
 
 # numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
 # under python_version = "3.10"; skip analysing numpy entirely (it is not our code).

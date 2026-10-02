@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable
+from copy import copy, deepcopy
 from typing import TYPE_CHECKING, TypeAlias
 
 from ag2.annotations import Context
@@ -19,6 +20,32 @@ StreamFactory: TypeAlias = Callable[["Agent", Context], Stream]
 StreamOrFactory: TypeAlias = Stream | StreamFactory
 
 
+class SubagentTool(FunctionTool):
+    """A delegation tool that keeps its target visible to capability discovery."""
+
+    __slots__ = ("agent",)
+
+    def __init__(self, agent: "Agent", delegate: FunctionTool) -> None:
+        function = delegate.schema.function
+        super().__init__(
+            delegate.model,
+            name=function.name,
+            description=function.description,
+            schema=function.parameters,
+            middleware=delegate._middleware,
+        )
+        self.agent = agent
+
+    def __deepcopy__(self, memo: dict[int, object]) -> "SubagentTool":
+        # The target Agent owns locks and live state; tool registration must
+        # retain it, while isolating the tool's own configuration.
+        cloned = copy(self)
+        cloned.model = deepcopy(self.model, memo)
+        cloned.schema = deepcopy(self.schema, memo)
+        cloned._middleware = deepcopy(self._middleware, memo)
+        return cloned
+
+
 def subagent_tool(
     agent: "Agent",
     *,
@@ -26,7 +53,7 @@ def subagent_tool(
     name: str | None = None,
     stream: StreamOrFactory | None = None,
     middleware: Iterable[ToolMiddleware] = (),
-) -> FunctionTool:
+) -> SubagentTool:
     """Expose ``agent`` as a delegation tool that runs it as a sub-task.
 
     ``stream=`` accepts three shapes:
@@ -71,7 +98,7 @@ def subagent_tool(
             return f"Sub-task '{agent.name}' failed: {result.error}"
         return result.result or ""
 
-    return delegate
+    return SubagentTool(agent, delegate)
 
 
 def _resolve_stream_argument(
