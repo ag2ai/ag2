@@ -93,9 +93,8 @@ reply = await agent.ask(
 ## Plugins for one invocation
 
 Pass `plugins=` to `Agent.ask()`, `Agent.run()`, `Agent.resume()`, or a reply's
-`ask()` / `run()` to add capabilities for that call. Constructor plugins remain
-attached to the agent; invocation plugins contribute only while that turn's
-scope is open.
+`ask()` / `run()` to add capabilities for one call. For example, rebuild a
+`SkillPlugin` to refresh a long-lived agent's catalog and tool schemas:
 
 ```python linenums="1"
 from ag2 import Agent
@@ -103,16 +102,11 @@ from ag2.config import OpenAIConfig
 from ag2.tools.skills import LocalRuntime, SkillPlugin
 
 runtime = LocalRuntime("./skills")
-agent = Agent(
-    "assistant",
-    prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-5-mini"),
-)
+agent = Agent("assistant", prompt="You are a helpful assistant.", config=OpenAIConfig(model="gpt-5-mini"))
 
-# Construct a fresh catalog and activation-tool schemas for this message.
 reply = await agent.ask("Help with my project", plugins=[SkillPlugin(runtime)])
 
-# After changing the installed skills, invalidate discovery and rebuild the plugin.
+# After changing installed skills, invalidate discovery and build a fresh plugin.
 runtime.invalidate()
 reply = await agent.ask(
     "Use the newly installed skill",
@@ -121,27 +115,21 @@ reply = await agent.ask(
 )
 ```
 
-Plugins contribute tools, static and dynamic prompt fragments, middleware,
-observers, assembly policies, dependency and variable defaults, and a HITL hook.
-Their prompt fragments follow the resolved prompt, including an explicit
-`prompt=` override; invocation dynamic hooks run once per call. An explicit
-`prompt=` still replaces the agent's base prompt and skips its dynamic hooks.
+Invocation plugins contribute prompts, tools, middleware, observers, policies,
+context defaults, and HITL. Their rules are:
 
-Later invocation plugins override earlier defaults and same-named tools.
-Existing context values take precedence over plugin defaults; explicit call
-`tools=` take precedence over plugin tools. HITL uses the explicit call hook,
-then the agent's hook, then the first invocation plugin hook. Plugin policies
-follow the agent's policies in the same assembler.
+- Prompt fragments append to the resolved prompt; plugin dynamic hooks run once
+  per call. Explicit `prompt=` still replaces the agent's base and dynamic prompts.
+- Existing context values beat plugin defaults. Later plugins override earlier
+  defaults and same-named tools; explicit `tools=` override plugin tools.
+- Policies follow agent policies in one assembler. HITL uses the explicit call
+  hook, then the agent hook, then the first plugin hook.
+- Contributions are cleaned up on scope exit, including failure or cancellation.
+  Pass the plugin again for a continuation. Changes to other context variables
+  persist; constructor plugins remain attached to the agent.
 
-Plugin prompt fragments and newly supplied defaults are removed when the scope
-closes, including failure or cancellation. They do not carry into `reply.ask()`
-or `reply.run()` unless you pass the plugin again. Changes to other context
-variables remain available to continuations. The agent itself is unchanged, so
-concurrent calls on separate streams can use different plugins.
-
-A fresh `SkillPlugin(runtime)` builds a fresh snapshot; passing the same plugin
-again preserves its existing snapshot. Runtime discovery caches must still be
-invalidated when their source changes.
+The agent is unchanged, so separate streams can use different plugins concurrently.
+Reusing a `SkillPlugin` preserves its snapshot.
 
 ## Prompt updates
 

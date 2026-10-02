@@ -285,20 +285,13 @@ class AgentReply(Generic[TResult, TAgent]):
     ) -> "AgentReply[Any, Any]":
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        context = self.context
-        if dependencies:
-            context.dependencies.update(dependencies)
-        if variables:
-            context.variables.update(variables)
-        if prompt:
-            context.prompt = list(prompt)
-
         client = config.create() if config else self.__client
 
         return await self.__agent._execute(
             initial_event,
-            context=context,
+            context=self.context,
             client=client,
+            context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
             hitl_hook=hitl_hook,
             additional_tools=tools,
             additional_plugins=plugins,
@@ -392,19 +385,12 @@ class AgentReply(Generic[TResult, TAgent]):
         """
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        context = self.context
-        if dependencies:
-            context.dependencies.update(dependencies)
-        if variables:
-            context.variables.update(variables)
-        if prompt:
-            context.prompt = list(prompt)
-
         client = config.create() if config else self.__client
 
         return self.__agent._make_run(
             initial_event,
-            context=context,
+            context=self.context,
+            context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
             config=config,
             tools=tools,
             plugins=plugins,
@@ -414,6 +400,21 @@ class AgentReply(Generic[TResult, TAgent]):
             hitl_hook=hitl_hook,
             client=client,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class _ContextOverrides:
+    """Continuation values applied only after acquiring the stream turn lock."""
+
+    dependencies: Mapping[Any, Any]
+    variables: Mapping[str, Any]
+    prompt: tuple[str, ...]
+
+    def apply(self, context: Context) -> None:
+        context.dependencies.update(self.dependencies)
+        context.variables.update(self.variables)
+        if self.prompt:
+            context.prompt = list(self.prompt)
 
 
 class _TurnPlugins:
@@ -429,6 +430,7 @@ class _TurnPlugins:
         self.dependencies: dict[Any, Any] = {}
         self.variables: dict[Any, Any] = {}
         self.hitl_hook: HumanHook | None = None
+        self.conflicting_hitl_hooks = 0
         for plugin in plugins:
             self.static_prompt.extend(plugin._system_prompt)
             self.dynamic_prompt.extend(plugin._dynamic_prompt)
@@ -440,7 +442,7 @@ class _TurnPlugins:
             self.variables.update(plugin._variables)
             if plugin._hitl_hook is not None:
                 if self.hitl_hook is not None:
-                    warnings.warn("Multiple invocation plugins set hitl_hook; the first wins.", stacklevel=3)
+                    self.conflicting_hitl_hooks += 1
                 else:
                     self.hitl_hook = plugin._hitl_hook
 
@@ -488,10 +490,12 @@ class AgentRun(Generic[TResult, TAgent]):
         response_schema: Omittable[ResponseProto[Any] | type | None],
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
+        context_overrides: _ContextOverrides | None = None,
     ) -> None:
         self.__agent = agent
         self.__trigger = trigger
         self.__context = context
+        self.__context_overrides = context_overrides
         self.__config = config
         self.__tools = tools
         self.__plugins = tuple(plugins)
@@ -536,6 +540,7 @@ class AgentRun(Generic[TResult, TAgent]):
                 context=self.__context,
                 client=self.__client,
                 config=self.__config,
+                context_overrides=self.__context_overrides,
                 additional_plugins=self.__plugins,
                 hitl_hook=self.__hitl_hook,
                 additional_tools=self.__tools,
@@ -1220,6 +1225,7 @@ class Agent(PluginTarget, Generic[TResult]):
         response_schema: Omittable[ResponseProto[Any] | type | None],
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
+        context_overrides: _ContextOverrides | None = None,
     ) -> "AgentRun[Any, Any]":
         """The launch primitive: wrap a ``(trigger, context)`` turn as an ``AgentRun``.
 
@@ -1240,6 +1246,7 @@ class Agent(PluginTarget, Generic[TResult]):
             response_schema=response_schema,
             hitl_hook=hitl_hook,
             client=client,
+            context_overrides=context_overrides,
         )
 
     async def resume(
@@ -1352,6 +1359,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         context: Context,
         client: LLMClient,
+        context_overrides: _ContextOverrides | None = None,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
         additional_plugins: Iterable[Plugin] = (),
@@ -1370,6 +1378,7 @@ class Agent(PluginTarget, Generic[TResult]):
             event,
             context=context,
             client=client,
+            context_overrides=context_overrides,
             hitl_hook=hitl_hook,
             additional_tools=additional_tools,
             additional_plugins=additional_plugins,
@@ -1387,6 +1396,7 @@ class Agent(PluginTarget, Generic[TResult]):
         context: Context,
         client: LLMClient | None = None,
         config: ModelConfig | None = None,
+        context_overrides: _ContextOverrides | None = None,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
         additional_plugins: Iterable[Plugin] = (),
@@ -1397,6 +1407,10 @@ class Agent(PluginTarget, Generic[TResult]):
         """Resolve invocation plugins and bracket their context contributions."""
         plugins = _TurnPlugins(additional_plugins)
         async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
+            if context_overrides is not None:
+                context_overrides.apply(context)
+            for _ in range(plugins.conflicting_hitl_hooks):
+                warnings.warn("Multiple invocation plugins set hitl_hook; the first wins.", stacklevel=3)
             for target, defaults in (
                 (context.dependencies, plugins.dependencies),
                 (context.variables, plugins.variables),
@@ -1505,12 +1519,12 @@ class Agent(PluginTarget, Generic[TResult]):
                 policies = [*self._policies, *policies]
                 for warning in AssemblerMiddleware.validate_order(policies):
                     logger.warning("Assembly policy ordering: %s", warning)
-                factories = [
-                    m
-                    for m in factories
-                    if not isinstance(m, (_AssemblerMiddlewareFactory, _HaltCheckMiddlewareFactory))
-                ]
-                factories.extend((_AssemblerMiddlewareFactory(policies), _HaltCheckMiddlewareFactory()))
+                for index, factory in enumerate(factories):
+                    if isinstance(factory, _AssemblerMiddlewareFactory):
+                        factories[index] = _AssemblerMiddlewareFactory(policies)
+                        break
+                else:
+                    factories.extend((_AssemblerMiddlewareFactory(policies), _HaltCheckMiddlewareFactory()))
 
             for m in reversed(tuple(chain(factories, additional_middleware))):
                 mw = m(event, context)

@@ -5,13 +5,14 @@
 import asyncio
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pytest
+from dirty_equals import IsPartialDict
 
-from ag2 import Agent, Context, MemoryStream, observer, tool
+from ag2 import Agent, AgentRun, Context, MemoryStream, observer, tool
 from ag2.config import LLMClient
 from ag2.events import BaseEvent, HumanMessage, ModelRequest, ModelResponse, ToolCallEvent, ToolResultsEvent
 from ag2.exceptions import ToolNotFoundError
@@ -349,13 +350,87 @@ async def test_fresh_skill_plugin_updates_catalog_and_name_schema(tmp_path: Path
     assert "<name>new-skill</name>" in config.calls[-1].prompt[-1]
     assert "Instructions" in tool_text(config)
     schema = next(s for s in config.calls[-1].schemas if isinstance(s, FunctionToolSchema))
-    assert schema.function.parameters["properties"]["name"].get("const") == "new-skill"
+    assert asdict(schema) == IsPartialDict({
+        "function": IsPartialDict({
+            "name": "load_skill",
+            "parameters": IsPartialDict({
+                "properties": IsPartialDict({"name": IsPartialDict({"const": "new-skill"})}),
+            }),
+        }),
+    })
     with pytest.raises(ToolNotFoundError, match="load_skill"):
         await agent.ask("go")
 
 
 def fail_prompt(ctx: Context) -> str:
     raise ValueError("invalid prompt")
+
+
+async def drive_run(run: AgentRun) -> None:
+    async with run:
+        await run.result()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entry", ["ask", "run"])
+async def test_queued_continuation_preserves_explicit_overrides(entry: str) -> None:
+    agent = Agent("a", prompt="base", config=RecordingConfig("initial"))
+    reply = await agent.ask("initial")
+    first = RecordingConfig("one", gate=asyncio.Event())
+    second = RecordingConfig("two")
+    one = asyncio.create_task(
+        reply.ask(
+            "one",
+            config=first,
+            plugins=[Plugin(prompt="plugin-one", variables={"label": "one"}, dependencies={"source": "one"})],
+        )
+    )
+    await first.started.wait()
+    options: dict[str, Any] = {
+        "config": second,
+        "prompt": ["override-two"],
+        "variables": {"label": "explicit-two"},
+        "dependencies": {"source": "explicit-two"},
+        "plugins": [
+            Plugin(
+                prompt=["plugin-two", dynamic_prompt],
+                variables={"label": "plugin-two"},
+                dependencies={"source": "plugin-two"},
+            )
+        ],
+    }
+    if entry == "run":
+        two = asyncio.create_task(drive_run(reply.run("two", **options)))
+    else:
+        two = asyncio.create_task(reply.ask("two", **options))
+    await asyncio.sleep(0)
+    active_prompt = list(reply.context.prompt)
+    active_label = reply.context.variables.get("label")
+    active_source = reply.context.dependencies.get("source")
+    first.gate.set()
+    await asyncio.gather(one, two)
+    assert (active_prompt, active_label, active_source) == (["base", "plugin-one"], "one", "one")
+    assert second.calls[0].prompt == ["override-two", "plugin-two", "dynamic:explicit-two:explicit-two"]
+    assert second.calls[0].variables == {"label": "explicit-two"}
+    assert second.calls[0].dependencies == IsPartialDict({"source": "explicit-two"})
+    assert reply.context.prompt == ["override-two"]
+    assert reply.context.variables == {"label": "explicit-two"}
+    assert reply.context.dependencies == IsPartialDict({"source": "explicit-two"})
+
+
+@pytest.mark.asyncio
+async def test_plugin_policies_preserve_existing_middleware_order() -> None:
+    config = RecordingConfig("done")
+    agent = Agent("a", prompt="base", config=config, assembly=[AppendPolicy("agent-policy")])
+    agent.add_middleware(Middleware(SuffixMiddleware))
+    plugin = Plugin()
+    plugin.add_policy(AppendPolicy("plugin-policy"))
+    await agent.ask("plain")
+    await agent.ask("with plugin", plugins=[plugin])
+    assert [call.prompt for call in config.calls] == [
+        ["base", "agent-policy", "middleware"],
+        ["base", "agent-policy", "plugin-policy", "middleware"],
+    ]
 
 
 @pytest.mark.asyncio
