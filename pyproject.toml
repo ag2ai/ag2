@@ -242,7 +242,7 @@ types = [
     # `disallow_any_unimported`. Type-check only — never a published constraint.
     "types-aiobotocore[bedrock-runtime]",
     { include-group = "test" },
-    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui]",
+    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui, acp]",
 ]
 
 lint = ["ruff==0.16.8", "codespell==2.4.3", "zizmor==1.30.1"]
