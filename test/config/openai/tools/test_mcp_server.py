@@ -6,7 +6,7 @@ import pytest
 
 from ag2 import Context
 from ag2.config.openai.mappers import tool_to_api, tool_to_responses_api
-from ag2.exceptions import UnsupportedToolError
+from ag2.exceptions import BlockedToolsUnsupportedError, UnsupportedToolError
 from ag2.tools.builtin.mcp_server import MCPServerTool
 
 
@@ -51,6 +51,37 @@ class TestResponsesApi:
             "require_approval": "never",
             "allowed_tools": ["search", "create"],
         }
+
+    @pytest.mark.asyncio
+    async def test_blocked_tools_alone_is_refused(self, context: Context) -> None:
+        # The OpenAI remote-MCP tool takes an allow-list only, so dropping the filter
+        # silently would let the model call what was blocked.
+        tool = MCPServerTool(
+            server_url="https://mcp.example.com/sse",
+            server_label="example-mcp",
+            blocked_tools=["delete"],
+        )
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(BlockedToolsUnsupportedError, match="blocked_tools"):
+            tool_to_responses_api(schema)
+
+    @pytest.mark.asyncio
+    async def test_blocked_tools_beside_an_allow_list_is_refused_too(self, context: Context) -> None:
+        # Refused whole, not rewritten: narrowing `allowed_tools` by the blocked names
+        # would answer a request the caller did not write.
+        tool = MCPServerTool(
+            server_url="https://mcp.example.com/sse",
+            server_label="example-mcp",
+            allowed_tools=["search", "create", "delete"],
+            blocked_tools=["delete"],
+        )
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(BlockedToolsUnsupportedError, match="blocked_tools"):
+            tool_to_responses_api(schema)
 
     @pytest.mark.asyncio
     async def test_with_headers(self, context: Context) -> None:
@@ -101,6 +132,20 @@ class TestResponsesApi:
 
         result = tool_to_responses_api(schema)
         assert result["headers"] == {"Authorization": "Custom auth"}
+
+    @pytest.mark.asyncio
+    async def test_auth_token_is_merged_into_headers_without_authorization(self, context: Context) -> None:
+        tool = MCPServerTool(
+            server_url="https://mcp.example.com/sse",
+            server_label="example-mcp",
+            authorization_token="token123",
+            headers={"X-Custom": "value"},
+        )
+
+        [schema] = await tool.schemas(context)
+
+        result = tool_to_responses_api(schema)
+        assert result["headers"] == {"X-Custom": "value", "Authorization": "Bearer token123"}
 
     @pytest.mark.asyncio
     async def test_with_description(self, context: Context) -> None:

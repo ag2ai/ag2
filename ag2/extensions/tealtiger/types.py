@@ -6,6 +6,7 @@
 import re
 import time
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -19,8 +20,131 @@ class GovernanceMode(str, Enum):
     ENFORCE = "ENFORCE"  # Log decisions AND block denied tool calls
 
 
+class OutputAction(str, Enum):
+    """What an ``output_scan`` detector does with a finding in a tool result."""
+
+    REDACT = "REDACT"  # Replace matched values in place; the sanitized result flows through
+    BLOCK = "BLOCK"  # Withhold the whole result (ENFORCE only; degrades to REDACT elsewhere)
+    FLAG = "FLAG"  # Record the finding only; the result passes through unchanged
+
+
+# Severity order for resolving one effective action out of several policies.
+# A more restrictive action always wins.
+_OUTPUT_ACTION_SEVERITY: dict[OutputAction, int] = {
+    OutputAction.FLAG: 0,
+    OutputAction.REDACT: 1,
+    OutputAction.BLOCK: 2,
+}
+
+
+def most_restrictive(actions: Iterable[OutputAction], default: OutputAction) -> OutputAction:
+    """The most restrictive of `actions` (BLOCK > REDACT > FLAG), or `default` if empty."""
+    return max(actions, key=lambda a: _OUTPUT_ACTION_SEVERITY[a], default=default)
+
+
+# PII detection patterns, keyed by the category name policies refer to. This dict is
+# the single source of truth for which categories exist: `PII_CATEGORIES` is derived
+# from it, and both the `pii_block` / `output_scan` validators and the middleware's
+# detection and redaction read it rather than restating the list.
+PII_PATTERNS: dict[str, re.Pattern[str]] = {
+    "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+    "credit_card": re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b"),
+    "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+    "phone": re.compile(r"\b(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
+}
+
+PII_CATEGORIES: tuple[str, ...] = tuple(PII_PATTERNS)
+
+SECRET_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\b(sk-[a-zA-Z0-9]{20,})\b"),
+    re.compile(r"\b(ghp_[a-zA-Z0-9]{36,})\b"),
+    re.compile(r"\b(AKIA[0-9A-Z]{16})\b"),
+    re.compile(r"\b(xox[bpors]-[a-zA-Z0-9-]+)\b"),
+    re.compile(r"(?i)(?:api[_-]?key|apikey)\s*[:=]\s*['\"]?[a-zA-Z0-9_\-]{20,}"),
+    re.compile(r"-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----"),
+]
+
+
 # Minimum pattern confidence a prompt-injection finding needs to trigger a block.
 DEFAULT_INJECTION_CONFIDENCE_THRESHOLD = 0.7
+
+ARG_TYPES_BY_NAME: dict[str, type] = {
+    "str": str,
+    "int": int,
+    "float": float,
+    "bool": bool,
+    "list": list,
+    "dict": dict,
+}
+
+ARG_CHECKS = frozenset({
+    "max_length",
+    "min_length",
+    "type",
+    "blocked_terms",
+    "blocked_patterns",
+    "allowed_values",
+})
+
+
+def _normalize_arg_spec(arg_name: str, spec: dict[str, Any]) -> dict[str, Any]:
+    """Validate one argument's constraint spec and return it ready to evaluate.
+
+    Each check's *value* is validated, not just its name: an uncompilable regex
+    or a non-integer length would otherwise crash the governance path on the
+    first call it evaluated. Regexes are compiled here so evaluation never pays
+    for compilation — hence "ready to evaluate", and hence a returned spec that
+    holds `re.Pattern` objects where the caller passed strings.
+    """
+    if not spec:
+        raise ValueError(f"Constraint spec for argument '{arg_name}' must not be empty.")
+
+    normalized = dict(spec)
+
+    type_name = spec.get("type")
+    if type_name is not None and (not isinstance(type_name, str) or type_name not in ARG_TYPES_BY_NAME):
+        raise ValueError(
+            f"Unsupported type {type_name!r} for argument '{arg_name}'. "
+            f"Valid types: {', '.join(sorted(ARG_TYPES_BY_NAME))}."
+        )
+
+    for bound in ("max_length", "min_length"):
+        # bool is an int subclass, so `True` would otherwise pass as the length 1.
+        if bound in spec and (not isinstance(spec[bound], int) or isinstance(spec[bound], bool) or spec[bound] < 0):
+            raise ValueError(
+                f"`{bound}` for argument '{arg_name}' must be a non-negative integer, got {spec[bound]!r}."
+            )
+    if "max_length" in spec and "min_length" in spec and spec["max_length"] < spec["min_length"]:
+        raise ValueError(
+            f"`max_length` ({spec['max_length']}) is below `min_length` ({spec['min_length']}) for argument "
+            f"'{arg_name}'; no value could satisfy both."
+        )
+
+    for check in ("blocked_terms", "allowed_values"):
+        if check in spec:
+            if not isinstance(spec[check], (list, tuple, set)) or not spec[check]:
+                raise ValueError(f"`{check}` for argument '{arg_name}' must be a non-empty list, got {spec[check]!r}.")
+            normalized[check] = list(spec[check])
+    if "blocked_terms" in normalized and any(not isinstance(term, str) for term in normalized["blocked_terms"]):
+        raise ValueError(f"`blocked_terms` for argument '{arg_name}' must contain only strings.")
+
+    if "blocked_patterns" in spec:
+        if not isinstance(spec["blocked_patterns"], (list, tuple)) or not spec["blocked_patterns"]:
+            raise ValueError(
+                f"`blocked_patterns` for argument '{arg_name}' must be a non-empty list, "
+                f"got {spec['blocked_patterns']!r}."
+            )
+        compiled: list[re.Pattern[str]] = []
+        for pattern in spec["blocked_patterns"]:
+            try:
+                compiled.append(re.compile(pattern))
+            except (re.error, TypeError) as exc:
+                raise ValueError(
+                    f"Invalid regex in `blocked_patterns` for argument '{arg_name}': {pattern!r} — {exc}."
+                ) from exc
+        normalized["blocked_patterns"] = compiled
+
+    return normalized
 
 
 @dataclass
@@ -35,29 +159,211 @@ class GovernancePolicy:
 
     @classmethod
     def tool_allowlist(cls, allowed: list[str]) -> "GovernancePolicy":
-        """Only allow tools matching these patterns (supports glob-style '*' suffix).
+        """Only allow tools whose name matches one of these patterns.
+
+        Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`, `[seq]`)
+        applies. Matching follows the host's filename case rules: case-sensitive on
+        Linux/macOS, case-insensitive on Windows.
 
         Args:
-            allowed: List of tool name patterns. Use '*' suffix for prefix matching.
+            allowed: List of tool name patterns, e.g. `["search", "read_*"]`.
         """
-        return cls(type="tool_allowlist", config={"allowed": allowed})
+        return cls(type="tool_allowlist", config={"allowed": list(allowed)})
+
+    @classmethod
+    def tool_blocklist(cls, blocked: list[str]) -> "GovernancePolicy":
+        """Deny tools whose name matches one of these patterns.
+
+        The complement of `tool_allowlist`: everything is allowed except the
+        tools named here. Use this when you want to permit most tools but block
+        a known-dangerous few (e.g. `delete_*`, `shell`), rather than
+        enumerating every safe tool.
+
+        Patterns are matched with `fnmatch`, so the full glob syntax (`*`, `?`,
+        `[seq]`) applies and exact names (`"shell"`) work too. When combined with
+        `tool_allowlist`, either policy denying the call results in a DENY.
+
+        Matching follows the host's filename case rules — case-sensitive on
+        Linux/macOS, case-insensitive on Windows — so `["shell"]` does not block
+        a tool registered as `Shell` on Linux/macOS. List the casings you need to
+        deny explicitly if tool names are not under your control.
+
+        Args:
+            blocked: List of tool name patterns to deny, e.g. `["delete_*", "shell"]`.
+
+        Raises:
+            ValueError: If `blocked` is empty, which would otherwise create a
+                policy that blocks nothing and silently does nothing.
+        """
+        if not blocked:
+            raise ValueError("`blocked` must not be empty; a tool_blocklist with no patterns blocks nothing.")
+        return cls(type="tool_blocklist", config={"blocked": list(blocked)})
+
+    @classmethod
+    def arg_validation(cls, tool: str, constraints: dict[str, dict[str, Any]]) -> "GovernancePolicy":
+        """Constrain the arguments a specific tool (or tool pattern) may receive.
+
+        Where `tool_allowlist`/`tool_blocklist` govern *which* tools run, this
+        governs *what* those tools are called with — a defence against dangerous
+        argument values such as SQL injection, path traversal, or oversized
+        payloads::
+
+            GovernancePolicy.arg_validation(
+                "sql_query",
+                {"query": {"max_length": 500, "blocked_terms": ["DROP", ";--"]}},
+            )
+
+        Only the arguments named in `constraints` are checked, and one absent
+        from the call is skipped — so this constrains values, never presence.
+        If a call's arguments are not a mapping there are no names to read by,
+        and the policy falls back to scanning the serialized call for every
+        constrained `blocked_terms`/`blocked_patterns`, denying as `*:{check}`.
+
+        Args:
+            tool: Tool name, or `fnmatch` pattern such as `"sql_*"`.
+            constraints: Argument name -> the checks it must satisfy. See
+                `ARG_CHECKS` for the checks, and the extension docs for what
+                each one means.
+
+        Raises:
+            ValueError: If `tool` or `constraints` is empty, or a spec is
+                malformed. Specs are validated in full here so that a typo
+                fails where it was written, rather than leaving a policy that
+                checks nothing or one that raises mid-call from inside the
+                governance path.
+        """
+        if not tool:
+            raise ValueError("`tool` must not be empty.")
+        if not constraints:
+            raise ValueError("`constraints` must not be empty; a policy with no constraints validates nothing.")
+
+        normalized: dict[str, dict[str, Any]] = {}
+        for arg_name, spec in constraints.items():
+            if not isinstance(spec, dict):
+                raise ValueError(
+                    f"Constraint spec for argument '{arg_name}' must be a dict, got {type(spec).__name__}."
+                )
+            unknown = set(spec) - ARG_CHECKS
+            if unknown:
+                raise ValueError(
+                    f"Unknown constraint(s) for argument '{arg_name}': {', '.join(sorted(unknown))}. "
+                    f"Valid checks: {', '.join(sorted(ARG_CHECKS))}."
+                )
+            normalized[arg_name] = _normalize_arg_spec(arg_name, spec)
+
+        return cls(type="arg_validation", config={"tool": tool, "constraints": normalized})
 
     @classmethod
     def pii_block(cls, categories: list[str] | None = None) -> "GovernancePolicy":
         """Block tool calls containing PII in arguments.
 
         Args:
-            categories: PII categories to detect. Default: ["ssn", "credit_card", "email", "phone"].
+            categories: PII categories to detect. Default: every category in
+                `PII_CATEGORIES`.
         """
         return cls(
             type="pii_block",
-            config={"categories": categories or ["ssn", "credit_card", "email", "phone"]},
+            config={"categories": categories or list(PII_CATEGORIES)},
         )
 
     @classmethod
     def secret_detection(cls) -> "GovernancePolicy":
         """Block tool calls containing API keys/tokens in arguments."""
         return cls(type="secret_detection", config={})
+
+    @classmethod
+    def output_scan(
+        cls,
+        scan_pii: bool = True,
+        scan_secrets: bool = True,
+        pii_action: str | OutputAction = OutputAction.REDACT,
+        secret_action: str | OutputAction = OutputAction.BLOCK,
+        categories: list[str] | None = None,
+    ) -> "GovernancePolicy":
+        """Scan tool *results* for PII/secrets before they flow back into agent context.
+
+        Where `pii_block` / `secret_detection` inspect a tool's *arguments*
+        before it runs, this inspects what the tool *returns* — the data-leakage
+        direction. A tool that reads a database, file, or API can hand back an
+        SSN or a leaked credential that would otherwise land straight in the
+        model's context on the next turn. This policy scans that result and
+        redacts, blocks, or flags it first.
+
+        Each detector has an independent action:
+
+        | Action | Effect |
+        |--------|--------|
+        | `REDACT` | Replace matched values in the result with `[REDACTED:<type>]`; the sanitized result flows through. |
+        | `BLOCK` | Replace the whole result with a governance error (ENFORCE only). In MONITOR it degrades to REDACT so the value still never leaks. |
+        | `FLAG` | Record the finding in the decision/receipt trail; pass the result through unchanged. |
+
+        The two actions are independent: flagging PII while redacting secrets records
+        the PII and rewrites only the credential. In OBSERVE mode results are not
+        scanned at all, consistent with OBSERVE never altering a call. When several
+        `output_scan` policies are configured, the most restrictive action any of
+        them asks for wins, per detector.
+
+        Defaults mirror the sensible split: PII is redacted (the agent usually
+        still needs the surrounding result), secrets are blocked (a leaked
+        credential should not reach the model at all).
+
+        Example::
+
+            GovernancePolicy.output_scan()  # redact PII, block secrets
+            GovernancePolicy.output_scan(pii_action="BLOCK", categories=["ssn", "credit_card"])
+
+        Args:
+            scan_pii: Scan results for PII. Default True.
+            scan_secrets: Scan results for leaked credentials. Default True.
+            pii_action: Action when PII is found — an `OutputAction` member or its
+                string name (`REDACT`, `BLOCK`, `FLAG`).
+            secret_action: Action when a secret is found, same accepted values.
+            categories: PII categories to detect. Default: every category in
+                `PII_CATEGORIES`. Ignored when `scan_pii` is False.
+
+        Raises:
+            ValueError: If both `scan_pii` and `scan_secrets` are False (the
+                policy would scan nothing), if `scan_pii` is True but
+                `categories` is an empty list (PII scanning that scans no
+                category), if an action is not one of `REDACT`/`BLOCK`/`FLAG`,
+                or if `categories` names an unknown PII category — any of which
+                would silently do nothing.
+        """
+        if not scan_pii and not scan_secrets:
+            raise ValueError("output_scan must scan something: set scan_pii and/or scan_secrets to True.")
+
+        actions: dict[str, OutputAction] = {}
+        for label, value in (("pii_action", pii_action), ("secret_action", secret_action)):
+            try:
+                actions[label] = OutputAction(value)
+            except ValueError:
+                valid = ", ".join(a.value for a in OutputAction)
+                raise ValueError(f"Invalid {label} '{value}'. Valid actions: {valid}.") from None
+
+        resolved_categories = list(categories) if categories is not None else list(PII_CATEGORIES)
+        if scan_pii and not resolved_categories:
+            raise ValueError(
+                "output_scan(scan_pii=True) needs at least one PII category to scan; "
+                "pass a non-empty `categories` list or omit it to scan every category "
+                f"({', '.join(PII_CATEGORIES)})."
+            )
+        unknown = set(resolved_categories) - set(PII_CATEGORIES)
+        if unknown:
+            raise ValueError(
+                f"Unknown PII category(ies): {', '.join(sorted(unknown))}. "
+                f"Valid categories: {', '.join(sorted(PII_CATEGORIES))}."
+            )
+
+        return cls(
+            type="output_scan",
+            config={
+                "scan_pii": scan_pii,
+                "scan_secrets": scan_secrets,
+                "pii_action": actions["pii_action"].value,
+                "secret_action": actions["secret_action"].value,
+                "categories": resolved_categories,
+            },
+        )
 
     @classmethod
     def cost_limit(cls, max_per_session: float) -> "GovernancePolicy":
@@ -67,6 +373,107 @@ class GovernancePolicy:
             max_per_session: Maximum allowed cost in USD per session.
         """
         return cls(type="cost_limit", config={"max_per_session": max_per_session})
+
+    @classmethod
+    def rate_limit(
+        cls,
+        max_calls: int,
+        window_seconds: float,
+        tool: str | None = None,
+        on_exceeded: str = "wait",
+        max_wait_seconds: float | None = None,
+    ) -> "GovernancePolicy":
+        """Cap how fast tool calls happen within a rolling window.
+
+        Where `cost_limit` caps how *many* calls a session may make in total, this
+        caps how *fast* they happen and then lets the allowance return — the
+        defence against a runaway loop that keeps invoking the same tool and burns
+        provider rate limits, side effects, and budget. It is a sliding window:
+        only the calls in the last `window_seconds` count, so the limit refills
+        continuously rather than resetting on a fixed boundary.
+
+        Scope is set by `tool`:
+
+        - `tool=None` (default) — **global**: every governed tool call shares one
+          budget. `rate_limit(30, 60)` caps the agent to 30 tool calls per minute
+          total.
+        - `tool="pattern"` — **per-tool**: only calls whose name matches the
+          `fnmatch` pattern count against (and are limited by) this policy.
+          `rate_limit(5, 60, tool="search")` caps `search` to 5/min while leaving
+          other tools alone; `rate_limit(10, 60, tool="db_*")` caps the `db_*`
+          family together.
+
+        Combine several: a global ceiling plus tighter per-tool caps all apply,
+        and an over-limit call waits for (or is refused by) the first one it trips.
+
+        What happens at the limit is `on_exceeded`:
+
+        - `"wait"` (default) — **throttle**: the call is held until the window has
+          room, then runs. This is what actually slows a runaway loop down. A
+          refusal does not: it returns to the model as a tool error, and a looping
+          agent just calls again, spending a model round-trip per refusal and
+          burning tokens faster than the tool calls it replaced.
+        - `"deny"` — **refuse**: block the call with `RATE_LIMIT_EXCEEDED` instead
+          of delaying it. Right where a late call is worse than no call, or where
+          stalling the turn is unacceptable.
+
+        A wait is bounded by `max_wait_seconds`; a call that would wait longer is
+        denied rather than held, so the turn cannot stall indefinitely.
+
+        Example::
+
+            GovernancePolicy.rate_limit(30, 60)  # throttle to 30 tool calls / minute
+            GovernancePolicy.rate_limit(5, 60, tool="send_email", on_exceeded="deny")
+            GovernancePolicy.rate_limit(100, 3600, tool="api_*", max_wait_seconds=30)
+
+        Args:
+            max_calls: Maximum calls permitted within the window. Must be a
+                positive integer.
+            window_seconds: Length of the rolling window in seconds. Must be a
+                positive number.
+            tool: Tool name or `fnmatch` pattern to scope the limit to. Omit for a
+                global limit across all tools.
+            on_exceeded: `"wait"` to hold an over-limit call until the window has
+                room, `"deny"` to refuse it outright.
+            max_wait_seconds: Longest a single call may be held under `"wait"`.
+                Defaults to `window_seconds`, the most a sliding window can ever
+                need. A call facing a longer wait is denied instead. Ignored when
+                `on_exceeded="deny"`.
+
+        Raises:
+            ValueError: If `max_calls` is not a positive integer, `window_seconds`
+                or `max_wait_seconds` is not a positive number, `tool` is given but
+                empty, or `on_exceeded` is not `"wait"`/`"deny"` — any of which
+                would leave a policy that limits nothing or can never allow a call.
+        """
+        # bool is an int subclass; a True max_calls is almost certainly a mistake.
+        if isinstance(max_calls, bool) or not isinstance(max_calls, int) or max_calls <= 0:
+            raise ValueError(f"`max_calls` must be a positive integer, got {max_calls!r}.")
+        if isinstance(window_seconds, bool) or not isinstance(window_seconds, (int, float)) or window_seconds <= 0:
+            raise ValueError(f"`window_seconds` must be a positive number, got {window_seconds!r}.")
+        if tool is not None and not tool:
+            raise ValueError("`tool` must not be empty; omit it for a global rate limit.")
+        if on_exceeded not in ("wait", "deny"):
+            raise ValueError(f"`on_exceeded` must be 'wait' or 'deny', got {on_exceeded!r}.")
+        if max_wait_seconds is not None and (
+            isinstance(max_wait_seconds, bool)
+            or not isinstance(max_wait_seconds, (int, float))
+            or max_wait_seconds <= 0
+        ):
+            raise ValueError(f"`max_wait_seconds` must be a positive number, got {max_wait_seconds!r}.")
+
+        return cls(
+            type="rate_limit",
+            config={
+                "max_calls": max_calls,
+                "window_seconds": float(window_seconds),
+                "tool": tool,
+                "on_exceeded": on_exceeded,
+                # None means "as long as the window itself" — the most a sliding
+                # window can ever need before a slot frees.
+                "max_wait_seconds": float(max_wait_seconds) if max_wait_seconds is not None else float(window_seconds),
+            },
+        )
 
     @classmethod
     def prompt_injection_block(

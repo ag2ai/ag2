@@ -6,11 +6,12 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, Literal, TypedDict
 
-import httpx
+import httpx2
 from fast_depends.library.serializer import SerializerProto
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai.types.chat.completion_create_params import PromptCacheOptions
 from typing_extensions import Required
 
 from ag2.config.client import LLMClient
@@ -55,6 +56,7 @@ class CreateOptions(TypedDict, total=False):
     modalities: list[str] | None | Omit
     prediction: dict[str, Any] | None | Omit
     prompt_cache_key: str | Omit
+    prompt_cache_options: PromptCacheOptions | Omit
     safety_identifier: str | Omit
     service_tier: str | None | Omit
     store: bool | None | Omit
@@ -78,7 +80,7 @@ class OpenAIClient(LLMClient):
         max_retries: int = DEFAULT_MAX_RETRIES,
         default_headers: dict[str, str] | None = None,
         default_query: dict[str, object] | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: httpx2.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
     ) -> None:
         self._client = AsyncOpenAI(
@@ -165,6 +167,7 @@ class OpenAIClient(LLMClient):
                 model=completion.model,
                 provider="openai",
                 finish_reason=choice.finish_reason,
+                response_id=completion.id,
             )
 
     async def _process_stream(
@@ -176,6 +179,7 @@ class OpenAIClient(LLMClient):
         usage = Usage()
         finish_reason: str | None = None
         resolved_model: str | None = None
+        response_id: str | None = None
 
         # Accumulate tool calls by index (streaming sends partial updates per index)
         full_tool_calls: list[dict[str, str]] = []
@@ -187,6 +191,8 @@ class OpenAIClient(LLMClient):
 
             if chunk.model:
                 resolved_model = chunk.model
+
+            response_id = chunk.id
 
             for choice in chunk.choices:
                 if choice.finish_reason:
@@ -240,4 +246,5 @@ class OpenAIClient(LLMClient):
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
+            response_id=response_id,
         )

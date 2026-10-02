@@ -2,13 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 import json
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import AsyncIterator, Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
-import boto3
+from aiobotocore.session import AioSession
 from botocore.config import Config as BotocoreConfig
 from fast_depends.library.serializer import SerializerProto
 from typing_extensions import Required
@@ -30,8 +29,18 @@ from ag2.tools.schemas import ToolSchema
 
 from .mappers import convert_messages, normalize_usage, response_proto_to_output_config, tool_to_api
 
-# End-of-stream sentinel for pulling the sync EventStream via next() without StopIteration
-_STREAM_DONE = object()
+if TYPE_CHECKING:
+    from types_aiobotocore_bedrock_runtime.client import BedrockRuntimeClient
+    from types_aiobotocore_bedrock_runtime.type_defs import (
+        ConverseRequestTypeDef,
+        ConverseStreamRequestTypeDef,
+        GuardrailConfigurationTypeDef,
+        InferenceConfigurationTypeDef,
+        MessageTypeDef,
+        OutputConfigTypeDef,
+        PerformanceConfigurationTypeDef,
+        ToolTypeDef,
+    )
 
 
 class CreateOptions(TypedDict, total=False):
@@ -50,7 +59,7 @@ class CreateOptions(TypedDict, total=False):
 
 
 class BedrockClient(LLMClient):
-    """Amazon Bedrock client for the Converse API (sync boto3 via asyncio.to_thread)."""
+    """Amazon Bedrock client for the Converse API (aiobotocore)."""
 
     def __init__(
         self,
@@ -63,16 +72,10 @@ class BedrockClient(LLMClient):
         timeout: float | None = None,
         max_retries: int | None = None,
         botocore_config: Any | None = None,
-        session: Any | None = None,
+        session: AioSession | None = None,
         create_options: CreateOptions | None = None,
     ) -> None:
-        self._session = session or boto3.Session(
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            aws_session_token=aws_session_token,
-            region_name=region_name,
-            profile_name=profile_name,
-        )
+        self._session = session or AioSession(profile=profile_name)
 
         config = botocore_config
         if config is None and (timeout is not None or max_retries is not None):
@@ -85,21 +88,22 @@ class BedrockClient(LLMClient):
             config = BotocoreConfig(**config_kwargs)
 
         self._client_kwargs: dict[str, Any] = {}
+        if aws_access_key_id is not None:
+            self._client_kwargs["aws_access_key_id"] = aws_access_key_id
+        if aws_secret_access_key is not None:
+            self._client_kwargs["aws_secret_access_key"] = aws_secret_access_key
+        if aws_session_token is not None:
+            self._client_kwargs["aws_session_token"] = aws_session_token
+        if region_name is not None:
+            self._client_kwargs["region_name"] = region_name
         if endpoint_url is not None:
             self._client_kwargs["endpoint_url"] = endpoint_url
         if config is not None:
             self._client_kwargs["config"] = config
 
-        self._client: Any | None = None
-        self._create_options = create_options or {}
+        self._create_options: CreateOptions = cast("CreateOptions", create_options or {})
         self._streaming = self._create_options.get("stream", False)
         self._model: str = self._create_options["model"]
-
-    def _get_client(self) -> Any:
-        # Created lazily off the event loop — boto3 loads service models from disk
-        if self._client is None:
-            self._client = self._session.client("bedrock-runtime", **self._client_kwargs)
-        return self._client
 
     async def __call__(
         self,
@@ -118,16 +122,16 @@ class BedrockClient(LLMClient):
         bedrock_messages = convert_messages(messages, serializer)
         tools_list = [tool_to_api(t) for t in tools]
 
-        kwargs: dict[str, Any] = {
+        kwargs: ConverseRequestTypeDef = {
             "modelId": self._model,
-            "messages": bedrock_messages,
+            "messages": cast("list[MessageTypeDef]", bedrock_messages),
         }
 
         system_text = "\n".join(prompt)
         if system_text:
             kwargs["system"] = [{"text": system_text}]
 
-        inference_config: dict[str, Any] = {}
+        inference_config: InferenceConfigurationTypeDef = {}
         if (max_tokens := self._create_options.get("max_tokens")) is not None:
             inference_config["maxTokens"] = max_tokens
         if (temperature := self._create_options.get("temperature")) is not None:
@@ -141,30 +145,35 @@ class BedrockClient(LLMClient):
 
         # Converse rejects an empty tools list
         if tools_list:
-            kwargs["toolConfig"] = {"tools": tools_list}
+            kwargs["toolConfig"] = {"tools": cast("list[ToolTypeDef]", tools_list)}
 
         if output_config := response_proto_to_output_config(response_schema):
-            kwargs["outputConfig"] = output_config
+            kwargs["outputConfig"] = cast("OutputConfigTypeDef", output_config)
 
         if (request_fields := self._create_options.get("additional_model_request_fields")) is not None:
             kwargs["additionalModelRequestFields"] = request_fields
         if (response_paths := self._create_options.get("additional_model_response_field_paths")) is not None:
             kwargs["additionalModelResponseFieldPaths"] = response_paths
         if (guardrail := self._create_options.get("guardrail_config")) is not None:
-            kwargs["guardrailConfig"] = guardrail
+            kwargs["guardrailConfig"] = cast("GuardrailConfigurationTypeDef", guardrail)
         if (performance := self._create_options.get("performance_config")) is not None:
-            kwargs["performanceConfig"] = performance
+            kwargs["performanceConfig"] = cast("PerformanceConfigurationTypeDef", performance)
         if (request_metadata := self._create_options.get("request_metadata")) is not None:
             kwargs["requestMetadata"] = request_metadata
 
-        client = await asyncio.to_thread(self._get_client)
+        async with cast(
+            "BedrockRuntimeClient",
+            self._session.create_client("bedrock-runtime", **self._client_kwargs),
+        ) as client:
+            if self._streaming:
+                stream_kwargs = cast("ConverseStreamRequestTypeDef", kwargs)
+                stream_response = await client.converse_stream(**stream_kwargs)
+                return await self._process_stream(
+                    cast("AsyncIterator[dict[str, Any]]", stream_response["stream"]), context
+                )
 
-        if self._streaming:
-            response = await asyncio.to_thread(client.converse_stream, **kwargs)
-            return await self._process_stream(iter(response["stream"]), context)
-
-        response = await asyncio.to_thread(client.converse, **kwargs)
-        return await self._process_completion(response, context)
+            response = await client.converse(**kwargs)
+            return await self._process_completion(cast("dict[str, Any]", response), context)
 
     async def _process_completion(
         self,
@@ -210,7 +219,7 @@ class BedrockClient(LLMClient):
 
     async def _process_stream(
         self,
-        stream: Iterator[dict[str, Any]],
+        stream: AsyncIterator[dict[str, Any]],
         context: "ConversationContext",
     ) -> ModelResponse:
         full_content: str = ""
@@ -221,8 +230,7 @@ class BedrockClient(LLMClient):
         # toolUse input arrives as partial JSON strings, accumulated by contentBlockIndex
         tool_accs: dict[int, dict[str, str]] = {}
 
-        # Sync EventStream — pull each event off the loop
-        while (event := await asyncio.to_thread(next, stream, _STREAM_DONE)) is not _STREAM_DONE:
+        async for event in stream:
             if block_start := event.get("contentBlockStart"):
                 if tool_use := (block_start.get("start") or {}).get("toolUse"):
                     tool_accs[block_start["contentBlockIndex"]] = {

@@ -36,7 +36,7 @@ class SkillSearchToolkit(SkillsToolkit):
         from ag2.config import AnthropicConfig
         from ag2.tools import SkillSearchToolkit
 
-        config = AnthropicConfig(model="claude-sonnet-4-5")
+        config = AnthropicConfig(model="claude-sonnet-5")
         skills = SkillSearchToolkit()
 
         agent = Agent(

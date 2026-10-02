@@ -12,6 +12,7 @@ import pytest
 from ag2 import Context
 from ag2.config.mistral.mappers import tool_to_api
 from ag2.exceptions import UnsupportedToolError
+from ag2.tools.builtin.anthropic_bash import AnthropicBashTool
 from ag2.tools.builtin.code_execution import CodeExecutionTool
 from ag2.tools.builtin.file_search import FileSearchTool
 from ag2.tools.builtin.google_maps import GoogleMapsTool
@@ -119,6 +120,15 @@ async def test_retrieval(context: Context) -> None:
 
 async def test_google_maps(context: Context) -> None:
     tool = GoogleMapsTool()
+
+    [schema] = await tool.schemas(context)
+
+    with pytest.raises(UnsupportedToolError, match="mistral"):
+        tool_to_api(schema)
+
+
+async def test_anthropic_bash(context: Context) -> None:
+    tool = AnthropicBashTool()
 
     [schema] = await tool.schemas(context)
 

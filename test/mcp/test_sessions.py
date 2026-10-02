@@ -3,64 +3,37 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import Sequence
 from types import SimpleNamespace
-from typing import Any
+from uuid import uuid4
 
 import pytest
-from typing_extensions import Self
+from mcp_types.version import LATEST_HANDSHAKE_VERSION
 
-from ag2 import Agent, Context
-from ag2.config import LLMClient, ModelConfig
-from ag2.events import BaseEvent, ModelResponse
+from ag2 import Agent
+from ag2.context import ConversationContext
+from ag2.events import ModelRequest, TextInput
+from ag2.mcp.errors import UnknownConversationError
 from ag2.mcp.executor import AgentExecutor, _session_id
 from ag2.mcp.sessions import STDIO_SESSION, SessionConfig, SessionStore
 from ag2.testing import TestConfig
 
-
-class _RecordingClient(LLMClient):
-    """Wraps another client, capturing the full message list sent on each call."""
-
-    def __init__(self, client: LLMClient, sink: list[list[BaseEvent]]) -> None:
-        self.client = client
-        self.sink = sink
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self.sink.append(list(messages))
-        return await self.client(messages, context=context, **kwargs)
-
-
-class _RecordingConfig(ModelConfig):
-    """Records the messages the framework sends to the LLM across every turn."""
-
-    def __init__(self, config: ModelConfig) -> None:
-        self.config = config
-        self.calls: list[list[BaseEvent]] = []
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _RecordingClient:
-        return _RecordingClient(self.config.create(), self.calls)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
+from ._helpers import Clock, RecordingConfig
 
 
 def _request_context(session_id: str | None) -> SimpleNamespace:
-    """A minimal stand-in for the transport's RequestContext (HTTP shape)."""
+    """A minimal stand-in for the transport's RequestContext, on a handshake-era protocol version."""
     headers = {"mcp-session-id": session_id} if session_id is not None else {}
-    return SimpleNamespace(request=SimpleNamespace(headers=headers))
+    return SimpleNamespace(request=SimpleNamespace(headers=headers), protocol_version=LATEST_HANDSHAKE_VERSION)
 
 
 def _stdio_request_context() -> SimpleNamespace:
-    return SimpleNamespace(request=None)
+    return SimpleNamespace(request=None, protocol_version=LATEST_HANDSHAKE_VERSION)
 
 
 @pytest.mark.asyncio
 class TestMultiTurnHistory:
     async def test_same_session_accumulates_history(self) -> None:
-        config = _RecordingConfig(TestConfig("ok"))
+        config = RecordingConfig(TestConfig("ok"))
         executor = AgentExecutor(Agent("a", config=config), stream_progress=False, session_store=SessionStore())
         rc = _request_context("sess-1")
 
@@ -72,7 +45,7 @@ class TestMultiTurnHistory:
         assert len(config.calls[1]) > len(config.calls[0])
 
     async def test_different_sessions_are_isolated(self) -> None:
-        config = _RecordingConfig(TestConfig("ok"))
+        config = RecordingConfig(TestConfig("ok"))
         executor = AgentExecutor(Agent("a", config=config), stream_progress=False, session_store=SessionStore())
 
         await executor.call("ask", message="first", request_context=_request_context("sess-1"))
@@ -82,7 +55,7 @@ class TestMultiTurnHistory:
         assert len(config.calls[1]) == len(config.calls[0])
 
     async def test_stateless_when_sessions_disabled(self) -> None:
-        config = _RecordingConfig(TestConfig("ok"))
+        config = RecordingConfig(TestConfig("ok"))
         executor = AgentExecutor(Agent("a", config=config), stream_progress=False, session_store=None)
         rc = _request_context("sess-1")
 
@@ -93,7 +66,7 @@ class TestMultiTurnHistory:
         assert len(config.calls[1]) == len(config.calls[0])
 
     async def test_stateless_http_without_session_id(self) -> None:
-        config = _RecordingConfig(TestConfig("ok"))
+        config = RecordingConfig(TestConfig("ok"))
         executor = AgentExecutor(Agent("a", config=config), stream_progress=False, session_store=SessionStore())
 
         # HTTP request but no server-issued mcp-session-id (stateless transport).
@@ -129,11 +102,11 @@ class TestSessionStore:
         assert revived != original
 
     async def test_ttl_expiry_resets_history(self) -> None:
-        clock = {"t": 0.0}
-        store = SessionStore(ttl=10.0, clock=lambda: clock["t"])
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
 
         original = (await store.acquire("a")).id
-        clock["t"] = 20.0
+        clock.advance(20.0)
         revived = (await store.acquire("a")).id
 
         assert revived != original
@@ -157,12 +130,108 @@ class TestSessionStore:
         )
 
     async def test_ttl_kept_within_window(self) -> None:
-        clock = {"t": 0.0}
-        store = SessionStore(ttl=10.0, clock=lambda: clock["t"])
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
 
         original = (await store.acquire("a")).id
-        clock["t"] = 5.0
+        clock.advance(5.0)
         assert (await store.acquire("a")).id == original
+
+
+@pytest.mark.asyncio
+class TestHandleNamedConversations:
+    """A handle is just another key, so the registry's guarantees carry over."""
+
+    async def test_fresh_mints_a_handle_that_resolves_to_the_same_stream(self) -> None:
+        store = SessionStore()
+
+        async with store.fresh() as minted:
+            assert minted.handle is not None
+            handle = minted.handle
+            stream_id = minted.stream.id
+
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_two_fresh_conversations_are_isolated(self) -> None:
+        store = SessionStore()
+
+        async with store.fresh() as one, store.fresh() as two:
+            assert one.handle != two.handle
+            assert one.stream.id != two.stream.id
+
+    async def test_a_handle_the_store_never_minted_is_rejected(self) -> None:
+        store = SessionStore()
+
+        with pytest.raises(UnknownConversationError):
+            async with store.by_handle(str(uuid4())):
+                pass
+
+    async def test_a_session_named_conversation_also_has_a_handle(self) -> None:
+        store = SessionStore()
+
+        async with store.session("sess-1") as named:
+            assert named.handle is not None
+            handle, stream_id = named.handle, named.stream.id
+
+        # The handle names the same conversation the MCP session does, so a
+        # handshake-era caller can migrate to explicit handles without losing it.
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_idle_expiry_drops_a_handle_named_conversation(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+
+        async with store.fresh() as minted:
+            handle = minted.handle
+        assert handle is not None
+        clock.advance(20.0)
+
+        with pytest.raises(UnknownConversationError):
+            async with store.by_handle(handle):
+                pass
+
+    async def test_lru_overflow_drops_a_handle_named_conversation(self) -> None:
+        store = SessionStore(max_sessions=1)
+
+        async with store.fresh() as first:
+            handle = first.handle
+        assert handle is not None
+        async with store.fresh():  # evicts the first
+            pass
+
+        with pytest.raises(UnknownConversationError):
+            async with store.by_handle(handle):
+                pass
+
+    async def test_a_conversation_is_bound_to_the_principal_that_created_it(self) -> None:
+        store = SessionStore()
+
+        async with store.fresh(principal="alice") as minted:
+            handle = minted.handle
+        assert handle is not None
+
+        async with store.by_handle(handle, principal="alice") as continued:
+            assert continued.handle == handle
+        with pytest.raises(UnknownConversationError):
+            async with store.by_handle(handle, principal="bob"):
+                pass
+
+    async def test_acquire_records_the_principal_of_the_handle_it_mints(self) -> None:
+        """A conversation first created through ``acquire`` is reachable by its creator."""
+        store = SessionStore()
+
+        await store.acquire("s", principal="alice")
+        async with store.session("s", principal="alice") as conversation:
+            handle = conversation.handle
+        assert handle is not None
+
+        async with store.by_handle(handle, principal="alice") as continued:
+            assert continued.handle == handle
+        with pytest.raises(UnknownConversationError):
+            async with store.by_handle(handle, principal="bob"):
+                pass
 
 
 def test_session_store_rejects_bad_config() -> None:
@@ -189,3 +258,121 @@ def test_session_config_defaults() -> None:
     assert cfg.max_sessions == 1024
     assert cfg.ttl is None
     assert cfg.storage is None
+
+
+@pytest.mark.asyncio
+class TestEvictionSparesTurnsInFlight:
+    """A turn holds its conversation for its whole scope, so neither bound may drop it midway."""
+
+    async def test_idle_expiry_keeps_the_history_of_a_turn_slower_than_the_ttl(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+        request = ModelRequest(TextInput("hello"))
+
+        async with store.session("a") as held:
+            await held.stream.send(request, ConversationContext(stream=held.stream))
+            clock.advance(20.0)
+            async with store.fresh():  # another caller's request runs maintenance
+                pass
+
+            assert list(await held.stream.history.get_events()) == [request]
+
+    async def test_a_turn_that_outlived_the_ttl_can_be_continued(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+
+        async with store.session("a") as held:
+            handle, stream_id = held.handle, held.stream.id
+            clock.advance(20.0)
+        assert handle is not None
+        clock.advance(1.0)
+
+        # The turn is what used the conversation, so its end restarts the idle window.
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_overflow_drops_the_oldest_idle_conversation(self) -> None:
+        store = SessionStore(max_sessions=2)
+
+        async with store.session("a") as held:
+            handle, stream_id = held.handle, held.stream.id
+            async with store.fresh() as idle:
+                idle_handle = idle.handle
+            async with store.fresh():  # over the bound: "a" is older, but mid-turn
+                pass
+        assert handle is not None
+        assert idle_handle is not None
+
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+        with pytest.raises(UnknownConversationError):
+            async with store.by_handle(idle_handle):
+                pass
+
+    async def test_overflow_never_drops_the_conversation_it_is_serving(self) -> None:
+        store = SessionStore(max_sessions=1)
+
+        async with store.session("a"), store.fresh() as minted:
+            handle, stream_id = minted.handle, minted.stream.id
+        assert handle is not None
+
+        # With every other conversation mid-turn the bound gives way until one ends.
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_idle_expiry_keeps_the_history_of_a_resumed_run(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+        request = ModelRequest(TextInput("hello"))
+        async with store.fresh() as paused:
+            handle, stream = paused.handle, paused.stream
+            await stream.send(request, ConversationContext(stream=stream))
+        assert handle is not None
+
+        # A resumed run works without the turn lock, which it released when it paused.
+        async with store.resumed(handle):
+            clock.advance(20.0)
+            async with store.fresh():
+                pass
+
+            assert list(await stream.history.get_events()) == [request]
+
+    async def test_a_resumed_run_that_outlived_the_ttl_can_be_continued(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+        async with store.fresh() as paused:
+            handle, stream_id = paused.handle, paused.stream.id
+        assert handle is not None
+
+        async with store.resumed(handle):
+            clock.advance(20.0)
+        clock.advance(1.0)
+
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_overflow_spares_a_resumed_run(self) -> None:
+        store = SessionStore(max_sessions=1)
+        async with store.fresh() as paused:
+            handle, stream_id = paused.handle, paused.stream.id
+        assert handle is not None
+
+        async with store.resumed(handle), store.fresh():
+            pass
+
+        async with store.by_handle(handle) as continued:
+            assert continued.stream.id == stream_id
+
+    async def test_resuming_an_evicted_conversation_is_refused(self) -> None:
+        clock = Clock()
+        store = SessionStore(ttl=10.0, clock=clock)
+        async with store.fresh() as paused:
+            handle = paused.handle
+        assert handle is not None
+        clock.advance(20.0)
+        async with store.fresh():  # sweeps the paused conversation
+            pass
+
+        with pytest.raises(UnknownConversationError):
+            async with store.resumed(handle):
+                pass

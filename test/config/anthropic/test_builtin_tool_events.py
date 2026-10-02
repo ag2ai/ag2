@@ -64,7 +64,7 @@ async def _process(content: Iterable[Any]) -> tuple[ModelResponse, list[BaseEven
         id="m1",
         type="message",
         role="assistant",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         content=list(content),
         usage=Usage(input_tokens=10, output_tokens=20),
         stop_reason="end_turn",

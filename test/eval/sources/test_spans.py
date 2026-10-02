@@ -6,11 +6,13 @@
 
 import json
 import logging
+from dataclasses import replace
 
 from ag2._telemetry_consts import (
     ATTR_HUMAN_INPUT_PROMPT,
     ATTR_HUMAN_INPUT_RESPONSE,
     ATTR_SPAN_TYPE,
+    ATTR_TOOL_RESULT_TRUNCATED,
     ATTR_USAGE_KIND,
     ATTR_USAGE_LABEL,
     ATTR_USAGE_TOTAL,
@@ -456,6 +458,20 @@ class TestAG2GenAIConvention:
         # The reconstruction is what the real prebuilt scorers see.
         assert tool_called("get_weather")._fn(trace=trace) is True
         assert no_tool_errors()._fn(trace=trace) is True
+
+    def test_tool_span_result_part_carries_no_truncation_metadata_by_default(self) -> None:
+        trace = spans_to_trace([_agent_span(), _tool_span(10 * _MS, name="get_weather", call_id="c1")])
+
+        assert trace.events_of(ToolResultEvent)[0].result.parts[0].metadata == {}
+
+    def test_tool_span_truncation_flag_lands_on_the_result_part(self) -> None:
+        span = _tool_span(10 * _MS, name="dump", call_id="c1", result='{"rows": ["x...[truncated]')
+        span = replace(span, attributes={**span.attributes, ATTR_TOOL_RESULT_TRUNCATED: True})
+        trace = spans_to_trace([_agent_span(), span])
+
+        part = trace.events_of(ToolResultEvent)[0].result.parts[0]
+        assert part.content == '{"rows": ["x...[truncated]'
+        assert part.metadata == {"truncated": True}
 
     def test_tool_span_error_reconstructs_tool_error_event(self) -> None:
         err_span = _tool_span(10 * _MS, name="flaky", call_id="c2")

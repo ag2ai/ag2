@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from uuid import uuid4
+
 import acp
 import pytest
 from acp.exceptions import RequestError
@@ -50,11 +52,12 @@ class TestHandshake:
 class TestCapabilitiesAreTruthful:
     """Anything advertised here must actually work — a Client relies on it."""
 
-    async def test_does_not_advertise_session_loading(self) -> None:
+    async def test_advertises_session_loading(self) -> None:
+        """``session/load`` is wired — see ``test_agent_load.py`` for what it does."""
         async with connect(ACPAgent(_agent()), initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        assert response.agent_capabilities.load_session is False
+        assert response.agent_capabilities.load_session is True
 
     async def test_does_not_advertise_mcp_support(self) -> None:
         async with connect(ACPAgent(_agent()), initialize=False) as (conn, _):
@@ -84,10 +87,21 @@ class TestCapabilitiesAreTruthful:
         prompt = response.agent_capabilities.prompt_capabilities
         assert (prompt.image, prompt.audio, prompt.embedded_context) == (True, False, True)
 
-    async def test_load_session_is_rejected_since_it_is_not_advertised(self) -> None:
+    async def test_loading_an_unknown_session_is_not_found(self) -> None:
+        """A well-formed id nobody issued: the session does not exist, and that is the answer."""
         async with connect(ACPAgent(_agent())) as (conn, _):
-            with pytest.raises(RequestError):
+            with pytest.raises(RequestError) as caught:
+                await conn.load_session(session_id=uuid4().hex, cwd="/tmp")
+
+        assert caught.value.code == RequestError.resource_not_found().code
+
+    async def test_loading_a_malformed_id_is_not_found_too(self) -> None:
+        """Not an invalid *request* — a valid request for a session that cannot exist."""
+        async with connect(ACPAgent(_agent())) as (conn, _):
+            with pytest.raises(RequestError) as caught:
                 await conn.load_session(session_id="anything", cwd="/tmp")
+
+        assert caught.value.code == RequestError.resource_not_found().code
 
 
 @pytest.mark.asyncio

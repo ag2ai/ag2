@@ -5,7 +5,7 @@
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, TypeAlias, overload
 
 from fast_depends.core import CallModel
@@ -13,6 +13,7 @@ from fast_depends.pydantic.schema import get_schema
 
 from ag2.annotations import Context
 from ag2.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
+from ag2.exceptions import HumanInputError
 from ag2.middleware import (
     BaseMiddleware,
     DescribedMiddleware,
@@ -80,6 +81,14 @@ class FunctionTool(Tool):
         self.name = name
 
     @property
+    def source(self) -> str:
+        """The implementation behind this tool: its function and the name it is called by."""
+        call = self.model.call
+        module = getattr(call, "__module__", None) or type(call).__module__
+        qualname = getattr(call, "__qualname__", None) or type(call).__qualname__
+        return f"function:{module}:{qualname}:{self.name}"
+
+    @property
     def middleware(self) -> tuple[DescribedMiddleware, ...]:
         """Tool-scoped middleware, in execution order.
 
@@ -124,7 +133,7 @@ class FunctionTool(Tool):
             execution = _wrap_middleware(mw.on_tool_execution, execution)
 
         async def execute(event: "ToolCallEvent", context: "Context") -> None:
-            result = await execution(event, context)
+            result = await execution(event.handled_by(self.source), context)
             await context.send(result)
 
         stack.enter_context(context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(execute))
@@ -133,13 +142,19 @@ class FunctionTool(Tool):
         try:
             async with AsyncExitStack() as stack:
                 result = await self.model.asolve(
-                    **(event.serialized_arguments | {CONTEXT_OPTION_NAME: context}),
+                    **(event.serialized_arguments | {CONTEXT_OPTION_NAME: replace(context, tool_call_id=event.id)}),
                     stack=stack,
                     cache_dependencies={},
                     dependency_provider=context.dependency_provider,
                 )
 
             return ToolResultEvent.from_call(event, result=result)
+
+        # The human-input channel failing is not this tool failing: recording it
+        # as a tool result would hand the model a question that was never put,
+        # dressed as a tool that broke. Let it end the turn.
+        except HumanInputError:
+            raise
 
         except Exception as e:
             return ToolErrorEvent.from_call(event, error=e)

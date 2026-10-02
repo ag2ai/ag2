@@ -4,20 +4,32 @@
 
 import asyncio
 import base64
+import hashlib
 from collections.abc import AsyncGenerator, Iterable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import replace
-from typing import Any, get_args
+from functools import partial
+from typing import Any, TypeAlias, get_args
+from urllib.parse import urlsplit
 
 import httpx2
 from mcp import ClientSession
+from mcp.client._input_required import run_input_required_driver
+from mcp.client._probe import negotiate_auto
+from mcp.client.session import ClientRequestContext
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import (
     AudioContent,
     CallToolResult,
     EmbeddedResource,
+    ErrorData,
     ImageContent,
+    InputRequest,
+    InputRequiredResult,
+    InputResponse,
+    InputResponses,
+    PaginatedRequestParams,
     ResourceLink,
     TextContent,
     TextResourceContents,
@@ -55,17 +67,29 @@ from ag2.types import (
     VideoMediaType,
 )
 
-from .types import MCPServerConfig, MCPStdioServerConfig
+from .answering import InputRequestAnswerer, MCPAnswerPolicy
+from .types import MCPServerConfig, MCPStdioServerConfig, ProtocolMode
 
-AnyMCPConfig = MCPServerConfig | MCPStdioServerConfig
+AnyMCPConfig: TypeAlias = MCPServerConfig | MCPStdioServerConfig
+
+_MAX_TOOL_PAGES = 1000
 
 
 @asynccontextmanager
-async def _mcp_session(config: AnyMCPConfig) -> AsyncGenerator[ClientSession]:
+async def _mcp_session(
+    config: AnyMCPConfig,
+    **session_kwargs: Any,
+) -> AsyncGenerator[ClientSession]:
     """Open a short-lived MCP ``ClientSession`` for one operation.
 
     Dispatches on the config type — HTTP/streamable-http for
     :class:`MCPServerConfig`, stdio subprocess for :class:`MCPStdioServerConfig`.
+
+    ``session_kwargs`` are the answering callbacks for this operation (see
+    :mod:`.answering`). Which ones are present is what the handshake advertises,
+    so they are passed per-operation rather than fixed on the toolkit: the
+    agent's human and the agent's model are reachable only from the live context
+    the operation runs in.
     """
     if isinstance(config, MCPStdioServerConfig):
         params = StdioServerParameters(
@@ -77,9 +101,9 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncGenerator[ClientSession]:
         )
         async with (
             stdio_client(params) as (read_stream, write_stream),
-            ClientSession(read_stream, write_stream) as session,
+            ClientSession(read_stream, write_stream, **session_kwargs) as session,
         ):
-            await session.initialize()
+            await _settle_era(session, config.protocol_mode)
             yield session
     else:
         # ``httpx2``, not ``httpx``: that is the client type mcp 2.0's streamable-HTTP
@@ -91,34 +115,87 @@ async def _mcp_session(config: AnyMCPConfig) -> AsyncGenerator[ClientSession]:
                 timeout=config.connection_timeout,
                 proxy=config.proxy,
                 verify=config.verify,
-                # A Starlette-mounted endpoint 307s the slashless form, which is the
-                # form a caller naturally writes; without this the connection fails.
-                follow_redirects=True,
             ) as client,
             streamable_http_client(
                 config.server_url,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 http_client=client,
             ) as (read_stream, write_stream),
-            ClientSession(read_stream, write_stream) as session,
+            ClientSession(read_stream, write_stream, **session_kwargs) as session,
         ):
-            await session.initialize()
+            await _settle_era(session, config.protocol_mode)
             yield session
+
+
+async def _settle_era(session: ClientSession, mode: ProtocolMode) -> None:
+    """Establish which protocol revision this session speaks.
+
+    ``"auto"`` asks the server (``server/discover``) and falls back to the
+    handshake, so a modern-era server is met on the modern era — which is what
+    lets a server return a question as the *result* of a call rather than over a
+    standalone request. ``"legacy"`` performs the handshake only.
+    """
+    if mode == "auto":
+        await negotiate_auto(session)
+        return
+    await session.initialize()
+
+
+async def _dispatch_input_request(
+    session: ClientSession, key: str, request: "InputRequest"
+) -> "InputResponse | ErrorData":
+    """Route one embedded input request through this session's answering callbacks.
+
+    The same callback table the standalone server-to-client RPCs go through, so
+    the handshake and modern eras cannot disagree about who answers what.
+    """
+    ctx = ClientRequestContext(
+        session=session,
+        request_id=key,
+        meta=request.params.meta if request.params else None,
+    )
+    return await session.dispatch_input_request(ctx, request)
+
+
+async def _retry_call(
+    session: ClientSession,
+    name: str,
+    arguments: dict[str, Any],
+    responses: "InputResponses | None",
+    state: str | None,
+) -> "CallToolResult | InputRequiredResult":
+    """Re-issue the original call carrying the answers and the echoed state."""
+    return await session.call_tool(
+        name,
+        arguments,
+        input_responses=responses,
+        request_state=state,
+        allow_input_required=True,
+    )
 
 
 class _MCPProxyTool(Tool):
     """A function-tool-shaped proxy that forwards calls to a remote MCP server."""
 
-    __slots__ = ("name", "schema", "_config", "_middleware")
+    __slots__ = ("name", "schema", "_config", "_middleware", "_answering", "_remote_name")
+
+    declared_in_code = False
 
     def __init__(
         self,
         config: AnyMCPConfig,
         raw_tool: MCPTool,
+        *,
+        tool_name_prefix: str = "",
         middleware: tuple[ToolMiddleware, ...] = (),
+        answering: MCPAnswerPolicy,
     ) -> None:
         self._config = config
         self._middleware = middleware
-        self.name = raw_tool.name
+        self._answering = answering
+        # Two names for one tool: the remote one the server knows, and the
+        # (possibly prefixed) local one the agent and the LLM see.
+        self._remote_name = raw_tool.name
+        self.name = f"{tool_name_prefix}{raw_tool.name}"
         self.schema = FunctionToolSchema(
             function=FunctionDefinition(
                 name=self.name,
@@ -144,7 +221,8 @@ class _MCPProxyTool(Tool):
             execution = _wrap_middleware(mw.on_tool_execution, execution)
 
         async def execute(event: "ToolCallEvent", context: "Context") -> None:
-            result = await execution(event, context)
+            source = f"mcp:{_endpoint(_resolve_config(self._config, context))}:{self._remote_name}"
+            result = await execution(event.handled_by(source), context)
             await context.send(result)
 
         # ``Event.field == value`` builds a Condition at runtime; mypy sees ``bool``.
@@ -153,16 +231,44 @@ class _MCPProxyTool(Tool):
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent | ToolErrorEvent":
         try:
             resolved = _resolve_config(self._config, context)
-            async with _mcp_session(resolved) as session:
-                result = await session.call_tool(self.name, event.serialized_arguments)
+            answerer = InputRequestAnswerer(self._answering, context)
+            async with _mcp_session(resolved, **answerer.session_kwargs()) as session:
+                result = await self._call(session, event, answerer)
 
         except Exception as e:
-            return ToolErrorEvent.from_call(event, error=e)
+            return ToolErrorEvent.from_call(event, error=_unwrap(e))
 
         if result.is_error:
             return ToolErrorEvent.from_call(event, error=RuntimeError(str(result)))
 
         return ToolResultEvent.from_call(event, result=_extract_content(result))
+
+    async def _call(
+        self,
+        session: ClientSession,
+        event: "ToolCallEvent",
+        answerer: InputRequestAnswerer,
+    ) -> CallToolResult:
+        """One ``tools/call``, answering and retrying for as long as the server asks.
+
+        The whole loop lives inside the single operation that already opened the
+        session, so nothing has to be held between calls: the pause is happening
+        on the *remote* server and this end is simply waiting. ``request_state``
+        is echoed back byte-exact and never inspected — it is the server's own
+        sealed state, not ours to read.
+        """
+        arguments = event.serialized_arguments
+        first = await session.call_tool(self._remote_name, arguments, allow_input_required=True)
+        if not isinstance(first, InputRequiredResult):
+            return first
+        # A bound on the rounds, so a server that re-asks the same thing forever
+        # ends the call with an error naming that rather than looping the agent.
+        return await run_input_required_driver(
+            first,
+            dispatch=partial(_dispatch_input_request, session),
+            retry=partial(_retry_call, session, self._remote_name, arguments),
+            max_rounds=self._answering.max_rounds,
+        )
 
 
 class MCPToolkit(Toolkit):
@@ -179,19 +285,48 @@ class MCPToolkit(Toolkit):
     MCP handshake, lists the server's tools, and registers a proxy for each
     one. The agent never sees that these are MCP tools — they look and behave
     like ordinary :class:`FunctionTool` instances.
+
+    Set ``tool_name_prefix`` on the config to namespace the agent-visible tool
+    names, so that two servers exposing the same generic name (``search``) do
+    not collide locally. The prefix never reaches the server: discovery
+    filters (``allowed_tools`` / ``blocked_tools``) and the outbound
+    ``call_tool`` request both use the server's original names.
+
+    A server may answer a tool call by asking for something instead of returning
+    a result — a question for the user, a model completion, the client's roots.
+    Whatever ``answering`` enables is answered inside the same operation that
+    opened the session and the call is retried, so nothing is held between calls:
+    the pause is on the remote server and this end is simply waiting.
+
+    Args:
+        server: The server to reach — a URL string, an :class:`MCPServerConfig`
+            for a remote one, or an :class:`MCPStdioServerConfig` for one
+            launched as a local subprocess.
+        middleware: Tool middleware applied to every call made through this
+            toolkit.
+        answering: Which of the operator's own resources this server may use.
+            With none passed, nothing is advertised and nothing is answered.
     """
 
-    __slots__ = ("config", "_discovered", "_discover_lock")
+    config: "AnyMCPConfig"
+    """The resolved configuration of the server this toolkit reaches."""
+
+    answering: MCPAnswerPolicy
+    """Which of the operator's own resources this server may use."""
+
+    __slots__ = ("config", "answering", "_discovered", "_discover_lock")
 
     def __init__(
         self,
         server: str | MCPServerConfig | MCPStdioServerConfig,
         *,
         middleware: Iterable[ToolMiddleware] = (),
+        answering: MCPAnswerPolicy | None = None,
     ) -> None:
         if isinstance(server, str):
             server = MCPServerConfig(server_url=server)
         self.config: AnyMCPConfig = server
+        self.answering = answering if answering is not None else MCPAnswerPolicy()
         self._discovered = False
         self._discover_lock = asyncio.Lock()
 
@@ -216,13 +351,31 @@ class MCPToolkit(Toolkit):
             resolved = _resolve_config(self.config, context)
 
             async with _mcp_session(resolved) as session:
-                raw_tools = (await session.list_tools()).tools
+                page = await session.list_tools()
+                raw_tools = list(page.tools)
+                seen_cursors: set[str] = set()
+                runaway: str | None = None
+                while (cursor := page.next_cursor) is not None:
+                    if cursor in seen_cursors:
+                        runaway = "MCP server returned a repeated pagination cursor while listing tools"
+                        break
+                    if len(seen_cursors) + 1 >= _MAX_TOOL_PAGES:
+                        runaway = f"MCP server did not end tools/list pagination within {_MAX_TOOL_PAGES} pages"
+                        break
+                    seen_cursors.add(cursor)
+                    page = await session.list_tools(params=PaginatedRequestParams(cursor=cursor))
+                    raw_tools.extend(page.tools)
 
-            # Both already resolved (Variable -> concrete) by _resolve_config above.
+            if runaway is not None:
+                raise RuntimeError(runaway)
+
+            # All already resolved (Variable -> concrete) by _resolve_config above.
             allowed = resolved.allowed_tools
             blocked = set(resolved.blocked_tools or [])  # type: ignore[arg-type]
+            prefix: str = resolved.tool_name_prefix  # type: ignore[assignment]
 
             for raw in raw_tools:
+                # Filters match the server's own names, before any prefixing.
                 if allowed is not None and raw.name not in allowed:  # type: ignore[operator]
                     continue
                 if raw.name in blocked:
@@ -230,11 +383,34 @@ class MCPToolkit(Toolkit):
                 proxy = _MCPProxyTool(
                     config=self.config,
                     raw_tool=raw,
+                    tool_name_prefix=prefix,
                     middleware=self._middleware,
+                    answering=self.answering,
                 )
                 self._tools[proxy.name] = proxy
 
             self._discovered = True
+
+
+def _unwrap(error: Exception) -> Exception:
+    """Peel task-group wrappers off a lone failure.
+
+    A ``ClientSession`` runs its receive loop inside a task group, so anything
+    raised while the session is open — the round bound being reached, a server
+    refusing an input request — arrives here inside one ``ExceptionGroup`` per
+    nesting level. The group's own message names nothing ("unhandled errors in a
+    TaskGroup"), and that message is what the agent would otherwise be told the
+    call failed for. A group carrying more than one failure is left alone:
+    picking one of several would hide the rest.
+    """
+    while True:
+        # Recognised by what it carries rather than by ``BaseExceptionGroup``,
+        # which is a 3.11 builtin: on 3.10 the group is the ``exceptiongroup``
+        # backport's class instead, and the name is not there to test against.
+        members = getattr(error, "exceptions", None)
+        if not isinstance(members, tuple) or len(members) != 1 or not isinstance(members[0], Exception):
+            return error
+        error = members[0]
 
 
 def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":
@@ -322,6 +498,20 @@ def _resolve_value(value: Any, context: "Context") -> Any:
     raise KeyError(f"Context variable {name!r} not found and no default provided")
 
 
+def _endpoint(config: AnyMCPConfig) -> str:
+    """Which server a resolved ``config`` reaches, without the secrets a URL or argv may carry.
+
+    An HTTP server is its URL minus credentials and query; a stdio server is its
+    command plus a digest of its arguments.
+    """
+    if isinstance(config, MCPStdioServerConfig):
+        argv = config.args if isinstance(config.args, list) else []
+        args = hashlib.sha256("\0".join(argv).encode()).hexdigest()[:12]
+        return f"{config.command}#{args}"
+    url = urlsplit(str(config.server_url))
+    return f"{url.scheme}://{url.netloc.rpartition('@')[2]}{url.path}"
+
+
 def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
     if isinstance(config, MCPStdioServerConfig):
         return replace(
@@ -334,11 +524,12 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
             description=_resolve_value(config.description, context),
             allowed_tools=_resolve_value(config.allowed_tools, context),
             blocked_tools=_resolve_value(config.blocked_tools, context),
+            tool_name_prefix=_resolve_value(config.tool_name_prefix, context) or "",
         )
 
     headers = dict(_resolve_value(config.headers, context) or {})
     auth = _resolve_value(config.authorization_token, context)
-    if auth and "Authorization" not in headers:
+    if auth and not any(key.lower() == "authorization" for key in headers):
         headers["Authorization"] = f"Bearer {auth}"
 
     return replace(
@@ -349,5 +540,6 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
         description=_resolve_value(config.description, context),
         allowed_tools=_resolve_value(config.allowed_tools, context),
         blocked_tools=_resolve_value(config.blocked_tools, context),
+        tool_name_prefix=_resolve_value(config.tool_name_prefix, context) or "",
         headers=headers or None,
     )

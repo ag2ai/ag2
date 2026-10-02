@@ -5,7 +5,7 @@
 from dataclasses import dataclass
 from typing import Any, Literal
 
-import httpx
+import httpx2
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, not_given
 
 
@@ -63,7 +63,7 @@ class ContainerManager:
         max_retries: int = DEFAULT_MAX_RETRIES,
         default_headers: dict[str, str] | None = None,
         default_query: dict[str, object] | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: httpx2.AsyncClient | None = None,
     ) -> None:
         self._client = AsyncOpenAI(
             api_key=api_key,

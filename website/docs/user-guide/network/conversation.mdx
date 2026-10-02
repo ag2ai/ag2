@@ -53,7 +53,7 @@ from ag2.config import AnthropicConfig
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import Hub
 
-config = AnthropicConfig(model="claude-sonnet-4-6")
+config = AnthropicConfig(model="claude-sonnet-5")
 hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
 alice = await hub.register(

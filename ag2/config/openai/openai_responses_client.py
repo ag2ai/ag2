@@ -7,20 +7,25 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
-import httpx
+import httpx2
 from fast_depends.library.serializer import SerializerProto
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
 from openai.types.responses import (
     Response,
     ResponseCompletedEvent,
+    ResponseFunctionShellToolCall,
+    ResponseFunctionShellToolCallOutput,
     ResponseFunctionToolCall,
     ResponseOutputItemDoneEvent,
     ResponseOutputMessage,
     ResponseReasoningItem,
+    ResponseShellCallCommandDeltaEvent,
+    ResponseShellCallOutputContentDeltaEvent,
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
 )
+from openai.types.responses.response_create_params import PromptCacheOptions
 from openai.types.responses.response_output_item import ImageGenerationCall
 from typing_extensions import Required
 
@@ -40,12 +45,21 @@ from ag2.response import ResponseProto
 from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.schemas import ToolSchema
 
-from .events import OpenAIReasoningEvent, OpenAIServerToolCallEvent, OpenAIServerToolResultEvent
+from .events import (
+    OpenAIPromptCacheDiagnostics,
+    OpenAIReasoningEvent,
+    OpenAIServerToolCallEvent,
+    OpenAIServerToolResultEvent,
+    OpenAIShellCommandChunk,
+    OpenAIShellOutputChunk,
+    ShellCallTracker,
+)
 from .mappers import (
     events_to_responses_input,
     extract_skills_for_shell,
     merge_skills_into_shell_tools,
     normalize_responses_usage,
+    reject_client_executed_shell,
     response_proto_to_text_config,
     responses_api_includes,
     tool_to_responses_api,
@@ -63,6 +77,8 @@ class CreateOptions(TypedDict, total=False):
     top_logprobs: int | None | Omit
     store: bool | None
     metadata: dict[str, str] | None | Omit
+    prompt_cache_key: str | Omit
+    prompt_cache_options: PromptCacheOptions | Omit
     service_tier: str | None | Omit
     user: str
     stream: bool
@@ -81,8 +97,9 @@ class OpenAIResponsesClient(LLMClient):
         max_retries: int = DEFAULT_MAX_RETRIES,
         default_headers: dict[str, str] | None = None,
         default_query: dict[str, object] | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: httpx2.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
+        prompt_cache_diagnostics: bool = False,
     ) -> None:
         self._client = AsyncOpenAI(
             api_key=api_key,
@@ -99,6 +116,44 @@ class OpenAIResponsesClient(LLMClient):
 
         self._create_options = create_options or {}
         self._streaming = self._create_options.get("stream", False)
+        self._prompt_cache_diagnostics = prompt_cache_diagnostics
+        self._last_response_id: str | None = None
+
+    def _request_options(self) -> dict[str, Any]:
+        """The create options for this call, diagnosing against the last response if asked to.
+
+        Only the comparison id varies between calls; everything else is fixed at construction.
+        Returns a plain mapping rather than ``CreateOptions`` because that TypedDict declares
+        ``service_tier`` and ``truncation`` as ``str`` where the SDK wants a ``Literal``;
+        spreading it as a typed mapping fails on those fields, which are not this change's.
+        """
+        options = dict(self._create_options)
+        if not self._prompt_cache_diagnostics or self._last_response_id is None:
+            return options
+
+        configured = self._create_options.get("prompt_cache_options")
+        if configured and "comparison_response_id" in configured:
+            # The caller named a response to compare against; that choice outranks the chain.
+            return options
+
+        chained: PromptCacheOptions = {"comparison_response_id": self._last_response_id}
+        options["prompt_cache_options"] = {**configured, **chained} if configured else chained
+        return options
+
+    @staticmethod
+    def _comparison_id(options: dict[str, Any]) -> str | None:
+        """The response this request asked to be compared against, if it asked at all."""
+        configured: PromptCacheOptions | None = options.get("prompt_cache_options") or None
+        return configured.get("comparison_response_id") if configured else None
+
+    async def _report_cache_diagnostics(
+        self,
+        response: Response,
+        context: "ConversationContext",
+        comparison_id: str | None,
+    ) -> None:
+        if diagnostics := OpenAIPromptCacheDiagnostics.from_response(response, requested_comparison_id=comparison_id):
+            await context.send(diagnostics)
 
     async def __call__(
         self,
@@ -125,6 +180,7 @@ class OpenAIResponsesClient(LLMClient):
             [tool_to_responses_api(t) for t in tools_list],
             openai_skills,
         )
+        reject_client_executed_shell(openai_tools)
 
         kwargs: dict[str, Any] = {}
         if r := response_proto_to_text_config(response_schema):
@@ -139,26 +195,38 @@ class OpenAIResponsesClient(LLMClient):
         if includes:
             kwargs["include"] = includes
 
+        options = self._request_options()
         response = await self._client.responses.create(
-            **self._create_options,
+            **options,
             **kwargs,
             input=input_items,
             instructions=instructions,
             tools=openai_tools or omit,
         )
 
+        comparison_id = self._comparison_id(options)
         if self._streaming:
-            return await self._process_stream(response, context)
-        return await self._process_response(response, context)
+            result = await self._process_stream(response, context, comparison_id=comparison_id)
+        else:
+            result = await self._process_response(response, context, comparison_id=comparison_id)
+
+        # A turn that reported no id leaves the previous one standing: a stale comparison
+        # still names a real response, where `None` would silently stop diagnosing.
+        if result.response_id:
+            self._last_response_id = result.response_id
+        return result
 
     async def _process_response(
         self,
         response: Response,
         context: "ConversationContext",
+        *,
+        comparison_id: str | None = None,
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
         files: list[BinaryResult] = []
+        shell_calls = ShellCallTracker()
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
@@ -186,6 +254,8 @@ class OpenAIResponsesClient(LLMClient):
 
             elif call_event := OpenAIServerToolCallEvent.from_item(item):
                 await context.send(call_event)
+                if isinstance(item, ResponseFunctionShellToolCall):
+                    shell_calls.opened(item, event_id=call_event.id)
                 result_event = OpenAIServerToolResultEvent.from_item(item, parent_id=call_event.id)
                 if result_event:
                     await context.send(result_event)
@@ -193,7 +263,13 @@ class OpenAIResponsesClient(LLMClient):
                         binary = result_event.result.parts[0]
                         files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
 
+            elif isinstance(item, ResponseFunctionShellToolCallOutput):
+                if shell_result := shell_calls.close(item):
+                    await context.send(shell_result)
+
         usage = normalize_responses_usage(response.usage) if response.usage else Usage()
+
+        await self._report_cache_diagnostics(response, context, comparison_id)
 
         return ModelResponse(
             message=model_msg,
@@ -202,6 +278,7 @@ class OpenAIResponsesClient(LLMClient):
             model=response.model,
             provider="openai",
             finish_reason=response.status,
+            response_id=response.id,
             files=files,
         )
 
@@ -209,18 +286,42 @@ class OpenAIResponsesClient(LLMClient):
         self,
         response_stream: AsyncStream[ResponseStreamEvent],
         context: "ConversationContext",
+        *,
+        comparison_id: str | None = None,
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCallEvent] = []
         files: list[BinaryResult] = []
         finish_reason: str | None = None
         resolved_model: str | None = None
+        response_id: str | None = None
         usage = Usage()
+        shell_calls = ShellCallTracker()
 
         async for event in response_stream:
             if isinstance(event, ResponseTextDeltaEvent):
                 full_content += event.delta
                 await context.send(ModelMessageChunk(event.delta))
+
+            elif isinstance(event, ResponseShellCallCommandDeltaEvent):
+                await context.send(
+                    OpenAIShellCommandChunk(
+                        event.delta,
+                        command_index=event.command_index,
+                        output_index=event.output_index,
+                    )
+                )
+
+            elif isinstance(event, ResponseShellCallOutputContentDeltaEvent):
+                await context.send(
+                    OpenAIShellOutputChunk(
+                        command_index=event.command_index,
+                        output_index=event.output_index,
+                        item_id=event.item_id,
+                        stdout=event.delta.stdout,
+                        stderr=event.delta.stderr,
+                    )
+                )
 
             elif isinstance(event, ResponseOutputItemDoneEvent):
                 # Builtin and reasoning events are emitted on Done so the typed
@@ -246,12 +347,18 @@ class OpenAIResponsesClient(LLMClient):
 
                 elif call_event := OpenAIServerToolCallEvent.from_item(event.item):
                     await context.send(call_event)
+                    if isinstance(event.item, ResponseFunctionShellToolCall):
+                        shell_calls.opened(event.item, event_id=call_event.id)
                     result_event = OpenAIServerToolResultEvent.from_item(event.item, parent_id=call_event.id)
                     if result_event:
                         await context.send(result_event)
                         if isinstance(event.item, ImageGenerationCall) and event.item.result:
                             binary = result_event.result.parts[0]
                             files.append(BinaryResult(binary.data, metadata=result_event.result.metadata))
+
+                elif isinstance(event.item, ResponseFunctionShellToolCallOutput):
+                    if shell_result := shell_calls.close(event.item):
+                        await context.send(shell_result)
 
             elif isinstance(event, ResponseCompletedEvent):
                 # Stream finished
@@ -260,6 +367,9 @@ class OpenAIResponsesClient(LLMClient):
 
                 finish_reason = event.response.status
                 resolved_model = event.response.model
+                response_id = event.response.id
+
+                await self._report_cache_diagnostics(event.response, context, comparison_id)
 
         message: ModelMessage | None = None
         if full_content:
@@ -273,5 +383,6 @@ class OpenAIResponsesClient(LLMClient):
             model=resolved_model,
             provider="openai",
             finish_reason=finish_reason,
+            response_id=response_id,
             files=files,
         )

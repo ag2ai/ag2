@@ -24,9 +24,10 @@ import asyncio
 import pytest
 from pydantic import BaseModel
 
-from ag2 import Agent, tool
+from ag2 import Agent, Context, tool
 from ag2.events import (
     BaseEvent,
+    MessageEnqueued,
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -222,6 +223,56 @@ class TestEnqueue:
 
         seen = [text for call in config.mock.call_args_list for text in _texts(call.args[0])]
         assert "injected message" in seen, "a message enqueued mid-turn must reach a model call in that turn"
+
+    async def test_announces_the_message(self) -> None:
+        agent = Agent("runner", config=TestConfig("ok"))
+        announced = asyncio.Event()
+
+        async with agent.run("Hi!") as run:
+
+            @run.stream.where(MessageEnqueued).subscribe
+            async def on_enqueued(_event: MessageEnqueued) -> None:
+                announced.set()
+
+            run.enqueue("queued")
+            await asyncio.wait_for(announced.wait(), timeout=1.0)
+            await run.result()
+
+    async def test_announces_from_a_sync_tool(self) -> None:
+        stream = MemoryStream()
+        announced = asyncio.Event()
+
+        @stream.where(MessageEnqueued).subscribe
+        async def on_enqueued(_event: MessageEnqueued) -> None:
+            announced.set()
+
+        @tool
+        def queue_note(ctx: Context) -> str:
+            """Enqueue a note from a worker thread."""
+            ctx.enqueue("note")
+            return "queued"
+
+        agent = Agent(
+            "runner",
+            config=TestConfig(ToolCallEvent(name="queue_note", arguments="{}"), "done"),
+            tools=[queue_note],
+        )
+
+        reply = await agent.ask("Hi!", stream=stream)
+        await asyncio.wait_for(announced.wait(), timeout=1.0)
+
+        assert reply.body == "done"
+
+    async def test_announcement_stays_out_of_history(self) -> None:
+        agent = Agent("runner", config=TestConfig("ok"))
+
+        async with agent.run("Hi!") as run:
+            run.enqueue("queued")
+            reply = await run.result()
+            await asyncio.sleep(0)
+
+        events = await reply.context.stream.history.get_events()
+        assert not any(isinstance(e, MessageEnqueued) for e in events)
 
 
 @pytest.mark.asyncio

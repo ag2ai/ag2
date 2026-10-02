@@ -31,9 +31,9 @@
 /website/docs/user-guide/ag-ui/ @Lancetnik @vvlrff
 
 # area:mcp
-/ag2/mcp/ @marklysze
-/test/mcp/ @marklysze
-/website/docs/user-guide/tools/mcp_servers.mdx @marklysze
+/ag2/mcp/ @marklysze @vvlrff
+/test/mcp/ @marklysze @vvlrff
+/website/docs/user-guide/tools/mcp_servers.mdx @marklysze @vvlrff
 
 # area:network
 /ag2/network/ @Lancetnik @marklysze

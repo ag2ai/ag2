@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import ag2.tools
+import ag2.tools.toolkits
+import ag2.tools.toolkits.mcp_server
 import ag2.tools.types
 from ag2 import Agent
 from ag2.tools import Toolkit, tool
@@ -50,6 +52,18 @@ class TestImportPathsStaySeparate:
         assert [name for name in _CONCRETE_TOOLS if name not in ag2.tools.__all__] == []
 
 
+class TestTheMCPAnswerPolicyNamesItsProtocol:
+    """`ag2.tools` holds several protocols' names; a policy must say which it answers for."""
+
+    def test_it_is_advertised_under_the_protocol_qualified_name(self) -> None:
+        assert "MCPAnswerPolicy" in ag2.tools.__all__
+
+    def test_the_generic_name_is_exported_at_no_level(self) -> None:
+        for module in (ag2.tools, ag2.tools.toolkits, ag2.tools.toolkits.mcp_server):
+            assert "AnswerPolicy" not in module.__all__
+            assert not hasattr(module, "AnswerPolicy")
+
+
 class TestToolAbstraction:
     """ADR 0002 — one ``Tool`` abstraction; every kind of tool implements it."""
 
@@ -79,10 +93,10 @@ class TestPublicReturnTypesAreImportable:
 
         assert isinstance(my_tool, FunctionTool)
 
-    def test_agent_as_tool_returns_function_tool(self) -> None:
+    def test_agent_as_tool_returns_tool(self) -> None:
         child = Agent("child", prompt="You are a child agent.")
 
-        assert isinstance(child.as_tool(description="Delegate to the child."), FunctionTool)
+        assert isinstance(child.as_tool(description="Delegate to the child."), Tool)
 
     def test_toolkit_tool_decorator_returns_function_tool(self) -> None:
         toolkit = Toolkit()

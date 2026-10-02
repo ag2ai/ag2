@@ -4,12 +4,9 @@
 
 """OpenTelemetry ``ReadableSpan`` → :class:`Trace` bridge (producer-side).
 
-Unlike :mod:`ag2.eval.sources._spans` (which is SDK-free), this module imports
-the OpenTelemetry SDK: it turns the spans a live run produced — or spans read
-back from an exporter — into the normalized :class:`SpanData` the pure adapter
-consumes. It is deliberately **not** re-exported from ``ag2.eval`` so
-the SDK stays off the core eval import path; only the trace producer and its
-backends import it.
+Unlike :mod:`ag2.eval.sources._spans` (which is SDK-free), this module needs the
+OpenTelemetry SDK. The import is guarded by ``optional_import_block``, so importing
+without the SDK is safe; calling either function then raises ``ImportError``.
 """
 
 from collections.abc import Sequence

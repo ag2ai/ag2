@@ -8,7 +8,6 @@ from typing import TypeAlias
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.context import ServerCallContext
 from a2a.server.request_handlers import DefaultRequestHandlerV2
-from a2a.server.routes.agent_card_routes import create_agent_card_routes
 from a2a.server.tasks import (
     InMemoryTaskStore,
     PushNotificationConfigStore,
@@ -16,7 +15,6 @@ from a2a.server.tasks import (
     TaskStore,
 )
 from a2a.types import AgentCard
-from starlette.routing import BaseRoute
 
 from ..errors import A2AStaleCardSignatureError
 
@@ -133,25 +131,3 @@ def build_default_handler(
         push_config_store=push_config_store,
         push_sender=push_sender,
     )
-
-
-def build_card_routes_with_legacy(
-    agent_card: AgentCard,
-    *,
-    card_modifier: CardModifier | None,
-    card_url: str,
-    legacy_card_url: str | None,
-) -> list[BaseRoute]:
-    """Card routes at v1.x ``card_url`` plus optional v0.x alias at ``legacy_card_url``."""
-    routes: list[BaseRoute] = list(
-        create_agent_card_routes(agent_card, card_modifier=card_modifier, card_url=card_url),
-    )
-    if legacy_card_url:
-        routes.extend(
-            create_agent_card_routes(
-                agent_card,
-                card_modifier=card_modifier,
-                card_url=legacy_card_url,
-            ),
-        )
-    return routes

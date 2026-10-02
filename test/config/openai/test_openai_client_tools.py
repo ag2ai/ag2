@@ -4,7 +4,7 @@
 
 import json
 
-import httpx
+import httpx2
 import pytest
 from fast_depends.use import SerializerCls
 
@@ -14,10 +14,10 @@ from ag2.events import ModelRequest, TextInput
 from ag2.tools import tool
 
 
-def _capturing_client(captured: dict[str, object]) -> httpx.AsyncClient:
-    def handler(request: httpx.Request) -> httpx.Response:
+def _capturing_client(captured: dict[str, object]) -> httpx2.AsyncClient:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         captured["body"] = json.loads(request.content)
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "id": "c1",
@@ -35,7 +35,7 @@ def _capturing_client(captured: dict[str, object]) -> httpx.AsyncClient:
             },
         )
 
-    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
 
 
 @pytest.mark.asyncio

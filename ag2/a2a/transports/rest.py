@@ -19,13 +19,13 @@ from ._common import (
     CardModifier,
     CardSigner,
     ExtendedCardModifier,
-    build_card_routes_with_legacy,
     build_default_handler,
     prepare_public_card,
     sign_card,
     wrap_card_modifier,
     wrap_extended_card_modifier,
 )
+from ._routes import build_card_routes_with_legacy
 
 
 def build_rest_asgi(

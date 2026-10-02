@@ -5,7 +5,7 @@
 from ag2.exceptions import missing_additional_dependency, missing_optional_dependency
 
 try:
-    from .agent import ACPAgent, PromptContent
+    from .agent import ACPAgent, PromptContent, SessionObserver, SessionOrigin
     from .auth import AuthProvider, AuthenticationFailedError, StaticTokenAuth
     from .config import ACPConfig, ClaudeCodeConfig, CodexConfig, KiloCodeConfig, OpenCodeConfig
     from .sessions import SessionConfig
@@ -24,6 +24,8 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[acp] is a
     OpenCodeConfig = missing_optional_dependency("OpenCodeConfig", "acp", e)  # type: ignore[misc]
     MCPCapabilityError = missing_optional_dependency("MCPCapabilityError", "acp", e)  # type: ignore[misc]
     SessionConfig = missing_optional_dependency("SessionConfig", "acp", e)  # type: ignore[misc]
+    SessionObserver = missing_optional_dependency("SessionObserver", "acp", e)  # type: ignore[misc]
+    SessionOrigin = missing_optional_dependency("SessionOrigin", "acp", e)  # type: ignore[misc]
     StaticTokenAuth = missing_optional_dependency("StaticTokenAuth", "acp", e)  # type: ignore[misc]
 
 try:
@@ -45,5 +47,7 @@ __all__ = [
     "OpenCodeConfig",
     "PromptContent",
     "SessionConfig",
+    "SessionObserver",
+    "SessionOrigin",
     "StaticTokenAuth",
 ]

@@ -18,6 +18,7 @@ or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
 import asyncio
 import json
 import logging
+import threading
 import types
 import weakref
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
@@ -29,6 +30,7 @@ from typing import Any, Generic, Literal, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
@@ -63,8 +65,8 @@ from .events.lifecycle import (
     ObserverCompleted,
     ObserverStarted,
 )
-from .exceptions import ConfigNotProvidedError
-from .history import History
+from .exceptions import ConfigNotProvidedError, HumanInputError
+from .history import HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore
 from .knowledge.config import KnowledgeConfig
@@ -82,17 +84,17 @@ from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
+from .tools.final import FunctionTool, Toolkit, tool
+from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
-from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
+from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
 from .types import Omittable, SendableMessage, omit
-from .usage import UsageReport
+from .usage import UsageReport, collect_usage_events
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 logger = logging.getLogger(__name__)
-
 
 TResult = TypeVar313("TResult", default=str)
 TAgent = TypeVar313("TAgent", default=str)
@@ -110,7 +112,8 @@ class TaskConfig:
 
     Use ``include_tools`` (allowlist) and ``exclude_tools`` (blocklist) to
     narrow what the subtask sees, and ``extra_tools`` to add capabilities the
-    parent doesn't have.
+    parent doesn't have. ``max_concurrency`` optionally bounds the total
+    number of sub-tasks running for this Agent across both spawning tools.
     """
 
     config: ModelConfig | None = None
@@ -118,6 +121,11 @@ class TaskConfig:
     include_tools: Iterable[str] | None = None
     exclude_tools: Iterable[str] = ()
     extra_tools: Iterable[Callable[..., Any] | Tool] = ()
+    max_concurrency: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_concurrency is not None and self.max_concurrency < 1:
+            raise ValueError(f"max_concurrency must be >= 1 when set, got {self.max_concurrency}.")
 
 
 class AgentReply(Generic[TResult, TAgent]):
@@ -472,7 +480,8 @@ class AgentRun(Generic[TResult, TAgent]):
         consumed by that turn; one enqueued before ``result()`` merges into the
         first model call; one enqueued after the turn completes waits for the
         next turn on this stream. Safe to call from a stream subscriber (inline
-        during the drive) or a concurrent task — it only appends.
+        during the drive) or a concurrent task — it appends at once and
+        announces the message with ``MessageEnqueued`` from a background task.
         """
         self.__context.enqueue(*content)
 
@@ -746,6 +755,13 @@ class Agent(PluginTarget, Generic[TResult]):
         else:
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
+        # One Semaphore per running loop: sharing one raises once a second loop
+        # awaits it contended (the hazard ag2/extensions/docker/sandbox.py also
+        # calls out). Provisioned by ``_task_slots_for``.
+        self._task_slots: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+            weakref.WeakKeyDictionary()
+        )
+        self._task_slots_lock = threading.Lock()
 
         # Knowledge store + compaction/aggregation strategies
         if knowledge:
@@ -812,6 +828,18 @@ class Agent(PluginTarget, Generic[TResult]):
         """Variables available to this agent."""
 
         return types.MappingProxyType(self._agent_variables)
+
+    @property
+    def has_hitl_hook(self) -> bool:
+        """Whether a hook answers this agent's questions to a human, rather than the caller's."""
+
+        return self._hitl_hook is not None
+
+    @property
+    def serializer(self) -> SerializerProto:
+        """The serializer that encodes this agent's tool results."""
+
+        return self._serializer
 
     @property
     def response_schema(self) -> ResponseProto[TResult] | None:
@@ -1333,21 +1361,13 @@ class Agent(PluginTarget, Generic[TResult]):
             all_tools: tuple[Tool, ...] = tuple(chain(self.tools, self._additional_tools, additional_tools))
 
             all_schemas: list[ToolSchema] = []
-            known_tools: set[str] = set()
             tool_search_schema: ToolSearchToolSchema | None = None
-            for t in all_tools:
-                schemas = await t.schemas(context)
-
-                for schema in schemas:
-                    if isinstance(schema, FunctionToolSchema):
-                        known_tools.add(schema.function.name)
-                    else:
-                        known_tools.add(schema.type)
-
-                    if isinstance(schema, ToolSearchToolSchema):
-                        tool_search_schema = schema
-                    else:
-                        all_schemas.append(schema)
+            resolved_tools = await resolve_tools(all_tools, context)
+            for schema in resolved_tools.schemas:
+                if isinstance(schema, ToolSearchToolSchema):
+                    tool_search_schema = schema
+                else:
+                    all_schemas.append(schema)
 
             if tool_search_schema is not None:
                 all_schemas.append(tool_search_schema)
@@ -1429,8 +1449,8 @@ class Agent(PluginTarget, Generic[TResult]):
                 self._tool_executor.register(
                     stack,
                     context,
-                    tools=all_tools,
-                    known_tools=known_tools,
+                    tools=resolved_tools.tools,
+                    known_tools=resolved_tools.known_tools,
                     middleware=middleware_instances,
                 )
 
@@ -1441,7 +1461,14 @@ class Agent(PluginTarget, Generic[TResult]):
                 ):
 
                     async def drive() -> "AgentReply[Any, Any]":
-                        message = await agent_turn(event, context)
+                        try:
+                            message = await agent_turn(event, context)
+                        except HumanInputError:
+                            await close_unanswered_tool_calls(
+                                context.stream.history,
+                                result=HUMAN_INPUT_ABANDONED_TOOL_RESULT,
+                            )
+                            raise
                         return AgentReply(
                             message,
                             context=context,
@@ -1468,7 +1495,30 @@ class Agent(PluginTarget, Generic[TResult]):
         tc = self._task_config
         if tc is None:
             return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
+        if tc.max_concurrency is not None:
+            async with self._task_slots_for(tc.max_concurrency):
+                return await self._run_subtask(task, ctx, tc)
+        return await self._run_subtask(task, ctx, tc)
 
+    def _task_slots_for(self, max_concurrency: int) -> asyncio.Semaphore:
+        """The subtask semaphore for the running loop, created on first use.
+
+        A ``threading.Lock`` because several OS threads can drive one Agent, and
+        two racing creators would leave the loser capped by a semaphore nothing
+        else holds. Closed loops are dropped on the way past: a contended
+        ``asyncio.Semaphore`` caches its loop, keeping its own weak key alive.
+        """
+        loop = asyncio.get_running_loop()
+        with self._task_slots_lock:
+            slots = self._task_slots.get(loop)
+            if slots is None:
+                for closed in [cached for cached in self._task_slots if cached.is_closed()]:
+                    del self._task_slots[closed]
+                slots = asyncio.Semaphore(max_concurrency)
+                self._task_slots[loop] = slots
+            return slots
+
+    async def _run_subtask(self, task: str, ctx: Context, tc: TaskConfig) -> str:
         # Inherit only the parent's user-supplied tools — never the
         # auto-injected subtask toolkit or knowledge tool (excluded by
         # identity), so the child can't recurse or see parent-only tooling.
@@ -1512,7 +1562,7 @@ class Agent(PluginTarget, Generic[TResult]):
         name: str | None = None,
         stream: StreamOrFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
-    ) -> FunctionTool:
+    ) -> SubagentTool:
         """Expose this agent as a delegation tool for another agent.
 
         ``stream=`` accepts ``None`` (a fresh stream per delegation), a
@@ -1705,12 +1755,20 @@ def _build_subtask_toolkit(agent: "Agent[Any]") -> Toolkit:
                 *(agent._spawn_subtask(t, ctx) for t in tasks),
                 return_exceptions=True,
             )
+            # One sub-task that could not reach a human sinks the whole call:
+            # rendering it as text would make it the tool's output, and the
+            # model would read an unaskable approval as a subtask that failed.
+            for r in raw:
+                if isinstance(r, HumanInputError):
+                    raise r
             results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
         else:
             results = []
             for t in tasks:
                 try:
                     results.append(await agent._spawn_subtask(t, ctx))
+                except HumanInputError:
+                    raise
                 except Exception as e:
                     results.append(f"Error: {e}")
 
@@ -1912,8 +1970,15 @@ class _CompactionMiddleware(BaseMiddleware):
                     event_count=len(events),
                 )
             )
+            # Collected live rather than re-read from history afterwards: the
+            # summarization call's own record is sent *while* the strategy runs,
+            # so it is in neither ``events`` nor what the strategy returns. A
+            # subscriber sees it as it is sent, which needs no assumption about
+            # how history grew in the meantime and no second full read of it.
+            spent_during: list[UsageEvent] = []
             try:
-                compacted = await self._strategy.compact(events, context, self._store)
+                with context.stream.where(UsageEvent).sub_scope(collect_usage_events(spent_during)):
+                    compacted = await self._strategy.compact(events, context, self._store)
             except Exception as exc:
                 logger.exception("Compaction failed for %s", self._actor_name)
                 with suppress(Exception):
@@ -1927,7 +1992,9 @@ class _CompactionMiddleware(BaseMiddleware):
                     )
                 return result
 
-            await context.stream.history.replace(compacted)
+            await context.stream.history.replace(
+                _with_usage_events(before=events, compacted=compacted, spent_during=spent_during)
+            )
             self._last_compact_event_count = len([e for e in compacted if is_conversational(e)])
 
             usage = getattr(self._strategy, "last_usage", {})
@@ -1943,6 +2010,58 @@ class _CompactionMiddleware(BaseMiddleware):
             )
 
         return result
+
+
+def _with_usage_events(
+    *,
+    before: list[BaseEvent],
+    compacted: list[BaseEvent],
+    spent_during: list[UsageEvent],
+) -> list[BaseEvent]:
+    """``compacted``, with every token record of the run put back around it.
+
+    Compaction replaces stream history with what its strategy retained, and
+    ``UsageEvent`` is the only thing ``UsageReport`` reads (`ADR 0014`), so
+    without this a run that compacted under-reports what it cost — on
+    ``AgentReply.usage()`` and on every transport that reports spend. Two
+    records are lost, for two different reasons: those outside the retained
+    window, which the strategy drops along with the conversation, and the
+    summarization call's own, which is emitted *while* the strategy runs and is
+    therefore absent from the snapshot the strategy returns. ``spent_during``
+    carries the second kind, collected from the stream as they were sent.
+
+    The records are rebuilt from ``before`` rather than from ``compacted``, so a
+    strategy that retained a record and one that dropped it read the same: each
+    record of the run appears exactly once, whatever the strategy did with it.
+    The one case this does not cover is a strategy that *synthesises* a new
+    ``UsageEvent`` into its returned list without sending it — that record is
+    dropped here, because telling it apart from a rebuilt copy of an existing
+    one would need identity, which does not survive a storage backend that
+    deserializes on read, or equality, which is wrong on an event whose
+    ``model`` / ``provider`` / ``label`` are ``compare=False``. A strategy that
+    ``context.send``s its spend, as the built-in ones do, is accounted correctly.
+
+    Order is telemetry from before the compaction, then the retained
+    conversation, then what was spent during it. That is not the chronological
+    order of the run — records from inside the retained window are hoisted ahead
+    of the conversation they were interleaved with — but the token records keep
+    their order relative to each other, which is what consumers that group by
+    first appearance need (AG-UI's per-``(provider, model)`` list among them).
+
+    None of this feeds the model or moves the compaction trigger: ``UsageEvent``
+    is not conversational (`ADR 0010`).
+
+    Note that the kept records accumulate: every compaction carries forward
+    every record the stream has seen, so a long-lived stream keeps one event per
+    model call for its whole life and each compaction rewrites all of them. That
+    is the cost of `ADR 0014`'s decision to keep spend in the event log; bounding
+    it belongs with that decision, not here.
+    """
+    return [
+        *(e for e in before if isinstance(e, UsageEvent)),
+        *(e for e in compacted if not isinstance(e, UsageEvent)),
+        *spent_during,
+    ]
 
 
 class _CompactionMiddlewareFactory:

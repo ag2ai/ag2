@@ -10,7 +10,7 @@ The `ag2.extensions.tenki` module runs AG2 shell and code tools in isolated [Ten
 Install AG2, your model provider, and Tenki's Python SDK:
 
 ```bash
-pip install "ag2[anthropic]" "tenki>=0.5.4,<1"
+pip install "ag2[anthropic]" "tenki>=1.4.0,<2"
 ```
 
 Create an API key in Tenki and export it:
@@ -38,7 +38,7 @@ async def main() -> None:
     async with env:
         agent = Agent(
             "developer",
-            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            config=AnthropicConfig(model="claude-sonnet-5"),
             tools=[SandboxShellTool(env), SandboxCodeTool(env.code_environment())],
         )
         reply = await agent.ask("Write hello.txt, then read it with Python.")

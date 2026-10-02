@@ -4,9 +4,10 @@
 
 import base64
 import re
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
+from urllib.parse import unquote
 
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.types import (
@@ -21,17 +22,17 @@ from mcp.types import (
 from mcp.types import Resource as MCPResource
 from mcp.types import ResourceTemplate as MCPResourceTemplate
 
+from ag2.annotations import Variable
+
 from ._async import call_user_fn
 from .errors import MCPResourceNotFoundError
-
-if TYPE_CHECKING:
-    from mcp.server.context import ServerRequestContext
+from .tools import MCPExecutionContext, call_with_context, resolve_context_value
 
 # Resource bodies are either text (``str``) or binary (``bytes``); the reader may
 # be sync or async. A template reader additionally receives the variables matched
 # out of the request URI.
 ResourceContent = str | bytes
-ReadFn = Callable[[], Awaitable[ResourceContent] | ResourceContent]
+ReadFn = Callable[..., Awaitable[ResourceContent] | ResourceContent]
 TemplateReadFn = Callable[[dict[str, str]], Awaitable[ResourceContent] | ResourceContent]
 
 
@@ -42,13 +43,33 @@ class Resource:
     ``read`` returns the body (``str`` → text, ``bytes`` → binary) and may be sync
     or async. ``mime_type`` defaults to ``text/plain`` for text and
     ``application/octet-stream`` for bytes when left ``None``.
+
+    ``meta`` reaches ``_meta`` on both the listing entry and the read result. It
+    is a generic passthrough into the protocol's extension slot — ag2 puts
+    nothing of its own there — so an extension's keys (``ui`` for MCP Apps, say)
+    go in verbatim. An empty mapping puts no ``_meta`` on the wire at all.
+
+    ``title`` is the display name a client shows in ``resources/list``; ``name``
+    stays the identifier. It reaches the listing entry only — the wire's read
+    result has no such field — so it is visible only on a listed resource.
+
+    ``listed`` keeps the resource out of ``resources/list`` when false. It stays
+    readable by URI: the listing is a browsing surface, and a body that only
+    makes sense to a machine that was told its URI does not belong there.
+
+    ``title``, ``description``, ``mime_type`` and the values inside ``meta`` may
+    each be a ``Variable``, resolved per request against the ``AskContext`` the
+    server's ``context_provider`` returned.
     """
 
     uri: str
     name: str
     read: ReadFn
-    description: str | None = None
-    mime_type: str | None = None
+    title: str | Variable | None = None
+    description: str | Variable | None = None
+    mime_type: str | Variable | None = None
+    meta: Mapping[str, Any] | None = None
+    listed: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,12 +81,25 @@ class ResourceTemplate:
     across ``/``. ``read`` receives the matched variables as a ``{name: value}``
     dict and returns the body (sync or async).
 
+    Matched values are percent-decoded once as UTF-8, preserving literal ``+``.
+    Readers should use these values directly: ``%2520`` becomes the literal
+    ``%20``, not a space. Matching and the returned resource URI use the original
+    encoded URI.
+
+    Decoding never widens what a form matches. A ``{var}`` value is one segment
+    after decoding too, so ``files:///a%2Fb`` does not match ``files:///{var}``
+    — it would hand the reader a separator the pattern just refused. A ``{+var}``
+    value may span ``/`` and may contain ``..``, so a reader behind it owns its
+    own containment — one addressing a filesystem has to confine the path itself
+    before opening it. A URI whose escapes are not valid UTF-8 matches no
+    template.
+
     Example::
 
         ResourceTemplate(
-            uri_template="file:///{+path}",
-            name="file",
-            read=lambda vars: Path(vars["path"]).read_text(),
+            uri_template="weather://{city}",
+            name="weather",
+            read=lambda vars: f"sunny in {vars['city']}",
         )
     """
 
@@ -79,18 +113,46 @@ class ResourceTemplate:
 _VAR = re.compile(r"\{(\+?)(\w+)\}")
 
 
-def _compile_template(uri_template: str) -> "re.Pattern[str]":
-    """Compile an RFC 6570 ``{var}`` / ``{+var}`` template into a match regex."""
+def _compile_template(uri_template: str) -> tuple["re.Pattern[str]", frozenset[str]]:
+    """Compile an RFC 6570 ``{var}`` / ``{+var}`` template into a match regex.
+
+    Returns the regex and the names it confines to a single path segment.
+    """
     parts: list[str] = []
+    segment_vars: list[str] = []
     last = 0
     for m in _VAR.finditer(uri_template):
         parts.append(re.escape(uri_template[last : m.start()]))
         reserved, name = m.group(1), m.group(2)
         # {+var} (reserved expansion) may span '/'; plain {var} is one segment.
         parts.append(f"(?P<{name}>.+)" if reserved else f"(?P<{name}>[^/]+)")
+        if not reserved:
+            segment_vars.append(name)
         last = m.end()
     parts.append(re.escape(uri_template[last:]))
-    return re.compile("^" + "".join(parts) + "$")
+    return re.compile("^" + "".join(parts) + "$"), frozenset(segment_vars)
+
+
+def _decoded_variables(match: "re.Match[str]", segment_vars: frozenset[str]) -> dict[str, str] | None:
+    """The matched variables decoded once, or ``None`` if the URI addresses nothing here.
+
+    Decoding runs after matching, so it can reveal a separator the pattern
+    refused: ``files:///a%2Fb`` matches ``files:///{var}`` as one segment and only
+    then decodes to ``a/b``. Honouring that would hand a ``{var}`` reader a path
+    it was promised it would never see, so such a URI addresses no template at
+    all. Escapes that are not valid UTF-8 likewise address nothing, rather than
+    decoding to replacement characters.
+    """
+    variables: dict[str, str] = {}
+    for name, value in match.groupdict().items():
+        try:
+            decoded = unquote(value, errors="strict")
+        except UnicodeDecodeError:
+            return None
+        if name in segment_vars and "/" in decoded:
+            return None
+        variables[name] = decoded
+    return variables
 
 
 class ResourceProvider:
@@ -102,7 +164,7 @@ class ResourceProvider:
         self._resources = tuple(resources)
         self._templates = tuple(templates)
         self._by_uri = {r.uri: r for r in self._resources}
-        self._compiled = [(_compile_template(t.uri_template), t) for t in self._templates]
+        self._compiled = [(*_compile_template(t.uri_template), t) for t in self._templates]
 
     @property
     def has_templates(self) -> bool:
@@ -114,32 +176,45 @@ class ResourceProvider:
         return bool(self._templates)
 
     async def on_list_resources(
-        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+        self, ctx: MCPExecutionContext, params: PaginatedRequestParams | None
     ) -> ListResourcesResult:
-        return ListResourcesResult(resources=[_to_mcp_resource(r) for r in self._resources])
+        return ListResourcesResult(resources=[_to_mcp_resource(r, ctx) for r in self._resources if r.listed])
 
     async def on_list_resource_templates(
-        self, ctx: "ServerRequestContext[Any, Any]", params: PaginatedRequestParams | None
+        self, ctx: MCPExecutionContext, params: PaginatedRequestParams | None
     ) -> ListResourceTemplatesResult:
         return ListResourceTemplatesResult(resourceTemplates=[_to_mcp_template(t) for t in self._templates])
 
-    async def on_read_resource(
-        self, ctx: "ServerRequestContext[Any, Any]", params: ReadResourceRequestParams
-    ) -> ReadResourceResult:
-        contents = await self.read(params.uri)
+    async def on_read_resource(self, ctx: MCPExecutionContext, params: ReadResourceRequestParams) -> ReadResourceResult:
+        contents = await self.read(params.uri, ctx)
         return ReadResourceResult(contents=[_to_wire_contents(params.uri, c) for c in contents])
 
-    async def read(self, uri: str) -> list[ReadResourceContents]:
+    async def read(self, uri: str, context: MCPExecutionContext | None = None) -> list[ReadResourceContents]:
         resource = self._by_uri.get(uri)
         if resource is not None:
-            data = await call_user_fn(resource.read)
-            return [ReadResourceContents(content=data, mime_type=resource.mime_type)]
-        for pattern, template in self._compiled:
+            data = await _call_resource_read(resource.read, context)
+            return [
+                ReadResourceContents(
+                    content=data,
+                    mime_type=resolve_context_value(resource.mime_type, context),
+                    meta=_meta(resource.meta, context),
+                )
+            ]
+        for pattern, segment_vars, template in self._compiled:
             match = pattern.match(uri)
-            if match is not None:
-                data = await call_user_fn(template.read, match.groupdict())
+            if match is None:
+                continue
+            variables = _decoded_variables(match, segment_vars)
+            if variables is not None:
+                data = await call_user_fn(template.read, variables)
                 return [ReadResourceContents(content=data, mime_type=template.mime_type)]
         raise MCPResourceNotFoundError(uri)
+
+
+async def _call_resource_read(read: ReadFn, context: MCPExecutionContext | None) -> ResourceContent:
+    if context is None:
+        return await call_user_fn(read)
+    return await call_with_context(read, context)
 
 
 def _to_wire_contents(uri: str, contents: ReadResourceContents) -> TextResourceContents | BlobResourceContents:
@@ -149,27 +224,38 @@ def _to_wire_contents(uri: str, contents: ReadResourceContents) -> TextResourceC
     returns a complete result, so the mapping — and its MIME-type defaults, which
     :class:`Resource` documents — moves here.
     """
+    meta = _meta(contents.meta)
     if isinstance(contents.content, bytes):
         return BlobResourceContents(
             uri=uri,
             mimeType=contents.mime_type or "application/octet-stream",
             blob=base64.b64encode(contents.content).decode("ascii"),
-            _meta=contents.meta,
+            _meta=meta,
         )
     return TextResourceContents(
         uri=uri,
         mimeType=contents.mime_type or "text/plain",
         text=contents.content,
-        _meta=contents.meta,
+        _meta=meta,
     )
 
 
-def _to_mcp_resource(resource: Resource) -> MCPResource:
+def _meta(meta: Mapping[str, Any] | None, context: MCPExecutionContext | None = None) -> dict[str, Any] | None:
+    """``meta`` as a wire ``_meta``, or ``None`` so an empty one is never sent."""
+    if not meta:
+        return None
+    resolved = resolve_context_value(meta, context)
+    return dict(resolved) if resolved else None
+
+
+def _to_mcp_resource(resource: Resource, context: MCPExecutionContext | None = None) -> MCPResource:
     return MCPResource(
         uri=resource.uri,
         name=resource.name,
-        description=resource.description,
-        mimeType=resource.mime_type,
+        title=resolve_context_value(resource.title, context),
+        description=resolve_context_value(resource.description, context),
+        mimeType=resolve_context_value(resource.mime_type, context),
+        _meta=_meta(resource.meta, context),
     )
 
 

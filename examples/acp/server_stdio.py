@@ -37,7 +37,7 @@ async def calc_add(a: int, b: int) -> str:
 agent = Agent(
     name="workie",
     prompt="You are a concise assistant. Use tools when they help.",
-    config=AnthropicConfig(model="claude-sonnet-4-6", streaming=True),
+    config=AnthropicConfig(model="claude-sonnet-5", streaming=True),
     tools=[calc_add],
 )
 

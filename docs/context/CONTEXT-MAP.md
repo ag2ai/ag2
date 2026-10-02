@@ -10,5 +10,7 @@ implementation-free list of the domain terms that context uses, kept here
   `ag2` agent and consume its result (`ask`, `run`, replies, streams).
 - [Skills](./skills.md) — `agentskills.io` progressive-disclosure: discover skill
   folders, surface them to the model, load / read / execute on demand.
+- [Live](./live.md) — realtime `LiveAgent` sessions: responses, their boundaries,
+  and user turns pushed while the session runs.
 
 System-wide architectural decisions live in [`docs/adr/`](../adr/).

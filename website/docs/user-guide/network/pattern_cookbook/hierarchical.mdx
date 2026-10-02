@@ -136,7 +136,7 @@ async def delegate_writer(reason: str) -> Handoff:
     return Handoff(target="writer", reason=reason)
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 

@@ -20,7 +20,7 @@ fs = FilesystemToolkit(base_path="/tmp/workspace")
 
 agent = Agent(
     "assistant",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[fs],
 )
 ```
@@ -52,7 +52,7 @@ fs = FilesystemToolkit(base_path="/tmp/workspace")
 
 agent = Agent(
     "reader",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[fs.read_file(), fs.find_files()],
 )
 ```
@@ -73,7 +73,7 @@ async def main() -> None:
 
         agent = Agent(
             "assistant",
-            config=AnthropicConfig(model="claude-sonnet-4-6"),
+            config=AnthropicConfig(model="claude-sonnet-5"),
             tools=[fs],
         )
         await agent.ask("Create a hello.py file that prints 'Hello, World!'")
@@ -109,7 +109,7 @@ from ag2.tools import DuckDuckSearchTool
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[DuckDuckSearchTool()],
 )
 ```
@@ -143,7 +143,7 @@ from ag2.tools import PerplexitySearchToolkit
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[PerplexitySearchToolkit(api_key=os.environ["PERPLEXITY_API_KEY"])],
 )
 ```
@@ -255,7 +255,7 @@ from ag2.tools import TavilySearchTool
 
 agent = Agent(
     "researcher",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[TavilySearchTool(api_key=os.environ["TAVILY_API_KEY"])],
 )
 ```
@@ -318,7 +318,7 @@ from ag2.tools import SandboxShellTool, LocalEnvironment
 
 agent = Agent(
     "engineer",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SandboxShellTool(LocalEnvironment("/tmp/my_project"))],
 )
 ```

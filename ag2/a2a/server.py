@@ -18,6 +18,7 @@ from ag2.agent import Agent
 
 from .card import build_card
 from .executor import AgentExecutor
+from .transports import build_grpc_server, build_jsonrpc_asgi, build_rest_asgi
 from .transports._common import (
     DEFAULT_AGENT_CARD_PATH,
     LEGACY_AGENT_CARD_PATH,
@@ -25,9 +26,6 @@ from .transports._common import (
     CardSigner,
     ExtendedCardModifier,
 )
-from .transports.grpc import build_grpc_server
-from .transports.jsonrpc import build_jsonrpc_asgi
-from .transports.rest import build_rest_asgi
 
 if TYPE_CHECKING:
     import grpc

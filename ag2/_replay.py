@@ -20,6 +20,10 @@ The remedy differs by caller because what they own differs: a policy or limiter
 persists nothing, so it drops the offending event (:func:`replayable_span`);
 compaction persists everything it drops, so it moves the cut (:func:`snap`) —
 filtering there would leave an event neither retained nor persisted.
+
+A hosted OpenAI ``shell_call`` needs the ``shell_call_output`` *after* it, which a
+prefix cut cannot remove — only an unfinished turn can, so that one is enforced in
+``ag2.config.openai.mappers`` instead.
 """
 
 from collections.abc import Sequence

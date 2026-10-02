@@ -158,6 +158,56 @@ def test_extract_skill_validates_metadata(tmp_path: Path) -> None:
         extract_skill(tar_path, "", dest)
 
 
+@pytest.mark.parametrize("absolute", [False, True], ids=["relative", "absolute"])
+def test_extract_skill_rejects_path_name_before_touching_disk(tmp_path: Path, absolute: bool) -> None:
+    dest = tmp_path / "skills"
+    dest.mkdir()
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep.txt").write_text("keep")
+    name = str(victim) if absolute else "../victim"
+    skill_md = f"---\nname: {name}\ndescription: Bad\n---\n"
+    tar_path = tmp_path / "skill.tar.gz"
+    tar_path.write_bytes(_make_tarball({"owner-repo-abc123/SKILL.md": skill_md}))
+
+    with pytest.raises(InvalidSkillError):
+        extract_skill(tar_path, "", dest)
+
+    assert (victim / "keep.txt").read_text() == "keep"
+    assert not (victim / "SKILL.md").exists()
+
+
+def test_extract_skill_skips_absolute_member_path(tmp_path: Path) -> None:
+    dest = tmp_path / "skills"
+    dest.mkdir()
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    tar_path = tmp_path / "skill.tar.gz"
+    tar_path.write_bytes(
+        _make_tarball({
+            "owner-repo-abc123/SKILL.md": STANDALONE_SKILL_MD,
+            f"owner-repo-abc123/{victim}/pwned.txt": "pwned",
+        })
+    )
+
+    extract_skill(tar_path, "", dest)
+
+    assert not (victim / "pwned.txt").exists()
+    assert (dest / "last30days" / "SKILL.md").exists()
+
+
+def test_local_runtime_install_path_traversal_blocked(tmp_path: Path) -> None:
+    install_dir = tmp_path / "skills"
+    install_dir.mkdir()
+    source = tmp_path / "source"
+    source.mkdir()
+
+    with pytest.raises(ValueError, match="path traversal"):
+        LocalRuntime(dir=install_dir).install(source, "../outside")
+
+    assert not (tmp_path / "outside").exists()
+
+
 @pytest.mark.asyncio
 async def test_search_skills_formats_output(tmp_path: Path) -> None:
     skills_data = [

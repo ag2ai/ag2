@@ -19,6 +19,11 @@ _AUDIO = b"RIFFxxxxWAVE"
 _BLOB = b"%PDF-1.4 binary"
 
 
+def _replying(response: ModelResponse) -> Agent:
+    """An agent whose one turn is ``response``, files and all."""
+    return Agent("maker", config=TestConfig(response))
+
+
 @pytest.mark.asyncio
 class TestContentMapping:
     async def test_image_file_maps_to_image_content(self) -> None:
@@ -26,7 +31,7 @@ class TestContentMapping:
             message=ModelMessage("here is the image"),
             files=[BinaryResult(_IMG, metadata={"media_type": "image/png"})],
         )
-        server = MCPServer(Agent("painter", config=TestConfig(response)))
+        server = MCPServer(_replying(response))
 
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "draw"})
@@ -41,7 +46,7 @@ class TestContentMapping:
             message=ModelMessage(""),
             files=[BinaryResult(_AUDIO, metadata={"media_type": "audio/wav"})],
         )
-        server = MCPServer(Agent("speaker", config=TestConfig(response)))
+        server = MCPServer(_replying(response))
 
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "speak"})
@@ -53,7 +58,7 @@ class TestContentMapping:
     async def test_missing_media_type_defaults_to_image(self) -> None:
         # No media-type key in metadata -> _media_type falls back to the default.
         response = ModelResponse(message=ModelMessage(""), files=[BinaryResult(_IMG, metadata={})])
-        server = MCPServer(Agent("painter", config=TestConfig(response)))
+        server = MCPServer(_replying(response))
 
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "draw"})
@@ -67,7 +72,7 @@ class TestContentMapping:
             message=ModelMessage(""),
             files=[BinaryResult(_BLOB, metadata={"media_type": "application/pdf", "filename": "doc.pdf"})],
         )
-        server = MCPServer(Agent("writer", config=TestConfig(response)))
+        server = MCPServer(_replying(response))
 
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "write"})

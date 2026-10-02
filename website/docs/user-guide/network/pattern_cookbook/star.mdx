@@ -57,7 +57,7 @@ talk to each other; everything routes through the hub.
 
     ```python
     AnthropicConfig(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         extra_body={"tool_choice": {"type": "auto", "disable_parallel_tool_use": True}},
     )
     ```
@@ -195,7 +195,7 @@ async def main() -> None:
     # one ask_spoke (or synthesise) per LLM response. Spokes use
     # TestConfig so they don't need this.
     hub_config = AnthropicConfig(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         extra_body={"tool_choice": {"type": "auto", "disable_parallel_tool_use": True}},
     )
 

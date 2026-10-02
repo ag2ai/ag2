@@ -31,7 +31,7 @@ class StaticTokenVerifier:
 agent = Agent(
     name="claude",
     prompt="You are a concise assistant. Use tools when they help.",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[calc_add],
 )
 

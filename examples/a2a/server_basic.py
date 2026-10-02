@@ -15,7 +15,7 @@ async def calc_add(a: int, b: int) -> str:
 
 agent = Agent(
     name="claude",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[calc_add],
 )
 

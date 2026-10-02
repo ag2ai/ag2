@@ -71,7 +71,7 @@ from ag2 import Agent
 from ag2.a2a import A2AServer
 from ag2.config import AnthropicConfig
 
-agent = Agent(name="weather", config=AnthropicConfig(model="claude-sonnet-4-6"))
+agent = Agent(name="weather", config=AnthropicConfig(model="claude-sonnet-5"))
 server = A2AServer(agent, card_signer=signer)
 asgi = server.build_jsonrpc(url="http://127.0.0.1:8000")
 ```

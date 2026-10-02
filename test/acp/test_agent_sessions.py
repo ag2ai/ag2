@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 from contextlib import suppress
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -15,6 +17,7 @@ from ag2.acp.sessions import (
     UnknownSessionError,
 )
 from ag2.events import ModelMessage
+from ag2.history import MemoryStorage
 
 
 @pytest.mark.asyncio
@@ -27,6 +30,15 @@ class TestIdentity:
 
         assert first.session_id != second.session_id
         assert first.stream_id != second.stream_id
+
+    async def test_the_session_id_is_its_stream_id(self) -> None:
+        """The id a Client holds is the key its history is stored under — nothing else is needed to find it."""
+        store = SessionStore()
+
+        session = await store.create()
+
+        assert UUID(session.session_id) == session.stream_id
+        assert session.session_id == session.stream_id.hex
 
     async def test_get_returns_the_same_session(self) -> None:
         store = SessionStore()
@@ -291,6 +303,187 @@ class TestEviction:
         await store.create()  # evicts first
 
         assert list(await store.stream(first).history.get_events()) == []
+
+    async def test_a_session_under_recovery_is_not_evicted(self) -> None:
+        """Holding the turn lock without a prompt — a repair, a load replay — is still work.
+
+        Evicting mid-way would drop a session the Client is about to use, and
+        by default its history with it.
+        """
+        store = SessionStore(max_sessions=1)
+        session = await store.create()
+
+        async with session.recovery():
+            with pytest.raises(SessionLimitError):
+                await store.create()
+
+        assert await store.get(session.session_id) is session
+
+    async def test_from_config_takes_a_clock(self) -> None:
+        now = 0.0
+        store = SessionStore.from_config(SessionConfig(ttl=10.0), clock=lambda: now)
+        session = await store.create()
+
+        now = 11.0
+
+        with pytest.raises(UnknownSessionError):
+            await store.get(session.session_id)
+
+
+@pytest.mark.asyncio
+class TestRetention:
+    """``retain_history`` separates letting a session go from deleting its conversation."""
+
+    async def test_retained_history_survives_aclose(self) -> None:
+        store = SessionStore(retain_history=True)
+        session = await store.create()
+        await store.stream(session).history.replace([ModelMessage("kept")])
+
+        await store.aclose()
+
+        assert len(store) == 0
+        assert [e.content for e in await store.stream(session).history.get_events()] == ["kept"]
+
+    async def test_retained_history_survives_lru_eviction(self) -> None:
+        store = SessionStore(max_sessions=1, retain_history=True)
+        first = await store.create()
+        await store.stream(first).history.replace([ModelMessage("kept")])
+
+        await store.create()  # evicts first
+
+        with pytest.raises(UnknownSessionError):
+            await store.get(first.session_id)
+        assert [e.content for e in await store.stream(first).history.get_events()] == ["kept"]
+
+    async def test_retained_history_survives_ttl_expiry(self) -> None:
+        now = 0.0
+        store = SessionStore(ttl=10.0, retain_history=True, clock=lambda: now)
+        session = await store.create()
+        await store.stream(session).history.replace([ModelMessage("kept")])
+
+        now = 11.0
+        with pytest.raises(UnknownSessionError):
+            await store.get(session.session_id)
+
+        assert [e.content for e in await store.stream(session).history.get_events()] == ["kept"]
+
+    async def test_close_always_drops_history_even_when_retained(self) -> None:
+        """Retention is for sessions that were let go; a close means the conversation is over."""
+        store = SessionStore(retain_history=True)
+        session = await store.create()
+        await store.stream(session).history.replace([ModelMessage("gone")])
+
+        await store.close(session.session_id)
+
+        assert list(await store.stream(session).history.get_events()) == []
+
+    async def test_retention_flows_through_from_config(self) -> None:
+        store = SessionStore.from_config(SessionConfig(retain_history=True, storage=MemoryStorage()))
+
+        assert store.retains_history is True
+        assert SessionStore.from_config(SessionConfig()).retains_history is False
+
+
+class TestRetentionConfigWarns:
+    """In-memory retention only grows the process; say so rather than let it look durable."""
+
+    def test_retaining_in_the_default_storage_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="ag2.acp.sessions"):
+            SessionConfig(retain_history=True)
+
+        assert any("in-memory" in record.message for record in caplog.records)
+
+    def test_retaining_in_a_supplied_storage_is_quiet(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="ag2.acp.sessions"):
+            SessionConfig(retain_history=True, storage=MemoryStorage())
+
+        assert caplog.records == []
+
+
+@pytest.mark.asyncio
+class TestAdopt:
+    """``get_or_adopt`` is the ``session/load`` seam: an id the store never issued, registered over its history."""
+
+    async def test_adopt_registers_under_the_stream_id_hex(self) -> None:
+        store = SessionStore()
+        stream_id = uuid4()
+
+        session, adopted = await store.get_or_adopt(stream_id, cwd="/work")
+
+        assert adopted is True
+        assert (session.session_id, session.stream_id, session.cwd) == (stream_id.hex, stream_id, "/work")
+        assert await store.get(stream_id.hex) is session
+
+    async def test_adopting_a_live_id_returns_the_existing_session_untouched(self) -> None:
+        store = SessionStore()
+        live = await store.create(cwd="/original")
+
+        session, adopted = await store.get_or_adopt(live.stream_id, cwd="/other")
+
+        assert session is live
+        assert adopted is False
+        assert live.cwd == "/original"  # context seeds an adopted session only
+
+    async def test_an_adopted_session_reads_the_history_written_under_its_stream_id(self) -> None:
+        """Two stores, one storage: what the first wrote, the second finds by id alone."""
+        storage = MemoryStorage()
+        first_store = SessionStore(storage=storage, retain_history=True)
+        original = await first_store.create()
+        await first_store.stream(original).history.replace([ModelMessage("from before")])
+        await first_store.aclose()
+
+        second_store = SessionStore(storage=storage)
+        adopted, _ = await second_store.get_or_adopt(original.stream_id)
+
+        assert [e.content for e in await second_store.stream(adopted).history.get_events()] == ["from before"]
+
+    async def test_adopt_respects_the_cap(self) -> None:
+        store = SessionStore(max_sessions=1)
+        busy = await store.create()
+        started = asyncio.Event()
+
+        async def hold() -> None:
+            async with busy.turn():
+                started.set()
+                await asyncio.Event().wait()
+
+        task = asyncio.create_task(hold())
+        busy.turn_task = task
+        await started.wait()
+
+        with pytest.raises(SessionLimitError):
+            await store.get_or_adopt(uuid4())
+        task.cancel()
+
+    async def test_adopt_evicts_an_idle_session_to_make_room(self) -> None:
+        store = SessionStore(max_sessions=1)
+        idle = await store.create()
+
+        adopted, _ = await store.get_or_adopt(uuid4())
+
+        assert await store.get(adopted.session_id) is adopted
+        with pytest.raises(UnknownSessionError):
+            await store.get(idle.session_id)
+
+    async def test_an_adopted_session_starts_idle(self) -> None:
+        store = SessionStore()
+
+        session, _ = await store.get_or_adopt(uuid4())
+
+        assert session.is_idle
+
+    async def test_forget_unregisters_without_touching_history(self) -> None:
+        """Undoing a refused adoption must leave the conversation as it was found."""
+        store = SessionStore()
+        session, _ = await store.get_or_adopt(uuid4())
+        await store.stream(session).history.replace([ModelMessage("not ours to delete")])
+
+        await store.forget(session.session_id)
+
+        with pytest.raises(UnknownSessionError):
+            await store.get(session.session_id)
+        assert [e.content for e in await store.stream(session).history.get_events()] == ["not ours to delete"]
+        await store.forget("never-issued")  # nothing to undo is not an error
 
 
 @pytest.mark.asyncio

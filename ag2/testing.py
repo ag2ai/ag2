@@ -3,14 +3,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 from unittest.mock import MagicMock
 
 from typing_extensions import Self
 
 from ag2 import Context
 from ag2.config import LLMClient, ModelConfig, ModelProvider
-from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, ToolErrorEvent
+from ag2.events import (
+    BaseEvent,
+    BuiltinToolCallEvent,
+    ModelMessage,
+    ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolErrorEvent,
+)
 
 if TYPE_CHECKING:
     from ag2.files.protocol import FilesClient
@@ -18,14 +26,32 @@ if TYPE_CHECKING:
 __all__ = (
     "TestConfig",
     "TrackingConfig",
+    "Turn",
 )
+
+Turn: TypeAlias = "str | ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | BaseEvent | BaseException"
+"""One scripted LLM turn.
+
+* ``str`` — the model replies with that text.
+* ``ToolCallEvent`` (or an iterable of them) — the model calls tools.
+* ``ModelResponse`` — the response, spelled out in full.
+* ``BaseException`` — the call fails with it, the way a provider client would.
+* any other ``BaseEvent`` — published to the stream *during* the turn, exactly as
+  a provider client streams chunks or reasoning, then the script is read on for
+  whatever ends the turn.
+"""
 
 
 class TestClient(LLMClient):
     __test__ = False
 
-    def __init__(self, *events: str | ModelResponse | ToolCallEvent | Iterable[ToolCallEvent]) -> None:
+    def __init__(
+        self,
+        *events: "Turn",
+        raise_tool_errors: bool = True,
+    ) -> None:
         self.events = iter(events)
+        self.raise_tool_errors = raise_tool_errors
 
     async def __call__(
         self,
@@ -33,24 +59,39 @@ class TestClient(LLMClient):
         context: Context,
         **kwargs: Any,
     ) -> ModelResponse:
-        for m in messages:
-            if isinstance(m, ToolErrorEvent):
-                raise m.error
+        if self.raise_tool_errors:
+            for m in messages:
+                if isinstance(m, ToolErrorEvent):
+                    raise m.error
 
-        next_msg = next(self.events)
+        while True:
+            scripted = next(self.events)
 
-        if isinstance(next_msg, str):
-            message = ModelMessage(next_msg)
-            await context.send(message)
-            next_msg = ModelResponse(message)
+            if isinstance(scripted, BaseException):
+                raise scripted
 
-        elif isinstance(next_msg, Iterable):
-            next_msg = ModelResponse(tool_calls=ToolCallsEvent(list(next_msg)))
+            if isinstance(scripted, str):
+                message = ModelMessage(scripted)
+                await context.send(message)
+                return ModelResponse(message)
 
-        elif isinstance(next_msg, ToolCallEvent):
-            next_msg = ModelResponse(tool_calls=ToolCallsEvent([next_msg]))
+            if isinstance(scripted, ModelResponse):
+                return scripted
 
-        return next_msg
+            # A builtin call is not a request for the agent to run a tool: the
+            # provider ran it, and the client only publishes it. It falls through
+            # to the branch below.
+            if isinstance(scripted, ToolCallEvent) and not isinstance(scripted, BuiltinToolCallEvent):
+                return ModelResponse(tool_calls=ToolCallsEvent([scripted]))
+
+            if isinstance(scripted, BaseEvent):
+                # Anything else a provider publishes mid-turn — a streamed chunk,
+                # reasoning, server-side tool activity. It does not end the turn,
+                # so keep reading the script for what does.
+                await context.send(scripted)
+                continue
+
+            return ModelResponse(tool_calls=ToolCallsEvent(list(scripted)))
 
 
 class TrackingClient(LLMClient):
@@ -96,13 +137,30 @@ class TestConfig(ModelConfig):
 
     def __init__(
         self,
-        *events: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
+        *events: "Turn",
         provider: ModelProvider | None = None,
         model: str | None = None,
+        raise_tool_errors: bool = True,
     ) -> None:
+        """Script the LLM, one :data:`Turn` per positional event.
+
+        Events that only *publish* (chunks, reasoning, builtin tool activity) do
+        not consume a turn — they are sent to the stream and the next scripted
+        event is read straight away, so a single turn can stream and then fail::
+
+            TestConfig(ModelMessageChunk("Tok"), TimeoutError("dropped"), "Recovered")
+
+        ``raise_tool_errors`` (default ``True``) re-raises any ``ToolErrorEvent``
+        it finds in the history, which is the convenient way to assert that a
+        tool blew up. Set it to ``False`` to model a *real* provider, which is
+        handed a failed tool call as an ordinary result and carries on: a test
+        asserting that something **ends the turn** needs that, or it is
+        asserting this double's behaviour rather than the agent's.
+        """
         self.events = events
         self._provider = provider
         self._model = model
+        self._raise_tool_errors = raise_tool_errors
 
     @property
     def provider(self) -> ModelProvider:
@@ -120,7 +178,7 @@ class TestConfig(ModelConfig):
         return self
 
     def create(self) -> TestClient:
-        return TestClient(*self.events)
+        return TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
 
     def create_files_client(self) -> "FilesClient":
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

@@ -138,8 +138,11 @@ class SkillsToolkit(Toolkit):
         name_type = self._name_annotation("Skill name returned by list_skills.")
 
         @tool(name=name, description=description, middleware=middleware)
-        def _load_skill(name: name_type) -> str:  # type: ignore[valid-type]
-            return _route_read(self._runtimes, name)
+        async def _load_skill(
+            name: name_type,  # type: ignore[valid-type]
+            ctx: Context,  # injected; absent from the tool schema
+        ) -> str:
+            return await _route_read(self._runtimes, name, ctx)
 
         return _load_skill
 
@@ -202,10 +205,10 @@ class SkillsToolkit(Toolkit):
         return _run_skill_script
 
 
-def _route_read(runtimes: Sequence[SkillRuntime], name: str) -> str:
+async def _route_read(runtimes: Sequence[SkillRuntime], name: str, context: ConversationContext) -> str:
     for runtime in reversed(runtimes):
         try:
-            return runtime.read(name)
+            return await runtime.read(name, context)
         except SkillNotFoundError:
             continue
     raise SkillNotFoundError(f"Skill {name!r} not found in any runtime")

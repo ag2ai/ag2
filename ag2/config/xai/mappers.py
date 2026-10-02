@@ -14,7 +14,6 @@ from xai_sdk.chat import (
 )
 from xai_sdk.chat import (
     assistant,
-    chat_pb2,
     system,
     tool_result,
     user,
@@ -31,7 +30,7 @@ from xai_sdk.chat import (
 from xai_sdk.chat import (
     tool as xai_tool,
 )
-from xai_sdk.proto import usage_pb2
+from xai_sdk.proto import chat_pb2, usage_pb2
 
 from ag2.compact import CompactionSummary
 from ag2.events import (
@@ -48,7 +47,7 @@ from ag2.events import (
     UrlInput,
     Usage,
 )
-from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.exceptions import BlockedToolsUnsupportedError, UnsupportedInputError, UnsupportedToolError
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
@@ -168,6 +167,9 @@ def tool_to_api(t: ToolSchema) -> chat_pb2.Tool:
         return xai_tools.code_execution()
 
     if isinstance(t, MCPServerToolSchema):
+        if t.blocked_tools is not None:
+            raise BlockedToolsUnsupportedError("xAI", t.server_label)
+
         kwargs = {"server_url": t.server_url}
         if t.server_label is not None:
             kwargs["server_label"] = t.server_label
@@ -175,14 +177,14 @@ def tool_to_api(t: ToolSchema) -> chat_pb2.Tool:
             kwargs["server_description"] = t.description
         if t.allowed_tools is not None:
             kwargs["allowed_tool_names"] = t.allowed_tools
-        if t.authorization_token is not None:
-            kwargs["authorization"] = f"Bearer {t.authorization_token}"
-        elif t.headers is not None and "Authorization" in t.headers:
-            kwargs["authorization"] = t.headers["Authorization"]
-        if t.headers is not None:
-            extra = {k: v for k, v in t.headers.items() if k != "Authorization"}
-            if extra:
-                kwargs["extra_headers"] = extra
+        extra: dict[str, str] = {}
+        for key, value in t.http_headers().items():
+            if key.lower() == "authorization":
+                kwargs["authorization"] = value
+            else:
+                extra[key] = value
+        if extra:
+            kwargs["extra_headers"] = extra
         return xai_tools.mcp(**kwargs)
 
     raise UnsupportedToolError(t.type, PROVIDER)

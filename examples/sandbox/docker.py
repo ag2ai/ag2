@@ -9,7 +9,7 @@ env = DockerEnvironment(image="python:3.12-slim")
 
 agent = Agent(
     name="claude",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
     tools=[SandboxShellTool(env), SandboxCodeTool(env)],
 )
 

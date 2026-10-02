@@ -57,6 +57,19 @@ class DrainedModelRequest(ModelRequest):
     """
 
 
+class MessageEnqueued(BaseEvent):
+    """Announces that ``context.enqueue`` added a message to the stream's inbox.
+
+    Published from a background task one event-loop tick after the append, so
+    a consumer that does not poll the inbox — a live session between two
+    responses — knows to drain it. The agent loop ignores it: it drains the
+    inbox before each model call. ``Stream.enqueue`` has no context to publish
+    with and announces nothing.
+    """
+
+    __transient__ = True
+
+
 class DataInput(Input):
     """Data input event sent to the model."""
 

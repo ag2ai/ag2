@@ -16,6 +16,8 @@ so reference-based scorers like ``final_answer_matches`` work against a
 reconstructed trace. ``reference_outputs``
 come from the paired :class:`~ag2.eval.Suite` task (via
 ``TraceRef.task_id``); traces with no paired task are graded reference-free.
+The reverse — a suite task with no trace — is governed by ``on_missing_task``
+and counts as an error by default.
 """
 
 import asyncio
@@ -26,14 +28,14 @@ import time
 from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime, timezone
 from functools import partial
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from ag2.context import ConversationContext
 from ag2.events import ModelResponse
 from ag2.stream import Stream
 
-from .._types import Feedback
+from .._types import Feedback, MissingTraceError
 from ..dataset import Suite, Task
 from ..events import EvalCompleted, EvalStarted, TaskEvaluated
 from ..results import BudgetThresholds, RunResult, TaskResult
@@ -45,6 +47,9 @@ from ._settle import reraise_if_not_exception
 __all__ = ("evaluate_traces",)
 
 logger = logging.getLogger(__name__)
+
+OnMissingTask = Literal["error", "ignore", "raise"]
+"""What to do with a suite task the source has no trace for."""
 
 
 async def evaluate_traces(
@@ -58,6 +63,7 @@ async def evaluate_traces(
     run_id: str | None = None,
     label: str | None = None,
     stream: Stream | None = None,
+    on_missing_task: OnMissingTask = "error",
 ) -> RunResult:
     """Grade every trace from ``source`` and persist a :class:`RunResult`.
 
@@ -78,6 +84,15 @@ async def evaluate_traces(
         stream: Optional :class:`~ag2.stream.Stream` to publish eval
             lifecycle events to (``EvalStarted`` / ``TaskEvaluated`` /
             ``EvalCompleted``) — observe a grading pass like you observe an agent.
+        on_missing_task: How to treat a ``suite`` task that no ``TraceRef``
+            carries the ``task_id`` of. ``"error"`` (default) grades it with an
+            empty :class:`~ag2.eval.Trace` carrying a
+            :class:`~ag2.eval.MissingTraceError`, so it counts in
+            ``aggregates.errors`` and in the pass-rate denominator; ``"ignore"``
+            leaves it out of the result and logs a warning; ``"raise"`` raises
+            :class:`~ag2.eval.MissingTraceError` before anything is graded.
+            Ignored when ``suite`` is ``None``. Missing tasks are appended in
+            suite order after the graded traces.
     """
     started = time.perf_counter()
     return await _grade(
@@ -92,6 +107,7 @@ async def evaluate_traces(
         stream=stream,
         target_path=f"trace-source:{type(source).__name__}",
         started_at=started,
+        on_missing_task=on_missing_task,
     )
 
 
@@ -109,6 +125,7 @@ async def _grade(
     target_path: str,
     started_at: float,
     variant: str | None = None,
+    on_missing_task: OnMissingTask = "error",
 ) -> RunResult:
     """Grade every trace from ``source`` into a persisted :class:`RunResult`.
 
@@ -118,11 +135,14 @@ async def _grade(
     when ``stream`` is set — publishes the lifecycle events. ``target_path`` records
     provenance (the agent for ``run_agent``; the trace source for ``evaluate_traces``);
     ``started_at`` is the caller's ``perf_counter`` start so the run-level duration
-    spans the caller's whole operation.
+    spans the caller's whole operation. ``on_missing_task`` decides what a suite task
+    with no matching ref becomes; missing tasks are graded after the refs, in suite order.
     """
     refs = [ref async for ref in source.list()]
     tasks_by_id = {task.task_id: task for task in suite} if suite is not None else {}
     resolved_suite = suite if suite is not None else _suite_from_refs(refs)
+    missing = _uncovered_tasks(suite, refs, on_missing_task)
+    missing_refs = [TraceRef(trace_id=f"missing:{task.task_id}", task_id=task.task_id) for task in missing]
     semaphore = asyncio.Semaphore(max(1, concurrency))
 
     actual_run_id = run_id if run_id is not None else uuid4().hex
@@ -132,7 +152,7 @@ async def _grade(
         eval_ctx = ConversationContext(stream=stream) if stream is not None else None
 
         await eval_ctx.send(
-            EvalStarted(run_id=actual_run_id, label=label, suite=resolved_suite.name, total=len(refs)),
+            EvalStarted(run_id=actual_run_id, label=label, suite=resolved_suite.name, total=len(refs) + len(missing)),
         )
 
         on_result = partial(_publish_task_evaluated, eval_ctx, actual_run_id, label, variant)
@@ -146,9 +166,13 @@ async def _grade(
         )
         for ref in refs
     ]
+    coros += [
+        _evaluate_missing(semaphore, task, ref, scorers=scorers, budgets=budgets, on_result=on_result)
+        for task, ref in zip(missing, missing_refs)
+    ]
     gathered = await asyncio.gather(*coros, return_exceptions=True)
     task_results: list[TaskResult] = []
-    for ref, outcome in zip(refs, gathered):
+    for ref, outcome in zip(refs + missing_refs, gathered):
         if isinstance(outcome, BaseException):
             reraise_if_not_exception(outcome)
             logger.error("eval ref failed: %s", getattr(ref, "task_id", ref), exc_info=outcome)
@@ -179,6 +203,26 @@ async def _grade(
     return result
 
 
+def _uncovered_tasks(suite: Suite | None, refs: list[TraceRef], on_missing_task: OnMissingTask) -> list[Task]:
+    """Suite tasks no ref carries the ``task_id`` of, per ``on_missing_task``.
+
+    Empty for ``"ignore"`` (warned instead) and when no suite was given.
+    """
+    if suite is None:
+        return []
+    covered = {ref.task_id for ref in refs}
+    missing = [task for task in suite if task.task_id not in covered]
+    if not missing:
+        return []
+    task_ids = [task.task_id for task in missing]
+    if on_missing_task == "raise":
+        raise MissingTraceError(task_ids)
+    if on_missing_task == "ignore":
+        logger.warning("%d suite task(s) have no trace and were not graded: %s", len(task_ids), task_ids)
+        return []
+    return missing
+
+
 def _error_task_result(ref: TraceRef, exc: BaseException) -> TaskResult:
     """Build a failed :class:`TaskResult` when ``_evaluate_ref`` raises.
 
@@ -206,27 +250,54 @@ async def _evaluate_ref(
         task = tasks_by_id.get(ref.task_id) if ref.task_id is not None else None
         if task is None:
             task = Task(task_id=ref.task_id or ref.trace_id, inputs={}, reference_outputs=None)
+        return await _score(task, trace, ref, scorers=scorers, budgets=budgets, on_result=on_result)
 
-        outputs = _outputs_from_trace(trace)
-        feedback: list[Feedback] = []
-        for scorer in scorers:
-            feedback.extend(
-                await scorer(
-                    inputs=task.inputs,
-                    outputs=outputs,
-                    reference_outputs=task.reference_outputs,
-                    trace=trace,
-                    task=task,
-                )
+
+async def _evaluate_missing(
+    semaphore: asyncio.Semaphore,
+    task: Task,
+    ref: TraceRef,
+    *,
+    scorers: tuple[Scorer, ...],
+    budgets: BudgetThresholds | None,
+    on_result: Callable[[Task, TaskResult], Awaitable[None]] | None = None,
+) -> TaskResult:
+    """Grade a suite task with no trace, through the same scorer path as a ref."""
+    async with semaphore:
+        trace = Trace(events=(), exception=MissingTraceError(task.task_id), duration_ms=0)
+        return await _score(task, trace, ref, scorers=scorers, budgets=budgets, on_result=on_result)
+
+
+async def _score(
+    task: Task,
+    trace: Trace,
+    ref: TraceRef,
+    *,
+    scorers: tuple[Scorer, ...],
+    budgets: BudgetThresholds | None,
+    on_result: Callable[[Task, TaskResult], Awaitable[None]] | None,
+) -> TaskResult:
+    """Run every scorer over one ``(task, trace)`` pair and build its :class:`TaskResult`."""
+    outputs = _outputs_from_trace(trace)
+    feedback: list[Feedback] = []
+    for scorer in scorers:
+        feedback.extend(
+            await scorer(
+                inputs=task.inputs,
+                outputs=outputs,
+                reference_outputs=task.reference_outputs,
+                trace=trace,
+                task=task,
             )
-
-        budget_violation = budgets.exceeded_by(trace) if budgets is not None else False
-        result = TaskResult(
-            task=task, trace=trace, feedback=tuple(feedback), budget_violation=budget_violation, trace_ref=ref
         )
-        if on_result is not None:
-            await on_result(task, result)
-        return result
+
+    budget_violation = budgets.exceeded_by(trace) if budgets is not None else False
+    result = TaskResult(
+        task=task, trace=trace, feedback=tuple(feedback), budget_violation=budget_violation, trace_ref=ref
+    )
+    if on_result is not None:
+        await on_result(task, result)
+    return result
 
 
 async def _publish_task_evaluated(

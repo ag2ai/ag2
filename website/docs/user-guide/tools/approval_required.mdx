@@ -50,8 +50,30 @@ Y/N?
 
 Typing **y** lets the tool run. Any other input denies it — the agent receives the denied message and can adjust.
 
+With `allow_always=True` (the default), typing **always** approves this call and every later call of the same tool in this agent's conversation. The answer belongs to the tool that was asked about, identified by its implementation (the Python function, or the MCP server and its tool name), not by its name alone: another tool with the same name is still asked about, even behind the same `#!python approval_required()` hook. The answer survives a restart as long as the conversation's variables do. It does not carry across [sub-task delegation](/docs/user-guide/subagents) in either direction: a sub-task asks again, and its "always" does not reach the parent.
+
 !!! note
-    `approval_required()` relies on the agent's `#!python hitl_hook` to collect user input. If no `hitl_hook` is configured, `#!python context.input()` will raise an error at runtime. Read more about [Human in the Loop](/docs/user-guide/context/human_in_the_loop) to learn how to configure a HITL hook.
+    `approval_required()` relies on the agent's `#!python hitl_hook` to collect user input. With no `#!python hitl_hook` configured there is nobody to ask, so `#!python context.input()` raises `#!python HumanInputNotProvidedError` and **the turn ends** — the gated tool does not run, and the model is not handed a tool failure it could route around. Read more about [Human in the Loop](/docs/user-guide/context/human_in_the_loop) to learn how to configure a HITL hook.
+
+    An agent **served over AG-UI** is the exception: with no hook, the call is put to the connected client as an interrupt instead of ending the turn, and the client approves or refuses it. See [Gating a tool call](/docs/user-guide/ag-ui/overview#gating-a-tool-call-instead-of-asking-a-question).
+
+## Waiting for the answer
+
+By default `approval_required()` waits as long as the human takes. An approval is a question for a person, so the deadline is yours to set:
+
+```python linenums="1" hl_lines="2"
+@tool(
+    middleware=[approval_required(timeout=120)],
+)
+def delete_account(user_id: str) -> str:
+    """Deletes a user account by ID permanently."""
+    return f"Account {user_id} deleted."
+```
+
+When the timeout expires the turn ends with `#!python HumanInputTimeoutError` and the gated tool does not run — an unanswered approval is not an approval. A late answer arriving after the deadline does not release it either.
+
+!!! warning "`timeout` used to be `30` and used to do nothing"
+    Before AG2 fixed the human-input channel, `timeout` never fired: the hook ran inline, so the clock only started once it had already returned. It now binds, and the default changed from `30` to `None` (wait indefinitely) so that turning the parameter on does not silently start failing turns whenever a human takes over half a minute to read a prompt.
 
 ## Inspecting the configuration
 
@@ -65,6 +87,14 @@ approval_required(timeout=5, allow_always=False).describe().config
 ```
 
 Approval state (which tools the user answered "always" for) lives in `#!python context.variables`, not on the instance, so it never appears in the description. See [Describing middleware](/docs/user-guide/middleware#describing-middleware).
+
+!!! note "Only your human writes it"
+
+    The "always" answer is stored under a reserved `ag:` variable key. When the agent is
+    served over a protocol that syncs variables with a peer — A2A, NLIP, A2UI, AG-UI —
+    reserved keys are stripped from the payload in both directions, so a remote caller
+    can neither pre-approve a gated tool nor read what your human approved. See
+    [Variables over a protocol connection](/docs/user-guide/context/variables#variables-over-a-protocol-connection).
 
 ## Customizing the prompt
 

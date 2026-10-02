@@ -137,6 +137,10 @@ reply = await agent.ask(
 stars = await reply.content()
 ```
 
+!!! tip "Decision models"
+
+    On `TypeSafeConfig` the response schema is not a format hint but the question itself: `bool`, an `Enum` or an `IntEnum` rubric is put to the Jev decision model, which answers with a confidence and per-option probabilities instead of text. See [TypeSafe (Jev) Configuration](/docs/user-guide/model_configuration#typesafe-jev-configuration).
+
 ---
 
 ## Supported schema types

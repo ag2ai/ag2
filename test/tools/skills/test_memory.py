@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Annotated
 
@@ -10,9 +11,12 @@ import pytest
 from pydantic import ValidationError
 
 from ag2 import Agent, Context, Depends, Variable
+from ag2.context import ConversationContext
 from ag2.events import ToolCallEvent, ToolResultsEvent
-from ag2.exceptions import ToolNotFoundError
+from ag2.exceptions import SkillError, SkillNotFoundError, ToolNotFoundError
+from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.final.function_tool import FunctionTool
 from ag2.tools.skills import MemoryRuntime, MemorySkill, SkillPlugin
 
 
@@ -46,6 +50,120 @@ class TestCatalog:
         await agent.ask("hi")
 
         assert "Say hello warmly." in _tool_result(tracking)
+
+
+@pytest.mark.asyncio
+class TestDynamicInstructions:
+    async def test_callable_body_renders_against_the_live_run(self) -> None:
+        # The whole point of an async, context-aware read: the body is produced
+        # per read and resolves dependencies like a resource or a script does.
+        async def body(region: Annotated[str, Variable("region")]) -> str:
+            return f"Deploy to {region}."
+
+        skill = MemorySkill(name="deploy", description="d", instructions=body)
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="deploy"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi", variables={"region": "eu-west-1"})
+
+        assert "Deploy to eu-west-1." in _tool_result(tracking)
+
+    async def test_decorator_registers_the_body(self) -> None:
+        skill = MemorySkill(name="greeter", description="d")
+
+        @skill.instructions
+        def body() -> str:
+            return "Decorated body."
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="greeter"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        assert "Decorated body." in _tool_result(tracking)
+
+    async def test_decorator_overrides_constructor_instructions(self) -> None:
+        skill = MemorySkill(name="s", description="d", instructions="static body")
+
+        @skill.instructions
+        def body() -> str:
+            return "dynamic body"
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        content = _tool_result(tracking)
+        assert "dynamic body" in content
+        assert "static body" not in content
+
+    async def test_body_is_rendered_on_every_read(self) -> None:
+        calls = 0
+
+        def body() -> str:
+            nonlocal calls
+            calls += 1
+            return f"read #{calls}"
+
+        skill = MemorySkill(name="s", description="d", instructions=body)
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), _call("load_skill", name="s"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        assert "read #1" in _tool_result(tracking, 1)
+        assert "read #2" in _tool_result(tracking, 2)
+
+    async def test_callable_body_keeps_resource_and_script_blocks(self) -> None:
+        skill = MemorySkill(name="s", description="d", instructions=lambda: "dynamic body")
+
+        @skill.resource
+        def roster() -> str:
+            return "Alice"
+
+        @skill.script
+        def go(text: str) -> str:
+            """Do the thing."""
+            return text
+
+        tracking = TrackingConfig(TestConfig(_call("load_skill", name="s"), "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        content = _tool_result(tracking)
+        assert "dynamic body" in content
+        assert "<file>roster</file>" in content
+        assert '<script name="go" description="Do the thing.">' in content
+
+
+class TestInstructionsRegistration:
+    # Registration is pure bookkeeping on the skill — no agent needed.
+    def test_decorator_returns_the_function_unchanged(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.instructions
+        def body() -> str:
+            return "text"
+
+        assert body() == "text"
+
+    def test_called_decorator_form_registers(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.instructions()
+        def body() -> str:
+            return "text"
+
+        assert isinstance(skill.get_instructions(), FunctionTool)
+
+    # ``None`` is the decorator's "no argument yet" marker, so the constructor must
+    # not route through it — that would store no body and fail only at load_skill.
+    @pytest.mark.parametrize("value", [42, None])
+    def test_non_string_non_callable_rejected(self, value: object) -> None:
+        with pytest.raises(TypeError, match="must be a string or a callable"):
+            MemorySkill(name="s", description="d", instructions=value)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -344,6 +462,52 @@ class TestComposition:
 
         with pytest.raises(ToolNotFoundError, match="read_skill_resource"):
             await agent.ask("hi")
+
+
+@pytest.mark.asyncio
+class TestCallableRaisesSkillNotFound:
+    # SkillNotFoundError is the toolkit chain's "this runtime does not own the
+    # skill" signal, so one raised by a user callable must not look like one.
+    @pytest.mark.parametrize(
+        ("part", "read"),
+        [
+            ("the body", lambda rt, ctx: rt.read("s", ctx)),
+            ("resource 'res'", lambda rt, ctx: rt.read_resource("s", "res", ctx)),
+            ("script 'run'", lambda rt, ctx: rt.execute("s", "run", ctx)),
+        ],
+    )
+    async def test_re_raised_as_skill_error(
+        self, part: str, read: Callable[[MemoryRuntime, ConversationContext], Awaitable[str]]
+    ) -> None:
+        def raiser() -> str:
+            raise SkillNotFoundError("the callable's own lookup failed")
+
+        skill = MemorySkill(name="s", description="d", instructions=raiser)
+        skill.resource(name="res")(raiser)
+        skill.script(name="run")(raiser)
+
+        with pytest.raises(SkillError) as exc_info:
+            await read(MemoryRuntime(skill), ConversationContext(stream=MemoryStream()))
+
+        assert not isinstance(exc_info.value, SkillNotFoundError)
+        assert isinstance(exc_info.value.__cause__, SkillNotFoundError)
+        assert f"{part} of skill 's'" in str(exc_info.value)
+
+    async def test_chain_reports_the_body_not_a_routing_miss(self) -> None:
+        # Routing tries the last runtime first, so the failing body is reached
+        # only after a genuine miss — the shape that used to swallow it.
+        def raiser() -> str:
+            raise SkillNotFoundError("the body's own lookup failed")
+
+        broken = MemorySkill(name="broken", description="d", instructions=raiser)
+        other = MemorySkill(name="other", description="d", instructions="fine")
+        config = TestConfig(_call("load_skill", name="broken"), "done")
+        agent = Agent("a", config=config, plugins=[SkillPlugin(MemoryRuntime(broken), MemoryRuntime(other))])
+
+        with pytest.raises(SkillError, match="the body of skill 'broken'") as exc_info:
+            await agent.ask("hi")
+
+        assert "not found in any runtime" not in str(exc_info.value)
 
 
 class TestMemoryRuntimeReadOnly:

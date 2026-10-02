@@ -3,21 +3,25 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import threading
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path, PurePosixPath
+from unittest.mock import patch
 
 import pytest
 from dirty_equals import IsPartialDict
 
 from ag2 import Context, TextInput
 from ag2.events import ToolCallEvent, ToolErrorEvent
+from ag2.exceptions import SkillNotFoundError
 from ag2.tools import SkillsToolkit
 from ag2.tools.sandbox import ExecResult, Sandbox
 from ag2.tools.sandbox.adapter import ShellAdapter
 from ag2.tools.sandbox.local import LocalSandbox
-from ag2.tools.skills import LocalRuntime
+from ag2.tools.skills import LocalRuntime, MemoryRuntime, MemorySkill
+from ag2.tools.skills.runtime.local.loader import SkillLoader
 
 
 def _write_script_skill(base: Path, name: str, script_body: str | None = None) -> Path:
@@ -92,6 +96,63 @@ async def test_run_skill_script_executes_nested_script(tmp_path: Path, context: 
 
 
 @pytest.mark.asyncio
+async def test_run_script_routes_named_args_to_memory_runtime(tmp_path: Path, context: Context) -> None:
+    skill = MemorySkill(name="calc", description="Double a number")
+
+    @skill.script
+    def double(value: int) -> str:
+        return str(2 * value)
+
+    run_tool = SkillsToolkit(MemoryRuntime(skill), LocalRuntime(dir=tmp_path)).run_skill_script()
+    args = json.dumps({"name": "calc", "script": "double", "args": {"value": 2}})
+
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    assert result.result.parts == [TextInput(content="4")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("script_args", [None, [], {}, {"value": 2}])
+async def test_run_script_unknown_skill(tmp_path: Path, context: Context, script_args: object) -> None:
+    # Empty catalogs leave the name unconstrained, so the call reaches routing.
+    run_tool = SkillsToolkit(MemoryRuntime(), LocalRuntime(dir=tmp_path)).run_skill_script()
+    args = json.dumps({"name": "missing", "script": "double", "args": script_args})
+
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert isinstance(result, ToolErrorEvent)
+    assert isinstance(result.error, SkillNotFoundError)
+    assert "Skill 'missing' not found in any runtime" in str(result.error)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("script_body", ["echo LOCAL\n", None])
+@pytest.mark.parametrize("script_args", [{}, {"value": 2}])
+async def test_local_script_rejects_named_args_without_falling_through(
+    tmp_path: Path, context: Context, script_body: str | None, script_args: dict[str, int]
+) -> None:
+    local = _write_script_skill(tmp_path, "dup", script_body)
+    skill = MemorySkill(name="dup", description="Fallback must not run")
+    calls: list[int] = []
+
+    @skill.script(name="go.sh")
+    def fallback(value: int = 0) -> str:
+        calls.append(value)
+        return "MEMORY"
+
+    run_tool = SkillsToolkit(MemoryRuntime(skill), LocalRuntime(dir=local)).run_skill_script()
+    args = json.dumps({"name": "dup", "script": "go.sh", "args": script_args})
+
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert isinstance(result, ToolErrorEvent)
+    assert isinstance(result.error, TypeError)
+    assert "requires positional string arguments" in str(result.error)
+    assert calls == []
+
+
+@pytest.mark.asyncio
 async def test_missing_script_in_owning_runtime_does_not_fall_through(tmp_path: Path, context: Context) -> None:
     # The last runtime OWNS the skill but lacks the script: that is a genuine
     # error, not SkillNotFoundError, so the chain must NOT fall through and run
@@ -104,6 +165,7 @@ async def test_missing_script_in_owning_runtime_does_not_fall_through(tmp_path: 
     result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
 
     assert isinstance(result, ToolErrorEvent)
+    assert isinstance(result.error, FileNotFoundError)
 
 
 @pytest.mark.asyncio
@@ -186,6 +248,25 @@ async def test_load_skill_wraps_content_with_resources(skill_tree: Path, context
     # Body only: the YAML frontmatter is stripped before wrapping (spec Step 4).
     assert "description: Best practices for React development" not in content
     assert "version: 1.2.0" not in content
+
+
+@pytest.mark.asyncio
+async def test_filesystem_reads_stay_off_the_event_loop(skill_tree: Path, context: Context) -> None:
+    # read/read_resource are async, so their blocking filesystem work — which
+    # includes a full tree scan on a cold discovery cache — must run in a thread.
+    runtime = LocalRuntime(dir=skill_tree)
+    threads: list[int] = []
+    original = SkillLoader.get_skill
+
+    def record(self: SkillLoader, name: str) -> object:
+        threads.append(threading.get_ident())
+        return original(self, name)
+
+    with patch.object(SkillLoader, "get_skill", record):
+        await runtime.read("react-best-practices", context)
+        await runtime.read_resource("react-best-practices", "references/guide.md", context)
+
+    assert threads and all(t != threading.get_ident() for t in threads)
 
 
 @pytest.mark.asyncio

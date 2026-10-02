@@ -190,6 +190,23 @@ class TestDurableHistoryIsDropped:
             assert list(await doomed_store.stream(doomed).history.get_events()) == []
             assert await survivor.stream(kept).history.get_events() != []
 
+    async def test_retained_history_outlives_its_connection(self) -> None:
+        """The opt-in mirror of the first test: with ``retain_history`` the disconnect only releases."""
+        storage = MemoryStorage()
+        server = ACPAgent(
+            Agent("workie", config=TestConfig("answered")),
+            sessions=SessionConfig(storage=storage, retain_history=True),
+        )
+
+        async with connect(server) as (conn, _):
+            session_id = (await conn.new_session(cwd="/tmp")).session_id
+            await conn.prompt(session_id=session_id, prompt=[acp.text_block("hello")])
+            store = server.sessions
+            session = await store.get(session_id)
+
+        assert len(store) == 0
+        assert await store.stream(session).history.get_events() != []
+
 
 @pytest.mark.asyncio
 class TestServeOverStreams:

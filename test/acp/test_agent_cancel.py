@@ -519,6 +519,14 @@ class _ConcurrencyProbeConfig(ModelConfig):
         self.peak = 0
         self.release = asyncio.Event()
 
+    async def wait_until_running(self, n: int, *, timeout: float = 5.0) -> None:
+        """Poll until ``n`` turns are parked; the fixed sleep it replaces raced CI."""
+        deadline = asyncio.get_running_loop().time() + timeout
+        while self.running < n:
+            if asyncio.get_running_loop().time() > deadline:
+                raise TimeoutError(f"only {self.running} of {n} turns parked within {timeout}s")
+            await asyncio.sleep(0.01)
+
     def copy(self) -> Self:
         return self
 
@@ -562,11 +570,13 @@ class TestConnectionWideLimits:
         async with connect(server) as (conn, _):
             ids = [(await conn.new_session(cwd="/tmp")).session_id for _ in range(6)]
             turns = [asyncio.create_task(conn.prompt(session_id=sid, prompt=[acp.text_block("go")])) for sid in ids]
-            await asyncio.sleep(0.1)
+            try:
+                await probe.wait_until_running(3)
+                await asyncio.sleep(0.1)
 
-            assert probe.peak == 3
-
-            probe.release.set()
+                assert probe.peak == 3
+            finally:
+                probe.release.set()
             responses = await asyncio.gather(*turns)
 
         assert [r.stop_reason for r in responses] == ["end_turn"] * 6
@@ -582,11 +592,13 @@ class TestConnectionWideLimits:
         async with connect(server) as (conn, _):
             ids = [(await conn.new_session(cwd="/tmp")).session_id for _ in range(5)]
             turns = [asyncio.create_task(conn.prompt(session_id=sid, prompt=[acp.text_block("go")])) for sid in ids]
-            await asyncio.sleep(0.1)
+            try:
+                await probe.wait_until_running(2)
+                await asyncio.sleep(0.1)
 
-            assert not any(t.done() for t in turns)
-
-            probe.release.set()
+                assert not any(t.done() for t in turns)
+            finally:
+                probe.release.set()
             responses = await asyncio.gather(*turns)
 
         assert all(r.stop_reason == "end_turn" for r in responses)
@@ -601,12 +613,13 @@ class TestConnectionWideLimits:
         async with connect(server) as (conn, _):
             ids = [(await conn.new_session(cwd="/tmp")).session_id for _ in range(5)]
             turns = [asyncio.create_task(conn.prompt(session_id=sid, prompt=[acp.text_block("go")])) for sid in ids[:4]]
-            await asyncio.sleep(0.1)
+            try:
+                await probe.wait_until_running(2)
 
-            with pytest.raises(acp.RequestError):
-                await conn.prompt(session_id=ids[4], prompt=[acp.text_block("go")])
-
-            probe.release.set()
+                with pytest.raises(acp.RequestError):
+                    await conn.prompt(session_id=ids[4], prompt=[acp.text_block("go")])
+            finally:
+                probe.release.set()
             await asyncio.gather(*turns)
 
     async def test_a_slot_frees_up_once_a_turn_finishes(self) -> None:
