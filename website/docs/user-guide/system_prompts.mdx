@@ -92,11 +92,12 @@ reply = await agent.ask(
 
 ## Plugins for one invocation
 
-Pass `plugins=` to `Agent.ask()`, `Agent.run()`, `Agent.resume()`, or a reply's
-`ask()` / `run()` to add capabilities for one call. For example, rebuild a
-`SkillPlugin` to refresh a long-lived agent's catalog and tool schemas:
+Plugins normally attach when an agent is built. Pass `plugins=` to `Agent.ask()`, `Agent.run()`,
+`Agent.resume()`, or a reply's `ask()` / `run()` to add capabilities for one call instead. For
+example, build a fresh [`SkillPlugin`](/docs/user-guide/skills) to refresh a long-lived agent's
+catalog and tool schemas:
 
-```python linenums="1"
+```python linenums="1" hl_lines="8 11 15"
 from ag2 import Agent
 from ag2.config import OpenAIConfig
 from ag2.tools.skills import LocalRuntime, SkillPlugin
@@ -132,11 +133,14 @@ context defaults, and HITL. Their rules are:
 The agent is unchanged, so separate streams can use different plugins concurrently.
 Reusing a `SkillPlugin` preserves its snapshot.
 
-Invocation plugins add to the agent's constructor plugins; they do not replace them.
-A `SkillPlugin` attached to the agent and another passed to `plugins=` render two
-catalogs in the prompt, so attach a refreshed skill catalog in only one place.
-Cleanup of a default compares by identity: if code later assigns the identical object
-to the same key, the value is treated as the plugin's own and removed.
+!!! warning "Invocation plugins add to constructor plugins"
+    They do not replace them. A `SkillPlugin` attached to the agent and another passed to
+    `plugins=` render two catalogs in the prompt, so attach a refreshed skill catalog in
+    only one place.
+
+!!! note
+    Cleanup of a default compares by identity: if code later assigns the identical object
+    to the same key, the value is treated as the plugin's own and removed.
 
 ## Prompt updates
 
