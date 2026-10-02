@@ -120,10 +120,13 @@ class TrackingClient(LLMClient):
         **kwargs: Any,
     ) -> ModelResponse:
         self.mock(messages[-1])
+        tools = tuple(kwargs.get("tools", ()))
+        if "tools" in kwargs:
+            kwargs["tools"] = tools
         self.calls.append(
             ModelCall(
                 prompt=tuple(context.prompt),
-                tools=tuple(kwargs.get("tools", ())),
+                tools=tools,
                 dependencies=dict(context.dependencies),
                 variables=dict(context.variables),
             )
