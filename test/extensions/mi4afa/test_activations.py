@@ -87,6 +87,39 @@ def test_resid_final_is_the_normalized_last_hidden_state(model: Any, tokenizer: 
     torch.testing.assert_close(final, last[0, list(encoding.turn_positions)])
 
 
+@pytest.mark.parametrize(
+    ("sites", "expected"),
+    [
+        ([ActivationSite(0, "mlp_in"), ActivationSite(1, "mlp_in")], False),
+        ([ActivationSite(0, "mlp_in"), ActivationSite(1, "resid_pre")], True),
+        ([ActivationSite(2, "resid_final")], True),
+    ],
+)
+def test_hidden_states_are_requested_only_for_residual_sites(
+    model: Any, tokenizer: Any, sites: list[ActivationSite], expected: bool
+) -> None:
+    requested: list[Any] = []
+    hook = model.get_decoder().register_forward_pre_hook(
+        lambda module, args, kwargs: requested.append(kwargs.get("output_hidden_states")), with_kwargs=True
+    )
+    try:
+        ActivationExtractor(model, tokenizer, sites=sites).extract(make_conversation(3))
+    finally:
+        hook.remove()
+
+    assert requested == [expected]
+
+
+def test_mlp_in_values_do_not_depend_on_the_other_sites(model: Any, tokenizer: Any) -> None:
+    conversation = make_conversation(4)
+    site = ActivationSite(1, "mlp_in")
+
+    alone = ActivationExtractor(model, tokenizer, sites=[site]).extract(conversation)
+    together = ActivationExtractor(model, tokenizer).extract(conversation)
+
+    torch.testing.assert_close(alone.values[0], together.values[together.sites.index(site)])
+
+
 def test_site_subset_and_override(model: Any, tokenizer: Any) -> None:
     only = ActivationSite(1, "mlp_in")
     extractor = ActivationExtractor(model, tokenizer, sites=[only])
