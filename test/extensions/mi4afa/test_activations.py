@@ -6,6 +6,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pytest
+
+pytest.importorskip("torch")
+pytest.importorskip("transformers")
 import torch
 
 from ag2.extensions.mi4afa import ActivationExtractor, ActivationSite, PromptEncoding

@@ -2,16 +2,25 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Offline fixtures: a byte-level BPE tokenizer trained in memory and a tiny random Llama."""
+"""Offline fixtures: a byte-level BPE tokenizer trained in memory and a tiny random Llama.
 
+PyTorch and Transformers are optional. Without them this module still imports, the test modules that need
+them skip themselves with ``pytest.importorskip``, and the trace and missing-dependency tests still run.
+"""
+
+from contextlib import suppress
 from typing import Any
 
 import pytest
-import tokenizers
-import torch
-import transformers
 
 from ag2.extensions.mi4afa import Conversation, Turn
+
+with suppress(ImportError):
+    import tokenizers
+    import transformers
+
+with suppress(ImportError):
+    import torch
 
 CHATML_TEMPLATE = (
     "{% for message in messages %}<|im_start|>{{ message['role'] }}\n{{ message['content'] }}<|im_end|>\n{% endfor %}"

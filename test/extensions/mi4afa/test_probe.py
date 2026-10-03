@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
+pytest.importorskip("torch")
 import torch
 
 from ag2.extensions.mi4afa import LogisticProbe

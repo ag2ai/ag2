@@ -7,6 +7,9 @@ from typing import Any
 
 import pytest
 
+pytest.importorskip("torch")
+pytest.importorskip("transformers")
+
 from ag2.eval import InMemoryTraceSource, Trace, TraceRef, evaluate_traces
 from ag2.eval.dataset.task import Task
 from ag2.eval.scorers import Attribution
