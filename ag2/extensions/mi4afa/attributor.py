@@ -169,6 +169,10 @@ class ProbeAttributor:
 
         Returns:
             The selected site and every site's validation score.
+
+        Raises:
+            ValueError: If a conversation's prompt is longer than the model's context.
+                Leave such conversations out of ``train`` and ``validation``.
         """
         examples = self._examples(train)
         if validation is None:

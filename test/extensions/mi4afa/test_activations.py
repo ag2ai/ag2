@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -12,8 +13,9 @@ pytest.importorskip("transformers")
 import torch
 
 from ag2.extensions.mi4afa import ActivationExtractor, ActivationSite, PromptEncoding
+from ag2.extensions.mi4afa.activations import _context_length
 
-from .conftest import make_conversation
+from .conftest import build_model, make_conversation
 
 
 def _reference(model: Any, encoding: PromptEncoding) -> tuple[tuple[torch.Tensor, ...], dict[int, torch.Tensor]]:
@@ -163,6 +165,27 @@ def test_encoding_must_match_the_conversation(model: Any, tokenizer: Any) -> Non
     encoding = extractor.encode(make_conversation(3))
     with pytest.raises(ValueError, match="3 turn positions"):
         extractor.extract_encoded(make_conversation(2), encoding)
+
+
+def test_a_prompt_at_the_context_length_is_read_and_a_longer_one_is_refused(model: Any, tokenizer: Any) -> None:
+    conversation = make_conversation(3)
+    length = len(ActivationExtractor(model, tokenizer).encode(conversation).input_ids)
+
+    at_limit = ActivationExtractor(build_model(len(tokenizer), max_position_embeddings=length), tokenizer)
+    assert at_limit.extract(conversation).values.shape[1] == 3
+
+    too_long = ActivationExtractor(build_model(len(tokenizer), max_position_embeddings=length - 1), tokenizer)
+    with pytest.raises(ValueError, match=f"the prompt has {length} tokens, more than the {length - 1}"):
+        too_long.extract(conversation)
+
+
+def test_context_length_comes_from_the_text_config_when_declared() -> None:
+    nested = SimpleNamespace(get_text_config=lambda: SimpleNamespace(max_position_embeddings=128))
+
+    assert _context_length(SimpleNamespace(config=nested)) == 128
+    assert _context_length(SimpleNamespace(config=SimpleNamespace(max_position_embeddings=64))) == 64
+    assert _context_length(SimpleNamespace(config=SimpleNamespace())) is None
+    assert _context_length(object()) is None
 
 
 def test_concurrent_extraction_matches_serial(model: Any, tokenizer: Any) -> None:

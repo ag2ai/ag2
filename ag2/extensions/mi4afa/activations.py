@@ -139,11 +139,21 @@ class ActivationExtractor:
 
         Returns:
             The per-turn activations.
+
+        Raises:
+            ValueError: If ``encoding`` does not have one position per turn, or the
+                prompt is longer than the model's context (``max_position_embeddings``).
         """
         if len(encoding.turn_positions) != len(conversation.history):
             raise ValueError(
                 f"encoding has {len(encoding.turn_positions)} turn positions "
                 f"but the conversation has {len(conversation.history)} turns"
+            )
+        limit = _context_length(self.model)
+        if limit is not None and len(encoding.input_ids) > limit:
+            raise ValueError(
+                f"the prompt has {len(encoding.input_ids)} tokens, more than the {limit} the model supports; "
+                "shorten the conversation or use a model with a longer context"
             )
         sites = self.resolve_sites(sites) if sites is not None else self.sites
         with self._lock:
@@ -207,6 +217,16 @@ class ActivationExtractor:
         if layers is None:
             raise TypeError(f"{type(self.model).__name__} has no decoder layers to probe")
         return layers  # type: ignore[no-any-return]
+
+
+def _context_length(model: Any) -> int | None:
+    """The longest sequence the model's config declares (``max_position_embeddings``), or None if it declares none."""
+    config = getattr(model, "config", None)
+    get_text_config = getattr(config, "get_text_config", None)
+    if callable(get_text_config):
+        config = get_text_config()
+    length = getattr(config, "max_position_embeddings", None)
+    return length if isinstance(length, int) and length > 0 else None
 
 
 def _mlp(layer: torch.nn.Module) -> torch.nn.Module:
