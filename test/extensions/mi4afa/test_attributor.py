@@ -17,7 +17,7 @@ from ag2.extensions.mi4afa import (
     ConversationActivations,
     ProbeAttributor,
 )
-from ag2.extensions.mi4afa.attributor import _split
+from ag2.extensions.mi4afa.attributor import _same_agent, _split
 
 from .conftest import make_conversation
 
@@ -88,6 +88,25 @@ def test_evaluate_scores_the_fitted_site() -> None:
     assert score.count == 30
     assert score.step_accuracy > 0.9
     assert score.agent_accuracy >= score.step_accuracy
+
+
+@pytest.mark.parametrize(
+    ("predicted", "labelled", "expected"),
+    [
+        ("Coder", "Coder", True),
+        ("Expert", "Expert_1", True),
+        ("Expert_1", "Expert", True),
+        ("Expert_1", "Expert_1", True),
+        ("Expert_1", "Expert_10", False),
+        ("A", "Assistant", False),
+        ("Assistant", "A", False),
+        ("", "Coder", False),
+        ("Coder", "", False),
+        ("Coder", None, False),
+    ],
+)
+def test_same_agent_ignores_only_a_numbered_suffix(predicted: str, labelled: str | None, expected: bool) -> None:
+    assert _same_agent(predicted, labelled) is expected
 
 
 def test_explicit_validation_set_selects_the_site_and_is_not_trained_on() -> None:
