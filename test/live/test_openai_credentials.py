@@ -154,11 +154,15 @@ def test_client_and_key_conflict(config_class: Any, sdk_clients: SDKClients, key
     assert not client.is_closed()
 
 
-def test_api_key_is_optional_and_keyword_only(config_class: Any, sdk_clients: SDKClients) -> None:
+def test_api_key_is_optional_and_keyword_only(config_class: Any) -> None:
+    # Python 3.14 evaluates annotations lazily, so keep the SDK class unpatched here.
     parameter = inspect.signature(config_class).parameters["api_key"]
     assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
     assert parameter.default is None
     assert parameter.annotation == str | None
+
+
+def test_api_key_rejects_positional_argument(config_class: Any, sdk_clients: SDKClients) -> None:
     with pytest.raises(TypeError):
         config_class("test-model", "test-positional-key")
     assert not sdk_clients.clients
