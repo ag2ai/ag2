@@ -7,6 +7,7 @@
 import json
 import os
 import random
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
@@ -33,6 +34,7 @@ Example: TypeAlias = Conversation | ConversationActivations
 
 _WEIGHTS_FILE = "probe.safetensors"
 _CONFIG_FILE = "probe.json"
+_NUMBERED_SUFFIX = re.compile(r"_\d+$")
 _FORMAT = "ag2.mi4afa.probe"
 _FORMAT_VERSION = 1
 
@@ -381,10 +383,18 @@ def _score(
 
 
 def _same_agent(predicted: str, labelled: str | None) -> bool:
-    """Agent names in Who&When are sometimes suffixed (``Expert`` vs ``Expert_1``), so a prefix match counts."""
-    if labelled is None:
+    """Whether the predicted speaker is the labelled agent.
+
+    Who&When sometimes numbers an agent (``Expert`` vs ``Expert_1``), so a name and the same name with a
+    ``_<digits>`` suffix count as one agent. Any other difference, including an empty name, does not.
+    """
+    if not predicted or not labelled:
         return False
-    return labelled.startswith(predicted) or predicted.startswith(labelled)
+    return (
+        predicted == labelled
+        or _NUMBERED_SUFFIX.sub("", predicted) == labelled
+        or _NUMBERED_SUFFIX.sub("", labelled) == predicted
+    )
 
 
 def _selection_rank(item: tuple[int, SiteScore]) -> tuple[float, float, int]:
