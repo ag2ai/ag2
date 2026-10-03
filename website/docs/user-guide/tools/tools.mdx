@@ -47,6 +47,8 @@ agent = Agent(name="ShippingAssistant", tools=[calculate_shipping_cost])
     agent = Agent(name="WeatherBot", tools=[get_weather])
     ```
 
+`examples/tools/screen_context.py` is the runnable version of a single-purpose search tool: it reads a local history file (nothing leaves the machine), is framed by the agent prompt so the model only searches when the user explicitly asks, and returns each hit labelled `trust=untrusted` with its capture timestamp and source app.
+
 ### Registering Tools via a Decorator
 
 Alternatively, you can register a tool directly with an agent instance using its `@my_agent.tool` decorator.
