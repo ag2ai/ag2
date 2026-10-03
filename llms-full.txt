@@ -1983,6 +1983,58 @@ reply = await agent.ask(
 )
 ```
 
+## Plugins for one invocation
+
+Plugins normally attach when an agent is built. Pass `plugins=` to `Agent.ask()`, `Agent.run()`,
+`Agent.resume()`, or a reply's `ask()` / `run()` to add capabilities for one call instead. For
+example, build a fresh [`SkillPlugin`](skills.md) to refresh a long-lived agent's
+catalog and tool schemas:
+
+```python
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.tools.skills import LocalRuntime, SkillPlugin
+
+runtime = LocalRuntime("./skills")
+agent = Agent("assistant", prompt="You are a helpful assistant.", config=OpenAIConfig(model="gpt-5-mini"))
+
+reply = await agent.ask("Help with my project", plugins=[SkillPlugin(runtime)])
+
+# After changing installed skills, invalidate discovery and build a fresh plugin.
+runtime.invalidate()
+reply = await agent.ask(
+    "Use the newly installed skill",
+    stream=reply.context.stream,
+    plugins=[SkillPlugin(runtime)],
+)
+```
+
+Invocation plugins contribute prompts, tools, middleware, observers, policies,
+context defaults, and HITL. Their rules are:
+
+- Prompt fragments append to the resolved prompt; plugin dynamic hooks run once
+  per call. Explicit `prompt=` still replaces the agent's base and dynamic prompts.
+- Existing context values beat plugin defaults. Later plugins override earlier
+  defaults and same-named tools; explicit `tools=` override plugin tools.
+- Policies follow agent policies in one assembler. HITL uses the explicit call
+  hook, then the agent hook, then the first plugin hook.
+- Scope exit removes the plugin's bound prompt fragments and unreplaced defaults,
+  including failure or cancellation. Prompt updates and reassigned defaults
+  persist. Pass the plugin again for a continuation; constructor plugins remain
+  attached to the agent. Arbitrary side effects of plugin code are not rolled back.
+
+The agent is unchanged, so separate streams can use different plugins concurrently.
+Reusing a `SkillPlugin` preserves its snapshot.
+
+!!! warning "Invocation plugins add to constructor plugins"
+    They do not replace them. A `SkillPlugin` attached to the agent and another passed to
+    `plugins=` render two catalogs in the prompt, so attach a refreshed skill catalog in
+    only one place.
+
+!!! note
+    Cleanup of a default compares by identity: if code later assigns the identical object
+    to the same key, the value is treated as the plugin's own and removed.
+
 ## Prompt updates
 
 For continuous and event-driven prompt updates, you can mutate `context.prompt` dynamically from an event subscriber. This allows you to respond to specific events in the stream and adjust the agent's behavior on the fly during an ongoing conversation. See the [Stream](advanced/stream.md) documentation for more details on this advanced feature.
@@ -2276,7 +2328,7 @@ plugins=[SkillPlugin("./my-skills")]
 So an agent whose skills are pure instructions never sees a `run_skill_script` tool it can't use. When no skills are found at all, the plugin contributes nothing - no catalog and no tools.
 
 !!! tip
-    `SkillPlugin` is a snapshot taken at construction time: the catalog, the `name` constraint, and the gated tools always describe the same set of skills. Rebuild the agent (or the plugin) after installing new skills.
+    `SkillPlugin` is a snapshot taken at construction time: the catalog, the `name` constraint, and the gated tools always describe the same set of skills. Rebuild the agent (or the plugin) after installing new skills, or pass a fresh plugin to a single call with `agent.ask(..., plugins=[SkillPlugin(runtime)])` - see [Plugins for one invocation](system_prompts.md#plugins-for-one-invocation).
 
 ## SkillsToolkit
 
@@ -2336,7 +2388,7 @@ skills = SkillsToolkit(
         "./my-skills",
         extra_paths=["./shared-skills"],   # read-only, also scanned
         timeout=30,                        # per-script timeout (seconds)
-        blocked=["rm -rf"],                # best-effort command blocklist
+        blocked=["rm -rf"],                # command blocklist (matched against argv)
     )
 )
 ```
@@ -5055,7 +5107,7 @@ def math_op(a: int, b: int) -> int:
     Explicitly setting the name and description overrides the automatically generated values.
 
 !!! note
-    An agent exposes one tool per name in a turn. If tools declared in code share a name (the agent's `tools`, toolkits, plugins, or tools passed to `ask()`), the later one replaces the earlier one and a warning names both. For example, `Agent(tools=[toolkit, my_deploy])` uses `my_deploy` instead of the toolkit's `deploy`. Tools a remote peer provides never replace tools declared in code: neither tools an MCP server reports (see [MCP servers](mcp_servers.md)) nor tools a client sends over AG-UI or A2A.
+    An agent exposes one tool per name in a turn. If tools declared in code share a name (the agent's `tools`, toolkits, plugins, plugins passed to `ask()`, or tools passed to `ask()`), the later one replaces the earlier one and a warning names both. For example, `Agent(tools=[toolkit, my_deploy])` uses `my_deploy` instead of the toolkit's `deploy`. Tools a remote peer provides never replace tools declared in code: neither tools an MCP server reports (see [MCP servers](mcp_servers.md)) nor tools a client sends over AG-UI or A2A.
 
 ### Deep Schema Customization with Pydantic
 
@@ -6186,7 +6238,7 @@ if __name__ == "__main__":
 
 ### Rename the tool, or return a schema
 
-The conversational tool takes a required `message` and an optional `context` string prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`. If the agent has a `response_schema`, that schema is advertised verbatim as the tool's `outputSchema` and validated replies come back as `structuredContent`:
+The conversational tool takes a required `message` and an optional `context` string prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`. With an object response schema, validated replies come back as `structuredContent`. For a Pydantic model, the tool's `outputSchema` describes the serialized reply, while the schema used to validate the LLM's response stays unchanged:
 
 ```python
 from pydantic import BaseModel
@@ -6206,6 +6258,8 @@ agent = Agent(
 )
 app = MCPServer(agent, tool_name="forecast")
 ```
+
+Pydantic replies use `model_dump(mode="json")`, respecting each model's `serialize_by_alias` setting, including nested models. For example, `item_id: str = Field(alias="itemId")` accepts `itemId` from the LLM but returns `item_id` by default; enabling alias serialization returns `itemId` instead. The MCP output schema follows the returned keys and serialized field types. The original LLM response remains in text content.
 
 Presentation metadata (`name`, `version`, `title`, `description`, `instructions`, `website_url`, `icons`) is never derived from the agent - `instructions` in particular is client-facing "how to use this server" guidance, not the agent's system prompt. Pass it explicitly when you want it.
 
@@ -6430,7 +6484,7 @@ The handle comes back twice, for two different readers:
 - in a **text content block**, so the model driving the tool can read it and carry it into its next call without any help from the host;
 - in the result's **`_meta`**, under the key `ai.ag2/conversation`, for clients threading it programmatically.
 
-`structuredContent` is deliberately left alone: on this tool it is the agent's response schema and is advertised verbatim as `outputSchema`, which MCP requires structured content to conform to.
+`structuredContent` is reserved for the agent's validated, serialized reply, which must conform to the advertised `outputSchema`. The conversation handle is never mixed into that data.
 
 !!! note "The handle comes back on every reply"
     Both readers get the handle whether or not the caller ever names a conversation, and in both protocol eras - so a handshake-era client that never touches the `conversation` argument still sees the extra content block and `_meta` key. A client that asserts on the exact shape of a reply will notice; one that reads the first text block, or `structuredContent`, will not.
@@ -7027,6 +7081,8 @@ Which is why `__str__` is worth writing: a text-only client gets *"Espresso cup 
 
 Both pydantic models and dataclasses work. This applies to any custom tool, not only a UI-bound one - see [Structured output](serving_mcp.md#structured-output).
 
+For Pydantic models, `outputSchema` describes `model_dump(mode="json")`, including serialized field types and each nested model's `serialize_by_alias` policy. Input-only aliases do not become output keys. An explicit `output_schema=` still takes precedence, and a manually returned `CallToolResult` keeps the content you supplied.
+
 ### Three levels of control
 
 A handler returns whichever of these fits, in increasing order of control:
@@ -7054,7 +7110,7 @@ async def explicit() -> CallToolResult:
 ```
 
 !!! note "The schema follows the annotation, not the value"
-    `outputSchema` is decided once, when the tool is declared. Annotating `-> CallToolResult` is what opts a tool out of an advertised schema; returning one from a handler annotated `-> Item` still advertises `Item`'s schema, and MCP requires your `structuredContent` to conform to it.
+    `outputSchema` is decided once, when the tool is declared. Annotating `-> CallToolResult` is what opts a tool out of an advertised schema; returning one from a handler annotated `-> Item` still advertises `Item`'s schema, and MCP requires your `structuredContent` to conform to it. For a Pydantic model this is its serialization schema. If you assemble a different shape by hand, supply an explicit `output_schema=` or annotate the handler `-> CallToolResult`.
 
 ## Inside the document: `ag2ui`
 
@@ -7938,7 +7994,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
     [Tenki](https://tenki.cloud/) provides managed, isolated cloud sandboxes with a bounded server-side lifetime.
 
     ```bash
-    pip install "ag2[anthropic]" "tenki>=0.5.4,<1"
+    pip install "ag2[anthropic]" "tenki>=1.4.0,<2"
     ```
 
     ```python linenums="1"
@@ -8169,8 +8225,8 @@ sh = SandboxShellTool(
 | :--- | :--- | :--- |
 | `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment` / `TenkiEnvironment`. `None` -> `LocalEnvironment()` |
 | `allowed` | `None` | Whitelist of command prefixes, matched word by word. Setting it switches on [restricted mode](#restricted-mode). `None` -> all commands allowed |
-| `blocked` | `None` | Blacklist of command prefixes. `None` -> nothing blocked |
-| `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"` |
+| `blocked` | `None` | Blacklist of command prefixes, matched word by word against the argv. Setting it switches on [restricted mode](#restricted-mode). `None` -> nothing blocked |
+| `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"`. Setting it switches on [restricted mode](#restricted-mode) |
 | `readonly` | `False` | When `True` and `allowed` is not set, restricts to a built-in list of commands that cannot write files or run programs (`cat`, `ls`, `grep`, ...) in [restricted mode](#restricted-mode) |
 
 ### LocalEnvironment Parameters
@@ -8187,13 +8243,14 @@ sh = SandboxShellTool(
 
 Filtering is applied in this order on every `run_shell_command(command)` call:
 
-1. **`allowed`** - if set, the command must match at least one prefix and use no shell syntax (pipes, redirects, chaining). Otherwise: `"Command not allowed: <cmd>"`.
-2. **`blocked`** - if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
-3. **`ignore`** - literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
-4. **Execute** - the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
+1. **`allowed`** - if set, the command must match at least one prefix. Otherwise: `"Command not allowed: <cmd>"`.
+2. **Shell syntax** - in [restricted mode](#restricted-mode), a command with unquoted pipes, redirects or chaining is rejected.
+3. **`blocked`** - if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
+4. **`ignore`** - literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
+5. **Execute** - the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
 
 !!! note
-    `ignore` checks only literal path tokens in the command string. Paths computed dynamically inside the shell (variable substitution, command substitution, glob expansion) are not inspected.
+    `ignore` checks only the literal path words of the command. Because restricted mode runs no shell, nothing is computed after the check (variables, command substitution and globs are passed on literally). A program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
 
 ## Read-Only Mode
 
@@ -8217,14 +8274,16 @@ For real isolation, use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEn
 
 ## Restricted Mode
 
-Setting `allowed` or `readonly=True` switches on restricted mode. The command is split into words once, the same way a POSIX shell quotes them, and that exact argv is checked and then run **without a shell**. Nothing can expand after the check, so none of these work:
+Setting `allowed`, `blocked`, `ignore` or `readonly=True` switches on restricted mode. The command is split into words once, the same way a POSIX shell quotes them, and that exact argv is checked and then run **without a shell**. Nothing can expand after the check, so none of these work:
 
-- pipes, redirects and chaining (`|`, `>`, `<`, `;`, `&`, `&&`, `||`, newlines), rejected with a clear error;
+- pipes, redirects and chaining (`|`, `>`, `<`, `;`, `&`, `&&`, `||`, newlines), rejected with a clear error unless quoted;
 - globs: `ls *.py` passes `*.py` to `ls` literally, so use `grep -r --include='*.py'` or `ls` instead;
 - variables, `~`, brace expansion and command substitution;
 - shell builtins: `echo` and `pwd` run the programs found on `PATH`.
 
-Without `allowed` and `readonly`, commands run through `sh -c` with full shell syntax.
+Without `allowed`, `blocked`, `ignore` and `readonly`, commands run through `sh -c` with full shell syntax.
+
+`blocked` matches the argv, with the program by its base name, so `rm`, `/bin/rm` and `rm  -rf` are all caught by `blocked=["rm"]`. It cannot stop a program that starts another one (`sh -c`, `env`, `xargs`), so for a hard boundary use `allowed` or an isolated backend.
 
 ## Accessing the Working Directory
 
@@ -9272,8 +9331,10 @@ The tool result is always recorded as a string:
 
 - text results verbatim,
 - structured results (dict, Pydantic model, list) as JSON,
-- binary/image/document parts as a `[binary:<media-type> <size>B]` descriptor,
+- parts given by URL as the URL,
 - multi-part results as the above joined with newlines.
+
+Binary and provider-file parts (inline images, audio, documents) have no text and are omitted.
 
 Results longer than `max_tool_result_chars` (default 8192) end with `...[truncated]` and carry
 `ag2.tool.call.result.truncated`; traces reconstructed by `ag2.eval` expose that flag as
@@ -13680,34 +13741,45 @@ Use AG-UI when you want a reusable UI contract across clients and frameworks.
 
 ## Supported capabilities
 
-Verified AG-UI features are supported in AG2:
+AG2 speaks AG-UI 1.0. Verified AG-UI features are supported in AG2:
 
 * [x] Streaming text events (`TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END`, `TEXT_MESSAGE_CHUNK`)
 * [x] [Backend tool lifecycle events](https://docs.copilotkit.ai/ag2/generative-ui/backend-tools) (`TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END`, `TOOL_CALL_RESULT`)
 * [x] [Frontend-tool dispatch](https://docs.copilotkit.ai/ag2/generative-ui/frontend-tools) (`TOOL_CALL_CHUNK` for client tools in `RunAgentInput.tools`)
-* [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state) (`STATE_SNAPSHOT`) from context and agent state
+* [x] [Shared-state snapshots](https://docs.copilotkit.ai/ag2/shared-state) (`STATE_SNAPSHOT`) of the client's state and the server's variables - see [Shared state](#shared-state)
+* [x] Application context (`RunAgentInput.context`) reaches the model - see [Application context](#application-context)
 * [x] [Human input checkpoints](https://docs.copilotkit.ai/ag2/human-in-the-loop) (`input_required` surfaced as user-visible message events)
 * [x] Run interrupts: an agent pauses on a question and a later run on the same thread answers it (`RUN_FINISHED` with an `interrupt` outcome, resumed through `resume`) - see [Asking the human a question](#asking-the-human-a-question)
 * [x] Tool-call approval: a gated tool puts the call itself to the client before it runs, over the same interrupt lifecycle - see [Gating a tool call instead of asking a question](#gating-a-tool-call-instead-of-asking-a-question)
+* [x] Tool results in content parts: text, images, audio, video, documents and provider file handles - see [Tool results](#tool-results)
+* [x] Delegations as subagent invocations (`SUBAGENT_STARTED`, `SUBAGENT_FINISHED`, `SUBAGENT_ERROR`) - see [Delegations](#delegations)
+* [x] Pending client tool calls named on the run's success outcome (`pendingToolCallIds`)
+* [x] Protocol version declared on every `RUN_STARTED` - see [Protocol version](#protocol-version)
+* [x] Capabilities declared before any run starts (`GET`) - see [Capabilities](#capabilities)
+* [x] Input from a newer client served, with what the server does not recognise stripped - see [Input from a newer client](#input-from-a-newer-client)
+* [x] Every run ends with `RUN_FINISHED` or `RUN_ERROR` - see [How a run ends](#how-a-run-ends)
 
 ## Installation
 
-Install AG2 with AG-UI support, plus the extra for the model provider your agent uses - `openai` in the examples below:
+Install AG2 with AG-UI support, the extra for your model provider (`openai` below), and the HTTP server used in the examples:
 
 ```bash
-pip install "ag2[ag-ui,openai]"
+pip install "ag2[ag-ui,openai]" fastapi uvicorn
 ```
+
+`ag2[ag-ui]` installs `ag-ui-protocol` 1.x, the Python SDK for AG-UI 1.0, so the
+backend sits beside a frontend on `@ag-ui/*` 1.0.
 
 ## Basic server example
 
 Use the manual-dispatch pattern when you want full control over auth, logging, and middleware:
 
 ```python
-from fastapi import FastAPI, Header
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ag2 import Agent
-from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.ag_ui import AGUIStream, read_run_input
 from ag2.config import OpenAIConfig
 
 agent = Agent(
@@ -13719,16 +13791,32 @@ agent = Agent(
 stream = AGUIStream(agent)
 app = FastAPI()
 
+@app.get("/chat")
+@app.get("/chat/capabilities")
+async def capabilities() -> JSONResponse:
+    return JSONResponse(stream.capabilities().model_dump(by_alias=True, exclude_none=True))
+
 @app.post("/chat")
-async def run_agent(
-    message: RunAgentInput,
-    accept: str | None = Header(None),
-) -> StreamingResponse:
+async def run_agent(request: Request) -> Response:
+    try:
+        message = read_run_input(await request.body())
+    except ValueError:
+        return JSONResponse({"error": "invalid AG-UI RunAgentInput body"}, status_code=400)
     return StreamingResponse(
-        stream.dispatch(message, accept=accept),
-        media_type=accept or "text/event-stream",
+        stream.dispatch(message, accept=request.headers.get("accept")),
+        media_type="text/event-stream",
     )
 ```
+
+The `GET` routes expose the agent's [capabilities](#capabilities). The body of a
+`POST` is read with `read_run_input` rather than declared as a `RunAgentInput`
+parameter. A newer client may send a message role or content part this server
+does not know, and FastAPI would refuse the whole request with `422`;
+`read_run_input` strips it and serves the run (see
+[Input from a newer client](#input-from-a-newer-client)). A body it cannot read
+is refused with `400` before any stream starts. The stream is Server-Sent Events
+whatever `Accept` says, so the content type is `text/event-stream`, never the
+client's `Accept` copied back.
 
 Run it:
 
@@ -13739,14 +13827,23 @@ uvicorn run_ag_ui:app --reload --port 8000
 !!! note "Simpler way"
     If you want the endpoint without any logic of your own around it, `AGUIStream.build_asgi()` builds the whole thing - an ASGI endpoint class you add as a route:
 
-    ```python linenums="1" hl_lines="6-7"
+    ```python linenums="1"
+    from ag2 import Agent
     from ag2.ag_ui import AGUIStream
+    from ag2.config import OpenAIConfig
     from fastapi import FastAPI
     from starlette.routing import Route
 
+    agent = Agent(
+        name="support_bot",
+        prompt="You help users with billing questions.",
+        config=OpenAIConfig(model="gpt-4o-mini"),
+    )
     app = FastAPI()
     stream = AGUIStream(agent)
-    app.routes.append(Route("/chat", stream.build_asgi()))
+    endpoint = stream.build_asgi()
+    app.routes.append(Route("/chat", endpoint))
+    app.routes.append(Route("/chat/capabilities", endpoint))
     ```
 
     Added as a route rather than mounted: `app.mount("/chat", ...)` serves the
@@ -13755,18 +13852,26 @@ uvicorn run_ag_ui:app --reload --port 8000
 
 ### Test the endpoint
 
+Check capability discovery before starting a run:
+
+```bash
+curl http://127.0.0.1:8000/chat/capabilities
+```
+
+Then start a run:
+
 ```bash
 curl -N -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{
-    "thread_id": "thread-1",
-    "run_id": "run-1",
+    "threadId": "thread-1",
+    "runId": "run-1",
+    "protocolVersion": "1.0",
     "messages": [{"id": "m1", "role": "user", "content": "Hello"}],
     "state": {},
     "context": [],
-    "tools": [],
-    "forwardedProps": null
+    "tools": []
   }'
 ```
 
@@ -13777,6 +13882,21 @@ data: {"type":"RUN_STARTED","threadId":"thread-1","runId":"run-1",...}
 data: {"type":"TEXT_MESSAGE_CHUNK","delta":"Hello! How can I help?",...}
 data: {"type":"RUN_FINISHED","threadId":"thread-1","runId":"run-1",...}
 ```
+
+## How a run ends
+
+Every run ends with exactly one `RUN_FINISHED` or `RUN_ERROR`, and the response
+body then closes normally.
+
+- **A failure inside the run** - the model call, a tool, input that cannot be
+  mapped - ends it with `RUN_ERROR`, and is logged with its traceback on the
+  `ag2.ag_ui` logger. `dispatch` does not re-raise it: the response has already
+  started `200 OK`, and the failure has been reported on it. Watch the logger,
+  not your endpoint's exception handler.
+- **A run the server stops** - `await stream.aclose()`, or `A2UIServer`'s
+  shutdown - first closes whatever it had open (a text message, a tool call, a
+  subagent invocation), then finishes with `RUN_FINISHED` and a `cancelled`
+  outcome.
 
 ## Token usage
 
@@ -13794,37 +13914,228 @@ failed, so a crashed run is not accounted for as free. (`RUN_ERROR` has no
 `threadId` / `runId` - the protocol defines neither for it; a client correlates
 the run from `RUN_STARTED` on the same event stream.)
 
-The figures cover every model call in the run - the whole tool loop, delegated
-sub-agents, history compaction and memory aggregation - and agree with
-`AgentReply.usage()` for the same run, because both read the same accounting
-events.
+The figures cover every model call in the run: the whole tool loop, delegated
+sub-agents, history compaction and memory aggregation. They come from the same
+accounting events as `AgentReply.usage()` for the same run.
 
-An entry carries `inputTokens`, `outputTokens`, `totalTokens`, `reasoningTokens`
-and `cachedInputTokens`. Any of them may be missing - three properties are worth
-knowing before you sum them:
+An entry carries `inputTokens`, `outputTokens`, `totalTokens`, `reasoningTokens`,
+`cachedInputTokens` and `cacheWriteInputTokens`, in AG-UI 1.0's accounting, so
+entries from different providers add up:
 
+- **`inputTokens` and `outputTokens` are totals.** Input counts every prompt
+  token the call was charged for, including tokens read from and written to the
+  provider's cache. Output counts every generated token, reasoning included.
+  Where a provider reports these counts beside a smaller figure, AG2 adds them
+  in before the entry leaves: Anthropic's cache counts go into the input, and
+  Gemini's thinking tokens into the output.
+- **`cachedInputTokens`, `cacheWriteInputTokens` and `reasoningTokens` are parts
+  of those totals**, never additions to them. Cache reads and writes are
+  reported apart, because providers price them differently.
+- **`totalTokens` is always `inputTokens + outputTokens`.** It is computed, not
+  copied from the provider.
 - **A count the provider did not report is absent, not `0`.** `cachedInputTokens`
   absent means "never measured"; `0` means the provider measured no cache hit.
-  The same holds for `reasoningTokens`, which most non-reasoning calls omit.
-- **`totalTokens` is never derived.** It appears only when every call behind an
-  entry supplied one, so a client is never handed a computed figure dressed up
-  as a measurement. Sum `inputTokens` and `outputTokens` yourself if you need a
-  figure regardless.
-- **Cache *writes* are not reported at all.** `cachedInputTokens` counts a cache
-  *read*. Tokens spent creating a cache entry have no field in the protocol, and
-  they are omitted rather than folded into a neighbouring count, because
-  providers disagree on whether cached tokens already sit in the prompt figure.
-  A cost model built on these entries alone under-counts a run that primed a
-  cache; read `AgentReply.usage()` server-side if you need that number.
+  An input or output the provider did not report leaves `totalTokens` absent too.
+
+The correction applies only to what reaches the wire. `AgentReply.usage()` keeps
+each provider's own figures, so a server-side total can differ from the AG-UI
+one for the same run: for Anthropic, `prompt_tokens` excludes the cache counts
+that `inputTokens` includes.
 
 One entry is emitted per distinct provider/model pair, in order of first
-appearance in the run. A delegated sub-agent that used a single configuration is
-attributed to it; one that spanned several arrives with `provider` and `model`
-unset rather than mislabelled. A run that spent nothing omits `usage` entirely.
+appearance in the run. A delegated sub-agent's calls are attributed to the
+pairs that made them, however many it used. A run that spent nothing omits
+`usage` entirely.
+
+Usage is reported per run, not per turn. A turn that pauses on a
+[question](#asking-the-human-a-question) is carried by several runs, and each
+reports only its own spend: the run that ends on the interrupt reports what was
+spent up to the pause, and the run that resumes the turn - or cancels it -
+reports what was spent after.
 
 The A2UI AG-UI transport (`A2UIServer(..., transport=AgUiTransport())`) reports
 the same field on the same two events, so what a client can show does not depend
 on which endpoint it connected to.
+
+## Protocol version
+
+Every `RUN_STARTED` declares the AG-UI version AG2 speaks, as
+`"protocolVersion": "1.0"`. AG2 reads the version a client declares on
+`RunAgentInput`:
+
+| Client declares | AG2 |
+|---|---|
+| Nothing | Serves it as a client that predates 1.0, and downgrades [tool results](#tool-results) to strings. |
+| `1.0` | Serves it. |
+| A newer minor, such as `1.9`, or a value it cannot read | Serves it, and logs a warning on the `ag2.ag_ui` logger. |
+| Another major, such as `2.0` | Refuses it. The stream is a lone `RUN_ERROR` with code `UNSUPPORTED_PROTOCOL_VERSION` (exported from `ag2.ag_ui`), and no run starts. |
+
+## Capabilities
+
+A `GET` on the endpoint returns what the agent can do, in the protocol's
+`AgentCapabilities` shape, before any run starts. A `GET` on
+`{path}/capabilities` returns the same document: that is where other AG-UI
+integrations serve it. Both routes are registered in the [basic server example](#basic-server-example).
+`A2UIServer` serves both paths automatically; with `build_asgi()`, register its
+endpoint on both routes as shown in the simpler example above.
+
+| Group | Declared | When |
+|---|---|---|
+| `identity` | `name` (the agent's), `type: "ag2"` | Always |
+| `transport` | `streaming: true` | Always |
+| `tools` | `supported: true`, `clientProvided: true` | `clientProvided` on `AGUIStream` only: the A2UI transport ignores `RunAgentInput.tools` |
+| `state` | `snapshots: true` | `AGUIStream` only |
+| `multiAgent` | `supported: true`, `delegation: true`; named `subagents` for `as_tool` | The agent is built with `tasks=TaskConfig(...)` or has delegation tools |
+| `reasoning` | `encrypted: true` for Gemini function-call signatures | Gemini agents only |
+| `multimodal` | `input`: media the configured provider mapper accepts | Always |
+| `humanInTheLoop` | `supported: true`, `interrupts` | `interrupts` is `false` when the agent has its own `hitl_hook` |
+
+The document is read off the agent, because it is served before any run: a
+`hitl_hook` or `tools` passed to one `dispatch` call are not known to it. A group
+AG2 cannot vouch for is omitted, which the protocol reads as "says nothing", not
+as "unsupported". A delegation tool from `agent.as_tool(...)` records the
+agent behind it, including when placed inside a `Toolkit`.
+
+`multimodal.input` follows the configured provider mapper. It cannot know the
+capabilities of an individual model. An inbound part the provider cannot take
+is skipped with a warning naming its kind and media type; the run continues.
+An empty user message adds nothing, and an empty tool result answers with the
+empty string. Outside AG-UI, provider mappers still reject unsupported input.
+Invalid options on an otherwise supported part remain errors.
+
+Gemini function calls carry their `thought_signature` as
+`REASONING_ENCRYPTED_VALUE`, bound to the tool call id. Clients must restate its
+`encryptedValue` on the call in later run history so Gemini can continue it.
+
+## Input from a newer client
+
+AG-UI 1.0 lets a newer client send what an older server does not describe, and
+requires the server to serve the run anyway. `read_run_input`, `build_asgi()`
+and `A2UIServer` strip it before validation:
+
+- a property the protocol does not define, on the input or on anything in it;
+- a message with a role this server does not know;
+- a content part of a type this server does not know;
+- a content part whose `source` is of a kind this server does not know. The whole
+  part goes, since one left without its source would be malformed.
+- a resume entry with a `status` this server does not know. The whole entry
+  goes, leaving any held interrupt unanswered.
+
+A message left with no parts is treated like any other empty message: a user
+message adds nothing to the turn, and a tool message still answers its call, with
+the empty string. Each removal logs one warning on the `ag2.ag_ui` logger, naming its JSON Pointer,
+such as `/messages/0/content/1`. Open objects - `state`, `forwardedProps`,
+`metadata`, a tool's `parameters` - are values rather than protocol members and
+are passed on whole. A known field carrying a value the schema rejects is
+malformed, not unrecognised, and the body is refused with `400`. `dispatch` strips
+unknown properties from a `RunAgentInput` you validated yourself, but a role or
+part type your own validation rejected never reaches it.
+
+## Shared state
+
+The run's `state` seeds the turn's variables: tool code reads the client's keys
+from `context.variables`. They are merged with the agent's own variables and the
+`variables=` passed to `dispatch`, and the framework's reserved keys are removed
+from what the client sent.
+
+A `STATE_SNAPSHOT` replaces the client's state wholesale, so each one carries all
+of it: the client's keys and the server's variables together. One is sent as the
+run starts, when that differs from what the client sent, and one as it ends,
+when the variables changed since the last one sent. A value with no JSON form,
+such as a client or a connection object, is left out; `None` is kept.
+
+!!! warning "Server variables reach the client"
+
+    Anything in the agent's variables or in `dispatch(variables=...)` that
+    serializes to JSON is sent to the browser in `STATE_SNAPSHOT`. Do not put
+    secrets there: pass them to `dispatch(dependencies=...)`, which never leaves
+    the server.
+
+A `state` that is not a JSON object, such as a list or a string, is served but
+seeds no variables, and no snapshot is sent for it.
+
+The A2UI transport seeds variables from `state` the same way, and sends no
+snapshots.
+
+## Application context
+
+`RunAgentInput.context` carries entries the application shares with the agent,
+such as the page the user is on. They reach the model as one block, added to the
+run's system prompt after the agent's own prompt:
+
+```text
+## Context from the application
+
+- Current page: /billing/invoices
+- Plan: pro
+```
+
+Each line is an entry's `description`, then its `value` exactly as the client
+sent it. The entries are prose for the model, not variables: tool code does not
+see them. To render them differently, pass `dispatch` a `context_prompt=`
+function that takes the entries and returns the block, or `None` for no block.
+`context_prompt=None` leaves the entries out. The A2UI transport adds the same
+block.
+
+## Tool results
+
+A server tool's result reaches a 1.0 client as content parts. A result that is a
+single piece of text with no metadata is sent as a plain string. Anything else is
+sent as a list, and a part's metadata travels on it:
+
+| Tool returns | Sent as |
+|---|---|
+| Text | `text` part |
+| Structured data | `text` part holding the serialized JSON (the protocol has no JSON part) |
+| An image, audio, video or document by URL | Part of that kind, with a `url` source |
+| An image, audio, video or document as bytes | Part of that kind, with a `data` source and its media type |
+| A URL or bytes of no particular kind | `document` part |
+| A file id | `document` part with a `file` source |
+
+A client that declares no protocol version predates 1.0 and reads a tool result as
+a string only. It gets the result's text parts, joined in order. Media parts are
+dropped, with a warning naming the dropped kinds. Nothing is invented in their
+place, and a result that was all media arrives as `""`.
+
+The other direction works the same way. A client may answer a client tool call
+with a list of parts, such as a screenshot next to its caption, and the model sees
+each part. A part with a provider file handle (a `file` source) reaches the model
+when it names no provider, or names the provider the run is configured with.
+A handle issued by another provider is skipped, and a warning names both
+providers, never the handle. A tool message left with no parts after that still
+answers its call: the model sees the empty string.
+
+## Delegations
+
+Each delegation to a sub-agent (`agent.as_tool(...)`, `run_subtask`) reaches the
+client as a subagent invocation with its own `subagentRunId`, so two parallel
+delegations to the same agent can be told apart:
+
+```text
+SUBAGENT_STARTED  {"subagentRunId":"4f1c...","name":"researcher","description":"<the objective>"}
+SUBAGENT_FINISHED {"subagentRunId":"4f1c...","result":"<what it returned>"}
+```
+
+A failed delegation ends with `SUBAGENT_ERROR` carrying the error message, and
+the run carries on: the parent's model is told the delegation failed and may
+recover. A delegation that is cancelled or runs out of time ends with
+`SUBAGENT_ERROR` too, with the message `cancelled` (`cancelled: <reason>` when
+there is one) or `expired`: the protocol has no outcome for a stopped
+invocation. Every invocation is closed before its run ends. One still open
+when the run finishes is closed with `SUBAGENT_ERROR`. The invocation events carry no usage. The run's own `usage` already
+includes what the delegation spent. Delegations are no longer reported as
+`STEP_STARTED` / `STEP_FINISHED`.
+
+When a delegated agent asks the human a question, the question reaches the
+client like any other interrupt, tagged with the invocation's `subagentRunId`.
+Before the run ends on it, the invocation is closed as suspended, naming that
+interrupt. The resuming run announces the invocation again under the same id
+before anything else about it, and then finishes it:
+
+```text
+run-1:  RUN_STARTED -> SUBAGENT_STARTED -> ... -> SUBAGENT_FINISHED (suspended) -> RUN_FINISHED (interrupt)
+run-2:  RUN_STARTED -> SUBAGENT_STARTED (same id) -> ... -> SUBAGENT_FINISHED -> RUN_FINISHED
+```
 
 ## Asking the human a question
 
@@ -13864,8 +14175,10 @@ interrupt in `resume`:
 `context.input` returns `"yes"` inside the tool, and the turn runs on to
 completion in that second exchange - `RUN_STARTED` for the resuming run, then
 whatever the agent does next. A client that has given up sends
-`"status": "cancelled"` instead; the turn ends and the run finishes with a
-success outcome, having delivered nothing.
+`"status": "cancelled"` instead. The turn is stopped, and the run finishes with a
+`cancelled` outcome and no result. Before it ends, the run sends whatever the
+turn did while it waited, and closes anything the turn still had open. The
+thread then holds nothing, so the next run on it is an ordinary new run.
 
 !!! warning "A paused tool call's lifecycle spans two runs"
 
@@ -13894,9 +14207,12 @@ Two things must travel back untouched: the **interrupt id**, and the
 **`metadata` envelope**. The envelope carries proof that the answer comes from
 whoever the question was put to - an answer attributed to a human is the input an
 agent trusts most, and an interrupt id alone is a bare string in a request body.
-A resume without it is refused. The protocol does not make clients echo it, and
-`@ag-ui/client` does not do it for you: copy the interrupt's `metadata` into the
-resume entry yourself.
+A resume that carries the envelope must carry the one issued; a resume that
+carries none is accepted unless the server is built with
+`require_resume_proof=True` (on `AGUIStream` and on the A2UI `AgUiTransport`).
+The protocol does not make clients echo it, and `@ag-ui/client` does not do it
+for you: to get the check, copy the interrupt's `metadata` into the resume entry
+yourself.
 
 ```typescript
 import { buildResumeArray } from "@ag-ui/client";
@@ -13910,7 +14226,7 @@ await agent.runAgent({
 ```
 
 A client that cannot set a resume entry's `metadata` cannot answer these
-interrupts. CopilotKit's `useInterrupt` is one: its `resolve()` and `cancel()`
+interrupts on a server running with `require_resume_proof=True`. CopilotKit's `useInterrupt` is one: its `resolve()` and `cancel()`
 send no metadata.
 
 Every refusal arrives as `RUN_ERROR` with a machine-readable `code`, never as a
@@ -13918,14 +14234,20 @@ stream that simply stops:
 
 | `code` | What happened |
 | --- | --- |
-| `INTERRUPT_NOT_HELD` | Nothing is held for this thread: unknown id, already answered, or expired |
-| `INTERRUPT_NOT_OUTSTANDING` | Something is held, but it is not waiting on the interrupt this run names |
-| `INTERRUPT_NOT_PROVEN` | The envelope's proof is missing, malformed, or not the one issued |
+| `INTERRUPT_NOT_COVERED` | A held interrupt has no matching resume entry, including a fresh run on its thread |
+| `INTERRUPT_NOT_PROVEN` | The envelope's proof is malformed or not the one issued; also missing, under `require_resume_proof=True` |
 | `INTERRUPT_PAYLOAD_REFUSED` | The payload is not what the interrupt asked for |
 
 A refusal that is not the turn's own fault - a bad payload, an id it is not
 waiting on - leaves the held turn resumable by a legitimate answer, without
 extending its deadline.
+
+Every refusal is a lone `RUN_ERROR` before `RUN_STARTED`. A fresh run on a
+thread with a held interrupt is refused; omitting an answer does not release
+the turn. An unrecognised entry beside a valid one is dropped with a warning,
+and the valid answer is applied. When no turn is held for the thread - unknown id,
+already answered, expired, or lost to a restart - the `resume` is dropped with a
+warning and the request runs as an ordinary run, as the protocol recommends.
 
 A runnable version of this exchange - server and client in one script - is in
 `examples/ag_ui/human_input.py`.
@@ -14018,17 +14340,18 @@ it is the constraint that matters most when you deploy:
 
 - **Sticky routing is required.** A resume must reach the process holding the
   turn. Route by `threadId`; behind a round-robin load balancer, resumes will
-  land on a process that knows nothing and be refused with
-  `INTERRUPT_NOT_HELD`.
+  land on a process that knows nothing; it drops the `resume` with a warning and
+  starts a fresh run instead of continuing the paused one.
 - **A restart drops every held turn.** After a deploy or a crash, a client
-  answering a question asked by the old process gets `RUN_ERROR` /
-  `INTERRUPT_NOT_HELD` - the same code as an expired one. Treat it as "ask
-  again", not as a bug.
+  answering a question asked by the old process has its `resume` dropped with a
+  warning and gets an ordinary run - the same as for an expired one. Treat it as
+  "ask again", not as a bug.
 - **Close the stream on the way down.** `A2UIServer` does it for you (it runs
   `AgUiTransport.aclose()` on ASGI shutdown). `AGUIStream` is not an app, so
   nothing can hang a shutdown hook on it for you - call `await stream.aclose()`
   from your own, or use it as an async context manager, so held turns are
-  cancelled rather than left running into the void.
+  cancelled rather than left running into the void. A run still streaming when
+  that happens ends with a `cancelled` outcome.
 
 ### Why a resume does not replay the run
 
@@ -14046,7 +14369,9 @@ function - not a setting on this one.
 
 ## UI clients
 
-Any AG-UI client works with this endpoint.
+Any AG-UI client can consume ordinary runs from this endpoint. To resume an
+interrupt, the client must copy its `metadata` into the resume entry, as shown
+in [Asking the human a question](#asking-the-human-a-question).
 
 For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs because it provides:
 
@@ -14077,406 +14402,157 @@ For protocol-level testing and event inspection, use the AG2 Dojo profile:
 
 Source: https://docs.ag2.ai/docs/user-guide/ag-ui/copilotkit-quickstart/
 
-This quickstart shows how to connect a CopilotKit React/Next.js UI to an AG2 backend endpoint that speaks the AG-UI protocol.
-
-## What you'll build
-
-- A Python backend that serves an AG-UI endpoint for an AG2 agent
-- A React/Next.js UI powered by CopilotKit
+Run an AG2 agent behind an AG-UI endpoint and connect a CopilotKit UI to it. The [AG2 weather sample](https://github.com/ag2ai/ag2-samples) contains the Python server and Next.js app used below.
 
 ## Prerequisites
 
-- Python 3.10+
-- Node.js 18.18+
-- An LLM API key for your AG2 agent (for example `OPENAI_API_KEY`)
+- Python 3.10-3.14, `uv`, Node.js 18.18 or newer, and `pnpm`
+- An OpenAI API key for the sample agent
 
-## Quickstart
+## Run the sample
 
-You can either bootstrap a template project, or follow the same structure as the AG2 + CopilotKit starter.
+Clone the sample and start its AG2 backend from the repository root:
 
-=== "Bootstrap with CopilotKit"
-    CopilotKit can bootstrap a template project:
-
-    ```sh
-    npx copilotkit@latest create -f ag2
-    ```
-
-    After initialization, run the backend and UI that were generated for you.
-
-=== "Clone the reference starter"
-    Runnable reference implementation: [AG2 + CopilotKit starter](https://github.com/ag2ai/ag2-copilotkit-starter).
-
-    The updated template structure used by the starter looks like:
-
-    ```text
-    ag2-copilotkit-starter/
-    ├── agent-py/     # Python backend (AG2 agent + AG-UI endpoint)
-    ├── ui-react/     # React + CopilotKit frontend
-    ```
-
-## 1) Start the AG-UI backend
-
-The starter backend mounts the AG-UI endpoint at `/chat` and runs on port `8008`.
-
-```sh
-cd agent-py
-pip install -r requirements.txt
-export OPENAI_API_KEY="your_openai_api_key"
-python backend.py
+```bash
+git clone https://github.com/ag2ai/ag2-samples.git
+cd ag2-samples
+uv sync
+export OPENAI_API_KEY="your-openai-api-key"
+uv run python weather.py
 ```
 
-Your AG-UI endpoint will be available at `http://localhost:8008/chat`.
+The server listens on port `8000`. Its AG-UI endpoint is `/weather/` in this sample. The [basic server example](overview.md#basic-server-example) uses `/chat` instead; use the URL configured by the server you actually start.
 
-## 2) Start the React + CopilotKit UI
+In another terminal, from the directory where you cloned the repository, start the UI:
 
-In a new terminal:
-
-```sh
-cd ui-react
-npm install
-npm run dev
+```bash
+cd ag2-samples/ui
+pnpm install
+pnpm dev
 ```
 
-Then open `http://localhost:3000`.
+Open `http://localhost:3000` and ask for the weather in a city. The UI sends the run to the Python endpoint and renders its streamed AG-UI events. You can also ask about your location if you allow browser location access.
 
-## 3) Connect CopilotKit runtime to the AG-UI endpoint
+!!! note "Starting from a generated project"
 
-CopilotKit uses a Next.js route (typically `/api/copilotkit`) that bridges the UI to your agent runtime. In the template, that route registers an AG-UI HTTP agent client with `CopilotRuntime`.
+    Run `npx copilotkit@latest init`, select AG2 in the prompts, then use the install and start commands it prints. The generated project's layout and endpoint may differ from the weather sample.
 
-```tsx
-import { HttpAgent } from "@ag-ui/client";
-import {
-  CopilotRuntime,
-  ExperimentalEmptyAdapter,
-  copilotRuntimeNextJSAppRouterEndpoint,
-} from "@copilotkit/runtime";
-import { NextRequest } from "next/server";
+## Connect your own AG2 agent
 
-const agent = new HttpAgent({ url: "http://localhost:8008/chat" });
+First serve it with `AGUIStream`, as shown in the [AG-UI overview](overview.md#basic-server-example). Then register an `HttpAgent` pointed at that endpoint in your CopilotKit runtime. Use the [CopilotKit AG2 integration guide](https://docs.copilotkit.ai/ag2) for the current runtime and React provider wiring; CopilotKit's route and component APIs differ across major versions.
 
-const runtime = new CopilotRuntime({
-  agents: {
-    weather_agent: agent,
-  },
-});
+The backend and CopilotKit runtime are separate processes. If the frontend connects through a Next.js runtime route, configure that route to reach the AG2 server and protect both routes as appropriate for your deployment. See [Authentication](backend-deepdive.md#authentication) for the AG2 endpoint.
 
-export async function POST(req: NextRequest) {
-  const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
-    runtime,
-    serviceAdapter: new ExperimentalEmptyAdapter(),
-    endpoint: "/api/copilotkit",
-  });
-  return handleRequest(req);
-}
-```
+## Check the connection
 
-## 4) Add the `CopilotKit` provider
+If chat does not stream, check these in order:
 
-Wrap your app with `<CopilotKit>` and point it at the runtime route.
+1. The AG2 backend is running and the configured `HttpAgent` URL points to its AG-UI endpoint.
+2. The endpoint responds to a valid `POST` with `Content-Type: text/event-stream`.
+3. The Next.js runtime route can reach the backend; check its server logs for connection errors.
+4. If the browser calls AG2 directly, allow the frontend origin and required headers in the backend's CORS settings.
 
-```tsx
-import { CopilotKit } from "@copilotkit/react-core";
-import "@copilotkit/react-ui/styles.css";
-import "./globals.css";
-
-export const metadata = {
-  title: "AG2 Weather Agent",
-  description: "Weather agent powered by AG2 and CopilotKit",
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>
-        <CopilotKit agent="weather_agent" runtimeUrl="/api/copilotkit">
-          {children}
-        </CopilotKit>
-      </body>
-    </html>
-  );
-}
-```
-
-If your backend enforces CORS/auth, configure those before starting the UI (see Production notes).
-
-## 5) Render a chat UI
-
-```tsx
-"use client";
-
-import { CopilotChat } from "@copilotkit/react-ui";
-import { useCopilotAction } from "@copilotkit/react-core";
-
-function WeatherCard({
-  location,
-  temperature,
-  feelsLike,
-  humidity,
-  windSpeed,
-  windGust,
-  conditions,
-  isLoading,
-}: {
-  location?: string;
-  temperature?: number;
-  feelsLike?: number;
-  humidity?: number;
-  windSpeed?: number;
-  windGust?: number;
-  conditions?: string;
-  isLoading: boolean;
-}) {
-  const tempF = temperature != null ? (temperature * 9 / 5 + 32).toFixed(1) : null;
-
-  return (
-    <div
-      className={`rounded-lg border border-sky-300 bg-gradient-to-br from-sky-100 to-blue-100 p-4 max-w-xs shadow-md ${isLoading ? "animate-pulse" : ""}`}
-    >
-      <h3 className="text-lg font-semibold text-sky-700">
-        {location || "Loading..."}
-      </h3>
-      <p className="text-xs text-sky-500 uppercase tracking-wide mb-3">
-        {isLoading ? "Fetching weather..." : "Current Weather"}
-      </p>
-
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="text-4xl font-bold text-gray-800">
-            {temperature != null ? temperature : "--"}
-            <span className="text-lg text-sky-600">&deg;C</span>
-          </div>
-          {tempF && <div className="text-sm text-gray-500">{tempF}&deg;F</div>}
-        </div>
-        <div className="text-sm text-gray-500 text-right max-w-[120px]">
-          {conditions || "--"}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 pt-3 border-t border-sky-200">
-        <div className="text-center">
-          <div className="text-[10px] text-gray-500 uppercase">Humidity</div>
-          <div className="text-sm font-mono text-gray-800">
-            {humidity != null ? `${humidity}%` : "--%"}
-          </div>
-        </div>
-        <div className="text-center">
-          <div className="text-[10px] text-gray-500 uppercase">Wind</div>
-          <div className="text-sm font-mono text-gray-800">
-            {windSpeed != null ? `${windSpeed} km/h` : "-- km/h"}
-          </div>
-        </div>
-        <div className="text-center">
-          <div className="text-[10px] text-gray-500 uppercase">Feels Like</div>
-          <div className="text-sm font-mono text-gray-800">
-            {feelsLike != null ? `${feelsLike}\u00B0` : "--\u00B0"}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function Home() {
-  useCopilotAction({
-    name: "get_weather",
-    description: "Get the weather for a given location.",
-    available: "disabled",
-    parameters: [{ name: "location", type: "string", required: true }],
-    render: ({ args, status, result }) => {
-      if (status === "complete" && result) {
-        let data = result;
-        if (typeof result === "string") {
-          try {
-            data = JSON.parse(result.replace(/'/g, '"'));
-          } catch {
-            return <div>{result}</div>;
-          }
-        }
-        return (
-          <WeatherCard
-            location={data.location}
-            temperature={data.temperature}
-            feelsLike={data.feelsLike}
-            humidity={data.humidity}
-            windSpeed={data.windSpeed}
-            windGust={data.windGust}
-            conditions={data.conditions}
-            isLoading={false}
-          />
-        );
-      }
-      return <WeatherCard location={args.location} isLoading={true} />;
-    },
-  });
-
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-sky-100 to-blue-200">
-      <div className="w-full max-w-2xl h-[80vh] rounded-xl overflow-hidden shadow-2xl border border-sky-300">
-        <CopilotChat
-          labels={{ "{{" }}
-            title: "AG2 Weather Agent",
-            initial: "Hi! Ask me about the weather in any city.",
-            placeholder: "Ask about the weather...",
-          {{ "}}" }}
-          className="h-full"
-        />
-      </div>
-    </div>
-  );
-}
-```
-
-## Expected output
-
-After setup:
-
-- The Next.js page shows a CopilotKit chat UI
-- Messages stream from the AG2 runtime via the AG-UI endpoint
-- Tool/action calls can be rendered as custom UI (for example, a weather card in the starter)
-
-## Production notes
-
-- CORS: allow your frontend origin on the AG-UI backend (`POST`, `OPTIONS`, auth headers).
-- Auth: protect both `/api/copilotkit` and backend `/chat` (token/header/cookie); do not rely on client-only secrets.
-- Deployment topology: keep frontend runtime route and AG-UI backend on trusted internal network paths where possible.
-- Timeouts/retries: configure conservative client and server timeouts for long-running tool workflows and retry only idempotent requests.
-
-## Troubleshooting
-
-- CORS errors (`blocked by CORS policy`): check backend `Access-Control-Allow-Origin`, `Access-Control-Allow-Headers`, and preflight handling.
-- No streaming output: verify backend response `Content-Type` is `text/event-stream` and that proxy layers do not buffer SSE.
-- Tool UI not rendering: ensure tool/action names match exactly (for example `get_weather`).
-
-## Security considerations
-
-Treat tool inputs and shared state as untrusted user-controlled data. Validate and authorize server-side before invoking privileged tools, and log tool execution with request identifiers for auditability.
-
-## Version and compatibility notes
-
-- For a complete working example (backend + React UI + HTML UI), see the starter repo referenced above.
+For frontend tools, shared state, and human input, see [Backend deep dive](backend-deepdive.md), [Shared state](overview.md#shared-state), and [Asking the human a question](overview.md#asking-the-human-a-question). A client that resumes an AG2 interrupt must copy the interrupt's `metadata` into its resume entry.
 
 ---
 
-# Channels: AG2 Agents in Slack and Other Messaging Platforms
+# Channels: AG2 Agents in Messaging Platforms
 
 Source: https://docs.ag2.ai/docs/user-guide/ag-ui/channels/
 
-The same AG2 agent that powers your in-app copilot can also run as a bot in messaging platforms. [CopilotKit Channels](https://docs.copilotkit.ai/slack/ag2) connects your AG2 agent to Slack and other messaging platforms, with threads, tool calls, and rich interactive messages handled natively in the channel.
+A CopilotKit Channel can run the same AG2 agent that serves your web UI in a messaging platform. The channel process connects to CopilotKit Intelligence, then calls your agent's AG-UI endpoint for each incoming message.
 
-!!! note
-    This page covers the AG2 side: how a channel process wires your `AGUIStream` endpoint into a platform thread. Creating the Channel and connecting Slack happen in the CopilotKit dashboard - follow [Configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence) first, since the code below needs the credentials it gives you.
+Before starting, [configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence) and obtain its Code and a project API key. Intelligence holds the platform credentials; your AG2 server holds the model credentials and tools.
 
-## How it fits together
+## Run the AG2 endpoint
 
-Your AG2 server stays where it is, serving the agent through `AGUIStream` exactly as in the [basic server example](overview.md#basic-server-example). A channel is a separate long-running Node process built with [`@copilotkit/channels`](https://www.npmjs.com/package/@copilotkit/channels), connected through [CopilotKit Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence). Intelligence holds the platform connection and credentials, receives each platform event, and delivers the turn over a persistent gateway connection to your channel process, which runs your agent over AG-UI and streams the reply back into the platform thread.
+Start the server from the [basic AG-UI example](overview.md#basic-server-example). The channel below points at `http://localhost:8000/chat`; change `AGENT_URL` if your server uses another path or host. If the channel and AG2 run on different machines, the channel needs an address it can reach.
 
-```text
-Slack  ──►  CopilotKit Intelligence  ──►  channel process (Node)  ──►  AG2 server (AGUIStream)
-```
-
-The credential split is the point, and it is what makes this safe when your AG2 agent holds its own model keys and tools:
-
-- **You keep** the agent logic, model credentials, tools, and the channel process.
-- **CopilotKit Intelligence holds** the platform credentials, message delivery, registration, health, and reconnects.
-
-A web frontend built with the [CopilotKit UI quickstart](copilotkit-quickstart.md) and the bot are just two clients of one AG-UI endpoint.
+A web UI and a Channel can use the same AG-UI endpoint. Each channel thread gets a separate `HttpAgent` instance with its own `threadId`.
 
 ## Build the channel process
 
-Install the Channels SDK, the CopilotKit runtime that hosts the channel, and the AG-UI client:
+Use Node.js 22 or newer and a long-running host. The Channels and Runtime versions below are the pair in the current [Channels SDK reference](https://docs.copilotkit.ai/reference/channels); `@ag-ui/client` is the AG-UI 1.0 client.
 
 ```bash
-npm install @copilotkit/channels @copilotkit/runtime @ag-ui/client tsx
+mkdir my-ag2-channel
+cd my-ag2-channel
+npm init -y
+npm install --save-exact @copilotkit/channels@0.11.0 @copilotkit/runtime@1.73.3 @ag-ui/client@1.0.1
+npm install -D tsx typescript @types/node
 ```
 
-Build the agent as a per-thread factory so each conversation gets its own session, using `HttpAgent` from [`@ag-ui/client`](https://www.npmjs.com/package/@ag-ui/client) pointed at your endpoint - `AGUIStream` speaks plain AG-UI, so no AG2-specific client is needed. The channel's `name` is the **Code** of the Channel you created in Intelligence, whose dashboard also holds the Slack credentials - they never enter this process.
+The first two commands create an empty project directory. `npm init -y` creates
+`package.json`; the first install adds the three runtime libraries, and
+`--save-exact` records those exact versions. The second install adds the
+TypeScript runner, compiler, and Node.js types as development dependencies.
 
-Name the file with an `.mts` extension: the Channels SDK ships ESM only, and `.mts` makes this an ES module without touching `package.json`.
+Save this as `channel.mts`. The Code must match the Channel configured in Intelligence. The current message is passed as `prompt` because it is not yet in the channel thread's history when the handler runs.
 
-```ts
+```typescript
+import { createServer } from "node:http";
 import { createChannel } from "@copilotkit/channels";
-import { CopilotRuntime, CopilotKitIntelligence } from "@copilotkit/runtime/v2";
+import { CopilotKitIntelligence, CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
 import { HttpAgent } from "@ag-ui/client";
 
-const required = (name: string) => {
+function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing ${name}`);
   return value;
-};
+}
 
 const channel = createChannel({
-  name: required("CHANNEL_CODE"), // the Channel's Code from Intelligence
+  name: required("CHANNEL_CODE"),
   identifyUser: "platform",
-  // A fresh agent per conversation, pointed at your AG-UI endpoint.
-  agent: (threadId) => {
-    const agent = new HttpAgent({ url: "http://localhost:8000/chat" });
+  agent: (threadId: string) => {
+    const agent = new HttpAgent({ url: required("AGENT_URL") });
     agent.threadId = threadId;
     return agent;
   },
 });
 
-// A mention subscribes the thread and runs the agent; afterwards every message
-// in a subscribed thread runs it without needing another mention.
-channel.onMention(async ({ thread }) => {
-  await thread.subscribe();
-  await thread.runAgent();
-});
-channel.onMessage(async ({ thread }) => {
-  if (await thread.isSubscribed()) await thread.runAgent();
+channel.onMessage(async ({ thread, message }) => {
+  await thread.runAgent({
+    prompt: message.contentParts?.length
+      ? [
+          ...(message.text ? [{ type: "text" as const, text: message.text }] : []),
+          ...message.contentParts,
+        ]
+      : message.text,
+    context: [{ description: "Originating platform", value: message.platform }],
+  });
 });
 
-// The runtime owns the channel's lifecycle: creating the listener starts it.
 const runtime = new CopilotRuntime({
-  agents: {}, // the channel supplies its own agent; no web-facing agents needed
+  agents: {},
   intelligence: new CopilotKitIntelligence({
-    apiKey: required("INTELLIGENCE_API_KEY"),
+    apiKey: required("CPK_INTELLIGENCE_API_KEY"),
   }),
   channels: [channel],
 });
 
-const listener = createCopilotNodeListener({ runtime });
-await listener.channels.ready({ timeoutMs: 15_000 }); // fail startup loudly on a broken config
+const listener = createCopilotNodeListener({ runtime, basePath: "/api/copilotkit" });
+createServer(listener).listen(Number(process.env.PORT ?? 8300));
+await listener.channels.ready({ timeoutMs: 30_000 });
 ```
 
-Run the channel process alongside the AG-UI server from the [basic server example](overview.md#basic-server-example). Both credentials come from the Intelligence dashboard - the API key under **API Keys**, the Code on the Channel you created there:
+Start the AG2 server in one terminal and the channel process in another. Use the actual Code and API key from your Intelligence project:
 
 ```bash
-uvicorn run_ag_ui:app --reload --port 8000   # terminal 1 - AG2 server
-```
-
-```bash
-export INTELLIGENCE_API_KEY="cpk-..."        # terminal 2 - channel process
-export CHANNEL_CODE="support-bot"            # the Channel's Code - not a Slack channel ID
+export AGENT_URL="http://localhost:8000/chat"
+export CHANNEL_CODE="support-bot"
+export CPK_INTELLIGENCE_API_KEY="your-project-api-key"
 npx tsx channel.mts
 ```
 
-Until the channel process is running, the Channel reads **Waiting for runtime** in the dashboard: nothing has declared it yet. That is the state `ready()` waits to leave.
+Creating the listener starts the Channel connection; the HTTP server keeps the process running. `ready()` waits for activation to settle. If the dashboard still says **Waiting for runtime**, check that the Code and API key belong to the same Intelligence project. For shutdown and health checks in a deployed service, follow the [CopilotKit Channels guide](https://docs.copilotkit.ai/slack/ag2/connect).
 
-## Slack
+## Verify delivery
 
-Invite the app to a Slack channel, then mention it. It runs your agent and streams the reply back into the thread; the thread stays subscribed, so follow-up messages run without another mention.
+Invite the app to a Slack channel and mention it, or send a direct message. The channel passes that message to AG2 as the prompt for a new AG-UI run and streams the reply back to the platform thread. For provider setup and troubleshooting, follow [Connect and run your agent](https://docs.copilotkit.ai/slack/ag2/connect).
 
-The agent receives an ordinary AG-UI `RunAgentInput` and emits ordinary AG-UI events - the platform mechanics stay behind the channel, so the same AG2 agent runs unchanged across every platform. Rich messages are written as JSX and rendered to each platform's native format (Block Kit on Slack, for example), so an interactive card degrades gracefully where a platform has no equivalent.
-
-!!! warning "The channel process needs a long-running host"
-    It holds a persistent connection to the Intelligence gateway, which delivers each turn to it. A serverless request handler cannot own that connection.
-
-The Slack app itself is created by pasting the manifest from the Intelligence wizard into Slack's web UI and handing its tokens back to Intelligence - no Slack CLI and no bot framework, since the agent already runs in your AG2 server. For that walkthrough, see [Configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence); for the full channel-process one, see [Connect your agent](https://docs.copilotkit.ai/slack/ag2/connect).
-
-## Other platforms
-
-Discord, Teams, Telegram, and WhatsApp connect the same way - a managed connection configured in Intelligence, with your channel code unchanged. See the [CopilotKit Channels documentation](https://docs.copilotkit.ai/slack/ag2) for the current platform list and per-platform setup.
-
-!!! note
-    By default, interactive actions live in memory and reset on restart. Back the channel with a durable action and state store (Redis or Postgres) so buttons and per-thread state survive restarts and span multiple instances.
-
-## Next steps
-
-1. Build the AG-UI endpoint from the [basic server example](overview.md#basic-server-example) if you have not already.
-2. Create the Channel in CopilotKit Intelligence and connect Slack there, then export the API key and the Channel's Code.
-3. Start the channel process, invite the app to a Slack channel, and mention it.
-4. For a web UI on the same endpoint, follow the [CopilotKit UI quickstart](copilotkit-quickstart.md).
+The channel process needs a persistent connection to Intelligence, so keep it on a long-running host. The AG2 server must also remain available to answer its AG-UI requests. For supported platforms and persistence options, see the [CopilotKit Channels documentation](https://docs.copilotkit.ai/slack/ag2).
 
 ---
 
@@ -14490,18 +14566,18 @@ If you haven't set up an AG-UI endpoint yet, start with the [AG-UI overview](ove
 
 ## Authentication
 
-Because AG-UI integration works on top of simple HTTP SSE endpoints, you can use the same authentication mechanisms as you would for any other HTTP endpoint - validate headers/tokens before streaming events.
+Because AG-UI integration works on top of HTTP SSE endpoints, you can validate headers or tokens before streaming events.
 
 Example: protect `/chat` with a shared token header.
 
 ```python
 from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ag2 import Agent
-from ag2.ag_ui import AGUIStream, RunAgentInput
+from ag2.ag_ui import AGUIStream, read_run_input
 from ag2.config import OpenAIConfig
 
 agent = Agent(
@@ -14515,29 +14591,36 @@ app = FastAPI()
 
 @app.post("/chat")
 async def run_agent(
-    message: RunAgentInput,
+    request: Request,
     token: Annotated[str, Header(..., description="Authentication token")],
-    accept: str | None = Header(None),
-) -> StreamingResponse:
+) -> Response:
     if token != "1234567890":
         raise HTTPException(status_code=401, detail="Invalid token")
-
+    try:
+        message = read_run_input(await request.body())
+    except ValueError:
+        return JSONResponse({"error": "invalid AG-UI RunAgentInput body"}, status_code=400)
     return StreamingResponse(
-        stream.dispatch(message, accept=accept),
-        media_type=accept or "text/event-stream",
+        stream.dispatch(message, accept=request.headers.get("accept")),
+        media_type="text/event-stream",
     )
 ```
+
+The body goes through `read_run_input`, which strips what a newer client sends
+that this server does not recognise, and the content type is always
+`text/event-stream` (see the [overview](overview.md#basic-server-example){.internal-link}).
 
 Notes:
 
 - **Do not** put secrets (API keys, auth tokens) in the browser bundle. Protect the Next.js runtime route (`/api/copilotkit`) and forward credentials server-to-server.
-- If you don't need auth/middleware, you can mount the generated ASGI endpoint with `AGUIStream.build_asgi()`, but you'll have less control over request handling.
+- If you expose a capabilities `GET` route alongside this `POST` route, apply the same authentication check there.
+- If you don't need auth or middleware, add the generated `AGUIStream.build_asgi()` endpoint as a route, as shown in the [basic server example](overview.md#basic-server-example){.internal-link}.
 
 ## Tools context
 
 You often need to pass **per-request context** (user ID, org ID, plan, permissions) into tools without baking it into prompts or trusting client-provided text.
 
-AG2 supports this via `ContextVariables`. Your tool can accept a `context` parameter, and you provide values when dispatching.
+AG2 supports this through injected `Context` and `dispatch(variables=...)`. Your tool reads values from `context.variables`.
 
 ```python
 from ag2 import Agent, Context, tool
@@ -14545,7 +14628,7 @@ from ag2.ag_ui import AGUIStream, RunAgentInput
 from ag2.config import OpenAIConfig
 
 @tool
-def get_user_profile(user_id: Context) -> str:
+def get_user_profile(context: Context) -> str:
     user_id = context.variables.get("user_id")
     return f"User profile for user {user_id}"
 
@@ -14558,13 +14641,21 @@ agent = Agent(
 
 stream = AGUIStream(agent)
 
-async def dispatch_with_context(message: RunAgentInput):
-    return stream.dispatch(message, variables={"user_id": "1234567890"})
+def dispatch_with_context(message: RunAgentInput, user_id: str):
+    return stream.dispatch(message, variables={"user_id": user_id})
 ```
+
+!!! warning "Variables are shared state"
+
+    Variables reach the client too: each `STATE_SNAPSHOT` carries the client's
+    state and the server's variables together (see
+    [Shared state](overview.md#shared-state){.internal-link}).
+    A user id is fine to share. A token or an API key is not: pass it to
+    `dispatch(dependencies=...)`, which never leaves the server.
 
 ## Backend tools (Python functions)
 
-Backend tools are regular Python callables registered on the agent (for example via `functions=[...]`). When the agent invokes a tool during a run, the AG-UI stream emits tool lifecycle events that a UI can render in real time.
+Backend tools are regular Python callables registered on the agent (for example via `tools=[...]`). When the agent invokes a tool during a run, the AG-UI stream emits tool lifecycle events that a UI can render in real time.
 
 Example backend tool:
 
@@ -14584,6 +14675,9 @@ agent = Agent(
 )
 ```
 
+A tool may return more than text. An image, a document or structured data
+reaches a 1.0 client as content parts (see [Tool results](overview.md#tool-results){.internal-link}).
+
 In an AG-UI-compatible UI, you typically render these as:
 
 - Status updates (tool started / finished)
@@ -14602,6 +14696,17 @@ In this setup:
 - The **frontend** advertises available tools in `RunAgentInput.tools`.
 - The **agent** can call those tools during the run.
 - The **frontend** executes/handles the tool and renders the UI.
+
+A run that stops on client tool calls finishes with a success outcome naming
+the calls it started, in call order, in `pendingToolCallIds`. A call an earlier
+run announced is not repeated: the run that paused on a question ended on an
+interrupt outcome, which carries no pending ids. The client answers them in the next
+run's messages, and a tool message may carry content parts, not only a string.
+
+This frontend-tool round trip is separate from an AG2 `context.input()`
+interrupt. To resume an interrupt, the client must echo its `metadata` in the
+resume entry; CopilotKit's `useInterrupt().resolve()` and `.cancel()` do not send
+that metadata. See [Asking the human a question](overview.md#asking-the-human-a-question).
 
 A frontend tool never replaces a backend tool with the same name: the backend tool is kept and the frontend one is dropped with a warning. Give frontend tools names of their own.
 
@@ -16063,6 +16168,10 @@ if __name__ == "__main__":
 ```
 
 The turn is served at `POST /` by default (pass `AgUiTransport(path="/agent")` to change it) and the request body is an AG-UI `RunAgentInput`. Each validated A2UI message reaches the renderer as an `ACTIVITY_SNAPSHOT` event with `activityType="a2ui-surface"` and the operations under `content["a2ui_operations"]`; the prose arrives as `TEXT_MESSAGE_CHUNK`. A CopilotKit button click rides `forwardedProps.a2uiAction` and is rewritten into the next turn - the same click round-trip as REST (see [Actions](actions.md)).
+
+It speaks the same AG-UI 1.0 as `AGUIStream`: the same [protocol version](../ag-ui/overview.md#protocol-version) on every `RUN_STARTED` and the same refusal of another major, the same run outcomes (an abandoned question ends the run as `cancelled`), the same [run ending](../ag-ui/overview.md#how-a-run-ends) (a failure is logged and reported as `RUN_ERROR`, and shutdown finishes a live run as `cancelled`), the same [stripping](../ag-ui/overview.md#input-from-a-newer-client) of input it does not recognise, the same [application context](../ag-ui/overview.md#application-context) block, the same [delegations](../ag-ui/overview.md#delegations) as subagent invocations, and the same per-run [token usage](../ag-ui/overview.md#token-usage) accounting.
+
+A `GET` on the path, or on `{path}/capabilities`, returns the agent's [capabilities](../ag-ui/overview.md#capabilities). They differ from `AGUIStream`'s in two groups: `tools` has no `clientProvided`, because this transport ignores `RunAgentInput.tools`, and `state` is omitted, because it sends no `STATE_SNAPSHOT`.
 
 !!! tip
     For a runnable AG-UI round-trip - text + `ACTIVITY_SNAPSHOT` emission and a `forwardedProps` button click - see `test/a2ui/transports/test_e2e_ag_ui.py` in the repository.
@@ -18268,7 +18377,7 @@ Two halves: **active actions** (the agent is inside its own `agent.task(...)` bl
 | `"list"` | observation | `scope="own"\|"all", state="active"\|"all", limit=20` | Task summaries. |
 | `"status"` | observation | `task_id` | Refreshed `TaskMetadata`. |
 | `"wait"` | observation | `task_id, timeout=300, poll_interval=0.1` | Blocks until the task reaches a terminal state. |
-| `"cancel"` | - | - | Not implemented; returns an error placeholder. |
+| `"cancel"` | observation | `task_id, reason?` | Posts an `ag2.task.cancel_request` to the task's owner in the task's channel; the owner decides whether to cancel. An agent outside that channel may send one request per task - a retry returns an error. |
 
 `"start"` is intentionally **not** a tool - calling it from the LLM would bypass the `async with agent.task(...)` lifecycle that scopes `TaskInject` correctly. Owners start tasks in their own code; the LLM uses `"progress"`/`"complete"` once a task is active, and `delegate` for one-shot remote work.
 
@@ -23787,7 +23896,7 @@ from ag2.network import Hub, serve_ws
 
 async def main() -> None:
     hub = await Hub.open(MemoryKnowledgeStore())
-    async with serve_ws(hub, "0.0.0.0", 8765) as server:
+    async with serve_ws(hub, "127.0.0.1", 8765) as server:
         host, port = server.sockets[0].getsockname()[:2]
         print(f"listening on ws://{host}:{port}", flush=True)
         with contextlib.suppress(asyncio.CancelledError):
@@ -23799,9 +23908,13 @@ asyncio.run(main())
 
 `serve_ws(hub, host, port)` is an async context manager. It binds a WebSocket server, hands each incoming connection its own `WsLinkEndpoint`, and lets the hub dispatch from there. Pass `port=0` to bind an ephemeral port and read the real one from `server.sockets[0].getsockname()[1]`.
 
+!!! warning "Reachable addresses need real authentication"
+
+    The default auth registry includes `NoAuth`, which lets any client act as any agent. `serve_ws` therefore raises `ValueError` when such a hub is bound to a non-loopback host. To listen on a reachable address, build the hub with an `AuthRegistry` without `NoAuth` (see [Authentication](#authentication)), or pass `allow_unauthenticated=True` to accept the risk.
+
 ## Connecting a Remote Agent
 
-From any other process - same machine, different container, or across a real network:
+From any other process - same machine, different container, or across a real network. The example connects to `ws://hub-host:8765`; reaching a hub from another machine needs it bound to a reachable address with real authentication (see the warning above), while on one machine you can use `ws://127.0.0.1:8765`:
 
 ```python
 import asyncio
@@ -23890,6 +24003,30 @@ bob = await hub_client.register(agent, passport)
 
 The hub's `AuthRegistry` validates the claim before binding the connection. Raise `AuthError` from a custom `AuthAdapter` (a `Protocol`) to reject any scheme you define.
 
+### What a connection may do
+
+Every request on a connection runs as the agents bound to it - the ones it registered, or re-attached to with `attach`. One connection may hold several agents. The hub rejects, with `AccessDeniedError`, a request that:
+
+- changes another agent's resume, skill, or rule, unregisters it, or acts on its behalf (`create_channel`, `pending_turns_for`, ...);
+- posts an envelope whose `sender_id` is not bound to the connection;
+- reads or closes a channel none of the connection's agents participates in;
+- updates, checkpoints, or reads the checkpoint of a task another agent owns - for a checkpoint the hub has no task record for, the owner is whichever connection's agents wrote it first over the wire. A checkpoint written in-process (or by an older hub) has no recorded writer, so it is readable by any connection and claimed by the first wire writer.
+
+Independently, a channel accepts events only from its participants - except a task cancel request (as the `tasks` tool's `cancel` action sends it) addressed to the owner of a live task in that channel. A non-participant may send at most one cancel request per task; a retry gets `ProtocolError` - and `attach` must present the auth scheme the identity registered with. Registering a `kind="remote_agent"` identity over the wire is off unless the hub is opened with `allow_remote_agent_registration=True`; then it needs a connection that already holds one of your agents; those agents own it, and only a connection holding an owner can re-attach it. Enable it only if you trust your clients with naming: remote-agent registration skips authentication, so any admitted client can take any *unused* name first, and the `auth.scheme` / `auth.claim` it registers become the routing data your `RemoteAgentProxy` dispatches with - the client chooses where the proxy sends that agent's traffic. Task ids must be a single path segment (letters, digits, `.`, `_`, `-`). Agent names may not equal, or look like, an agent id (32 lowercase hex characters), and `get_agent` resolves an exact id before a name. Over the wire, `fire_task_event` accepts only the task mirror's `mirror_failed` report - its `owner_id` must be one of the connection's agents and its `channel_id` the task's own channel (or, for a task the hub hasn't observed, a channel that agent is in); terminal task events come from the hub itself when `update_task` finishes a task. Names that only resemble an id or another name (upper-case hex, dashed UUIDs, look-alike characters) are accepted, so show ids alongside names wherever identity matters.
+
+```python
+from ag2.network import AccessDeniedError
+
+try:
+    await mallory_client.set_skill(bob_agent_id, "...")
+except AccessDeniedError:
+    ...  # "connection is not bound to agent '...'"
+```
+
+`list_channels()` without an `agent_id` lists only the channels of the connection's own agents. Discovery reads - `get_agent`, `list_agents`, resumes, skills, rules - stay open to every connection. `get_task` and `list_tasks` show a task only to its owner and to the participants of its channel. An envelope's `audience` may name only participants of its channel. Once `attach` re-binds an agent to a new connection, the old connection can no longer act as it.
+
+In-process clients (`LocalLink` with a hub reference) call the hub directly and are not subject to these checks.
+
 ## At-Least-Once Delivery
 
 The hub guarantees each envelope is delivered at least once across reconnects:
@@ -23901,11 +24038,11 @@ The hub guarantees each envelope is delivered at least once across reconnects:
 ```python
 hub_client = HubClient(WsLink(url))
 await hub_client.open()
-bob = await hub_client.attach(agent, name="bob", since_envelope_id=last_acked_id)
+bob = await hub_client.attach(agent, name="bob", passport=bob_passport, since_envelope_id=last_acked_id)
 await hub_client.resume_pending_turns(bob)
 ```
 
-`attach` re-binds an existing identity to a fresh connection. `resume_pending_turns` re-fires any turns the protocol still expects from this agent. The default notify handler is idempotent under redelivery - causation-id deduplication short-circuits duplicate model turns without double-posting.
+`attach` re-binds an existing identity to a fresh connection. Pass the identity's own passport (with its `AuthBlock` credential): the hub never returns another agent's - or your own - auth claim, so it cannot be recovered from `get_agent`. Keep the passport you registered with: the `AgentClient.passport` a remote `register` returns has no claim and cannot re-attach a credentialed identity. `resume_pending_turns` re-fires any turns the protocol still expects from this agent. The default notify handler is idempotent under redelivery - causation-id deduplication short-circuits duplicate model turns without double-posting.
 
 ## Task Durability
 
@@ -23930,7 +24067,7 @@ recovered = await agent.resume_from(task_id, checkpoint_store)
 | Concern | Recommendation |
 |---|---|
 | TLS | Pass an `ssl_context` to `serve_ws(...)` and use `wss://` in `WsLink`. |
-| Auth | Build the hub with `AuthRegistry([ApiKeyAuth(keys=...)])` and pass `Passport(auth=AuthBlock(...))` from each agent. |
+| Auth | Required beyond loopback: `serve_ws` refuses a hub with `NoAuth` there. Build the hub with `AuthRegistry([ApiKeyAuth(keys=...)])` and pass `Passport(auth=AuthBlock(...))` from each agent. |
 | Durability | Use `DiskKnowledgeStore(path)` on the hub so the registry and channel WALs survive a restart. |
 | Reconnect | On disconnect, build a fresh `HubClient`, call `open()`, then `attach(agent, name=..., since_envelope_id=last_id)`. The hub replays any unacked envelopes past that cursor. |
 | Federation | Register a `RemoteAgentProxy` on the hub to route envelopes addressed to agents with `kind="remote_agent"` across hub boundaries. |
@@ -26351,7 +26488,7 @@ The `ag2.extensions.tenki` module runs AG2 shell and code tools in isolated [Ten
 Install AG2, your model provider, and Tenki's Python SDK:
 
 ```bash
-pip install "ag2[anthropic]" "tenki>=0.5.4,<1"
+pip install "ag2[anthropic]" "tenki>=1.4.0,<2"
 ```
 
 Create an API key in Tenki and export it:

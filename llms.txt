@@ -84,8 +84,8 @@ Build with `ag2` only. The classic `autogen` API (`ConversableAgent`, `initiate_
 ## AG-UI
 
 - [AG-UI (Agent-User Interaction) Integration](https://docs.ag2.ai/docs/user-guide/ag-ui/overview/): The Agent-User Interaction (AG-UI) protocol standardizes how frontend applications communicate with agents. In AG2, ag2.ag_ui.AGUIStream bridges an Agent to AG-UI event streams.
-- [CopilotKit UI Quickstart for AG-UI](https://docs.ag2.ai/docs/user-guide/ag-ui/copilotkit-quickstart/): This quickstart shows how to connect a CopilotKit React/Next.js UI to an AG2 backend endpoint that speaks the AG-UI protocol.
-- [Channels: AG2 Agents in Slack and Other Messaging Platforms](https://docs.ag2.ai/docs/user-guide/ag-ui/channels/): The same AG2 agent that powers your in-app copilot can also run as a bot in messaging platforms. CopilotKit Channels connects your AG2 agent to Slack and other messaging platforms, with threads, tool...
+- [CopilotKit UI Quickstart for AG-UI](https://docs.ag2.ai/docs/user-guide/ag-ui/copilotkit-quickstart/): Run an AG2 agent behind an AG-UI endpoint and connect a CopilotKit UI to it. The AG2 weather sample contains the Python server and Next.js app used below.
+- [Channels: AG2 Agents in Messaging Platforms](https://docs.ag2.ai/docs/user-guide/ag-ui/channels/): A CopilotKit Channel can run the same AG2 agent that serves your web UI in a messaging platform. The channel process connects to CopilotKit Intelligence, then calls your agent's AG-UI endpoint for...
 - [AG-UI backend deep dive](https://docs.ag2.ai/docs/user-guide/ag-ui/backend-deepdive/): This page expands on the backend of the AG-UI integration: how to secure your endpoint, how tool calls are represented in the protocol, and how to pass per-request context into your tools.
 
 ## A2A
