@@ -81,8 +81,28 @@ def split_command(command: str) -> list[str] | None:
 
 
 def contains_shell_operator(command: str) -> bool:
-    """Return True if *command* contains any of ``_SHELL_OPERATORS``."""
-    return any(op in command for op in _SHELL_OPERATORS)
+    """Return True if *command* contains any of ``_SHELL_OPERATORS`` outside quotes and escapes."""
+    return any(op in _unquoted(command) for op in _SHELL_OPERATORS)
+
+
+def _unquoted(command: str) -> str:
+    """Return *command* with quoted and backslash-escaped text removed."""
+    kept: list[str] = []
+    quote = ""
+    chars = iter(command)
+    for char in chars:
+        if quote:
+            if char == quote:
+                quote = ""
+            elif char == "\\" and quote == '"':
+                next(chars, "")
+        elif char in "'\"":
+            quote = char
+        elif char == "\\":
+            next(chars, "")
+        else:
+            kept.append(char)
+    return "".join(kept)
 
 
 def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) -> str | None:

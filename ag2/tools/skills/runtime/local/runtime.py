@@ -40,9 +40,9 @@ class LocalRuntime(SkillRuntime):
         timeout:     Per-command timeout in seconds. Defaults to 60.
         max_output:  Maximum characters returned from a script run. Defaults to 100,000.
         blocked:     Command prefixes that are not allowed to run. Empty list → nothing blocked.
-                     Best-effort only (matches the head command prefix; chaining such
-                     as ``;`` / ``|`` / ``&&`` / ``$(...)`` bypasses it) — not a security
-                     boundary.
+                     Matched word by word against the argv, which then runs without a
+                     shell. A script that runs another program (``sh -c``, ``env``)
+                     is not covered — not a security boundary on its own.
         extra_paths: Additional read-only directories to scan for skills.
                      Installed skills always go to *dir*; these paths are only
                      used for discovery.

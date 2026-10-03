@@ -16,7 +16,25 @@ from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultE
 from ag2.testing import TestConfig
 from ag2.tools import LocalEnvironment, SandboxShellTool
 from ag2.tools.sandbox import ExecResult, SandboxFactory
-from ag2.tools.sandbox.filter import check_ignore, matches
+from ag2.tools.sandbox.filter import check_ignore, contains_shell_operator, matches
+
+
+class TestContainsShellOperator:
+    def test_unquoted_operator_is_found(self) -> None:
+        assert contains_shell_operator("echo x; id") is True
+
+    def test_quoted_operator_is_literal(self) -> None:
+        assert contains_shell_operator("grep 'a|b' f") is False
+        assert contains_shell_operator('echo "a && b" "$(c)"') is False
+
+    def test_escaped_operator_is_literal(self) -> None:
+        assert contains_shell_operator("echo a\\;b") is False
+
+    def test_operator_after_a_closed_quote_is_found(self) -> None:
+        assert contains_shell_operator("echo 'a'; id") is True
+
+    def test_unbalanced_quote_hides_the_rest(self) -> None:
+        assert contains_shell_operator("echo 'a; id") is False
 
 
 class TestMatches:
