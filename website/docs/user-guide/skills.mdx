@@ -160,7 +160,7 @@ skills = SkillsToolkit(
         "./my-skills",
         extra_paths=["./shared-skills"],   # read-only, also scanned
         timeout=30,                        # per-script timeout (seconds)
-        blocked=["rm -rf"],                # best-effort command blocklist
+        blocked=["rm -rf"],                # command blocklist (matched against argv)
     )
 )
 ```

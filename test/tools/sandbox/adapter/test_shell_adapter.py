@@ -118,6 +118,92 @@ class TestShellAdapterFiltering:
         await adapter.run(command)
         assert not (tmp_path / "pwned").exists()
 
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("echo x; touch pwned", id="semicolon"),
+            pytest.param("true && touch pwned", id="and"),
+            pytest.param("echo $(touch pwned)", id="substitution"),
+            pytest.param("echo `touch pwned`", id="backtick"),
+            pytest.param("echo x | touch pwned", id="pipe"),
+            pytest.param("echo x\ntouch pwned", id="newline"),
+        ],
+    )
+    async def test_blocked_alone_does_not_run_chained_commands(self, tmp_path: Path, command: str) -> None:
+        adapter = ShellAdapter(LocalSandbox(tmp_path), blocked=["touch"])
+        result = await adapter.run(command)
+        assert "Command not allowed" in result
+        assert not (tmp_path / "pwned").exists()
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("touch pwned", id="plain"),
+            pytest.param("touch  pwned", id="double-space"),
+            pytest.param("/usr/bin/touch pwned", id="absolute-path"),
+            pytest.param("'touch' pwned", id="quoted"),
+        ],
+    )
+    async def test_blocked_matches_the_argv(self, tmp_path: Path, command: str) -> None:
+        adapter = ShellAdapter(LocalSandbox(tmp_path), blocked=["touch"])
+        result = await adapter.run(command)
+        assert "Command not allowed" in result
+        assert not (tmp_path / "pwned").exists()
+
+    @pytest.mark.parametrize(
+        ("pattern", "command"),
+        [
+            pytest.param("/usr/bin/touch", "/usr/bin/touch pwned", id="absolute-path"),
+            pytest.param("./danger.sh", "./danger.sh pwned", id="relative-path"),
+            pytest.param("/usr/bin/touch pwned", "/usr/bin/touch  pwned", id="absolute-path-with-argument"),
+            pytest.param("./danger.sh pwned", "'./danger.sh'  pwned", id="relative-path-with-argument"),
+        ],
+    )
+    async def test_blocked_matches_path_based_prefixes(self, pattern: str, command: str) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, blocked=[pattern])
+        result = await adapter.run(command)
+        assert "Command not allowed" in result
+        assert sandbox.execs == []
+
+    async def test_blocked_path_prefix_allows_other_arguments(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, blocked=["./danger.sh pwned"])
+        await adapter.run("./danger.sh safe")
+        assert sandbox.execs == [["./danger.sh", "safe"]]
+
+    async def test_blocked_applies_on_top_of_allowed(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, allowed=["git"], blocked=["git push"])
+        result = await adapter.run("git  push")
+        assert "Command not allowed" in result
+        assert sandbox.execs == []
+
+    async def test_blocked_runs_other_commands_as_argv(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, blocked=["rm"])
+        await adapter.run("echo 'a; b' \"c | d\"")
+        assert sandbox.execs == [["echo", "a; b", "c | d"]]
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("cat .e$(echo)nv", id="substitution"),
+            pytest.param("cat .en*", id="glob"),
+            pytest.param("e=.env; cat $e", id="variable"),
+        ],
+    )
+    async def test_ignore_alone_does_not_leak_through_shell_expansion(self, tmp_path: Path, command: str) -> None:
+        (tmp_path / ".env").write_text("SECRET")
+        adapter = ShellAdapter(LocalSandbox(tmp_path), ignore=[".env"])
+        result = await adapter.run(command)
+        assert "SECRET" not in result
+
+    async def test_blocked_or_ignore_alone_switches_on_restricted_mode(self) -> None:
+        assert ShellAdapter(RecordingSandbox(), blocked=["rm"]).restricted
+        assert ShellAdapter(RecordingSandbox(), ignore=[".env"]).restricted
+        assert not ShellAdapter(RecordingSandbox()).restricted
+
     async def test_restricted_mode_does_not_expand_globs(self) -> None:
         sandbox = RecordingSandbox()
         adapter = ShellAdapter(sandbox, readonly=True)
