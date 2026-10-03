@@ -6,6 +6,9 @@ from typing import Any
 
 import pytest
 
+pytest.importorskip("transformers")
+pytest.importorskip("jinja2")
+
 from ag2.extensions.mi4afa import Conversation, PromptTemplate, Turn, TurnPositionError, build_prompt
 
 from .conftest import TRIMMING_TEMPLATE, build_tokenizer, make_conversation
