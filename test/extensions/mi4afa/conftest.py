@@ -61,7 +61,7 @@ def build_tokenizer(chat_template: str = CHATML_TEMPLATE) -> Any:
     return tokenizer
 
 
-def build_model(vocab_size: int, *, layers: int = 2, seed: int = 0) -> Any:
+def build_model(vocab_size: int, *, layers: int = 2, seed: int = 0, max_position_embeddings: int = 4096) -> Any:
     torch.manual_seed(seed)
     config = transformers.LlamaConfig(
         vocab_size=vocab_size,
@@ -70,7 +70,7 @@ def build_model(vocab_size: int, *, layers: int = 2, seed: int = 0) -> Any:
         num_hidden_layers=layers,
         num_attention_heads=2,
         num_key_value_heads=2,
-        max_position_embeddings=4096,
+        max_position_embeddings=max_position_embeddings,
     )
     return transformers.LlamaForCausalLM(config).eval()
 
