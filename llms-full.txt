@@ -12493,7 +12493,7 @@ Detects repetitive tool-call patterns. Maintains a sliding window of recent tool
 
 ```python
 from ag2 import Agent
-from ag2.observer import LoopDetector
+from ag2.observers import LoopDetector
 from ag2.config import OpenAIConfig
 
 agent = Agent(
@@ -12509,7 +12509,7 @@ Tracks cumulative token usage across `UsageEvent` - the framework's accounting r
 
 ```python
 from ag2 import Agent
-from ag2.observer import TokenMonitor
+from ag2.observers import TokenMonitor
 from ag2.config import OpenAIConfig
 
 agent = Agent(
@@ -12545,7 +12545,7 @@ Subclass `BaseObserver`, pick a [Watch](watches.md), implement `process()`:
 
 ```python
 from ag2 import Context
-from ag2.observer import BaseObserver
+from ag2.observers import BaseObserver
 from ag2.watch import CadenceWatch
 from ag2.events import BaseEvent, ModelResponse, ObserverAlert, Severity
 
@@ -12872,7 +12872,7 @@ The `append` / `read_range` pair supports WAL-style workloads: `append` returns 
 ### Memory store - fastest, non-persistent
 
 ```python
-from ag2 import MemoryKnowledgeStore
+from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 
@@ -12884,7 +12884,7 @@ print(await store.list("/"))  # ['artifacts/']
 ### Sqlite store - persistent across process restarts
 
 ```python
-from ag2 import SqliteKnowledgeStore
+from ag2.knowledge import SqliteKnowledgeStore
 
 store = SqliteKnowledgeStore("/var/agents/alice/knowledge.db")
 await store.write("/config/model.txt", "claude-opus-5")
@@ -12897,7 +12897,7 @@ print(await store2.read("/config/model.txt"))  # "claude-opus-5"
 ### Disk store - files on the filesystem
 
 ```python
-from ag2 import DiskKnowledgeStore
+from ag2.knowledge import DiskKnowledgeStore
 
 store = DiskKnowledgeStore("/var/agents/alice/knowledge/")
 await store.write("/artifacts/data.json", '{"ok": true}')
@@ -12913,7 +12913,7 @@ off1 = await store.append("/log/events.jsonl", '{"t": 1}\n')
 off2 = await store.append("/log/events.jsonl", '{"t": 2}\n')
 
 # Read everything appended in the second write
-new_slice = await store.read_range("/log/events.jsonl", off1)
+new_slice = await store.read_range("/log/events.jsonl", off2)
 print(new_slice)  # '{"t": 2}\n'
 ```
 
@@ -12922,7 +12922,7 @@ print(new_slice)  # '{"t": 2}\n'
 
 ## Change subscriptions
 
-Callers can react to writes via `on_change`. Backends that observe changes efficiently (`DiskKnowledgeStore` using `watchdog`) call the callback directly. Backends that cannot (`MemoryKnowledgeStore`, `SqliteKnowledgeStore`) return a `NoopChangeSubscription` - the caller is expected to poll.
+Callers can react to writes via `on_change`, which returns a subscription to `close()` when you no longer need notifications. Every built-in backend delivers them: `MemoryKnowledgeStore` calls back on each write, `DiskKnowledgeStore` uses `watchdog` filesystem events, and `SqliteKnowledgeStore` / `RedisKnowledgeStore` poll in the background (every 500 ms by default; pass `poll_interval_s` to the constructor to change it). A custom backend that cannot observe changes returns a `NoopChangeSubscription`, and the caller is expected to poll.
 
 ```python
 async def on_log_change(path: str) -> None:
@@ -12930,7 +12930,7 @@ async def on_log_change(path: str) -> None:
 
 sub = await store.on_change("/log/", on_log_change)
 # ... later:
-await sub.cancel()
+await sub.close()
 ```
 
 ## DefaultBootstrap
@@ -12938,7 +12938,7 @@ await sub.cancel()
 `DefaultBootstrap` populates a store with a standard layout and `SKILL.md` files that explain each directory to an LLM reader. It's designed to be called once per agent:
 
 ```python
-from ag2 import DefaultBootstrap, MemoryKnowledgeStore
+from ag2.knowledge import DefaultBootstrap, MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 await DefaultBootstrap().bootstrap(store, actor_name="alice")
@@ -12963,8 +12963,9 @@ Implement your own `StoreBootstrap` if you need a different layout.
 `EventLogWriter` serializes a Stream's events to a `KnowledgeStore` as JSONL, and can reconstruct them later. Useful for replay, audit, or multi-run aggregation.
 
 ```python
-from ag2 import Agent, EventLogWriter, MemoryKnowledgeStore, MemoryStream
+from ag2 import Agent, MemoryStream
 from ag2.config import OpenAIConfig
+from ag2.knowledge import EventLogWriter, MemoryKnowledgeStore
 
 stream = MemoryStream()
 agent = Agent("assistant", config=OpenAIConfig(model="gpt-5"))
@@ -12992,7 +12993,7 @@ When an `Agent` is given a `KnowledgeConfig`, it runs this `persist(...)` step f
 `LockedKnowledgeStore` wraps any `KnowledgeStore` to serialize concurrent writes. It delegates locking to a user-provided object implementing `acquire(name, ttl)` / `release(name)` - typically a distributed lock (Redis, database advisory locks, etc.) so multiple processes sharing the same store can coordinate.
 
 ```python
-from ag2 import LockedKnowledgeStore, SqliteKnowledgeStore
+from ag2.knowledge import LockedKnowledgeStore, SqliteKnowledgeStore
 
 inner = SqliteKnowledgeStore("/var/agents/shared.db")
 store = LockedKnowledgeStore(inner, lock=your_distributed_lock)
@@ -14402,14 +14403,19 @@ For protocol-level testing and event inspection, use the AG2 Dojo profile:
 
 Source: https://docs.ag2.ai/docs/user-guide/ag-ui/copilotkit-quickstart/
 
-Run an AG2 agent behind an AG-UI endpoint and connect a CopilotKit UI to it. The [AG2 weather sample](https://github.com/ag2ai/ag2-samples) contains the Python server and Next.js app used below.
+Run an AG2 agent behind an AG-UI 1.0 endpoint and connect a CopilotKit UI to it. The [AG2 weather sample](https://github.com/ag2ai/ag2-samples) contains the Python server and the Next.js app used below, and shows sub-agents, human approval and shared state next to a plain chat.
 
 ## Prerequisites
 
-- Python 3.10-3.14, `uv`, Node.js 18.18 or newer, and `pnpm`
+- Python 3.10-3.14 and `uv`
+- Node.js 20.9 or newer and `pnpm`
 - An OpenAI API key for the sample agent
 
+The backend depends on `ag2[ag-ui,openai]>=1.1.2,<2`; the UI on `@copilotkit/react-core` and `@copilotkit/runtime` 1.76.0 and `@ag-ui/client` 1.0.1.
+
 ## Run the sample
+
+The sample serves the agent only to a signed-in user, so both processes share a secret that signs and verifies the user's access token. Generate any long random string and use the same value for both.
 
 Clone the sample and start its AG2 backend from the repository root:
 
@@ -14418,30 +14424,89 @@ git clone https://github.com/ag2ai/ag2-samples.git
 cd ag2-samples
 uv sync
 export OPENAI_API_KEY="your-openai-api-key"
-uv run python weather.py
+export AUTH_SECRET="a-long-random-string"
+uv run python -m backend
 ```
 
 The server listens on port `8000`. Its AG-UI endpoint is `/weather/` in this sample. The [basic server example](overview.md#basic-server-example) uses `/chat` instead; use the URL configured by the server you actually start.
 
-In another terminal, from the directory where you cloned the repository, start the UI:
+In another terminal, from the repository root, start the UI with the same secret:
 
 ```bash
-cd ag2-samples/ui
+cd ui
 pnpm install
-pnpm dev
+AUTH_SECRET="a-long-random-string" pnpm dev
 ```
 
-Open `http://localhost:3000` and ask for the weather in a city. The UI sends the run to the Python endpoint and renders its streamed AG-UI events. You can also ask about your location if you allow browser location access.
+Open `http://localhost:3000`, enter a name to sign in, and ask for the weather in a city. The UI sends the run to the Python endpoint and renders its streamed AG-UI events. You can also ask about your location if you allow browser location access.
+
+!!! warning "The sign-in is a demonstration"
+
+    The sample accepts any name and keeps the token in `localStorage`. Replace `verify_access_token` in `backend/auth.py` and the token route in the UI before reusing the pattern. See [Authentication](backend-deepdive.md#authentication) for protecting the AG2 endpoint.
 
 !!! note "Starting from a generated project"
 
     Run `npx copilotkit@latest init`, select AG2 in the prompts, then use the install and start commands it prints. The generated project's layout and endpoint may differ from the weather sample.
 
+## What the sample shows
+
+| AG-UI 1.0 feature | Backend | Frontend | Try it |
+| --- | --- | --- | --- |
+| [Delegations](overview.md#delegations) (`SUBAGENT_*` events) | `ClothingAdvisor` and `TripPlanner`, wrapped with `Agent.as_tool()` | `agent.subscribe(...)` in a side panel | "What should I wear in Oslo?" |
+| [Interrupts](overview.md#gating-a-tool-call-instead-of-asking-a-question) | `save_favorite_city` is held by `ApprovalRequired` | `useInterrupt` renders Approve and Reject, and `resolve(true)` or `resolve(false)` answers | "Save Lisbon to my favorites" |
+| [Shared state](overview.md#shared-state) (`STATE_SNAPSHOT`) | `context.variables` | `useAgent` reads `agent.state` | Save a city, then watch the panel |
+| [Capabilities](overview.md#capabilities) | `GET /weather/` returns `stream.capabilities()` | | `curl localhost:8000/weather/` |
+| [Frontend tools](backend-deepdive.md#frontend-tools-ui-driven-actions) | | `useFrontendTool` registers `getUserLocation` | "What's the weather here?" |
+
 ## Connect your own AG2 agent
 
-First serve it with `AGUIStream`, as shown in the [AG-UI overview](overview.md#basic-server-example). Then register an `HttpAgent` pointed at that endpoint in your CopilotKit runtime. Use the [CopilotKit AG2 integration guide](https://docs.copilotkit.ai/ag2) for the current runtime and React provider wiring; CopilotKit's route and component APIs differ across major versions.
+Serve the agent with `AGUIStream`, as shown in the [AG-UI overview](overview.md#basic-server-example). Then register an `HttpAgent` pointed at that endpoint in your CopilotKit runtime. The sample's runtime route (`ui/app/api/copilotkit/route.ts`) is the whole wiring:
 
-The backend and CopilotKit runtime are separate processes. If the frontend connects through a Next.js runtime route, configure that route to reach the AG2 server and protect both routes as appropriate for your deployment. See [Authentication](backend-deepdive.md#authentication) for the AG2 endpoint.
+```typescript
+import { HttpAgent } from "@ag-ui/client";
+import { NextRequest } from "next/server";
+import {
+  CopilotRuntime,
+  createCopilotRuntimeHandler,
+} from "@copilotkit/runtime/v2";
+
+export const POST = async (req: NextRequest) => {
+  const runtime = new CopilotRuntime({
+    agents: {
+      agenticChatAgent: new HttpAgent({
+        url: "http://localhost:8000/weather/",
+        headers: { Authorization: req.headers.get("authorization") ?? "" },
+      }),
+    },
+  });
+
+  return createCopilotRuntimeHandler({
+    runtime,
+    basePath: "/api/copilotkit",
+    mode: "single-route",
+  })(req);
+};
+```
+
+The agent is built per request so the caller's `Authorization` header can be forwarded to the AG2 server. If your endpoint needs no credentials, create the runtime once at module level and drop `headers`.
+
+On the page, wrap the chat in the `CopilotKit` provider and name the same agent:
+
+```tsx
+import { CopilotKit } from "@copilotkit/react-core/v2";
+
+<CopilotKit agent="agenticChatAgent" runtimeUrl="/api/copilotkit">
+  {children}
+</CopilotKit>
+```
+
+Hooks such as `useAgent`, `useInterrupt`, `useFrontendTool` and `useRenderTool` come from `@copilotkit/react-core/v2` as well. CopilotKit's route and component APIs differ across major versions; use the [CopilotKit AG2 integration guide](https://docs.copilotkit.ai/ag2) for the version you install.
+
+The backend and CopilotKit runtime are separate processes. Both routes need protecting as appropriate for your deployment.
+
+!!! warning "Interrupts that require resume proof"
+
+    `useInterrupt().resolve()` and `.cancel()` send no `metadata` in the resume entry. That is enough for a gated tool call like the sample's `save_favorite_city`, but not for a server running with `require_resume_proof=True`. See [Asking the human a question](overview.md#asking-the-human-a-question).
 
 ## Check the connection
 
@@ -14450,9 +14515,10 @@ If chat does not stream, check these in order:
 1. The AG2 backend is running and the configured `HttpAgent` URL points to its AG-UI endpoint.
 2. The endpoint responds to a valid `POST` with `Content-Type: text/event-stream`.
 3. The Next.js runtime route can reach the backend; check its server logs for connection errors.
-4. If the browser calls AG2 directly, allow the frontend origin and required headers in the backend's CORS settings.
+4. If the backend answers `401`, the access token is missing or was signed with a different `AUTH_SECRET` than the backend's.
+5. If the browser calls AG2 directly, allow the frontend origin and required headers in the backend's CORS settings.
 
-For frontend tools, shared state, and human input, see [Backend deep dive](backend-deepdive.md), [Shared state](overview.md#shared-state), and [Asking the human a question](overview.md#asking-the-human-a-question). A client that resumes an AG2 interrupt must copy the interrupt's `metadata` into its resume entry.
+For frontend tools, shared state, and human input, see [Backend deep dive](backend-deepdive.md), [Shared state](overview.md#shared-state), and [Asking the human a question](overview.md#asking-the-human-a-question). A client that resumes an AG2 interrupt on a server with `require_resume_proof=True` must copy the interrupt's `metadata` into its resume entry.
 
 ---
 
@@ -14614,6 +14680,7 @@ Notes:
 
 - **Do not** put secrets (API keys, auth tokens) in the browser bundle. Protect the Next.js runtime route (`/api/copilotkit`) and forward credentials server-to-server.
 - If you expose a capabilities `GET` route alongside this `POST` route, apply the same authentication check there.
+- To give tools the verified user, pass it to `dispatch(dependencies=...)` rather than `variables`. The [weather sample](https://github.com/ag2ai/ag2-samples) verifies a signed token in a FastAPI dependency and does exactly that, so the user is never echoed back to the browser or supplied by the client.
 - If you don't need auth or middleware, add the generated `AGUIStream.build_asgi()` endpoint as a route, as shown in the [basic server example](overview.md#basic-server-example){.internal-link}.
 
 ## Tools context
@@ -24395,7 +24462,7 @@ from ag2 import Agent
 from ag2 import Context
 from ag2.config import GeminiConfig
 from ag2.events import BaseEvent, ObserverAlert
-from ag2.observer import BaseObserver, LoopDetector, TokenMonitor
+from ag2.observers import BaseObserver, LoopDetector, TokenMonitor
 from ag2.stream import MemoryStream
 from ag2.watch import EventWatch
 
@@ -24878,7 +24945,7 @@ from ag2 import Agent
 from ag2 import Context
 from ag2.config import GeminiConfig
 from ag2.events import BaseEvent, ToolCallEvent, HaltEvent, ObserverAlert, Severity
-from ag2.observer import BaseObserver
+from ag2.observers import BaseObserver
 from ag2.policies import AlertPolicy
 from ag2.stream import MemoryStream
 from ag2.watch import EventWatch
