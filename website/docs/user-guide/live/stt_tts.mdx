@@ -25,6 +25,46 @@ ElevenLabs classes need the optional dependency and `ELEVENLABS_API_KEY` in the 
 pip install "ag2[elevenlabs] sounddevice[numpy]"
 ```
 
+## OpenAI credentials
+
+The four OpenAI voice configs accept an explicit keyword-only `api_key`. This is useful when your application already holds a key and does not need a custom SDK client:
+
+```python linenums="1"
+import os
+
+from ag2.live import openai
+
+key = os.environ["VOICE_API_KEY"]  # an application-specific environment variable
+realtime = openai.RealTimeConfig("gpt-realtime-2", api_key=key)
+transcriber = openai.STTConfig("gpt-4o-mini-transcribe", api_key=key)
+translator = openai.STTTranslationConfig("whisper-1", api_key=key)
+tts = openai.TTSConfig("gpt-4o-mini-tts", api_key=key)
+```
+
+The public aliases `OpenAIRealTimeConfig`, `OpenAITranscriber`, `OpenAITranslationTranscriber`, and `OpenAITTSConfig` accept the same arguments. Omit `api_key` (or pass `None`) to keep the OpenAI SDK's `OPENAI_API_KEY` environment default. An explicit key takes precedence over that environment variable. The key configures only that voice config; it does not set credentials for a separate text agent or another provider.
+
+For a shared client, custom `base_url`, timeouts, or other SDK options, continue to pass `client=`. Each config reuses the supplied instance; it does not create another client:
+
+```python linenums="1"
+import asyncio
+import os
+
+from openai import AsyncOpenAI
+
+from ag2.live import openai
+
+async def main() -> None:
+    async with AsyncOpenAI(api_key=os.environ["VOICE_API_KEY"], timeout=30.0) as client:
+        transcriber = openai.STTConfig("gpt-4o-mini-transcribe", client=client)
+        tts = openai.TTSConfig("gpt-4o-mini-tts", client=client)
+        # Use transcriber and tts within this client lifetime.
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Passing both `client` and a non-`None` `api_key` raises `ValueError`, even if the key matches the client's key. Configure credentials on the injected client instead. Passing `client` with `api_key=None` is allowed and leaves the client unchanged.
+
 ## Audio I/O primitives
 
 `SoundDeviceRecorder` captures microphone input and `SoundDevicePlayer` plays synthesized speech. Both are thin wrappers around the [`sounddevice`](https://python-sounddevice.readthedocs.io/){.external-link target="_blank"} library and share the same event stream.
