@@ -46,6 +46,8 @@ if __name__ == "__main__":
 !!! note
     The three context managers must share the **same** `context` so the recorder's `RecordedAudioEvent`s reach the provider session and the provider's `SynthesizedAudioEvent`s reach the player.
 
+For OpenAI credentials, `openai.RealTimeConfig` accepts `api_key=` directly. Omitting it keeps the SDK's `OPENAI_API_KEY` environment default. You can also reuse a preconfigured SDK client with `client=`; passing both a client and a non-`None` key raises `ValueError`. See [OpenAI credentials](/docs/user-guide/live/stt_tts#openai-credentials) for examples shared by all four OpenAI voice configs.
+
 ## Watching the transcript
 
 The realtime provider streams both audio and a text transcript. Subscribe to `ModelMessageChunk` to receive the assistant's transcript token-by-token.
