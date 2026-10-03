@@ -155,6 +155,47 @@ def test_loader_lenient_skips_empty_description(tmp_path: Path, caplog: pytest.L
     assert "description" in caplog.text
 
 
+def test_loader_lenient_skips_invalid_utf8(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    contents = {
+        name: f"---\nname: {name}\ndescription: A valid skill\n---\nInstructions for {name}\n"
+        for name in ("a-good", "z-good")
+    }
+    for name, content in contents.items():
+        _write_skill(tmp_path, name, content)
+    invalid_dir = tmp_path / "m-invalid"
+    invalid_dir.mkdir()
+    (invalid_dir / "SKILL.md").write_bytes(
+        b"---\nname: m-invalid\ndescription: Valid frontmatter\n---\nInvalid body: \xff\n"
+    )
+
+    loader = SkillLoader(tmp_path, strict=False)
+    with caplog.at_level("WARNING"):
+        skills = loader.discover()
+
+    assert [skill.name for skill in skills] == ["a-good", "z-good"]
+    assert "Skipping skill 'm-invalid'" in caplog.text
+    assert "utf-8" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level("WARNING"):
+        assert loader.discover() == skills
+        for name, content in contents.items():
+            assert loader.load(name) == content
+    assert caplog.text == ""
+
+
+def test_loader_strict_raises_invalid_utf8(tmp_path: Path) -> None:
+    invalid_dir = tmp_path / "invalid"
+    invalid_dir.mkdir()
+    (invalid_dir / "SKILL.md").write_bytes(
+        b"---\nname: invalid\ndescription: Valid frontmatter\n---\nInvalid body: \xff\n"
+    )
+
+    loader = SkillLoader(tmp_path, strict=True)
+    with pytest.raises(UnicodeDecodeError, match="utf-8"):
+        loader.discover()
+
+
 def test_loader_collision_warns_and_first_wins(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     for scope in ("project", "user"):
         _write_skill(tmp_path / scope, "my-skill", f"---\nname: my-skill\ndescription: from {scope}\n---\n")
