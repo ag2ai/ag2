@@ -14,6 +14,11 @@ from typing import Any
 from .base import ChangeCallback, ChangeSubscription, _normalize
 from .polling import PollingChangeWatcher
 
+# Prefix predicate, bound as ``(len(prefix), prefix)``. Never use ``LIKE`` for
+# this: it treats ``_`` and ``%`` as wildcards and folds ASCII case, while the
+# other stores compare prefixes literally and case-sensitively.
+_PREFIX_MATCH = "substr(path, 1, ?) = ?"
+
 
 class SqliteKnowledgeStore:
     """SQLite-backed :class:`KnowledgeStore`.
@@ -97,9 +102,8 @@ class SqliteKnowledgeStore:
 
     def _sync_list(self, prefix: str) -> list[str]:
         conn = self._ensure_connected()
-        # Literal and case-sensitive. LIKE treats _ and % as wildcards and folds ASCII case.
         cur = conn.execute(
-            "SELECT path FROM entries WHERE substr(path, 1, ?) = ?",
+            f"SELECT path FROM entries WHERE {_PREFIX_MATCH}",
             (len(prefix), prefix),
         )
         children: set[str] = set()
@@ -115,7 +119,7 @@ class SqliteKnowledgeStore:
         conn = self._ensure_connected()
         conn.execute("DELETE FROM entries WHERE path = ?", (normalized,))
         conn.execute(
-            "DELETE FROM entries WHERE substr(path, 1, ?) = ?",
+            f"DELETE FROM entries WHERE {_PREFIX_MATCH}",
             (len(prefix), prefix),
         )
         conn.commit()
@@ -126,7 +130,7 @@ class SqliteKnowledgeStore:
         if cur.fetchone() is not None:
             return True
         cur = conn.execute(
-            "SELECT 1 FROM entries WHERE substr(path, 1, ?) = ? LIMIT 1",
+            f"SELECT 1 FROM entries WHERE {_PREFIX_MATCH} LIMIT 1",
             (len(prefix), prefix),
         )
         return cur.fetchone() is not None
@@ -164,7 +168,7 @@ class SqliteKnowledgeStore:
         else:
             child_prefix = normalized + "/"
             cur = conn.execute(
-                "SELECT path, version FROM entries WHERE path = ? OR substr(path, 1, ?) = ?",
+                f"SELECT path, version FROM entries WHERE path = ? OR {_PREFIX_MATCH}",
                 (normalized, len(child_prefix), child_prefix),
             )
         return {row[0]: int(row[1]) for row in cur.fetchall()}
