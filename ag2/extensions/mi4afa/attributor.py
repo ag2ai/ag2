@@ -8,6 +8,7 @@ import json
 import os
 import random
 import re
+import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
@@ -19,7 +20,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ag2.eval.scorers import Attribution
 
-from .activations import ActivationExtractor, ConversationActivations
+from .activations import ActivationExtractor, ConversationActivations, _model_fingerprint
 from .probe import LogisticProbe
 from .prompt import PromptTemplate
 from .types import ActivationSite, Conversation, FitReport, SiteScore
@@ -241,8 +242,8 @@ class ProbeAttributor:
         """Write the fitted probe and its settings to directory ``path``.
 
         The probe tensors go to ``probe.safetensors`` and the settings needed
-        to reproduce its inputs (model id, site, prompt, chat-template
-        variables, probe hyperparameters) to ``probe.json``.
+        to reproduce its inputs (model id and architecture, site, prompt,
+        chat-template variables, probe hyperparameters) to ``probe.json``.
         """
         directory = Path(path)
         directory.mkdir(parents=True, exist_ok=True)
@@ -251,6 +252,7 @@ class ProbeAttributor:
             "format": _FORMAT,
             "version": _FORMAT_VERSION,
             "model_id": self.extractor.model_id,
+            "model_fingerprint": _model_fingerprint(self.extractor.model),
             "site": {"layer": self.site.layer, "component": self.site.component},
             "template": asdict(self.extractor.template),
             "chat_template_kwargs": self.extractor.chat_template_kwargs,
@@ -272,9 +274,17 @@ class ProbeAttributor:
         The prompt and chat-template variables are restored from the saved
         settings so the probe sees the same inputs it was trained on.
 
+        ``model`` is checked by its architecture rather than by the name or path
+        it was loaded from, so a local copy of the probe's Hub model loads. Two
+        models with the same architecture and different weights are not told apart.
+
         Raises:
-            ValueError: If ``path`` is not a saved probe, or ``model`` is not the
-                model the probe was trained on.
+            ValueError: If ``path`` is not a saved probe, or ``model``'s architecture
+                differs from the model the probe was trained on.
+
+        Warns:
+            UserWarning: If ``model`` was loaded from another name or path than the
+                probe's model.
         """
         directory = Path(path)
         config = json.loads((directory / _CONFIG_FILE).read_text(encoding="utf-8"))
@@ -287,9 +297,26 @@ class ProbeAttributor:
             template=PromptTemplate(**config["template"]),
             chat_template_kwargs=config["chat_template_kwargs"],
         )
+        saved_fingerprint = config.get("model_fingerprint")
+        fingerprint = _model_fingerprint(model)
+        if saved_fingerprint is not None and saved_fingerprint != fingerprint:
+            changed = ", ".join(
+                f"{field} {saved_fingerprint.get(field)!r} vs {fingerprint.get(field)!r}"
+                for field in dict.fromkeys([*saved_fingerprint, *fingerprint])
+                if saved_fingerprint.get(field) != fingerprint.get(field)
+            )
+            raise ValueError(f"probe was trained on a model with a different architecture: {changed}")
         saved_model = config.get("model_id")
         if saved_model and extractor.model_id and saved_model != extractor.model_id:
-            raise ValueError(f"probe was trained on {saved_model!r}, not {extractor.model_id!r}")
+            checked = (
+                "its architecture matches"
+                if saved_fingerprint is not None
+                else "the probe records no architecture to compare"
+            )
+            warnings.warn(
+                f"probe was trained on {saved_model!r} and is loaded with {extractor.model_id!r}; {checked}",
+                stacklevel=2,
+            )
 
         attributor = cls(extractor, device=device, **config["probe"])
         site = ActivationSite(layer=int(config["site"]["layer"]), component=config["site"]["component"])
