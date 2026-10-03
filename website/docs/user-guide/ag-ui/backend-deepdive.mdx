@@ -58,6 +58,7 @@ Notes:
 
 - **Do not** put secrets (API keys, auth tokens) in the browser bundle. Protect the Next.js runtime route (`/api/copilotkit`) and forward credentials server-to-server.
 - If you expose a capabilities `GET` route alongside this `POST` route, apply the same authentication check there.
+- To give tools the verified user, pass it to `dispatch(dependencies=...)` rather than `variables`. The [weather sample](https://github.com/ag2ai/ag2-samples){.external-link target="_blank"} verifies a signed token in a FastAPI dependency and does exactly that, so the user is never echoed back to the browser or supplied by the client.
 - If you don’t need auth or middleware, add the generated `AGUIStream.build_asgi()` endpoint as a route, as shown in the [basic server example](/docs/user-guide/ag-ui/overview#basic-server-example){.internal-link}.
 
 ## Tools context
