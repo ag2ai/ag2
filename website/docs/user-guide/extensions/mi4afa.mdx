@@ -1,0 +1,137 @@
+---
+title: mi4afa Probing Failure Attribution
+sidebarTitle: mi4afa Probing
+---
+
+The `ag2.extensions.mi4afa` module attributes failed multi-agent runs to their **decisive step** and **responsible agent** by reading an open-weight model's internal activations. It is the white-box counterpart of the core [`failure_attribution`](/docs/user-guide/evaluation/scorers#failure-attribution-failure_attribution) scorer: instead of asking a judge model which step went wrong, it trains a small linear probe on labelled failures and reads the answer out of the model's hidden states.
+
+It targets the setting of the [Who&When](https://arxiv.org/abs/2505.00212){.external-link target="_blank"} benchmark, where judge models asked to name the failing step usually answer wrongly, yet the correct step is often linearly decodable from a model's activations while it reads the transcript.
+
+## Installation
+
+The extension needs PyTorch and Hugging Face Transformers, plus an open-weight chat model (for example `Qwen/Qwen2.5-0.5B-Instruct`). A GPU is recommended for anything beyond small models.
+
+```bash
+pip install ag2 "torch>=2.4,<3" "transformers>=4.56,<6"
+```
+
+```python linenums="1"
+from ag2.extensions.mi4afa import Conversation, ProbeAttributor, probe_failure_attribution
+```
+
+Without PyTorch installed, the data types (`Conversation`, `Turn`, `PromptTemplate`, `conversation_from_trace`) still import; the probing classes raise an `ImportError` with the install command.
+
+## Quick start
+
+Train on labelled failures, select a layer on a validation split, and score held-out data. Records in the [Who&When](https://huggingface.co/datasets/Kevin355/Who_and_When){.external-link target="_blank"} format — `question`, `ground_truth`, a `history` of `{"name", "content"}` steps, `mistake_step` and `mistake_agent` — load directly:
+
+```python linenums="1"
+import json
+import random
+
+from ag2.extensions.mi4afa import Conversation, ProbeAttributor
+
+records = json.load(open("who_and_when.json"))  # a list of Who&When records
+conversations = [Conversation.from_who_and_when(record) for record in records]
+random.Random(0).shuffle(conversations)
+train, test = conversations[: len(conversations) // 2], conversations[len(conversations) // 2 :]
+
+attributor = ProbeAttributor.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct", device="cuda")
+
+report = attributor.fit(train)  # holds out 20% of `train` to choose the site
+print("selected site:", report.site)
+
+score = attributor.evaluate(test)
+print(f"step accuracy {score.step_accuracy:.2%}, agent accuracy {score.agent_accuracy:.2%}")
+
+attribution = attributor.attribute(test[0])
+print(attribution.decisive_step, attribution.responsible_agent)
+```
+
+`attribute` returns the core [`Attribution`](/docs/user-guide/evaluation/scorers#failure-attribution-failure_attribution) model. The probe localizes a failure but does not classify it, so `error_mode` is `"other"`.
+
+## Use it as an eval scorer
+
+`probe_failure_attribution` wraps a fitted attributor as an `ag2.eval` scorer. Each run's trace is converted into a conversation, the probe blames one turn, and the scorer emits a `Feedback` whose `value` is the responsible agent — so `value_counts` gives the blame distribution — and whose `detail` is the `Attribution` with `decisive_step` pointing into `trace.events`, as in the core scorer:
+
+```python linenums="1"
+from ag2.eval import evaluate_traces
+from ag2.extensions.mi4afa import probe_failure_attribution
+
+result = await evaluate_traces(
+    failed_runs,  # a TraceSource of runs already known to have failed
+    scorers=[probe_failure_attribution(attributor, key="blame", agent_name="planner")],
+    store_dir="./runs",
+)
+print(result.value_counts("blame"))  # {"planner": 12, "tool:search": 5, "researcher": 3}
+```
+
+The probe always names a step, so score runs that failed, or read it next to a correctness scorer. The model forward pass runs in a worker thread, so the event loop stays responsive.
+
+!!! note "Trace conversion is best effort"
+    A trace records one agent's stream and its events carry no speaker. `conversation_from_trace` turns the traced agent's text responses and tool calls into turns by `agent_name`, tool results and errors into turns by `tool:<name>`, and completed or failed sub-tasks into turns by the sub-agent that ran them. For full control, build `Conversation` objects yourself and call `attributor.attribute(...)`.
+
+## How it works
+
+1. **Prompt.** Each conversation is rendered as a judge prompt (task, expected answer, then one numbered line per turn) with the model's chat template. `PromptTemplate` holds the wording.
+2. **Activations.** `ActivationExtractor` runs the model's decoder once per conversation and reads, at the token holding each turn's last character, every **site**:
+    - `resid_pre` at layer *l* — the residual stream entering layer *l*,
+    - `mlp_in` at layer *l* — the normalized post-attention residual entering layer *l*'s MLP,
+    - `resid_final` — the final hidden state after the last norm.
+3. **Probe.** A standardized, class-weighted `LogisticProbe` scores each turn as "is this the mistake?". The highest-scoring turn is the decisive step, and its speaker the responsible agent.
+4. **Site selection.** `fit` trains one probe per site on part of the training data and keeps the site with the best **validation** step accuracy, then refits on all of it. Test data never influences the choice.
+
+Turn tokens are located from the tokenizer's character offsets, so a fast tokenizer is required. Chat templates that embed the current date (Llama 3) change the prompt from day to day; pin them for reproducible activations:
+
+```python linenums="1"
+attributor = ProbeAttributor.from_pretrained(
+    "meta-llama/Llama-3.2-1B-Instruct",
+    device="cuda",
+    chat_template_kwargs={"date_string": "26 Jul 2024"},
+)
+```
+
+### Reuse activations
+
+Extraction dominates the cost. Extract once and pass the activations to `fit`, `evaluate` and `sweep_sites`, which accept them in place of conversations:
+
+```python linenums="1"
+train_acts = attributor.extract(train)
+test_acts = attributor.extract(test)
+
+attributor.fit(train_acts)
+print(attributor.evaluate(test_acts))
+
+for score in attributor.sweep_sites(train_acts, test_acts):  # per-site test accuracy, for analysis
+    print(score.site, score.step_accuracy)
+```
+
+`sweep_sites` scores every site on the test set, which shows where the information lives but is optimistic if used to pick a site — use `fit` + `evaluate` for an unbiased number.
+
+### Save and load
+
+```python linenums="1"
+attributor.save("probes/qwen0.5-algo")
+
+restored = ProbeAttributor.load("probes/qwen0.5-algo", model, tokenizer)
+```
+
+The probe is stored as `probe.safetensors` (no pickle) next to `probe.json`, which records the model id, site, prompt and chat-template variables. `load` restores the same prompt settings and refuses a model other than the one the probe was trained on.
+
+## Reference
+
+| Name | Purpose |
+| :--- | :--- |
+| `Conversation`, `Turn` | A multi-agent conversation, optionally labelled with `mistake_step` / `mistake_agent`; `Conversation.from_who_and_when(record)` |
+| `PromptTemplate`, `build_prompt` | Judge-prompt wording and tokenization with per-turn token positions |
+| `ActivationExtractor`, `ActivationSite` | Read per-turn activations at chosen sites of a Hugging Face causal LM |
+| `LogisticProbe` | The standardized logistic probe |
+| `ProbeAttributor` | `fit` / `evaluate` / `sweep_sites` / `attribute` / `save` / `load` |
+| `conversation_from_trace` | Convert an `ag2.eval` `Trace` into a `Conversation` |
+| `probe_failure_attribution` | The `ag2.eval` scorer |
+
+## Testing
+
+The bundled unit tests build a tiny random Llama and an in-memory tokenizer, so they run offline on CPU without downloading any model.
+
+Maintainer: [@wuliang211](https://github.com/wuliang211){.external-link target="_blank"} (Liang Wu). Based on research by Wendy Zheng.
