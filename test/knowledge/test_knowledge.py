@@ -518,6 +518,60 @@ class TestSqliteKnowledgeStore:
         finally:
             store.close()
 
+    async def test_underscore_prefix_does_not_match_sibling(self, tmp_path: Path) -> None:
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            await store.write("/skills/codeXreview/notes.md", "sibling")
+            assert await store.exists("/skills/code_review") is False
+            assert await store.list("/skills/code_review") == []
+            await store.delete("/skills/code_review")
+            assert await store.read("/skills/codeXreview/notes.md") == "sibling"
+
+            await store.write("/skills/code_review/notes.md", "real")
+            assert await store.exists("/skills/code_review") is True
+            assert await store.list("/skills/code_review") == ["notes.md"]
+            await store.delete("/skills/code_review")
+            assert await store.read("/skills/code_review/notes.md") is None
+            assert await store.read("/skills/codeXreview/notes.md") == "sibling"
+        finally:
+            store.close()
+
+    async def test_percent_prefix_does_not_match_sibling(self, tmp_path: Path) -> None:
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            await store.write("/pct/100X_done/sibling.md", "sibling")
+            assert await store.list("/pct/100%_done") == []
+            assert await store.exists("/pct/100%_done") is False
+            await store.delete("/pct/100%_done")
+            assert await store.read("/pct/100X_done/sibling.md") == "sibling"
+
+            await store.write("/pct/100%_done/real.md", "real")
+            assert await store.list("/pct/100%_done") == ["real.md"]
+        finally:
+            store.close()
+
+    async def test_prefix_match_is_case_sensitive(self, tmp_path: Path) -> None:
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            await store.write("/docs/readme.md", "hello")
+            assert await store.list("/Docs") == []
+            assert await store.exists("/Docs") is False
+            await store.delete("/Docs")
+            assert await store.read("/docs/readme.md") == "hello"
+            assert await store.list("/docs") == ["readme.md"]
+        finally:
+            store.close()
+
+    async def test_list_versions_under_underscore_does_not_include_sibling(self, tmp_path: Path) -> None:
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            await store.write("/skills/code_review/notes.md", "real")
+            await store.write("/skills/codeXreview/notes.md", "sibling")
+            versions = await store.list_versions_under("/skills/code_review")
+            assert set(versions.keys()) == {"/skills/code_review/notes.md"}
+        finally:
+            store.close()
+
     async def test_on_change_polling(self, tmp_path: Path) -> None:
         store = SqliteKnowledgeStore(str(tmp_path / "store.db"), poll_interval_s=0.05)
         received: list[str] = []

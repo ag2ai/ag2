@@ -97,9 +97,10 @@ class SqliteKnowledgeStore:
 
     def _sync_list(self, prefix: str) -> list[str]:
         conn = self._ensure_connected()
+        # Literal and case-sensitive. LIKE treats _ and % as wildcards and folds ASCII case.
         cur = conn.execute(
-            "SELECT path FROM entries WHERE path LIKE ?",
-            (prefix + "%",),
+            "SELECT path FROM entries WHERE substr(path, 1, ?) = ?",
+            (len(prefix), prefix),
         )
         children: set[str] = set()
         for (p,) in cur.fetchall():
@@ -113,7 +114,10 @@ class SqliteKnowledgeStore:
     def _sync_delete(self, normalized: str, prefix: str) -> None:
         conn = self._ensure_connected()
         conn.execute("DELETE FROM entries WHERE path = ?", (normalized,))
-        conn.execute("DELETE FROM entries WHERE path LIKE ?", (prefix + "%",))
+        conn.execute(
+            "DELETE FROM entries WHERE substr(path, 1, ?) = ?",
+            (len(prefix), prefix),
+        )
         conn.commit()
 
     def _sync_exists(self, normalized: str, prefix: str) -> bool:
@@ -122,8 +126,8 @@ class SqliteKnowledgeStore:
         if cur.fetchone() is not None:
             return True
         cur = conn.execute(
-            "SELECT 1 FROM entries WHERE path LIKE ? LIMIT 1",
-            (prefix + "%",),
+            "SELECT 1 FROM entries WHERE substr(path, 1, ?) = ? LIMIT 1",
+            (len(prefix), prefix),
         )
         return cur.fetchone() is not None
 
@@ -158,9 +162,10 @@ class SqliteKnowledgeStore:
         if normalized in ("", "/"):
             cur = conn.execute("SELECT path, version FROM entries")
         else:
+            child_prefix = normalized + "/"
             cur = conn.execute(
-                "SELECT path, version FROM entries WHERE path = ? OR path LIKE ?",
-                (normalized, normalized + "/%"),
+                "SELECT path, version FROM entries WHERE path = ? OR substr(path, 1, ?) = ?",
+                (normalized, len(child_prefix), child_prefix),
             )
         return {row[0]: int(row[1]) for row in cur.fetchall()}
 
