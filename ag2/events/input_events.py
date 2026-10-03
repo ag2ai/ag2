@@ -58,6 +58,17 @@ class DrainedModelRequest(ModelRequest):
     """
 
 
+class VoiceTurn(ModelRequest):
+    """``ModelRequest`` a live session built from the user's captured speech.
+
+    Published by ``CascadeConfig`` with the transcript of an utterance, right
+    before it answers it. Observers, logging middleware, and history storage
+    treat it as a normal ``ModelRequest``; the session that published it skips
+    it in its own ``ModelRequest`` subscription, which is for input pushed
+    into the session by others.
+    """
+
+
 class MessageEnqueued(BaseEvent):
     """Announces that ``context.enqueue`` added a message to the stream's inbox.
 

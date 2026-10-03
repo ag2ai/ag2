@@ -12,20 +12,21 @@ from ag2.exceptions import UnsupportedInputError
 logger = logging.getLogger(__name__)
 
 
-def request_texts(request: ModelRequest, serializer: SerializerProto, *, provider: str) -> list[str]:
-    """Convert the parts of a pushed request to the texts a text-only live session sends.
+# The input kinds every live session sends; the rest of the contract is in `RealtimeConfig`.
+SENDABLE_INPUTS = (TextInput, DataInput)
 
-    `TextInput` is taken as is and `DataInput` encoded by `serializer`. Any
-    other part raises `UnsupportedInputError`, except in a
+
+def sendable_parts(request: ModelRequest, *, provider: str) -> list[Input]:
+    """Select the parts of a pushed request a live session sends: `TextInput` and `DataInput`.
+
+    Any other part raises `UnsupportedInputError`, except in a
     `DrainedModelRequest`, where it is logged and dropped so the rest of the
     drained inbox still reaches the model.
     """
-    texts: list[str] = []
+    parts: list[Input] = []
     for part in request.parts:
-        if isinstance(part, TextInput):
-            texts.append(part.content)
-        elif isinstance(part, DataInput):
-            texts.append(serializer.encode(part.data).decode())
+        if isinstance(part, SENDABLE_INPUTS):
+            parts.append(part)
         elif isinstance(request, DrainedModelRequest):
             logger.warning(
                 "Dropped %s from an inbox message: input type not supported by provider `%s`",
@@ -34,6 +35,21 @@ def request_texts(request: ModelRequest, serializer: SerializerProto, *, provide
             )
         else:
             raise UnsupportedInputError(_input_kind(part), provider)
+    return parts
+
+
+def request_texts(request: ModelRequest, serializer: SerializerProto, *, provider: str) -> list[str]:
+    """Convert the sendable parts of a pushed request to the texts a text-only live session sends.
+
+    `TextInput` is taken as is and `DataInput` encoded by `serializer`; other
+    parts are refused or dropped as `sendable_parts` describes.
+    """
+    texts: list[str] = []
+    for part in sendable_parts(request, provider=provider):
+        if isinstance(part, TextInput):
+            texts.append(part.content)
+        elif isinstance(part, DataInput):
+            texts.append(serializer.encode(part.data).decode())
     return texts
 
 

@@ -20,6 +20,7 @@ from .input_events import (
     TextInput,
     UrlInput,
     VideoInput,
+    VoiceTurn,
 )
 from .lifecycle import (
     AggregationCompleted,
@@ -141,6 +142,7 @@ __all__ = (
     "Usage",
     "UsageEvent",
     "VideoInput",
+    "VoiceTurn",
     "estimated_tokens",
     "is_conversational",
     "render_for_prompt",
