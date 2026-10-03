@@ -21,5 +21,7 @@ def test_torch_free_api_imports_and_probing_api_hints_install(monkeypatch: pytes
     conversation = module.Conversation(question="q", ground_truth="a", history=(module.Turn("A", "x"),))
     assert module.PromptTemplate().chunks(conversation)[1] == "0 - A: x"
     for name in ("ProbeAttributor", "ActivationExtractor", "LogisticProbe", "probe_failure_attribution"):
-        with pytest.raises(ImportError, match=r'pip install "torch>=2.4,<3" "transformers>=4.57,<6"'):
+        with pytest.raises(
+            ImportError, match=r'pip install "torch>=2.4,<3" "transformers>=4.57,<6" "safetensors>=0.4.3,<1"'
+        ):
             getattr(module, name)()
