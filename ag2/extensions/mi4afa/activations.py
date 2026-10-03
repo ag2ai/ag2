@@ -20,6 +20,8 @@ __all__ = (
     "ConversationActivations",
 )
 
+_FINGERPRINT_FIELDS = ("model_type", "hidden_size", "num_hidden_layers", "intermediate_size", "vocab_size")
+
 
 @dataclass(frozen=True, slots=True)
 class ConversationActivations:
@@ -219,14 +221,27 @@ class ActivationExtractor:
         return layers  # type: ignore[no-any-return]
 
 
-def _context_length(model: Any) -> int | None:
-    """The longest sequence the model's config declares (``max_position_embeddings``), or None if it declares none."""
+def _text_config(model: Any) -> Any:
+    """The model's config, or its text part when the config nests one."""
     config = getattr(model, "config", None)
     get_text_config = getattr(config, "get_text_config", None)
-    if callable(get_text_config):
-        config = get_text_config()
-    length = getattr(config, "max_position_embeddings", None)
+    return get_text_config() if callable(get_text_config) else config
+
+
+def _context_length(model: Any) -> int | None:
+    """The longest sequence the model's config declares (``max_position_embeddings``), or None if it declares none."""
+    length = getattr(_text_config(model), "max_position_embeddings", None)
     return length if isinstance(length, int) and length > 0 else None
+
+
+def _model_fingerprint(model: Any) -> dict[str, Any]:
+    """The architecture fields of the model's config that the activations a probe reads depend on.
+
+    The same weights loaded from the Hub and from a local copy give the same fingerprint. Two models that share
+    an architecture but not their weights do too: the fingerprint does not tell them apart.
+    """
+    config = _text_config(model)
+    return {field: getattr(config, field, None) for field in _FINGERPRINT_FIELDS}
 
 
 def _mlp(layer: torch.nn.Module) -> torch.nn.Module:

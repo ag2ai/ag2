@@ -4,6 +4,7 @@
 
 import json
 import random
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,7 @@ from ag2.extensions.mi4afa import (
 )
 from ag2.extensions.mi4afa.attributor import _same_agent, _split
 
-from .conftest import make_conversation
+from .conftest import build_model, make_conversation
 
 SITE_A = ActivationSite(0, "resid_pre")
 SITE_B = ActivationSite(0, "mlp_in")
@@ -226,9 +227,19 @@ def test_save_and_load_round_trip(model: Any, tokenizer: Any, tmp_path: Path, mo
     attributor.fit(conversations)
 
     attributor.save(tmp_path / "probe")
-    loaded = ProbeAttributor.load(tmp_path / "probe", model, tokenizer)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        loaded = ProbeAttributor.load(tmp_path / "probe", model, tokenizer)
 
     assert sorted(path.name for path in (tmp_path / "probe").iterdir()) == ["probe.json", "probe.safetensors"]
+    saved = json.loads((tmp_path / "probe" / "probe.json").read_text(encoding="utf-8"))
+    assert saved["model_fingerprint"] == {
+        "model_type": "llama",
+        "hidden_size": 16,
+        "num_hidden_layers": 2,
+        "intermediate_size": 32,
+        "vocab_size": len(tokenizer),
+    }
     assert loaded.site == attributor.site
     assert loaded.extractor.chat_template_kwargs == {"date_string": "26 Jul 2024"}
     assert loaded.extractor.template == attributor.extractor.template
@@ -236,17 +247,51 @@ def test_save_and_load_round_trip(model: Any, tokenizer: Any, tmp_path: Path, mo
     torch.testing.assert_close(loaded.score_turns(conversations[1]), attributor.score_turns(conversations[1]))
 
 
-def test_load_rejects_a_different_model(
+def _saved_probe(model: Any, tokenizer: Any, path: Path) -> tuple[ProbeAttributor, list[Any]]:
+    attributor = _real_attributor(model, tokenizer)
+    conversations = _real_conversations(6)
+    attributor.fit(conversations)
+    attributor.save(path)
+    return attributor, conversations
+
+
+def test_load_warns_when_the_same_architecture_comes_from_another_path(
     model: Any, tokenizer: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(model.config, "_name_or_path", "org/tiny-llama")
-    attributor = _real_attributor(model, tokenizer)
-    attributor.fit(_real_conversations(6))
-    attributor.save(tmp_path)
+    attributor, conversations = _saved_probe(model, tokenizer, tmp_path)
 
-    monkeypatch.setattr(model.config, "_name_or_path", "org/other-model")
-    with pytest.raises(ValueError, match="trained on 'org/tiny-llama'"):
-        ProbeAttributor.load(tmp_path, model, tokenizer)
+    monkeypatch.setattr(model.config, "_name_or_path", "/models/tiny-llama")
+    with pytest.warns(
+        UserWarning, match="trained on 'org/tiny-llama' and is loaded with '/models/tiny-llama'.*matches"
+    ):
+        loaded = ProbeAttributor.load(tmp_path, model, tokenizer)
+
+    torch.testing.assert_close(loaded.score_turns(conversations[0]), attributor.score_turns(conversations[0]))
+
+
+def test_load_rejects_a_model_with_a_different_architecture(model: Any, tokenizer: Any, tmp_path: Path) -> None:
+    _saved_probe(model, tokenizer, tmp_path)
+
+    with pytest.raises(ValueError, match="different architecture: num_hidden_layers 2 vs 3"):
+        ProbeAttributor.load(tmp_path, build_model(len(tokenizer), layers=3), tokenizer)
+
+
+def test_load_accepts_a_probe_saved_without_a_fingerprint(
+    model: Any, tokenizer: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(model.config, "_name_or_path", "org/tiny-llama")
+    attributor, conversations = _saved_probe(model, tokenizer, tmp_path)
+    config_file = tmp_path / "probe.json"
+    config = json.loads(config_file.read_text(encoding="utf-8"))
+    del config["model_fingerprint"]
+    config_file.write_text(json.dumps(config), encoding="utf-8")
+
+    monkeypatch.setattr(model.config, "_name_or_path", "/models/tiny-llama")
+    with pytest.warns(UserWarning, match="records no architecture to compare"):
+        loaded = ProbeAttributor.load(tmp_path, model, tokenizer)
+
+    torch.testing.assert_close(loaded.score_turns(conversations[0]), attributor.score_turns(conversations[0]))
 
 
 def test_load_rejects_foreign_files(model: Any, tokenizer: Any, tmp_path: Path) -> None:

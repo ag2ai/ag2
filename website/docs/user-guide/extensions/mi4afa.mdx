@@ -118,7 +118,7 @@ attributor.save("probes/qwen0.5-algo")
 restored = ProbeAttributor.load("probes/qwen0.5-algo", model, tokenizer)
 ```
 
-The probe is stored as `probe.safetensors` (no pickle) next to `probe.json`, which records the model id, site, prompt and chat-template variables. `load` restores the same prompt settings and refuses a model other than the one the probe was trained on.
+The probe is stored as `probe.safetensors` (no pickle) next to `probe.json`, which records the model id and architecture, site, prompt and chat-template variables. `load` restores the same prompt settings. It refuses a model whose architecture differs from the probe's model, and warns when the same architecture was loaded from another name or path, such as a local copy of the Hub model for an offline machine. The check reads the model's config, so two models that share an architecture but not their weights are not told apart.
 
 ## Reference
 
