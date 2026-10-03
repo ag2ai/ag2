@@ -268,3 +268,32 @@ async def test_delegate_tool_end_to_end() -> None:
     assert reply.body == "The answer is 4."
 
     await hub.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("channel_type", ["consulting", "conversation"])
+async def test_open_to_self_fails_with_clear_error(channel_type: str) -> None:
+    """Opening a channel whose only target is the caller fails fast.
+
+    Every adapter requires at least two participants. When the sole resolved
+    target is the agent itself, the participant set collapses onto the creator
+    and the adapter would otherwise reject the open deep down with an opaque
+    role error ("... requires exactly one respondent"). ``AgentClient.open``
+    must surface an actionable message naming the real problem instead, for
+    every entry point (the ``channels`` tool, ``delegate``, direct ``open``).
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+
+    with pytest.raises(ProtocolError, match="only self as participant"):
+        await alice.open(type=channel_type, target="alice")
+
+    # The doomed open must not leave a channel behind.
+    assert await hub.list_channels() == []
+
+    await alice_hc.close()
+    await hub.close()
