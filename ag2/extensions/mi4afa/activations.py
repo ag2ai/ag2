@@ -161,12 +161,14 @@ class ActivationExtractor:
             _mlp(layers[layer]).register_forward_pre_hook(partial(self._capture, layer=layer))
             for layer in sorted({site.layer for site in sites if site.component == "mlp_in"})
         ]
+        # Hidden states hold every layer at every token, so request them only when a residual site reads them.
+        needs_hidden_states = any(site.component != "mlp_in" for site in sites)
         try:
             with torch.inference_mode():
                 output = decoder(
                     input_ids=input_ids,
                     attention_mask=torch.ones_like(input_ids),
-                    output_hidden_states=True,
+                    output_hidden_states=needs_hidden_states,
                     use_cache=False,
                 )
                 hidden_states = output.hidden_states
