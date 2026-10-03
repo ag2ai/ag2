@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Awaitable, Callable
+
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.routes.jsonrpc_routes import create_jsonrpc_routes
 from a2a.server.tasks import (
@@ -39,6 +41,7 @@ def build_jsonrpc_asgi(
     task_store: TaskStore | None = None,
     push_config_store: PushNotificationConfigStore | None = None,
     push_sender: PushNotificationSender | None = None,
+    push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
     rpc_url: str = "/",
     card_url: str = DEFAULT_AGENT_CARD_PATH,
     legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
@@ -62,6 +65,7 @@ def build_jsonrpc_asgi(
         task_store=task_store,
         push_config_store=push_config_store,
         push_sender=push_sender,
+        push_url_validator=push_url_validator,
     )
     routes: list[BaseRoute] = list(create_jsonrpc_routes(handler, rpc_url=rpc_url))
     routes.extend(

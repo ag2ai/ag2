@@ -47,10 +47,18 @@ After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.we
 | `#!python task_store` | Shared `#!python TaskStore`. Defaults to a single `#!python InMemoryTaskStore` reused across every `#!python build_*` call |
 | `#!python push_config_store` | Enables push-notifications CRUD (see [Tasks & Push](/docs/user-guide/a2a/tasks_and_push)). Optional |
 | `#!python push_sender` | Custom delivery sender. Defaults to no-op when not set |
+| `#!python push_url_validator` | Optional async callback receiving a URL and returning `bool`. Rejects disallowed push-notification URLs before storing them |
 | `#!python extended_card` | Auth-aware extra metadata returned via `#!python GetExtendedAgentCard` |
 | `#!python card_modifier` / `#!python extended_card_modifier` | Per-request hooks that mutate the card before it's served |
 | `#!python card_signer` | Attaches a JWS signature to every card served, on all transports (see [Card Signing](/docs/user-guide/a2a/card_signing)). Optional |
 | `#!python executor` | Escape hatch — drop in a custom `#!python AgentExecutor` (see [Advanced](/docs/user-guide/a2a/advanced#custom-agentexecutor)) |
+
+Push URLs are supplied by clients and may point to internal services (SSRF).
+Pass `#!python push_url_validator` to apply your application's URL policy on
+JSON-RPC, REST, and gRPC. Returning `#!python False` rejects registration with
+the SDK's invalid-params error and stores nothing. Omitting the callback keeps
+the existing behavior; AG2 does not supply a default URL policy. This option
+requires `a2a-sdk>=1.1.4`, the minimum installed by `ag2[a2a]`.
 
 !!! note
     The default `#!python InMemoryTaskStore` is materialised **once** at `#!python __init__` time. This is what makes JSON-RPC, REST and gRPC bound to the same `#!python A2AServer` see each other's tasks — a single store, three transports.

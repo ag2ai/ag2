@@ -120,6 +120,7 @@ def build_default_handler(
     task_store: TaskStore | None,
     push_config_store: PushNotificationConfigStore | None,
     push_sender: PushNotificationSender | None,
+    push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
 ) -> DefaultRequestHandlerV2:
     """Build the SDK request handler shared by all transports."""
     return DefaultRequestHandlerV2(
@@ -130,4 +131,5 @@ def build_default_handler(
         extended_card_modifier=extended_card_modifier,
         push_config_store=push_config_store,
         push_sender=push_sender,
+        push_url_validator=push_url_validator,
     )
