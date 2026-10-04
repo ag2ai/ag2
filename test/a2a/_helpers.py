@@ -205,14 +205,18 @@ class GatedExecutor(A2AAgentExecutorBase):
 
     def __init__(self) -> None:
         self.gate = asyncio.Event()
+        self.working = asyncio.Event()
+        self.task_id = ""
 
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
         task_id, context_id = request_context.task_id or uuid4().hex, request_context.context_id or uuid4().hex
+        self.task_id = task_id
         updater = TaskUpdater(event_queue, task_id, context_id)
         await event_queue.enqueue_event(
             Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED))
         )
         await updater.start_work()
+        self.working.set()
         await self.gate.wait()
         await updater.complete(message=updater.new_agent_message(parts=[Part(text="finished")]))
 
