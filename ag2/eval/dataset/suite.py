@@ -141,8 +141,16 @@ def _items_to_tasks(items: Sequence[dict[str, Any]], *, source: str) -> tuple[Ta
             raise ValueError(f"{source}: task at index {index} is missing required field 'inputs' (must be a dict)")
         task_id = item.get("task_id") or f"task-{index:04d}"
         reference_outputs = item.get("reference_outputs")
-        tags = tuple(item.get("tags", ()))
-        metadata = dict(item.get("metadata", {}))
+        raw_tags = item.get("tags", ())
+        if raw_tags is None:
+            raw_tags = ()
+        elif isinstance(raw_tags, str):
+            raw_tags = (raw_tags,)
+        tags = tuple(raw_tags)
+        raw_metadata = item.get("metadata", {})
+        if raw_metadata is None:
+            raw_metadata = {}
+        metadata = dict(raw_metadata)
         tasks.append(
             Task(
                 inputs=inputs,

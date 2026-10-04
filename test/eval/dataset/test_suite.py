@@ -89,6 +89,19 @@ class TestFromList:
         assert suite.name == "weather-mini"
         assert suite.source == "inline"
 
+    def test_null_tags_and_metadata_default_to_empty(self) -> None:
+        suite = Suite.from_list([{"inputs": {"q": "x"}, "tags": None, "metadata": None}])
+
+        [task] = list(suite)
+        assert task.tags == ()
+        assert task.metadata == {}
+
+    def test_single_string_tag_is_not_split_into_characters(self) -> None:
+        suite = Suite.from_list([{"inputs": {"q": "x"}, "tags": "smoke"}])
+
+        [task] = list(suite)
+        assert task.tags == ("smoke",)
+
 
 class TestFromJsonl:
     def test_loads_one_task_per_line(self, tmp_path: Path) -> None:
@@ -156,6 +169,19 @@ class TestFromJsonl:
 
         with pytest.raises(ValueError, match="must be a JSON object"):
             Suite.from_jsonl(path)
+
+    def test_null_tags_and_metadata_in_jsonl(self, tmp_path: Path) -> None:
+        path = tmp_path / "dataset.jsonl"
+        path.write_text(
+            json.dumps({"inputs": {"q": "x"}, "tags": None, "metadata": None}) + "\n",
+            encoding="utf-8",
+        )
+
+        suite = Suite.from_jsonl(path)
+
+        [task] = list(suite)
+        assert task.tags == ()
+        assert task.metadata == {}
 
 
 def test_suite_iterates_in_dataset_order() -> None:
