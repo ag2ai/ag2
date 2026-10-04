@@ -67,7 +67,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           # The tests run on CPU; the default Linux wheel of torch pulls in several GB of CUDA libraries.
-          uv pip install --system "torch>=2.4,<3" --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --system "torch>=2.5,<3" --index-url https://download.pytorch.org/whl/cpu
           uv pip install --system --group=test --group=optionals -e .
       - name: Test with pytest
         run: |
