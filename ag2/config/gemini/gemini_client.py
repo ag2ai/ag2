@@ -59,6 +59,19 @@ class CreateConfig(TypedDict, total=False):
     thinking_config: types.ThinkingConfig | None
 
 
+def _credentials_from_file(path: str) -> google.auth.credentials.Credentials:
+    """Load service-account credentials from a JSON key file.
+
+    google-auth ships `py.typed` but leaves `from_service_account_file` unannotated, so the
+    one suppression is confined here and the rest of the client keeps a real credentials type.
+    """
+    credentials: google.auth.credentials.Credentials = service_account.Credentials.from_service_account_file(  # type: ignore[no-untyped-call]
+        path,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+    return credentials
+
+
 def _inline_data_to_binary(blob: types.Blob) -> BinaryResult:
     """Wrap a Gemini inline-data image part as a ``BinaryResult``.
 
@@ -86,17 +99,13 @@ class GeminiClient(LLMClient):
         create_config: CreateConfig | None = None,
         cached_content: str | None = None,
     ) -> None:
-        if isinstance(credentials, str):
-            # String indicates a json credentials file, load into credentials
-            credentials = service_account.Credentials.from_service_account_file(
-                credentials,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"],
-            )
+        # A string indicates a json credentials file, load into credentials
+        resolved_credentials = _credentials_from_file(credentials) if isinstance(credentials, str) else credentials
         http_options = types.HttpOptions(httpx_async_client=http_client) if http_client is not None else None
         self._client = genai.Client(
             vertexai=vertexai,
             api_key=api_key,
-            credentials=credentials,
+            credentials=resolved_credentials,
             project=project,
             location=location,
             http_options=http_options,
@@ -115,7 +124,8 @@ class GeminiClient(LLMClient):
         response_schema: ResponseProto | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
-        contents = convert_messages(messages, serializer)
+        # `list` is invariant, so the SDK's wider element type needs a list of its own.
+        contents: list[types.ContentUnion] = list(convert_messages(messages, serializer))
 
         if response_schema and response_schema.system_prompt:
             prompt: Iterable[str] = chain(context.prompt, (response_schema.system_prompt,))
@@ -131,15 +141,15 @@ class GeminiClient(LLMClient):
         if self._cached_content:
             cache_kwargs["cached_content"] = self._cached_content
 
-        config = types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            tools=gemini_tools,
-            tool_config=gemini_tool_config,
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True) if gemini_tools else None,
+        config = types.GenerateContentConfig(**{
+            "system_instruction": system_instruction,
+            "tools": gemini_tools,
+            "tool_config": gemini_tool_config,
+            "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True) if gemini_tools else None,
             **response_proto_to_config(response_schema),
             **self._create_config,
             **cache_kwargs,
-        )
+        })
 
         if self._streaming:
             stream = await self._client.aio.models.generate_content_stream(

@@ -159,3 +159,14 @@ class TestZAIFilesClient:
         await ZAIFilesClient(zai_config).delete("file_123")
 
         mock_client.files.delete.assert_called_once_with("file_123")
+
+    @patch("ag2.config.zai.files.ZaiClient")
+    async def test_upload_rejects_a_file_without_an_id(self, mock_zai_client: MagicMock, zai_config: MagicMock) -> None:
+        mock_client = MagicMock()
+        mock_zai_client.return_value = mock_client
+        mock_client.files.create.return_value = SimpleNamespace(
+            id=None, filename="hello.jsonl", bytes=5, purpose="batch", created_at=123
+        )
+
+        with pytest.raises(ValueError, match="no id"):
+            await ZAIFilesClient(zai_config).upload(b"hello", "hello.jsonl")
