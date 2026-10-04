@@ -199,6 +199,19 @@ class TestShellAdapterFiltering:
         result = await adapter.run(command)
         assert "SECRET" not in result
 
+    @pytest.mark.parametrize("command", ["cat .en*", "cat .e?v", "cat .en[v]", "cat *"])
+    async def test_ignore_denies_a_wildcard_that_matches_an_ignored_file(self, tmp_path: Path, command: str) -> None:
+        # Some programs expand wildcards themselves (MSYS tools on Windows), so the
+        # filter must not rely on the missing shell to keep the ignored file unread.
+        (tmp_path / ".env").write_text("SECRET")
+        adapter = ShellAdapter(LocalSandbox(tmp_path), ignore=[".env"])
+        assert "Access denied" in await adapter.run(command)
+
+    async def test_ignore_allows_a_wildcard_that_matches_nothing_ignored(self, tmp_path: Path) -> None:
+        (tmp_path / "a.txt").write_text("fine")
+        adapter = ShellAdapter(LocalSandbox(tmp_path), ignore=[".env"])
+        assert "Access denied" not in await adapter.run("ls *.txt")
+
     async def test_blocked_or_ignore_alone_switches_on_restricted_mode(self) -> None:
         assert ShellAdapter(RecordingSandbox(), blocked=["rm"]).restricted
         assert ShellAdapter(RecordingSandbox(), ignore=[".env"]).restricted
