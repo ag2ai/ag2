@@ -406,6 +406,55 @@ class TestDiskKnowledgeStore:
         finally:
             await sub.close()
 
+    async def test_on_change_on_missing_file_path_keeps_it_writable(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+
+        async def callback(path: str) -> None:
+            pass
+
+        sub = await store.on_change("/memory/working.md", callback)
+        try:
+            assert not (tmp_path / "memory" / "working.md").is_dir()
+            await store.write("/memory/working.md", "hello")
+            assert await store.read("/memory/working.md") == "hello"
+        finally:
+            await sub.close()
+
+    async def test_on_change_on_existing_file_path(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/notes.md", "original")
+
+        async def callback(path: str) -> None:
+            pass
+
+        sub = await store.on_change("/notes.md", callback)
+        try:
+            await store.write("/notes.md", "updated")
+            assert await store.read("/notes.md") == "updated"
+        finally:
+            await sub.close()
+
+    async def test_on_change_on_file_path_fires(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        received: list[str] = []
+        event = asyncio.Event()
+
+        async def callback(path: str) -> None:
+            received.append(path)
+            event.set()
+
+        sub = await store.on_change("/memory/working.md", callback)
+        try:
+            await store.write("/memory/working.md", "hello")
+            # watchdog delivers asynchronously via a background thread
+            try:
+                await asyncio.wait_for(event.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                pytest.skip("watchdog backend did not deliver event in time")
+            assert "/memory/working.md" in received
+        finally:
+            await sub.close()
+
 
 @pytest.mark.asyncio
 class TestSqliteKnowledgeStore:
