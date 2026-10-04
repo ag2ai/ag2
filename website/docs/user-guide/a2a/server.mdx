@@ -53,12 +53,65 @@ After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.we
 | `#!python card_signer` | Attaches a JWS signature to every card served, on all transports (see [Card Signing](/docs/user-guide/a2a/card_signing)). Optional |
 | `#!python executor` | Escape hatch — drop in a custom `#!python AgentExecutor` (see [Advanced](/docs/user-guide/a2a/advanced#custom-agentexecutor)) |
 
-Push URLs are supplied by clients and may point to internal services (SSRF).
-Pass `#!python push_url_validator` to apply your application's URL policy on
-JSON-RPC, REST, and gRPC. Returning `#!python False` rejects registration with
-the SDK's invalid-params error and stores nothing. Omitting the callback keeps
-the existing behavior; AG2 does not supply a default URL policy. This option
-requires `a2a-sdk>=1.1.4`, the minimum installed by `ag2[a2a]`.
+#### Safe push notifications
+
+With push notifications the server POSTs task updates to a webhook URL **that
+the client chooses**. A client can therefore point the server at internal
+addresses or cloud metadata endpoints (SSRF). Protect the server with a URL
+policy.
+
+**Server.** Enable push with a store and pass `#!python push_url_validator`. The
+SDK ships a ready-made policy, `#!python validate_push_notification_url`, that
+allows only public `http(s)` hosts. You pass the function itself (no call, no
+URL); the SDK calls it with the client's URL on every registration:
+
+```python linenums="1"
+from a2a.server.tasks import InMemoryPushNotificationConfigStore
+from a2a.utils.push_url_validator import validate_push_notification_url
+
+from ag2.a2a import A2AServer
+
+server = A2AServer(
+    agent,
+    push_config_store=InMemoryPushNotificationConfigStore(),
+    push_url_validator=validate_push_notification_url,
+)
+```
+
+**Client.** The URL is set by whoever registers the webhook, using the helpers
+from [Tasks & Push](/docs/user-guide/a2a/tasks_and_push):
+
+```python linenums="1"
+from ag2.a2a import A2AConfig
+from ag2.a2a.push import A2APushConfig, create_push_notification_config
+
+client = A2AConfig(card_url="http://127.0.0.1:8000")
+
+await create_push_notification_config(
+    client, task_id, A2APushConfig(url="https://my-app.example.com/a2a-hook")
+)  # accepted
+
+await create_push_notification_config(
+    client, task_id, A2APushConfig(url="http://169.254.169.254/latest/meta-data")
+)  # raises InvalidParamsError, nothing is stored
+```
+
+Pass your own `#!python async def check(url: str) -> bool` instead to apply a
+different policy, for example an allow-list of partner hosts. A rejected URL
+fails registration with the SDK's invalid-params error on JSON-RPC, REST, and
+gRPC.
+
+- **Off by default.** Without `#!python push_url_validator` any URL is accepted,
+  as before; AG2 does not choose a policy for you.
+- **Needs a store.** `#!python push_url_validator` without `#!python push_config_store`
+  raises `#!python ValueError`, because push is disabled without a store.
+- **Hosts must resolve.** The SDK policy resolves the hostname and rejects it if
+  DNS fails or any address is private, loopback, or link-local. The client only
+  sees `Invalid push notification URL`; the reason is in the server log.
+- **Registration only.** The validator screens URLs when they are registered. A
+  custom `#!python push_sender` is not covered; give it the same callback (the
+  SDK's `#!python BasePushNotificationSender` takes `#!python push_url_validator`).
+- Requires `a2a-sdk>=1.1.4`, the minimum installed by `ag2[a2a]`.
 
 !!! note
     The default `#!python InMemoryTaskStore` is materialised **once** at `#!python __init__` time. This is what makes JSON-RPC, REST and gRPC bound to the same `#!python A2AServer` see each other's tasks — a single store, three transports.

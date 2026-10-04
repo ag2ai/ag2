@@ -12,6 +12,7 @@ from a2a.server.context import ServerCallContext
 from a2a.server.tasks import InMemoryPushNotificationConfigStore, InMemoryTaskStore
 from a2a.types import Task, TaskState, TaskStatus
 from a2a.utils.errors import InvalidParamsError
+from a2a.utils.push_url_validator import validate_push_notification_url
 
 from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer, build_card
@@ -82,3 +83,21 @@ async def test_omitting_push_url_validator_keeps_existing_behavior(transport: Tr
         created = await create_push_notification_config(config, "task", push)
         assert created == replace(push, id=created.id)
         assert await list_push_notification_configs(config, "task") == [created]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport", ["jsonrpc", "rest", "grpc"])
+async def test_sdk_policy_blocks_internal_urls(transport: TransportName) -> None:
+    async with push_server(transport, validate_push_notification_url) as config:
+        for url in ("http://127.0.0.1/hook", "http://169.254.169.254/latest", "file:///etc/passwd"):
+            with pytest.raises(InvalidParamsError):
+                await create_push_notification_config(config, "task", A2APushConfig(url=url))
+        assert await list_push_notification_configs(config, "task") == []
+
+
+def test_push_url_validator_requires_push_config_store() -> None:
+    async def validate(url: str) -> bool:
+        return True
+
+    with pytest.raises(ValueError, match="push_config_store"):
+        A2AServer(Agent("server", config=TestConfig("unused")), push_url_validator=validate)

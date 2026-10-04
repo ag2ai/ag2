@@ -88,6 +88,11 @@ class A2AServer:
         push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
         executor: A2AAgentExecutorBase | None = None,
     ) -> None:
+        if push_url_validator is not None and push_config_store is None:
+            raise ValueError(
+                "push_url_validator has no effect without push_config_store: "
+                "push notifications are disabled until a store is provided."
+            )
         self._agent = agent
         self._extended_card = extended_card
         self._card_modifier = card_modifier
