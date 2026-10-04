@@ -7,7 +7,7 @@ import json
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 
 from a2a.types import Part
 from google.protobuf import json_format, struct_pb2
@@ -149,7 +149,9 @@ def struct_from_dict(payload: dict[str, Any]) -> struct_pb2.Struct:  # type: ign
 def struct_to_dict(s: struct_pb2.Struct) -> dict[str, Any]:  # type: ignore[no-any-unimported]
     if not s or not s.fields:
         return {}
-    return cast(dict[str, Any], json_format.MessageToDict(s, preserving_proto_field_name=True))
+    # Annotated, not cast: the protobuf stubs type the result, an unstubbed install leaves it `Any`.
+    result: dict[str, Any] = json_format.MessageToDict(s, preserving_proto_field_name=True)
+    return result
 
 
 def _binary_kind(metadata: dict[str, Any]) -> BinaryType:
