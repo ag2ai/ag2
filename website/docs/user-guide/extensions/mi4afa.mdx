@@ -66,7 +66,10 @@ result = await evaluate_traces(
 print(result.value_counts("blame"))  # {"planner": 12, "tool:search": 5, "researcher": 3}
 ```
 
-The probe always names a step, so score runs that failed, or read it next to a correctness scorer. The model forward pass runs in a worker thread, so the event loop stays responsive.
+The model forward pass runs in a worker thread, so the event loop stays responsive.
+
+!!! warning "A run that succeeded is blamed too"
+    The probe ranks the turns of every conversation it reads, so it names a decisive step and a responsible agent even for a run that succeeded. Each successful run you score adds an agent to `value_counts` as if that agent had failed. Score only runs that failed, or read the blame next to a correctness scorer and keep the runs it marks as wrong.
 
 !!! note "Trace conversion is best effort"
     A trace records one agent's stream and its events carry no speaker. `conversation_from_trace` turns the traced agent's text responses and tool calls into turns by `agent_name`, tool results and errors into turns by `tool:<name>`, and completed or failed sub-tasks into turns by the sub-agent that ran them. For full control, build `Conversation` objects yourself and call `attributor.attribute(...)`.
