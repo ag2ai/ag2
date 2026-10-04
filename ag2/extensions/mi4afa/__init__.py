@@ -35,7 +35,7 @@ from .prompt import (
 from .trace import TraceConversation, conversation_from_trace
 from .types import ActivationSite, Component, Conversation, FitReport, SiteScore, Turn
 
-_DEPENDENCIES = 'torch>=2.4,<3" "transformers>=4.57,<6" "safetensors>=0.4.3,<1'
+_DEPENDENCIES = 'torch>=2.5,<3" "transformers>=4.57,<6" "safetensors>=0.4.3,<1'
 
 try:
     from .activations import ActivationExtractor, ConversationActivations
