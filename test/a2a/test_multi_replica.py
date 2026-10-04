@@ -158,6 +158,19 @@ async def test_a_task_waiting_on_the_client_resumes_on_another_replica(tmp_path:
         assert task.status.state == TaskState.TASK_STATE_COMPLETED
 
 
+async def _wait_until_working(server: A2AServer, task_id: str) -> None:
+    """The executor signals before the event is persisted, so the other replica may not see the task yet."""
+    config = _client_config(server)
+    while True:
+        try:
+            task = await get_task(config, task_id)
+        except Exception:  # noqa: BLE001 - not stored yet
+            task = None
+        if task is not None and task.status.state == TaskState.TASK_STATE_WORKING:
+            return
+        await asyncio.sleep(0.01)
+
+
 @pytest.mark.asyncio
 async def test_a_subscriber_on_another_replica_sees_a_running_task_finish(tmp_path: Path) -> None:
     executor = GatedExecutor()
@@ -166,7 +179,12 @@ async def test_a_subscriber_on_another_replica_sees_a_running_task_finish(tmp_pa
         _replica(tmp_path, executor=GatedExecutor()) as second,
     ):
         running = asyncio.create_task(Agent("client", config=_client_config(first)).ask("work"))
-        await executor.working.wait()
+        try:
+            await asyncio.wait_for(executor.working.wait(), 10)
+            await asyncio.wait_for(_wait_until_working(second, executor.task_id), 10)
+        except BaseException:
+            executor.gate.set()  # never leave the run hanging behind a failed wait
+            raise
 
         # A real socket, because an in-process transport hands the body over only once it is complete.
         body = {"jsonrpc": "2.0", "id": 1, "method": "SubscribeToTask", "params": {"id": executor.task_id}}
