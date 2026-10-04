@@ -401,6 +401,24 @@ files = [
     "ag2/__init__.py",
     "ag2/acp/client.py",
     "ag2/acp/elicitation.py",
+    "ag2/acp/__init__.py",
+    "ag2/acp/agent.py",
+    "ag2/acp/auth.py",
+    "ag2/acp/bridge.py",
+    "ag2/acp/config.py",
+    "ag2/acp/dispatch.py",
+    "ag2/acp/events.py",
+    "ag2/acp/executor.py",
+    "ag2/acp/guard.py",
+    "ag2/acp/mappers.py",
+    "ag2/acp/permissions.py",
+    "ag2/acp/remote.py",
+    "ag2/acp/session.py",
+    "ag2/acp/sessions.py",
+    "ag2/acp/testing.py",
+    "ag2/acp/tool_gateway.py",
+    "ag2/acp/transport.py",
+    "ag2/acp/types.py",
     "ag2/eval/pairwise.py",
     "ag2/eval/results/result.py",
     "ag2/eval/scorers/correctness.py",
@@ -424,6 +442,24 @@ files = [
     "ag2/live/gemini.py",
     "ag2/mcp/apps.py",
     "ag2/mcp/tools.py",
+    "ag2/mcp/__init__.py",
+    "ag2/mcp/_async.py",
+    "ag2/mcp/elicitation.py",
+    "ag2/mcp/errors.py",
+    "ag2/mcp/extensions.py",
+    "ag2/mcp/mappers.py",
+    "ag2/mcp/pause.py",
+    "ag2/mcp/prompts.py",
+    "ag2/mcp/resources.py",
+    "ag2/mcp/sampling.py",
+    "ag2/mcp/security.py",
+    "ag2/mcp/server.py",
+    "ag2/mcp/sessions.py",
+    "ag2/mcp/testing.py",
+    "ag2/mcp/transport.py",
+    "ag2/mcp_ui/__init__.py",
+    "ag2/mcp_ui/actions.py",
+    "ag2/mcp_ui/resources.py",
     "ag2/ag_ui/run_input.py",
     "ag2/ag_ui/stream.py",
     "ag2/ag_ui/__init__.py",
@@ -457,6 +493,12 @@ disallow_any_unimported = true
 
 [[tool.mypy.overrides]]
 module = "xai_sdk.*"
+follow_untyped_imports = true
+
+# `mcp-ui-server` is fully annotated but ships no `py.typed` marker, so mypy
+# would hand us `Any` from every name we import. Following it uses its real types.
+[[tool.mypy.overrides]]
+module = "mcp_ui_server.*"
 follow_untyped_imports = true
 
 # AG-UI's SDK does not ship typing metadata, so values crossing that boundary
