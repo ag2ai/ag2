@@ -40,6 +40,7 @@ jobs:
         run: |
           uv venv
           . .venv/bin/activate
+          uv pip install "torch>=2.4,<3" --index-url https://download.pytorch.org/whl/cpu
           uv pip install --group docs -e .
           just docs-build --force
         working-directory: .
