@@ -199,6 +199,32 @@ class TestShellAdapterFiltering:
         result = await adapter.run(command)
         assert "SECRET" not in result
 
+    @pytest.mark.parametrize("remote", [False, True], ids=["local", "remote"])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("cat .en*", id="star"),
+            pytest.param("cat .en?", id="question"),
+            pytest.param("cat .[e]nv", id="bracket"),
+            pytest.param("cat .{env,key}", id="brace"),
+            pytest.param("cat '.en*'", id="single-quoted"),
+            pytest.param('cat ".en*"', id="double-quoted"),
+            pytest.param(r"cat .en\*", id="escaped"),
+        ],
+    )
+    async def test_ignore_rejects_wildcard_arguments(self, tmp_path: Path, remote: bool, command: str) -> None:
+        (tmp_path / ".env").write_text("SECRET")
+        sandbox = RecordingSandbox() if remote else LocalSandbox(tmp_path)
+        result = await ShellAdapter(sandbox, ignore=[".env"]).run(command)
+        assert "Access denied" in result
+        if isinstance(sandbox, RecordingSandbox):
+            assert sandbox.execs == []
+
+    async def test_ignore_allows_literal_paths_with_spaces(self, tmp_path: Path) -> None:
+        (tmp_path / "public note.txt").write_text("PUBLIC")
+        adapter = ShellAdapter(LocalSandbox(tmp_path), ignore=["**/.env", "*.key"])
+        assert await adapter.run('cat "public note.txt"') == "PUBLIC"
+
     async def test_blocked_or_ignore_alone_switches_on_restricted_mode(self) -> None:
         assert ShellAdapter(RecordingSandbox(), blocked=["rm"]).restricted
         assert ShellAdapter(RecordingSandbox(), ignore=[".env"]).restricted

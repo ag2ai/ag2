@@ -101,11 +101,11 @@ Filtering is applied in this order on every `run_shell_command(command)` call:
 1. **`allowed`** — if set, the command must match at least one prefix. Otherwise: `"Command not allowed: <cmd>"`.
 2. **Shell syntax** — in [restricted mode](#restricted-mode), a command with unquoted pipes, redirects or chaining is rejected.
 3. **`blocked`** — if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
-4. **`ignore`** — literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
+4. **`ignore`** — wildcard arguments are rejected; literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
 5. **Execute** — the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
 
 !!! note
-    `ignore` checks only the literal path words of the command. Because restricted mode runs no shell, nothing is computed after the check (variables, command substitution and globs are passed on literally). A program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
+    When `ignore` is set, arguments containing `*`, `?`, `[` or `{` are rejected, even if quoted or escaped. Some Windows runtimes expand these patterns without a shell, which can bypass a literal path check. Use explicit file paths instead; wildcard patterns in the `ignore` configuration remain supported. A program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
 
 ## Read-Only Mode
 
@@ -129,10 +129,10 @@ For real isolation, use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEn
 
 ## Restricted Mode
 
-Setting `allowed`, `blocked`, `ignore` or `readonly=True` switches on restricted mode. The command is split into words once, the same way a POSIX shell quotes them, and that exact argv is checked and then run **without a shell**. Nothing can expand after the check, so none of these work:
+Setting `allowed`, `blocked`, `ignore` or `readonly=True` switches on restricted mode. The command is split into words once, the same way a POSIX shell quotes them, and that exact argv is checked and then run **without a shell**. Shell features are unavailable:
 
 - pipes, redirects and chaining (`|`, `>`, `<`, `;`, `&`, `&&`, `||`, newlines), rejected with a clear error unless quoted;
-- globs: `ls *.py` passes `*.py` to `ls` literally, so use `grep -r --include='*.py'` or `ls` instead;
+- globs: `ls *.py` passes `*.py` to the executable, which may still expand it on Windows. With `ignore` set, such arguments are rejected; use explicit file paths instead;
 - variables, `~`, brace expansion and command substitution;
 - shell builtins: `echo` and `pwd` run the programs found on `PATH`.
 

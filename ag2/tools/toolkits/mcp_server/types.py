@@ -34,6 +34,13 @@ class MCPServerConfig:
     connection_timeout: float = 30.0
     """How long, in seconds, to wait on the server before giving up on a request."""
 
+    max_sse_event_size: int | None = 1_048_576
+    """Maximum bytes buffered for one SSE event; ``None`` disables the limit.
+
+    Raising or disabling the limit lets a server consume more client memory per
+    event. Only do so for trusted servers. JSON responses are not affected.
+    """
+
     proxy: str | None = None
     """HTTP proxy to route the connection through."""
 

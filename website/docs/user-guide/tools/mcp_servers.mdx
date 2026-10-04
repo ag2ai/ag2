@@ -73,6 +73,29 @@ agent = Agent(
 )
 ```
 
+### Receive large tool results over HTTP
+
+An HTTP server can return a tool result as a single SSE event. By default, the client rejects events larger than 1 MiB. For a trusted server returning larger results, such as file contents or a base64 screenshot, set a larger positive byte limit:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.tools import MCPServerConfig, MCPToolkit
+
+agent = Agent(
+    name="File reader",
+    tools=[
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://my-mcp-url.example.com",
+                max_sse_event_size=8 * 1024 * 1024,  # 8 MiB per SSE event
+            )
+        )
+    ],
+)
+```
+
+Raising the limit allows the server to make the client buffer more memory per event. Setting `max_sse_event_size=None` removes the limit entirely, so a server can cause unbounded buffering. Choose the smallest limit that fits results from a trusted server. This setting applies only to SSE responses over HTTP; ordinary JSON responses and stdio connections are unaffected.
+
 ### Launch a local server over stdio
 
 Many MCP servers ship as CLIs that speak MCP over their own stdin/stdout — `npx -y @modelcontextprotocol/server-filesystem`, `uvx some-mcp-server`, a Python script in your repo. `MCPStdioServerConfig` launches one as a subprocess and pipes the protocol through its stdio:
@@ -309,6 +332,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | `authorization_token` | `None` | bearer token sent unless `headers` already contains `Authorization` (case-insensitive) |
 | `headers` | `None` | extra HTTP headers |
 | `connection_timeout` | `30.0` | seconds to wait on the server |
+| `max_sse_event_size` | `1_048_576` (1 MiB) | maximum bytes buffered per SSE event; `None` disables the limit; JSON responses are unaffected |
 | `proxy` | `None` | HTTP proxy to route through |
 | `verify` | `True` | verify the server's TLS certificate |
 | `protocol_mode` | `"legacy"` | `"auto"` probes for a modern-era peer and falls back |
@@ -330,7 +354,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | `protocol_mode` | `"legacy"` | `"auto"` probes for a modern-era peer and falls back |
 | `server_label` / `description` / `allowed_tools` / `blocked_tools` / `tool_name_prefix` | as above | as above |
 
-Every field of both configs except `connection_timeout`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
+Every field of both configs except `connection_timeout`, `max_sse_event_size`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
 
 ### `MCPAnswerPolicy`
 

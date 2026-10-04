@@ -106,7 +106,7 @@ def _unquoted(command: str) -> str:
 
 
 def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) -> str | None:
-    """Return ``"Access denied: <path>"`` if any literal path in *command* leaves *workdir* or matches *patterns*.
+    """Deny wildcard arguments and literal paths that leave *workdir* or match *patterns*.
 
     Tokens are extracted via :func:`shlex.split` to handle quoted paths. Each
     token is resolved relative to *workdir* and checked against each pattern.
@@ -130,6 +130,10 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
         resolved_workdir = PurePosixPath(posixpath.normpath(str(workdir)))
 
     for token in tokens:
+        # Windows runtimes can expand wildcards even without a shell. Check
+        # parsed tokens so quotes/escapes cannot hide a pattern from the filter.
+        if any(char in token for char in "*?[{"):
+            return f"Access denied (wildcard arguments are not supported with ignore): {token!r}"
         if host_backed:
             try:
                 resolved: PurePath = (workdir / token).resolve()

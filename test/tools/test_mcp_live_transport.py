@@ -31,6 +31,7 @@ import pytest
 
 pytest.importorskip("mcp")
 
+from mcp.shared.exceptions import MCPError
 from starlette.datastructures import Headers
 
 from ag2 import Agent, Context, Variable
@@ -45,7 +46,7 @@ from ag2.events import (
 from ag2.mcp import MCPServer, mcp_tool
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
-from ag2.tools import MCPAnswerPolicy, MCPServerConfig, MCPToolkit
+from ag2.tools import MCPAnswerPolicy, MCPServerConfig, MCPStdioServerConfig, MCPToolkit
 from test._serving import serving
 
 
@@ -147,6 +148,98 @@ async def test_a_tool_call_round_trips_over_the_real_transport(context: Context)
 
     assert isinstance(result, ToolResultEvent)
     assert result.result.parts == [TextInput(content="echo: hi")]
+
+
+@mcp_tool
+def sized_result(size: int) -> str:
+    """Generate the result on the server so the request itself stays small."""
+    return "x" * size + "-end"
+
+
+@asynccontextmanager
+async def _sized_result_server(*, json_response: bool = False) -> AsyncGenerator[str]:
+    served = MCPServer(Agent("sized", config=TestConfig("unused")), tools=[sized_result], json_response=json_response)
+    async with _serving_mcp(served) as url:
+        yield url
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("size", "options", "rejected_limit"),
+    [
+        pytest.param(32, {}, None, id="small-default"),
+        pytest.param(1_048_576, {}, 1_048_576, id="large-default"),
+        pytest.param(1_048_576, {"max_sse_event_size": 2_097_152}, None, id="large-raised"),
+        pytest.param(1_048_576, {"max_sse_event_size": None}, None, id="large-unlimited"),
+        pytest.param(32_768, {"max_sse_event_size": 16_384}, 16_384, id="explicit-smaller-limit"),
+    ],
+)
+async def test_sse_event_size_limit(
+    context: Context,
+    size: int,
+    options: dict[str, Any],
+    rejected_limit: int | None,
+) -> None:
+    """A real SDK parser must reject an oversized event or return its entire text."""
+    async with _sized_result_server() as url:
+        # Resolving another field must preserve the static transport setting.
+        context.variables["endpoint"] = url
+        toolkit = MCPToolkit(MCPServerConfig(server_url=Variable("endpoint"), **options))
+        await toolkit.schemas(context)
+        proxy = next(t for t in toolkit.tools if t.name == "sized_result")
+        result = await proxy(ToolCallEvent(name="sized_result", arguments=json.dumps({"size": size})), context)
+
+    if rejected_limit is not None:
+        assert isinstance(result, ToolErrorEvent)
+        assert isinstance(result.error, MCPError)
+        assert f"Server-sent event exceeded the {rejected_limit} byte limit" in str(result.error)
+    else:
+        assert isinstance(result, ToolResultEvent)
+        assert result.result.parts == [TextInput(content="x" * size + "-end")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("json_response", [False, True], ids=["sse", "json"])
+async def test_url_shortcut_preserves_default_sse_limit(context: Context, json_response: bool) -> None:
+    async with _sized_result_server(json_response=json_response) as url:
+        toolkit = MCPToolkit(url)
+        await toolkit.schemas(context)
+        proxy = next(t for t in toolkit.tools if t.name == "sized_result")
+        result = await proxy(ToolCallEvent(name="sized_result", arguments='{"size": 1048576}'), context)
+
+    if json_response:
+        assert isinstance(result, ToolResultEvent)
+        assert result.result.parts == [TextInput(content="x" * 1_048_576 + "-end")]
+    else:
+        assert isinstance(result, ToolErrorEvent)
+        assert isinstance(result.error, MCPError)
+        assert "Server-sent event exceeded the 1048576 byte limit" in str(result.error)
+
+
+@pytest.mark.asyncio
+async def test_sse_event_size_does_not_limit_modern_json_results(context: Context) -> None:
+    async with _sized_result_server() as url:
+        toolkit = MCPToolkit(MCPServerConfig(server_url=url, protocol_mode="auto", max_sse_event_size=16_384))
+        await toolkit.schemas(context)
+        proxy = next(t for t in toolkit.tools if t.name == "sized_result")
+        result = await proxy(ToolCallEvent(name="sized_result", arguments='{"size": 1048576}'), context)
+
+    assert isinstance(result, ToolResultEvent)
+    assert result.result.parts == [TextInput(content="x" * 1_048_576 + "-end")]
+
+
+def test_sse_event_size_config_is_http_only() -> None:
+    assert MCPServerConfig(server_url="http://localhost/mcp").max_sse_event_size == 1_048_576
+    with pytest.raises(TypeError, match="max_sse_event_size"):
+        MCPStdioServerConfig(command="mcp-server", max_sse_event_size=None)  # type: ignore[call-arg]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [0, -1])
+async def test_sse_event_size_uses_sdk_validation(context: Context, limit: int) -> None:
+    toolkit = MCPToolkit(MCPServerConfig(server_url="http://127.0.0.1:1/mcp", max_sse_event_size=limit))
+    with pytest.raises(ValueError, match="max_sse_event_size must be positive or None"):
+        await toolkit.schemas(context)
 
 
 @pytest.mark.asyncio
