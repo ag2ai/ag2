@@ -4,9 +4,10 @@
 
 """Resampling and exact tests over per-boundary deltas. Standard library only.
 
-Burden deltas live on a coarse rational grid (a mean of small integer counts),
-so the paired tests here are exact rather than Monte Carlo: the sign-flip null
-is obtained by integer convolution, and a p-value carries no simulation noise.
+Burden deltas live on a coarse rational grid (differences of means of small
+integer counts), so the paired tests here are exact rather than Monte Carlo:
+the sign-flip null is obtained by integer convolution, and a p-value carries no
+simulation noise.
 Bootstrap draws come from a seeded :class:`random.Random`, so every interval is
 reproducible bit for bit.
 """
@@ -15,7 +16,7 @@ import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
-from math import comb
+from math import comb, gcd, lcm
 
 __all__ = (
     "DEFAULT_BOOTSTRAP_SEED",
@@ -29,6 +30,10 @@ __all__ = (
 
 DEFAULT_RESAMPLES = 10_000
 DEFAULT_BOOTSTRAP_SEED = 20260803
+
+# A difference of means over arms of up to 100 rollouts has a denominator of at
+# most 100 * 100; a value that needs more is not a burden delta.
+_MAX_DENOMINATOR = 10_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,33 +94,53 @@ def exact_permutation_test(diffs: Sequence[float]) -> float:
     """Two-sided exact sign-flip permutation p-value for a mean of paired differences.
 
     Under the null each difference's sign is flipped independently, giving
-    ``2**n`` equally likely sums. The differences are placed on an integer grid
-    and the null distribution is convolved exactly, so the p-value is exact.
+    ``2**n`` equally likely sums. A burden delta is a difference of two means of
+    integer counts, so each difference is recovered as an exact fraction; all of
+    them are then placed on one integer grid, the least common multiple of their
+    denominators. Nothing is rounded, so the null distribution is convolved
+    exactly and the p-value is exact for any number of samples per arm, equal or
+    not.
+
+    Raises:
+        ValueError: A difference is not a fraction with a denominator of at most
+            ``10_000``, so there is no grid the test could be exact on.
     """
     if not diffs:
         return 1.0
-    scale = 3
-    grid: list[int] = []
-    for d in diffs:
-        f = Fraction(d).limit_denominator(1000) * scale
-        if f.denominator != 1:
-            # Fold the whole scale into one integer before multiplying: scaling
-            # in two steps rounds differently for some floats and moves a grid
-            # point, which moves the p-value.
-            scale *= f.denominator
-            return _sign_flip_p([int(round(x * scale)) for x in diffs])
-        grid.append(int(f))
-    return _sign_flip_p(grid)
+    fractions = [_as_fraction(d) for d in diffs]
+    scale = lcm(*(f.denominator for f in fractions))
+    grid = [f.numerator * (scale // f.denominator) for f in fractions]
+    unit = gcd(*grid)
+    if unit == 0:
+        return 1.0  # every difference is zero: every sign pattern ties the observed sum
+    return _sign_flip_p([g // unit for g in grid])
+
+
+def _as_fraction(value: float) -> Fraction:
+    exact = Fraction(value).limit_denominator(_MAX_DENOMINATOR)
+    if abs(float(exact) - value) > 1e-9 * max(1.0, abs(value)):
+        raise ValueError(f"{value!r} is not a difference of means of counts; the permutation test needs one")
+    return exact
 
 
 def _sign_flip_p(grid: Sequence[int]) -> float:
+    """``P(|sum of randomly signed grid values| >= |observed sum|)``, by exact convolution."""
     observed = abs(sum(grid))
-    counts = {0: 1}
-    for v in grid:
-        step: dict[int, int] = {}
-        for s, c in counts.items():
-            step[s + v] = step.get(s + v, 0) + c
-            step[s - v] = step.get(s - v, 0) + c
+    if observed == 0:
+        return 1.0
+    values = [abs(v) for v in grid if v]  # a zero has both signs equal: it doubles every count and cancels
+    span = sum(values)
+    counts = [0] * (2 * span + 1)  # counts[s + span] = sign patterns whose sum is s
+    counts[span] = 1
+    reach = 0
+    for v in values:
+        step = [0] * len(counts)
+        for i in range(span - reach, span + reach + 1):
+            c = counts[i]
+            if c:
+                step[i - v] += c
+                step[i + v] += c
         counts = step
-    total = sum(counts.values())
-    return sum(c for s, c in counts.items() if abs(s) >= observed) / total
+        reach += v
+    tail = sum(counts[: span - observed + 1]) + sum(counts[span + observed :])
+    return tail / (1 << len(values))
