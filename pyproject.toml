@@ -8,6 +8,16 @@ module-root = "."
 module-name = "ag2"
 source-exclude = ["test", "notebook"]
 
+# torch is only in the optionals and docs groups, which run on CPU. On Linux its default wheel pulls in
+# several GB of CUDA libraries, so resolve it from the PyTorch CPU index there.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
 [project.urls]
 Homepage = "https://ag2.ai/"
 Documentation = "https://docs.ag2.ai"
