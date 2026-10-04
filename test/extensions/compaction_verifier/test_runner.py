@@ -7,8 +7,9 @@ import json
 import pytest
 
 from ag2 import Agent
-from ag2.compact import CompactionSummary, TailWindowCompact
+from ag2.compact import CompactionSummary, SummarizeCompact, TailWindowCompact
 from ag2.eval import Trace
+from ag2.events import ModelMessage, ModelResponse, Usage
 from ag2.extensions.compaction_verifier import (
     ActionBudget,
     CompactionVerifier,
@@ -21,7 +22,7 @@ from ag2.extensions.compaction_verifier import (
 )
 from ag2.testing import TestConfig
 
-from .conftest import ContextAwareConfig, record_trajectory, world_environment
+from .conftest import ContextAwareConfig, record_answer, record_trajectory, world_environment
 
 
 class TestActionBudget:
@@ -343,6 +344,13 @@ class TestCompactionVerifier:
         # calls issued in one response are one round, and the last round is never a boundary
         with pytest.raises(ValueError) as one_round_error:
             await verifier.verify([Recording(one_round, world_environment())], strategies, every=1, min_prefix=1)
+        with pytest.raises(ValueError) as several_error:
+            await verifier.verify(
+                [Recording(await record_answer(), world_environment()), Recording(short, world_environment())],
+                strategies,
+            )
+        with pytest.raises(ValueError) as many_error:
+            await verifier.verify([Recording(short, world_environment())] * 6, strategies)
         with pytest.raises(ValueError, match="no recordings given"):
             await verifier.verify([], strategies)
         with pytest.raises(ValueError, match="recording 0: 0 cuts given"):
@@ -352,6 +360,30 @@ class TestCompactionVerifier:
         assert "min_prefix=3" in str(short_error.value)
         assert str(one_round_error.value).startswith("no boundary to verify (recording 0: 5 actions in 1 tool round). ")
         assert "calls issued in one model response are one round" in str(one_round_error.value)
+        assert str(several_error.value).startswith(
+            "no boundary to verify (recording 0: 0 actions in 0 tool rounds; recording 1: 2 actions in 2 tool rounds). "
+        )
+        assert "recording 4: 2 actions in 2 tool rounds; ...). " in str(many_error.value)
+        assert "recording 5" not in str(many_error.value)
+
+    @pytest.mark.asyncio
+    async def test_the_tokens_a_strategy_spends_are_reported(self) -> None:
+        events = await record_trajectory(fetches=6)
+        summarizer = TestConfig(
+            ModelResponse(
+                ModelMessage("logged in, fetched a to e"), usage=Usage(prompt_tokens=120, completion_tokens=30)
+            )
+        )
+        verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()), horizon=1, samples=1)
+
+        report = await verifier.verify(
+            [Recording(events, world_environment(), cuts=[resumable_cuts(events)[5]])],
+            {"summary": SummarizeCompact(target=5, config=summarizer)},
+        )
+
+        (result,) = report.strategies["summary"].boundaries
+        assert result.compaction_tokens == 150
+        assert report.to_dict()["strategies"]["summary"]["boundaries"][0]["compaction_tokens"] == 150
 
     @pytest.mark.asyncio
     async def test_rejects_bad_arguments(self) -> None:

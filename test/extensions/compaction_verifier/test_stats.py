@@ -10,6 +10,17 @@ from fractions import Fraction
 import pytest
 
 from ag2.extensions.compaction_verifier import bootstrap_mean, exact_permutation_test, exact_sign_test
+from ag2.extensions.compaction_verifier.stats import median
+
+
+class TestMedian:
+    def test_odd_and_even_samples(self) -> None:
+        assert median([3.0, 1.0, 2.0]) == 2.0
+        assert median([4.0, 1.0, 3.0, 2.0]) == 2.5
+
+    def test_empty_sample_is_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            median([])
 
 
 class TestBootstrapMean:

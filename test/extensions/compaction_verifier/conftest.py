@@ -157,3 +157,11 @@ async def record_trajectory(fetches: int = 6, *, ollama_ids: bool = False, one_r
     stream = MemoryStream()
     await agent.ask("Fetch the items.", stream=stream, tools=[tool(f, name=n) for n, f in world_tools().items()])
     return list(await stream.history.get_events())
+
+
+async def record_answer() -> list[BaseEvent]:
+    """A real AG2 history in which the model answers without calling any tool."""
+    agent = Agent("recorder", config=TestConfig("nothing to fetch"))
+    stream = MemoryStream()
+    await agent.ask("Fetch the items.", stream=stream, tools=[tool(f, name=n) for n, f in world_tools().items()])
+    return list(await stream.history.get_events())

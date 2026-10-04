@@ -16,7 +16,7 @@ from ag2.extensions.compaction_verifier import (
 )
 from ag2.knowledge import KnowledgeStore
 
-from .conftest import record_trajectory
+from .conftest import record_answer, record_trajectory
 
 
 class _DropEverything:
@@ -60,6 +60,13 @@ class TestCuts:
             a, b = make_boundary(unique, cut), make_boundary(ollama, cut)
             assert [(x.signature, x.blocked) for x in b.prefix] == [(x.signature, x.blocked) for x in a.prefix]
             assert (b.history, b.history_tools) == (a.history, a.history_tools)
+
+    @pytest.mark.asyncio
+    async def test_a_run_without_tool_calls_has_no_cut(self) -> None:
+        events = await record_answer()
+
+        assert resumable_cuts(events) == []
+        assert select_cuts(events, every=1, min_prefix=1) == []
 
     def test_select_cuts_rejects_non_positive_spacing(self) -> None:
         with pytest.raises(ValueError):

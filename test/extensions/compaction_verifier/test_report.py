@@ -4,6 +4,8 @@
 
 import json
 
+import pytest
+
 from ag2.extensions.compaction_verifier import (
     Action,
     BoundaryResult,
@@ -121,6 +123,18 @@ class TestFailureCounts:
         assert s.post_errors == (("B: y", 2), ("A: x", 1))
 
 
+class TestHorizonLookup:
+    def test_a_recorded_horizon_is_found_and_an_unknown_one_raises(self) -> None:
+        result = boundary(10, [ran("pre", 0)], [ran("post", 0)])
+        s = StrategyReport.build("s", [result], HORIZON)
+
+        assert result.at(HORIZON).horizon == s.at(HORIZON).horizon == HORIZON
+        with pytest.raises(KeyError):
+            result.at(HORIZON + 1)
+        with pytest.raises(KeyError):
+            s.at(0)
+
+
 class TestSummary:
     def test_shows_failed_counts_unscored_boundaries_and_pre_failures(self) -> None:
         results = [
@@ -148,6 +162,23 @@ class TestSummary:
         assert "no scorable boundaries: 2 of 2 POST and 0 of 1 PRE rollouts failed" in text
         assert "! tail: failed more often after compaction (POST 2/2 vs PRE 0/1). No boundary could be scored." in text
         assert "most common POST error (2x)" in text
+
+    def test_failing_more_without_compaction_is_noted(self) -> None:
+        too_long = "ContextWindowExceeded: too long"
+        scored = [boundary(10, [ran("pre", 0), failed("pre", 1, too_long)], [ran("post", 0), ran("post", 1)])]
+        unscored = [boundary(10, [failed("pre", 0, too_long)], [ran("post", 0)])]
+
+        scored_lines = report({"tail": scored}, pre_failed=1, pre_total=2).summary().splitlines()
+        unscored_text = report({"tail": unscored}, pre_failed=1, pre_total=1).summary()
+
+        assert "0/2!" in next(line for line in scored_lines if line.startswith("tail "))
+        assert (
+            "! tail: failed more often without compaction (PRE 1/2 vs POST 0/2). Failed rollouts are not scored, "
+            "so the delta covers only the PRE samples that ran and may understate what compaction saves."
+        ) in scored_lines
+        assert (
+            "! tail: failed more often without compaction (PRE 1/1 vs POST 0/1). No boundary could be scored."
+        ) in unscored_text
 
     def test_a_strategy_with_no_boundary_says_so(self) -> None:
         row = next(line for line in report({"tail": []}).summary().splitlines() if line.startswith("tail "))
