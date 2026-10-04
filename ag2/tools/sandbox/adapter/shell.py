@@ -37,8 +37,9 @@ class ShellAdapter:
                  get resolved against the active Context).
         allowed / blocked / ignore / readonly: command filter set. Any of them
                  switches on restricted mode, where the command runs as its
-                 checked argv without a shell, so nothing can expand or chain
-                 after the check. ``blocked`` matches the argv word by word
+                 checked argv without a shell. With ``ignore`` set, wildcard
+                 arguments are also rejected: some Windows runtimes expand
+                 them even without a shell. ``blocked`` matches the argv word by word
                  (the program by its base name), so it cannot stop a program
                  that runs another one (``sh -c``, ``env``, ``xargs``): use
                  ``allowed`` / ``readonly`` or an isolated container for that.
