@@ -128,6 +128,8 @@ class StrategyReport:
     """Boundaries where the strategy raised instead of returning a context; they are not scored."""
     compaction_errors: tuple[tuple[str, int], ...] = ()
     """Distinct compaction errors with their counts, most common first."""
+    grown_boundaries: int = 0
+    """Boundaries where the compacted context was longer than the history it replaced."""
 
     def at(self, horizon: int) -> HorizonSummary:
         for h in self.horizons:
@@ -177,6 +179,7 @@ class StrategyReport:
             post_errors=error_counts(post_runs),
             failed_compactions=sum(1 for r in results if r.compaction_error),
             compaction_errors=tuple(Counter(r.compaction_error for r in results if r.compaction_error).most_common()),
+            grown_boundaries=sum(1 for r in results if r.post_size and r.post_size.tokens > r.pre_size.tokens),
         )
 
 
@@ -229,6 +232,7 @@ class VerificationReport:
                     f"{report.unchanged_boundaries:>4}  {failed:>9}  {report.permutation_p:>6.3f}"
                 )
             notes.extend(_failure_notes(name, report))
+            notes.extend(_growth_note(name, report))
         lines.append(
             "n = boundaries scored / tested; stopped = share of rollouts that ended before the horizon; "
             "kept = median share of context tokens kept; noop = boundaries left unchanged; "
@@ -333,6 +337,16 @@ def _failure_notes(name: str, report: StrategyReport) -> list[str]:
     return notes
 
 
+def _growth_note(name: str, report: StrategyReport) -> list[str]:
+    if not report.grown_boundaries:
+        return []
+    compacted = len(report.boundaries) - report.failed_compactions
+    return [
+        f"{name}: the compacted context was longer than the history it replaced at {report.grown_boundaries} "
+        f"of {compacted} boundaries (median kept {report.median_token_ratio:.0%})"
+    ]
+
+
 def _clip(message: str, limit: int = 160) -> str:
     message = " ".join(message.split())
     return message if len(message) <= limit else message[: limit - 1] + "…"
@@ -359,6 +373,7 @@ def _strategy_dict(report: StrategyReport) -> dict[str, Any]:
         "post_errors": [list(e) for e in report.post_errors],
         "failed_compactions": report.failed_compactions,
         "compaction_errors": [list(e) for e in report.compaction_errors],
+        "grown_boundaries": report.grown_boundaries,
         "horizons": [dataclasses.asdict(h) for h in report.horizons],
         "boundaries": [_boundary_dict(b) for b in report.boundaries],
     }

@@ -36,7 +36,9 @@ def failed(arm: str, sample: int, error: str = "BadRequestError: orphaned tool r
     return Rollout(arm=arm, sample=sample, actions=(), ending="error", error=error)  # type: ignore[arg-type]
 
 
-def boundary(cut: int, pre: list[Rollout], post: list[Rollout], *, trajectory: int = 0) -> BoundaryResult:
+def boundary(
+    cut: int, pre: list[Rollout], post: list[Rollout], *, trajectory: int = 0, post_tokens: int = 100
+) -> BoundaryResult:
     scorable_pre = [r.actions for r in pre if r.ending != "error"]
     scorable_post = [r.actions for r in post if r.ending != "error"]
     deltas = (
@@ -50,7 +52,7 @@ def boundary(cut: int, pre: list[Rollout], post: list[Rollout], *, trajectory: i
         strategy="s",
         deltas=deltas,
         pre_size=ContextSize(events=20, tokens=400),
-        post_size=ContextSize(events=5, tokens=100),
+        post_size=ContextSize(events=5, tokens=post_tokens),
         pre=tuple(pre),
         post=tuple(post),
         compaction_tokens=0,
@@ -233,6 +235,57 @@ class TestSampleNote:
         lines = report({"a": [boundary(10, [ran("pre", 0)], [ran("post", 0)])]}, pre_total=1).summary().splitlines()
 
         assert "1 boundary from 1 recording" in lines
+
+
+class TestGrownContext:
+    def test_a_strategy_that_lengthens_the_context_gets_a_note(self) -> None:
+        results = [
+            boundary(10, [ran("pre", 0)], [ran("post", 0)], post_tokens=600),
+            boundary(20, [ran("pre", 0)], [ran("post", 0)], post_tokens=520),
+            boundary(30, [ran("pre", 0)], [ran("post", 0)], post_tokens=100),
+        ]
+
+        s = StrategyReport.build("s", results, HORIZON)
+        lines = report({"summarize": results}, pre_total=3).summary().splitlines()
+
+        assert s.grown_boundaries == 2
+        assert s.median_token_ratio == 1.3
+        assert (
+            "summarize: the compacted context was longer than the history it replaced at 2 of 3 boundaries "
+            "(median kept 130%)"
+        ) in lines
+        assert report({"summarize": results}, pre_total=3).to_dict()["strategies"]["summarize"]["grown_boundaries"] == 2
+
+    def test_no_note_when_every_context_shrank(self) -> None:
+        results = [boundary(10, [ran("pre", 0)], [ran("post", 0)])]
+
+        lines = report({"tail": results}, pre_total=1).summary().splitlines()
+
+        assert StrategyReport.build("tail", results, HORIZON).grown_boundaries == 0
+        assert not any("longer than the history" in line for line in lines)
+
+    def test_failed_compactions_are_not_counted(self) -> None:
+        grown = boundary(10, [ran("pre", 0)], [ran("post", 0)], post_tokens=600)
+        broken = BoundaryResult(
+            trajectory=0,
+            cut=20,
+            strategy="s",
+            deltas=(),
+            pre_size=ContextSize(events=20, tokens=400),
+            post_size=None,
+            pre=(ran("pre", 0),),
+            post=(),
+            compaction_tokens=0,
+            unchanged=False,
+            compaction_error="RuntimeError: down",
+        )
+
+        lines = report({"s": [grown, broken]}, pre_total=2).summary().splitlines()
+
+        assert (
+            "s: the compacted context was longer than the history it replaced at 1 of 1 boundaries (median kept 150%)"
+            in lines
+        )
 
 
 class TestToDict:

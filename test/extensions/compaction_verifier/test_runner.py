@@ -7,7 +7,7 @@ import json
 import pytest
 
 from ag2 import Agent
-from ag2.compact import TailWindowCompact
+from ag2.compact import CompactionSummary, TailWindowCompact
 from ag2.eval import Trace
 from ag2.extensions.compaction_verifier import (
     ActionBudget,
@@ -264,6 +264,23 @@ class TestCompactionVerifier:
         assert "PRE: most common error (2x): ReplayMismatchError" in report.summary()
 
     @pytest.mark.asyncio
+    async def test_a_strategy_that_lengthens_the_context_is_noted(self) -> None:
+        events = await record_trajectory(fetches=4)
+        verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()), horizon=1, samples=1)
+
+        report = await verifier.verify(
+            [Recording(events, world_environment())], {"verbose": _Verbose()}, every=2, min_prefix=2
+        )
+
+        verbose = report.strategies["verbose"]
+        n = len(verbose.boundaries)
+        assert verbose.median_token_ratio > 1.0
+        assert verbose.grown_boundaries == n
+        assert f"verbose: the compacted context was longer than the history it replaced at {n} of {n} boundaries" in (
+            report.summary()
+        )
+
+    @pytest.mark.asyncio
     async def test_each_recording_uses_its_own_environment(self) -> None:
         events = await record_trajectory(fetches=4)
         restored: list[int] = []
@@ -347,6 +364,17 @@ class _FailsAfter:
         if len(events) > self._limit:
             raise RuntimeError("context too long to summarize")
         return list(await TailWindowCompact(target=5).compact(events, context, store))
+
+
+class _Verbose:
+    """Summarizes into something longer than what it replaced, then keeps the last tool round."""
+
+    async def compact(self, events, context, store):  # type: ignore[no-untyped-def]
+        kept = list(await TailWindowCompact(target=5).compact(events, context, store))
+        return [
+            CompactionSummary(summary="so far, in great detail: " + "padding " * 2000, event_count=len(events)),
+            *kept,
+        ]
 
 
 class _BrokenAt:
