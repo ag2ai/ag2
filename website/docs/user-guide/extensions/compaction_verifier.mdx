@@ -61,48 +61,92 @@ from ag2.extensions.compaction_verifier import (
 config = OpenAIConfig(model="gpt-4.1-mini", temperature=0.7)
 
 
-class Inventory:
+class Shop:
     """Deterministic state: the same calls always leave it the same way."""
 
     def __init__(self) -> None:
-        self.stock = {"widget": 3, "gadget": 0}
+        self.pages = [["widget", "gadget"], ["gizmo", "sprocket"], ["flange", "bolt"], ["hinge", "valve"]]
+        self.stock = {
+            "widget": 3, "gadget": 0, "gizmo": 0, "sprocket": 5,
+            "flange": 0, "bolt": 2, "hinge": 1, "valve": 0,
+        }
+        self.session = ""
 
-    def check(self, item: str) -> str:
+    def login(self) -> str:
+        """Start a session. Returns the session id every other tool needs."""
+        self.session = "s-4821"
+        return self.session
+
+    def list_items(self, session: str, page: int) -> str:
+        """List one page of items; pages start at 1."""
+        self._authorize(session)
+        return f"page {page} of {len(self.pages)}: {', '.join(self.pages[page - 1])}"
+
+    def check(self, session: str, item: str) -> str:
+        """Units of an item in stock."""
+        self._authorize(session)
         return str(self.stock[item])
 
-    def reorder(self, item: str, quantity: int) -> str:
+    def reorder(self, session: str, item: str, quantity: int) -> str:
+        """Order more units of an item."""
+        self._authorize(session)
         self.stock[item] += quantity
         return "ok"
 
+    def _authorize(self, session: str) -> None:
+        if not self.session or session != self.session:
+            raise PermissionError("invalid session; call login first")
+
 
 def fresh_tools() -> dict:
-    inventory = Inventory()
-    return {"check": inventory.check, "reorder": inventory.reorder}
+    shop = Shop()
+    return {"login": shop.login, "list_items": shop.list_items, "check": shop.check, "reorder": shop.reorder}
 
 
 async def main() -> None:
-    # 1. Record a run, uncompacted.
+    # 1. Record a few runs, uncompacted.
     agent = Agent("stock-keeper", "Keep every item in stock.", config=config)
-    stream = MemoryStream()
-    tools = [tool(f, name=n) for n, f in fresh_tools().items()]
-    await agent.ask("Check every item and reorder what is out.", stream=stream, tools=tools)
-    events = list(await stream.history.get_events())
+    task = "Check every item on every page and reorder what is out of stock."
+    recordings = []
+    for _ in range(3):
+        stream = MemoryStream()
+        tools = [tool(f, name=n) for n, f in fresh_tools().items()]
+        await agent.ask(task, stream=stream, tools=tools)
+        events = list(await stream.history.get_events())
+        recordings.append(Recording(events, ReplayEnvironment(fresh_tools)))
 
-    # 2. Verify strategies against it.
+    # 2. Verify strategies against them.
     verifier = CompactionVerifier(agent, horizon=5, samples=3)
     report = await verifier.verify(
-        [Recording(events, ReplayEnvironment(fresh_tools))],
+        recordings,
         {
             "control": IdentityCompact(),
             "tail": TailWindowCompact(target=15),
             "summary": SummarizeCompact(target=15, config=config),
         },
+        every=3,
+        min_prefix=3,
     )
     print(report.summary())
 
 
 asyncio.run(main())
 ```
+
+With gpt-4.1-mini, each recorded run logs in, lists the four pages one at a time, and checks and restocks the items on each: 17 tool calls in 13 rounds. `every=3, min_prefix=3` takes four boundaries from each run, 12 in all, and the script finishes in about three minutes. One run printed:
+
+```text
+compaction verifier: POST minus PRE over the first 5 actions (3 samples per arm; * = 95% CI excludes 0)
+PRE rollouts failed: 0 of 36 (shared by every strategy)
+12 boundaries from 3 recordings; intervals and p treat boundaries as independent, but boundaries from one recording are correlated, so both are optimistic
+strategy                  n                  wasted                 blocked                 refetch                 stopped   kept  noop     failed       p
+control                  12  +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]    100%    12       0/36   1.000
+tail                     12  +1.139 [+0.333,+2.056]*  +0.000 [+0.000,+0.000]   +1.139 [+0.333,+2.056]*  +0.028 [+0.000,+0.083]     31%     0       0/36   0.062
+summary                  12  +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]   +0.056 [+0.000,+0.167]     40%     0       0/36   1.000
+n = boundaries scored / tested; stopped = share of rollouts that ended before the horizon; kept = median share of context tokens kept; noop = boundaries left unchanged; failed = POST rollouts that failed, not scored; p = exact sign-flip permutation test on per-boundary wasted delta
+```
+
+The control scored exactly zero on every channel. `tail` kept 31% of the context and cost about one repeated call in five: resumed from a window that no longer showed which pages were done, the agent started again from page 1. Its interval excludes zero, but the harm came from 5 of the 12 boundaries, and with five boundaries showing any difference the exact test cannot go below p = 0.06; record more runs before relying on it. `summary` kept 40% at no measurable cost. Your numbers will differ from run to run.
 
 `report.summary()` prints one row per strategy: the boundaries scored out of those tested, the mean POST-minus-PRE delta at the full horizon for wasted, blocked and refetch actions and for stopped rollouts, each with a 95% bootstrap interval (`*` when it excludes zero), the median share of context tokens the strategy kept, how many boundaries it left unchanged, how many POST rollouts failed, and an exact sign-flip permutation p-value on the wasted delta. A line above the table gives the PRE failures, which every strategy shares. With fewer than 10 boundaries no interval is marked: a percentile bootstrap over so few units is not reliable.
 
@@ -127,7 +171,7 @@ Both arms of a boundary must start from the state the environment was in at that
 
 ## Choosing boundaries
 
-By default a boundary is taken after the first `min_prefix` actions and then every `every` actions (`verify(..., every=5, min_prefix=3)`). Pass `Recording(events, environment, cuts=[...])` to choose them yourself; `resumable_cuts(events)` lists every valid point.
+By default a boundary is taken after the first `min_prefix` actions and then every `every` actions (`verify(..., every=5, min_prefix=3)`). Boundaries fall between tool rounds, and only where the recorded run went on to call another tool. Calls the model issues in one response are one round, so a run that makes all its calls at once has no boundary, whatever `every` and `min_prefix` are. When no recording has a boundary, `verify()` raises a `ValueError` that says how many actions and tool rounds each recording has. Pass `Recording(events, environment, cuts=[...])` to choose them yourself; `resumable_cuts(events)` lists every valid point.
 
 AG2's compaction middleware fires between turns, so a long single-turn tool loop is not compacted in production. The verifier does not depend on where a strategy happens to fire: it asks what the strategy would cost *if* the history were compacted at each boundary.
 

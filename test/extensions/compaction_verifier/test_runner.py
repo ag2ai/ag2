@@ -332,6 +332,28 @@ class TestCompactionVerifier:
         json.dumps(report.to_dict())
 
     @pytest.mark.asyncio
+    async def test_recordings_without_a_boundary_raise_and_say_why(self) -> None:
+        short = await record_trajectory(fetches=1)
+        one_round = await record_trajectory(fetches=4, one_round=True)
+        verifier = CompactionVerifier(Agent("worker", config=TestConfig(RuntimeError("must not be called"))))
+        strategies = {"identity": IdentityCompact()}
+
+        with pytest.raises(ValueError) as short_error:
+            await verifier.verify([Recording(short, world_environment())], strategies)
+        # calls issued in one response are one round, and the last round is never a boundary
+        with pytest.raises(ValueError) as one_round_error:
+            await verifier.verify([Recording(one_round, world_environment())], strategies, every=1, min_prefix=1)
+        with pytest.raises(ValueError, match="no recordings given"):
+            await verifier.verify([], strategies)
+        with pytest.raises(ValueError, match="recording 0: 0 cuts given"):
+            await verifier.verify([Recording(short, world_environment(), cuts=[])], strategies)
+
+        assert str(short_error.value).startswith("no boundary to verify (recording 0: 2 actions in 2 tool rounds). ")
+        assert "min_prefix=3" in str(short_error.value)
+        assert str(one_round_error.value).startswith("no boundary to verify (recording 0: 5 actions in 1 tool round). ")
+        assert "calls issued in one model response are one round" in str(one_round_error.value)
+
+    @pytest.mark.asyncio
     async def test_rejects_bad_arguments(self) -> None:
         verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()))
         with pytest.raises(ValueError, match="at least one strategy"):

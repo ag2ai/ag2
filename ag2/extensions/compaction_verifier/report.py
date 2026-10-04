@@ -213,7 +213,9 @@ class VerificationReport:
             n = f"{tested - report.unscored_boundaries}/{tested}" if report.unscored_boundaries else f"{tested}"
             mark = "!" if report.failure_asymmetry or report.failed_compactions else ""
             failed = f"{report.failed_rollouts}/{report.post_rollouts}{mark}"
-            if not report.horizons:
+            if not tested:
+                lines.append(f"{name:<20}{n:>7}  no boundaries tested")
+            elif not report.horizons:
                 why = []
                 if report.failed_compactions:
                     why.append(f"compaction failed at {report.failed_compactions} of {tested} boundaries")

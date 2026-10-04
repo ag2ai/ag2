@@ -149,6 +149,11 @@ class TestSummary:
         assert "! tail: failed more often after compaction (POST 2/2 vs PRE 0/1). No boundary could be scored." in text
         assert "most common POST error (2x)" in text
 
+    def test_a_strategy_with_no_boundary_says_so(self) -> None:
+        row = next(line for line in report({"tail": []}).summary().splitlines() if line.startswith("tail "))
+
+        assert row.endswith("0  no boundaries tested")
+
     def test_a_clean_run_has_no_failure_notes(self) -> None:
         results = [boundary(10, [ran("pre", 0)], [ran("post", 0)])]
 

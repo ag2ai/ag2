@@ -36,7 +36,7 @@ from ag2.middleware.base import LLMCall, ToolExecution, ToolResultType
 from ag2.stream import MemoryStream
 
 from .actions import Action, actions_from_events
-from .boundary import Boundary, CompactedContext, compact_context, make_boundary, select_cuts
+from .boundary import Boundary, CompactedContext, compact_context, make_boundary, resumable_cuts, select_cuts
 from .burden import score_boundary
 from .environment import Environment
 from .report import Arm, BoundaryResult, Rollout, StrategyReport, VerificationReport, error_counts
@@ -213,16 +213,25 @@ class CompactionVerifier:
             every: Actions between consecutive chosen cuts, for recordings
                 without explicit ``cuts``.
             min_prefix: Actions that must precede the first chosen cut.
+
+        Raises:
+            ValueError: No strategy was given, or no recording has a boundary
+                to test. The message says how many actions and tool rounds
+                each recording has.
         """
         if not strategies:
             raise ValueError("give at least one strategy to verify")
         planned: list[tuple[Boundary, Environment]] = []
+        scanned: list[tuple[Sequence[BaseEvent], Sequence[int] | None]] = []
         for t, recording in enumerate(recordings):
             events = recording.events.events if isinstance(recording.events, Trace) else tuple(recording.events)
             cuts = recording.cuts
             if cuts is None:
                 cuts = select_cuts(events, every=every, min_prefix=min_prefix)
             planned.extend((make_boundary(events, cut, trajectory=t), recording.environment) for cut in cuts)
+            scanned.append((events, recording.cuts))
+        if not planned:
+            raise ValueError(_no_boundaries(scanned, min_prefix=min_prefix))
         logger.info("verifying %d strategies at %d boundaries", len(strategies), len(planned))
 
         gate = asyncio.Semaphore(self.concurrency)
@@ -325,6 +334,31 @@ class CompactionVerifier:
             return await run_rollout(
                 self.agent, context, environment, boundary.prefix, horizon=self.horizon, arm=arm, sample=sample
             )
+
+
+def _shape(trajectory: int, events: Sequence[BaseEvent], cuts: Sequence[int] | None) -> str:
+    if cuts is not None:
+        return f"recording {trajectory}: {len(cuts)} cuts given"
+    actions = len(actions_from_events(events))
+    rounds = len(resumable_cuts(events))
+    return (
+        f"recording {trajectory}: {actions} action{'' if actions == 1 else 's'} "
+        f"in {rounds} tool round{'' if rounds == 1 else 's'}"
+    )
+
+
+def _no_boundaries(scanned: Sequence[tuple[Sequence[BaseEvent], Sequence[int] | None]], *, min_prefix: int) -> str:
+    """Why no boundary was found, and what to change."""
+    if not scanned:
+        return "no boundary to verify: no recordings given"
+    shapes = [_shape(t, events, cuts) for t, (events, cuts) in enumerate(scanned[:5])]
+    listed = "; ".join(shapes) + ("; ..." if len(scanned) > 5 else "")
+    return (
+        f"no boundary to verify ({listed}). The first boundary is taken once min_prefix={min_prefix} "
+        "actions have executed, and only where another tool round follows: calls issued in one model "
+        "response are one round, and the last round is never a boundary. Record longer runs, lower "
+        "min_prefix, or pass Recording(..., cuts=[...])."
+    )
 
 
 def _spent(context: CompactedContext) -> int:

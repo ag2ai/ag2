@@ -138,18 +138,20 @@ class ContextAwareConfig(ModelConfig):
         raise NotImplementedError
 
 
-async def record_trajectory(fetches: int = 6, *, ollama_ids: bool = False) -> list[BaseEvent]:
+async def record_trajectory(fetches: int = 6, *, ollama_ids: bool = False, one_round: bool = False) -> list[BaseEvent]:
     """A real AG2 history: log in once, then fetch ``fetches`` items, then answer.
 
     With ``ollama_ids`` every call is ``call_0``, as AG2's Ollama client numbers
-    calls per response.
+    calls per response. With ``one_round`` the model issues every call in a
+    single response, so the history has one tool round.
     """
     ids = ["call_0"] * (fetches + 1) if ollama_ids else [f"rec-{i}" for i in range(fetches + 1)]
-    turns: list[Any] = [ToolCallEvent("login", arguments='{"user": "ada"}', id=ids[0])]
-    turns += [
+    calls = [ToolCallEvent("login", arguments='{"user": "ada"}', id=ids[0])]
+    calls += [
         ToolCallEvent("fetch", arguments=json.dumps({"token": TOKEN, "item": ITEMS[i]}), id=ids[i + 1])
         for i in range(fetches)
     ]
+    turns: list[Any] = [calls] if one_round else list(calls)
     turns.append("done")
     agent = Agent("recorder", config=TestConfig(*turns, raise_tool_errors=False))
     stream = MemoryStream()
