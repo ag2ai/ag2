@@ -119,6 +119,7 @@ async def _mcp_session(
             streamable_http_client(
                 config.server_url,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 http_client=client,
+                max_sse_event_size=config.max_sse_event_size,
             ) as (read_stream, write_stream),
             ClientSession(read_stream, write_stream, **session_kwargs) as session,
         ):
