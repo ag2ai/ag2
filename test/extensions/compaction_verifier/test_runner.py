@@ -43,6 +43,17 @@ class TestRunRollout:
         assert not {a.call_id for a in rollout.actions} & {a.call_id for a in boundary.prefix}
 
     @pytest.mark.asyncio
+    async def test_new_calls_that_reuse_prefix_ids_are_counted(self) -> None:
+        events = await record_trajectory(fetches=3, ollama_ids=True)
+        boundary = make_boundary(events, resumable_cuts(events)[1])
+        agent = Agent("worker", config=ContextAwareConfig(ollama_ids=True))
+
+        rollout = await run_rollout(agent, boundary.context, world_environment(), boundary.prefix, horizon=2, arm="pre")
+
+        assert {a.call_id for a in (*boundary.prefix, *rollout.actions)} == {"call_0"}
+        assert [json.loads(a.arguments)["item"] for a in rollout.actions] == ["b", "c"]
+
+    @pytest.mark.asyncio
     async def test_an_agent_that_finishes_early_ends_with_an_answer(self) -> None:
         events = await record_trajectory(fetches=7)
         boundary = make_boundary(events, resumable_cuts(events)[-1])  # 7 of 8 items fetched
@@ -94,6 +105,33 @@ class TestCompactionVerifier:
         # two boundaries are too few to mark anything significant
         assert "*" not in report.summary().splitlines()[2]
         assert "without significance marks" in report.summary()
+
+    @pytest.mark.asyncio
+    async def test_ollama_ids_verify_exactly_like_unique_ids(self) -> None:
+        strategies = {"identity": IdentityCompact(), "tail": TailWindowCompact(target=5)}
+        reports = []
+        for ollama in (False, True):
+            events = await record_trajectory(fetches=5, ollama_ids=ollama)
+            verifier = CompactionVerifier(
+                Agent("worker", config=ContextAwareConfig(ollama_ids=ollama)), horizon=3, samples=2
+            )
+            reports.append(
+                await verifier.verify([Recording(events, world_environment())], strategies, every=2, min_prefix=2)
+            )
+
+        def scores(report):  # type: ignore[no-untyped-def]
+            return {
+                name: [
+                    (b.cut, b.unchanged, [(d.blocked, d.refetch, d.wasted, d.stopped) for d in b.deltas])
+                    for b in s.boundaries
+                ]
+                for name, s in report.strategies.items()
+            }
+
+        unique, ollama = reports
+        assert scores(ollama) == scores(unique)
+        assert ollama.strategies["tail"].at(3).boundaries >= 2
+        assert ollama.strategies["tail"].at(3).wasted.mean > 0
 
     @pytest.mark.asyncio
     async def test_each_recording_uses_its_own_environment(self) -> None:

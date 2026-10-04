@@ -48,6 +48,19 @@ class TestCuts:
 
         assert [len(make_boundary(events, c).prefix) for c in cuts] == [3, 5]
 
+    @pytest.mark.asyncio
+    async def test_ollama_ids_give_the_same_cuts_and_boundaries(self) -> None:
+        unique = await record_trajectory(fetches=6)
+        ollama = await record_trajectory(fetches=6, ollama_ids=True)
+
+        cuts = select_cuts(ollama, every=2, min_prefix=3)
+
+        assert cuts == select_cuts(unique, every=2, min_prefix=3) != []
+        for cut in cuts:
+            a, b = make_boundary(unique, cut), make_boundary(ollama, cut)
+            assert [(x.signature, x.blocked) for x in b.prefix] == [(x.signature, x.blocked) for x in a.prefix]
+            assert (b.history, b.history_tools) == (a.history, a.history_tools)
+
     def test_select_cuts_rejects_non_positive_spacing(self) -> None:
         with pytest.raises(ValueError):
             select_cuts([], every=0)

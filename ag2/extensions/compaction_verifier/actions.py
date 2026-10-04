@@ -14,6 +14,11 @@ reads two things from each action:
   error contract, not a reading of the result text;
 * its **signature** — the tool name plus its arguments as canonical JSON, used
   to recognise a call that repeats one already executed.
+
+Call ids are not assumed unique across a history: some providers number calls
+per response (AG2's Ollama client names the first call of every response
+``call_0``). A call is identified by its position in the sequence, and each
+result is paired with the call it answers by scanning in order.
 """
 
 import json
@@ -39,6 +44,7 @@ class Action:
 
     Attributes:
         call_id: Id of the originating :class:`~ag2.events.ToolCallEvent`.
+            Diagnostic only: ids need not be unique across a history.
         name: Tool name as the model called it.
         arguments: Arguments exactly as the model sent them (a JSON string).
         signature: ``name(arguments)`` with the arguments as canonical JSON —
@@ -78,36 +84,82 @@ def actions_from_events(events: Iterable[BaseEvent]) -> list[Action]:
     """Every executed tool call in ``events``, in the order the calls were issued.
 
     A call counts once it has a result; a call still waiting for one (a run cut
-    off mid-execution) has not been executed and is left out. Calls and results
-    are matched by id, and read both from the individual events and from their
-    containers (:class:`~ag2.events.ToolCallsEvent`,
-    :class:`~ag2.events.ToolResultsEvent`, a response's ``tool_calls``), so each
-    is counted once however the sequence was recorded.
-    """
-    calls: dict[str, ToolCallEvent] = {}
-    results: dict[str, ToolResultEvent] = {}
-    for event in events:
-        for call in calls_in(event):
-            calls.setdefault(call.id, call)
-        for result in results_in(event):
-            results.setdefault(result.parent_id, result)
+    off mid-execution) has not been executed and is left out. See
+    :func:`actions_with_positions` for how calls and results are paired.
 
-    actions: list[Action] = []
-    for call_id, call in calls.items():
-        answer = results.get(call_id)
-        if answer is None:
+    Raises:
+        ValueError: Two different calls awaiting results share an id, so a
+            result cannot be paired with a single call.
+    """
+    return [action for action, _ in actions_with_positions(events)]
+
+
+def actions_with_positions(events: Iterable[BaseEvent]) -> list[tuple[Action, int]]:
+    """Every executed tool call, with the index of the event that answered it.
+
+    Calls and results are paired by scanning ``events`` in order, never through
+    a global id map, because ids repeat across responses with some providers:
+
+    * a call is read from the individual events and from their containers
+      (:class:`~ag2.events.ToolCallsEvent`, a response's ``tool_calls``); a call
+      seen again while an identical call (same id, tool and arguments) is still
+      awaiting its result is that call repeated by another container, and counts
+      once — otherwise it is a new call, even if an earlier, answered call used
+      the same id;
+    * a result answers the call with its id that is awaiting a result; a result
+      with no such call is a container repeating one already paired, and is
+      skipped.
+
+    Raises:
+        ValueError: Two different calls awaiting results share an id — within
+            one event, or across events before the first was answered — so a
+            result could not be paired with a single call.
+    """
+    issued: list[ToolCallEvent] = []
+    awaiting: dict[str, int] = {}  # call id -> index in ``issued`` of the call awaiting its result
+    answered: dict[int, tuple[ToolResultEvent, int]] = {}
+    for index, event in enumerate(events):
+        calls = calls_in(event)
+        if len({c.id for c in calls}) < len(calls):
+            raise ValueError(
+                f"{type(event).__name__} at {index} holds several calls with one id; results cannot be paired"
+            )
+        for call in calls:
+            open_index = awaiting.get(call.id)
+            if open_index is None:
+                awaiting[call.id] = len(issued)
+                issued.append(call)
+            elif not _same_call(issued[open_index], call):
+                raise ValueError(
+                    f"call id {call.id!r} at {index} is reused while an earlier call with that id is "
+                    "still awaiting its result; results cannot be paired"
+                )
+        for result in results_in(event):
+            open_index = awaiting.pop(result.parent_id, None)
+            if open_index is not None:
+                answered[open_index] = (result, index)
+
+    actions: list[tuple[Action, int]] = []
+    for position, call in enumerate(issued):
+        if position not in answered:
             continue
-        actions.append(
+        answer, at = answered[position]
+        actions.append((
             Action(
-                call_id=call_id,
+                call_id=call.id,
                 name=call.name,
                 arguments=call.arguments,
                 signature=call_signature(call.name, call.arguments),
                 blocked=isinstance(answer, ToolErrorEvent),
                 error_type=type(answer.error).__name__ if isinstance(answer, ToolErrorEvent) else None,
-            )
-        )
+            ),
+            at,
+        ))
     return actions
+
+
+def _same_call(a: ToolCallEvent, b: ToolCallEvent) -> bool:
+    return call_signature(a.name, a.arguments) == call_signature(b.name, b.arguments)
 
 
 def calls_in(event: BaseEvent) -> tuple[ToolCallEvent, ...]:

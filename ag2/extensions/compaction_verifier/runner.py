@@ -112,16 +112,28 @@ async def run_rollout(
     raised: every rollout of that boundary would start from the wrong state.
     """
     tools = await environment.restore(prefix)
+    stream = MemoryStream()
+    emitted = _EventLog()
+    # Only what this run emits: the seeded history is written to storage, not
+    # sent, so the agent's new calls are read here whatever ids they reuse.
+    stream.subscribe(emitted.add, sync_to_thread=False)
     try:
-        stream = MemoryStream()
         await agent.resume(*context, stream=stream, tools=tools, middleware=[ActionBudget(horizon)])
-        history = await stream.history.get_events()
+        actions = tuple(actions_from_events(emitted.events))
     except Exception as exc:
         logger.warning("%s rollout %d failed: %s: %s", arm, sample, type(exc).__name__, exc)
         return Rollout(arm=arm, sample=sample, actions=(), ending="error", error=f"{type(exc).__name__}: {exc}")
-    seen = {a.call_id for a in prefix}
-    actions = tuple(a for a in actions_from_events(history) if a.call_id not in seen)
     return Rollout(arm=arm, sample=sample, actions=actions, ending="budget" if len(actions) >= horizon else "answer")
+
+
+class _EventLog:
+    __slots__ = ("events",)
+
+    def __init__(self) -> None:
+        self.events: list[BaseEvent] = []
+
+    async def add(self, event: BaseEvent) -> None:
+        self.events.append(event)
 
 
 @dataclass(frozen=True, slots=True)

@@ -33,7 +33,7 @@ from ag2.context import ConversationContext
 from ag2.events import BaseEvent, ToolResultsEvent, UsageEvent, estimated_tokens, is_conversational
 from ag2.stream import MemoryStream
 
-from .actions import Action, actions_from_events, calls_in, results_in
+from .actions import Action, actions_from_events, actions_with_positions
 from .burden import history_signatures
 
 __all__ = (
@@ -128,21 +128,18 @@ def select_cuts(
     """
     if every < 1 or min_prefix < 1:
         raise ValueError("every and min_prefix must be at least 1")
-    total = len(actions_from_events(events))
+    answered_at = sorted(at for _, at in actions_with_positions(events))
+    total = len(answered_at)
     cuts: list[int] = []
     next_at = min_prefix
-    called: set[str] = set()
-    answered: set[str] = set()
-    for i, event in enumerate(events):
-        called.update(c.id for c in calls_in(event))
-        answered.update(r.parent_id for r in results_in(event))
-        if not isinstance(event, ToolResultsEvent):
-            continue
-        executed = len(called & answered)
+    executed = 0
+    for cut in resumable_cuts(events):
+        while executed < total and answered_at[executed] < cut:
+            executed += 1
         if executed >= total:
             break
         if executed >= next_at:
-            cuts.append(i + 1)
+            cuts.append(cut)
             next_at = executed + every
     return cuts
 

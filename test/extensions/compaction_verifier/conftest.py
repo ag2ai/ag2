@@ -72,8 +72,9 @@ def world_environment() -> ReplayEnvironment:
 
 
 class _ContextAwareClient(LLMClient):
-    def __init__(self, guess_token: bool) -> None:
+    def __init__(self, guess_token: bool, ollama_ids: bool) -> None:
         self._guess_token = guess_token
+        self._ollama_ids = ollama_ids
         self._calls = 0
 
     async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
@@ -85,7 +86,7 @@ class _ContextAwareClient(LLMClient):
         remaining = [i for i in ITEMS if i not in fetched]
         if not remaining:
             return ModelResponse(ModelMessage("all items fetched"))
-        call_id = f"call-{id(self)}-{self._calls}"
+        call_id = "call_0" if self._ollama_ids else f"call-{id(self)}-{self._calls}"
         if TOKEN in text:
             args = {"token": TOKEN, "item": remaining[0]}
             return ModelResponse(
@@ -102,10 +103,15 @@ class _ContextAwareClient(LLMClient):
 
 
 class ContextAwareConfig(ModelConfig):
-    """A fake model whose next call depends only on what its context shows."""
+    """A fake model whose next call depends only on what its context shows.
 
-    def __init__(self, *, guess_token: bool = False) -> None:
+    With ``ollama_ids`` it numbers calls per response the way AG2's Ollama
+    client does, so every call is ``call_0``.
+    """
+
+    def __init__(self, *, guess_token: bool = False, ollama_ids: bool = False) -> None:
         self._guess_token = guess_token
+        self._ollama_ids = ollama_ids
 
     @property
     def provider(self) -> ModelProvider:
@@ -119,17 +125,22 @@ class ContextAwareConfig(ModelConfig):
         return self
 
     def create(self) -> LLMClient:
-        return _ContextAwareClient(self._guess_token)
+        return _ContextAwareClient(self._guess_token, self._ollama_ids)
 
     def create_files_client(self) -> Any:
         raise NotImplementedError
 
 
-async def record_trajectory(fetches: int = 6) -> list[BaseEvent]:
-    """A real AG2 history: log in once, then fetch ``fetches`` items, then answer."""
-    turns: list[Any] = [ToolCallEvent("login", arguments='{"user": "ada"}', id="rec-0")]
+async def record_trajectory(fetches: int = 6, *, ollama_ids: bool = False) -> list[BaseEvent]:
+    """A real AG2 history: log in once, then fetch ``fetches`` items, then answer.
+
+    With ``ollama_ids`` every call is ``call_0``, as AG2's Ollama client numbers
+    calls per response.
+    """
+    ids = ["call_0"] * (fetches + 1) if ollama_ids else [f"rec-{i}" for i in range(fetches + 1)]
+    turns: list[Any] = [ToolCallEvent("login", arguments='{"user": "ada"}', id=ids[0])]
     turns += [
-        ToolCallEvent("fetch", arguments=json.dumps({"token": TOKEN, "item": ITEMS[i]}), id=f"rec-{i + 1}")
+        ToolCallEvent("fetch", arguments=json.dumps({"token": TOKEN, "item": ITEMS[i]}), id=ids[i + 1])
         for i in range(fetches)
     ]
     turns.append("done")
