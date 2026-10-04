@@ -58,9 +58,11 @@ def bootstrap_mean(
 ) -> Interval:
     """Mean of ``values`` with a 95% percentile-bootstrap interval.
 
-    The unit resampled is one value (one boundary), so boundaries from the same
-    trajectory are treated as independent; with few boundaries per trajectory
-    this is the usual approximation.
+    The unit resampled is one value (one boundary), so boundaries are treated as
+    independent. Boundaries cut from the same recording share one agent run and
+    are correlated, so with several per recording the interval is narrower than
+    it should be. The same holds for the p-values of :func:`exact_sign_test` and
+    :func:`exact_permutation_test`, which also take each boundary as one unit.
     """
     if not values:
         raise ValueError("cannot bootstrap an empty sample")

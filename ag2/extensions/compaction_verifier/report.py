@@ -199,6 +199,7 @@ class VerificationReport:
             f"compaction verifier: POST minus PRE over the first {k} actions "
             f"({self.samples} samples per arm; * = 95% CI excludes 0)",
             f"PRE rollouts failed: {self.failed_pre_rollouts} of {self.pre_rollouts} (shared by every strategy)",
+            *self._sample_note(),
             f"{'strategy':<20}{'n':>7}  {'wasted':>22}  {'blocked':>22}  {'refetch':>22}  "
             f"{'stopped':>22}  {'kept':>5}  {'noop':>4}  {'failed':>9}  {'p':>6}",
         ]
@@ -245,11 +246,35 @@ class VerificationReport:
         lines.extend(notes)
         return "\n".join(lines)
 
+    @property
+    def boundaries(self) -> int:
+        """Boundaries tested, counted once however many strategies were compared."""
+        return len({(b.trajectory, b.cut) for s in self.strategies.values() for b in s.boundaries})
+
+    @property
+    def recordings(self) -> int:
+        """Recordings the boundaries were cut from."""
+        return len({b.trajectory for s in self.strategies.values() for b in s.boundaries})
+
+    def _sample_note(self) -> list[str]:
+        boundaries, recordings = self.boundaries, self.recordings
+        if not boundaries:
+            return []
+        note = f"{boundaries} boundar{'y' if boundaries == 1 else 'ies'} from {recordings} recording{'' if recordings == 1 else 's'}"
+        if boundaries > recordings:
+            note += (
+                "; intervals and p treat boundaries as independent, but boundaries from one recording "
+                "are correlated, so both are optimistic"
+            )
+        return [note]
+
     def to_dict(self) -> dict[str, Any]:
         """A JSON-serializable view, rollouts and actions included."""
         return {
             "horizon": self.horizon,
             "samples": self.samples,
+            "boundaries": self.boundaries,
+            "recordings": self.recordings,
             "pre_rollouts": self.pre_rollouts,
             "failed_pre_rollouts": self.failed_pre_rollouts,
             "pre_errors": [list(e) for e in self.pre_errors],

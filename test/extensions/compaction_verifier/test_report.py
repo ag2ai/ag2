@@ -36,7 +36,7 @@ def failed(arm: str, sample: int, error: str = "BadRequestError: orphaned tool r
     return Rollout(arm=arm, sample=sample, actions=(), ending="error", error=error)  # type: ignore[arg-type]
 
 
-def boundary(cut: int, pre: list[Rollout], post: list[Rollout]) -> BoundaryResult:
+def boundary(cut: int, pre: list[Rollout], post: list[Rollout], *, trajectory: int = 0) -> BoundaryResult:
     scorable_pre = [r.actions for r in pre if r.ending != "error"]
     scorable_post = [r.actions for r in post if r.ending != "error"]
     deltas = (
@@ -45,7 +45,7 @@ def boundary(cut: int, pre: list[Rollout], post: list[Rollout]) -> BoundaryResul
         else ()
     )
     return BoundaryResult(
-        trajectory=0,
+        trajectory=trajectory,
         cut=cut,
         strategy="s",
         deltas=deltas,
@@ -204,6 +204,35 @@ class TestCompactionFailures:
         assert (
             d["boundaries"][1]["post_size"] is None and d["boundaries"][1]["compaction_error"] == "RateLimitError: 429"
         )
+
+
+class TestSampleNote:
+    def test_several_boundaries_per_recording_are_flagged(self) -> None:
+        results = [
+            boundary(cut, [ran("pre", 0)], [ran("post", 0)], trajectory=t) for cut, t in ((10, 0), (20, 0), (30, 1))
+        ]
+
+        r = report({"a": results, "b": results}, pre_total=3)
+
+        assert (r.boundaries, r.recordings) == (3, 2)
+        assert (
+            "3 boundaries from 2 recordings; intervals and p treat boundaries as independent, but boundaries "
+            "from one recording are correlated, so both are optimistic"
+        ) in r.summary().splitlines()
+        assert (r.to_dict()["boundaries"], r.to_dict()["recordings"]) == (3, 2)
+
+    def test_one_boundary_per_recording_needs_no_caveat(self) -> None:
+        results = [boundary(10, [ran("pre", 0)], [ran("post", 0)], trajectory=t) for t in range(2)]
+
+        lines = report({"a": results}, pre_total=2).summary().splitlines()
+
+        assert "2 boundaries from 2 recordings" in lines
+        assert not any("optimistic" in line for line in lines)
+
+    def test_singular_wording(self) -> None:
+        lines = report({"a": [boundary(10, [ran("pre", 0)], [ran("post", 0)])]}, pre_total=1).summary().splitlines()
+
+        assert "1 boundary from 1 recording" in lines
 
 
 class TestToDict:

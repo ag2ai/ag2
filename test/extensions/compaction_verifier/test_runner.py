@@ -118,7 +118,8 @@ class TestCompactionVerifier:
         assert tail.unchanged_boundaries == 0
         assert report.failed_pre_rollouts == 0
         # two boundaries are too few to mark anything significant
-        assert "*" not in report.summary().splitlines()[2]
+        rows = [line for line in report.summary().splitlines() if line.startswith(("identity ", "tail "))]
+        assert len(rows) == 2 and not any("*" in row for row in rows)
         assert "without significance marks" in report.summary()
 
     @pytest.mark.asyncio
