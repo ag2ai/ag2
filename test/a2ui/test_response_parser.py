@@ -88,6 +88,29 @@ class TestA2UIResponseParser:
         assert result.parse_error is not None
         assert "Expected JSON" in result.parse_error
 
+    @pytest.mark.parametrize(
+        "block",
+        [
+            pytest.param('[{"deleteSurface": {"surfaceId": "s"}}, 1]', id="array-with-a-scalar"),
+            pytest.param('[{"deleteSurface": {"surfaceId": "s"}}, {"bogus": {}}]', id="array-with-an-unknown-envelope"),
+            pytest.param('{"version": "v0.9"}', id="object-without-a-payload"),
+            pytest.param('{"createSurface": {}, "deleteSurface": {}}', id="object-with-two-payloads"),
+            pytest.param('{"deleteSurface": {"surfaceId": "s"}}\n{"bogus": {}}', id="jsonl-with-an-unknown-envelope"),
+        ],
+    )
+    def test_parse_rejects_a_block_that_is_not_made_of_messages(self, block: str) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        result = parser.parse(f"Text\n<a2ui-json>\n{block}\n</a2ui-json>")
+        assert result.has_a2ui is True
+        assert result.operations == []
+        assert result.parse_error is not None
+
+    def test_parse_names_the_offending_operation(self) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        result = parser.parse('<a2ui-json>[{"deleteSurface": {"surfaceId": "s"}}, {"bogus": {}}]</a2ui-json>')
+        assert result.parse_error is not None
+        assert result.parse_error.startswith("Operation 1 is not an A2UI message")
+
     def test_parse_empty_inside_tag(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
         result = parser.parse("Text\n<a2ui-json>\n</a2ui-json>")
