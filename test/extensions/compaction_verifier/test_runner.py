@@ -14,6 +14,7 @@ from ag2.extensions.compaction_verifier import (
     CompactionVerifier,
     IdentityCompact,
     Recording,
+    ReplayMismatchError,
     make_boundary,
     resumable_cuts,
     run_rollout,
@@ -63,6 +64,20 @@ class TestRunRollout:
 
         assert rollout.ending == "answer"
         assert len(rollout.actions) == 1
+
+    @pytest.mark.asyncio
+    async def test_an_environment_that_cannot_be_restored_is_recorded_not_raised(self) -> None:
+        events = await record_trajectory(fetches=2)
+        boundary = make_boundary(events, resumable_cuts(events)[-1])
+        agent = Agent("worker", config=ContextAwareConfig())
+
+        rollout = await run_rollout(
+            agent, boundary.context, _BrokenAt(len(boundary.prefix)), boundary.prefix, horizon=2, arm="pre"
+        )
+
+        assert rollout.ending == "error"
+        assert rollout.error is not None and rollout.error.startswith("ReplayMismatchError: ")
+        assert rollout.actions == ()
 
     @pytest.mark.asyncio
     async def test_a_failing_run_is_recorded_not_raised(self) -> None:
@@ -162,6 +177,92 @@ class TestCompactionVerifier:
         assert "provider rejected the context" in text
 
     @pytest.mark.asyncio
+    async def test_a_strategy_that_raises_is_recorded_and_the_rest_still_scores(self) -> None:
+        events = await record_trajectory(fetches=5)
+        verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()), horizon=2, samples=2)
+
+        report = await verifier.verify(
+            [Recording(events, world_environment())],
+            {"identity": IdentityCompact(), "raises": _Raises(RuntimeError("summary call rate-limited"))},
+            every=2,
+            min_prefix=2,
+        )
+
+        identity, raises = report.strategies["identity"], report.strategies["raises"]
+        n = len(raises.boundaries)
+        assert n >= 2 and identity.at(2).boundaries == n
+        assert raises.failed_compactions == raises.unscored_boundaries == n
+        assert raises.post_rollouts == 0
+        assert raises.compaction_errors == (("RuntimeError: summary call rate-limited", n),)
+        assert all(b.compaction_error and b.post_size is None for b in raises.boundaries)
+        assert report.pre_rollouts == 2 * n  # PRE still ran, for identity
+        text = report.summary()
+        row = next(line for line in text.splitlines() if line.startswith("raises "))
+        assert row.endswith(f"no scorable boundaries: compaction failed at {n} of {n} boundaries")
+        assert f"! raises: compaction failed at {n} of {n} boundaries" in text
+        assert f"raises: most common compaction error ({n}x): RuntimeError: summary call rate-limited" in text
+
+    @pytest.mark.asyncio
+    async def test_a_strategy_that_drops_the_trigger_is_recorded(self) -> None:
+        events = await record_trajectory(fetches=4)
+        verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()), horizon=1, samples=1)
+
+        report = await verifier.verify(
+            [Recording(events, world_environment())], {"empty": _Raises(None)}, every=2, min_prefix=2
+        )
+
+        (message, _), *_ = report.strategies["empty"].compaction_errors
+        assert message.startswith("ValueError: _Raises did not keep the boundary's last ToolResultsEvent")
+
+    @pytest.mark.asyncio
+    async def test_a_strategy_failing_at_some_boundaries_scores_the_others(self) -> None:
+        events = await record_trajectory(fetches=7)
+        cuts = resumable_cuts(events)
+        verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()), horizon=2, samples=1)
+
+        report = await verifier.verify(
+            [Recording(events, world_environment(), cuts=[cuts[2], cuts[4], cuts[6]])],
+            {"late": _FailsAfter(limit=cuts[3])},
+        )
+
+        late = report.strategies["late"]
+        assert late.failed_compactions == 2
+        assert late.at(2).boundaries == 1
+        row = next(line for line in report.summary().splitlines() if line.startswith("late "))
+        assert " 1/3 " in row and row.rstrip().split()[-2].endswith("!")
+
+    @pytest.mark.asyncio
+    async def test_no_pre_rollouts_run_where_every_strategy_failed_to_compact(self) -> None:
+        events = await record_trajectory(fetches=4)
+        verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()), horizon=2, samples=3)
+
+        report = await verifier.verify(
+            [Recording(events, world_environment())], {"raises": _Raises(RuntimeError("down"))}, every=2, min_prefix=2
+        )
+
+        assert report.pre_rollouts == 0
+        n = len(report.strategies["raises"].boundaries)
+        assert f"no scorable boundaries: compaction failed at {n} of {n} boundaries" in report.summary()
+
+    @pytest.mark.asyncio
+    async def test_a_boundary_whose_environment_cannot_be_restored_is_recorded(self) -> None:
+        events = await record_trajectory(fetches=5)
+        cuts = resumable_cuts(events)
+        verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()), horizon=2, samples=2)
+        broken = make_boundary(events, cuts[3])
+
+        report = await verifier.verify(
+            [Recording(events, _BrokenAt(len(broken.prefix)), cuts=[cuts[1], cuts[3]])], {"identity": IdentityCompact()}
+        )
+
+        identity = report.strategies["identity"]
+        assert identity.unscored_boundaries == 1
+        assert identity.at(2).boundaries == 1
+        assert report.failed_pre_rollouts == 2 and identity.failed_rollouts == 2
+        assert report.pre_errors[0][0].startswith("ReplayMismatchError: ")
+        assert "PRE: most common error (2x): ReplayMismatchError" in report.summary()
+
+    @pytest.mark.asyncio
     async def test_each_recording_uses_its_own_environment(self) -> None:
         events = await record_trajectory(fetches=4)
         restored: list[int] = []
@@ -221,6 +322,42 @@ class TestCompactionVerifier:
             await verifier.verify([Recording([], world_environment(), cuts=[1])], {"identity": IdentityCompact()})
         with pytest.raises(ValueError):
             CompactionVerifier(Agent("worker", config=ContextAwareConfig()), samples=0)
+
+
+class _Raises:
+    """Raises ``error`` instead of compacting; with ``None``, returns nothing at all."""
+
+    def __init__(self, error: Exception | None) -> None:
+        self._error = error
+
+    async def compact(self, events, context, store):  # type: ignore[no-untyped-def]
+        if self._error is None:
+            return []
+        raise self._error
+
+
+class _FailsAfter:
+    """Keeps the last tool round, until the history is longer than ``limit`` events; then raises."""
+
+    def __init__(self, limit: int) -> None:
+        self._limit = limit
+
+    async def compact(self, events, context, store):  # type: ignore[no-untyped-def]
+        if len(events) > self._limit:
+            raise RuntimeError("context too long to summarize")
+        return list(await TailWindowCompact(target=5).compact(events, context, store))
+
+
+class _BrokenAt:
+    """An environment that cannot be restored for a prefix of exactly ``size`` calls."""
+
+    def __init__(self, size: int) -> None:
+        self._size = size
+
+    async def restore(self, prefix):  # type: ignore[no-untyped-def]
+        if len(prefix) == self._size:
+            raise ReplayMismatchError("recorded call fetch(...) succeeded but raised KeyError on replay")
+        return await world_environment().restore(prefix)
 
 
 class _DropUntilLast:

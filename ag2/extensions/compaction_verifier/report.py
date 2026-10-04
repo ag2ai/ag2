@@ -64,13 +64,16 @@ class BoundaryResult:
     deltas: tuple[BoundaryDelta, ...]
     """POST minus PRE for every horizon ``1..k``; empty if an arm had no scorable rollout."""
     pre_size: ContextSize
-    post_size: ContextSize
+    post_size: ContextSize | None
+    """``None`` when the strategy failed to compact this boundary."""
     pre: tuple[Rollout, ...]
     post: tuple[Rollout, ...]
     compaction_tokens: int
     """Tokens the strategy itself spent compacting this boundary."""
     unchanged: bool
     """The strategy returned the history unchanged: POST saw exactly the PRE context."""
+    compaction_error: str | None = None
+    """Why the strategy produced no POST context here; no POST rollout ran, and the boundary is not scored."""
 
     @property
     def scored(self) -> bool:
@@ -121,6 +124,10 @@ class StrategyReport:
     failed_pre_rollouts: int
     post_errors: tuple[tuple[str, int], ...]
     """Distinct POST errors with their counts, most common first."""
+    failed_compactions: int = 0
+    """Boundaries where the strategy raised instead of returning a context; they are not scored."""
+    compaction_errors: tuple[tuple[str, int], ...] = ()
+    """Distinct compaction errors with their counts, most common first."""
 
     def at(self, horizon: int) -> HorizonSummary:
         for h in self.horizons:
@@ -151,7 +158,7 @@ class StrategyReport:
         scored = [r for r in results if r.scored]
         horizons = tuple(_summarize(scored, k) for k in range(1, horizon + 1)) if scored else ()
         full = [r.at(horizon).wasted for r in scored]
-        ratios = [r.post_size.tokens / r.pre_size.tokens for r in results if r.pre_size.tokens]
+        ratios = [r.post_size.tokens / r.pre_size.tokens for r in results if r.post_size and r.pre_size.tokens]
         post_runs = [x for r in results for x in r.post]
         pre_runs = [x for r in results for x in r.pre]
         return cls(
@@ -168,6 +175,8 @@ class StrategyReport:
             pre_rollouts=len(pre_runs),
             failed_pre_rollouts=sum(1 for x in pre_runs if x.ending == "error"),
             post_errors=error_counts(post_runs),
+            failed_compactions=sum(1 for r in results if r.compaction_error),
+            compaction_errors=tuple(Counter(r.compaction_error for r in results if r.compaction_error).most_common()),
         )
 
 
@@ -198,13 +207,18 @@ class VerificationReport:
         for name, report in self.strategies.items():
             tested = len(report.boundaries)
             n = f"{tested - report.unscored_boundaries}/{tested}" if report.unscored_boundaries else f"{tested}"
-            mark = "!" if report.failure_asymmetry else ""
+            mark = "!" if report.failure_asymmetry or report.failed_compactions else ""
             failed = f"{report.failed_rollouts}/{report.post_rollouts}{mark}"
             if not report.horizons:
-                lines.append(
-                    f"{name:<20}{n:>7}  no scorable boundaries: {report.failed_rollouts} of {report.post_rollouts} "
-                    f"POST and {report.failed_pre_rollouts} of {report.pre_rollouts} PRE rollouts failed"
-                )
+                why = []
+                if report.failed_compactions:
+                    why.append(f"compaction failed at {report.failed_compactions} of {tested} boundaries")
+                if report.post_rollouts or report.failed_pre_rollouts:
+                    why.append(
+                        f"{report.failed_rollouts} of {report.post_rollouts} POST and "
+                        f"{report.failed_pre_rollouts} of {report.pre_rollouts} PRE rollouts failed"
+                    )
+                lines.append(f"{name:<20}{n:>7}  no scorable boundaries: {'; '.join(why)}")
             else:
                 h = report.at(k)
                 few = few or h.boundaries < MIN_BOUNDARIES_FOR_SIGNIFICANCE
@@ -263,6 +277,13 @@ def error_counts(rollouts: Iterable[Rollout]) -> tuple[tuple[str, int], ...]:
 
 def _failure_notes(name: str, report: StrategyReport) -> list[str]:
     notes = []
+    if report.failed_compactions:
+        notes.append(
+            f"! {name}: compaction failed at {report.failed_compactions} of {len(report.boundaries)} boundaries; "
+            "no POST rollout ran there and those boundaries are not scored."
+        )
+        message, count = report.compaction_errors[0]
+        notes.append(f"{name}: most common compaction error ({count}x): {_clip(message)}")
     post = f"POST {report.failed_rollouts}/{report.post_rollouts}"
     pre = f"PRE {report.failed_pre_rollouts}/{report.pre_rollouts}"
     if report.failure_asymmetry == "post":
@@ -311,6 +332,8 @@ def _strategy_dict(report: StrategyReport) -> dict[str, Any]:
         "failed_pre_rollouts": report.failed_pre_rollouts,
         "failure_asymmetry": report.failure_asymmetry,
         "post_errors": [list(e) for e in report.post_errors],
+        "failed_compactions": report.failed_compactions,
+        "compaction_errors": [list(e) for e in report.compaction_errors],
         "horizons": [dataclasses.asdict(h) for h in report.horizons],
         "boundaries": [_boundary_dict(b) for b in report.boundaries],
     }
@@ -321,9 +344,10 @@ def _boundary_dict(result: BoundaryResult) -> dict[str, Any]:
         "trajectory": result.trajectory,
         "cut": result.cut,
         "pre_size": dataclasses.asdict(result.pre_size),
-        "post_size": dataclasses.asdict(result.post_size),
+        "post_size": dataclasses.asdict(result.post_size) if result.post_size else None,
         "compaction_tokens": result.compaction_tokens,
         "unchanged": result.unchanged,
+        "compaction_error": result.compaction_error,
         "deltas": [
             {
                 "horizon": d.horizon,

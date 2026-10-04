@@ -169,6 +169,43 @@ class TestSummary:
         assert "PRE: most common error (2x): TimeoutError: slow" in r.summary()
 
 
+class TestCompactionFailures:
+    def test_counted_excluded_from_kept_and_flagged(self) -> None:
+        ok = boundary(10, [ran("pre", 0)], [ran("post", 0)])
+        broken = BoundaryResult(
+            trajectory=0,
+            cut=20,
+            strategy="s",
+            deltas=(),
+            pre_size=ContextSize(events=20, tokens=400),
+            post_size=None,
+            pre=(ran("pre", 0),),
+            post=(),
+            compaction_tokens=0,
+            unchanged=False,
+            compaction_error="RateLimitError: 429",
+        )
+
+        s = StrategyReport.build("s", [ok, broken], HORIZON)
+
+        assert (s.failed_compactions, s.unscored_boundaries) == (1, 1)
+        assert s.compaction_errors == (("RateLimitError: 429", 1),)
+        assert s.median_token_ratio == 0.25  # from the boundary that compacted only
+        lines = report({"s": [ok, broken]}, pre_total=2).summary().splitlines()
+        row = next(line for line in lines if line.startswith("s "))
+        assert " 1/2 " in row and "0/1!" in row
+        assert (
+            "! s: compaction failed at 1 of 2 boundaries; no POST rollout ran there and those boundaries are not scored."
+            in lines
+        )
+        assert "s: most common compaction error (1x): RateLimitError: 429" in lines
+        d = report({"s": [ok, broken]}, pre_total=2).to_dict()["strategies"]["s"]
+        assert d["failed_compactions"] == 1 and d["compaction_errors"] == [["RateLimitError: 429", 1]]
+        assert (
+            d["boundaries"][1]["post_size"] is None and d["boundaries"][1]["compaction_error"] == "RateLimitError: 429"
+        )
+
+
 class TestToDict:
     def test_failure_fields_are_serialized(self) -> None:
         results = [boundary(10, [ran("pre", 0)], [ran("post", 0), failed("post", 1)])]

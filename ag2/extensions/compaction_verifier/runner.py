@@ -106,12 +106,18 @@ async def run_rollout(
 ) -> Rollout:
     """Resume ``agent`` from ``context`` in a restored environment and record what it does.
 
-    A failure while the agent runs (a provider error, say) is recorded on the
-    rollout rather than raised, so one bad sample does not discard a boundary;
-    such a rollout is not scored. A failure to restore the environment is
-    raised: every rollout of that boundary would start from the wrong state.
+    A failure is recorded on the rollout rather than raised, so one bad sample
+    or one bad boundary does not discard the rest of a verification; such a
+    rollout is not scored. That covers a failure while the agent runs (a
+    provider error, say) and a failure to restore the environment (a
+    :class:`ReplayMismatchError`, say): in the second case the agent never
+    starts, so nothing runs from the wrong state.
     """
-    tools = await environment.restore(prefix)
+    try:
+        tools = await environment.restore(prefix)
+    except Exception as exc:
+        logger.warning("%s rollout %d: environment not restored: %s: %s", arm, sample, type(exc).__name__, exc)
+        return Rollout(arm=arm, sample=sample, actions=(), ending="error", error=f"{type(exc).__name__}: {exc}")
     stream = MemoryStream()
     emitted = _EventLog()
     # Only what this run emits: the seeded history is written to storage, not
@@ -245,26 +251,31 @@ class CompactionVerifier:
         gate: asyncio.Semaphore,
     ) -> tuple[list[BoundaryResult], tuple[Rollout, ...]]:
         names = list(strategies)
-        compacted = await asyncio.gather(*(self._gated_compact(strategies[n], boundary, gate) for n in names))
+        outcomes = await asyncio.gather(*(self._gated_compact(strategies[n], boundary, gate) for n in names))
+        # PRE serves only the strategies that compacted; with none, it would be compared with nothing.
+        samples = self.samples if any(isinstance(o, CompactedContext) for o in outcomes) else 0
         pre_task = asyncio.gather(
-            *(self._gated_rollout(boundary.context, boundary, environment, "pre", i, gate) for i in range(self.samples))
+            *(self._gated_rollout(boundary.context, boundary, environment, "pre", i, gate) for i in range(samples))
         )
-        post_tasks = [
+        post_tasks: list[asyncio.Future[list[Rollout]]] = [
             asyncio.gather(
-                *(self._gated_rollout(c.events, boundary, environment, "post", i, gate) for i in range(self.samples))
+                *(self._gated_rollout(o.events, boundary, environment, "post", i, gate) for i in range(self.samples))
             )
-            for c in compacted
+            if isinstance(o, CompactedContext)
+            else asyncio.gather()
+            for o in outcomes
         ]
         pre, *posts = await asyncio.gather(pre_task, *post_tasks)
         scorable_pre = [r.actions for r in pre if r.ending != "error"]
         results = []
-        for name, context, post in zip(names, compacted, posts, strict=True):
+        for name, outcome, post in zip(names, outcomes, posts, strict=True):
             scorable_post = [r.actions for r in post if r.ending != "error"]
             deltas = (
                 score_boundary(scorable_pre, scorable_post, boundary.history, range(1, self.horizon + 1))
                 if scorable_pre and scorable_post
                 else ()
             )
+            compacted = outcome if isinstance(outcome, CompactedContext) else None
             results.append(
                 BoundaryResult(
                     trajectory=boundary.trajectory,
@@ -272,11 +283,12 @@ class CompactionVerifier:
                     strategy=name,
                     deltas=deltas,
                     pre_size=boundary.size,
-                    post_size=context.size,
+                    post_size=compacted.size if compacted else None,
                     pre=tuple(pre),
                     post=tuple(post),
-                    compaction_tokens=_spent(context),
-                    unchanged=context.events == boundary.context,
+                    compaction_tokens=_spent(compacted) if compacted else 0,
+                    unchanged=compacted is not None and compacted.events == boundary.context,
+                    compaction_error=None if compacted else str(outcome),
                 )
             )
         logger.info("boundary %d@%d done", boundary.trajectory, boundary.cut)
@@ -284,9 +296,21 @@ class CompactionVerifier:
 
     async def _gated_compact(
         self, strategy: CompactStrategy, boundary: Boundary, gate: asyncio.Semaphore
-    ) -> CompactedContext:
+    ) -> CompactedContext | str:
+        """The POST context, or the error that kept the strategy from producing one."""
         async with gate:
-            return await compact_context(strategy, boundary)
+            try:
+                return await compact_context(strategy, boundary)
+            except Exception as exc:
+                logger.warning(
+                    "%s failed to compact boundary %d@%d: %s: %s",
+                    type(strategy).__name__,
+                    boundary.trajectory,
+                    boundary.cut,
+                    type(exc).__name__,
+                    exc,
+                )
+                return f"{type(exc).__name__}: {exc}"
 
     async def _gated_rollout(
         self,
