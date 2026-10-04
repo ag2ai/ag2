@@ -58,7 +58,7 @@ from ag2.extensions.compaction_verifier import (
     ReplayEnvironment,
 )
 
-config = OpenAIConfig(model="gpt-5-mini", temperature=0.7)
+config = OpenAIConfig(model="gpt-4.1-mini", temperature=0.7)
 
 
 class Inventory:
@@ -117,7 +117,7 @@ Build the agent **without** the environment's tools: each rollout passes tools b
 - **Failures never stop a verification.** A strategy that raises instead of returning a context (a summarization call that is rate-limited, say) is recorded for that boundary: no POST rollout runs there, the boundary is left out of that strategy's averages, and the summary marks the strategy with `!` and prints the error. The other strategies and boundaries carry on, and so does everything already finished.
 - **Intervals and p-values treat boundaries as independent.** Each boundary is one unit in the bootstrap interval and in the sign and permutation tests. Boundaries cut from the same recording share one agent run and are correlated. So with several boundaries per recording (a small `every` on long runs), the intervals come out narrower and the p-values smaller than they should. The summary's header says how many recordings the boundaries come from. Spread boundaries over more recordings rather than packing many into a few, and treat a borderline result with caution.
 - **Every horizon is available.** `report.strategies[name].at(k)` gives the summary at `k = 1 … horizon`; `report.to_dict()` holds every boundary and every rollout's actions for your own analysis.
-- **Sampling.** Variance only averages out if the agent's model samples with a non-zero temperature; with temperature 0 use `samples=1`.
+- **Sampling.** Variance only averages out if the agent's model samples with a non-zero temperature; with temperature 0 use `samples=1`. Some models accept only their default temperature (OpenAI's gpt-5 family rejects `temperature=0.7`, for example). For those, leave `temperature` unset: their default of 1 is non-zero, which is what the verifier needs.
 
 ## Environments
 
