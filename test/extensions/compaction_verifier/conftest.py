@@ -27,6 +27,7 @@ from ag2.config import LLMClient, ModelConfig, ModelProvider
 from ag2.events import (
     BaseEvent,
     ModelMessage,
+    ModelRequest,
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
@@ -72,13 +73,16 @@ def world_environment() -> ReplayEnvironment:
 
 
 class _ContextAwareClient(LLMClient):
-    def __init__(self, guess_token: bool, ollama_ids: bool) -> None:
+    def __init__(self, guess_token: bool, ollama_ids: bool, require_request: bool) -> None:
         self._guess_token = guess_token
         self._ollama_ids = ollama_ids
+        self._require_request = require_request
         self._calls = 0
 
     async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
         self._calls += 1
+        if self._require_request and not any(isinstance(m, ModelRequest) for m in messages):
+            raise RuntimeError("provider rejected the context: no user request")
         # Only what tools returned (or a summary of it) counts as known: the
         # model knows the token if it saw login's output.
         text = "\n".join(render_for_prompt(m) for m in messages if isinstance(m, (ToolResultsEvent, CompactionSummary)))
@@ -106,12 +110,15 @@ class ContextAwareConfig(ModelConfig):
     """A fake model whose next call depends only on what its context shows.
 
     With ``ollama_ids`` it numbers calls per response the way AG2's Ollama
-    client does, so every call is ``call_0``.
+    client does, so every call is ``call_0``. With ``require_request`` it fails,
+    as a provider rejecting the request would, when its context holds no user
+    request.
     """
 
-    def __init__(self, *, guess_token: bool = False, ollama_ids: bool = False) -> None:
+    def __init__(self, *, guess_token: bool = False, ollama_ids: bool = False, require_request: bool = False) -> None:
         self._guess_token = guess_token
         self._ollama_ids = ollama_ids
+        self._require_request = require_request
 
     @property
     def provider(self) -> ModelProvider:
@@ -125,7 +132,7 @@ class ContextAwareConfig(ModelConfig):
         return self
 
     def create(self) -> LLMClient:
-        return _ContextAwareClient(self._guess_token, self._ollama_ids)
+        return _ContextAwareClient(self._guess_token, self._ollama_ids, self._require_request)
 
     def create_files_client(self) -> Any:
         raise NotImplementedError

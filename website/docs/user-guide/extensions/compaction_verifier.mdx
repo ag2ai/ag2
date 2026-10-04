@@ -104,7 +104,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-`report.summary()` prints one row per strategy: the mean POST-minus-PRE delta at the full horizon for wasted, blocked and refetch actions and for stopped rollouts, each with a 95% bootstrap interval (`*` when it excludes zero), the median share of context tokens the strategy kept, how many boundaries it left unchanged, and an exact sign-flip permutation p-value on the wasted delta. With fewer than 10 boundaries no interval is marked: a percentile bootstrap over so few units is not reliable.
+`report.summary()` prints one row per strategy: the boundaries scored out of those tested, the mean POST-minus-PRE delta at the full horizon for wasted, blocked and refetch actions and for stopped rollouts, each with a 95% bootstrap interval (`*` when it excludes zero), the median share of context tokens the strategy kept, how many boundaries it left unchanged, how many POST rollouts failed, and an exact sign-flip permutation p-value on the wasted delta. A line above the table gives the PRE failures, which every strategy shares. With fewer than 10 boundaries no interval is marked: a percentile bootstrap over so few units is not reliable.
 
 Build the agent **without** the environment's tools: each rollout passes tools bound to its own rebuilt environment.
 
@@ -113,6 +113,7 @@ Build the agent **without** the environment's tools: each rollout passes tools b
 - **Always include `IdentityCompact`.** It returns the history unchanged, so PRE and POST see the same context and its delta is the agent's own run-to-run noise at your sample size. A strategy's delta is evidence only when it clears the control's.
 - **`kept`** is how much of the context a strategy kept, and **`noop`** how many boundaries it left untouched. A strategy that keeps 100% of the context is not compacting at all, and its delta is noise. A `TailWindowCompact` window narrower than one tool round (five conversational events) keeps everything, because the window's start would split a call from its result.
 - **`TailWindowCompact` drops the original request** along with everything else outside the window. Between turns the next `ask()` brings a new request; resumed mid-task, an agent can lose track of what it was asked to do and stop, which shows up in `stopped`.
+- **Check `failed` before reading a delta.** A rollout that raises (a provider error, say) is recorded but not scored, and a boundary where every rollout of one arm failed is left out of the averages, which `n` shows as boundaries scored / tested. A `!` marks a strategy whose arms failed at different rates, which biases its delta. More failures after compaction, for instance a provider rejecting the compacted context, leave only the POST samples that ran and can understate the harm. More failures without compaction, for instance the raw history overflowing the context window, can understate what compaction saves. The most common error is printed under the table, and every error is in `to_dict()`.
 - **Every horizon is available.** `report.strategies[name].at(k)` gives the summary at `k = 1 … horizon`; `report.to_dict()` holds every boundary and every rollout's actions for your own analysis.
 - **Sampling.** Variance only averages out if the agent's model samples with a non-zero temperature; with temperature 0 use `samples=1`.
 

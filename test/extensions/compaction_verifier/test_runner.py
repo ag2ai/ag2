@@ -134,6 +134,34 @@ class TestCompactionVerifier:
         assert ollama.strategies["tail"].at(3).wasted.mean > 0
 
     @pytest.mark.asyncio
+    async def test_failures_from_a_rejected_compacted_context_are_reported(self) -> None:
+        # the window drops the original request; this model, like a strict provider, refuses such a context
+        events = await record_trajectory(fetches=5)
+        verifier = CompactionVerifier(
+            Agent("worker", config=ContextAwareConfig(require_request=True)), horizon=2, samples=2
+        )
+
+        report = await verifier.verify(
+            [Recording(events, world_environment())],
+            {"identity": IdentityCompact(), "tail": TailWindowCompact(target=5)},
+            every=2,
+            min_prefix=2,
+        )
+
+        identity, tail = report.strategies["identity"], report.strategies["tail"]
+        assert identity.failed_rollouts == 0 and identity.failure_asymmetry is None
+        assert tail.failed_rollouts == tail.post_rollouts > 0
+        assert tail.failure_asymmetry == "post"
+        assert tail.unscored_boundaries == len(tail.boundaries)
+        assert tail.post_errors == (
+            ("RuntimeError: provider rejected the context: no user request", tail.post_rollouts),
+        )
+        text = report.summary()
+        assert "no scorable boundaries" in text
+        assert "! tail: failed more often after compaction" in text
+        assert "provider rejected the context" in text
+
+    @pytest.mark.asyncio
     async def test_each_recording_uses_its_own_environment(self) -> None:
         events = await record_trajectory(fetches=4)
         restored: list[int] = []

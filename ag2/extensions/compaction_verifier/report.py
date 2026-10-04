@@ -5,7 +5,8 @@
 """Verification results: per boundary, and aggregated per strategy."""
 
 import dataclasses
-from collections.abc import Mapping, Sequence
+from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -110,7 +111,16 @@ class StrategyReport:
     """Median of POST tokens / PRE tokens: how much of the context the strategy kept."""
     unchanged_boundaries: int
     """Boundaries where the strategy returned the history unchanged, so POST was PRE."""
+    unscored_boundaries: int
+    """Boundaries left out of every average because an arm had no rollout that ran."""
+    post_rollouts: int
     failed_rollouts: int
+    """POST rollouts that raised. They are not scored."""
+    pre_rollouts: int
+    """PRE rollouts at this strategy's boundaries (shared with every strategy)."""
+    failed_pre_rollouts: int
+    post_errors: tuple[tuple[str, int], ...]
+    """Distinct POST errors with their counts, most common first."""
 
     def at(self, horizon: int) -> HorizonSummary:
         for h in self.horizons:
@@ -118,14 +128,32 @@ class StrategyReport:
                 return h
         raise KeyError(horizon)
 
+    @property
+    def failure_asymmetry(self) -> Arm | None:
+        """The arm that failed more often at this strategy's boundaries, or ``None`` if neither did.
+
+        Failed rollouts are not scored, so an asymmetry biases the delta: more
+        POST failures (say, a provider rejecting the compacted context) leave only
+        the POST samples that ran and can understate the harm; more PRE failures
+        (say, the raw history overflowing the context window) can understate
+        what compaction saves.
+        """
+        post = self.failed_rollouts * self.pre_rollouts
+        pre = self.failed_pre_rollouts * self.post_rollouts
+        if post > pre:
+            return "post"
+        if pre > post:
+            return "pre"
+        return None
+
     @classmethod
     def build(cls, strategy: str, results: Sequence[BoundaryResult], horizon: int) -> "StrategyReport":
         scored = [r for r in results if r.scored]
         horizons = tuple(_summarize(scored, k) for k in range(1, horizon + 1)) if scored else ()
         full = [r.at(horizon).wasted for r in scored]
         ratios = [r.post_size.tokens / r.pre_size.tokens for r in results if r.pre_size.tokens]
-        failed = sum(1 for r in results for x in r.post if x.ending == "error")
-        unchanged = sum(1 for r in results if r.unchanged)
+        post_runs = [x for r in results for x in r.post]
+        pre_runs = [x for r in results for x in r.pre]
         return cls(
             strategy=strategy,
             horizons=horizons,
@@ -133,8 +161,13 @@ class StrategyReport:
             sign_test_p=exact_sign_test(full),
             permutation_p=exact_permutation_test(full),
             median_token_ratio=median(ratios) if ratios else 1.0,
-            unchanged_boundaries=unchanged,
-            failed_rollouts=failed,
+            unchanged_boundaries=sum(1 for r in results if r.unchanged),
+            unscored_boundaries=len(results) - len(scored),
+            post_rollouts=len(post_runs),
+            failed_rollouts=sum(1 for x in post_runs if x.ending == "error"),
+            pre_rollouts=len(pre_runs),
+            failed_pre_rollouts=sum(1 for x in pre_runs if x.ending == "error"),
+            post_errors=error_counts(post_runs),
         )
 
 
@@ -146,6 +179,9 @@ class VerificationReport:
     samples: int
     strategies: Mapping[str, StrategyReport]
     failed_pre_rollouts: int
+    pre_rollouts: int = 0
+    pre_errors: tuple[tuple[str, int], ...] = ()
+    """Distinct PRE errors with their counts, most common first."""
 
     def summary(self) -> str:
         """A short plain-text table: per strategy, the mean delta at the full horizon."""
@@ -153,31 +189,46 @@ class VerificationReport:
         lines = [
             f"compaction verifier: POST minus PRE over the first {k} actions "
             f"({self.samples} samples per arm; * = 95% CI excludes 0)",
-            f"{'strategy':<20}{'n':>4}  {'wasted':>22}  {'blocked':>22}  {'refetch':>22}  "
-            f"{'stopped':>22}  {'kept':>5}  {'noop':>4}  {'p':>6}",
+            f"PRE rollouts failed: {self.failed_pre_rollouts} of {self.pre_rollouts} (shared by every strategy)",
+            f"{'strategy':<20}{'n':>7}  {'wasted':>22}  {'blocked':>22}  {'refetch':>22}  "
+            f"{'stopped':>22}  {'kept':>5}  {'noop':>4}  {'failed':>9}  {'p':>6}",
         ]
+        notes: list[str] = []
         few = False
         for name, report in self.strategies.items():
+            tested = len(report.boundaries)
+            n = f"{tested - report.unscored_boundaries}/{tested}" if report.unscored_boundaries else f"{tested}"
+            mark = "!" if report.failure_asymmetry else ""
+            failed = f"{report.failed_rollouts}/{report.post_rollouts}{mark}"
             if not report.horizons:
-                lines.append(f"{name:<20}{0:>4}  no scorable boundaries")
-                continue
-            h = report.at(k)
-            few = few or h.boundaries < MIN_BOUNDARIES_FOR_SIGNIFICANCE
-            lines.append(
-                f"{name:<20}{h.boundaries:>4}  {_fmt(h.wasted):>22}  {_fmt(h.blocked):>22}  "
-                f"{_fmt(h.refetch):>22}  {_fmt(h.stopped):>22}  {report.median_token_ratio:>5.0%}  "
-                f"{report.unchanged_boundaries:>4}  {report.permutation_p:>6.3f}"
-            )
+                lines.append(
+                    f"{name:<20}{n:>7}  no scorable boundaries: {report.failed_rollouts} of {report.post_rollouts} "
+                    f"POST and {report.failed_pre_rollouts} of {report.pre_rollouts} PRE rollouts failed"
+                )
+            else:
+                h = report.at(k)
+                few = few or h.boundaries < MIN_BOUNDARIES_FOR_SIGNIFICANCE
+                lines.append(
+                    f"{name:<20}{n:>7}  {_fmt(h.wasted):>22}  {_fmt(h.blocked):>22}  "
+                    f"{_fmt(h.refetch):>22}  {_fmt(h.stopped):>22}  {report.median_token_ratio:>5.0%}  "
+                    f"{report.unchanged_boundaries:>4}  {failed:>9}  {report.permutation_p:>6.3f}"
+                )
+            notes.extend(_failure_notes(name, report))
         lines.append(
-            "stopped = share of rollouts that ended before the horizon; kept = median share of "
-            "context tokens kept; noop = boundaries left unchanged; p = exact sign-flip "
-            "permutation test on per-boundary wasted delta"
+            "n = boundaries scored / tested; stopped = share of rollouts that ended before the horizon; "
+            "kept = median share of context tokens kept; noop = boundaries left unchanged; "
+            "failed = POST rollouts that failed, not scored; "
+            "p = exact sign-flip permutation test on per-boundary wasted delta"
         )
         if few:
             lines.append(
                 f"fewer than {MIN_BOUNDARIES_FOR_SIGNIFICANCE} boundaries: intervals are shown "
                 "without significance marks"
             )
+        if self.pre_errors:
+            message, count = self.pre_errors[0]
+            lines.append(f"PRE: most common error ({count}x): {_clip(message)}")
+        lines.extend(notes)
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:
@@ -185,7 +236,9 @@ class VerificationReport:
         return {
             "horizon": self.horizon,
             "samples": self.samples,
+            "pre_rollouts": self.pre_rollouts,
             "failed_pre_rollouts": self.failed_pre_rollouts,
+            "pre_errors": [list(e) for e in self.pre_errors],
             "strategies": {name: _strategy_dict(r) for name, r in self.strategies.items()},
         }
 
@@ -203,6 +256,42 @@ def _summarize(results: Sequence[BoundaryResult], horizon: int) -> HorizonSummar
     )
 
 
+def error_counts(rollouts: Iterable[Rollout]) -> tuple[tuple[str, int], ...]:
+    """Distinct errors of the failed ``rollouts`` with their counts, most common first."""
+    return tuple(Counter(r.error or "unknown error" for r in rollouts if r.ending == "error").most_common())
+
+
+def _failure_notes(name: str, report: StrategyReport) -> list[str]:
+    notes = []
+    post = f"POST {report.failed_rollouts}/{report.post_rollouts}"
+    pre = f"PRE {report.failed_pre_rollouts}/{report.pre_rollouts}"
+    if report.failure_asymmetry == "post":
+        consequence = (
+            "Failed rollouts are not scored, so the delta covers only the POST samples that ran and may "
+            "understate the harm."
+            if report.horizons
+            else "No boundary could be scored."
+        )
+        notes.append(f"! {name}: failed more often after compaction ({post} vs {pre}). {consequence}")
+    elif report.failure_asymmetry == "pre":
+        consequence = (
+            "Failed rollouts are not scored, so the delta covers only the PRE samples that ran and may "
+            "understate what compaction saves."
+            if report.horizons
+            else "No boundary could be scored."
+        )
+        notes.append(f"! {name}: failed more often without compaction ({pre} vs {post}). {consequence}")
+    if report.post_errors:
+        message, count = report.post_errors[0]
+        notes.append(f"{name}: most common POST error ({count}x): {_clip(message)}")
+    return notes
+
+
+def _clip(message: str, limit: int = 160) -> str:
+    message = " ".join(message.split())
+    return message if len(message) <= limit else message[: limit - 1] + "…"
+
+
 def _fmt(i: Interval) -> str:
     star = "*" if i.excludes_zero and i.n >= MIN_BOUNDARIES_FOR_SIGNIFICANCE else " "
     return f"{i.mean:+.3f} [{i.low:+.3f},{i.high:+.3f}]{star}"
@@ -215,7 +304,13 @@ def _strategy_dict(report: StrategyReport) -> dict[str, Any]:
         "permutation_p": report.permutation_p,
         "median_token_ratio": report.median_token_ratio,
         "unchanged_boundaries": report.unchanged_boundaries,
+        "unscored_boundaries": report.unscored_boundaries,
+        "post_rollouts": report.post_rollouts,
         "failed_rollouts": report.failed_rollouts,
+        "pre_rollouts": report.pre_rollouts,
+        "failed_pre_rollouts": report.failed_pre_rollouts,
+        "failure_asymmetry": report.failure_asymmetry,
+        "post_errors": [list(e) for e in report.post_errors],
         "horizons": [dataclasses.asdict(h) for h in report.horizons],
         "boundaries": [_boundary_dict(b) for b in report.boundaries],
     }

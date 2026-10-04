@@ -39,7 +39,7 @@ from .actions import Action, actions_from_events
 from .boundary import Boundary, CompactedContext, compact_context, make_boundary, select_cuts
 from .burden import score_boundary
 from .environment import Environment
-from .report import Arm, BoundaryResult, Rollout, StrategyReport, VerificationReport
+from .report import Arm, BoundaryResult, Rollout, StrategyReport, VerificationReport, error_counts
 
 __all__ = ("ActionBudget", "CompactionVerifier", "Recording", "run_rollout")
 
@@ -223,16 +223,18 @@ class CompactionVerifier:
         results = await asyncio.gather(*(self._verify_boundary(b, env, strategies, gate) for b, env in planned))
 
         by_strategy: dict[str, list[BoundaryResult]] = {name: [] for name in strategies}
-        failed_pre = 0
-        for boundary_results, pre_failures in results:
-            failed_pre += pre_failures
+        pre: list[Rollout] = []
+        for boundary_results, boundary_pre in results:
+            pre.extend(boundary_pre)
             for result in boundary_results:
                 by_strategy[result.strategy].append(result)
         return VerificationReport(
             horizon=self.horizon,
             samples=self.samples,
             strategies={name: StrategyReport.build(name, rs, self.horizon) for name, rs in by_strategy.items()},
-            failed_pre_rollouts=failed_pre,
+            failed_pre_rollouts=sum(1 for r in pre if r.ending == "error"),
+            pre_rollouts=len(pre),
+            pre_errors=error_counts(pre),
         )
 
     async def _verify_boundary(
@@ -241,7 +243,7 @@ class CompactionVerifier:
         environment: Environment,
         strategies: Mapping[str, CompactStrategy],
         gate: asyncio.Semaphore,
-    ) -> tuple[list[BoundaryResult], int]:
+    ) -> tuple[list[BoundaryResult], tuple[Rollout, ...]]:
         names = list(strategies)
         compacted = await asyncio.gather(*(self._gated_compact(strategies[n], boundary, gate) for n in names))
         pre_task = asyncio.gather(
@@ -278,7 +280,7 @@ class CompactionVerifier:
                 )
             )
         logger.info("boundary %d@%d done", boundary.trajectory, boundary.cut)
-        return results, sum(1 for r in pre if r.ending == "error")
+        return results, tuple(pre)
 
     async def _gated_compact(
         self, strategy: CompactStrategy, boundary: Boundary, gate: asyncio.Semaphore
