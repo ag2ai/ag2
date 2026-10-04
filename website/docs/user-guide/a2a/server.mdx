@@ -44,7 +44,8 @@ After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.we
 | Constructor argument | Purpose |
 |---|---|
 | `#!python agent` | The AG2 `#!python Agent` exposed over A2A |
-| `#!python task_store` | Shared `#!python TaskStore`. Defaults to a single `#!python InMemoryTaskStore` reused across every `#!python build_*` call |
+| `#!python task_store` | Shared `#!python TaskStore`, or a `#!python VersionedTaskStore` for [several replicas](#running-on-several-replicas). Defaults to a single `#!python InMemoryTaskStore` reused across every `#!python build_*` call |
+| `#!python event_stream` | `#!python TaskEventStream` that carries task events between replicas. Required with a `#!python VersionedTaskStore`, rejected without one |
 | `#!python push_config_store` | Enables push-notifications CRUD (see [Tasks & Push](/docs/user-guide/a2a/tasks_and_push)). Optional |
 | `#!python push_sender` | Custom delivery sender. Defaults to no-op when not set |
 | `#!python push_url_validator` | Optional async callback receiving a URL and returning `bool`. Rejects disallowed push-notification URLs before storing them |
@@ -111,10 +112,61 @@ gRPC.
 - **Registration only.** The validator screens URLs when they are registered. A
   custom `#!python push_sender` is not covered; give it the same callback (the
   SDK's `#!python BasePushNotificationSender` takes `#!python push_url_validator`).
-- Requires `a2a-sdk>=1.1.4`, the minimum installed by `ag2[a2a]`.
+- Works on every SDK `ag2[a2a]` installs (`a2a-sdk>=1.2.0`).
 
 !!! note
     The default `#!python InMemoryTaskStore` is materialised **once** at `#!python __init__` time. This is what makes JSON-RPC, REST and gRPC bound to the same `#!python A2AServer` see each other's tasks — a single store, three transports.
+
+## Running on Several Replicas
+
+By default a task lives in the memory of the process that started it, so a second copy of the server answers `#!python GetTask` with "not found". To run the same agent behind a load balancer, give every replica one shared **versioned task store** (concurrent writers are detected instead of overwritten) and one **event stream** (a client that subscribes through one replica receives the events of a task running on another). The SDK ships SQL implementations of both; install the driver for your database through the SDK's own extras, for example `pip install "a2a-sdk[postgresql]"`. `ag2[a2a]` adds no database dependency.
+
+```python linenums="1"
+from a2a.server.cluster import DatabaseTaskEventStream, VersionedDatabaseTaskStore
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from ag2.a2a import A2AServer
+
+engine = create_async_engine("postgresql+asyncpg://user:password@db/a2a")
+task_store = VersionedDatabaseTaskStore(engine)
+event_stream = DatabaseTaskEventStream(engine)
+
+# Create the tables once at startup, before serving. The SDK creates only the
+# `tasks` table on first use; without these calls the first request fails with
+# `no such table: task_versions`.
+await task_store.initialize()
+await event_stream.initialize()
+
+server = A2AServer(agent, task_store=task_store, event_stream=event_stream)
+app = server.build_jsonrpc(url="https://my-agent.example.com")
+```
+
+Run the same code in every replica. JSON-RPC, REST and gRPC built from one server share both objects. The load balancer needs no sticky routing: AG2's executor keeps no per-task state between calls, so a task that paused for a client-side tool call or for human input can be resumed on a different replica.
+
+`#!python A2AServer` refuses a configuration that cannot work, at construction time:
+
+- A `#!python VersionedTaskStore` **without** `#!python event_stream` raises `#!python ValueError`. Without a stream, streaming would silently work only on the replica running the task. A single replica that uses a versioned store passes a stream too.
+- An `#!python event_stream` **without** a `#!python VersionedTaskStore` raises `#!python ValueError`: the stream orders events by task version.
+
+!!! warning "Push notifications stay per-replica"
+    `#!python push_config_store` and `#!python push_sender` are separate from the task store and are **not** shared by the setup above. With the default in-memory push store, a webhook registered through replica A is unknown to replica B, so a task that finishes on B sends nothing and raises no error. If webhooks must work across replicas, pass the SDK's database push store, built on the same engine, and a sender that reads it:
+
+    ```python linenums="1"
+    from a2a.server.tasks import BasePushNotificationSender, DatabasePushNotificationConfigStore
+
+    push_store = DatabasePushNotificationConfigStore(engine)
+    await push_store.initialize()
+
+    server = A2AServer(
+        agent,
+        task_store=task_store,
+        event_stream=event_stream,
+        push_config_store=push_store,
+        push_sender=BasePushNotificationSender(http_client, push_store),
+    )
+    ```
+
+    AG2 does not warn about an in-memory push store: it is a valid choice when webhooks only need to work on one replica.
 
 ## Server-side Tools
 

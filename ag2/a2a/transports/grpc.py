@@ -7,6 +7,7 @@ from typing import Any
 
 import grpc
 from a2a.server.agent_execution import AgentExecutor
+from a2a.server.cluster import TaskEventStream, VersionedTaskStore
 from a2a.server.request_handlers.grpc_handler import GrpcHandler
 from a2a.server.tasks import (
     PushNotificationConfigStore,
@@ -84,7 +85,8 @@ def build_grpc_server(  # type: ignore[no-any-unimported]
     extended_agent_card: AgentCard | None = None,
     extended_card_modifier: ExtendedCardModifier | None = None,
     card_signer: CardSigner | None = None,
-    task_store: TaskStore | None = None,
+    task_store: TaskStore | VersionedTaskStore | None = None,
+    event_stream: TaskEventStream | None = None,
     push_config_store: PushNotificationConfigStore | None = None,
     push_sender: PushNotificationSender | None = None,
     push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
@@ -111,6 +113,7 @@ def build_grpc_server(  # type: ignore[no-any-unimported]
         extended_agent_card=extended_agent_card,
         extended_card_modifier=extended_card_modifier,
         task_store=task_store,
+        event_stream=event_stream,
         push_config_store=push_config_store,
         push_sender=push_sender,
         push_url_validator=push_url_validator,
