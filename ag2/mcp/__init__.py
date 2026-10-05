@@ -34,7 +34,7 @@ try:
     from .transport import TransportConfig
 except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is absent
     MCPServer = missing_optional_dependency("MCPServer", "mcp", e)  # type: ignore[misc]
-    build_ask_tool = missing_optional_dependency("build_ask_tool", "mcp", e)  # type: ignore[misc]
+    build_ask_tool = missing_optional_dependency("build_ask_tool", "mcp", e)
     AskContext = missing_optional_dependency("AskContext", "mcp", e)  # type: ignore[misc]
     ContextProvider = missing_optional_dependency("ContextProvider", "mcp", e)  # type: ignore[misc]
     SessionConfig = missing_optional_dependency("SessionConfig", "mcp", e)  # type: ignore[misc]
@@ -47,17 +47,17 @@ except ImportError as e:  # pragma: no cover - exercised only when ag2[mcp] is a
     PromptArgument = missing_optional_dependency("PromptArgument", "mcp", e)  # type: ignore[misc]
     PromptMessage = missing_optional_dependency("PromptMessage", "mcp", e)  # type: ignore[misc]
     MCPFunctionTool = missing_optional_dependency("MCPFunctionTool", "mcp", e)  # type: ignore[misc]
-    mcp_tool = missing_optional_dependency("mcp_tool", "mcp", e)  # type: ignore[misc]
+    mcp_tool = missing_optional_dependency("mcp_tool", "mcp", e)
     Elicit = missing_optional_dependency("Elicit", "mcp", e)  # type: ignore[misc]
     ListRoots = missing_optional_dependency("ListRoots", "mcp", e)  # type: ignore[misc]
     Resolve = missing_optional_dependency("Resolve", "mcp", e)  # type: ignore[misc]
     Sample = missing_optional_dependency("Sample", "mcp", e)  # type: ignore[misc]
     RequestStateSecurity = missing_optional_dependency("RequestStateSecurity", "mcp", e)  # type: ignore[misc]
-    client_extension = missing_optional_dependency("client_extension", "mcp", e)  # type: ignore[misc]
+    client_extension = missing_optional_dependency("client_extension", "mcp", e)
     ExtensionMap = missing_optional_dependency("ExtensionMap", "mcp", e)  # type: ignore[misc]
     AppSandbox = missing_optional_dependency("AppSandbox", "mcp", e)  # type: ignore[misc]
     MCPApp = missing_optional_dependency("MCPApp", "mcp", e)  # type: ignore[misc]
-    client_supports_apps = missing_optional_dependency("client_supports_apps", "mcp", e)  # type: ignore[misc]
+    client_supports_apps = missing_optional_dependency("client_supports_apps", "mcp", e)
     MCPRequestContext = missing_optional_dependency("MCPRequestContext", "mcp", e)  # type: ignore[misc]
     ResourceCsp = missing_optional_dependency("ResourceCsp", "mcp", e)  # type: ignore[misc]
     ResourcePermissions = missing_optional_dependency("ResourcePermissions", "mcp", e)  # type: ignore[misc]

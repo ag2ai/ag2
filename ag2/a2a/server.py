@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
+from a2a.server.cluster import TaskEventStream, VersionedTaskStore
 from a2a.server.tasks import (
     InMemoryTaskStore,
     PushNotificationConfigStore,
@@ -52,6 +53,14 @@ class A2AServer:
     A2A spec doesn't define middleware — attach cross-cutting concerns
     (CORS, auth, tracing) to the returned transport object directly.
 
+    Cluster mode: pass a ``VersionedTaskStore`` together with an
+    ``event_stream`` (for example the SDK's ``VersionedDatabaseTaskStore``
+    and ``DatabaseTaskEventStream`` over one engine) and any replica can
+    answer ``GetTask`` or stream a task another replica runs. The two go
+    together — a versioned store without a stream, or a stream without a
+    versioned store, raises ``ValueError``. Push config store and push
+    sender stay per-replica state.
+
     ``card_signer`` (from :func:`a2a.utils.signing.create_agent_card_signer`)
     signs every served card; per-request modifier outputs are re-signed
     automatically, and the card is always signed after AG2 derives its
@@ -65,6 +74,7 @@ class A2AServer:
         "_agent",
         "_card_modifier",
         "_card_signer",
+        "_event_stream",
         "_executor",
         "_extended_card",
         "_extended_card_modifier",
@@ -82,7 +92,8 @@ class A2AServer:
         card_modifier: CardModifier | None = None,
         extended_card_modifier: ExtendedCardModifier | None = None,
         card_signer: CardSigner | None = None,
-        task_store: TaskStore | None = None,
+        task_store: TaskStore | VersionedTaskStore | None = None,
+        event_stream: TaskEventStream | None = None,
         push_config_store: PushNotificationConfigStore | None = None,
         push_sender: PushNotificationSender | None = None,
         push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
@@ -93,6 +104,17 @@ class A2AServer:
                 "push_url_validator has no effect without push_config_store: "
                 "push notifications are disabled until a store is provided."
             )
+        versioned = isinstance(task_store, VersionedTaskStore)
+        if versioned and event_stream is None:
+            raise ValueError(
+                "a versioned task store needs an event_stream: without one, streaming works only on the "
+                "replica that runs the task. Pass event_stream=, e.g. DatabaseTaskEventStream(engine)."
+            )
+        if event_stream is not None and not versioned:
+            raise ValueError(
+                "event_stream requires a versioned task_store (a VersionedTaskStore, e.g. "
+                "VersionedDatabaseTaskStore(engine)): the stream orders events by task version."
+            )
         self._agent = agent
         self._extended_card = extended_card
         self._card_modifier = card_modifier
@@ -102,6 +124,7 @@ class A2AServer:
         # server exposed via JSON-RPC + REST + gRPC) all share one task
         # store. Otherwise each builder defaults to its own.
         self._task_store = task_store or InMemoryTaskStore()
+        self._event_stream = event_stream
         self._push_config_store = push_config_store
         self._push_sender = push_sender
         self._push_url_validator = push_url_validator
@@ -118,9 +141,14 @@ class A2AServer:
         return self._extended_card
 
     @property
-    def task_store(self) -> TaskStore:
+    def task_store(self) -> TaskStore | VersionedTaskStore:
         """The shared task store used across all transport builders."""
         return self._task_store
+
+    @property
+    def event_stream(self) -> TaskEventStream | None:
+        """The shared cross-replica event stream, or ``None`` outside cluster mode."""
+        return self._event_stream
 
     def _shared_kwargs(self, *, include_card_modifier: bool) -> dict[str, Any]:
         """Wiring shared by every ``build_*`` method.
@@ -133,6 +161,7 @@ class A2AServer:
             "extended_card_modifier": self._extended_card_modifier,
             "card_signer": self._card_signer,
             "task_store": self._task_store,
+            "event_stream": self._event_stream,
             "push_config_store": self._push_config_store,
             "push_sender": self._push_sender,
             "push_url_validator": self._push_url_validator,

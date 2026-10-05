@@ -97,7 +97,7 @@ class TestGivingUp:
 
     async def test_work_kept_while_the_question_waited_is_sent_and_closed_first(self) -> None:
         """What the turn did while paused belongs to the cancelled run, and ends before it does."""
-        question_out, sibling_done = asyncio.Event(), asyncio.Event()
+        question_out, sibling_started, sibling_done = asyncio.Event(), asyncio.Event(), asyncio.Event()
         agent = Agent(
             "test_agent",
             config=TestConfig(
@@ -109,12 +109,14 @@ class TestGivingUp:
 
         @agent.tool
         async def ask_human(context: Context) -> str:
-            """Ask the human."""
+            """Ask the human, once the sibling call has been announced."""
+            await sibling_started.wait()
             return await context.input(QUESTION)
 
         @agent.tool
         async def look_up() -> str:
             """Finish only once the question is out."""
+            sibling_started.set()
             await question_out.wait()
             return "looked up"
 
