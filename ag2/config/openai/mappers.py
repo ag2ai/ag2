@@ -29,9 +29,11 @@ from openai.types.responses import (
     FileSearchToolParam,
     FunctionShellToolParam,
     ImageDetail,
+    ResponseFormatTextJSONSchemaConfigParam,
     ResponseFunctionCallOutputItemParam,
     ResponseFunctionShellToolCall,
     ResponseFunctionToolCallParam,
+    ResponseIncludable,
     ResponseInputContentParam,
     ResponseInputFileContentParam,
     ResponseInputFileParam,
@@ -40,6 +42,7 @@ from openai.types.responses import (
     ResponseInputItemParam,
     ResponseInputTextContentParam,
     ResponseInputTextParam,
+    ResponseTextConfigParam,
     ResponseUsage,
     SkillReferenceParam,
     ToolSearchToolParam,
@@ -163,14 +166,14 @@ def _strictify_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 def response_proto_to_text_config(
     response: ResponseProto | None,
-) -> dict[str, Any] | None:
+) -> ResponseTextConfigParam | None:
     """Convert a ResponseProto to Responses API text config."""
     if not response or not response.json_schema:
         return None
 
     strict_schema = _strictify_schema(response.json_schema)
 
-    fmt: dict[str, Any] = {
+    fmt: ResponseFormatTextJSONSchemaConfigParam = {
         "type": "json_schema",
         "name": response.name,
         "schema": strict_schema,
@@ -765,8 +768,8 @@ def reject_client_executed_shell(openai_tools: list[dict[str, Any]]) -> None:
             raise ClientExecutedShellUnsupportedError()
 
 
-def responses_api_includes(tools: Iterable[ToolSchema]) -> list[str]:
-    includes: list[str] = []
+def responses_api_includes(tools: Iterable[ToolSchema]) -> list[ResponseIncludable]:
+    includes: list[ResponseIncludable] = []
     for t in tools:
         if isinstance(t, WebSearchToolSchema):
             includes.append("web_search_call.action.sources")

@@ -6,6 +6,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
+from openai.types import FilePurpose
 
 from ag2.files.types import FileContent, FileProvider, UploadedFile, _created_at_to_float
 
@@ -31,7 +32,7 @@ class OpenAIFilesClient:
             http_client=config.http_client,
         )
 
-    async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:
+    async def upload(self, data: bytes, filename: str, purpose: FilePurpose | None = None) -> UploadedFile:
         result = await self._client.files.create(
             file=(filename, BytesIO(data)),
             purpose=purpose or "assistants",
