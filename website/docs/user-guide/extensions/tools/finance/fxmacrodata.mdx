@@ -1,0 +1,51 @@
+---
+title: FXMacroData
+sidebarTitle: FXMacroData
+---
+
+`FXMacroDataToolkit` gives an agent four read-only tools over [FXMacroData](https://fxmacrodata.com/documentation/reference?utm_source=github&utm_medium=referral&utm_campaign=ag2&utm_content=docs){.external-link target="_blank"}: official macroeconomic releases with their publication timestamps, release calendars and FX rates for 22 currencies. Use it when an agent needs the latest CPI, payrolls or policy-rate decision, wants to know what is scheduled next, or has to compare macro data across countries.
+
+!!! note
+    No extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on. The API key is optional. USD releases from the last 90 days, the USD release calendar and the data catalogue work without one; other currencies, longer history and FX rates need a key.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.finance import FXMacroDataToolkit
+
+agent = Agent(
+    "macro-analyst",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[FXMacroDataToolkit(api_key=os.environ.get("FXMACRODATA_API_KEY"))],
+)
+```
+
+## Tools
+
+| Tool | Endpoint | Description |
+| :--- | :--- | :--- |
+| `fxmacrodata_catalogue` | `/v1/data_catalogue/{currency}` | Indicators available for a currency, keyed by slug, with name, unit and source |
+| `fxmacrodata_announcements` | `/v1/announcements/{currency}/{indicator}` | Released values, newest first: period, value, publication time and official source link |
+| `fxmacrodata_calendar` | `/v1/calendar/{currency}` | Scheduled releases in UTC and the publisher's local time, optionally for one indicator |
+| `fxmacrodata_forex` | `/v1/forex/{base}/{quote}` | Daily FX rates for a pair (needs a key) |
+
+Each tool returns an `FXMacroDataResponse` holding the endpoint path and the API's JSON unchanged, so units, source links and data-quality fields reach the model as published.
+
+## Picking a subset of tools
+
+Each tool is a factory method on the toolkit. `announcements()` and `forex()` take a default row `limit`, which the model can override per call:
+
+```python linenums="1"
+toolkit = FXMacroDataToolkit(api_key=...)
+
+agent = Agent(
+    "macro-analyst",
+    config=config,
+    tools=[toolkit.catalogue(), toolkit.announcements(limit=6), toolkit.calendar()],
+)
+```
+
+## Errors
+
+Failures raise `FXMacroDataError` with the API's own message, for example the HTTP 401 returned when a currency needs a key. A response with an error body or an unexpected shape is reported as an error rather than passed on as data. Redirects are not followed, so the `X-API-Key` header is only ever sent to the configured host, and a key with whitespace or control characters is rejected at construction without being echoed.
