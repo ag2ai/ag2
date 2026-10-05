@@ -1,0 +1,133 @@
+---
+title: Firecrawl
+sidebarTitle: Firecrawl
+---
+
+`FirecrawlToolkit` gives an agent two related tools powered by [Firecrawl](https://www.firecrawl.dev/?utm_source=ag2&utm_medium=integration){.external-link target="_blank"}: web search and single-page scrape. Search can also return the content of each result page as markdown in the same call, so an agent can find sources and read them in one step. Scrape reads one URL as clean markdown, HTML, or links.
+
+!!! note
+    Requires the `firecrawl-py` package and an API key: `pip install "firecrawl-py>=4.46,<5"`. You can create a key in the [Firecrawl dashboard](https://www.firecrawl.dev/app/api-keys?utm_source=ag2&utm_medium=integration){.external-link target="_blank"}.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import FirecrawlToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[FirecrawlToolkit(api_key=os.environ["FIRECRAWL_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the Firecrawl SDK reads the `FIRECRAWL_API_KEY` environment variable when a tool runs.
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `firecrawl_search` | Search the web or news and return ranked results with URL, title, and description, optionally with each page's markdown |
+| `firecrawl_scrape` | Read one `http` or `https` URL and return its markdown, plus HTML and links when requested |
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default tools:
+
+```python linenums="1"
+toolkit = FirecrawlToolkit(
+    api_key=...,
+    limit=5,                  # max results for firecrawl_search
+    scrape_results=True,      # include page markdown in firecrawl_search results
+    formats=["markdown"],     # output formats for firecrawl_scrape
+    only_main_content=True,   # drop navigation, headers, and footers in firecrawl_scrape
+)
+```
+
+The constructor also accepts `api_url` (for a self-hosted Firecrawl), `http_timeout` (seconds, for each HTTP request) and `max_retries`.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.scrape()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = FirecrawlToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search(limit=3, scrape_results=True)],
+)
+```
+
+## Search configuration
+
+`firecrawl_search` accepts a required `query` at execution time. Configure the other options on `toolkit.search()`:
+
+```python linenums="1"
+toolkit = FirecrawlToolkit(api_key=...)
+
+search_tool = toolkit.search(
+    limit=5,                       # results per source; Firecrawl returns 5 when omitted
+    sources=["web", "news"],       # "web" | "news"; defaults to web
+    categories=["pdf"],            # "github" | "pdf"
+    include_domains=["ag2.ai"],    # or exclude_domains=[...]
+    tbs="qdr:w",                   # time filter for web results, here the past week
+    location="Germany",
+    country="DE",
+    timeout=30000,                 # Firecrawl API timeout in milliseconds
+    scrape_results=True,           # add each result page's markdown
+)
+
+agent = Agent("researcher", config=config, tools=[search_tool])
+```
+
+With `scrape_results=True`, every result also carries the main content of its page as markdown, so the agent does not need a separate scrape call for each result. Each result is then a full page, so keep `limit` low. `scrape_only_main_content` and `scrape_max_age` tune how those pages are read. Leave `scrape_results` off when titles and descriptions are enough.
+
+## Scrape configuration
+
+`firecrawl_scrape` accepts a single URL at execution time. Configure the output on `toolkit.scrape()`:
+
+```python linenums="1"
+toolkit = FirecrawlToolkit(api_key=...)
+
+scrape_tool = toolkit.scrape(
+    formats=["markdown", "links"],  # "markdown" | "html" | "links"; defaults to markdown
+    only_main_content=True,
+    exclude_tags=["nav", "footer"],
+    wait_for=1000,                  # milliseconds to wait for the page to render
+    max_age=0,                      # 0 always fetches a fresh copy
+    timeout=30000,                  # Firecrawl API timeout in milliseconds
+)
+
+agent = Agent("researcher", config=config, tools=[scrape_tool])
+```
+
+`toolkit.scrape()` also accepts `include_tags`, `headers`, `mobile`, `proxy`, `block_ads` and `store_in_cache`.
+
+The search and scrape options (everything except `api_key`, `api_url`, `http_timeout` and `max_retries`) accept a `Variable` for deferred context resolution.
+`firecrawl_scrape` accepts only `http` and `https` URLs and returns an error result for any other scheme. Firecrawl API errors, such as a missing or invalid key, are raised by the SDK and reach the model as tool errors.
+
+## Result
+
+`firecrawl_search` returns a `FirecrawlSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query |
+| `web` | List of `FirecrawlSearchResult` (`url`, `title`, `description`, `position`, `markdown`) |
+| `news` | List of `FirecrawlNewsResult` (`url`, `title`, `snippet`, `date`, `position`, `markdown`) |
+
+`markdown` is set only when `scrape_results=True`. In that mode `description` and `snippet` come from the page metadata, and news results have no `date`.
+
+`firecrawl_scrape` returns a `FirecrawlScrapeResult`:
+
+| Field | Description |
+| :--- | :--- |
+| `url` | Final URL of the page |
+| `title`, `description`, `language` | Page metadata |
+| `status_code` | HTTP status code of the page |
+| `markdown`, `html`, `links` | Page content in the requested formats |
+
+!!! tip
+    Use `firecrawl_search` with `scrape_results=True` when the agent needs to read several sources for one question. Use `firecrawl_scrape` when the agent already knows the URL it wants to read.
