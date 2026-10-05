@@ -105,7 +105,7 @@ Filtering is applied in this order on every `run_shell_command(command)` call:
 5. **Execute** — the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
 
 !!! note
-    `ignore` checks only the literal path words of the command. Because restricted mode runs no shell, nothing is computed after the check (variables, command substitution and globs are passed on literally). A program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
+    `ignore` checks only the literal path words of the command. Because restricted mode runs no shell, nothing is computed after the check (variables and command substitution are passed on literally). A glob word is expanded for the check, and the command is refused if it matches an ignored file, since some programs expand globs themselves (MSYS tools on Windows). That expansion needs the host filesystem, so it applies to the local backend only. A program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
 
 ## Read-Only Mode
 

@@ -212,9 +212,9 @@ class ResourceProvider:
 
 
 async def _call_resource_read(read: ReadFn, context: MCPExecutionContext | None) -> ResourceContent:
-    if context is None:
-        return await call_user_fn(read)
-    return await call_with_context(read, context)
+    # Both run the author's reader, whose return `ReadFn` states; they hand it back as `Any`.
+    data: ResourceContent = await call_user_fn(read) if context is None else await call_with_context(read, context)
+    return data
 
 
 def _to_wire_contents(uri: str, contents: ReadResourceContents) -> TextResourceContents | BlobResourceContents:

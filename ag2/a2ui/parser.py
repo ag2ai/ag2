@@ -4,14 +4,14 @@
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 import jsonschema
 from referencing.exceptions import Unresolvable
 
-from ._types import A2UIVersion, JsonSchema, JsonValue, ServerToClientMessage
+from ._types import A2UIVersion, JsonSchema, JsonValue, ServerToClientMessage, server_to_client_payload_keys
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
 if TYPE_CHECKING:
@@ -70,19 +70,15 @@ def _parse_json_block(json_part: str) -> "tuple[list[ServerToClientMessage], str
         # the block was meant to be a single array/object.
         return [], f"Invalid JSON: {whole_error}"
 
-    # The parsed JSON is a candidate A2UI message (object) or list of them; its
-    # conformance to ``ServerToClientMessage`` is enforced downstream by
-    # ``validate()`` against the schema, so the cast is the typed boundary
-    # between untyped wire JSON and the structured message type.
     if isinstance(parsed, dict):
-        return [cast(ServerToClientMessage, parsed)], None
+        return _as_messages([parsed])
     if isinstance(parsed, list):
-        return cast("list[ServerToClientMessage]", parsed), None
+        return _as_messages(parsed)
     return [], f"Expected JSON array or object, got {type(parsed).__name__}"
 
 
 def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | None]":
-    operations: list[ServerToClientMessage] = []
+    values: list[JsonValue] = []
     for line in json_part.splitlines():
         line = line.strip()
         if not line:
@@ -93,10 +89,30 @@ def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | No
             return [], f"Invalid JSON: {e}"
         if not isinstance(value, dict):
             return [], f"Expected JSON object per line, got {type(value).__name__}"
-        operations.append(cast(ServerToClientMessage, value))
-    if not operations:
+        values.append(value)
+    if not values:
         return [], "No JSON objects found"
-    return operations, None
+    return _as_messages(values)
+
+
+def _is_message(value: JsonValue) -> TypeGuard[ServerToClientMessage]:
+    """Whether ``value`` has the envelope of a message: an object with exactly one payload key.
+
+    The payload's contents are left to ``validate()``, which checks them against the schema.
+    """
+    return isinstance(value, dict) and len(server_to_client_payload_keys().intersection(value)) == 1
+
+
+def _as_messages(values: list[JsonValue]) -> "tuple[list[ServerToClientMessage], str | None]":
+    messages: list[ServerToClientMessage] = []
+    for i, value in enumerate(values):
+        if not _is_message(value):
+            return (
+                [],
+                f"Operation {i} is not an A2UI message: expected an object with exactly one of {sorted(server_to_client_payload_keys())}",
+            )
+        messages.append(value)
+    return messages, None
 
 
 def _components_of(update_components: object) -> list[object]:
@@ -222,7 +238,8 @@ class A2UIResponseParser:
         for i, op in enumerate(operations):
             try:
                 if validator is not None:
-                    validator.validate(op)
+                    instance: Mapping[str, Any] = op
+                    validator.validate(instance)
                 else:
                     jsonschema.validate(instance=op, schema=self._schema)
             except jsonschema.ValidationError as e:

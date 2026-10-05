@@ -109,7 +109,8 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
     """Return ``"Access denied: <path>"`` if any literal path in *command* leaves *workdir* or matches *patterns*.
 
     Tokens are extracted via :func:`shlex.split` to handle quoted paths. Each
-    token is resolved relative to *workdir* and checked against each pattern.
+    token is resolved relative to *workdir* and checked against each pattern;
+    a glob token is checked against the files it matches on a host path.
     Returns ``None`` if no pattern matches.
 
     *workdir* may be a host :class:`~pathlib.Path` (local backend) or a
@@ -132,27 +133,47 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
     for token in tokens:
         if host_backed:
             try:
-                resolved: PurePath = (workdir / token).resolve()
+                literal: PurePath = (workdir / token).resolve()
             except Exception:
                 continue
+            candidates = [literal, *_glob_matches(workdir, token)]
         else:
-            resolved = PurePosixPath(posixpath.normpath(posixpath.join(str(workdir), token)))
+            candidates = [PurePosixPath(posixpath.normpath(posixpath.join(str(workdir), token)))]
 
-        try:
-            rel = str(resolved.relative_to(resolved_workdir)).replace("\\", "/")
-        except ValueError:
+        for resolved in candidates:
+            denied = _denied(resolved, resolved_workdir, patterns)
+            if denied is not None:
+                return denied
+
+    return None
+
+
+def _glob_matches(workdir: Path, token: str) -> list[Path]:
+    # The command runs as argv, but a program may expand a glob itself (MSYS
+    # tools do on Windows), so a pattern naming an ignored file must be refused.
+    if not any(c in token for c in "*?["):
+        return []
+    try:
+        return [m.resolve() for m in workdir.glob(token)]
+    except (ValueError, NotImplementedError, OSError):
+        return []
+
+
+def _denied(resolved: PurePath, resolved_workdir: PurePath, patterns: list[str]) -> str | None:
+    try:
+        rel = str(resolved.relative_to(resolved_workdir)).replace("\\", "/")
+    except ValueError:
+        return f"Access denied: {resolved}"
+
+    for pattern in patterns:
+        if any(c in pattern for c in ("*", "?", "[")):
+            if fnmatch.fnmatch(rel, pattern):
+                return f"Access denied: {resolved}"
+            if pattern.startswith("**/") and fnmatch.fnmatch(resolved.name, pattern[3:]):
+                return f"Access denied: {resolved}"
+            if fnmatch.fnmatch(resolved.name, pattern):
+                return f"Access denied: {resolved}"
+        elif resolved.name == pattern or rel == pattern or rel.startswith(pattern + "/"):
             return f"Access denied: {resolved}"
-
-        for pattern in patterns:
-            if any(c in pattern for c in ("*", "?", "[")):
-                if fnmatch.fnmatch(rel, pattern):
-                    return f"Access denied: {resolved}"
-                if pattern.startswith("**/") and fnmatch.fnmatch(resolved.name, pattern[3:]):
-                    return f"Access denied: {resolved}"
-                if fnmatch.fnmatch(resolved.name, pattern):
-                    return f"Access denied: {resolved}"
-            else:
-                if resolved.name == pattern or rel == pattern or rel.startswith(pattern + "/"):
-                    return f"Access denied: {resolved}"
 
     return None

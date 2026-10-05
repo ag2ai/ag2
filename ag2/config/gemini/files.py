@@ -7,11 +7,23 @@ import mimetypes
 from typing import TYPE_CHECKING
 
 from google import genai
+from google.genai import types
 
 from ag2.files.types import FileContent, FileProvider, UploadedFile, _created_at_to_float
 
 if TYPE_CHECKING:
     from ag2.config.gemini.config import GeminiConfig
+
+
+def _file_id(file: types.File) -> str:
+    """Read the resource name off a file, which the SDK declares optional on every field.
+
+    A file with no name cannot be read, sent or deleted, so it is named here rather than
+    carried on as `None` through an `UploadedFile` that promises a `str`.
+    """
+    if file.name is None:
+        raise ValueError("Gemini answered with a file that has no resource name.")
+    return file.name
 
 
 class GeminiFilesClient:
@@ -24,11 +36,14 @@ class GeminiFilesClient:
 
     async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:
         mime_type, _ = mimetypes.guess_type(filename)
-        config = {"display_name": filename, "mime_type": mime_type or "application/octet-stream"}
+        config: types.UploadFileConfigDict = {
+            "display_name": filename,
+            "mime_type": mime_type or "application/octet-stream",
+        }
         result = await self._client.aio.files.upload(file=io.BytesIO(data), config=config)
 
         return UploadedFile(
-            file_id=result.name,
+            file_id=_file_id(result),
             filename=filename,
             provider=FileProvider.GEMINI,
             bytes_count=result.size_bytes if hasattr(result, "size_bytes") else len(data),
@@ -54,7 +69,7 @@ class GeminiFilesClient:
         pager = await self._client.aio.files.list()
         return [
             UploadedFile(
-                file_id=f.name,
+                file_id=_file_id(f),
                 filename=f.display_name if f.display_name else None,
                 provider=FileProvider.GEMINI,
                 bytes_count=f.size_bytes if f.size_bytes else None,

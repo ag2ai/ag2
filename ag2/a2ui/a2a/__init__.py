@@ -18,25 +18,17 @@ try:
     )
     from .parts import create_a2ui_parts, get_a2ui_data, is_a2ui_part
 except ImportError as e:
-    get_a2ui_agent_extension = missing_optional_dependency(  # type: ignore[misc]
-        "get_a2ui_agent_extension", "a2a", e
-    )
-    get_activated_extensions = missing_optional_dependency(  # type: ignore[misc]
-        "get_activated_extensions", "a2a", e
-    )
-    try_activate_a2ui_extension = missing_optional_dependency(  # type: ignore[misc]
-        "try_activate_a2ui_extension", "a2a", e
-    )
+    get_a2ui_agent_extension = missing_optional_dependency("get_a2ui_agent_extension", "a2a", e)
+    get_activated_extensions = missing_optional_dependency("get_activated_extensions", "a2a", e)
+    try_activate_a2ui_extension = missing_optional_dependency("try_activate_a2ui_extension", "a2a", e)
     ACTIVATED_EXTENSIONS_KEY = "activated_extensions"
-    create_a2ui_parts = missing_optional_dependency("create_a2ui_parts", "a2a", e)  # type: ignore[misc]
-    get_a2ui_data = missing_optional_dependency("get_a2ui_data", "a2a", e)  # type: ignore[misc]
-    is_a2ui_part = missing_optional_dependency("is_a2ui_part", "a2a", e)  # type: ignore[misc]
+    create_a2ui_parts = missing_optional_dependency("create_a2ui_parts", "a2a", e)
+    get_a2ui_data = missing_optional_dependency("get_a2ui_data", "a2a", e)
+    is_a2ui_part = missing_optional_dependency("is_a2ui_part", "a2a", e)
     A2UIClientCapabilities = missing_optional_dependency(  # type: ignore[misc]
         "A2UIClientCapabilities", "a2a", e
     )
-    parse_client_capabilities = missing_optional_dependency(  # type: ignore[misc]
-        "parse_client_capabilities", "a2a", e
-    )
+    parse_client_capabilities = missing_optional_dependency("parse_client_capabilities", "a2a", e)
     A2UI_CLIENT_CAPABILITIES_METADATA_KEY = "a2uiClientCapabilities"
 
 try:

@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import TypeAlias
 
 from a2a.server.agent_execution import AgentExecutor
+from a2a.server.cluster import TaskEventStream, VersionedTaskStore
 from a2a.server.context import ServerCallContext
 from a2a.server.request_handlers import DefaultRequestHandlerV2
 from a2a.server.tasks import (
@@ -117,17 +118,21 @@ def build_default_handler(
     agent_card: AgentCard,
     extended_agent_card: AgentCard | None,
     extended_card_modifier: ExtendedCardModifier | None,
-    task_store: TaskStore | None,
+    task_store: TaskStore | VersionedTaskStore | None,
+    event_stream: TaskEventStream | None,
     push_config_store: PushNotificationConfigStore | None,
     push_sender: PushNotificationSender | None,
+    push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
 ) -> DefaultRequestHandlerV2:
     """Build the SDK request handler shared by all transports."""
     return DefaultRequestHandlerV2(
         agent_executor=agent_executor,
         task_store=task_store or InMemoryTaskStore(),
+        event_stream=event_stream,
         agent_card=agent_card,
         extended_agent_card=extended_agent_card,
         extended_card_modifier=extended_card_modifier,
         push_config_store=push_config_store,
         push_sender=push_sender,
+        push_url_validator=push_url_validator,
     )

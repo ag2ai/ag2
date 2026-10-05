@@ -154,9 +154,11 @@ class A2UIAction:
             Whatever the handler returns (opaque user value; the caller maps it
             onto the wire).
         """
+        # `asolve` annotates each keyword as a `dict[str, Any]`; the values really are arbitrary.
+        options: dict[str, Any] = click.context | {CONTEXT_OPTION_NAME: context}
         async with AsyncExitStack() as stack:
             return await self.model.asolve(
-                **(click.context | {CONTEXT_OPTION_NAME: context}),
+                **options,
                 stack=stack,
                 cache_dependencies={},
                 dependency_provider=context.dependency_provider,

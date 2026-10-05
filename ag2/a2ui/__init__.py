@@ -14,7 +14,7 @@ try:
     from .capabilities import A2UIClientCapabilities
     from .events import A2UIClientEvent, A2UIMessageEvent, A2UIValidationFailedEvent
 except ImportError as e:
-    a2ui_action = missing_optional_dependency("a2ui_action", "a2ui", e)  # type: ignore[misc]
+    a2ui_action = missing_optional_dependency("a2ui_action", "a2ui", e)
     A2UIAction = missing_optional_dependency("A2UIAction", "a2ui", e)  # type: ignore[misc]
     A2UIClientCapabilities = missing_optional_dependency("A2UIClientCapabilities", "a2ui", e)  # type: ignore[misc]
     A2UIClientEvent = missing_optional_dependency("A2UIClientEvent", "a2ui", e)  # type: ignore[misc]
