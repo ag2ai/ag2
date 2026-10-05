@@ -102,6 +102,14 @@ class TestFromList:
         [task] = list(suite)
         assert task.tags == ("smoke",)
 
+    def test_invalid_tags_type_raises_with_task_index(self) -> None:
+        with pytest.raises(ValueError, match=r"task at index 1 has invalid 'tags'"):
+            Suite.from_list([{"inputs": {"q": "x"}}, {"inputs": {"q": "y"}, "tags": 5}])
+
+    def test_invalid_metadata_type_raises_with_task_index(self) -> None:
+        with pytest.raises(ValueError, match=r"task at index 0 has invalid 'metadata'"):
+            Suite.from_list([{"inputs": {"q": "x"}, "metadata": "abc"}])
+
 
 class TestFromJsonl:
     def test_loads_one_task_per_line(self, tmp_path: Path) -> None:
