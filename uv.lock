@@ -273,7 +273,7 @@ requires-dist = [
     { name = "ag2", extras = ["mcp"], marker = "extra == 'acp'" },
     { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.12.1,<0.13" },
     { name = "aiobotocore", marker = "extra == 'bedrock'", specifier = ">=3.9.1,<4" },
-    { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.6.0,<2" },
+    { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.9.0,<2" },
     { name = "anyio", specifier = ">=4.0.0,<5.0.0" },
     { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.25.13" },
     { name = "ddgs", marker = "extra == 'ddgs'", specifier = ">=9.0.0,<10" },
@@ -745,7 +745,7 @@ wheels = [
 
 [[package]]
 name = "anthropic"
-version = "1.8.0"
+version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -756,9 +756,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/65/b8/f4de0e90bbd641e86a1d6b20e017442033a2c1d2f5381799f82057115bd7/anthropic-1.8.0.tar.gz", hash = "sha256:9c1783ed90f409617749a61c5ab98e20624a572626f2e0a15cea03ed8e1401e5", size = 1221762, upload-time = "2026-09-22T16:25:38.167Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/12/9a6ffa397b172adb040008d934a1dfd85d0e4cefc77489416db294ffc880/anthropic-1.11.0.tar.gz", hash = "sha256:3906fabac7ad7b5b46c6186040398fc7826885c77ce34e4dd7849de16fc8d0f8", size = 1390390, upload-time = "2026-09-30T22:58:21.098Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5b/18/5d25a703b66ba34e9277f875f692a3bea3b0ff4d47ee5d188521a01cdd2a/anthropic-1.8.0-py3-none-any.whl", hash = "sha256:79a4516a21e64fd7b15be1a49ebf544bd6376c96a971a77365358823a2717bc6", size = 1348276, upload-time = "2026-09-22T16:25:36.515Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/6f/20edcd2956cac68042b1bcdd13ab3311447519f86b26929ff268dc74c650/anthropic-1.11.0-py3-none-any.whl", hash = "sha256:52f97b2c485cca7ac66058374f5073a3febb7e6849b16989c145d602a3efee21", size = 1681654, upload-time = "2026-09-30T22:58:22.925Z" },
 ]
 
 [[package]]
