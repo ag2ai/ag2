@@ -15,6 +15,7 @@ from anthropic.types import (
     CodeExecutionToolResultBlock,
     CodeExecutionToolResultError,
     ContainerUploadBlock,
+    Diagnostics,
     EncryptedCodeExecutionResultBlock,
     PlainTextSource,
     RedactedThinkingBlock,
@@ -229,4 +230,53 @@ class AnthropicServerToolResultEvent(BuiltinToolResultEvent):
             name=name,
             result=ToolResult(parts=parts, metadata=metadata),
             block=block,
+        )
+
+
+class AnthropicCacheDiagnostics(BaseEvent):
+    """Why the API could not reuse the cached prefix of the previous request.
+
+    Transient: a fact about a single request, and never part of the reply. The token
+    count is an estimate about a counterfactual, which is why it is here rather than
+    in :class:`~ag2.events.Usage`.
+    """
+
+    __transient__ = True
+
+    reason: str = Field(kw_only=False)
+    """``model_changed``, ``system_changed``, ``tools_changed``, ``messages_changed``,
+    ``previous_message_not_found`` or ``unavailable``, typed as ``str`` so a later
+    addition is reported rather than read as one of these."""
+
+    cache_missed_input_tokens: int | None = None
+    """Estimated input tokens that would have been read from cache had the prefix matched."""
+
+    previous_message_id: str | None = None
+    """The message this one was compared against."""
+
+    @classmethod
+    def from_message(
+        cls,
+        diagnostics: Diagnostics | None,
+        *,
+        previous_message_id: str | None = None,
+    ) -> "AnthropicCacheDiagnostics | None":
+        """Read the miss reason off `diagnostics`, or ``None`` while there is nothing to report.
+
+        ``None`` covers both a response without diagnostics and one whose comparison is still
+        pending; neither is a cache hit, so neither produces an event.
+        """
+        reason = diagnostics.cache_miss_reason if diagnostics else None
+        if reason is None:
+            return None
+
+        kind = getattr(reason, "type", None)
+        if not isinstance(kind, str):
+            return None
+
+        tokens = getattr(reason, "cache_missed_input_tokens", None)
+        return cls(
+            kind,
+            cache_missed_input_tokens=tokens if isinstance(tokens, int) else None,
+            previous_message_id=previous_message_id,
         )
