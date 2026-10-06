@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Coroutine, Mapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeAlias, cast, overload, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
 from uuid import UUID
 
 import anyio.from_thread
@@ -19,6 +19,9 @@ from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, MessageEn
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
+if TYPE_CHECKING:
+    from .history import History
+
 logger = logging.getLogger(__name__)
 
 StreamId: TypeAlias = UUID
@@ -28,6 +31,8 @@ SubId: TypeAlias = UUID
 @runtime_checkable
 class Stream(Protocol):
     id: StreamId
+
+    history: "History"
 
     pending_messages: list[ModelRequest]
     """Inbox of follow-up turns produced asynchronously (e.g. by background

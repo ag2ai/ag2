@@ -314,6 +314,10 @@ class SubStream(ABCStream):
         await self._parent.send(event, context)
 
     @property
+    def history(self) -> History:
+        return self._parent.history
+
+    @property
     def pending_messages(self) -> list[ModelRequest]:
         return self._parent.pending_messages
 

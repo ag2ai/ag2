@@ -26,6 +26,8 @@ from openai.types.realtime import (
     RealtimeTracingConfigParam,
 )
 from openai.types.realtime.realtime_audio_config_input_param import NoiseReduction
+from openai.types.realtime.realtime_audio_formats_param import AudioPCM
+from openai.types.realtime.realtime_audio_input_turn_detection_param import SemanticVad
 
 from ag2.context import ConversationContext
 from ag2.events import (
@@ -88,6 +90,14 @@ ModelName = Literal[
 ]
 
 
+def _pcm_24khz() -> AudioPCM:
+    return {"type": "audio/pcm", "rate": 24000}
+
+
+def _semantic_vad() -> SemanticVad:
+    return {"type": "semantic_vad", "create_response": True, "interrupt_response": True}
+
+
 @dataclass(slots=True)
 class AudioOutput:
     """Audio output config for the realtime session.
@@ -97,7 +107,7 @@ class AudioOutput:
 
     voice: RealtimeVoice | str = "alloy"
     format: RealtimeAudioFormatsParam = field(
-        default_factory=lambda: {"type": "audio/pcm", "rate": 24000},
+        default_factory=_pcm_24khz,
     )
     speed: float = 1.0
 
@@ -118,16 +128,12 @@ class InputConfig:
     """
 
     format: RealtimeAudioFormatsParam = field(
-        default_factory=lambda: {"type": "audio/pcm", "rate": 24000},
+        default_factory=_pcm_24khz,
     )
     transcription: AudioTranscriptionParam | None = None
     noise_reduction: NoiseReduction | None = None
     turn_detection: RealtimeAudioInputTurnDetectionParam | None = field(
-        default_factory=lambda: {
-            "type": "semantic_vad",
-            "create_response": True,
-            "interrupt_response": True,
-        }
+        default_factory=_semantic_vad,
     )
 
 
@@ -374,7 +380,8 @@ async def _pump_events(
     text = ""
     async for event in conn:
         if event.type == "conversation.item.input_audio_transcription.delta":
-            await context.send(TranscriptionChunkEvent(event.delta))
+            if event.delta is not None:
+                await context.send(TranscriptionChunkEvent(event.delta))
         elif event.type == "conversation.item.input_audio_transcription.completed":
             # TODO: process usage
             await context.send(TranscriptionCompletedEvent(event.transcript))

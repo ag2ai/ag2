@@ -453,7 +453,17 @@ files = [
     "ag2/config/zai/files.py",
     "ag2/config/zai/mappers.py",
     "ag2/config/zai/zai_client.py",
+    "ag2/live/__init__.py",
+    "ag2/live/cascade.py",
+    "ag2/live/elevenlabs.py",
     "ag2/live/gemini.py",
+    "ag2/live/observer.py",
+    "ag2/live/openai.py",
+    "ag2/live/protocols.py",
+    "ag2/live/realtime.py",
+    "ag2/live/sound_device.py",
+    "ag2/live/stt.py",
+    "ag2/live/turn.py",
     "ag2/mcp/apps.py",
     "ag2/mcp/tools.py",
     "ag2/mcp/__init__.py",
@@ -570,6 +580,11 @@ follow_untyped_imports = true
 # are Any even though this module's own functions remain checked strictly.
 [[tool.mypy.overrides]]
 module = "ag2.ag_ui.*"
+disable_error_code = ["no-any-unimported"]
+
+# `sounddevice` ships no stubs, so its types arrive as Any at this module's boundary.
+[[tool.mypy.overrides]]
+module = "ag2.live.sound_device"
 disable_error_code = ["no-any-unimported"]
 
 # numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
