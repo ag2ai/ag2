@@ -7,10 +7,10 @@ import json
 import httpx
 import pytest
 
-from ag2 import Agent
+from ag2 import Agent, AudioInput, DocumentInput, ImageInput
 from ag2.a2a import A2AConfig, A2AServer, build_card
 from ag2.a2a.extension import MIME_HISTORY, MIME_TOOL_CALL, MIME_TOOL_RESULT, MIME_TOOL_SCHEMAS
-from ag2.a2a.testing import make_test_client_factory
+from ag2.a2a.testing import make_test_client_factory, make_test_rest_client_factory, pick_free_port
 from ag2.events import ToolCallEvent
 from ag2.testing import TestConfig
 
@@ -55,6 +55,16 @@ class TestCardInputModes:
         card = build_card(Agent("srv", config=TestConfig("ok")), url="http://test")
 
         assert {MIME_HISTORY, MIME_TOOL_CALL, MIME_TOOL_RESULT, MIME_TOOL_SCHEMAS} <= set(card.default_input_modes)
+
+    def test_untyped_config_declares_every_typed_media_type(self) -> None:
+        card = build_card(Agent("srv", config=TestConfig("ok")), url="http://test")
+
+        assert {"image/png", "application/pdf", "audio/wav", "video/mp4"} <= set(card.default_input_modes)
+
+    def test_explicit_input_modes_replace_the_derived_list(self) -> None:
+        card = build_card(Agent("srv", config=TestConfig("ok")), url="http://test", input_modes=["image/png"])
+
+        assert list(card.default_input_modes) == ["image/png"]
 
     @pytest.mark.parametrize("build", ["build_jsonrpc", "build_rest", "build_grpc"])
     def test_custom_card_without_ag2_types_rejected_when_validating(self, build: str) -> None:
@@ -107,7 +117,7 @@ class TestValidateInputModes:
                 "message": {
                     "messageId": "m1",
                     "role": "ROLE_USER",
-                    "parts": [{"raw": "AAAA", "mediaType": "image/png"}],
+                    "parts": [{"raw": "AAAA", "mediaType": "application/x-unknown"}],
                 },
             },
         }
@@ -118,4 +128,49 @@ class TestValidateInputModes:
 
         error = response.json()["error"]
         assert error["code"] == -32005  # ContentTypeNotSupportedError
-        assert "image/png" in error["message"]
+        assert "application/x-unknown" in error["message"]
+
+
+MEDIA = {
+    "image": ImageInput(data=b"\x89PNG0000", media_type="image/png"),
+    "document": DocumentInput(data=b"%PDF-1.4", media_type="application/pdf"),
+    "audio": AudioInput(data=b"RIFF", media_type="audio/wav"),
+}
+
+
+@pytest.mark.asyncio
+class TestValidateInputModesMedia:
+    @pytest.mark.parametrize("transport", ["jsonrpc", "rest"])
+    @pytest.mark.parametrize("streaming", [False, True])
+    @pytest.mark.parametrize("kind", MEDIA)
+    async def test_declared_media_passes_http(self, transport: str, streaming: bool, kind: str) -> None:
+        server = A2AServer(Agent("srv", config=TestConfig("ok")), validate_input_modes=True)
+        factory = (make_test_rest_client_factory if transport == "rest" else make_test_client_factory)(
+            server, url="http://test"
+        )
+        client = Agent(
+            "cli",
+            config=A2AConfig(
+                card_url="http://test", httpx_client_factory=factory, prefer=transport, streaming=streaming
+            ),
+        )
+
+        reply = await client.ask("look", MEDIA[kind])
+
+        assert reply.response.content == "ok"
+
+    @pytest.mark.parametrize("kind", MEDIA)
+    async def test_declared_media_passes_grpc(self, kind: str) -> None:
+        agent = Agent("srv", config=TestConfig("ok"))
+        url = f"127.0.0.1:{pick_free_port('127.0.0.1')}"
+        card = build_card(agent, url=url, transports=("grpc",), grpc_url=url)
+        grpc_server = A2AServer(agent, validate_input_modes=True).build_grpc(bind=url, grpc_url=url, card=card)
+        await grpc_server.start()
+        try:
+            client = Agent("cli", config=A2AConfig(card_url=url, preset_card=card, prefer="grpc"))
+
+            reply = await client.ask("look", MEDIA[kind])
+
+            assert reply.response.content == "ok"
+        finally:
+            await grpc_server.stop(grace=0)

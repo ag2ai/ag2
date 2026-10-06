@@ -72,8 +72,9 @@ class A2AServer:
 
     ``validate_input_modes`` makes the SDK reject a message part whose media
     type is not in the card's ``default_input_modes`` or a skill's
-    ``input_modes``. The default card declares the ``vnd.ag2`` types, so AG2
-    clients keep working; a custom ``card`` must declare them too.
+    ``input_modes``. The default card declares the ``vnd.ag2`` types and the
+    media types the agent's model accepts, so AG2 clients keep working; a custom
+    ``card`` must declare the ``vnd.ag2`` types too.
     ``build_jsonrpc`` / ``build_rest`` take ``card_cache_control`` to set
     ``Cache-Control`` on the card route.
     """

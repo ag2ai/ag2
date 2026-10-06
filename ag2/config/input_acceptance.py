@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Provider mapper acceptance for inbound AG-UI media, by position and source."""
+"""Provider mapper acceptance for inbound media, by position and source."""
+
+from typing import get_args
 
 from ag2.config import (
     AnthropicConfig,
@@ -20,6 +22,7 @@ from ag2.config import (
     ZAIConfig,
 )
 from ag2.events import BinaryInput, BinaryType, FileIdInput, Input, UrlInput
+from ag2.types import AudioMediaType, DocumentMediaType, ImageMediaType, VideoMediaType
 
 # Each entry names (position, source, kind). Text is accepted everywhere.
 # The table describes mapper behavior, not model-specific ability.
@@ -187,4 +190,26 @@ def input_modalities(config: ModelConfig | None) -> dict[str, bool]:
     }
 
 
-__all__ = ("accepts_input", "input_modalities")
+_KIND_OF_MEDIA_TYPE: dict[str, BinaryType] = {
+    **dict.fromkeys(get_args(ImageMediaType), BinaryType.IMAGE),
+    **dict.fromkeys(get_args(AudioMediaType), BinaryType.AUDIO),
+    **dict.fromkeys(get_args(VideoMediaType), BinaryType.VIDEO),
+    **dict.fromkeys(get_args(DocumentMediaType), BinaryType.DOCUMENT),
+}
+
+
+def input_media_types(config: ModelConfig | None) -> tuple[str, ...]:
+    """Media types the config's mapper accepts as inline user data, in `ag2.types` order.
+
+    Asks `accepts_input` about each typed media type, so the answer follows the same
+    per-provider rules as the mapper. A config the table does not describe accepts
+    every typed media type, as `accepts_input` does.
+    """
+    return tuple(
+        media_type
+        for media_type, kind in _KIND_OF_MEDIA_TYPE.items()
+        if accepts_input(config, "user", BinaryInput(b"", media_type=media_type, kind=kind))
+    )
+
+
+__all__ = ("accepts_input", "input_media_types", "input_modalities")
