@@ -131,13 +131,16 @@ class InputConfig:
     )
 
 
-class STTConfig(STTConfigProtocol):
-    """OpenAI speech transcription with an optional API key or reusable SDK client.
+def _resolve_client(client: AsyncOpenAI | None, api_key: str | None) -> AsyncOpenAI:
+    if client is None:
+        return AsyncOpenAI(api_key=api_key)
+    if api_key is not None:
+        raise ValueError("Pass either client or api_key, not both.")
+    return client
 
-    Without a client, leaving ``api_key`` as None preserves the SDK's
-    ``OPENAI_API_KEY`` default. Passing both ``client`` and a non-None
-    ``api_key`` raises ``ValueError``.
-    """
+
+class STTConfig(STTConfigProtocol):
+    """OpenAI speech transcription; takes an ``api_key`` or a reusable ``client``."""
 
     def __init__(
         self,
@@ -146,10 +149,8 @@ class STTConfig(STTConfigProtocol):
         client: AsyncOpenAI | None = None,
         api_key: str | None = None,
     ) -> None:
-        if client is not None and api_key is not None:
-            raise ValueError("Pass either client or api_key, not both.")
         self.model = model
-        self.client = client if client is not None else AsyncOpenAI(api_key=api_key)
+        self.client = _resolve_client(client, api_key)
 
     async def transcribe(self, voice: "VoiceInput", context: "Context") -> str:
         stream = await self.client.audio.transcriptions.create(
@@ -170,12 +171,7 @@ class STTConfig(STTConfigProtocol):
 
 
 class STTTranslationConfig(STTConfigProtocol):
-    """OpenAI speech translation with an optional API key or reusable SDK client.
-
-    Without a client, leaving ``api_key`` as None preserves the SDK's
-    ``OPENAI_API_KEY`` default. Passing both ``client`` and a non-None
-    ``api_key`` raises ``ValueError``.
-    """
+    """OpenAI speech translation; takes an ``api_key`` or a reusable ``client``."""
 
     def __init__(
         self,
@@ -184,10 +180,8 @@ class STTTranslationConfig(STTConfigProtocol):
         client: AsyncOpenAI | None = None,
         api_key: str | None = None,
     ) -> None:
-        if client is not None and api_key is not None:
-            raise ValueError("Pass either client or api_key, not both.")
         self.model = model
-        self.client = client if client is not None else AsyncOpenAI(api_key=api_key)
+        self.client = _resolve_client(client, api_key)
 
     async def transcribe(self, voice: "VoiceInput", context: "Context") -> str:
         result = await self.client.audio.translations.create(
@@ -201,12 +195,7 @@ class STTTranslationConfig(STTConfigProtocol):
 
 
 class TTSConfig(TTSConfigProtocol[bytes]):
-    """OpenAI speech synthesis with an optional API key or reusable SDK client.
-
-    Without a client, leaving ``api_key`` as None preserves the SDK's
-    ``OPENAI_API_KEY`` default. Passing both ``client`` and a non-None
-    ``api_key`` raises ``ValueError``.
-    """
+    """OpenAI speech synthesis; takes an ``api_key`` or a reusable ``client``."""
 
     def __init__(
         self,
@@ -217,9 +206,7 @@ class TTSConfig(TTSConfigProtocol[bytes]):
         voice: Voice = "alloy",
         speed: float | Omit = omit,
     ) -> None:
-        if client is not None and api_key is not None:
-            raise ValueError("Pass either client or api_key, not both.")
-        self._client = client if client is not None else AsyncOpenAI(api_key=api_key)
+        self._client = _resolve_client(client, api_key)
 
         self._model = model
         self._voice = voice
@@ -243,9 +230,7 @@ class RealTimeConfig(RealtimeConfig):
     a connection that pumps captured audio into the API and emits transcription
     events on the supplied context.
 
-    Supply ``api_key`` directly or reuse an SDK ``client``. Without a client,
-    leaving ``api_key`` as None preserves the SDK's ``OPENAI_API_KEY`` default.
-    Passing both ``client`` and a non-None ``api_key`` raises ``ValueError``.
+    Takes an ``api_key`` or a reusable ``client``, not both.
     """
 
     def __init__(
@@ -261,8 +246,6 @@ class RealTimeConfig(RealtimeConfig):
         client: AsyncOpenAI | None = None,
         api_key: str | None = None,
     ) -> None:
-        if client is not None and api_key is not None:
-            raise ValueError("Pass either client or api_key, not both.")
         self.model = model
 
         if output is None:
@@ -306,7 +289,7 @@ class RealTimeConfig(RealtimeConfig):
 
         self._session_overrides: RealtimeSessionCreateRequestParam = session or {"type": "realtime"}
 
-        self.client = client if client is not None else AsyncOpenAI(api_key=api_key)
+        self.client = _resolve_client(client, api_key)
 
     def _build_session(
         self,
