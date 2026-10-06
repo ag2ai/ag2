@@ -137,15 +137,26 @@ class InputConfig:
     )
 
 
+def _resolve_client(client: AsyncOpenAI | None, api_key: str | None) -> AsyncOpenAI:
+    if client is None:
+        return AsyncOpenAI(api_key=api_key)
+    if api_key is not None:
+        raise ValueError("Pass either client or api_key, not both.")
+    return client
+
+
 class STTConfig(STTConfigProtocol):
+    """OpenAI speech transcription; takes an ``api_key`` or a reusable ``client``."""
+
     def __init__(
         self,
         model: "AudioModel | str",
         *,
         client: AsyncOpenAI | None = None,
+        api_key: str | None = None,
     ) -> None:
         self.model = model
-        self.client = client or AsyncOpenAI()
+        self.client = _resolve_client(client, api_key)
 
     async def transcribe(self, voice: "VoiceInput", context: "Context") -> str:
         stream = await self.client.audio.transcriptions.create(
@@ -166,14 +177,17 @@ class STTConfig(STTConfigProtocol):
 
 
 class STTTranslationConfig(STTConfigProtocol):
+    """OpenAI speech translation; takes an ``api_key`` or a reusable ``client``."""
+
     def __init__(
         self,
         model: "AudioModel | str",
         *,
         client: AsyncOpenAI | None = None,
+        api_key: str | None = None,
     ) -> None:
         self.model = model
-        self.client = client or AsyncOpenAI()
+        self.client = _resolve_client(client, api_key)
 
     async def transcribe(self, voice: "VoiceInput", context: "Context") -> str:
         result = await self.client.audio.translations.create(
@@ -187,15 +201,18 @@ class STTTranslationConfig(STTConfigProtocol):
 
 
 class TTSConfig(TTSConfigProtocol[bytes]):
+    """OpenAI speech synthesis; takes an ``api_key`` or a reusable ``client``."""
+
     def __init__(
         self,
         model: "SpeechModel | str",
         *,
         client: AsyncOpenAI | None = None,
+        api_key: str | None = None,
         voice: Voice = "alloy",
         speed: float | Omit = omit,
     ) -> None:
-        self._client = client or AsyncOpenAI()
+        self._client = _resolve_client(client, api_key)
 
         self._model = model
         self._voice = voice
@@ -218,6 +235,8 @@ class RealTimeConfig(RealtimeConfig):
     Implements the `RealtimeConfig` protocol — call `session(...)` to open
     a connection that pumps captured audio into the API and emits transcription
     events on the supplied context.
+
+    Takes an ``api_key`` or a reusable ``client``, not both.
     """
 
     def __init__(
@@ -231,6 +250,7 @@ class RealTimeConfig(RealtimeConfig):
         tracing: RealtimeTracingConfigParam | None = None,
         session: RealtimeSessionCreateRequestParam | None = None,
         client: AsyncOpenAI | None = None,
+        api_key: str | None = None,
     ) -> None:
         self.model = model
 
@@ -275,7 +295,7 @@ class RealTimeConfig(RealtimeConfig):
 
         self._session_overrides: RealtimeSessionCreateRequestParam = session or {"type": "realtime"}
 
-        self.client = client or AsyncOpenAI()
+        self.client = _resolve_client(client, api_key)
 
     def _build_session(
         self,
