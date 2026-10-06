@@ -5,7 +5,10 @@
 import asyncio
 import json
 import os
+import signal
 import sys
+import traceback
+from contextlib import suppress
 from copy import deepcopy
 from pathlib import Path, PurePosixPath
 from unittest.mock import MagicMock
@@ -75,7 +78,7 @@ async def test_output_and_env_and_per_call_timeout(sprite: MagicMock) -> None:
     sandbox = SpritesSandbox(sprite, env_vars=env_vars, max_output=6)
     env_vars["BASE"] = "changed"
     result = await sandbox.exec(["test"], env={"OVERRIDE": "new"}, timeout=0.5)
-    assert result == ExecResult(output="error\ufffd", exit_code=7)
+    assert result == ExecResult(output="error\ufffd\n[truncated: showing last 6 of 12 chars]", exit_code=7)
     assert sprite.run.await_args.kwargs["env"] == {"BASE": "one", "OVERRIDE": "new"}
     assert sprite.run.await_args.kwargs["cwd"] == "/home/sprite"
     assert sprite.run.await_args.kwargs["timeout"] > 0.5
@@ -92,11 +95,14 @@ async def test_output_and_env_and_per_call_timeout(sprite: MagicMock) -> None:
         APIError("private diagnostic", status_code=429),
     ],
 )
-async def test_transport_failure_never_claims_remote_termination(sprite: MagicMock, error: Exception) -> None:
+async def test_transport_failure_never_claims_remote_termination(
+    sprite: MagicMock, error: Exception, caplog: pytest.LogCaptureFixture
+) -> None:
     sprite.run.side_effect = error
     with pytest.raises(RuntimeError, match="execution status is unknown") as raised:
         await SpritesSandbox(sprite).exec(["sleep", "30"])
-    assert "private diagnostic" not in str(raised.value)
+    assert "private diagnostic" not in "".join(traceback.format_exception(raised.value))
+    assert any(record.exc_info and record.exc_info[1] is error for record in caplog.records)
     if isinstance(error, APIError):
         assert "429" in str(raised.value)
     sprite.run.assert_awaited_once()
@@ -191,7 +197,7 @@ async def test_real_execution_preserves_arguments_and_nonzero_exit(local_sprite:
     sandbox = SpritesSandbox(local_sprite)
     literal = "$(printf unexpected); 'quoted' value"
     result = await sandbox.exec([sys.executable, "-c", "import sys; print(sys.argv[1]); sys.exit(7)", literal])
-    assert result == ExecResult(output=literal + "\n", exit_code=7)
+    assert result == ExecResult(output=literal, exit_code=7)
     missing = await sandbox.exec(["ag2-command-that-does-not-exist"])
     assert missing.exit_code == 127
 
@@ -267,7 +273,7 @@ async def test_invalid_per_call_timeout_never_starts_a_command(sprite: MagicMock
 
 
 @pytest.mark.asyncio
-async def test_file_errors_do_not_expose_sdk_diagnostics(sprite: MagicMock) -> None:
+async def test_file_errors_do_not_expose_sdk_diagnostics(sprite: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
     path = sprite.filesystem.return_value.path.return_value
     path.write_bytes.side_effect = NetworkError("private diagnostic")
     path.unlink.side_effect = NetworkError("private diagnostic")
@@ -280,10 +286,72 @@ async def test_file_errors_do_not_expose_sdk_diagnostics(sprite: MagicMock) -> N
     assert "private diagnostic" not in str(remove_error.value)
     path.write_bytes.assert_awaited_once()
     path.unlink.assert_awaited_once()
+    errors = [record.exc_info[1] for record in caplog.records if record.exc_info]
+    assert errors == [path.write_bytes.side_effect, path.unlink.side_effect]
 
 
 @pytest.mark.asyncio
 async def test_per_call_deadline_overrides_default(local_sprite: MagicMock) -> None:
     sandbox = SpritesSandbox(local_sprite, timeout=0.001)
     result = await sandbox.exec([sys.executable, "-c", "import time; time.sleep(0.05); print('finished')"], timeout=5)
-    assert result == ExecResult(output="finished\n", exit_code=0)
+    assert result == ExecResult(output="finished", exit_code=0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("output", [b"  hello\n\t", b"\n\t ", b"123456"])
+async def test_output_is_trimmed_without_false_truncation(sprite: MagicMock, output: bytes) -> None:
+    sprite.run.return_value = CompletedProcess(args=["test"], returncode=0, stdout=output, stderr=b"")
+    result = await SpritesSandbox(sprite, max_output=6).exec(["test"])
+    assert result == ExecResult(output=output.decode().strip(), exit_code=0)
+
+
+class InterruptedTransport:
+    """Mimic the exec server signaling the supervisor's process group."""
+
+    def __init__(self, path: Path, signum: int) -> None:
+        self.path = path
+        self.signum = signum
+
+    async def run(self, *args: str, **kwargs: object) -> CompletedProcess:
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            *args[1:],
+            cwd=self.path,
+            start_new_session=True,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        child_pid = None
+        try:
+            # The command acknowledges startup, avoiding a sleep-based race.
+            ready = await asyncio.wait_for(process.stdout.readline(), timeout=5)
+            child_pid = int(ready)
+            os.killpg(process.pid, self.signum)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
+            return CompletedProcess(args=list(args), returncode=process.returncode, stdout=stdout, stderr=stderr)
+        finally:
+            # Also clean up the intentionally failing, pre-fix reproduction.
+            for pgid in (child_pid, process.pid):
+                if pgid is not None:
+                    with suppress(ProcessLookupError):
+                        os.killpg(pgid, signal.SIGKILL)
+            await process.wait()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("signum", [signal.SIGTERM, getattr(signal, "SIGHUP", signal.SIGTERM), signal.SIGINT])
+async def test_supervisor_signals_kill_command_group(local_sprite: MagicMock, tmp_path: Path, signum: int) -> None:
+    local_sprite.run.side_effect = InterruptedTransport(tmp_path, signum).run
+    child = "import time; from pathlib import Path; time.sleep(0.3); Path('child-survived').touch()"
+    command = (
+        "import os,signal,subprocess,sys,time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        f"subprocess.Popen([sys.executable, '-c', {child!r}]); "
+        "print(os.getpid(), flush=True); time.sleep(0.3); "
+        "from pathlib import Path; Path('command-survived').touch()"
+    )
+    result = await SpritesSandbox(local_sprite).exec([sys.executable, "-c", command])
+    await asyncio.sleep(0.4)
+    assert not (tmp_path / "command-survived").exists()
+    assert not (tmp_path / "child-survived").exists()
+    assert result.exit_code == 128 + signum

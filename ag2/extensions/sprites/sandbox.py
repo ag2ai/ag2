@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 import math
 import os
 from pathlib import Path, PurePosixPath
@@ -16,10 +17,19 @@ from ag2.tools.sandbox import ExecResult, SandboxBase
 # This supervisor runs inside the Sprite, not on the agent's host. A client-side
 # wait timeout alone cannot establish that the remote command was terminated.
 _COMMAND_RUNNER = """
+import functools
 import os
 import signal
 import subprocess
 import sys
+
+
+def stop(pgid, signum, frame):
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    os._exit(128 + signum)
 
 
 def main():
@@ -31,6 +41,8 @@ def main():
     except OSError:
         print("Command could not be started", file=sys.stderr)
         return 126
+    for signum in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        signal.signal(signum, functools.partial(stop, process.pid))
     try:
         code = process.wait(timeout=float(sys.argv[1]))
     except subprocess.TimeoutExpired:
@@ -58,7 +70,9 @@ class SpritesSandbox(SandboxBase):
 
     The Sprite must have Python 3 available as ``python``. A supervisor inside
     the Sprite enforces command deadlines by killing the command's process
-    group. A transport failure instead raises an error with unknown execution
+    group and forwards termination signals to that group. Workspace pyenv
+    settings (including ``.python-version`` and ``PYENV_VERSION``) must select
+    an installed Python even for shell commands. A transport failure instead raises an error with unknown execution
     status; it is never converted into a confirmed timeout or retried.
 
     Args:
@@ -67,7 +81,8 @@ class SpritesSandbox(SandboxBase):
             This is not a filesystem security boundary.
         timeout: Default per-command deadline in seconds, positive and finite.
         max_output: Maximum returned characters of combined stdout and stderr.
-            Keeps the end of the output; does not bound SDK capture buffers.
+            Keeps the end and adds a truncation marker outside this limit;
+            does not bound SDK capture buffers.
         env_vars: Environment variables applied to every command. Per-call
             values override these. Host environment variables are not forwarded.
     """
@@ -136,8 +151,11 @@ class SpritesSandbox(SandboxBase):
             )
         except (SpriteError, TimeoutError, asyncio.TimeoutError) as error:
             raise _request_error("execution", error) from None
-        output = ((result.stdout or b"") + (result.stderr or b"")).decode("utf-8", errors="replace")
-        return ExecResult(output=output[-self._max_output :], exit_code=result.returncode)
+        output = ((result.stdout or b"") + (result.stderr or b"")).decode("utf-8", errors="replace").strip()
+        if len(output) > self._max_output:
+            total = len(output)
+            output = output[-self._max_output :] + f"\n[truncated: showing last {self._max_output} of {total} chars]"
+        return ExecResult(output=output, exit_code=result.returncode)
 
     async def put_file(self, path: PurePosixPath, content: bytes) -> None:
         """Write bytes to a relative path using the Sprite filesystem API."""
@@ -167,6 +185,7 @@ def _validate_relative_file(path: PurePosixPath) -> None:
 
 
 def _request_error(operation: str, error: Exception) -> RuntimeError:
+    logging.getLogger(__name__).warning("Sprite %s failed", operation, exc_info=True)
     status = f", HTTP {error.status_code}" if isinstance(error, APIError) and error.status_code is not None else ""
     return RuntimeError(
         f"Sprite {operation} status is unknown ({type(error).__name__}{status}); no retry was attempted."
