@@ -19,19 +19,12 @@ from ag2.agent import Agent
 from ag2.config.input_acceptance import input_media_types
 from ag2.tools.skills.toolkit import SkillsToolkit
 
-from .extension import EXTENSION_URI, MIME_HISTORY, MIME_TOOL_CALL, MIME_TOOL_RESULT, MIME_TOOL_SCHEMAS
+from .extension import AG2_INPUT_MODES, EXTENSION_URI
 from .security import Requirement, Scheme
 from .transports import TransportName
 
 _DEFAULT_VERSION = "1.0.0"
-_BASE_INPUT_MODES = (
-    "text/plain",
-    "application/json",
-    MIME_HISTORY,
-    MIME_TOOL_CALL,
-    MIME_TOOL_RESULT,
-    MIME_TOOL_SCHEMAS,
-)
+_BASE_INPUT_MODES = ("text/plain", "application/json", *AG2_INPUT_MODES)
 _DEFAULT_OUTPUT_MODES = ("text/plain", "application/json")
 
 

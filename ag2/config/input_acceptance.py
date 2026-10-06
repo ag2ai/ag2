@@ -4,6 +4,8 @@
 
 """Provider mapper acceptance for inbound media, by position and source."""
 
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import get_args
 
 from ag2.config import (
@@ -190,12 +192,17 @@ def input_modalities(config: ModelConfig | None) -> dict[str, bool]:
     }
 
 
-_KIND_OF_MEDIA_TYPE: dict[str, BinaryType] = {
+_KIND_OF_MEDIA_TYPE: Mapping[str, BinaryType] = MappingProxyType({
     **dict.fromkeys(get_args(ImageMediaType), BinaryType.IMAGE),
     **dict.fromkeys(get_args(AudioMediaType), BinaryType.AUDIO),
     **dict.fromkeys(get_args(VideoMediaType), BinaryType.VIDEO),
     **dict.fromkeys(get_args(DocumentMediaType), BinaryType.DOCUMENT),
-}
+})
+
+
+def binary_kind_of(media_type: str) -> BinaryType | None:
+    """Kind of a typed media type (``image/png`` -> IMAGE), or ``None`` for one `ag2.types` does not list."""
+    return _KIND_OF_MEDIA_TYPE.get(media_type)
 
 
 def input_media_types(config: ModelConfig | None) -> tuple[str, ...]:
@@ -212,4 +219,4 @@ def input_media_types(config: ModelConfig | None) -> tuple[str, ...]:
     )
 
 
-__all__ = ("accepts_input", "input_media_types", "input_modalities")
+__all__ = ("accepts_input", "binary_kind_of", "input_media_types", "input_modalities")

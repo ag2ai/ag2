@@ -3,16 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from collections.abc import Mapping
+from typing import Any
 
 import httpx
 import pytest
+from a2a.types import AgentCard
+from dirty_equals import IsPartialDict, IsStr
 
 from ag2 import Agent, AudioInput, DocumentInput, ImageInput
 from ag2.a2a import A2AConfig, A2AServer, build_card
 from ag2.a2a.extension import MIME_HISTORY, MIME_TOOL_CALL, MIME_TOOL_RESULT, MIME_TOOL_SCHEMAS
 from ag2.a2a.testing import make_test_client_factory, make_test_rest_client_factory, pick_free_port
-from ag2.events import ToolCallEvent
-from ag2.testing import TestConfig
+from ag2.events import BinaryInput, BinaryType, ModelRequest, ToolCallEvent
+from ag2.testing import TestConfig, TrackingConfig
 
 from ._helpers import StatelessScript
 
@@ -126,23 +130,29 @@ class TestValidateInputModes:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
             response = await http.post("/", content=json.dumps(body), headers=headers)
 
-        error = response.json()["error"]
-        assert error["code"] == -32005  # ContentTypeNotSupportedError
-        assert "application/x-unknown" in error["message"]
+        # -32005 is ContentTypeNotSupportedError
+        assert response.json()["error"] == IsPartialDict({
+            "code": -32005,
+            "message": IsStr(regex=".*application/x-unknown.*"),
+        })
 
 
-MEDIA = {
-    "image": ImageInput(data=b"\x89PNG0000", media_type="image/png"),
-    "document": DocumentInput(data=b"%PDF-1.4", media_type="application/pdf"),
-    "audio": AudioInput(data=b"RIFF", media_type="audio/wav"),
-}
+def _media(kind: str) -> BinaryInput:
+    return {
+        "image": ImageInput(data=b"\x89PNG0000", media_type="image/png"),
+        "document": DocumentInput(data=b"%PDF-1.4", media_type="application/pdf"),
+        "audio": AudioInput(data=b"RIFF", media_type="audio/wav"),
+    }[kind]
+
+
+MEDIA_KINDS = ("image", "document", "audio")
 
 
 @pytest.mark.asyncio
 class TestValidateInputModesMedia:
     @pytest.mark.parametrize("transport", ["jsonrpc", "rest"])
     @pytest.mark.parametrize("streaming", [False, True])
-    @pytest.mark.parametrize("kind", MEDIA)
+    @pytest.mark.parametrize("kind", MEDIA_KINDS)
     async def test_declared_media_passes_http(self, transport: str, streaming: bool, kind: str) -> None:
         server = A2AServer(Agent("srv", config=TestConfig("ok")), validate_input_modes=True)
         factory = (make_test_rest_client_factory if transport == "rest" else make_test_client_factory)(
@@ -155,11 +165,11 @@ class TestValidateInputModesMedia:
             ),
         )
 
-        reply = await client.ask("look", MEDIA[kind])
+        reply = await client.ask("look", _media(kind))
 
         assert reply.response.content == "ok"
 
-    @pytest.mark.parametrize("kind", MEDIA)
+    @pytest.mark.parametrize("kind", MEDIA_KINDS)
     async def test_declared_media_passes_grpc(self, kind: str) -> None:
         agent = Agent("srv", config=TestConfig("ok"))
         url = f"127.0.0.1:{pick_free_port('127.0.0.1')}"
@@ -169,8 +179,85 @@ class TestValidateInputModesMedia:
         try:
             client = Agent("cli", config=A2AConfig(card_url=url, preset_card=card, prefer="grpc"))
 
-            reply = await client.ask("look", MEDIA[kind])
+            reply = await client.ask("look", _media(kind))
 
             assert reply.response.content == "ok"
         finally:
             await grpc_server.stop(grace=0)
+
+
+@pytest.mark.asyncio
+class TestStandardMediaPart:
+    """A third-party A2A client follows the card; it sends no `ag2.binary_kind` metadata."""
+
+    @pytest.mark.parametrize(
+        ("media_type", "kind"),
+        [
+            ("image/png", BinaryType.IMAGE),
+            ("application/pdf", BinaryType.DOCUMENT),
+            ("audio/wav", BinaryType.AUDIO),
+            ("video/mp4", BinaryType.VIDEO),
+        ],
+    )
+    async def test_kind_is_inferred_from_the_media_type(self, media_type: str, kind: BinaryType) -> None:
+        tracking = TrackingConfig(TestConfig("ok"))
+
+        response = await _send_raw_part(tracking, {"raw": "AAAA", "mediaType": media_type})
+
+        assert "error" not in response
+        assert tracking.mock.call_args.args[0] == ModelRequest([
+            BinaryInput(b"\x00\x00\x00", media_type=media_type, kind=kind)
+        ])
+
+    async def test_explicit_binary_kind_metadata_wins_over_the_media_type(self) -> None:
+        tracking = TrackingConfig(TestConfig("ok"))
+        part = {"raw": "AAAA", "mediaType": "image/png", "metadata": {"ag2.binary_kind": "document"}}
+
+        await _send_raw_part(tracking, part)
+
+        assert tracking.mock.call_args.args[0] == ModelRequest([
+            BinaryInput(b"\x00\x00\x00", media_type="image/png", kind=BinaryType.DOCUMENT)
+        ])
+
+
+async def _send_raw_part(tracking: TrackingConfig, part: Mapping[str, Any]) -> dict[str, Any]:
+    app = A2AServer(Agent("srv", config=tracking), validate_input_modes=True).build_jsonrpc(url="http://test")
+    body = {
+        "jsonrpc": "2.0",
+        "id": "1",
+        "method": "SendMessage",
+        "params": {"message": {"messageId": "m1", "role": "ROLE_USER", "parts": [part]}},
+    }
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+        response = await http.post("/", content=json.dumps(body), headers={"A2A-Version": "1.0"})
+    result: dict[str, Any] = response.json()
+    return result
+
+
+@pytest.mark.asyncio
+async def test_card_modifier_cannot_widen_what_validation_accepts() -> None:
+    async def widen(card: AgentCard) -> AgentCard:
+        card.default_input_modes.append("application/x-unknown")
+        return card
+
+    app = A2AServer(
+        Agent("srv", config=TestConfig("ok")), validate_input_modes=True, card_modifier=widen
+    ).build_jsonrpc(url="http://test")
+    body = {
+        "jsonrpc": "2.0",
+        "id": "1",
+        "method": "SendMessage",
+        "params": {
+            "message": {
+                "messageId": "m1",
+                "role": "ROLE_USER",
+                "parts": [{"raw": "AAAA", "mediaType": "application/x-unknown"}],
+            },
+        },
+    }
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+        await http.get(CARD_PATHS[0])
+        response = await http.post("/", content=json.dumps(body), headers={"A2A-Version": "1.0"})
+
+    assert response.json()["error"] == IsPartialDict({"code": -32005})

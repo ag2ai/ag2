@@ -19,7 +19,7 @@ from ag2.agent import Agent
 
 from .card import build_card
 from .executor import AgentExecutor
-from .extension import MIME_HISTORY, MIME_TOOL_CALL, MIME_TOOL_RESULT, MIME_TOOL_SCHEMAS
+from .extension import AG2_INPUT_MODES
 from .transports import build_grpc_server, build_jsonrpc_asgi, build_rest_asgi
 from .transports._common import (
     DEFAULT_AGENT_CARD_PATH,
@@ -191,7 +191,7 @@ class A2AServer:
         for skill in card.skills:
             declared.update(skill.input_modes)
         # An empty declaration is an absent one: the SDK accepts everything.
-        missing = {MIME_HISTORY, MIME_TOOL_CALL, MIME_TOOL_RESULT, MIME_TOOL_SCHEMAS} - declared
+        missing = set(AG2_INPUT_MODES) - declared
         if declared and missing:
             raise ValueError(
                 "validate_input_modes=True would reject AG2 clients: the card does not declare "
