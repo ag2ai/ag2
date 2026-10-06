@@ -4,7 +4,6 @@
 
 import asyncio
 import base64
-import logging
 from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
@@ -33,10 +32,7 @@ from openai.types.realtime.realtime_conversation_item_user_message_param import 
 
 from ag2.context import ConversationContext
 from ag2.events import (
-    BinaryInput,
     DataInput,
-    DrainedModelRequest,
-    Input,
     ModelMessage,
     ModelMessageChunk,
     ModelRequest,
@@ -48,14 +44,13 @@ from ag2.events import (
     ToolResultEvent,
     TranscriptionChunkEvent,
     TranscriptionCompletedEvent,
-    UrlInput,
     Usage,
     UsageEvent,
 )
-from ag2.exceptions import UnsupportedInputError
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
+from ._input import request_texts
 from .protocols import TTSConfig as TTSConfigProtocol
 from .realtime import RealtimeConfig
 from .stt import STTConfig as STTConfigProtocol
@@ -67,8 +62,6 @@ if TYPE_CHECKING:
     from openai.types.realtime.realtime_response_usage import RealtimeResponseUsage
 
     from ag2.annotations import Context
-
-logger = logging.getLogger(__name__)
 
 _PROVIDER = "openai realtime"
 
@@ -471,34 +464,7 @@ async def _send_request(
 
 
 def _user_message_content(event: ModelRequest, serializer: SerializerProto) -> list[UserMessageContent]:
-    """Convert the request's parts to user message content.
-
-    `TextInput` is sent as is and `DataInput` as text encoded by `serializer`.
-    Any other part raises `UnsupportedInputError`, except in a
-    `DrainedModelRequest`, where it is logged and dropped so the rest of the
-    drained inbox still reaches the model.
-    """
-    content: list[UserMessageContent] = []
-    for part in event.parts:
-        if isinstance(part, TextInput):
-            content.append({"type": "input_text", "text": part.content})
-        elif isinstance(part, DataInput):
-            content.append({"type": "input_text", "text": serializer.encode(part.data).decode()})
-        elif isinstance(event, DrainedModelRequest):
-            logger.warning(
-                "Dropped %s from an inbox message: input type not supported by provider `%s`",
-                _input_kind(part),
-                _PROVIDER,
-            )
-        else:
-            raise UnsupportedInputError(_input_kind(part), _PROVIDER)
-    return content
-
-
-def _input_kind(part: Input) -> str:
-    if isinstance(part, (UrlInput, BinaryInput)):
-        return f"{type(part).__name__}({part.kind.value})"
-    return type(part).__name__
+    return [{"type": "input_text", "text": text} for text in request_texts(event, serializer, provider=_PROVIDER)]
 
 
 def normalize_realtime_usage(usage: "RealtimeResponseUsage | None") -> Usage:
