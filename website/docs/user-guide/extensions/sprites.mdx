@@ -1,0 +1,94 @@
+---
+title: Sprites Sandbox Integration
+sidebarTitle: Sprites
+---
+
+The `ag2.extensions.sprites` module runs AG2 code and shell tools in an existing [Sprite](https://sprites.dev/){.external-link target="_blank"}. Both tools share the Sprite's filesystem, so files and installed packages persist across calls. Each command starts a new process; Python variables and shell state do not persist.
+
+## Installation
+
+Install AG2 with your model provider and the Sprites Python SDK. For example, with Anthropic:
+
+```bash
+pip install "ag2[anthropic]" "sprites-py>=0.7.2,<1"
+```
+
+Create a Sprite separately and set `SPRITES_TOKEN` and `SPRITE_NAME` in the environment running AG2. The example also reads `ANTHROPIC_API_KEY` through AG2's provider configuration and `ANTHROPIC_MODEL` for your chosen model.
+
+The Sprite must have Python 3 available as `python`, plus the interpreters or executables your tools use. Python and Bash are the default code languages. The default working directory is `/home/sprite`; a custom directory must already exist.
+
+## Use one Sprite for code and shell tools
+
+The caller creates and owns the SDK client. Pass an `AsyncSprite` handle to `SpritesEnvironment`, then share that environment between the tools:
+
+```python linenums="1"
+import asyncio
+import os
+
+from sprites import AsyncSpritesClient
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.sprites import SpritesEnvironment
+from ag2.tools import SandboxCodeTool, SandboxShellTool
+
+async def main() -> None:
+    async with AsyncSpritesClient(token=os.environ["SPRITES_TOKEN"]) as client:
+        sprite = client.sprite(os.environ["SPRITE_NAME"])
+        env = SpritesEnvironment(sprite, timeout=60)
+        agent = Agent(
+            "developer",
+            config=AnthropicConfig(model=os.environ["ANTHROPIC_MODEL"]),
+            tools=[
+                SandboxCodeTool(env, name="run_sprite_code"),
+                SandboxShellTool(
+                    env,
+                    name="run_sprite_command",
+                    description="Execute a shell command in the Sprite at {workdir}",
+                ),
+            ],
+        )
+        reply = await agent.ask(
+            "Use Python to create a uniquely named temporary file in the working "
+            "directory containing 'Hello from AG2'. Read it using the shell tool, "
+            "then remove only that temporary file."
+        )
+        print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+These explicit tool names distinguish remote commands from any local tools on the same agent. `SandboxShellTool` also includes the remote working directory in its description.
+
+## Ownership and persistence
+
+`SpritesEnvironment` does not create, delete, or reset Sprites. Construction makes no network requests. Every `open()` returns the same `SpritesSandbox`, and copies made when tools attach to agents share that backend.
+
+Closing the environment, leaving its async context, or calling `aclose()` leaves the Sprite and SDK client untouched. Close the client yourself after the agents finish, as shown above. Deleting a Sprite is a separate caller decision. Code execution removes its own temporary script files for file-based languages; it does not clear the workspace.
+
+Scope each Sprite to the agents and users intended to share its files. The working directory and relative-path checks are not filesystem isolation boundaries: commands can access other paths inside the Sprite, and symlinks can point outside the working directory. Host files and host environment variables are not automatically forwarded.
+
+## Configuration
+
+`SpritesEnvironment` and `SpritesSandbox` accept the same options:
+
+| Parameter | Default | Purpose |
+| :--- | :--- | :--- |
+| `sprite` | Required | Caller-owned `AsyncSprite` handle |
+| `workdir` | `/home/sprite` | Existing absolute POSIX directory inside the Sprite |
+| `timeout` | `60` seconds | Positive, finite deadline for each command |
+| `max_output` | `100000` characters | Tail of combined stdout and stderr returned to the agent |
+| `env_vars` | `{}` | Environment variables passed to each remote command |
+
+For direct execution, `SpritesSandbox.exec(argv, env=..., timeout=...)` accepts per-call overrides. It passes arguments literally; shell syntax is interpreted only when the command invokes a shell. Native SDK file methods implement `put_file()` and `remove_file()` for paths relative to `workdir`.
+
+The output limit applies after the SDK captures the command output. It does not bound the SDK's memory usage during execution.
+
+## Deadlines and failures
+
+A small Python supervisor runs inside the Sprite and enforces the command deadline. When the deadline expires, it kills the command's process group, waits for termination, and returns exit code `124`. This includes ordinary child processes; deliberately detached processes can escape that group. It is an execution deadline, not a security boundary for programs that actively evade it.
+
+The SDK transport gets an additional ten seconds to receive the termination result. A transport timeout or other SDK failure raises an error indicating that the execution status is unknown. It does not claim the command was terminated, retry it, or delete the Sprite. Cancellation likewise does not confirm remote termination. Inspect the Sprite before repeating a command whose side effects matter.
+
+Errors expose the SDK exception type and an HTTP status code when available, without putting the SDK's raw diagnostic message into the agent's response. Nonzero command exits retain their exit code and output.

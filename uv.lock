@@ -3,16 +3,16 @@ revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'linux'",
-    "python_full_version == '3.14.*' and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and sys_platform == 'linux'",
-    "python_full_version < '3.12' and sys_platform == 'linux'",
     "python_full_version >= '3.15' and sys_platform != 'linux'",
+    "python_full_version == '3.14.*' and sys_platform == 'linux'",
     "python_full_version == '3.14.*' and sys_platform != 'linux'",
+    "python_full_version == '3.13.*' and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version < '3.12' and sys_platform == 'linux'",
     "python_full_version < '3.12' and sys_platform != 'linux'",
 ]
 
@@ -183,6 +183,7 @@ dev = [
     { name = "respx" },
     { name = "ruff" },
     { name = "safetensors" },
+    { name = "sprites-py" },
     { name = "tenki" },
     { name = "tinyfish" },
     { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
@@ -215,6 +216,7 @@ docs = [
     { name = "nlip-server" },
     { name = "pyyaml" },
     { name = "safetensors" },
+    { name = "sprites-py" },
     { name = "tenki" },
     { name = "tinyfish" },
     { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
@@ -239,6 +241,7 @@ optionals = [
     { name = "firecrawl-py" },
     { name = "mistralai", extra = ["realtime"] },
     { name = "safetensors" },
+    { name = "sprites-py" },
     { name = "tenki" },
     { name = "tinyfish" },
     { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
@@ -379,6 +382,7 @@ dev = [
     { name = "respx", specifier = ">=0.23.0,<0.24.0" },
     { name = "ruff", specifier = "==0.16.10" },
     { name = "safetensors", specifier = ">=0.4.3,<1" },
+    { name = "sprites-py", specifier = ">=0.7.2,<1" },
     { name = "tenki", specifier = ">=1.4.0,<2" },
     { name = "tinyfish", specifier = ">=0.5,<0.6" },
     { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.5,<3" },
@@ -423,6 +427,7 @@ docs = [
     { name = "nlip-server", specifier = ">=0.1.3,<1" },
     { name = "pyyaml", specifier = "==6.0.3" },
     { name = "safetensors", specifier = ">=0.4.3,<1" },
+    { name = "sprites-py", specifier = ">=0.7.2,<1" },
     { name = "tenki", specifier = ">=1.4.0,<2" },
     { name = "tinyfish", specifier = ">=0.5,<0.6" },
     { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.5,<3" },
@@ -467,6 +472,7 @@ optionals = [
     { name = "firecrawl-py", specifier = ">=4.53,<5" },
     { name = "mistralai", extras = ["realtime"], specifier = ">=3.6.0,<4" },
     { name = "safetensors", specifier = ">=0.4.3,<1" },
+    { name = "sprites-py", specifier = ">=0.7.2,<1" },
     { name = "tenki", specifier = ">=1.4.0,<2" },
     { name = "tinyfish", specifier = ">=0.5,<0.6" },
     { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.5,<3" },
@@ -1249,6 +1255,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/76/d4/81420972a676e8ffea40450d8c8c92943e7218a78fe9b64359836cc9876b/click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6", size = 338000, upload-time = "2026-06-24T17:45:15.148Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/e2/79c688af8b210d232694e31e59da9f6ec747bae31c3f5946e4e9b98860d5/click-8.4.2-py3-none-any.whl", hash = "sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76", size = 119243, upload-time = "2026-06-24T17:45:13.73Z" },
+]
+
+[[package]]
+name = "client-signals"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/c2/39d3a5aee89961a77a1af668ac89b2e91feebfcdf4d140858f1a6803ee1a/client_signals-0.5.0.tar.gz", hash = "sha256:d8a41242162d858959780757f5c22ecb77d668156bfe7ec0e0716d995e81e6db", size = 3863, upload-time = "2026-10-26T09:50:39.465Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/17/45/ea24e401723aa592701734bfdf005a6c0cb3b58b77e5d7ed7003b611a7f6/client_signals-0.5.0-py3-none-any.whl", hash = "sha256:bd04dcf9aaeb44af11cc83cef79e80353abc88c9fa2af81d7d07291ec9605e29", size = 4348, upload-time = "2026-10-26T09:50:38.159Z" },
 ]
 
 [[package]]
@@ -3657,14 +3672,14 @@ version = "3.7"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'linux'",
-    "python_full_version == '3.14.*' and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and sys_platform == 'linux'",
     "python_full_version >= '3.15' and sys_platform != 'linux'",
+    "python_full_version == '3.14.*' and sys_platform == 'linux'",
     "python_full_version == '3.14.*' and sys_platform != 'linux'",
+    "python_full_version == '3.13.*' and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/dc/76/3af777226b63a5e64a6b36b1ec5855c14e2b94a37096d4760e595fc43511/networkx-3.7.tar.gz", hash = "sha256:fd77a511bd90f39f3d016351345b52cf5319b813bdca01de3f755d3cca62e96a", size = 1866482, upload-time = "2026-09-21T16:45:16.974Z" }
@@ -3786,14 +3801,14 @@ version = "2.5.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'linux'",
-    "python_full_version == '3.14.*' and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and sys_platform == 'linux'",
     "python_full_version >= '3.15' and sys_platform != 'linux'",
+    "python_full_version == '3.14.*' and sys_platform == 'linux'",
     "python_full_version == '3.14.*' and sys_platform != 'linux'",
+    "python_full_version == '3.13.*' and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/95/b0/c7453d0b6e2073c3264468b106ee1563750cecc910965e67357e3698c83e/numpy-2.5.4.tar.gz", hash = "sha256:9a94cf751c9ad8ebaa835bcd3d40dacf8534ad086b88c38029b65123c7999d2a", size = 20866315, upload-time = "2026-10-10T20:05:31.422Z" }
@@ -5515,6 +5530,20 @@ wheels = [
 ]
 
 [[package]]
+name = "sprites-py"
+version = "0.7.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "client-signals" },
+    { name = "httpx" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fa/71/82ae6b75878240f5052c1dcecdd97102745ad27e277baa203a55a57ce238/sprites_py-0.7.2.tar.gz", hash = "sha256:bebc5aec3c1a2a7a5090b8a1efd4b0cb2ed2c10baf72c8b85ea050d59c054c8c", size = 69185, upload-time = "2026-10-06T16:04:07.004Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1f/5c/141763b8d787b3d221f1ea90ad3d581a35bc92ef3e15b8ef52a3de434f85/sprites_py-0.7.2-py3-none-any.whl", hash = "sha256:b9015928cf2cab8c99f31f7fa245b088f9f26f37ce047721bcdf9c63e1f2f502", size = 62057, upload-time = "2026-10-06T16:04:05.798Z" },
+]
+
+[[package]]
 name = "sqlalchemy"
 version = "2.1.3"
 source = { registry = "https://pypi.org/simple" }
@@ -5881,8 +5910,8 @@ resolution-markers = [
     "python_full_version >= '3.15' and sys_platform != 'linux'",
     "python_full_version == '3.14.*' and sys_platform != 'linux'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
     "python_full_version < '3.12' and sys_platform != 'linux'",
 ]
