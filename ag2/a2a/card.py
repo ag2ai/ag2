@@ -18,12 +18,19 @@ from a2a.utils.constants import PROTOCOL_VERSION_CURRENT, TransportProtocol
 from ag2.agent import Agent
 from ag2.tools.skills.toolkit import SkillsToolkit
 
-from .extension import EXTENSION_URI
+from .extension import EXTENSION_URI, MIME_HISTORY, MIME_TOOL_CALL, MIME_TOOL_RESULT, MIME_TOOL_SCHEMAS
 from .security import Requirement, Scheme
 from .transports import TransportName
 
 _DEFAULT_VERSION = "1.0.0"
-_DEFAULT_INPUT_MODES = ("text/plain", "application/json")
+_DEFAULT_INPUT_MODES = (
+    "text/plain",
+    "application/json",
+    MIME_HISTORY,
+    MIME_TOOL_CALL,
+    MIME_TOOL_RESULT,
+    MIME_TOOL_SCHEMAS,
+)
 _DEFAULT_OUTPUT_MODES = ("text/plain", "application/json")
 
 
