@@ -41,6 +41,17 @@ def _safe_url(url: str) -> bool:
     return urlparse(url).scheme.lower() in _SAFE_URL_SCHEMES
 
 
+def _truncate(text: str | None, max_characters: int | None) -> tuple[str | None, bool]:
+    if text is None or max_characters is None or len(text) <= max_characters:
+        return text, False
+    return text[:max_characters], True
+
+
+def _check_domain_filters(include_domains: Any, exclude_domains: Any) -> None:
+    if include_domains and exclude_domains:
+        raise ValueError("include_domains and exclude_domains cannot both be set")
+
+
 def _as_list(value: Any) -> list[Any] | None:
     if value is None:
         return None
@@ -56,6 +67,7 @@ class FirecrawlSearchResult:
     description: str | None = None
     position: int | None = None
     markdown: str | None = None
+    truncated: bool = False
 
 
 @dataclass(slots=True)
@@ -66,6 +78,7 @@ class FirecrawlNewsResult:
     date: str | None = None
     position: int | None = None
     markdown: str | None = None
+    truncated: bool = False
 
 
 @dataclass(slots=True)
@@ -85,6 +98,7 @@ class FirecrawlScrapeResult:
     markdown: str | None = None
     html: str | None = None
     links: list[str] = field(default_factory=list)
+    truncated: bool = False
 
 
 class FirecrawlToolkit(Toolkit):
@@ -114,6 +128,13 @@ class FirecrawlToolkit(Toolkit):
     ``http_timeout`` (seconds) bounds each HTTP request made by the SDK client.
     The ``timeout`` options on ``search()`` and ``scrape()`` are Firecrawl API
     timeouts in milliseconds.
+
+    ``max_characters`` caps the page content each tool returns (markdown and
+    HTML, per result); results that were cut have ``truncated=True``.
+
+    ``firecrawl_scrape`` returns ``{"error": ...}`` for a URL that is not
+    http or https, so the model can correct it. Every other problem (invalid
+    options, a missing API key, Firecrawl API errors) is raised.
     """
 
     __slots__ = ("_api_key", "_api_url", "_http_timeout", "_max_retries")
@@ -129,6 +150,7 @@ class FirecrawlToolkit(Toolkit):
         scrape_results: bool | Variable | None = None,
         formats: Sequence[ScrapeFormat] | Variable | None = None,
         only_main_content: bool | Variable | None = None,
+        max_characters: int | Variable | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         self._api_key = api_key
@@ -137,8 +159,8 @@ class FirecrawlToolkit(Toolkit):
         self._max_retries = max_retries
 
         super().__init__(
-            self.search(limit=limit, scrape_results=scrape_results),
-            self.scrape(formats=formats, only_main_content=only_main_content),
+            self.search(limit=limit, scrape_results=scrape_results, max_characters=max_characters),
+            self.scrape(formats=formats, only_main_content=only_main_content, max_characters=max_characters),
             name="firecrawl_toolkit",
             middleware=middleware,
         )
@@ -159,6 +181,7 @@ class FirecrawlToolkit(Toolkit):
         scrape_results: bool | Variable | None = None,
         scrape_only_main_content: bool | Variable | None = None,
         scrape_max_age: int | Variable | None = None,
+        max_characters: int | Variable | None = None,
         name: str = "firecrawl_search",
         description: str = (
             "Search the web using Firecrawl. Returns ranked results with URLs, titles, and descriptions. "
@@ -188,10 +211,19 @@ class FirecrawlToolkit(Toolkit):
                 navigation, and footers. Firecrawl defaults to ``True``.
             scrape_max_age: With ``scrape_results``, accept cached pages up to
                 this many milliseconds old. ``0`` always fetches fresh pages.
+            max_characters: With ``scrape_results``, cut each result's markdown
+                to this many characters and set ``truncated=True`` on it.
             name: Tool name exposed to the model.
             description: Tool description exposed to the model.
             middleware: Tool middleware applied to this tool.
+
+        Raises:
+            ValueError: If both ``include_domains`` and ``exclude_domains`` are set.
         """
+        _check_domain_filters(
+            None if isinstance(include_domains, Variable) else include_domains,
+            None if isinstance(exclude_domains, Variable) else exclude_domains,
+        )
         client_kwargs = self._client_kwargs()
 
         @tool(name=name, description=description, middleware=middleware)
@@ -221,19 +253,23 @@ class FirecrawlToolkit(Toolkit):
                     "max_age": resolve_variable(scrape_max_age, ctx, param_name="scrape_max_age"),
                 }
                 params["scrape_options"] = {k: v for k, v in scrape_options.items() if v is not None}
+            _check_domain_filters(params["include_domains"], params["exclude_domains"])
             kwargs = {k: v for k, v in params.items() if v is not None}
+            limit_chars = resolve_variable(max_characters, ctx, param_name="max_characters")
 
             client = AsyncFirecrawlClient(**client_kwargs)
             try:
                 raw = await client.search(query, **kwargs)
             finally:
+                # The SDK has no public close(); ``async_http_client`` owns the httpx
+                # client. It is not documented as public, so check it on SDK upgrades.
                 await client.async_http_client.close()
 
             return ToolResult(
                 FirecrawlSearchResponse(
                     query=query,
-                    web=[_web_result(r, i) for i, r in enumerate(raw.web or [], start=1)],
-                    news=[_news_result(r, i) for i, r in enumerate(raw.news or [], start=1)],
+                    web=[_web_result(r, i, limit_chars) for i, r in enumerate(raw.web or [], start=1)],
+                    news=[_news_result(r, i, limit_chars) for i, r in enumerate(raw.news or [], start=1)],
                 )
             )
 
@@ -254,6 +290,7 @@ class FirecrawlToolkit(Toolkit):
         max_age: int | Variable | None = None,
         store_in_cache: bool | Variable | None = None,
         timeout: int | Variable | None = None,
+        max_characters: int | Variable | None = None,
         name: str = "firecrawl_scrape",
         description: str = (
             "Read a single web page using Firecrawl. Returns the page content (markdown by default) "
@@ -280,6 +317,8 @@ class FirecrawlToolkit(Toolkit):
                 ``0`` always fetches a fresh copy.
             store_in_cache: Whether Firecrawl may cache this page.
             timeout: Firecrawl API timeout in milliseconds.
+            max_characters: Cut the markdown and the HTML to this many
+                characters each and set ``truncated=True`` on the result.
             name: Tool name exposed to the model.
             description: Tool description exposed to the model.
             middleware: Tool middleware applied to this tool.
@@ -316,8 +355,13 @@ class FirecrawlToolkit(Toolkit):
             try:
                 doc = await client.scrape(url, **kwargs)
             finally:
+                # The SDK has no public close(); ``async_http_client`` owns the httpx
+                # client. It is not documented as public, so check it on SDK upgrades.
                 await client.async_http_client.close()
 
+            limit_chars = resolve_variable(max_characters, ctx, param_name="max_characters")
+            markdown, markdown_cut = _truncate(doc.markdown, limit_chars)
+            html, html_cut = _truncate(doc.html, limit_chars)
             metadata = doc.metadata_typed
             return ToolResult(
                 FirecrawlScrapeResult(
@@ -326,9 +370,10 @@ class FirecrawlToolkit(Toolkit):
                     description=metadata.description,
                     language=metadata.language,
                     status_code=metadata.status_code,
-                    markdown=doc.markdown,
-                    html=doc.html,
+                    markdown=markdown,
+                    html=html,
                     links=list(doc.links or []),
+                    truncated=markdown_cut or html_cut,
                 )
             )
 
@@ -350,15 +395,17 @@ class FirecrawlToolkit(Toolkit):
 # keep their rank order, so the list index is used as the position.
 # ``item`` is ``SearchResultWeb``/``SearchResultNews`` or ``Document``; firecrawl-py
 # ships no type information, so it is typed as ``Any``.
-def _web_result(item: Any, rank: int) -> FirecrawlSearchResult:
+def _web_result(item: Any, rank: int, max_characters: int | None) -> FirecrawlSearchResult:
     if isinstance(item, Document):
         metadata = item.metadata_typed
+        markdown, truncated = _truncate(item.markdown, max_characters)
         return FirecrawlSearchResult(
             url=metadata.url or metadata.source_url or "",
             title=metadata.title,
             description=metadata.description,
             position=rank,
-            markdown=item.markdown,
+            markdown=markdown,
+            truncated=truncated,
         )
     return FirecrawlSearchResult(
         url=item.url,
@@ -368,15 +415,17 @@ def _web_result(item: Any, rank: int) -> FirecrawlSearchResult:
     )
 
 
-def _news_result(item: Any, rank: int) -> FirecrawlNewsResult:
+def _news_result(item: Any, rank: int, max_characters: int | None) -> FirecrawlNewsResult:
     if isinstance(item, Document):
         metadata = item.metadata_typed
+        markdown, truncated = _truncate(item.markdown, max_characters)
         return FirecrawlNewsResult(
             url=metadata.url or metadata.source_url or "",
             title=metadata.title,
             snippet=metadata.description,
             position=rank,
-            markdown=item.markdown,
+            markdown=markdown,
+            truncated=truncated,
         )
     return FirecrawlNewsResult(
         url=item.url or "",

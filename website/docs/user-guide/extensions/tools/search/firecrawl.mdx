@@ -41,10 +41,27 @@ toolkit = FirecrawlToolkit(
     scrape_results=True,      # include page markdown in firecrawl_search results
     formats=["markdown"],     # output formats for firecrawl_scrape
     only_main_content=True,   # drop navigation, headers, and footers in firecrawl_scrape
+    max_characters=20_000,    # cap the page content each tool returns
 )
 ```
 
 The constructor also accepts `api_url` (for a self-hosted Firecrawl), `http_timeout` (seconds, for each HTTP request) and `max_retries`.
+
+!!! warning
+    `firecrawl_scrape` only checks that the URL is `http` or `https`; the model chooses the URL. Firecrawl's cloud API cannot reach your private network, but a self-hosted Firecrawl set through `api_url` fetches from wherever it runs, so the model could ask it for internal addresses. Restrict that deployment's network access if this matters.
+
+## Limiting result size
+
+A scraped page can be very long, and `firecrawl_search` with `scrape_results=True` returns one page per result. Set `max_characters` to cut each page's markdown (and HTML for `firecrawl_scrape`) to that many characters. Results that were cut have `truncated=True`, so the model knows the text is incomplete:
+
+```python linenums="1"
+toolkit = FirecrawlToolkit(api_key=...)
+
+search_tool = toolkit.search(limit=3, scrape_results=True, max_characters=10_000)
+scrape_tool = toolkit.scrape(max_characters=20_000)
+```
+
+`max_characters` is off by default.
 
 ## Picking a subset of tools
 
@@ -106,7 +123,15 @@ agent = Agent("researcher", config=config, tools=[scrape_tool])
 `toolkit.scrape()` also accepts `include_tags`, `headers`, `mobile`, `proxy`, `block_ads` and `store_in_cache`.
 
 The search and scrape options (everything except `api_key`, `api_url`, `http_timeout` and `max_retries`) accept a `Variable` for deferred context resolution.
-`firecrawl_scrape` accepts only `http` and `https` URLs and returns an error result for any other scheme. Firecrawl API errors, such as a missing or invalid key, are raised by the SDK and reach the model as tool errors.
+## Errors
+
+`firecrawl_scrape` returns `{"error": ...}` for a URL that is not `http` or `https`, so the model can try again with a valid one. Everything else is raised:
+
+- invalid options, such as setting both `include_domains` and `exclude_domains` (raised by `toolkit.search()` itself, or at call time when the values come from `Variable`s);
+- a missing or invalid API key;
+- Firecrawl API errors, raised as `firecrawl` SDK exceptions.
+
+Errors raised while a tool runs reach the model as tool errors.
 
 ## Result
 
@@ -115,8 +140,8 @@ The search and scrape options (everything except `api_key`, `api_url`, `http_tim
 | Field | Description |
 | :--- | :--- |
 | `query` | The search query |
-| `web` | List of `FirecrawlSearchResult` (`url`, `title`, `description`, `position`, `markdown`) |
-| `news` | List of `FirecrawlNewsResult` (`url`, `title`, `snippet`, `date`, `position`, `markdown`) |
+| `web` | List of `FirecrawlSearchResult` (`url`, `title`, `description`, `position`, `markdown`, `truncated`) |
+| `news` | List of `FirecrawlNewsResult` (`url`, `title`, `snippet`, `date`, `position`, `markdown`, `truncated`) |
 
 `markdown` is set only when `scrape_results=True`. In that mode `description` and `snippet` come from the page metadata, and news results have no `date`.
 
@@ -128,6 +153,7 @@ The search and scrape options (everything except `api_key`, `api_url`, `http_tim
 | `title`, `description`, `language` | Page metadata |
 | `status_code` | HTTP status code of the page |
 | `markdown`, `html`, `links` | Page content in the requested formats |
+| `truncated` | `True` when `max_characters` cut the markdown or HTML |
 
 !!! tip
     Use `firecrawl_search` with `scrape_results=True` when the agent needs to read several sources for one question. Use `firecrawl_scrape` when the agent already knows the URL it wants to read.
