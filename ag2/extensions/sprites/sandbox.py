@@ -72,8 +72,9 @@ class SpritesSandbox(SandboxBase):
     the Sprite enforces command deadlines by killing the command's process
     group and forwards termination signals to that group. Workspace pyenv
     settings (including ``.python-version`` and ``PYENV_VERSION``) must select
-    an installed Python even for shell commands. A transport failure instead raises an error with unknown execution
-    status; it is never converted into a confirmed timeout or retried.
+    an installed Python even for shell commands. A transport failure instead
+    raises an error with unknown execution status; it is never converted into
+    a confirmed timeout or retried.
 
     Args:
         sprite: An existing async Sprite handle, owned by the caller.
