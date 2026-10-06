@@ -44,16 +44,189 @@ After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.we
 | Constructor argument | Purpose |
 |---|---|
 | `#!python agent` | The AG2 `#!python Agent` exposed over A2A |
-| `#!python task_store` | Shared `#!python TaskStore`. Defaults to a single `#!python InMemoryTaskStore` reused across every `#!python build_*` call |
+| `#!python task_store` | Shared `#!python TaskStore`, or a `#!python VersionedTaskStore` for [several replicas](#running-on-several-replicas). Defaults to a single `#!python InMemoryTaskStore` reused across every `#!python build_*` call |
+| `#!python event_stream` | `#!python TaskEventStream` that carries task events between replicas. Required with a `#!python VersionedTaskStore`, rejected without one |
 | `#!python push_config_store` | Enables push-notifications CRUD (see [Tasks & Push](/docs/user-guide/a2a/tasks_and_push)). Optional |
 | `#!python push_sender` | Custom delivery sender. Defaults to no-op when not set |
+| `#!python push_url_validator` | Optional async callback receiving a URL and returning `bool`. Rejects disallowed push-notification URLs before storing them |
 | `#!python extended_card` | Auth-aware extra metadata returned via `#!python GetExtendedAgentCard` |
 | `#!python card_modifier` / `#!python extended_card_modifier` | Per-request hooks that mutate the card before it's served |
 | `#!python card_signer` | Attaches a JWS signature to every card served, on all transports (see [Card Signing](/docs/user-guide/a2a/card_signing)). Optional |
 | `#!python executor` | Escape hatch — drop in a custom `#!python AgentExecutor` (see [Advanced](/docs/user-guide/a2a/advanced#custom-agentexecutor)) |
 
+#### Safe push notifications
+
+With push notifications the server POSTs task updates to a webhook URL **that
+the client chooses**. A client can therefore point the server at internal
+addresses or cloud metadata endpoints (SSRF). Protect the server with a URL
+policy.
+
+**Server.** Enable push with a store and pass `#!python push_url_validator`. The
+SDK ships a ready-made policy, `#!python validate_push_notification_url`, that
+allows only public `http(s)` hosts. You pass the function itself (no call, no
+URL); the SDK calls it with the client's URL on every registration:
+
+```python linenums="1"
+from a2a.server.tasks import InMemoryPushNotificationConfigStore
+from a2a.utils.push_url_validator import validate_push_notification_url
+
+from ag2.a2a import A2AServer
+
+server = A2AServer(
+    agent,
+    push_config_store=InMemoryPushNotificationConfigStore(),
+    push_url_validator=validate_push_notification_url,
+)
+```
+
+**Client.** The URL is set by whoever registers the webhook, using the helpers
+from [Tasks & Push](/docs/user-guide/a2a/tasks_and_push):
+
+```python linenums="1"
+from ag2.a2a import A2AConfig
+from ag2.a2a.push import A2APushConfig, create_push_notification_config
+
+client = A2AConfig(card_url="http://127.0.0.1:8000")
+
+await create_push_notification_config(
+    client, task_id, A2APushConfig(url="https://my-app.example.com/a2a-hook")
+)  # accepted
+
+await create_push_notification_config(
+    client, task_id, A2APushConfig(url="http://169.254.169.254/latest/meta-data")
+)  # raises InvalidParamsError, nothing is stored
+```
+
+Pass your own `#!python async def check(url: str) -> bool` instead to apply a
+different policy, for example an allow-list of partner hosts. A rejected URL
+fails registration with the SDK's invalid-params error on JSON-RPC, REST, and
+gRPC.
+
+- **Off by default.** Without `#!python push_url_validator` any URL is accepted,
+  as before; AG2 does not choose a policy for you.
+- **Needs a store.** `#!python push_url_validator` without `#!python push_config_store`
+  raises `#!python ValueError`, because push is disabled without a store.
+- **Hosts must resolve.** The SDK policy resolves the hostname and rejects it if
+  DNS fails or any address is private, loopback, or link-local. The client only
+  sees `Invalid push notification URL`; the reason is in the server log.
+- **Registration only.** The validator screens URLs when they are registered. A
+  custom `#!python push_sender` is not covered; give it the same callback (the
+  SDK's `#!python BasePushNotificationSender` takes `#!python push_url_validator`).
+- Works on every SDK `ag2[a2a]` installs (`a2a-sdk>=1.2.0`).
+
 !!! note
     The default `#!python InMemoryTaskStore` is materialised **once** at `#!python __init__` time. This is what makes JSON-RPC, REST and gRPC bound to the same `#!python A2AServer` see each other's tasks — a single store, three transports.
+
+## Running on Several Replicas
+
+By default a task lives in the memory of the process that started it. That is enough for one process, and it breaks as soon as you run two: a request routed to the second copy answers `#!python GetTask` with "not found", and a client that subscribes through it never sees the events of a task running on the first. Run several replicas of the same agent when you need to:
+
+- **Scale out** — spread concurrent tasks over more processes or machines behind a load balancer.
+- **Survive restarts** — a task and its history live in the database, so a rolling deploy or a crashed replica does not lose them, and a task that paused for a client-side tool call or for human input resumes on whichever replica receives the next request.
+
+```text
+                         ┌─► replica A: A2AServer(agent) ─┐
+client ─► load balancer ─┼─► replica B: A2AServer(agent) ─┼─► shared database
+                         └─► replica C: A2AServer(agent) ─┘     tasks · task_versions · task_events
+```
+
+A *cluster* here is nothing more than N copies of **one** agent that share two objects, both from the SDK's `#!python a2a.server.cluster`:
+
+- a **versioned task store** — all replicas read and write the same tasks, and two replicas writing the same task at once are detected instead of overwriting each other;
+- an **event stream** — events produced on one replica reach subscribers connected to another.
+
+The SDK ships SQL implementations of both. Install the driver through the SDK's own extras, for example `pip install "a2a-sdk[postgresql]"`; `ag2[a2a]` adds no database dependency.
+
+!!! note "One cluster is one agent"
+    The shared tables are keyed by task and user, not by agent. Replicas must therefore all run the same agent. To serve several different agents, run a separate cluster for each one, with its own database or its own table names (`#!python table_name=`, `#!python event_table_name=` and `#!python version_table_name=` on the store, `#!python table_name=` on the stream). Each of those clusters can itself have any number of replicas.
+
+### Setting it up
+
+Every replica runs the same code: it builds the two shared objects on one database engine, creates the tables, and serves the agent as usual.
+
+```python linenums="1"
+import asyncio
+import os
+
+import uvicorn
+from a2a.server.cluster import DatabaseTaskEventStream, VersionedDatabaseTaskStore
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from ag2 import Agent
+from ag2.a2a import A2AServer
+from ag2.config import OpenAIConfig
+
+agent = Agent("assistant", config=OpenAIConfig("gpt-5"))
+
+
+async def main() -> None:
+    engine = create_async_engine("postgresql+asyncpg://user:password@db/a2a")
+    task_store = VersionedDatabaseTaskStore(engine)
+    event_stream = DatabaseTaskEventStream(engine)
+
+    # Create the tables at startup, before serving. The SDK creates only the
+    # `tasks` table on first use; without these calls the first request fails with
+    # `no such table: task_versions`.
+    await task_store.initialize()
+    await event_stream.initialize()
+
+    server = A2AServer(agent, task_store=task_store, event_stream=event_stream)
+    # The load balancer's URL, not this replica's: clients keep talking to the balancer.
+    app = server.build_jsonrpc(url="https://my-agent.example.com")
+
+    port = int(os.environ["PORT"])
+    await uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=port)).serve()
+
+
+asyncio.run(main())
+```
+
+Start the script once per replica (`#!bash PORT=8001 python replica.py`, `#!bash PORT=8002 python replica.py`, ...) and put a load balancer in front. It needs **no sticky routing**: AG2's executor keeps no per-task state between calls, so any replica can serve any request of a task.
+
+!!! tip "Trying it without a database server"
+    `#!python sqlite+aiosqlite:///shared.db` with `pip install "a2a-sdk[sqlite]"` works for local experiments with several processes on one machine. Use PostgreSQL or MySQL once the replicas run on different hosts.
+
+!!! note "Starting many replicas at once"
+    Table creation is idempotent, but replicas that start at the same moment can race to create the same tables on a fresh database. Start the first replica (or run the two `#!python initialize()` calls once as a deploy step) before scaling out.
+
+### JSON-RPC, REST and gRPC
+
+All three `#!python build_*` methods hand the same store and stream to their transport, so the setup above does not change — only the `#!python build_*` call and what serves the result do.
+
+| Transport | What each replica runs | What the load balancer must do |
+| --- | --- | --- |
+| JSON-RPC | `#!python app = server.build_jsonrpc(url=...)` under `uvicorn` | Plain HTTP load balancing. Streaming responses are long-lived `text/event-stream` requests: disable response buffering and allow idle timeouts longer than your slowest task |
+| REST | `#!python app = server.build_rest(url=...)` under `uvicorn` | Same as JSON-RPC |
+| gRPC | `#!python grpc_server = server.build_grpc(bind="0.0.0.0:50051", grpc_url=...)`, then `#!python await grpc_server.start()` and `#!python await grpc_server.wait_for_termination()` | An HTTP/2-aware balancer that spreads **calls**, not connections. A gRPC client keeps one connection open, so a plain TCP balancer sends every call to the same replica |
+
+The gRPC server is not an ASGI app, so it is started from your own `#!python asyncio.run(...)` entry point rather than by `uvicorn`; run one such process per replica. `#!python grpc_url` is the balancer's address, `#!python bind` is the replica's own listener address. To expose several transports from the same replicas, build one multi-transport card as described in [One Server, Three Transports](#one-server-three-transports); every transport shares the one store and stream.
+
+### What `A2AServer` checks
+
+`#!python A2AServer` refuses a configuration that cannot work, at construction time:
+
+- A `#!python VersionedTaskStore` **without** `#!python event_stream` raises `#!python ValueError`. Without a stream, streaming would silently work only on the replica running the task. A single replica that uses a versioned store passes a stream too.
+- An `#!python event_stream` **without** a `#!python VersionedTaskStore` raises `#!python ValueError`: the stream orders events by task version.
+
+!!! warning "Push notifications stay per-replica"
+    `#!python push_config_store` and `#!python push_sender` are separate from the task store and are **not** shared by the setup above. With the default in-memory push store, a webhook registered through replica A is unknown to replica B, so a task that finishes on B sends nothing and raises no error. If webhooks must work across replicas, pass the SDK's database push store, built on the same engine, and a sender that reads it:
+
+    ```python linenums="1"
+    from a2a.server.tasks import BasePushNotificationSender, DatabasePushNotificationConfigStore
+
+    push_store = DatabasePushNotificationConfigStore(engine)
+    await push_store.initialize()
+
+    server = A2AServer(
+        agent,
+        task_store=task_store,
+        event_stream=event_stream,
+        push_config_store=push_store,
+        push_sender=BasePushNotificationSender(http_client, push_store),
+    )
+    ```
+
+    AG2 does not warn about an in-memory push store: it is a valid choice when webhooks only need to work on one replica.
 
 ## Server-side Tools
 

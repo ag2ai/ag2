@@ -5,12 +5,14 @@
 import asyncio
 import json
 from collections.abc import Iterable, Iterator, Sequence
+from enum import Enum
 from itertools import chain
 from typing import Any, TypedDict
 
 import httpx
 from fast_depends.library.serializer import SerializerProto
 from zai import ZaiClient
+from zai.core import StreamResponse
 from zai.types.chat.chat_completion import Completion
 from zai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
@@ -40,31 +42,38 @@ from .mappers import (
     tool_to_api,
 )
 
-_STREAM_DONE = object()
+
+class _Sentinel(Enum):
+    """A one-member enum, so `next(stream, _STREAM_DONE)` has a type the loop below narrows."""
+
+    STREAM_DONE = "stream-done"
+
+
+_STREAM_DONE = _Sentinel.STREAM_DONE
 
 
 class CreateOptions(TypedDict, total=False):
     model: str
     stream: bool
-    max_tokens: int
-    temperature: float
-    top_p: float
-    stop: str | list[str]
-    seed: int
-    tool_choice: str | dict[str, Any]
-    request_id: str
-    user_id: str
-    do_sample: bool
-    meta: dict[str, str]
-    sensitive_word_check: Any
-    extra: Any
+    max_tokens: int | None
+    temperature: float | None
+    top_p: float | None
+    stop: str | list[str] | None
+    seed: int | None
+    tool_choice: str | dict[str, Any] | None
+    request_id: str | None
+    user_id: str | None
+    do_sample: bool | None
+    meta: dict[str, str] | None
+    sensitive_word_check: Any | None
+    extra: Any | None
     timeout: float | httpx.Timeout | None
-    watermark_enabled: bool
-    tool_stream: bool
-    reasoning_effort: str
-    thinking: dict[str, Any]
-    extra_body: dict[str, Any]
-    extra_headers: dict[str, str]
+    watermark_enabled: bool | None
+    tool_stream: bool | None
+    reasoning_effort: str | None
+    thinking: dict[str, Any] | None
+    extra_body: dict[str, Any] | None
+    extra_headers: dict[str, str] | None
 
 
 def _merge_extra_body(options: CreateOptions) -> dict[str, Any]:
@@ -101,7 +110,6 @@ class ZAIClient(LLMClient):
         self._disable_token_cache = disable_token_cache
         self._source_channel = source_channel
         self._create_options = create_options or {}
-        self._streaming = self._create_options.get("stream", False)
         self._client: ZaiClient | None = None
 
     def _get_client(self) -> ZaiClient:
@@ -155,11 +163,10 @@ class ZAIClient(LLMClient):
 
         client = await asyncio.to_thread(self._get_client)
 
-        if self._streaming:
-            response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
-            return await self._process_stream(iter(response), context)
-
         response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
+        # One call answers either shape; the reply says which, rather than the flag that asked for it.
+        if isinstance(response, StreamResponse):
+            return await self._process_stream(iter(response), context)
         return await self._process_completion(response, context)
 
     async def _process_completion(self, response: Completion, context: "ConversationContext") -> ModelResponse:

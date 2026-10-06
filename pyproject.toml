@@ -67,7 +67,7 @@ dependencies = [
 # tinyfish, ...) use `missing_additional_dependency` and are installed directly, not as extras.
 
 # === Agent protocols ===
-a2a = ["a2a-sdk>=1.1.0,<2"]
+a2a = ["a2a-sdk>=1.2.0,<2"]
 a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<2"]
 acp = [
     "agent-client-protocol>=0.12.1,<0.13",
@@ -80,7 +80,7 @@ ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=3.9.0,<4"]
-anthropic = ["anthropic>=1.6.0,<2"]
+anthropic = ["anthropic>=1.9.0,<2"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
@@ -171,7 +171,7 @@ optionals = [
     # search tools
     "ag2[tavily,ddgs,perplexity]",
     # extensions are not shipped as extras; install their packages directly for testing
-    "a2a-sdk[signing]", # AgentCard JWS signing/verification (test/a2a/test_card_signing.py); not part of ag2[a2a]
+    "a2a-sdk[signing,sqlite]", # AgentCard JWS signing (test_card_signing.py) and the SQL task store (test_multi_replica.py); not part of ag2[a2a]
     "agent-client-protocol[http]", # ag2.acp.remote transports — without them `test/acp/test_remote_*` importorskips itself out of the run
     "watchdog>=4.0,<7",  # DiskKnowledgeStore (ag2.knowledge)
     "websockets>=14.0,<17",  # WsLink (ag2.network)
@@ -245,7 +245,7 @@ types = [
     "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui, acp]",
 ]
 
-lint = ["ruff==0.16.8", "codespell==2.4.3", "zizmor==1.30.1"]
+lint = ["ruff==0.16.9", "codespell==2.4.3", "zizmor==1.30.1"]
 
 dev = [
     { include-group = "lint" },
@@ -401,6 +401,24 @@ files = [
     "ag2/__init__.py",
     "ag2/acp/client.py",
     "ag2/acp/elicitation.py",
+    "ag2/acp/__init__.py",
+    "ag2/acp/agent.py",
+    "ag2/acp/auth.py",
+    "ag2/acp/bridge.py",
+    "ag2/acp/config.py",
+    "ag2/acp/dispatch.py",
+    "ag2/acp/events.py",
+    "ag2/acp/executor.py",
+    "ag2/acp/guard.py",
+    "ag2/acp/mappers.py",
+    "ag2/acp/permissions.py",
+    "ag2/acp/remote.py",
+    "ag2/acp/session.py",
+    "ag2/acp/sessions.py",
+    "ag2/acp/testing.py",
+    "ag2/acp/tool_gateway.py",
+    "ag2/acp/transport.py",
+    "ag2/acp/types.py",
     "ag2/eval/pairwise.py",
     "ag2/eval/results/result.py",
     "ag2/eval/scorers/correctness.py",
@@ -409,8 +427,18 @@ files = [
     "ag2/policies/conversation.py",
     "ag2/config/bedrock/bedrock_client.py",
     "ag2/config/anthropic/files.py",
+    "ag2/config/gemini/__init__.py",
+    "ag2/config/gemini/config.py",
     "ag2/config/gemini/events.py",
+    "ag2/config/gemini/files.py",
+    "ag2/config/gemini/gemini_client.py",
+    "ag2/config/openai/__init__.py",
+    "ag2/config/openai/config.py",
+    "ag2/config/openai/containers.py",
+    "ag2/config/openai/events.py",
+    "ag2/config/openai/files.py",
     "ag2/config/openai/openai_client.py",
+    "ag2/config/openai/openai_responses_client.py",
     "ag2/config/bedrock/mappers.py",
     "ag2/config/anthropic/mappers.py",
     "ag2/config/dashscope/mappers.py",
@@ -420,10 +448,32 @@ files = [
     "ag2/config/openai/mappers.py",
     "ag2/config/xai/config.py",
     "ag2/config/xai/mappers.py",
+    "ag2/config/zai/__init__.py",
+    "ag2/config/zai/config.py",
+    "ag2/config/zai/files.py",
     "ag2/config/zai/mappers.py",
+    "ag2/config/zai/zai_client.py",
     "ag2/live/gemini.py",
     "ag2/mcp/apps.py",
     "ag2/mcp/tools.py",
+    "ag2/mcp/__init__.py",
+    "ag2/mcp/_async.py",
+    "ag2/mcp/elicitation.py",
+    "ag2/mcp/errors.py",
+    "ag2/mcp/extensions.py",
+    "ag2/mcp/mappers.py",
+    "ag2/mcp/pause.py",
+    "ag2/mcp/prompts.py",
+    "ag2/mcp/resources.py",
+    "ag2/mcp/sampling.py",
+    "ag2/mcp/security.py",
+    "ag2/mcp/server.py",
+    "ag2/mcp/sessions.py",
+    "ag2/mcp/testing.py",
+    "ag2/mcp/transport.py",
+    "ag2/mcp_ui/__init__.py",
+    "ag2/mcp_ui/actions.py",
+    "ag2/mcp_ui/resources.py",
     "ag2/ag_ui/run_input.py",
     "ag2/ag_ui/stream.py",
     "ag2/ag_ui/__init__.py",
@@ -431,6 +481,57 @@ files = [
     "ag2/ag_ui/capabilities.py",
     "ag2/ag_ui/interrupts.py",
     "ag2/ag_ui/usage.py",
+    "ag2/a2a/__init__.py",
+    "ag2/a2a/_session.py",
+    "ag2/a2a/card.py",
+    "ag2/a2a/client.py",
+    "ag2/a2a/config.py",
+    "ag2/a2a/errors.py",
+    "ag2/a2a/events.py",
+    "ag2/a2a/executor.py",
+    "ag2/a2a/extension.py",
+    "ag2/a2a/mappers/__init__.py",
+    "ag2/a2a/mappers/events.py",
+    "ag2/a2a/mappers/history.py",
+    "ag2/a2a/mappers/messages.py",
+    "ag2/a2a/mappers/parts.py",
+    "ag2/a2a/mappers/tools.py",
+    "ag2/a2a/push.py",
+    "ag2/a2a/security.py",
+    "ag2/a2a/server.py",
+    "ag2/a2a/tasks.py",
+    "ag2/a2a/testing.py",
+    "ag2/a2a/transports/__init__.py",
+    "ag2/a2a/transports/_common.py",
+    "ag2/a2a/transports/_http.py",
+    "ag2/a2a/transports/_routes.py",
+    "ag2/a2a/transports/grpc.py",
+    "ag2/a2ui/__init__.py",
+    "ag2/a2ui/_runtime.py",
+    "ag2/a2ui/_types.py",
+    "ag2/a2ui/a2a/__init__.py",
+    "ag2/a2ui/a2a/executor.py",
+    "ag2/a2ui/a2a/extension.py",
+    "ag2/a2ui/a2a/parts.py",
+    "ag2/a2ui/actions.py",
+    "ag2/a2ui/capabilities.py",
+    "ag2/a2ui/constants.py",
+    "ag2/a2ui/dispatch.py",
+    "ag2/a2ui/events.py",
+    "ag2/a2ui/incoming.py",
+    "ag2/a2ui/middleware.py",
+    "ag2/a2ui/parser.py",
+    "ag2/a2ui/request.py",
+    "ag2/a2ui/schema_manager.py",
+    "ag2/a2ui/serialize.py",
+    "ag2/a2ui/server.py",
+    "ag2/a2ui/server_action.py",
+    "ag2/a2ui/transports/__init__.py",
+    "ag2/a2ui/transports/ag_ui.py",
+    "ag2/a2ui/transports/base.py",
+    "ag2/a2ui/transports/rest.py",
+    "ag2/a2a/transports/jsonrpc.py",
+    "ag2/a2a/transports/rest.py",
 ]
 
 strict = true
@@ -457,6 +558,12 @@ disallow_any_unimported = true
 
 [[tool.mypy.overrides]]
 module = "xai_sdk.*"
+follow_untyped_imports = true
+
+# `mcp-ui-server` is fully annotated but ships no `py.typed` marker, so mypy
+# would hand us `Any` from every name we import. Following it uses its real types.
+[[tool.mypy.overrides]]
+module = "mcp_ui_server.*"
 follow_untyped_imports = true
 
 # AG-UI's SDK does not ship typing metadata, so values crossing that boundary

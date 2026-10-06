@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
+
+from zai.core import StreamResponse
 
 
 def make_usage(
@@ -88,6 +90,19 @@ def make_stream_tool_call(
     return SimpleNamespace(index=index, id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
 
 
+class FakeStreamResponse(StreamResponse[Any]):
+    """A `StreamResponse` over canned chunks, without the HTTP response the SDK's own builds from."""
+
+    def __init__(self, chunks: Iterable[Any]) -> None:
+        self._chunks = iter(chunks)
+
+    def __next__(self) -> Any:
+        return next(self._chunks)
+
+    def __iter__(self) -> Iterator[Any]:
+        return self._chunks
+
+
 class FakeCompletions:
     def __init__(self, response: Any | None = None, stream_chunks: Iterable[Any] = ()) -> None:
         self.response = response if response is not None else make_response()
@@ -97,7 +112,7 @@ class FakeCompletions:
     def create(self, **kwargs: Any) -> Any:
         self.kwargs = kwargs
         if kwargs.get("stream"):
-            return iter(self.stream_chunks)
+            return FakeStreamResponse(self.stream_chunks)
         return self.response
 
 

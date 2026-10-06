@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Literal, TypeAlias, TypedDict
+from functools import cache
+from typing import Literal, TypeAlias, TypedDict, get_args, get_type_hints, is_typeddict
 
 JsonScalar: TypeAlias = str | int | float | bool | None
 JsonValue: TypeAlias = "JsonScalar | list[JsonValue] | dict[str, JsonValue]"
@@ -143,6 +144,17 @@ ServerToClientMessage: TypeAlias = (
     | CallFunctionMessage
     | ActionResponseMessage
 )
+
+
+@cache
+def server_to_client_payload_keys() -> frozenset[str]:
+    """The key carrying the payload of each ``ServerToClientMessage``, read off its ``TypedDict``."""
+    return frozenset(
+        key
+        for message in get_args(ServerToClientMessage)
+        for key, annotation in get_type_hints(message).items()
+        if is_typeddict(annotation)
+    )
 
 
 # NOTE: client→server (action/error) and client-capability wire shapes are
