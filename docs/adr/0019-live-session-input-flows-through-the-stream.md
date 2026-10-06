@@ -23,9 +23,17 @@ The provider's session subscribes to `ModelRequest` on the stream, exactly as it
 subscribes to `RecordedAudioEvent` and `ToolResultEvent`. The `session()` signature does
 not change; the `RealtimeConfig` docstring states that a session consumes `ModelRequest`.
 `LiveAgent` owns only the inbox: at session open and on every `MessageEnqueued` it drains
-`pending_messages` and publishes them as a plain `ModelRequest`, which then takes the same
-path. `context.enqueue(*inputs)` is the public way to hand a running agent input — the same
-call for `Agent` and `LiveAgent`, for a human and for a program.
+`pending_messages` and publishes them as one `DrainedModelRequest` — the `ModelRequest`
+subclass `Agent` publishes for drained inbox content — which then takes the same path.
+The subclass tells the provider who is waiting on the request: a direct push has a caller
+awaiting `context.send`, so an input part the provider cannot send (image, audio, video,
+document, file) raises `UnsupportedInputError` there; a drain has no caller to report to
+— it runs at session open or in a background task, where raising would fail the open or
+lose the whole message — so the provider logs a warning, drops that part and delivers the
+rest. The same subclass keeps an `Agent` sharing the stream from treating the drained
+input as a new turn to answer. `context.enqueue(*inputs)` is the public way to hand a
+running agent input — the same call for `Agent` and `LiveAgent`, for a human and for a
+program.
 
 The inbox used to be passive — `enqueue` only appended, and `Agent` looked at it before
 each model call. A live session has no model calls of its own to hang that look on, so a
