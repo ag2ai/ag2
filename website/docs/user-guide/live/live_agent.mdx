@@ -416,6 +416,29 @@ A cascade turn holds the microphone, so the tool loop is capped at 10 round-trip
 !!! note
     Raw audio is stripped from the conversation history before each model call. A live session logs every microphone and synthesized chunk — ten-plus events per second, each carrying PCM — and replaying that on every turn would make a long conversation pay for the whole recording each time. Transcripts carry the meaning; the bytes are for the recorder and the player.
 
+## Per-session options and usage
+
+`agent.run()` accepts overrides that apply to that session only: `prompt`, `config`, `tools`, `middleware`, `observers`, `dependencies`, `variables`, and `hitl_hook`. Tools, middleware, and observers are added to the ones declared on the agent; `config`, `prompt`, and `hitl_hook` replace them. This lets one `LiveAgent` serve differently configured sessions.
+
+```python linenums="1"
+async with agent.run(config=OpenAIRealTimeConfig("gpt-realtime-mini"), variables={"user": "Ada"}) as context:
+    ...
+```
+
+By default each `run()` opens a fresh in-memory stream. Pass `stream=` to the `LiveAgent` constructor to bind it to a stream you own instead.
+
+Token usage accumulates on the session's stream. Read it with `LiveAgent.usage_report(context)`, which returns a `UsageReport` with `total` plus breakdowns `by_model`, `by_provider`, and `by_kind`:
+
+```python linenums="1"
+async with agent.run() as context:
+    ...
+
+report = await LiveAgent.usage_report(context)
+print(report.total)
+```
+
+Human-in-the-loop works as it does on an `Agent`: pass `hitl_hook=` to the `LiveAgent` (or to `run()`), and tool calls can ask the user through `context.input(...)`. See [Adding Human-in-the-Loop](/docs/user-guide/agents#adding-human-in-the-loop-hitl).
+
 ## LiveAgent vs Agent
 
 `LiveAgent` mirrors `Agent`'s constructor surface — `name`, `prompt`, `tools`, `middleware`, `observers`, `dependencies`, `variables`, `plugins`, `hitl_hook` — so most agent-level concepts carry over. The differences:
@@ -432,6 +455,8 @@ If you need both — for example, a realtime voice front-end that hands off to a
 
 ## Examples
 
+- `examples/live_playground/live_interaction.py` — the quick start, native S2S with OpenAI
+- `examples/live_playground/live_gemini.py` — native S2S with Gemini and a tool
 - `examples/live_playground/live_to_text_and_voice.py` — native S2S, audio in and out
 - `examples/live_playground/live_to_text_only.py` — `TextOutput()`, transcript only
 - `examples/live_playground/cascade_live_agent.py` — `CascadeConfig` with a tool, and the one-line swap to S2S

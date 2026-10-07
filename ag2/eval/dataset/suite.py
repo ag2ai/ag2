@@ -141,8 +141,8 @@ def _items_to_tasks(items: Sequence[dict[str, Any]], *, source: str) -> tuple[Ta
             raise ValueError(f"{source}: task at index {index} is missing required field 'inputs' (must be a dict)")
         task_id = item.get("task_id") or f"task-{index:04d}"
         reference_outputs = item.get("reference_outputs")
-        tags = tuple(item.get("tags", ()))
-        metadata = dict(item.get("metadata", {}))
+        tags = _coerce_tags(item.get("tags"), source=source, index=index)
+        metadata = _coerce_metadata(item.get("metadata"), source=source, index=index)
         tasks.append(
             Task(
                 inputs=inputs,
@@ -153,3 +153,21 @@ def _items_to_tasks(items: Sequence[dict[str, Any]], *, source: str) -> tuple[Ta
             )
         )
     return tuple(tasks)
+
+
+def _coerce_tags(raw: Any, *, source: str, index: int) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        return (raw,)
+    if isinstance(raw, (list, tuple)):
+        return tuple(raw)
+    raise ValueError(f"{source}: task at index {index} has invalid 'tags' (must be a string or a list of strings)")
+
+
+def _coerce_metadata(raw: Any, *, source: str, index: int) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return dict(raw)
+    raise ValueError(f"{source}: task at index {index} has invalid 'metadata' (must be a dict)")

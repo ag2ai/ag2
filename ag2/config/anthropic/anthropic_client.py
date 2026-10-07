@@ -38,6 +38,7 @@ from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.schemas import ToolSchema
 
 from .events import (
+    AnthropicCacheDiagnostics,
     AnthropicContainerUploadEvent,
     AnthropicRedactedThinkingEvent,
     AnthropicServerToolCallEvent,
@@ -96,6 +97,7 @@ class AnthropicClient(LLMClient):
         http_client: httpx2.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
         prompt_caching: bool = True,
+        cache_diagnostics: bool = False,
         extra_body: dict[str, Any] | None = None,
     ) -> None:
         self._client = AsyncAnthropic(
@@ -110,6 +112,8 @@ class AnthropicClient(LLMClient):
         self._create_options = {k: v for k, v in (create_options or {}).items() if k != "stream"}
         self._streaming = (create_options or {}).get("stream", False)
         self._prompt_caching = prompt_caching
+        self._cache_diagnostics = cache_diagnostics
+        self._last_message_id: str | None = None
 
         # A caller reaching this class directly (rather than through
         # `AnthropicConfig`) may still be passing the sampling parameters 1.x
@@ -195,22 +199,31 @@ class AnthropicClient(LLMClient):
         max_continuations = 5
 
         if self._streaming:
+            if self._cache_diagnostics:
+                create_kwargs["diagnostics"] = {"previous_message_id": self._last_message_id}
             async with self._client.messages.stream(**create_kwargs) as stream:
                 result = await self._process_stream(stream, context)
                 final_msg = await stream.get_final_message()
+            await self._report_cache_diagnostics(final_msg, create_kwargs, context)
 
             for _ in range(max_continuations):
                 if result.finish_reason != "pause_turn":
                     break
                 anthropic_messages.append({"role": "assistant", "content": final_msg.content})
                 create_kwargs["messages"] = anthropic_messages
+                if self._cache_diagnostics:
+                    create_kwargs["diagnostics"] = {"previous_message_id": self._last_message_id}
                 async with self._client.messages.stream(**create_kwargs) as stream:
                     result = await self._process_stream(stream, context)
                     final_msg = await stream.get_final_message()
+                await self._report_cache_diagnostics(final_msg, create_kwargs, context)
 
             return result
         else:
+            if self._cache_diagnostics:
+                create_kwargs["diagnostics"] = {"previous_message_id": self._last_message_id}
             response = await self._client.messages.create(**create_kwargs)
+            await self._report_cache_diagnostics(response, create_kwargs, context)
 
             for _ in range(max_continuations):
                 if response.stop_reason != "pause_turn":
@@ -218,9 +231,33 @@ class AnthropicClient(LLMClient):
                 await self._emit_builtin_tool_events(response.content, context)
                 anthropic_messages.append({"role": "assistant", "content": response.content})
                 create_kwargs["messages"] = anthropic_messages
+                if self._cache_diagnostics:
+                    create_kwargs["diagnostics"] = {"previous_message_id": self._last_message_id}
                 response = await self._client.messages.create(**create_kwargs)
+                await self._report_cache_diagnostics(response, create_kwargs, context)
 
             return await self._process_response(response, context)
+
+    async def _report_cache_diagnostics(
+        self,
+        message: Message,
+        create_kwargs: dict[str, Any],
+        context: "ConversationContext",
+    ) -> None:
+        """Report why `message` missed the cache, and chain the next call to it."""
+        if not self._cache_diagnostics:
+            return
+
+        compared_with = (create_kwargs.get("diagnostics") or {}).get("previous_message_id")
+        if event := AnthropicCacheDiagnostics.from_message(
+            getattr(message, "diagnostics", None), previous_message_id=compared_with
+        ):
+            await context.send(event)
+
+        # A message without an id leaves the previous one standing: a stale comparison
+        # still names a real message, where `None` would silently stop diagnosing.
+        if message.id:
+            self._last_message_id = message.id
 
     async def _emit_builtin_tool_events(
         self,

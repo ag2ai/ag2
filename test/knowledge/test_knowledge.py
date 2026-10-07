@@ -406,6 +406,57 @@ class TestDiskKnowledgeStore:
         finally:
             await sub.close()
 
+    async def test_on_change_on_missing_file_path_keeps_it_writable(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+
+        async def callback(path: str) -> None:
+            pass
+
+        sub = await store.on_change("/memory/working.md", callback)
+        try:
+            assert not (tmp_path / "memory" / "working.md").exists()
+            await store.write("/memory/working.md", "hello")
+            assert (tmp_path / "memory" / "working.md").is_file()
+            assert await store.read("/memory/working.md") == "hello"
+        finally:
+            await sub.close()
+
+    async def test_on_change_on_existing_file_path_leaves_it_untouched(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/notes.md", "original")
+
+        async def callback(path: str) -> None:
+            pass
+
+        sub = await store.on_change("/notes.md", callback)
+        try:
+            assert (tmp_path / "notes.md").is_file()
+            assert await store.read("/notes.md") == "original"
+        finally:
+            await sub.close()
+
+    async def test_on_change_on_file_path_only_fires_for_that_file(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        received: list[str] = []
+        event = asyncio.Event()
+
+        async def callback(path: str) -> None:
+            received.append(path)
+            if path == "/memory/working.md":
+                event.set()
+
+        sub = await store.on_change("/memory/working.md", callback)
+        try:
+            # sibling events arrive before the target's, so they would be in `received` by then
+            await store.write("/memory/other.md", "ignored")
+            await store.write("/memory/working.md.bak", "ignored")
+            await store.write("/memory/working.md", "hello")
+            # watchdog delivers asynchronously via a background thread
+            await asyncio.wait_for(event.wait(), timeout=10.0)
+            assert set(received) == {"/memory/working.md"}
+        finally:
+            await sub.close()
+
 
 @pytest.mark.asyncio
 class TestSqliteKnowledgeStore:
