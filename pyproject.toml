@@ -243,6 +243,8 @@ types = [
     "types-aiobotocore[bedrock-runtime]",
     { include-group = "test" },
     "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui, acp]",
+    # search tools in `ag2/tools/search`, checked under `disallow_any_unimported`
+    "ag2[ddgs, perplexity]",
 ]
 
 lint = ["ruff==0.16.9", "codespell==2.4.3", "zizmor==1.30.1"]
