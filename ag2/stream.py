@@ -258,7 +258,9 @@ class SubStream(ABCStream):
         parent: Stream,
         condition: Condition,
     ) -> None:
-        self.id: StreamId = uuid4()
+        # A subscription filter shares its parent's conversation. History storage
+        # and agent turn locks must therefore use the same stream identity.
+        self.id: StreamId = parent.id
 
         self._filter_condition = condition
         self._parent = parent
@@ -312,6 +314,10 @@ class SubStream(ABCStream):
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
         await self._parent.send(event, context)
+
+    @property
+    def history(self) -> History:
+        return self._parent.history
 
     @property
     def pending_messages(self) -> list[ModelRequest]:

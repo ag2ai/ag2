@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable, Iterable, Sequence
+from collections.abc import AsyncGenerator, Callable, Iterable
 from contextlib import asynccontextmanager, suppress
 
 from fast_depends.library.serializer import SerializerProto
@@ -221,7 +221,7 @@ class CascadeConfig(RealtimeConfig):
         raise RuntimeError(f"Tool loop exceeded {MAX_TOOL_ITERATIONS} iterations in one voice turn")
 
 
-def _conversation(events: "Sequence[BaseEvent]") -> "list[BaseEvent]":
+def _conversation(events: "Iterable[BaseEvent]") -> "list[BaseEvent]":
     """Drop the raw audio before handing history to the model.
 
     A live session logs every microphone chunk and every synthesized chunk —
