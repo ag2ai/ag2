@@ -117,6 +117,10 @@ class MemoryStream(ABCStream):
         "_ag2_turn_lock",
     )
 
+    # Writable here; the `Stream` protocol only promises they can be read.
+    history: History
+    pending_messages: list[ModelRequest]
+
     def __init__(
         self,
         storage: Storage | None = None,
@@ -137,7 +141,7 @@ class MemoryStream(ABCStream):
         # single ``ask`` so a background task that finishes after ``ask``
         # returns still delivers — the next ``ask`` on this stream merges
         # the leftover into its initial request.
-        self.pending_messages: list[ModelRequest] = []
+        self.pending_messages = []
         self._background_tasks: set[asyncio.Task[None]] = set()
 
         # Agent._execute populates this lazily on first turn — setting it
@@ -312,6 +316,10 @@ class SubStream(ABCStream):
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
         await self._parent.send(event, context)
+
+    @property
+    def history(self) -> History:
+        return self._parent.history
 
     @property
     def pending_messages(self) -> list[ModelRequest]:

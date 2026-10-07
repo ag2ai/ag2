@@ -124,14 +124,13 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
     except ValueError:
         tokens = command.split()
 
-    host_backed = isinstance(workdir, Path)
-    if host_backed:
+    if isinstance(workdir, Path):
         resolved_workdir: PurePath = workdir.resolve()
     else:
         resolved_workdir = PurePosixPath(posixpath.normpath(str(workdir)))
 
     for token in tokens:
-        if host_backed:
+        if isinstance(workdir, Path):
             try:
                 literal: PurePath = (workdir / token).resolve()
             except Exception:

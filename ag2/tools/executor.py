@@ -5,7 +5,7 @@
 import asyncio
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
-from typing import Any
+from typing import Any, cast
 
 from fast_depends.library.serializer import SerializerProto
 
@@ -84,8 +84,8 @@ class ToolExecutor:
             await asyncio.gather(*tasks, return_exceptions=True)
             raise
 
-        for event in outcomes:
-            match event:
+        for outcome in outcomes:
+            match outcome:
                 case ClientToolCallEvent() as ev:
                     client_calls.append(ev)
 
@@ -121,9 +121,14 @@ class ToolExecutor:
                     results.append(ev)
 
         if client_calls:
+            # Record the calls the *model* made, not the `ClientToolCallEvent`
+            # outcomes they produced: this turn is what the provider replays as
+            # the assistant's tool_use blocks, and the outcomes carry none of
+            # the provider fields that belong on them.
+            pending = {call.id for call in client_calls}
             await context.send(
                 ModelResponse(
-                    tool_calls=ToolCallsEvent(client_calls),
+                    tool_calls=ToolCallsEvent([call for call in event.calls if call.id in pending]),
                     response_force=True,
                 )
             )
@@ -142,7 +147,10 @@ async def _execute_call(
     ) as result:
         try:
             await context.send(call)
-            return await result
+            # The condition above names the three types this can settle as;
+            # `Stream.get` is typed for any event, since its filter is a runtime
+            # object the checker cannot read.
+            return cast("ToolErrorEvent | ToolResultEvent | ClientToolCallEvent", await result)
 
         # Same reasoning as in FunctionTool: a middleware that asked for human
         # input and got nowhere has not produced a tool failure, and an approval

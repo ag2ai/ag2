@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Coroutine, Mapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeAlias, cast, overload, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
 from uuid import UUID
 
 import anyio.from_thread
@@ -19,6 +19,10 @@ from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, MessageEn
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
+if TYPE_CHECKING:
+    # `history` imports this module, so the declaration below is type-time only.
+    from .history import History
+
 logger = logging.getLogger(__name__)
 
 StreamId: TypeAlias = UUID
@@ -29,11 +33,19 @@ SubId: TypeAlias = UUID
 class Stream(Protocol):
     id: StreamId
 
-    pending_messages: list[ModelRequest]
-    """Inbox of follow-up turns produced asynchronously (e.g. by background
-    tasks). The agent loop drains this before each model call; whatever lands
-    here while no ``ask`` is running is consumed by the next ``ask`` on this
-    stream and merged into its initial request."""
+    @property
+    def history(self) -> "History":
+        """Every event sent on this stream, and the storage backing them. A filtered
+        stream is a view, so it shares its parent's."""
+        ...
+
+    @property
+    def pending_messages(self) -> list[ModelRequest]:
+        """Inbox of follow-up turns produced asynchronously (e.g. by background
+        tasks). The agent loop drains this before each model call; whatever lands
+        here while no ``ask`` is running is consumed by the next ``ask`` on this
+        stream and merged into its initial request."""
+        ...
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None: ...
 

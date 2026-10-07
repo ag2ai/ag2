@@ -532,13 +532,90 @@ files = [
     "ag2/a2ui/transports/rest.py",
     "ag2/a2a/transports/jsonrpc.py",
     "ag2/a2a/transports/rest.py",
+    "ag2/tools/__init__.py",
+    "ag2/tools/builtin/__init__.py",
+    "ag2/tools/builtin/_resolve.py",
+    "ag2/tools/builtin/anthropic_bash.py",
+    "ag2/tools/builtin/code_execution.py",
+    "ag2/tools/builtin/file_search.py",
+    "ag2/tools/builtin/google_maps.py",
+    "ag2/tools/builtin/image_generation.py",
+    "ag2/tools/builtin/mcp_server.py",
+    "ag2/tools/builtin/memory.py",
+    "ag2/tools/builtin/retrieval.py",
+    "ag2/tools/builtin/shell.py",
+    "ag2/tools/builtin/skills.py",
+    "ag2/tools/builtin/tool_search.py",
+    "ag2/tools/builtin/web_fetch.py",
+    "ag2/tools/builtin/web_search.py",
+    "ag2/tools/builtin/x_search.py",
+    "ag2/tools/code/__init__.py",
+    "ag2/tools/code/environment/__init__.py",
+    "ag2/tools/code/environment/base.py",
+    "ag2/tools/code/tool.py",
+    "ag2/tools/dynamic/__init__.py",
+    "ag2/tools/dynamic/factory.py",
+    "ag2/tools/dynamic/handler.py",
+    "ag2/tools/executor.py",
+    "ag2/tools/final/__init__.py",
+    "ag2/tools/final/client_tool.py",
+    "ag2/tools/final/function_tool.py",
+    "ag2/tools/final/toolkit.py",
+    "ag2/tools/precedence.py",
+    "ag2/tools/sandbox/__init__.py",
+    "ag2/tools/sandbox/adapter/__init__.py",
+    "ag2/tools/sandbox/adapter/code.py",
+    "ag2/tools/sandbox/adapter/shell.py",
+    "ag2/tools/sandbox/base.py",
+    "ag2/tools/sandbox/environment.py",
+    "ag2/tools/sandbox/factory.py",
+    "ag2/tools/sandbox/filter.py",
+    "ag2/tools/sandbox/local.py",
+    "ag2/tools/schemas.py",
+    "ag2/tools/search/__init__.py",
+    "ag2/tools/search/duckduckgo.py",
+    "ag2/tools/search/perplexity.py",
+    "ag2/tools/search/tavily.py",
+    "ag2/tools/shell/__init__.py",
+    "ag2/tools/shell/tool.py",
+    "ag2/tools/skills/__init__.py",
+    "ag2/tools/skills/plugin.py",
+    "ag2/tools/skills/runtime/__init__.py",
+    "ag2/tools/skills/runtime/local/__init__.py",
+    "ag2/tools/skills/runtime/local/loader.py",
+    "ag2/tools/skills/runtime/local/runtime.py",
+    "ag2/tools/skills/runtime/memory/__init__.py",
+    "ag2/tools/skills/runtime/memory/runtime.py",
+    "ag2/tools/skills/runtime/memory/skill.py",
+    "ag2/tools/skills/runtime/protocol.py",
+    "ag2/tools/skills/skill_search/__init__.py",
+    "ag2/tools/skills/skill_search/client.py",
+    "ag2/tools/skills/skill_search/config.py",
+    "ag2/tools/skills/skill_search/extractor.py",
+    "ag2/tools/skills/skill_search/lock.py",
+    "ag2/tools/skills/skill_search/toolkit.py",
+    "ag2/tools/skills/skill_types.py",
+    "ag2/tools/skills/toolkit.py",
+    "ag2/tools/subagents/__init__.py",
+    "ag2/tools/subagents/background.py",
+    "ag2/tools/subagents/persistent_stream.py",
+    "ag2/tools/subagents/run_task.py",
+    "ag2/tools/subagents/subagent_tool.py",
+    "ag2/tools/tool.py",
+    "ag2/tools/toolkits/__init__.py",
+    "ag2/tools/toolkits/filesystem.py",
+    "ag2/tools/toolkits/mcp_server/__init__.py",
+    "ag2/tools/toolkits/mcp_server/answering.py",
+    "ag2/tools/toolkits/mcp_server/toolkit.py",
+    "ag2/tools/toolkits/mcp_server/types.py",
+    "ag2/tools/types.py",
 ]
 
 strict = true
 ignore_missing_imports = true
 install_types = true
 non_interactive = true
-plugins = ["pydantic.mypy"]
+plugins = ["pydantic.mypy", "ag2.mypy"]
 
 # remove after all files in the repo are fixed
 follow_imports = "silent"
@@ -555,6 +632,13 @@ warn_unused_ignores = false
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 disallow_any_unimported = true
+
+# `perplexity.types` re-exports its result types without an `__all__`, which
+# strict mode reads as "not exported". The alternative is importing from
+# `perplexity.generated.*`, which is internal.
+[[tool.mypy.overrides]]
+module = "perplexity.*"
+implicit_reexport = true
 
 [[tool.mypy.overrides]]
 module = "xai_sdk.*"
