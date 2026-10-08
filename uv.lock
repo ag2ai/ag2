@@ -149,7 +149,7 @@ zai = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
     { name = "codespell" },
     { name = "daytona" },
     { name = "dirty-equals" },
@@ -250,7 +250,7 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "perplexity", "typesafe", "xai", "zai"] },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "httpx2" },
@@ -313,6 +313,7 @@ dev = [
     { name = "ag2", extras = ["ag-ui"] },
     { name = "ag2", extras = ["anthropic"] },
     { name = "ag2", extras = ["dashscope"] },
+    { name = "ag2", extras = ["ddgs", "perplexity"] },
     { name = "ag2", extras = ["gemini"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
@@ -320,7 +321,7 @@ dev = [
     { name = "ag2", extras = ["mistral"] },
     { name = "ag2", extras = ["ollama"] },
     { name = "ag2", extras = ["openai"] },
-    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "a2a", "ag-ui", "acp"] },
+    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
     { name = "ag2", extras = ["redis"] },
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
@@ -458,9 +459,10 @@ test-core = [
     { name = "pytest-timeout", specifier = ">=2.4.0,<3" },
 ]
 types = [
+    { name = "ag2", extras = ["ddgs", "perplexity"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
-    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "a2a", "ag-ui", "acp"] },
+    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },

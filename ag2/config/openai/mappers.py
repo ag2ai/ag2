@@ -89,7 +89,7 @@ from ag2.exceptions import (
     UnsupportedInputError,
     UnsupportedToolError,
 )
-from ag2.files.types import FileProvider
+from ag2.files.types import FileProvider, UploadedFile
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.file_search import FileSearchToolSchema
@@ -302,9 +302,13 @@ def events_to_responses_input(
                     result.append(_user_message(_input_text(serializer.encode(inp.data).decode())))
 
                 elif isinstance(inp, FileIdInput):
-                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.OPENAI:
+                    if (
+                        isinstance(inp, UploadedFile)
+                        and inp.provider is not None
+                        and inp.provider is not FileProvider.OPENAI
+                    ):
                         raise UnsupportedInputError(
-                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.OPENAI.value}'",
+                            f"file uploaded via '{inp.provider.value}' cannot be used with '{FileProvider.OPENAI.value}'",
                             "openai-responses",
                         )
                     # OpenAI Responses API: file_id and filename are mutually exclusive.

@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 import httpx
 from fast_depends.library.serializer import SerializerProto
 from mistralai.client import Mistral
-from mistralai.client.models import ChatCompletionResponse
+from mistralai.client.models import ChatCompletionResponse, DeltaMessage
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
@@ -238,7 +238,8 @@ class MistralClient(LLMClient):
         results: dict[str, Any] = {}
 
         for turn in turns:
-            if getattr(turn, "tool_call_id", None):
+            # Only a `DeltaMessage` carries a tool result; the SDK leaves an absent id as a falsy `Unset`.
+            if isinstance(turn, DeltaMessage) and isinstance(turn.tool_call_id, str) and turn.tool_call_id:
                 results[turn.tool_call_id] = turn.content
                 continue
             turn_text, turn_reasoning = split_content(turn.content)
@@ -301,8 +302,8 @@ class MistralClient(LLMClient):
                     continue
 
                 # A server-executed tool reports back mid-stream on its own delta.
-                if tool_call_id := getattr(delta, "tool_call_id", None):
-                    results[tool_call_id] = delta.content
+                if isinstance(delta.tool_call_id, str) and delta.tool_call_id:
+                    results[delta.tool_call_id] = delta.content
                     continue
 
                 text, reasoning = split_content(delta.content)

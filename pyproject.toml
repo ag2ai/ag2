@@ -242,7 +242,7 @@ types = [
     # `disallow_any_unimported`. Type-check only — never a published constraint.
     "types-aiobotocore[bedrock-runtime]",
     { include-group = "test" },
-    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui, acp]",
+    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, typesafe, elevenlabs, a2a, ag-ui, acp]",
     # search tools in `ag2/tools/search`, checked under `disallow_any_unimported`
     "ag2[ddgs, perplexity]",
 ]
@@ -427,35 +427,18 @@ files = [
     "ag2/network/client/checkpoint.py",
     "ag2/network/transport/frames.py",
     "ag2/policies/conversation.py",
-    "ag2/config/bedrock/bedrock_client.py",
-    "ag2/config/anthropic/files.py",
-    "ag2/config/gemini/__init__.py",
-    "ag2/config/gemini/config.py",
-    "ag2/config/gemini/events.py",
-    "ag2/config/gemini/files.py",
-    "ag2/config/gemini/gemini_client.py",
-    "ag2/config/openai/__init__.py",
-    "ag2/config/openai/config.py",
-    "ag2/config/openai/containers.py",
-    "ag2/config/openai/events.py",
-    "ag2/config/openai/files.py",
-    "ag2/config/openai/openai_client.py",
-    "ag2/config/openai/openai_responses_client.py",
-    "ag2/config/bedrock/mappers.py",
-    "ag2/config/anthropic/mappers.py",
-    "ag2/config/dashscope/mappers.py",
-    "ag2/config/gemini/mappers.py",
-    "ag2/config/mistral/mappers.py",
-    "ag2/config/ollama/mappers.py",
-    "ag2/config/openai/mappers.py",
-    "ag2/config/xai/config.py",
-    "ag2/config/xai/mappers.py",
-    "ag2/config/zai/__init__.py",
-    "ag2/config/zai/config.py",
-    "ag2/config/zai/files.py",
-    "ag2/config/zai/mappers.py",
-    "ag2/config/zai/zai_client.py",
+    "ag2/config",
+    "ag2/live/__init__.py",
+    "ag2/live/cascade.py",
+    "ag2/live/elevenlabs.py",
     "ag2/live/gemini.py",
+    "ag2/live/observer.py",
+    "ag2/live/openai.py",
+    "ag2/live/protocols.py",
+    "ag2/live/realtime.py",
+    "ag2/live/sound_device.py",
+    "ag2/live/stt.py",
+    "ag2/live/turn.py",
     "ag2/mcp/apps.py",
     "ag2/mcp/tools.py",
     "ag2/mcp/__init__.py",
@@ -656,6 +639,11 @@ follow_untyped_imports = true
 # are Any even though this module's own functions remain checked strictly.
 [[tool.mypy.overrides]]
 module = "ag2.ag_ui.*"
+disable_error_code = ["no-any-unimported"]
+
+# `sounddevice` ships no stubs, so its types arrive as Any at this module's boundary.
+[[tool.mypy.overrides]]
+module = "ag2.live.sound_device"
 disable_error_code = ["no-any-unimported"]
 
 # numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
