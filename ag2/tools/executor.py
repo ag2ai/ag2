@@ -5,6 +5,7 @@
 import asyncio
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
+from copy import copy
 from typing import Any, cast
 
 from fast_depends.library.serializer import SerializerProto
@@ -121,20 +122,29 @@ class ToolExecutor:
                     results.append(ev)
 
         if client_calls:
-            # Record the calls the *model* made, not the `ClientToolCallEvent`
-            # outcomes they produced: this turn is what the provider replays as
-            # the assistant's tool_use blocks, and the outcomes carry none of
-            # the provider fields that belong on them.
-            pending = {call.id for call in client_calls}
+            # Preserve provider fields from the model's calls while dispatching
+            # the names and arguments that tool middleware actually approved.
+            pending = {call.id: call for call in client_calls}
             await context.send(
                 ModelResponse(
-                    tool_calls=ToolCallsEvent([call for call in event.calls if call.id in pending]),
+                    tool_calls=ToolCallsEvent([
+                        _client_call_for_response(call, pending[call.id]) for call in event.calls if call.id in pending
+                    ]),
                     response_force=True,
                 )
             )
 
         else:
             await context.send(ToolResultsEvent(results))
+
+
+def _client_call_for_response(call: ToolCallEvent, outcome: ClientToolCallEvent) -> ToolCallEvent:
+    response_call = copy(call)
+    response_call.name = outcome.name
+    response_call.arguments = outcome.arguments
+    # A mapper or middleware may already have decoded the original arguments.
+    response_call._serialized_arguments = None
+    return response_call
 
 
 async def _execute_call(
