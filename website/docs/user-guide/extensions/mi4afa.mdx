@@ -19,7 +19,7 @@ pip install ag2 "torch>=2.5,<3" "transformers>=4.57,<6" "safetensors>=0.4.3,<1"
 from ag2.extensions.mi4afa import Conversation, ProbeAttributor, probe_failure_attribution
 ```
 
-Without PyTorch installed, the data types (`Conversation`, `Turn`, `PromptTemplate`, `conversation_from_trace`) still import; the probing classes raise an `ImportError` with the install command.
+Without PyTorch installed, the data types (`Conversation`, `Turn`, `PromptTemplate`, `conversation_from_trace`, `subagent_names`) still import; the probing classes raise an `ImportError` with the install command.
 
 ## Quick start
 
@@ -56,11 +56,17 @@ print(attribution.decisive_step, attribution.responsible_agent)
 
 ```python linenums="1"
 from ag2.eval import evaluate_traces
-from ag2.extensions.mi4afa import probe_failure_attribution
+from ag2.extensions.mi4afa import probe_failure_attribution, subagent_names
 
+blame = probe_failure_attribution(
+    attributor,
+    key="blame",
+    agent_name="planner",
+    subagents=subagent_names(planner),  # {"task_researcher": "researcher"}: delegated results are the researcher's
+)
 result = await evaluate_traces(
     failed_runs,  # a TraceSource of runs already known to have failed
-    scorers=[probe_failure_attribution(attributor, key="blame", agent_name="planner")],
+    scorers=[blame],
     store_dir="./runs",
 )
 print(result.value_counts("blame"))  # {"planner": 12, "tool:search": 5, "researcher": 3}
@@ -72,7 +78,11 @@ The model forward pass runs in a worker thread, so the event loop stays responsi
     The probe ranks the turns of every conversation it reads, so it names a decisive step and a responsible agent even for a run that succeeded. Each successful run you score adds an agent to `value_counts` as if that agent had failed. Score only runs that failed, or read the blame next to a correctness scorer and keep the runs it marks as wrong.
 
 !!! note "Trace conversion is best effort"
-    A trace records one agent's stream and its events carry no speaker. `conversation_from_trace` turns the traced agent's text responses and tool calls into turns by `agent_name`, tool results and errors into turns by `tool:<name>`, and completed or failed sub-tasks into turns by the sub-agent that ran them. For full control, build `Conversation` objects yourself and call `attributor.attribute(...)`.
+    A trace records one agent's stream and its events carry no speaker. `conversation_from_trace` turns the traced agent's text responses and tool calls into turns by `agent_name`, and tool results and errors into turns by `tool:<name>`.
+
+    Sub-agents need a mapping. A trace rebuilt from spans — what `run_agent` and the OpenTelemetry trace sources produce — holds no sub-task events, so a sub-agent's work appears only as its delegation tool's result. Pass `subagents={tool name: agent name}` to make those results and errors turns by the sub-agent; `subagent_names(planner)` builds the mapping from the delegation tools in `planner.tools`, including custom tool names. Without it, a delegated result is blamed on `tool:task_<agent>` and the sub-agent is never named. A trace you build yourself from an agent's stream also holds `TaskCompleted` / `TaskFailed` events, which become turns by the sub-agent that ran them.
+
+    The sub-agent's own steps are not in its parent's trace, so its result stands for its whole sub-task. `subagent_names` does not see tools passed to `ask(...)` rather than set on the agent; map those yourself. A `background_agent_tool` returns a task id, not the sub-agent's answer, so it is not mapped. For full control, build `Conversation` objects yourself and call `attributor.attribute(...)`.
 
 ## How it works
 
@@ -133,6 +143,7 @@ The probe is stored as `probe.safetensors` (no pickle) next to `probe.json`, whi
 | `LogisticProbe` | The standardized logistic probe |
 | `ProbeAttributor` | `fit` / `evaluate` / `sweep_sites` / `attribute` / `save` / `load` |
 | `conversation_from_trace` | Convert an `ag2.eval` `Trace` into a `Conversation` |
+| `subagent_names` | Map an agent's delegation tools to the sub-agents they run, for `subagents=` |
 | `probe_failure_attribution` | The `ag2.eval` scorer |
 
 ## Testing
