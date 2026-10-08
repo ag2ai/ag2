@@ -6,6 +6,7 @@
 
 import asyncio
 import json
+from collections.abc import Mapping
 from typing import Any
 
 from ag2.eval import Feedback, Scorer, Trace
@@ -21,6 +22,7 @@ def probe_failure_attribution(
     *,
     key: str = "failure_probe",
     agent_name: str = "assistant",
+    subagents: Mapping[str, str] | None = None,
     ground_truth_field: str | None = None,
 ) -> Scorer:
     """Build a :class:`~ag2.eval.Scorer` that names each run's decisive step with a probe.
@@ -41,18 +43,28 @@ def probe_failure_attribution(
         attributor: A fitted (or loaded) attributor.
         key: Feedback key.
         agent_name: Speaker assigned to the traced agent's own turns.
+        subagents: Delegation tool name to the sub-agent it runs, so delegated
+            results are blamed on that sub-agent; see :func:`subagent_names`.
         ground_truth_field: Field of ``reference_outputs`` holding the expected
             answer. When omitted, a single-field ``reference_outputs`` uses its
             only value and anything else is shown as JSON.
     """
-    return Scorer(_ProbeScorer(attributor, key, agent_name, ground_truth_field), key=key)
+    return Scorer(_ProbeScorer(attributor, key, agent_name, subagents, ground_truth_field), key=key)
 
 
 class _ProbeScorer:
-    def __init__(self, attributor: ProbeAttributor, key: str, agent_name: str, ground_truth_field: str | None) -> None:
+    def __init__(
+        self,
+        attributor: ProbeAttributor,
+        key: str,
+        agent_name: str,
+        subagents: Mapping[str, str] | None,
+        ground_truth_field: str | None,
+    ) -> None:
         self._attributor = attributor
         self._key = key
         self._agent_name = agent_name
+        self._subagents = dict(subagents or {})
         self._ground_truth_field = ground_truth_field
 
     async def __call__(
@@ -64,6 +76,7 @@ class _ProbeScorer:
             question="" if question is None else str(question),
             ground_truth=_ground_truth(reference_outputs, self._ground_truth_field),
             agent_name=self._agent_name,
+            subagents=self._subagents,
         )
         if converted is None:
             return Feedback(key=self._key, comment="trace has no turns to attribute")

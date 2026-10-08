@@ -84,6 +84,17 @@ async def test_feedback_names_the_agent_and_the_trace_event() -> None:
 
 
 @pytest.mark.asyncio()
+async def test_subagents_put_the_blame_on_the_subagent() -> None:
+    attributor = _RecordingAttributor(step=2)
+    scorer = probe_failure_attribution(attributor, agent_name="planner", subagents={"search": "researcher"})  # type: ignore[arg-type]
+
+    [feedback] = await _score(scorer, _trace())
+
+    assert feedback.value == "researcher"
+    assert feedback.detail["responsible_agent"] == "researcher"
+
+
+@pytest.mark.asyncio()
 async def test_decisive_step_is_mapped_through_skipped_events() -> None:
     trace = Trace(
         events=[ModelResponse(message=None), ModelResponse(message=ModelMessage("only turn"))],

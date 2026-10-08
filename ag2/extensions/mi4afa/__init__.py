@@ -32,7 +32,7 @@ from .prompt import (
     TurnPositionError,
     build_prompt,
 )
-from .trace import TraceConversation, conversation_from_trace
+from .trace import TraceConversation, conversation_from_trace, subagent_names
 from .types import ActivationSite, Component, Conversation, FitReport, SiteScore, Turn
 
 _DEPENDENCIES = 'torch>=2.5,<3" "transformers>=4.57,<6" "safetensors>=0.4.3,<1'
@@ -72,4 +72,5 @@ __all__ = (
     "build_prompt",
     "conversation_from_trace",
     "probe_failure_attribution",
+    "subagent_names",
 )
