@@ -7,12 +7,14 @@ import base64
 import pytest
 from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
+from ollama import Message
 
 from ag2.compact import CompactionSummary
 from ag2.config.ollama.mappers import convert_messages
 from ag2.events import (
     AudioInput,
     BinaryInput,
+    DataInput,
     DocumentInput,
     FileIdInput,
     ImageInput,
@@ -22,6 +24,8 @@ from ag2.events import (
     ToolCallEvent,
     ToolCallsEvent,
     ToolNotFoundEvent,
+    ToolResult,
+    ToolResultEvent,
     ToolResultsEvent,
 )
 from ag2.exceptions import ToolNotFoundError, UnsupportedInputError
@@ -179,3 +183,22 @@ def test_compaction_summary_renders_as_user_turn() -> None:
     result = convert_messages([], [summary], SerializerCls)
 
     assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]
+
+
+@pytest.mark.parametrize(
+    ("tool_result", "content"),
+    [
+        pytest.param(ToolResult("first", "second"), "first\nsecond", id="multiple-text-parts"),
+        pytest.param(ToolResult("items", DataInput({"count": 2})), 'items\n{"count":2}', id="mixed-text-data"),
+        pytest.param(ToolResult(), "", id="empty-result"),
+        pytest.param(ToolResult("unchanged\n"), "unchanged\n", id="single-text"),
+        pytest.param(ToolResult(DataInput({"count": 2})), '{"count":2}', id="single-data"),
+    ],
+)
+def test_tool_result_is_valid_ollama_message(tool_result: ToolResult, content: str) -> None:
+    event = ToolResultsEvent([ToolResultEvent(parent_id="tc_1", name="lookup", result=tool_result)])
+
+    [message] = convert_messages([], [event], SerializerCls)
+
+    assert Message.model_validate(message).content == content
+    assert message == {"role": "tool", "content": content}
