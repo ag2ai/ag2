@@ -94,6 +94,8 @@ The model forward pass runs in a worker thread, so the event loop stays responsi
 3. **Probe.** A standardized, class-weighted `LogisticProbe` scores each turn as "is this the mistake?". The highest-scoring turn is the decisive step, and its speaker the responsible agent.
 4. **Site selection.** `fit` trains one probe per site on part of the training data and keeps the site with the best **validation** step accuracy, then refits on all of it. Test data never influences the choice.
 
+A probe needs at least two training turns, and at least one that is not the mistake, so training on one-turn conversations alone raises a `ValueError`, as do activations that are not finite. A probe whose score for some turn is NaN or infinite raises instead of naming a step, so the scorer reports an error rather than blaming an agent.
+
 A conversation whose prompt is longer than the model's context, as declared by its `max_position_embeddings`, is refused with a `ValueError` instead of being read at positions the model was not trained on. Leave such conversations out before calling `fit`.
 
 Turn tokens are located from the tokenizer's character offsets, so a fast tokenizer is required. Chat templates that embed the current date (Llama 3) change the prompt from day to day; pin them for reproducible activations:

@@ -69,6 +69,44 @@ def test_state_dict_round_trip() -> None:
     assert set(probe.state_dict()) == {"weight", "bias", "mean", "std"}
 
 
+def test_fit_needs_two_rows() -> None:
+    with pytest.raises(ValueError, match="at least two training rows, got 1"):
+        LogisticProbe.fit(torch.randn(1, 16), torch.ones(1))
+
+
+@pytest.mark.parametrize("label", [0.0, 1.0])
+def test_fit_needs_both_classes(label: float) -> None:
+    with pytest.raises(ValueError, match="mistake and non-mistake rows"):
+        LogisticProbe.fit(torch.randn(4, 3), torch.full((4,), label))
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_fit_rejects_non_finite_features(bad: float) -> None:
+    features, labels = _separable(rows=64)
+    features[5, 1] = bad
+    with pytest.raises(ValueError, match="NaN or infinity"):
+        LogisticProbe.fit(features, labels)
+
+
+def test_fit_rejects_features_too_large_to_standardize() -> None:
+    features, labels = _separable(rows=64)
+    features[:, 0] = 3e38  # finite, but their sum overflows float32
+    with pytest.raises(ValueError, match="too large to standardize"):
+        LogisticProbe.fit(features, labels)
+
+
+def test_score_rejects_non_finite_logits() -> None:
+    features, labels = _separable(rows=64)
+    probe = LogisticProbe.fit(features, labels, epochs=5)
+    broken = LogisticProbe(torch.full_like(probe.weight, float("nan")), probe.bias, probe.mean, probe.std)
+    with pytest.raises(ValueError, match="NaN or infinity"):
+        broken.score(features)
+    with_nan = features.clone()
+    with_nan[3, 0] = float("nan")
+    with pytest.raises(ValueError, match="NaN or infinity"):
+        probe.score(with_nan)
+
+
 def test_score_accepts_bfloat16_features() -> None:
     features, labels = _separable(rows=64)
     probe = LogisticProbe.fit(features, labels, epochs=20)

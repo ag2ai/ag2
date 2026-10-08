@@ -57,18 +57,36 @@ class LogisticProbe:
 
         Returns:
             The trained probe.
+
+        Raises:
+            ValueError: If there are fewer than two rows, the labels lack a mistake
+                row or a row that is not one, the features or their mean and
+                standard deviation are not finite, or training diverges.
         """
         features = features.float()
         labels = labels.to(device=features.device, dtype=torch.float32)
+        if len(features) < 2:
+            raise ValueError(f"a probe needs at least two training rows, got {len(features)}")
+        positives = int(labels.sum())
+        if positives == 0 or positives == len(labels):
+            raise ValueError(
+                f"a probe needs mistake and non-mistake rows, got {positives} of {len(labels)} rows labelled "
+                "as the mistake; one-turn conversations have no non-mistake turn"
+            )
+        if not torch.isfinite(features).all():
+            raise ValueError("training features contain NaN or infinity")
         mean = features.mean(0, keepdim=True)
         std = features.std(0, keepdim=True) + _STD_EPSILON
+        if not (torch.isfinite(mean).all() and torch.isfinite(std).all()):
+            raise ValueError(
+                "training features are too large to standardize: their mean or standard deviation overflows"
+            )
         standardized = (features - mean) / std
 
         with torch.enable_grad():
             weight = torch.zeros(features.shape[1], device=features.device, requires_grad=True)
             bias = torch.zeros(1, device=features.device, requires_grad=True)
-            positives = labels.sum().clamp(min=1)
-            loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=(len(labels) - positives) / positives)
+            loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=labels.new_tensor((len(labels) - positives) / positives))
             optimizer = torch.optim.AdamW([weight, bias], lr=lr)
             for _ in range(epochs):
                 optimizer.zero_grad()
@@ -76,12 +94,22 @@ class LogisticProbe:
                 loss.backward()
                 optimizer.step()
 
-        return cls(weight.detach(), bias.detach(), mean, std)
+        weight, bias = weight.detach(), bias.detach()
+        if not (torch.isfinite(weight).all() and torch.isfinite(bias).all()):
+            raise ValueError("probe training diverged to a non-finite weight; try a lower lr")
+        return cls(weight, bias, mean, std)
 
     def score(self, features: torch.Tensor) -> torch.Tensor:
-        """Return one logit per row of ``features`` (moved to the probe's device)."""
+        """Return one logit per row of ``features`` (moved to the probe's device).
+
+        Raises:
+            ValueError: If a logit is NaN or infinite, so no turn can be ranked.
+        """
         features = features.to(device=self.weight.device, dtype=torch.float32)
-        return ((features - self.mean) / self.std) @ self.weight + self.bias
+        scores = ((features - self.mean) / self.std) @ self.weight + self.bias
+        if not torch.isfinite(scores).all():
+            raise ValueError("probe scores contain NaN or infinity; check the activations and the probe tensors")
+        return scores
 
     def to(self, device: torch.device | str) -> "LogisticProbe":
         """Return a copy of the probe on ``device``."""
