@@ -46,7 +46,8 @@ class RunDiff:
     """The result of comparing a run against a baseline over what they share.
 
     ``pass_rate_deltas`` / ``mean_deltas`` map a scorer key to ``(baseline, current)``
-    over the comparable tasks. ``flipped_to_fail`` / ``flipped_to_pass`` are
+    over tasks with a boolean / numeric score in both runs. Missing or ungraded
+    feedback contributes to neither side. ``flipped_to_fail`` / ``flipped_to_pass`` are
     ``(scorer_key, task_id)`` pairs whose boolean verdict changed. The remaining tuples
     list everything excluded from the comparison.
     """
@@ -132,15 +133,22 @@ def compute_diff(current: RunResult, baseline: RunResult, *, strict: bool = True
     flipped_to_pass: list[tuple[str, str]] = []
 
     for key in shared_keys:
-        base_bools = [s for t in comparable if (s := _bool(base_fb[t].get(key))) is not None]
-        cur_bools = [s for t in comparable if (s := _bool(cur_fb[t].get(key))) is not None]
-        if base_bools or cur_bools:
-            pass_rate_deltas[key] = (_rate(base_bools), _rate(cur_bools))
+        bool_pairs = [
+            (base_score, cur_score)
+            for t in comparable
+            if (base_score := _bool(base_fb[t].get(key))) is not None
+            and (cur_score := _bool(cur_fb[t].get(key))) is not None
+        ]
+        if bool_pairs:
+            pass_rate_deltas[key] = (_rate([b for b, _ in bool_pairs]), _rate([c for _, c in bool_pairs]))
 
-        base_nums = [float(base_fb[t][key].score) for t in comparable if _is_num(base_fb[t].get(key))]
-        cur_nums = [float(cur_fb[t][key].score) for t in comparable if _is_num(cur_fb[t].get(key))]
-        if base_nums or cur_nums:
-            mean_deltas[key] = (_mean(base_nums), _mean(cur_nums))
+        num_pairs = [
+            (float(base_fb[t][key].score), float(cur_fb[t][key].score))
+            for t in comparable
+            if _is_num(base_fb[t].get(key)) and _is_num(cur_fb[t].get(key))
+        ]
+        if num_pairs:
+            mean_deltas[key] = (_mean([b for b, _ in num_pairs]), _mean([c for _, c in num_pairs]))
 
         for t in comparable:
             b, c = base_fb[t].get(key), cur_fb[t].get(key)
