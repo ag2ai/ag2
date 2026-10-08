@@ -163,6 +163,12 @@ Build the agent **without** the environment's tools: each rollout passes tools b
 - **Every horizon is available.** `report.strategies[name].at(k)` gives the summary at `k = 1 … horizon`; `report.to_dict()` holds every boundary and every rollout's actions for your own analysis.
 - **Sampling.** Variance only averages out if the agent's model samples with a non-zero temperature; with temperature 0 use `samples=1`. Some models accept only their default temperature (OpenAI's gpt-5 family rejects `temperature=0.7`, for example). For those, leave `temperature` unset: their default of 1 is non-zero, which is what the verifier needs.
 
+## Recording a run
+
+A `Recording` holds the history the agent's own stream kept. Run the agent on a `MemoryStream` and pass what it holds, as the quick start does: `await agent.ask(task, stream=stream, tools=tools)`, then `list(await stream.history.get_events())`. That history has the user request, every model response with the calls it issued, and the `ToolResultsEvent` that closes each round of calls, which is where a boundary can be cut and the agent resumed.
+
+An `ag2.eval` `Trace` cannot be used. The traces `run_agent` and `evaluate_traces` hand to scorers are rebuilt from telemetry spans. They keep each tool call and its result (cut at 8,192 characters by default), but not the user request, the calls on each model response, or the `ToolResultsEvent` that closes each round, so there is no point the agent could resume from. `Recording` rejects a `Trace` with a `TypeError`. `verify()` rejects a history that has tool results but no `ToolResultsEvent` with a `ValueError`, so passing a trace's events fails with the reason instead of finding no boundary. To verify an agent you also evaluate, record its runs separately on a stream.
+
 ## Environments
 
 Both arms of a boundary must start from the state the environment was in at that point, or a difference between them measures the environment, not the context. AG2 cannot snapshot what arbitrary tools did to the world, so each `Recording` carries an `Environment`: an object with one method, `async def restore(prefix)`, that returns tools bound to a fresh environment into which the recorded calls `prefix` have been applied.

@@ -7,10 +7,10 @@ from collections.abc import Sequence
 
 import pytest
 
-from ag2 import Agent, MemoryStream
+from ag2 import Agent, MemoryStream, tool
 from ag2.compact import CompactionSummary, SummarizeCompact, TailWindowCompact
 from ag2.context import ConversationContext
-from ag2.eval import Trace
+from ag2.eval import Trace, run_agent, scorer
 from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, Usage
 from ag2.extensions.compaction_verifier import (
     ActionBudget,
@@ -25,7 +25,7 @@ from ag2.extensions.compaction_verifier import (
 from ag2.extensions.compaction_verifier.runner import BUDGET_REACHED
 from ag2.testing import TestConfig
 
-from .conftest import TOKEN, ContextAwareConfig, record_answer, record_trajectory, world_environment
+from .conftest import TOKEN, ContextAwareConfig, record_answer, record_trajectory, world_environment, world_tools
 
 
 class TestActionBudget:
@@ -388,17 +388,43 @@ class TestCompactionVerifier:
         assert result.at(1).blocked == 1.0
 
     @pytest.mark.asyncio
-    async def test_accepts_eval_traces_and_serializes(self) -> None:
+    async def test_serializes(self) -> None:
         events = await record_trajectory(fetches=4)
-        trace = Trace(events=events, exception=None, duration_ms=0)
         verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()), horizon=2, samples=1)
 
         report = await verifier.verify(
-            [Recording(trace, world_environment())], {"identity": IdentityCompact()}, every=2, min_prefix=2
+            [Recording(events, world_environment())], {"identity": IdentityCompact()}, every=2, min_prefix=2
         )
 
         assert "identity" in report.summary()
         json.dumps(report.to_dict())
+
+    @pytest.mark.asyncio
+    async def test_an_eval_trace_from_run_agent_is_rejected_and_its_stream_history_is_not(self) -> None:
+        pytest.importorskip("opentelemetry.sdk")
+        _CAPTURED_TRACES.clear()
+        agent = Agent("worker", tools=[tool(f, name=n) for n, f in world_tools().items()])
+        await run_agent("Fetch the items.", agent=agent, scorers=[_capture_trace], model_config=_two_fetches())
+        (trace,) = _CAPTURED_TRACES
+        stream = MemoryStream()
+        tools = [tool(f, name=n) for n, f in world_tools().items()]
+        await Agent("worker", config=_two_fetches()).ask("Fetch the items.", stream=stream, tools=tools)
+        history = list(await stream.history.get_events())
+        verifier = CompactionVerifier(Agent("worker", config=ContextAwareConfig()), horizon=1, samples=1)
+        strategies = {"identity": IdentityCompact()}
+
+        with pytest.raises(TypeError, match="not an ag2.eval.Trace"):
+            Recording(trace, world_environment())  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="recording 0 has tool results but no ToolResultsEvent") as error:
+            await verifier.verify([Recording(list(trace.events), world_environment())], strategies, min_prefix=1)
+        # explicit cuts get the same explanation, not make_boundary's
+        with pytest.raises(ValueError, match="no ToolResultsEvent"):
+            await verifier.verify([Recording(list(trace.events), world_environment(), cuts=[2])], strategies)
+        report = await verifier.verify([Recording(history, world_environment())], strategies, min_prefix=1)
+
+        assert "stream.history.get_events()" in str(error.value)
+        assert "lower min_prefix" not in str(error.value)
+        assert report.boundaries == 1
 
     @pytest.mark.asyncio
     async def test_recordings_without_a_boundary_raise_and_say_why(self) -> None:
@@ -516,6 +542,24 @@ class _DropUntilLast:
 
     async def compact(self, events, context, store):  # type: ignore[no-untyped-def]
         return list(await TailWindowCompact(target=5).compact(events, context, store))
+
+
+_CAPTURED_TRACES: list[Trace] = []
+
+
+@scorer
+def _capture_trace(trace: Trace) -> bool:
+    """Keeps the Trace run_agent hands its scorers, the only place a caller can get it."""
+    _CAPTURED_TRACES.append(trace)
+    return True
+
+
+def _two_fetches() -> TestConfig:
+    return TestConfig(
+        ToolCallEvent("login", arguments='{"user": "ada"}'),
+        ToolCallEvent("fetch", arguments=json.dumps({"token": TOKEN, "item": "a"})),
+        "done",
+    )
 
 
 class _CountingModel:

@@ -31,7 +31,7 @@ from ag2 import Agent
 from ag2.annotations import Context
 from ag2.compact import CompactStrategy
 from ag2.eval import Trace
-from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolResultsEvent
+from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolResultEvent, ToolResultsEvent
 from ag2.middleware import BaseMiddleware
 from ag2.middleware.base import LLMCall
 from ag2.stream import MemoryStream
@@ -154,18 +154,35 @@ class Recording:
     """A recorded run and the environment it ran against.
 
     Attributes:
-        events: The run's history — an event sequence, or an
-            :class:`ag2.eval.Trace` from an eval run.
+        events: The run's history as the agent's own stream kept it:
+            ``list(await stream.history.get_events())`` after
+            ``agent.ask(..., stream=stream)``. An :class:`ag2.eval.Trace` is
+            not accepted: it is rebuilt from telemetry spans and keeps each
+            tool call and result, but not the user request, the calls on each
+            model response, or the ``ToolResultsEvent`` that closes each
+            round, so there is no point the agent could resume from.
         environment: Rebuilds this run's environment at a cut; see
             :class:`Environment`. Runs of different tasks usually start from
             different states, so each recording carries its own.
         cuts: Explicit cut indices. When ``None``, cuts are chosen by
             :func:`select_cuts`.
+
+    Raises:
+        TypeError: ``events`` is an :class:`ag2.eval.Trace`.
     """
 
-    events: Sequence[BaseEvent] | Trace
+    events: Sequence[BaseEvent]
     environment: Environment
     cuts: Sequence[int] | None = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.events, Trace):
+            raise TypeError(
+                "Recording takes the history the agent's stream kept, not an ag2.eval.Trace: a Trace is rebuilt "
+                "from telemetry spans and drops the user request, the calls on each model response and the "
+                "ToolResultsEvent that closes each round, so it cannot be resumed. Run agent.ask(..., stream=stream) "
+                "and pass list(await stream.history.get_events())."
+            )
 
 
 class CompactionVerifier:
@@ -222,16 +239,19 @@ class CompactionVerifier:
             min_prefix: Actions that must precede the first chosen cut.
 
         Raises:
-            ValueError: No strategy was given, or no recording has a boundary
-                to test. The message says how many actions and tool rounds
-                each recording has.
+            ValueError: No strategy was given; a recording has tool results
+                but no ``ToolResultsEvent``, as a history rebuilt from
+                telemetry does; or no recording has a boundary to test. The
+                message says how many actions and tool rounds each recording
+                has.
         """
         if not strategies:
             raise ValueError("give at least one strategy to verify")
         planned: list[tuple[Boundary, Environment]] = []
         scanned: list[tuple[Sequence[BaseEvent], Sequence[int] | None]] = []
         for t, recording in enumerate(recordings):
-            events = recording.events.events if isinstance(recording.events, Trace) else tuple(recording.events)
+            events = tuple(recording.events)
+            _require_rounds(t, events)
             cuts = recording.cuts
             if cuts is None:
                 cuts = select_cuts(events, every=every, min_prefix=min_prefix)
@@ -341,6 +361,21 @@ class CompactionVerifier:
             return await run_rollout(
                 self.agent, context, environment, boundary.prefix, horizon=self.horizon, arm=arm, sample=sample
             )
+
+
+def _require_rounds(trajectory: int, events: Sequence[BaseEvent]) -> None:
+    """Reject a history whose tool results are not closed into rounds, which no cut can resume."""
+    if any(isinstance(e, ToolResultsEvent) for e in events):
+        return
+    if any(isinstance(e, ToolResultEvent) for e in events):
+        raise ValueError(
+            f"recording {trajectory} has tool results but no ToolResultsEvent, so no point in it can be resumed. "
+            "This is what an ag2.eval Trace rebuilt from telemetry spans holds (its events from run_agent or "
+            "evaluate_traces): each tool call and result, but not the user request, the calls on each model "
+            "response, or the ToolResultsEvent that closes each round. No setting of every, min_prefix or cuts "
+            "can fix that. Record the agent's own stream instead: run agent.ask(..., stream=stream) and pass "
+            "list(await stream.history.get_events())."
+        )
 
 
 def _shape(trajectory: int, events: Sequence[BaseEvent], cuts: Sequence[int] | None) -> str:
