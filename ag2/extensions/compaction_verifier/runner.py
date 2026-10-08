@@ -10,8 +10,9 @@ Protocol for one rollout:
    (:meth:`Environment.restore`), with no model in the loop;
 2. show the agent exactly one context — the raw history (PRE) or the compacted
    one (POST) — through :meth:`ag2.Agent.resume`;
-3. let it run free until it has executed ``horizon`` tool calls or finishes,
-   and record every real result.
+3. let it run free until ``horizon`` tool calls have completed (failed calls
+   and calls to unknown tools included) or it finishes, and record every real
+   result.
 
 Nothing is teacher-forced: what the recorded run did after the cut is never
 shown to the agent. Both arms of a boundary restore the same prefix, so a
@@ -30,9 +31,9 @@ from ag2 import Agent
 from ag2.annotations import Context
 from ag2.compact import CompactStrategy
 from ag2.eval import Trace
-from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent
+from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolResultsEvent
 from ag2.middleware import BaseMiddleware
-from ag2.middleware.base import LLMCall, ToolExecution, ToolResultType
+from ag2.middleware.base import LLMCall
 from ag2.stream import MemoryStream
 
 from .actions import Action, actions_from_events
@@ -49,13 +50,19 @@ BUDGET_REACHED = "[compaction verifier] action budget reached"
 
 
 class ActionBudget:
-    """Middleware factory that ends a turn once ``limit`` tool calls have executed.
+    """Middleware factory that ends a turn once ``limit`` tool calls have completed.
 
-    After the ``limit``-th execution the model is not called again: the turn
-    ends with a synthetic final message instead, the same way AG2's halt check
-    ends a turn. Calls the model issued in one response all execute, so a
-    rollout can overshoot ``limit`` by the width of its last response; scoring
-    reads only the first ``limit`` actions.
+    Every tool result that reaches the history counts: a successful call, a
+    call that raised, and a call to a tool that does not exist, whose
+    ``ToolNotFoundEvent`` AG2 sends without running any tool middleware. Once
+    ``limit`` results are in, the model is not called again: the turn ends with
+    a synthetic final message instead, the same way AG2's halt check ends a
+    turn. Independently, the model is called at most ``limit`` times per turn,
+    so a turn ends even if its calls never produce a result.
+
+    Calls the model issued in one response all execute, so a rollout can
+    overshoot ``limit`` by the width of its last response; scoring reads only
+    the first ``limit`` actions.
     """
 
     def __init__(self, limit: int) -> None:
@@ -71,17 +78,8 @@ class _ActionBudgetMiddleware(BaseMiddleware):
     def __init__(self, event: BaseEvent, context: Context, *, limit: int) -> None:
         super().__init__(event, context)
         self._limit = limit
-        self._executed = 0
-
-    async def on_tool_execution(
-        self,
-        call_next: ToolExecution,
-        event: ToolCallEvent,
-        context: Context,
-    ) -> ToolResultType:
-        result = await call_next(event, context)
-        self._executed += 1
-        return result
+        self._results_before: int | None = None
+        self._model_calls = 0
 
     async def on_llm_call(
         self,
@@ -89,9 +87,18 @@ class _ActionBudgetMiddleware(BaseMiddleware):
         events: Sequence[BaseEvent],
         context: Context,
     ) -> ModelResponse:
-        if self._executed >= self._limit:
+        results = _completed_results(events)
+        if self._results_before is None:
+            self._results_before = results
+        if results - self._results_before >= self._limit or self._model_calls >= self._limit:
             return ModelResponse(ModelMessage(content=BUDGET_REACHED))
+        self._model_calls += 1
         return await call_next(events, context)
+
+
+def _completed_results(events: Sequence[BaseEvent]) -> int:
+    """Tool results in ``events``, read from the containers each round of calls ends with."""
+    return sum(len(e.results) for e in events if isinstance(e, ToolResultsEvent))
 
 
 async def run_rollout(

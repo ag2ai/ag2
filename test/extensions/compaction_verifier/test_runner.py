@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from collections.abc import Sequence
 
 import pytest
 
-from ag2 import Agent
+from ag2 import Agent, MemoryStream
 from ag2.compact import CompactionSummary, SummarizeCompact, TailWindowCompact
+from ag2.context import ConversationContext
 from ag2.eval import Trace
-from ag2.events import ModelMessage, ModelResponse, Usage
+from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, Usage
 from ag2.extensions.compaction_verifier import (
     ActionBudget,
     CompactionVerifier,
@@ -20,15 +22,28 @@ from ag2.extensions.compaction_verifier import (
     resumable_cuts,
     run_rollout,
 )
+from ag2.extensions.compaction_verifier.runner import BUDGET_REACHED
 from ag2.testing import TestConfig
 
-from .conftest import ContextAwareConfig, record_answer, record_trajectory, world_environment
+from .conftest import TOKEN, ContextAwareConfig, record_answer, record_trajectory, world_environment
 
 
 class TestActionBudget:
     def test_limit_must_be_positive(self) -> None:
         with pytest.raises(ValueError):
             ActionBudget(0)
+
+    @pytest.mark.asyncio
+    async def test_the_model_is_called_at_most_limit_times(self) -> None:
+        events = await record_trajectory(fetches=2)
+        middleware = ActionBudget(2)(events[0], ConversationContext(MemoryStream()))
+        model = _CountingModel()
+
+        # the history never gains a result, so only the model-call cap can end the turn
+        responses = [await middleware.on_llm_call(model, events, middleware.context) for _ in range(4)]
+
+        assert model.calls == 2
+        assert [r.content for r in responses] == ["next", "next", BUDGET_REACHED, BUDGET_REACHED]
 
 
 class TestRunRollout:
@@ -54,6 +69,59 @@ class TestRunRollout:
 
         assert {a.call_id for a in (*boundary.prefix, *rollout.actions)} == {"call_0"}
         assert [json.loads(a.arguments)["item"] for a in rollout.actions] == ["b", "c"]
+
+    @pytest.mark.asyncio
+    async def test_calls_to_unknown_tools_in_separate_responses_count_toward_the_horizon(self) -> None:
+        events = await record_trajectory(fetches=2)
+        boundary = make_boundary(events, resumable_cuts(events)[0])
+        turns = [ToolCallEvent("nonexistent", arguments="{}", id=f"bad-{i}") for i in range(6)] + ["done"]
+        agent = Agent("worker", config=TestConfig(*turns, raise_tool_errors=False))
+
+        rollout = await run_rollout(agent, boundary.context, world_environment(), boundary.prefix, horizon=2, arm="pre")
+
+        assert rollout.ending == "budget"
+        assert [(a.name, a.blocked, a.error_type) for a in rollout.actions] == [
+            ("nonexistent", True, "ToolNotFoundError"),
+            ("nonexistent", True, "ToolNotFoundError"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_unknown_and_known_tools_both_count(self) -> None:
+        events = await record_trajectory(fetches=1)
+        boundary = make_boundary(events, resumable_cuts(events)[-1])  # after login + fetch a
+        # the first response issues two calls, so the model-call cap alone would allow a fourth action
+        turns = [
+            [
+                ToolCallEvent("nonexistent", arguments="{}", id="bad-0"),
+                ToolCallEvent("fetch", arguments=json.dumps({"token": TOKEN, "item": "b"}), id="ok-0"),
+            ],
+            ToolCallEvent("nonexistent", arguments="{}", id="bad-1"),
+            ToolCallEvent("fetch", arguments=json.dumps({"token": TOKEN, "item": "c"}), id="ok-1"),
+            "done",
+        ]
+        agent = Agent("worker", config=TestConfig(*turns, raise_tool_errors=False))
+
+        rollout = await run_rollout(agent, boundary.context, world_environment(), boundary.prefix, horizon=3, arm="pre")
+
+        assert rollout.ending == "budget"
+        assert [(a.name, a.blocked) for a in rollout.actions] == [
+            ("nonexistent", True),
+            ("fetch", False),
+            ("nonexistent", True),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_parallel_calls_in_one_response_all_execute_and_end_the_turn(self) -> None:
+        events = await record_trajectory(fetches=1)
+        boundary = make_boundary(events, resumable_cuts(events)[-1])
+        calls = [ToolCallEvent("fetch", arguments=json.dumps({"token": TOKEN, "item": i}), id=i) for i in "bcd"]
+        # one scripted turn only: a further model call would fail the rollout
+        agent = Agent("worker", config=TestConfig(calls))
+
+        rollout = await run_rollout(agent, boundary.context, world_environment(), boundary.prefix, horizon=2, arm="pre")
+
+        assert rollout.ending == "budget"
+        assert [json.loads(a.arguments)["item"] for a in rollout.actions] == ["b", "c", "d"]
 
     @pytest.mark.asyncio
     async def test_an_agent_that_finishes_early_ends_with_an_answer(self) -> None:
@@ -448,3 +516,14 @@ class _DropUntilLast:
 
     async def compact(self, events, context, store):  # type: ignore[no-untyped-def]
         return list(await TailWindowCompact(target=5).compact(events, context, store))
+
+
+class _CountingModel:
+    """Stands in for the next ``on_llm_call`` in the chain and counts how often it is reached."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def __call__(self, events: Sequence[BaseEvent], context: ConversationContext) -> ModelResponse:
+        self.calls += 1
+        return ModelResponse(ModelMessage("next"))

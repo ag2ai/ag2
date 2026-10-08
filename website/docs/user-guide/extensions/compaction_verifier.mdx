@@ -30,7 +30,7 @@ The verifier takes runs you have already recorded and picks **boundaries** in th
 - **PRE** — the raw history up to the boundary (the control);
 - **POST** — what the strategy returns for that history (the treatment).
 
-For each context it resumes the agent with [`Agent.resume`](/docs/user-guide/resume) several times, in an environment rebuilt to the state at the boundary, and lets it run for a few tool calls. Nothing is teacher-forced: what the recorded run did next is never shown to the agent.
+For each context it resumes the agent with [`Agent.resume`](/docs/user-guide/resume) several times, in an environment rebuilt to the state at the boundary, and lets it run until `horizon` tool calls have completed or it finishes. Every completed call counts, including one that failed and one to a tool that does not exist, and the model is called at most `horizon` times, so a rollout always ends. Calls the model issues in one response all execute, so the last response can take a rollout past `horizon`; only the first `horizon` calls are scored. Nothing is teacher-forced: what the recorded run did next is never shown to the agent.
 
 Each tool call is then read for two regressions:
 
