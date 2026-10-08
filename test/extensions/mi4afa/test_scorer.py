@@ -94,6 +94,20 @@ async def test_subagents_put_the_blame_on_the_subagent() -> None:
     assert feedback.detail["responsible_agent"] == "researcher"
 
 
+class _NonFiniteAttributor:
+    def attribute(self, conversation: Conversation) -> Attribution:
+        raise ValueError("probe scores contain NaN or infinity")
+
+
+@pytest.mark.asyncio()
+async def test_non_finite_scores_blame_nobody() -> None:
+    [feedback] = await _score(probe_failure_attribution(_NonFiniteAttributor()), _trace())  # type: ignore[arg-type]
+
+    assert feedback.value is None
+    assert feedback.score is None
+    assert "NaN or infinity" in feedback.comment
+
+
 @pytest.mark.asyncio()
 async def test_decisive_step_is_mapped_through_skipped_events() -> None:
     trace = Trace(

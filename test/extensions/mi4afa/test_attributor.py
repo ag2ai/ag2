@@ -152,6 +152,46 @@ def test_attribute_names_the_decisive_step_and_its_agent() -> None:
     assert attributor.score_turns(example).shape == (5,)
 
 
+def test_one_turn_training_conversation_is_rejected_with_explicit_validation() -> None:
+    """Review reproduction: one row has a NaN sample standard deviation, which used to blame step 0 with logit nan."""
+    generator = torch.Generator().manual_seed(0)
+    train = ConversationActivations(
+        make_conversation(1, mistake_step=0), (SITE_A,), torch.randn(1, 1, 16, generator=generator)
+    )
+    validation = ConversationActivations(
+        make_conversation(2, mistake_step=1), (SITE_A,), torch.randn(1, 2, 16, generator=generator)
+    )
+    attributor = _attributor()
+
+    with pytest.raises(ValueError, match="at least two training rows, got 1"):
+        attributor.fit([train], validation=[validation])
+    assert not attributor.is_fitted
+
+
+def test_one_multi_turn_training_conversation_with_explicit_validation_fits() -> None:
+    [train] = _synthetic(1, informative=SITES, seed=20, turns=3)
+    [validation] = _synthetic(1, informative=SITES, seed=21, turns=2)
+    attributor = _attributor(epochs=20)
+
+    report = attributor.fit([train], validation=[validation])
+
+    assert (report.train_count, report.validation_count) == (1, 1)
+    assert torch.isfinite(attributor.score_turns(validation)).all()
+    assert attributor.attribute(validation).decisive_step in (0, 1)
+
+
+def test_attribute_refuses_non_finite_scores() -> None:
+    attributor = _attributor(epochs=20)
+    attributor.fit(_synthetic(20, informative=SITES, seed=22))
+    [example] = _synthetic(1, informative=SITES, seed=23)
+    values = example.values.clone()
+    values[:, 2, 0] = float("nan")
+    corrupted = ConversationActivations(example.conversation, SITES, values)
+
+    with pytest.raises(ValueError, match="NaN or infinity"):
+        attributor.attribute(corrupted)
+
+
 def test_split_keeps_conversations_whole_and_disjoint() -> None:
     examples = _synthetic(23, informative=SITES, seed=11)
 

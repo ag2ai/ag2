@@ -172,8 +172,11 @@ class ProbeAttributor:
             The selected site and every site's validation score.
 
         Raises:
-            ValueError: If a conversation's prompt is longer than the model's context.
-                Leave such conversations out of ``train`` and ``validation``.
+            ValueError: If a conversation's prompt is longer than the model's context
+                (leave such conversations out of ``train`` and ``validation``), or the
+                conversations a probe is trained on hold fewer than two turns or no
+                turn besides the mistakes (one-turn conversations only), or their
+                activations are not finite.
         """
         examples = self._examples(train)
         if validation is None:
@@ -225,6 +228,9 @@ class ProbeAttributor:
             An :class:`~ag2.eval.scorers.Attribution` whose ``decisive_step`` is
             an index into ``conversation.history``. The probe localizes but does
             not classify failures, so ``error_mode`` is ``"other"``.
+
+        Raises:
+            ValueError: If a turn's score is NaN or infinite; no step is named then.
         """
         scores = self.score_turns(conversation)
         step = int(scores.argmax())
