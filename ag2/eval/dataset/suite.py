@@ -111,7 +111,7 @@ class Suite:
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     """Read a JSONL file into a list of dicts, with line-numbered errors."""
     items: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as fh:
+    with path.open(encoding="utf-8-sig") as fh:
         for index, raw in enumerate(fh, start=1):
             line = raw.strip()
             if not line:
