@@ -229,6 +229,61 @@ async def test_update_file(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("content", "replacement", "expected"),
+    [
+        pytest.param(b"first\nold\nlast\n", "new", b"first\nnew\nlast\n", id="lf"),
+        pytest.param(b"first\r\nold\r\nlast\r\n", "new", b"first\r\nnew\r\nlast\r\n", id="crlf"),
+        pytest.param(b"first\rold\rlast\r", "new", b"first\rnew\rlast\r", id="cr"),
+        pytest.param(
+            "\ufeffCafé\r\nold\nlast\r".encode("utf-8"),
+            "新",
+            "\ufeffCafé\r\n新\nlast\r".encode("utf-8"),
+            id="mixed-unicode-bom",
+        ),
+        pytest.param(b"old\r\nold\r\n", "new\r\nline", b"new\r\nline\r\nold\r\n", id="replacement-crlf"),
+    ],
+)
+async def test_update_file_preserves_line_endings(
+    tmp_path: Path, content: bytes, replacement: str, expected: bytes
+) -> None:
+    # 2026-10-09: An exact edit must preserve all bytes outside the first match.
+    target = tmp_path / "data.txt"
+    target.write_bytes(content)
+    config = TestConfig(
+        ToolCallEvent(
+            name="update_file",
+            arguments=json.dumps({"path": "data.txt", "old_content": "old", "new_content": replacement}),
+        ),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[FilesystemToolkit(base_path=tmp_path)])
+
+    await agent.ask("update it")
+
+    assert target.read_bytes() == expected
+
+
+@pytest.mark.asyncio
+async def test_update_file_matches_crlf_exactly(tmp_path: Path) -> None:
+    # 2026-10-09: CRLF in old_content is part of the exact text to replace.
+    target = tmp_path / "data.txt"
+    target.write_bytes(b"before\r\nold\r\nline\r\nafter\r\n")
+    config = TestConfig(
+        ToolCallEvent(
+            name="update_file",
+            arguments=json.dumps({"path": "data.txt", "old_content": "old\r\nline", "new_content": "new"}),
+        ),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[FilesystemToolkit(base_path=tmp_path)])
+
+    await agent.ask("update it")
+
+    assert target.read_bytes() == b"before\r\nnew\r\nafter\r\n"
+
+
+@pytest.mark.asyncio
 async def test_delete_file(tmp_path: Path) -> None:
     sub = tmp_path / "sub"
     sub.mkdir()
