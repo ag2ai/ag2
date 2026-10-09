@@ -97,17 +97,21 @@ async def test_a_client_call_made_while_the_question_waited_is_pending_on_the_re
 
 async def test_a_client_call_made_before_the_question_is_not_pending_on_the_resumed_run() -> None:
     """The call went out in the run that paused: the run that finishes lists only what it started."""
+    made = asyncio.Event()
     agent = Agent(
         "test_agent",
         config=TestConfig([
             ToolCallEvent(name="get_weather", arguments='{"location":"Paris"}'),
             ToolCallEvent(name="ask_human", arguments="{}"),
         ]),
+        observers=[observer(ClientToolCallEvent, lambda _event: made.set(), sync_to_thread=False)],
     )
 
     @agent.tool
     async def ask_human(context: Context) -> str:
         """Ask the human."""
+        # Parallel calls can start in either order; arrange the scenario this test asserts.
+        await made.wait()
         return await context.input(QUESTION)
 
     app = app_for(AGUIStream(agent))
