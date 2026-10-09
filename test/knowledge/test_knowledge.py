@@ -5,6 +5,7 @@
 """Tests for KnowledgeStore, EventLogWriter, and bootstrapping."""
 
 import asyncio
+import functools
 import json
 import sys
 from pathlib import Path
@@ -27,6 +28,11 @@ from ag2.knowledge import (
 )
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
+
+
+async def _record_change(received: list[str], event: asyncio.Event, path: str) -> None:
+    received.append(path)
+    event.set()
 
 
 @pytest.mark.asyncio
@@ -460,6 +466,68 @@ class TestDiskKnowledgeStore:
 
 @pytest.mark.asyncio
 class TestSqliteKnowledgeStore:
+    @pytest.mark.parametrize("first_operation", ["write", "append"])
+    @pytest.mark.parametrize("second_operation", ["write", "append"])
+    async def test_first_mutations_have_increasing_versions(
+        self, tmp_path: Path, first_operation: str, second_operation: str
+    ) -> None:
+        store = SqliteKnowledgeStore(tmp_path / "store.db")
+        try:
+            first_result = await getattr(store, first_operation)("/note.txt", "first")
+            first = await store.list_versions_under("/")
+            second_result = await getattr(store, second_operation)("/note.txt", "second")
+            second = await store.list_versions_under("/")
+
+            assert second["/note.txt"] > first["/note.txt"]
+            assert await store.read("/note.txt") == ("second" if second_operation == "write" else "firstsecond")
+            if first_operation == "append":
+                assert first_result == 0
+            if second_operation == "append":
+                assert second_result == len(b"first")
+        finally:
+            store.close()
+
+    @pytest.mark.parametrize("operation", ["write", "append"])
+    async def test_first_mutation_after_reopen_exceeds_stored_versions(self, tmp_path: Path, operation: str) -> None:
+        db_path = tmp_path / "store.db"
+        store = SqliteKnowledgeStore(db_path)
+        try:
+            await store.write("/note.txt", "first")
+            await store.write("/other.txt", "other")
+            await store.write("/other.txt", "latest")
+            before = await store.list_versions_under("/")
+        finally:
+            store.close()
+
+        reopened = SqliteKnowledgeStore(db_path)
+        try:
+            result = await getattr(reopened, operation)("/note.txt", "second")
+            after = await reopened.list_versions_under("/")
+            assert after["/note.txt"] > max(before.values())
+            assert after["/other.txt"] == before["/other.txt"]
+            assert await reopened.read("/note.txt") == ("second" if operation == "write" else "firstsecond")
+            if operation == "append":
+                assert result == len(b"first")
+        finally:
+            reopened.close()
+
+    @pytest.mark.parametrize("operation", ["write", "append"])
+    async def test_on_change_after_first_mutation(self, tmp_path: Path, operation: str) -> None:
+        store = SqliteKnowledgeStore(tmp_path / "store.db", poll_interval_s=0.05)
+        received: list[str] = []
+        event = asyncio.Event()
+        sub = None
+        try:
+            await getattr(store, operation)("/watched/note.txt", "first")
+            sub = await store.on_change("/watched", functools.partial(_record_change, received, event))
+            await getattr(store, operation)("/watched/note.txt", "second")
+            await asyncio.wait_for(event.wait(), timeout=2.0)
+            assert received == ["/watched/note.txt"]
+        finally:
+            if sub is not None:
+                await sub.close()
+            store.close()
+
     async def test_read_write(self, tmp_path: Path) -> None:
         store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
         try:
