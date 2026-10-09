@@ -2,11 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Mappers for OpenAI's Decisions API (``POST /v1/decisions``).
-
-The API answers typed questions instead of generating text, so the agent's
-``response_schema`` is the question; see ``docs/adr/0023-openai-decisions-config-is-decision-only.md``.
-"""
 
 import base64
 import json
