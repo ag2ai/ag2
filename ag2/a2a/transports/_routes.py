@@ -22,10 +22,16 @@ def build_card_routes_with_legacy(
     card_modifier: CardModifier | None,
     card_url: str,
     legacy_card_url: str | None,
+    cache_control: str | None = None,
 ) -> list[BaseRoute]:
     """Card routes at v1.x ``card_url`` plus optional v0.x alias at ``legacy_card_url``."""
     routes: list[BaseRoute] = list(
-        create_agent_card_routes(agent_card, card_modifier=card_modifier, card_url=card_url),
+        create_agent_card_routes(
+            agent_card,
+            card_modifier=card_modifier,
+            card_url=card_url,
+            cache_control=cache_control,
+        ),
     )
     if legacy_card_url:
         routes.extend(
@@ -33,6 +39,7 @@ def build_card_routes_with_legacy(
                 agent_card,
                 card_modifier=card_modifier,
                 card_url=legacy_card_url,
+                cache_control=cache_control,
             ),
         )
     return routes

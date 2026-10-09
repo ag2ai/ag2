@@ -36,6 +36,7 @@ from ag2.network.client.tools.context import make_context_tool
 from ag2.network.client.tools.peers import make_peers_tool
 from ag2.network.client.tools.tasks import make_tasks_tool
 from ag2.network.policies import AGENT_CLIENT_DEP, CHANNEL_DEP
+from ag2.network.task_mirror import TaskMirror
 from ag2.stream import MemoryStream
 from ag2.task import TaskMetadata, TaskSpec, TaskState
 from ag2.testing import TestConfig
@@ -279,7 +280,6 @@ async def test_context_quote_returns_recent_n_from_speaker() -> None:
 @pytest.mark.asyncio
 async def test_tasks_status_and_list_and_wait() -> None:
     """Status / list / wait operate on hub-observed tasks."""
-    from ag2.network.task_mirror import TaskMirror
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)

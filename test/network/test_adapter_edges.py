@@ -15,10 +15,12 @@ These tests exercise the rejection paths and fold determinism that
 the existing per-adapter integration tests don't cover directly.
 """
 
+import tempfile
+
 import pytest
 
 from ag2 import Agent
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from ag2.network import (
     EV_TEXT,
     Envelope,
@@ -34,6 +36,7 @@ from ag2.network.channel import (
     Participant,
     ParticipantRole,
 )
+from ag2.network.envelope import EV_CHANNEL_OPENED
 
 from ._helpers import ScriptedConfig
 
@@ -253,7 +256,6 @@ class TestConversationAdapter:
         assert state.last_envelope_id == "e3"
 
     def test_fold_ignores_protocol_envelopes(self) -> None:
-        from ag2.network.envelope import EV_CHANNEL_OPENED
 
         adapter = ConversationAdapter()
         meta = _make_metadata(
@@ -425,9 +427,6 @@ async def test_validate_send_rejection_does_not_append_to_wal() -> None:
 async def test_hydrate_refolds_discussion_state_deterministically() -> None:
     """Close hub, reopen → refolded DiscussionState matches what fold
     would produce live."""
-    import tempfile
-
-    from ag2.knowledge import DiskKnowledgeStore
 
     with tempfile.TemporaryDirectory() as tmp:
         store = DiskKnowledgeStore(tmp)

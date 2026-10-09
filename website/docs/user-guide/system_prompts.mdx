@@ -90,6 +90,58 @@ reply = await agent.ask(
 )
 ```
 
+## Plugins for one invocation
+
+Plugins normally attach when an agent is built. Pass `plugins=` to `Agent.ask()`, `Agent.run()`,
+`Agent.resume()`, or a reply's `ask()` / `run()` to add capabilities for one call instead. For
+example, build a fresh [`SkillPlugin`](/docs/user-guide/skills) to refresh a long-lived agent's
+catalog and tool schemas:
+
+```python linenums="1" hl_lines="8 11 15"
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.tools.skills import LocalRuntime, SkillPlugin
+
+runtime = LocalRuntime("./skills")
+agent = Agent("assistant", prompt="You are a helpful assistant.", config=OpenAIConfig(model="gpt-5-mini"))
+
+reply = await agent.ask("Help with my project", plugins=[SkillPlugin(runtime)])
+
+# After changing installed skills, invalidate discovery and build a fresh plugin.
+runtime.invalidate()
+reply = await agent.ask(
+    "Use the newly installed skill",
+    stream=reply.context.stream,
+    plugins=[SkillPlugin(runtime)],
+)
+```
+
+Invocation plugins contribute prompts, tools, middleware, observers, policies,
+context defaults, and HITL. Their rules are:
+
+- Prompt fragments append to the resolved prompt; plugin dynamic hooks run once
+  per call. Explicit `prompt=` still replaces the agent's base and dynamic prompts.
+- Existing context values beat plugin defaults. Later plugins override earlier
+  defaults and same-named tools; explicit `tools=` override plugin tools.
+- Policies follow agent policies in one assembler. HITL uses the explicit call
+  hook, then the agent hook, then the first plugin hook.
+- Scope exit removes the plugin's bound prompt fragments and unreplaced defaults,
+  including failure or cancellation. Prompt updates and reassigned defaults
+  persist. Pass the plugin again for a continuation; constructor plugins remain
+  attached to the agent. Arbitrary side effects of plugin code are not rolled back.
+
+The agent is unchanged, so separate streams can use different plugins concurrently.
+Reusing a `SkillPlugin` preserves its snapshot.
+
+!!! warning "Invocation plugins add to constructor plugins"
+    They do not replace them. A `SkillPlugin` attached to the agent and another passed to
+    `plugins=` render two catalogs in the prompt, so attach a refreshed skill catalog in
+    only one place.
+
+!!! note
+    Cleanup of a default compares by identity: if code later assigns the identical object
+    to the same key, the value is treated as the plugin's own and removed.
+
 ## Prompt updates
 
 For continuous and event-driven prompt updates, you can mutate `context.prompt` dynamically from an event subscriber. This allows you to respond to specific events in the stream and adjust the agent's behavior on the fly during an ongoing conversation. See the [Stream](/docs/user-guide/advanced/stream) documentation for more details on this advanced feature.

@@ -29,19 +29,17 @@ from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
 
+@pytest.mark.asyncio
 class TestMemoryKnowledgeStore:
-    @pytest.mark.asyncio
     async def test_read_write(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/test.txt", "hello")
         assert await store.read("/test.txt") == "hello"
 
-    @pytest.mark.asyncio
     async def test_read_nonexistent(self) -> None:
         store = MemoryKnowledgeStore()
         assert await store.read("/missing.txt") is None
 
-    @pytest.mark.asyncio
     async def test_list_root(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/a.txt", "a")
@@ -50,7 +48,6 @@ class TestMemoryKnowledgeStore:
         assert "a.txt" in entries
         assert "b/" in entries
 
-    @pytest.mark.asyncio
     async def test_list_subdirectory(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/log/stream-1.jsonl", "data1")
@@ -58,14 +55,12 @@ class TestMemoryKnowledgeStore:
         entries = await store.list("/log/")
         assert entries == ["stream-1.jsonl", "stream-2.jsonl"]
 
-    @pytest.mark.asyncio
     async def test_delete_file(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/test.txt", "hello")
         await store.delete("/test.txt")
         assert await store.read("/test.txt") is None
 
-    @pytest.mark.asyncio
     async def test_delete_directory(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/dir/a.txt", "a")
@@ -74,34 +69,30 @@ class TestMemoryKnowledgeStore:
         assert await store.read("/dir/a.txt") is None
         assert await store.read("/dir/b.txt") is None
 
-    @pytest.mark.asyncio
     async def test_exists(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/test.txt", "hello")
         assert await store.exists("/test.txt") is True
         assert await store.exists("/missing.txt") is False
 
-    @pytest.mark.asyncio
     async def test_exists_directory(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/dir/file.txt", "data")
         assert await store.exists("/dir") is True
 
-    @pytest.mark.asyncio
     async def test_path_normalization(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("no_leading_slash.txt", "data")
         assert await store.read("/no_leading_slash.txt") == "data"
 
-    @pytest.mark.asyncio
     async def test_list_empty(self) -> None:
         store = MemoryKnowledgeStore()
         entries = await store.list("/")
         assert entries == []
 
 
+@pytest.mark.asyncio
 class TestEventLogWriter:
-    @pytest.mark.asyncio
     async def test_persist_and_load(self) -> None:
         store = MemoryKnowledgeStore()
         writer = EventLogWriter(store)
@@ -125,7 +116,6 @@ class TestEventLogWriter:
         assert loaded[1].agent_name == "analyzer"
         assert loaded[1].result == "done"
 
-    @pytest.mark.asyncio
     async def test_persist_dropped_segments(self) -> None:
         store = MemoryKnowledgeStore()
         writer = EventLogWriter(store)
@@ -147,7 +137,6 @@ class TestEventLogWriter:
         assert loaded[1].parts[0].content == "old-2"
         assert loaded[2].parts[0].content == "recent"
 
-    @pytest.mark.asyncio
     async def test_persist_dropped_multiple_writers_no_overwrite(self) -> None:
         """Multiple EventLogWriter instances must not overwrite each other's segments.
 
@@ -176,14 +165,12 @@ class TestEventLogWriter:
         assert loaded[1].parts[0].content == "batch-2"
         assert loaded[2].parts[0].content == "final"
 
-    @pytest.mark.asyncio
     async def test_load_empty(self) -> None:
         store = MemoryKnowledgeStore()
         writer = EventLogWriter(store)
         loaded = await writer.load(uuid4())
         assert loaded == []
 
-    @pytest.mark.asyncio
     async def test_unknown_event_fallback(self) -> None:
         store = MemoryKnowledgeStore()
         # Write a record with a non-existent event type
@@ -198,8 +185,8 @@ class TestEventLogWriter:
         assert loaded[0].type_name == "nonexistent.module.FakeEvent"
 
 
+@pytest.mark.asyncio
 class TestDefaultBootstrap:
-    @pytest.mark.asyncio
     async def test_creates_standard_layout(self) -> None:
         store = MemoryKnowledgeStore()
         # Agent writes sentinel before calling bootstrap, so simulate that
@@ -216,7 +203,6 @@ class TestDefaultBootstrap:
         root_skill = await store.read("/SKILL.md")
         assert "test-agent" in root_skill
 
-    @pytest.mark.asyncio
     async def test_sentinel_prevents_rebootstrap(self) -> None:
         store = MemoryKnowledgeStore()
         # Agent writes sentinel before calling bootstrap
@@ -231,7 +217,6 @@ class TestDefaultBootstrap:
         assert await store.exists("/.initialized")
         # (The Agent checks this before calling bootstrap)
 
-    @pytest.mark.asyncio
     async def test_does_not_write_sentinel(self) -> None:
         """``DefaultBootstrap`` writes SKILL.md files but not ``/.initialized``.
 
@@ -245,10 +230,10 @@ class TestDefaultBootstrap:
         assert not await store.exists("/.initialized")
 
 
+@pytest.mark.asyncio
 class TestAgentBootstrapsOnce:
     """End-to-end: a real Agent only bootstraps the store once."""
 
-    @pytest.mark.asyncio
     async def test_concurrent_asks_bootstrap_once(self) -> None:
         class _CountingBootstrap:
             def __init__(self) -> None:
@@ -279,7 +264,6 @@ class TestAgentBootstrapsOnce:
         assert counter.calls == 1
         assert await store.exists("/.initialized")
 
-    @pytest.mark.asyncio
     async def test_existing_sentinel_skips_bootstrap(self) -> None:
         class _CountingBootstrap:
             def __init__(self) -> None:
@@ -422,6 +406,57 @@ class TestDiskKnowledgeStore:
         finally:
             await sub.close()
 
+    async def test_on_change_on_missing_file_path_keeps_it_writable(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+
+        async def callback(path: str) -> None:
+            pass
+
+        sub = await store.on_change("/memory/working.md", callback)
+        try:
+            assert not (tmp_path / "memory" / "working.md").exists()
+            await store.write("/memory/working.md", "hello")
+            assert (tmp_path / "memory" / "working.md").is_file()
+            assert await store.read("/memory/working.md") == "hello"
+        finally:
+            await sub.close()
+
+    async def test_on_change_on_existing_file_path_leaves_it_untouched(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/notes.md", "original")
+
+        async def callback(path: str) -> None:
+            pass
+
+        sub = await store.on_change("/notes.md", callback)
+        try:
+            assert (tmp_path / "notes.md").is_file()
+            assert await store.read("/notes.md") == "original"
+        finally:
+            await sub.close()
+
+    async def test_on_change_on_file_path_only_fires_for_that_file(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        received: list[str] = []
+        event = asyncio.Event()
+
+        async def callback(path: str) -> None:
+            received.append(path)
+            if path == "/memory/working.md":
+                event.set()
+
+        sub = await store.on_change("/memory/working.md", callback)
+        try:
+            # sibling events arrive before the target's, so they would be in `received` by then
+            await store.write("/memory/other.md", "ignored")
+            await store.write("/memory/working.md.bak", "ignored")
+            await store.write("/memory/working.md", "hello")
+            # watchdog delivers asynchronously via a background thread
+            await asyncio.wait_for(event.wait(), timeout=10.0)
+            assert set(received) == {"/memory/working.md"}
+        finally:
+            await sub.close()
+
 
 @pytest.mark.asyncio
 class TestSqliteKnowledgeStore:
@@ -515,6 +550,81 @@ class TestSqliteKnowledgeStore:
 
             scoped = await store.list_versions_under("/dir")
             assert set(scoped.keys()) == {"/dir/b.txt"}
+        finally:
+            store.close()
+
+    async def test_underscore_prefix_does_not_match_sibling(self, tmp_path: Path) -> None:
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            await store.write("/skills/codeXreview/notes.md", "sibling")
+            assert await store.exists("/skills/code_review") is False
+            assert await store.list("/skills/code_review") == []
+            await store.delete("/skills/code_review")
+            assert await store.read("/skills/codeXreview/notes.md") == "sibling"
+
+            await store.write("/skills/code_review/notes.md", "real")
+            assert await store.exists("/skills/code_review") is True
+            assert await store.list("/skills/code_review") == ["notes.md"]
+            await store.delete("/skills/code_review")
+            assert await store.read("/skills/code_review/notes.md") is None
+            assert await store.read("/skills/codeXreview/notes.md") == "sibling"
+        finally:
+            store.close()
+
+    async def test_percent_prefix_does_not_match_sibling(self, tmp_path: Path) -> None:
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            await store.write("/pct/100X_done/sibling.md", "sibling")
+            assert await store.list("/pct/100%_done") == []
+            assert await store.exists("/pct/100%_done") is False
+            await store.delete("/pct/100%_done")
+            assert await store.read("/pct/100X_done/sibling.md") == "sibling"
+
+            await store.write("/pct/100%_done/real.md", "real")
+            assert await store.list("/pct/100%_done") == ["real.md"]
+        finally:
+            store.close()
+
+    async def test_prefix_match_is_case_sensitive(self, tmp_path: Path) -> None:
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            await store.write("/docs/readme.md", "hello")
+            assert await store.list("/Docs") == []
+            assert await store.exists("/Docs") is False
+            await store.delete("/Docs")
+            assert await store.read("/docs/readme.md") == "hello"
+            assert await store.list("/docs") == ["readme.md"]
+        finally:
+            store.close()
+
+    @pytest.mark.parametrize(
+        ("prefix", "real", "sibling"),
+        [
+            ("/skills/code_review", "/skills/code_review/notes.md", "/skills/codeXreview/notes.md"),
+            ("/pct/100%_done", "/pct/100%_done/notes.md", "/pct/100X_done/notes.md"),
+            ("/docs", "/docs/notes.md", "/Docs/notes.md"),
+            ("/café_menu", "/café_menu/notes.md", "/caféXmenu/notes.md"),
+        ],
+    )
+    async def test_list_versions_under_matches_prefix_literally(
+        self, tmp_path: Path, prefix: str, real: str, sibling: str
+    ) -> None:
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            await store.write(real, "real")
+            await store.write(sibling, "sibling")
+            versions = await store.list_versions_under(prefix)
+            assert set(versions.keys()) == {real}
+        finally:
+            store.close()
+
+    async def test_root_prefix_lists_every_entry(self, tmp_path: Path) -> None:
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
+        try:
+            await store.write("/a_b/one.md", "1")
+            await store.write("/aXb/two.md", "2")
+            assert await store.list("/") == ["aXb/", "a_b/"]
+            assert set((await store.list_versions_under("/")).keys()) == {"/a_b/one.md", "/aXb/two.md"}
         finally:
             store.close()
 

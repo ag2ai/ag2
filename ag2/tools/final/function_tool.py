@@ -5,7 +5,7 @@
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, TypeAlias, overload
 
 from fast_depends.core import CallModel
@@ -142,7 +142,7 @@ class FunctionTool(Tool):
         try:
             async with AsyncExitStack() as stack:
                 result = await self.model.asolve(
-                    **(event.serialized_arguments | {CONTEXT_OPTION_NAME: context}),
+                    **(event.serialized_arguments | {CONTEXT_OPTION_NAME: replace(context, tool_call_id=event.id)}),
                     stack=stack,
                     cache_dependencies={},
                     dependency_provider=context.dependency_provider,

@@ -36,13 +36,13 @@ import re
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, overload
+from typing import Annotated, Any, overload
 
 from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID, ResourceCsp, ResourcePermissions, Visibility
 from mcp.server.apps import client_supports_apps as client_supports_apps
 from mcp.types import CallToolResult, ToolAnnotations
 
-from ag2.annotations import Variable
+from ag2.annotations import ContextField, Variable
 from ag2.tools.builtin._resolve import resolve_variable
 
 from ._async import call_user_fn
@@ -469,7 +469,8 @@ class _AppResourceReader:
     def __init__(self, app: MCPApp) -> None:
         self._app = app
 
-    async def __call__(self, context: MCPExecutionContext) -> str:
+    # Injected by name like any reader's `Context`, not bound to a positional slot.
+    async def __call__(self, context: Annotated[MCPExecutionContext, ContextField(cast=False)]) -> str:
         return await self._app._read(context)
 
 

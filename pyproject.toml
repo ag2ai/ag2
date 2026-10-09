@@ -27,7 +27,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-version = "1.1.1"
+version = "1.1.2"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -67,7 +67,7 @@ dependencies = [
 # tinyfish, ...) use `missing_additional_dependency` and are installed directly, not as extras.
 
 # === Agent protocols ===
-a2a = ["a2a-sdk>=1.1.0,<2"]
+a2a = ["a2a-sdk>=1.2.0,<2"]
 a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<2"]
 acp = [
     "agent-client-protocol>=0.12.1,<0.13",
@@ -76,11 +76,11 @@ acp = [
     "starlette>=0.40,<2",
     "uvicorn>=0.51.0,<1",
 ]
-ag-ui = ["ag-ui-protocol>=0.1.21,<0.2"]
+ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=3.9.0,<4"]
-anthropic = ["anthropic>=1.6.0,<2"]
+anthropic = ["anthropic>=1.9.0,<2"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
@@ -171,13 +171,13 @@ optionals = [
     # search tools
     "ag2[tavily,ddgs,perplexity]",
     # extensions are not shipped as extras; install their packages directly for testing
-    "a2a-sdk[signing]", # AgentCard JWS signing/verification (test/a2a/test_card_signing.py); not part of ag2[a2a]
+    "a2a-sdk[signing,sqlite]", # AgentCard JWS signing (test_card_signing.py) and the SQL task store (test_multi_replica.py); not part of ag2[a2a]
     "agent-client-protocol[http]", # ag2.acp.remote transports — without them `test/acp/test_remote_*` importorskips itself out of the run
     "watchdog>=4.0,<7",  # DiskKnowledgeStore (ag2.knowledge)
     "websockets>=14.0,<17",  # WsLink (ag2.network)
     "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
     "daytona>=0.171.0,<1",
-    "tenki>=0.5.4,<2",
+    "tenki>=1.4.0,<2",
     "e2b>=2.0.0,<3",
     "tinyfish>=0.5,<0.6; python_version>='3.11'",
     "exa-py>=2.12.1,<3",
@@ -203,7 +203,7 @@ docs = [
     # Extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.5,<0.6; python_version>='3.11'",
     "daytona>=0.171.0,<1",
-    "tenki>=0.5.4,<2",
+    "tenki>=1.4.0,<2",
     "e2b>=2.0.0,<3",
     "exa-py>=2.12.1,<3",
     "docker>=6.0.0,<8",                # Code execution tools are exposed in the public API by the optional `ag2.tools` module
@@ -244,10 +244,12 @@ types = [
     # `disallow_any_unimported`. Type-check only — never a published constraint.
     "types-aiobotocore[bedrock-runtime]",
     { include-group = "test" },
-    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, a2a, ag-ui]",
+    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, typesafe, elevenlabs, a2a, ag-ui, acp]",
+    # search tools in `ag2/tools/search`, checked under `disallow_any_unimported`
+    "ag2[ddgs, perplexity]",
 ]
 
-lint = ["ruff==0.16.8", "codespell==2.4.3", "zizmor==1.30.1"]
+lint = ["ruff==0.16.9", "codespell==2.4.3", "zizmor==1.30.1"]
 
 dev = [
     { include-group = "lint" },
@@ -400,23 +402,207 @@ python_version = "3.10"
 # that already pass under `strict = true`.
 files = [
     "ag2/_import_utils.py",
-    "ag2/config/bedrock/bedrock_client.py",
-    "ag2/config/bedrock/mappers.py",
-    "ag2/config/anthropic/mappers.py",
-    "ag2/config/dashscope/mappers.py",
-    "ag2/config/gemini/mappers.py",
-    "ag2/config/mistral/mappers.py",
-    "ag2/config/ollama/mappers.py",
-    "ag2/config/openai/mappers.py",
-    "ag2/config/xai/mappers.py",
-    "ag2/config/zai/mappers.py",
+    "ag2/__init__.py",
+    "ag2/acp/client.py",
+    "ag2/acp/elicitation.py",
+    "ag2/acp/__init__.py",
+    "ag2/acp/agent.py",
+    "ag2/acp/auth.py",
+    "ag2/acp/bridge.py",
+    "ag2/acp/config.py",
+    "ag2/acp/dispatch.py",
+    "ag2/acp/events.py",
+    "ag2/acp/executor.py",
+    "ag2/acp/guard.py",
+    "ag2/acp/mappers.py",
+    "ag2/acp/permissions.py",
+    "ag2/acp/remote.py",
+    "ag2/acp/session.py",
+    "ag2/acp/sessions.py",
+    "ag2/acp/testing.py",
+    "ag2/acp/tool_gateway.py",
+    "ag2/acp/transport.py",
+    "ag2/acp/types.py",
+    "ag2/eval/pairwise.py",
+    "ag2/eval/results/result.py",
+    "ag2/eval/scorers/correctness.py",
+    "ag2/network/client/checkpoint.py",
+    "ag2/network/transport/frames.py",
+    "ag2/policies/conversation.py",
+    "ag2/config",
+    "ag2/live/__init__.py",
+    "ag2/live/cascade.py",
+    "ag2/live/elevenlabs.py",
+    "ag2/live/gemini.py",
+    "ag2/live/observer.py",
+    "ag2/live/openai.py",
+    "ag2/live/protocols.py",
+    "ag2/live/realtime.py",
+    "ag2/live/sound_device.py",
+    "ag2/live/stt.py",
+    "ag2/live/turn.py",
+    "ag2/mcp/apps.py",
+    "ag2/mcp/tools.py",
+    "ag2/mcp/__init__.py",
+    "ag2/mcp/_async.py",
+    "ag2/mcp/elicitation.py",
+    "ag2/mcp/errors.py",
+    "ag2/mcp/extensions.py",
+    "ag2/mcp/mappers.py",
+    "ag2/mcp/pause.py",
+    "ag2/mcp/prompts.py",
+    "ag2/mcp/resources.py",
+    "ag2/mcp/sampling.py",
+    "ag2/mcp/security.py",
+    "ag2/mcp/server.py",
+    "ag2/mcp/sessions.py",
+    "ag2/mcp/testing.py",
+    "ag2/mcp/transport.py",
+    "ag2/mcp_ui/__init__.py",
+    "ag2/mcp_ui/actions.py",
+    "ag2/mcp_ui/resources.py",
+    "ag2/ag_ui/run_input.py",
+    "ag2/ag_ui/stream.py",
+    "ag2/ag_ui/__init__.py",
+    "ag2/ag_ui/asgi.py",
+    "ag2/ag_ui/capabilities.py",
+    "ag2/ag_ui/interrupts.py",
+    "ag2/ag_ui/usage.py",
+    "ag2/a2a/__init__.py",
+    "ag2/a2a/_session.py",
+    "ag2/a2a/card.py",
+    "ag2/a2a/client.py",
+    "ag2/a2a/config.py",
+    "ag2/a2a/errors.py",
+    "ag2/a2a/events.py",
+    "ag2/a2a/executor.py",
+    "ag2/a2a/extension.py",
+    "ag2/a2a/mappers/__init__.py",
+    "ag2/a2a/mappers/events.py",
+    "ag2/a2a/mappers/history.py",
+    "ag2/a2a/mappers/messages.py",
+    "ag2/a2a/mappers/parts.py",
+    "ag2/a2a/mappers/tools.py",
+    "ag2/a2a/push.py",
+    "ag2/a2a/security.py",
+    "ag2/a2a/server.py",
+    "ag2/a2a/tasks.py",
+    "ag2/a2a/testing.py",
+    "ag2/a2a/transports/__init__.py",
+    "ag2/a2a/transports/_common.py",
+    "ag2/a2a/transports/_http.py",
+    "ag2/a2a/transports/_routes.py",
+    "ag2/a2a/transports/grpc.py",
+    "ag2/a2ui/__init__.py",
+    "ag2/a2ui/_runtime.py",
+    "ag2/a2ui/_types.py",
+    "ag2/a2ui/a2a/__init__.py",
+    "ag2/a2ui/a2a/executor.py",
+    "ag2/a2ui/a2a/extension.py",
+    "ag2/a2ui/a2a/parts.py",
+    "ag2/a2ui/actions.py",
+    "ag2/a2ui/capabilities.py",
+    "ag2/a2ui/constants.py",
+    "ag2/a2ui/dispatch.py",
+    "ag2/a2ui/events.py",
+    "ag2/a2ui/incoming.py",
+    "ag2/a2ui/middleware.py",
+    "ag2/a2ui/parser.py",
+    "ag2/a2ui/request.py",
+    "ag2/a2ui/schema_manager.py",
+    "ag2/a2ui/serialize.py",
+    "ag2/a2ui/server.py",
+    "ag2/a2ui/server_action.py",
+    "ag2/a2ui/transports/__init__.py",
+    "ag2/a2ui/transports/ag_ui.py",
+    "ag2/a2ui/transports/base.py",
+    "ag2/a2ui/transports/rest.py",
+    "ag2/a2a/transports/jsonrpc.py",
+    "ag2/a2a/transports/rest.py",
+    "ag2/tools/__init__.py",
+    "ag2/tools/builtin/__init__.py",
+    "ag2/tools/builtin/_resolve.py",
+    "ag2/tools/builtin/anthropic_bash.py",
+    "ag2/tools/builtin/code_execution.py",
+    "ag2/tools/builtin/file_search.py",
+    "ag2/tools/builtin/google_maps.py",
+    "ag2/tools/builtin/image_generation.py",
+    "ag2/tools/builtin/mcp_server.py",
+    "ag2/tools/builtin/memory.py",
+    "ag2/tools/builtin/retrieval.py",
+    "ag2/tools/builtin/shell.py",
+    "ag2/tools/builtin/skills.py",
+    "ag2/tools/builtin/tool_search.py",
+    "ag2/tools/builtin/web_fetch.py",
+    "ag2/tools/builtin/web_search.py",
+    "ag2/tools/builtin/x_search.py",
+    "ag2/tools/code/__init__.py",
+    "ag2/tools/code/environment/__init__.py",
+    "ag2/tools/code/environment/base.py",
+    "ag2/tools/code/tool.py",
+    "ag2/tools/dynamic/__init__.py",
+    "ag2/tools/dynamic/factory.py",
+    "ag2/tools/dynamic/handler.py",
+    "ag2/tools/executor.py",
+    "ag2/tools/final/__init__.py",
+    "ag2/tools/final/client_tool.py",
+    "ag2/tools/final/function_tool.py",
+    "ag2/tools/final/toolkit.py",
+    "ag2/tools/precedence.py",
+    "ag2/tools/sandbox/__init__.py",
+    "ag2/tools/sandbox/adapter/__init__.py",
+    "ag2/tools/sandbox/adapter/code.py",
+    "ag2/tools/sandbox/adapter/shell.py",
+    "ag2/tools/sandbox/base.py",
+    "ag2/tools/sandbox/environment.py",
+    "ag2/tools/sandbox/factory.py",
+    "ag2/tools/sandbox/filter.py",
+    "ag2/tools/sandbox/local.py",
+    "ag2/tools/schemas.py",
+    "ag2/tools/search/__init__.py",
+    "ag2/tools/search/duckduckgo.py",
+    "ag2/tools/search/perplexity.py",
+    "ag2/tools/search/tavily.py",
+    "ag2/tools/shell/__init__.py",
+    "ag2/tools/shell/tool.py",
+    "ag2/tools/skills/__init__.py",
+    "ag2/tools/skills/plugin.py",
+    "ag2/tools/skills/runtime/__init__.py",
+    "ag2/tools/skills/runtime/local/__init__.py",
+    "ag2/tools/skills/runtime/local/loader.py",
+    "ag2/tools/skills/runtime/local/runtime.py",
+    "ag2/tools/skills/runtime/memory/__init__.py",
+    "ag2/tools/skills/runtime/memory/runtime.py",
+    "ag2/tools/skills/runtime/memory/skill.py",
+    "ag2/tools/skills/runtime/protocol.py",
+    "ag2/tools/skills/skill_search/__init__.py",
+    "ag2/tools/skills/skill_search/client.py",
+    "ag2/tools/skills/skill_search/config.py",
+    "ag2/tools/skills/skill_search/extractor.py",
+    "ag2/tools/skills/skill_search/lock.py",
+    "ag2/tools/skills/skill_search/toolkit.py",
+    "ag2/tools/skills/skill_types.py",
+    "ag2/tools/skills/toolkit.py",
+    "ag2/tools/subagents/__init__.py",
+    "ag2/tools/subagents/background.py",
+    "ag2/tools/subagents/persistent_stream.py",
+    "ag2/tools/subagents/run_task.py",
+    "ag2/tools/subagents/subagent_tool.py",
+    "ag2/tools/tool.py",
+    "ag2/tools/toolkits/__init__.py",
+    "ag2/tools/toolkits/filesystem.py",
+    "ag2/tools/toolkits/mcp_server/__init__.py",
+    "ag2/tools/toolkits/mcp_server/answering.py",
+    "ag2/tools/toolkits/mcp_server/toolkit.py",
+    "ag2/tools/toolkits/mcp_server/types.py",
+    "ag2/tools/types.py",
 ]
 
 strict = true
 ignore_missing_imports = true
 install_types = true
 non_interactive = true
-plugins = ["pydantic.mypy"]
+plugins = ["pydantic.mypy", "ag2.mypy"]
 
 # remove after all files in the repo are fixed
 follow_imports = "silent"
@@ -434,9 +620,33 @@ disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 disallow_any_unimported = true
 
+# `perplexity.types` re-exports its result types without an `__all__`, which
+# strict mode reads as "not exported". The alternative is importing from
+# `perplexity.generated.*`, which is internal.
+[[tool.mypy.overrides]]
+module = "perplexity.*"
+implicit_reexport = true
+
 [[tool.mypy.overrides]]
 module = "xai_sdk.*"
 follow_untyped_imports = true
+
+# `mcp-ui-server` is fully annotated but ships no `py.typed` marker, so mypy
+# would hand us `Any` from every name we import. Following it uses its real types.
+[[tool.mypy.overrides]]
+module = "mcp_ui_server.*"
+follow_untyped_imports = true
+
+# AG-UI's SDK does not ship typing metadata, so values crossing that boundary
+# are Any even though this module's own functions remain checked strictly.
+[[tool.mypy.overrides]]
+module = "ag2.ag_ui.*"
+disable_error_code = ["no-any-unimported"]
+
+# `sounddevice` ships no stubs, so its types arrive as Any at this module's boundary.
+[[tool.mypy.overrides]]
+module = "ag2.live.sound_device"
+disable_error_code = ["no-any-unimported"]
 
 # numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
 # under python_version = "3.10"; skip analysing numpy entirely (it is not our code).

@@ -10,13 +10,14 @@ from ag2.config.gemini.mappers import normalize_usage
 from ag2.events import Usage
 
 
-def _make_metadata(prompt=100, candidates=20, total=120, cached=None, thoughts=None):
+def _make_metadata(prompt=100, candidates=20, total=120, cached=None, thoughts=None, tool_use=None):
     m = MagicMock()
     m.prompt_token_count = prompt
     m.candidates_token_count = candidates
     m.total_token_count = total
     m.cached_content_token_count = cached
     m.thoughts_token_count = thoughts
+    m.tool_use_prompt_token_count = tool_use
     return m
 
 
@@ -53,12 +54,23 @@ class TestNormalizeUsage:
         result = normalize_usage(_make_metadata(prompt=50, candidates=None, total=None))
         assert result == Usage(prompt_tokens=50)
 
+    def test_counts_tool_use_prompt_tokens_as_prompt(self):
+        # Grounding and code-execution output enters the prompt, is billed as
+        # prompt, and sits inside the total beside the prompt count.
+        result = normalize_usage(_make_metadata(tool_use=40, total=160))
+        assert result == Usage(prompt_tokens=140, completion_tokens=20, total_tokens=160)
+
+    def test_tool_use_prompt_tokens_without_a_prompt_count(self):
+        result = normalize_usage(_make_metadata(prompt=None, tool_use=40))
+        assert result.prompt_tokens == 40
+
     def test_includes_thinking_tokens(self):
-        result = normalize_usage(_make_metadata(thoughts=296))
+        # Gemini counts thoughts beside the candidates, and both inside the total.
+        result = normalize_usage(_make_metadata(thoughts=296, total=416))
         assert result == Usage(
             prompt_tokens=100,
             completion_tokens=20,
-            total_tokens=120,
+            total_tokens=416,
             thinking_tokens=296,
         )
 

@@ -20,6 +20,7 @@ from ag2 import Agent
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_TEXT,
+    AccessBlock,
     AccessDeniedError,
     Envelope,
     Hub,
@@ -29,6 +30,7 @@ from ag2.network import (
     Passport,
     ProtocolError,
     Resume,
+    Rule,
 )
 from ag2.network.channel import ChannelState
 
@@ -461,7 +463,6 @@ async def test_outbound_access_check_runs_before_channel_check() -> None:
     """If a sender has no permission to reach a recipient, hub raises
     AccessDeniedError before checking channel existence — confirms the
     check ordering at the top of post_envelope."""
-    from ag2.network import AccessBlock, Rule
 
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)

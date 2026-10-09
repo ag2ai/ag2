@@ -9,10 +9,61 @@ from unittest.mock import MagicMock
 import pytest
 
 from ag2 import Agent, Context, MemoryStream, tool
-from ag2.events import ClientToolCallEvent, ToolCallEvent
-from ag2.middleware import ToolExecution, ToolResultType
+from ag2.events import ClientToolCallEvent, ToolCallEvent, ToolCallsEvent
+from ag2.middleware import BaseMiddleware, Middleware, ToolExecution, ToolResultType
 from ag2.testing import TestConfig
 from ag2.tools.final.client_tool import ClientTool
+
+
+class ProviderToolCallEvent(ToolCallEvent):
+    signature: str
+
+
+class ConstrainClientCall(BaseMiddleware):
+    async def on_tool_execution(
+        self, call_next: ToolExecution, event: ToolCallEvent, context: Context
+    ) -> ToolResultType:
+        constrained = ToolCallEvent(id=event.id, name="approved_tool", arguments='{"path":"/allowed"}')
+        return await call_next(constrained, context)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("constrain", [False, True])
+async def test_client_response_preserves_effective_call_and_provider_fields(
+    client_tool: ClientTool, constrain: bool
+) -> None:
+    original = ProviderToolCallEvent(
+        id="client-call",
+        name="my_client_tool",
+        arguments='{"path":"/untrusted"}',
+        vendor_metadata={"caller": {"type": "direct"}},
+        signature="provider-signature",
+    )
+    # Exercise the cached-arguments path used by provider mappers.
+    assert original.serialized_arguments == {"path": "/untrusted"}
+    agent = Agent(
+        "test",
+        config=TestConfig(original),
+        tools=[client_tool],
+        middleware=[Middleware(ConstrainClientCall)] if constrain else [],
+    )
+
+    reply = await agent.ask("Read the file")
+
+    name = "approved_tool" if constrain else "my_client_tool"
+    arguments = '{"path":"/allowed"}' if constrain else '{"path":"/untrusted"}'
+    expected = ProviderToolCallEvent(
+        id=original.id,
+        name=name,
+        arguments=arguments,
+        vendor_metadata=original.vendor_metadata,
+        signature=original.signature,
+    )
+    assert reply.response.tool_calls == ToolCallsEvent([expected])
+    assert reply.response.tool_calls.to_api() == ToolCallsEvent([expected]).to_api()
+    assert original.name == "my_client_tool"
+    assert original.arguments == '{"path":"/untrusted"}'
+    assert original.serialized_arguments == {"path": "/untrusted"}
 
 
 @pytest.fixture()

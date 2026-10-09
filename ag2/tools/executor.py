@@ -5,7 +5,8 @@
 import asyncio
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
-from typing import Any
+from copy import copy
+from typing import Any, cast
 
 from fast_depends.library.serializer import SerializerProto
 
@@ -84,8 +85,8 @@ class ToolExecutor:
             await asyncio.gather(*tasks, return_exceptions=True)
             raise
 
-        for event in outcomes:
-            match event:
+        for outcome in outcomes:
+            match outcome:
                 case ClientToolCallEvent() as ev:
                     client_calls.append(ev)
 
@@ -121,15 +122,29 @@ class ToolExecutor:
                     results.append(ev)
 
         if client_calls:
+            # Preserve provider fields from the model's calls while dispatching
+            # the names and arguments that tool middleware actually approved.
+            pending = {call.id: call for call in client_calls}
             await context.send(
                 ModelResponse(
-                    tool_calls=ToolCallsEvent(client_calls),
+                    tool_calls=ToolCallsEvent([
+                        _client_call_for_response(call, pending[call.id]) for call in event.calls if call.id in pending
+                    ]),
                     response_force=True,
                 )
             )
 
         else:
             await context.send(ToolResultsEvent(results))
+
+
+def _client_call_for_response(call: ToolCallEvent, outcome: ClientToolCallEvent) -> ToolCallEvent:
+    response_call = copy(call)
+    response_call.name = outcome.name
+    response_call.arguments = outcome.arguments
+    # A mapper or middleware may already have decoded the original arguments.
+    response_call._serialized_arguments = None
+    return response_call
 
 
 async def _execute_call(
@@ -142,7 +157,10 @@ async def _execute_call(
     ) as result:
         try:
             await context.send(call)
-            return await result
+            # The condition above names the three types this can settle as;
+            # `Stream.get` is typed for any event, since its filter is a runtime
+            # object the checker cannot read.
+            return cast("ToolErrorEvent | ToolResultEvent | ClientToolCallEvent", await result)
 
         # Same reasoning as in FunctionTool: a middleware that asked for human
         # input and got nowhere has not produced a tool failure, and an approval

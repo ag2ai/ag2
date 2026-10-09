@@ -184,7 +184,7 @@ Detects repetitive tool-call patterns. Maintains a sliding window of recent tool
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.observer import LoopDetector
+from ag2.observers import LoopDetector
 from ag2.config import OpenAIConfig
 
 agent = Agent(
@@ -200,7 +200,7 @@ Tracks cumulative token usage across `UsageEvent` — the framework's accounting
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.observer import TokenMonitor
+from ag2.observers import TokenMonitor
 from ag2.config import OpenAIConfig
 
 agent = Agent(
@@ -236,7 +236,7 @@ Subclass `BaseObserver`, pick a [Watch](/docs/user-guide/advanced/watches), impl
 
 ```python linenums="1" hl_lines="10 13 17-21"
 from ag2 import Context
-from ag2.observer import BaseObserver
+from ag2.observers import BaseObserver
 from ag2.watch import CadenceWatch
 from ag2.events import BaseEvent, ModelResponse, ObserverAlert, Severity
 

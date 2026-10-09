@@ -23,12 +23,14 @@ __all__ = (
     "inbox_overflow_path",
     "passport_path",
     "registry_root",
+    "remote_owners_path",
     "resume_path",
     "rule_path",
     "runtime_path",
     "skill_path",
     "spans_path",
     "task_checkpoint_path",
+    "task_checkpoint_writers_path",
     "task_events_path",
     "task_metadata_path",
     "tasks_root",
@@ -62,6 +64,12 @@ def runtime_path(agent_id: str) -> str:
 
 def rule_path(agent_id: str) -> str:
     return f"/agents/{agent_id}/rule.json"
+
+
+def remote_owners_path(agent_id: str) -> str:
+    """Agents that own a ``remote_agent`` identity registered over the
+    wire — those bound to the registering connection."""
+    return f"/agents/{agent_id}/owners.json"
 
 
 def inbox_cursor_path(agent_id: str) -> str:
@@ -133,6 +141,12 @@ def task_checkpoint_path(task_id: str) -> str:
     """Owner-supplied resume state for crash recovery. Single JSON
     blob, last-write-wins. Opaque to the framework."""
     return f"/tasks/{task_id}/checkpoint.json"
+
+
+def task_checkpoint_writers_path(task_id: str) -> str:
+    """Agents allowed to read and write the checkpoint of a task the hub
+    has not observed: those bound to the connection that first wrote it."""
+    return f"/tasks/{task_id}/checkpoint_writers.json"
 
 
 # ── Audit ────────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import contextlib
 import queue
 import threading
 from types import TracebackType
+from typing import Any
 
 import numpy as np
 import sounddevice as sd
@@ -110,7 +111,9 @@ class Recorder:
         self._queue = None
         self._loop = None
 
-    def _callback(self, indata: np.ndarray, _frames: int, _time, _status) -> None:
+    # `_time` is a cffi `PaStreamCallbackTimeInfo` pointer (sounddevice documents it as
+    # `CData`); sounddevice exports no Python type for it and we never read it.
+    def _callback(self, indata: np.ndarray, _frames: int, _time: Any, _status: sd.CallbackFlags) -> None:
         # Runs on sounddevice's audio thread; hand off to the loop thread.
         # asyncio.Queue is NOT thread-safe, so we MUST go via call_soon_threadsafe.
         if self._loop is None:

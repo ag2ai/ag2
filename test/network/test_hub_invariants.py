@@ -78,6 +78,7 @@ from ag2.network.hub.layout import (
     rule_path,
     skill_path,
 )
+from ag2.network.policies import AGENT_CLIENT_DEP
 from ag2.network.rule import InboxBlock, LimitsBlock
 from ag2.stream import MemoryStream
 from ag2.task import (
@@ -383,8 +384,6 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    from ag2.network.policies import AGENT_CLIENT_DEP
-
     alice = await hub.register(_agent("alice"))
     await hub.register(_agent("bob", "the answer is 42"))
 
@@ -470,8 +469,6 @@ async def test_delegate_resolves_functions_namespaced_target() -> None:
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
 
-    from ag2.network.policies import AGENT_CLIENT_DEP
-
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
     alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
@@ -506,8 +503,6 @@ async def test_delegate_unknown_target_lists_available_peers() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
     link = LocalLink(hub)
-
-    from ag2.network.policies import AGENT_CLIENT_DEP
 
     alice_hc = HubClient(link, hub=hub)
     bob_hc = HubClient(link, hub=hub)
@@ -549,8 +544,6 @@ async def test_delegate_to_self_returns_actionable_error() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    from ag2.network.policies import AGENT_CLIENT_DEP
-
     alice = await hub.register(_agent("alice"))
 
     delegate_tool = make_delegate_tool(alice)
@@ -575,8 +568,6 @@ async def test_delegate_fails_fast_when_channel_closes_before_reply() -> None:
     delegate returns immediately with an error — not after the 300s timeout."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-
-    from ag2.network.policies import AGENT_CLIENT_DEP
 
     alice = await hub.register(_agent("alice"))
     bob = await hub.register(_agent("bob"), attach_plugin=False)
@@ -913,8 +904,6 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
     clock = _MockClock("2026-01-01T00:00:00+00:00")
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
-
-    from ag2.network.policies import AGENT_CLIENT_DEP
 
     alice = await hub.register(_agent("alice"))
     bob = await hub.register(_agent("bob"), attach_plugin=False)

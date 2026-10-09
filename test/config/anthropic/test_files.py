@@ -5,10 +5,48 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx2
 import pytest
 
+from ag2.config.anthropic import AnthropicConfig
 from ag2.config.anthropic.files import AnthropicFilesClient
 from ag2.files.types import FileContent, FileProvider, UploadedFile
+
+_METADATA = {
+    "id": "file-011CNha8",
+    "type": "file",
+    "filename": "output.csv",
+    "mime_type": "text/csv",
+    "size_bytes": 9,
+    "created_at": "2025-01-01T00:00:00Z",
+}
+
+
+def _transport_config() -> AnthropicConfig:
+    """A config whose transport answers the two calls `read` makes.
+
+    The SDK builds its own response objects from the wire, so the shapes under test
+    are the SDK's rather than a double's.
+    """
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path.endswith("/content"):
+            return httpx2.Response(200, content=b"file-data", headers={"content-type": "text/csv"})
+        return httpx2.Response(200, json=_METADATA)
+
+    return AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_takes_the_bytes_off_the_sdks_binary_response() -> None:
+    """`download` answers an `AsyncBinaryAPIResponse`, whose bytes are behind `read()`."""
+    result = await AnthropicFilesClient(_transport_config()).read("file-011CNha8")
+
+    assert result == FileContent(name="output.csv", data=b"file-data", media_type="text/csv")
 
 
 @pytest.mark.asyncio
@@ -35,20 +73,6 @@ class TestAnthropicFilesClient:
             created_at=1735689600.0,
         )
         assert result.created_at == 1735689600.0
-
-    @patch("ag2.config.anthropic.files.AsyncAnthropic")
-    async def test_read(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
-        mock_client = AsyncMock()
-        mock_anthropic_cls.return_value = mock_client
-        mock_client.beta.files.download.return_value = SimpleNamespace(content=b"file-data")
-        mock_client.beta.files.retrieve_metadata.return_value = SimpleNamespace(
-            filename="output.csv",
-            mime_type="text/csv",
-        )
-
-        result = await AnthropicFilesClient(anthropic_config).read("file-011CNha8")
-
-        assert result == FileContent(name="output.csv", data=b"file-data", media_type="text/csv")
 
     @patch("ag2.config.anthropic.files.AsyncAnthropic")
     async def test_list(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:

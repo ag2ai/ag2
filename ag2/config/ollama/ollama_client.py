@@ -130,7 +130,7 @@ class OllamaClient(LLMClient):
             usage=usage,
             model=response.model,
             provider="ollama",
-            finish_reason=getattr(response, "done_reason", None),
+            finish_reason=response.done_reason,
         )
 
     async def _call_streaming(
@@ -175,7 +175,7 @@ class OllamaClient(LLMClient):
                 p_n = float(chunk.prompt_eval_count or 0)
                 c_n = float(chunk.eval_count or 0)
                 usage = Usage(prompt_tokens=p_n, completion_tokens=c_n, total_tokens=p_n + c_n)
-                finish_reason = getattr(chunk, "done_reason", None)
+                finish_reason = chunk.done_reason
                 resolved_model = chunk.model
 
         message: ModelMessage | None = None

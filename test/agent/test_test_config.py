@@ -2,14 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Iterable
 from unittest.mock import MagicMock
 
 import pytest
 
-from ag2 import Agent
-from ag2.events import ToolCallEvent
+from ag2 import Agent, Context, MemoryStream, tool
+from ag2.events import ModelRequest, ToolCallEvent
 from ag2.exceptions import ConfigNotProvidedError, ToolNotFoundError
-from ag2.testing import TestConfig
+from ag2.testing import ModelCall, TestConfig, TrackingConfig
+from ag2.tools.final import FunctionToolSchema
 
 
 @pytest.fixture()
@@ -64,3 +66,32 @@ async def test_ask_without_any_config() -> None:
 
     with pytest.raises(ConfigNotProvidedError):
         await agent.ask("Hi!")
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize("iterable_type", ["list", "tuple", "generator"])
+async def test_tracking_config_preserves_tools_iterable(iterable_type: str) -> None:
+    wrapped = TrackingConfig(TestConfig("result"))
+    config = TrackingConfig(wrapped)
+    agent = Agent("a", config=config)
+    context = Context(stream=MemoryStream())
+    schemas = await tool(lambda: "answer", name="answer").schemas(context)
+    tools: Iterable[FunctionToolSchema]
+    if iterable_type == "list":
+        tools = schemas
+    elif iterable_type == "tuple":
+        tools = tuple(schemas)
+    else:
+        tools = (schema for schema in schemas)
+
+    await config.create()(
+        [ModelRequest.ensure_request(["go"])],
+        context=context,
+        tools=tools,
+        response_schema=None,
+        serializer=agent.serializer,
+    )
+
+    expected = [ModelCall(prompt=(), tools=tuple(schemas), dependencies={}, variables={})]
+    assert config.calls == expected
+    assert wrapped.calls == expected

@@ -25,6 +25,18 @@ ElevenLabs classes need the optional dependency and `ELEVENLABS_API_KEY` in the 
 pip install "ag2[elevenlabs] sounddevice[numpy]"
 ```
 
+## OpenAI credentials
+
+The OpenAI voice configs (`OpenAIRealTimeConfig`, `OpenAITranscriber`, `OpenAITranslationTranscriber`, `OpenAITTSConfig`) accept a keyword-only `api_key`. Omit it to keep the SDK's `OPENAI_API_KEY` default:
+
+```python linenums="1"
+from ag2.live import OpenAITTSConfig
+
+tts = OpenAITTSConfig("gpt-4o-mini-tts", api_key="sk-...")
+```
+
+For a shared client or other SDK options, pass `client=` instead. Passing both `client` and `api_key` raises `ValueError`.
+
 ## Audio I/O primitives
 
 `SoundDeviceRecorder` captures microphone input and `SoundDevicePlayer` plays synthesized speech. Both are thin wrappers around the [`sounddevice`](https://python-sounddevice.readthedocs.io/){.external-link target="_blank"} library and share the same event stream.
@@ -43,7 +55,7 @@ The recorder produces a `VoiceInput` containing 16-bit PCM bytes plus the sample
 
 ## Speech-to-Text
 
-`OpenAITranscriber` implements the `STTConfig` protocol and exposes a `.pipe(agent)` method that wraps an `Agent` in a `VoicePipeline`. Calling `pipeline.ask(voice)` transcribes the audio and forwards the text to the agent's normal `ask()` flow.
+`OpenAITranscriber` (the OpenAI `STTConfig` class from `ag2.live.openai`) implements the `STTConfig` protocol and exposes a `.pipe(agent)` method that wraps an `Agent` in a `VoicePipeline`. Calling `pipeline.ask(voice)` transcribes the audio and forwards the text to the agent's normal `ask()` flow.
 
 ```python linenums="1" hl_lines="13 18"
 import asyncio
@@ -365,6 +377,8 @@ Both halves share one stream, so `TranscriptionChunkEvent` (from the transcriber
 
 ## Examples
 
+- `examples/stt_tts.py/stt.py` — transcription only, with a follow-up turn
+- `examples/stt_tts.py/tts.py` — `TTSObserver` speaking an agent's reply
 - `examples/stt_tts.py/stt_tts.py` — the OpenAI round-trip
 - `examples/stt_tts.py/elevenlabs_stt_tts_streaming.py` — streaming TTS, prints time-to-first-byte
 - `examples/stt_tts.py/elevenlabs_stt_tts_sync.py` — buffered TTS with `eleven_v3`

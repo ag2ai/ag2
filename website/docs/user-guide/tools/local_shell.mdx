@@ -84,8 +84,8 @@ sh = SandboxShellTool(
 | :--- | :--- | :--- |
 | `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment` / `TenkiEnvironment` / `E2BEnvironment`. `None` → `LocalEnvironment()` |
 | `allowed` | `None` | Whitelist of command prefixes, matched word by word. Setting it switches on [restricted mode](#restricted-mode). `None` → all commands allowed |
-| `blocked` | `None` | Blacklist of command prefixes. `None` → nothing blocked |
-| `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"` |
+| `blocked` | `None` | Blacklist of command prefixes, matched word by word against the argv. Setting it switches on [restricted mode](#restricted-mode). `None` → nothing blocked |
+| `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"`. Setting it switches on [restricted mode](#restricted-mode) |
 | `readonly` | `False` | When `True` and `allowed` is not set, restricts to a built-in list of commands that cannot write files or run programs (`cat`, `ls`, `grep`, …) in [restricted mode](#restricted-mode) |
 
 ### LocalEnvironment Parameters
@@ -102,13 +102,14 @@ sh = SandboxShellTool(
 
 Filtering is applied in this order on every `run_shell_command(command)` call:
 
-1. **`allowed`** — if set, the command must match at least one prefix and use no shell syntax (pipes, redirects, chaining). Otherwise: `"Command not allowed: <cmd>"`.
-2. **`blocked`** — if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
-3. **`ignore`** — literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
-4. **Execute** — the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
+1. **`allowed`** — if set, the command must match at least one prefix. Otherwise: `"Command not allowed: <cmd>"`.
+2. **Shell syntax** — in [restricted mode](#restricted-mode), a command with unquoted pipes, redirects or chaining is rejected.
+3. **`blocked`** — if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
+4. **`ignore`** — literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
+5. **Execute** — the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
 
 !!! note
-    `ignore` checks only literal path tokens in the command string. Paths computed dynamically inside the shell (variable substitution, command substitution, glob expansion) are not inspected.
+    `ignore` checks only the literal path words of the command. Because restricted mode runs no shell, nothing is computed after the check (variables and command substitution are passed on literally). A glob word is expanded for the check, and the command is refused if it matches an ignored file, since some programs expand globs themselves (MSYS tools on Windows). That expansion needs the host filesystem, so it applies to the local backend only. A program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
 
 ## Read-Only Mode
 
@@ -132,14 +133,16 @@ For real isolation, use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEn
 
 ## Restricted Mode
 
-Setting `allowed` or `readonly=True` switches on restricted mode. The command is split into words once, the same way a POSIX shell quotes them, and that exact argv is checked and then run **without a shell**. Nothing can expand after the check, so none of these work:
+Setting `allowed`, `blocked`, `ignore` or `readonly=True` switches on restricted mode. The command is split into words once, the same way a POSIX shell quotes them, and that exact argv is checked and then run **without a shell**. Nothing can expand after the check, so none of these work:
 
-- pipes, redirects and chaining (`|`, `>`, `<`, `;`, `&`, `&&`, `||`, newlines), rejected with a clear error;
+- pipes, redirects and chaining (`|`, `>`, `<`, `;`, `&`, `&&`, `||`, newlines), rejected with a clear error unless quoted;
 - globs: `ls *.py` passes `*.py` to `ls` literally, so use `grep -r --include='*.py'` or `ls` instead;
 - variables, `~`, brace expansion and command substitution;
 - shell builtins: `echo` and `pwd` run the programs found on `PATH`.
 
-Without `allowed` and `readonly`, commands run through `sh -c` with full shell syntax.
+Without `allowed`, `blocked`, `ignore` and `readonly`, commands run through `sh -c` with full shell syntax.
+
+`blocked` matches the argv, with the program by its base name, so `rm`, `/bin/rm` and `rm  -rf` are all caught by `blocked=["rm"]`. It cannot stop a program that starts another one (`sh -c`, `env`, `xargs`), so for a hard boundary use `allowed` or an isolated backend.
 
 ## Accessing the Working Directory
 
