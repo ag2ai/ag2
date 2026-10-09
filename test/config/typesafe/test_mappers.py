@@ -79,6 +79,17 @@ def test_bool_criteria_override() -> None:
     assert question == Noul(criteria={"true": "Billing issue", "false": "Anything else"})
 
 
+@pytest.mark.parametrize(
+    "criteria",
+    [{"true": "Billing issue"}, {"false": "Anything else"}],
+    ids=["true-only", "false-only"],
+)
+def test_bool_one_described_outcome_is_enough(criteria: dict[str, str]) -> None:
+    question = response_proto_to_question(ResponseSchema(bool), instructions=None, criteria=criteria)
+
+    assert question.model_dump(mode="json") == {"type": "noul", "criteria": criteria}
+
+
 def test_bool_needs_a_question() -> None:
     with pytest.raises(ValueError, match="yes/no question needs asking"):
         response_proto_to_question(ResponseSchema(bool), instructions=None)
