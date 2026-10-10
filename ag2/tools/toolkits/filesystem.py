@@ -199,10 +199,11 @@ class FilesystemToolkit(Toolkit):
             # and writes the modified payload back in the same encoding.
             # Without this, the read/write pair on Windows would silently
             # transcode the file into cp1252 every time the model edits it.
-            text = target.read_text(encoding="utf-8")
+            # 2026-10-09: Preserve line endings during exact text replacement.
+            text = target.read_bytes().decode("utf-8")
             if old_content not in text:
                 raise ValueError(f"old_content not found in {path}")
-            target.write_text(text.replace(old_content, new_content, 1), encoding="utf-8")
+            target.write_bytes(text.replace(old_content, new_content, 1).encode("utf-8"))
             return f"Successfully updated {path}"
 
         return _update_file
