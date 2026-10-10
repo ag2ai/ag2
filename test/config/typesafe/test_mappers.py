@@ -80,14 +80,17 @@ def test_bool_criteria_override() -> None:
 
 
 @pytest.mark.parametrize(
-    "criteria",
-    [{"true": "Billing issue"}, {"false": "Anything else"}],
+    "criteria, expected",
+    [
+        ({"true": "Billing issue"}, {"true": "Billing issue", "false": None}),
+        ({"false": "Anything else"}, {"true": None, "false": "Anything else"}),
+    ],
     ids=["true-only", "false-only"],
 )
-def test_bool_one_described_outcome_is_enough(criteria: dict[str, str]) -> None:
+def test_bool_one_described_outcome_is_enough(criteria: dict[str, str], expected: dict[str, str | None]) -> None:
     question = response_proto_to_question(ResponseSchema(bool), instructions=None, criteria=criteria)
 
-    assert question.model_dump(mode="json") == {"type": "noul", "criteria": criteria}
+    assert question.model_dump(mode="json") == {"type": "noul", "criteria": expected}
 
 
 def test_bool_needs_a_question() -> None:
