@@ -99,7 +99,7 @@ mistral = ["mistralai>=2.8.0,<3"]
 ollama = ["ollama>=0.4.7"]
 bedrock = ["aiobotocore>=3.9.1,<4"]
 dashscope = ["dashscope>=1.25.13"]
-typesafe = ["typesafe-sdk>=0.7.1,<0.8"]
+typesafe = ["typesafe-sdk>=0.7.4,<0.8"]
 
 redis = ["redis>=5.0,<9"]
 # SDK only: ag2 builds spans and hands them to whatever SpanProcessor the caller

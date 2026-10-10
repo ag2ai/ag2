@@ -7,7 +7,7 @@ from enum import Enum, IntEnum
 from typing import Any
 
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from typesafe_sdk import Choice, ChoiceAnswer, Noul, NoulAnswer, Score, ScoreAnswer
 from typesafe_sdk import Usage as TypeSafeUsage
 
@@ -207,7 +207,7 @@ def test_convert_state_serialises_history() -> None:
             CompactionSummary(summary="The customer was refunded.", event_count=3),
             ModelRequest([DataInput({"order": 42})]),
         ],
-        SerializerCls,
+        PydanticSerializer(),
     )
 
     assert state == [
@@ -221,7 +221,7 @@ def test_convert_state_serialises_history() -> None:
 
 def test_convert_state_rejects_files() -> None:
     with pytest.raises(UnsupportedInputError, match="FileIdInput"):
-        convert_state([ModelRequest([FileIdInput("file_1")])], SerializerCls)
+        convert_state([ModelRequest([FileIdInput("file_1")])], PydanticSerializer())
 
 
 def test_answer_metadata() -> None:
