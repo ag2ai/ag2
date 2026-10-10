@@ -1,0 +1,167 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+"""A deterministic world and a context-sensitive fake model.
+
+The fake model only knows what its context shows it, which is what makes a
+compaction observable without a real LLM:
+
+* it needs the session token from ``login`` to ``fetch``; if the token is not in
+  its context it logs in again (a refetch), or — with ``guess_token`` — calls
+  ``fetch`` with a made-up token (a blocked call);
+* it fetches the next item after the ones its context shows fetched, so a
+  context that lost earlier fetches makes it fetch them again (refetches).
+"""
+
+import json
+import re
+from collections.abc import Callable, Sequence
+from typing import Any
+
+from typing_extensions import Self
+
+from ag2 import Agent, Context, MemoryStream, tool
+from ag2.compact import CompactionSummary
+from ag2.config import LLMClient, ModelConfig, ModelProvider
+from ag2.events import (
+    BaseEvent,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolResultsEvent,
+    render_for_prompt,
+)
+from ag2.extensions.compaction_verifier import ReplayEnvironment
+from ag2.testing import TestConfig
+
+ITEMS = ("a", "b", "c", "d", "e", "f", "g", "h")
+TOKEN = "tok-7f3a"
+
+
+class World:
+    """A login-then-fetch service with deterministic state."""
+
+    def __init__(self) -> None:
+        self.logins = 0
+        self.fetched: list[str] = []
+
+    def login(self, user: str) -> str:
+        """Log in and return a session token."""
+        self.logins += 1
+        return TOKEN
+
+    def fetch(self, token: str, item: str) -> str:
+        """Fetch one item with a session token."""
+        if token != TOKEN:
+            raise PermissionError("invalid session token")
+        if item not in ITEMS:
+            raise KeyError(item)
+        self.fetched.append(item)
+        return f"value of {item}"
+
+
+def world_tools() -> dict[str, Callable[..., Any]]:
+    world = World()
+    return {"login": world.login, "fetch": world.fetch}
+
+
+def world_environment() -> ReplayEnvironment:
+    return ReplayEnvironment(world_tools)
+
+
+class _ContextAwareClient(LLMClient):
+    def __init__(self, guess_token: bool, ollama_ids: bool, require_request: bool) -> None:
+        self._guess_token = guess_token
+        self._ollama_ids = ollama_ids
+        self._require_request = require_request
+        self._calls = 0
+
+    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+        self._calls += 1
+        if self._require_request and not any(isinstance(m, ModelRequest) for m in messages):
+            raise RuntimeError("provider rejected the context: no user request")
+        # Only what tools returned (or a summary of it) counts as known: the
+        # model knows the token if it saw login's output.
+        text = "\n".join(render_for_prompt(m) for m in messages if isinstance(m, (ToolResultsEvent, CompactionSummary)))
+        fetched = set(re.findall(r"value of (\w)", text))
+        remaining = [i for i in ITEMS if i not in fetched]
+        if not remaining:
+            return ModelResponse(ModelMessage("all items fetched"))
+        call_id = "call_0" if self._ollama_ids else f"call-{id(self)}-{self._calls}"
+        if TOKEN in text:
+            args = {"token": TOKEN, "item": remaining[0]}
+            return ModelResponse(
+                tool_calls=ToolCallsEvent([ToolCallEvent("fetch", arguments=json.dumps(args), id=call_id)])
+            )
+        if self._guess_token:
+            args = {"token": "tok-guess", "item": remaining[0]}
+            return ModelResponse(
+                tool_calls=ToolCallsEvent([ToolCallEvent("fetch", arguments=json.dumps(args), id=call_id)])
+            )
+        return ModelResponse(
+            tool_calls=ToolCallsEvent([ToolCallEvent("login", arguments=json.dumps({"user": "ada"}), id=call_id)])
+        )
+
+
+class ContextAwareConfig(ModelConfig):
+    """A fake model whose next call depends only on what its context shows.
+
+    With ``ollama_ids`` it numbers calls per response the way AG2's Ollama
+    client does, so every call is ``call_0``. With ``require_request`` it fails,
+    as a provider rejecting the request would, when its context holds no user
+    request.
+    """
+
+    def __init__(self, *, guess_token: bool = False, ollama_ids: bool = False, require_request: bool = False) -> None:
+        self._guess_token = guess_token
+        self._ollama_ids = ollama_ids
+        self._require_request = require_request
+
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError
+
+    @property
+    def model(self) -> str:
+        return "context-aware-fake"
+
+    def copy(self) -> Self:
+        return self
+
+    def create(self) -> LLMClient:
+        return _ContextAwareClient(self._guess_token, self._ollama_ids, self._require_request)
+
+    def create_files_client(self) -> Any:
+        raise NotImplementedError
+
+
+async def record_trajectory(fetches: int = 6, *, ollama_ids: bool = False, one_round: bool = False) -> list[BaseEvent]:
+    """A real AG2 history: log in once, then fetch ``fetches`` items, then answer.
+
+    With ``ollama_ids`` every call is ``call_0``, as AG2's Ollama client numbers
+    calls per response. With ``one_round`` the model issues every call in a
+    single response, so the history has one tool round.
+    """
+    ids = ["call_0"] * (fetches + 1) if ollama_ids else [f"rec-{i}" for i in range(fetches + 1)]
+    calls = [ToolCallEvent("login", arguments='{"user": "ada"}', id=ids[0])]
+    calls += [
+        ToolCallEvent("fetch", arguments=json.dumps({"token": TOKEN, "item": ITEMS[i]}), id=ids[i + 1])
+        for i in range(fetches)
+    ]
+    turns: list[Any] = [calls] if one_round else list(calls)
+    turns.append("done")
+    agent = Agent("recorder", config=TestConfig(*turns, raise_tool_errors=False))
+    stream = MemoryStream()
+    await agent.ask("Fetch the items.", stream=stream, tools=[tool(f, name=n) for n, f in world_tools().items()])
+    return list(await stream.history.get_events())
+
+
+async def record_answer() -> list[BaseEvent]:
+    """A real AG2 history in which the model answers without calling any tool."""
+    agent = Agent("recorder", config=TestConfig("nothing to fetch"))
+    stream = MemoryStream()
+    await agent.ask("Fetch the items.", stream=stream, tools=[tool(f, name=n) for n, f in world_tools().items()])
+    return list(await stream.history.get_events())
