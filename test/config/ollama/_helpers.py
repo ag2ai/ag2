@@ -3,10 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from dataclasses import dataclass
 from typing import Any
 
-from aiohttp import web
+import httpx
 from fast_depends.use import SerializerCls
 
 from ag2 import Context, MemoryStream
@@ -17,11 +16,14 @@ from ag2.events import BaseEvent, ModelRequest, ModelResponse, TextInput
 def make_chunk(
     *,
     content: str = "",
+    thinking: str | None = None,
     tool_calls: list[tuple[str, dict[str, Any]]] | None = None,
     done: bool = False,
 ) -> dict[str, Any]:
     """One `/api/chat` payload: a stream chunk, or the whole reply when not streaming."""
     message: dict[str, Any] = {"role": "assistant", "content": content}
+    if thinking:
+        message["thinking"] = thinking
     if tool_calls:
         message["tool_calls"] = [{"function": {"name": name, "arguments": args}} for name, args in tool_calls]
     chunk: dict[str, Any] = {"model": "m1", "message": message, "done": done}
@@ -30,49 +32,38 @@ def make_chunk(
     return chunk
 
 
-@dataclass(slots=True)
-class OllamaRequest:
-    path: str
-    body: dict[str, Any]
-
-
 class FakeOllama:
-    """Local Ollama endpoint: records requests, answers with scripted payloads.
+    """Scripts `/api/chat` replies on an `httpx.MockTransport` and records the requests it gets.
 
     `chunks` are sent as newline-delimited JSON when the request asks to stream; otherwise the
     last chunk, which carries the whole reply, is sent as one JSON document.
     """
 
     def __init__(self) -> None:
-        self.url = ""
-        self.requests: list[OllamaRequest] = []
+        self.requests: list[httpx.Request] = []
         self.chunks: list[dict[str, Any]] = [make_chunk(content="ok", done=True)]
 
-    def config(self, **overrides: Any) -> OllamaConfig:
-        options: dict[str, Any] = {"model": "m1", "host": self.url, **overrides}
-        return OllamaConfig(**options)
+    def client(self, **kwargs: Any) -> httpx.AsyncClient:
+        return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), **kwargs)
+
+    def config(self, http_client: httpx.AsyncClient | None = None, **overrides: Any) -> OllamaConfig:
+        return OllamaConfig(**{"model": "m1", "http_client": http_client or self.client(), **overrides})
+
+    @property
+    def request(self) -> httpx.Request:
+        [request] = self.requests
+        return request
 
     @property
     def body(self) -> dict[str, Any]:
-        [request] = self.requests
-        return request.body
+        return json.loads(self.request.content)
 
-    def app(self) -> web.Application:
-        app = web.Application()
-        app.router.add_post("/api/chat", self._chat)
-        return app
-
-    async def _chat(self, request: web.Request) -> web.StreamResponse:
-        body = await request.json()
-        self.requests.append(OllamaRequest(request.path, body))
-        if not body.get("stream"):
-            return web.json_response(self.chunks[-1])
-        response = web.StreamResponse(headers={"content-type": "application/x-ndjson"})
-        await response.prepare(request)
-        for chunk in self.chunks:
-            await response.write(json.dumps(chunk).encode() + b"\n")
-        await response.write_eof()
-        return response
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if not json.loads(request.content).get("stream"):
+            return httpx.Response(200, json=self.chunks[-1])
+        body = b"".join(json.dumps(chunk).encode() + b"\n" for chunk in self.chunks)
+        return httpx.Response(200, headers={"content-type": "application/x-ndjson"}, content=body)
 
 
 def recording(stream: MemoryStream) -> list[BaseEvent]:
@@ -86,14 +77,18 @@ def recording(stream: MemoryStream) -> list[BaseEvent]:
     return captured
 
 
-async def ask(config: OllamaConfig) -> tuple[ModelResponse, list[BaseEvent]]:
+async def ask(
+    config: OllamaConfig,
+    messages: list[BaseEvent] | None = None,
+    tools: list[Any] | None = None,
+) -> tuple[ModelResponse, list[BaseEvent]]:
     """One client call; returns the response and every event the client sent."""
     stream = MemoryStream()
     events = recording(stream)
     response = await config.create()(
-        messages=[ModelRequest([TextInput("hello")])],
+        messages=messages or [ModelRequest([TextInput("hello")])],
         context=Context(stream=stream),
-        tools=[],
+        tools=tools or [],
         response_schema=None,
         serializer=SerializerCls,
     )
