@@ -4,8 +4,10 @@
 
 import pytest
 
-from ag2 import Context, ToolResult
+from ag2 import Agent, Context, MemoryStream, ToolResult
 from ag2.events import (
+    ImageInput,
+    ModelMessage,
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -13,8 +15,10 @@ from ag2.events import (
     ToolCallsEvent,
     ToolResultEvent,
     ToolResultsEvent,
+    estimated_tokens,
 )
-from ag2.policies.token_budget import TokenBudgetPolicy
+from ag2.policies import ConversationPolicy, TokenBudgetPolicy
+from ag2.testing import TestConfig, TrackingConfig
 
 
 def _tool_response(call_id: str = "tc_1", name: str = "get") -> ModelResponse:
@@ -28,6 +32,84 @@ def _tool_results(parent_id: str = "tc_1", name: str = "get") -> ToolResultsEven
     return ToolResultsEvent(
         results=[ToolResultEvent(parent_id=parent_id, name=name, result=ToolResult("ok"))],
     )
+
+
+@pytest.mark.asyncio
+class TestContentBudget:
+    @pytest.mark.parametrize("chars_per_token", [1, 4])
+    async def test_long_user_content_is_counted_in_full(self, chars_per_token: int) -> None:
+        latest = ModelRequest([TextInput("next")])
+        events = [ModelRequest([TextInput("x" * 10_000)]), latest]
+        policy = TokenBudgetPolicy(max_tokens=1000, chars_per_token=chars_per_token)
+
+        _, result = await policy.apply([], events, Context(stream=MemoryStream()))
+
+        assert result == [latest]
+
+    async def test_long_tool_result_is_counted_in_full(self) -> None:
+        latest = ModelRequest([TextInput("next")])
+        events = [
+            _tool_response(),
+            ToolResultsEvent([ToolResultEvent(parent_id="tc_1", name="get", result=ToolResult("x" * 10_000))]),
+            latest,
+        ]
+        policy = TokenBudgetPolicy(max_tokens=1000)
+
+        _, result = await policy.apply([], events, Context(stream=MemoryStream()))
+
+        assert result == [latest]
+
+    async def test_image_uses_a_modality_budget(self) -> None:
+        latest = ModelRequest([TextInput("next")])
+        events = [ModelRequest([ImageInput(data=b"\x89PNG0000", media_type="image/png")]), latest]
+        policy = TokenBudgetPolicy(max_tokens=500)
+
+        _, result = await policy.apply([], events, Context(stream=MemoryStream()))
+
+        assert result == [latest]
+
+    @pytest.mark.parametrize("max_tokens", [0, 1000])
+    async def test_oversized_latest_event_is_preserved(self, max_tokens: int) -> None:
+        latest = ModelRequest([TextInput("x" * 10_000)])
+        events = [ModelRequest([TextInput("older")]), latest]
+        policy = TokenBudgetPolicy(max_tokens=max_tokens)
+
+        _, result = await policy.apply([], events, Context(stream=MemoryStream()))
+
+        assert result == [latest]
+
+    async def test_short_content_does_not_pay_for_display_scaffolding(self) -> None:
+        events = [ModelRequest([TextInput("abcd")]), ModelRequest([TextInput("efgh")])]
+        policy = TokenBudgetPolicy(max_tokens=2, transparent=True)
+
+        prompts, result = await policy.apply(["original"], events, Context(stream=MemoryStream()))
+
+        assert result == events
+        assert prompts == ["original"]
+
+    async def test_agent_assembly_trims_long_history_before_the_model_call(self) -> None:
+        stream = MemoryStream()
+        await stream.history.replace([
+            ModelRequest([TextInput("x" * 10_000)]),
+            ModelResponse(ModelMessage("acknowledged")),
+        ])
+        config = TrackingConfig(TestConfig("done"))
+        agent = Agent(
+            "budgeted",
+            config=config,
+            assembly=[ConversationPolicy(), TokenBudgetPolicy(1000, transparent=True)],
+        )
+
+        reply = await agent.ask("next", stream=stream)
+
+        assert reply.body == "done"
+        assert config.calls[-1].prompt == ("[token_budget] Showing 2 of 3 events (token budget).",)
+
+
+@pytest.mark.parametrize("chars_per_token", [0, -1])
+def test_rejects_nonpositive_chars_per_token(chars_per_token: int) -> None:
+    with pytest.raises(ValueError, match="chars_per_token must be greater than 0"):
+        TokenBudgetPolicy(max_tokens=1000, chars_per_token=chars_per_token)
 
 
 class TestNoTrimming:
@@ -48,7 +130,7 @@ class TestTrimming:
         # Use a very tight budget so only the last event fits
         last = ModelRequest([TextInput("z")])
         events = [ModelRequest([TextInput("a" * 200)]), last]
-        budget_tokens = (len(str(last)) // 4) + 1
+        budget_tokens = estimated_tokens(last)
         policy = TokenBudgetPolicy(max_tokens=budget_tokens)
 
         _, result = await policy.apply([], events, context)
@@ -58,7 +140,7 @@ class TestTrimming:
     @pytest.mark.asyncio
     async def test_transparent_adds_prompt(self, context: Context) -> None:
         events = [ModelRequest([TextInput("a" * 200)]), ModelRequest([TextInput("b")])]
-        budget_tokens = (len(str(events[-1])) // 4) + 1
+        budget_tokens = estimated_tokens(events[-1])
         policy = TokenBudgetPolicy(max_tokens=budget_tokens, transparent=True)
 
         prompts, _ = await policy.apply(["existing"], events, context)
@@ -83,8 +165,8 @@ class TestOrphanedToolResults:
             request,
         ]
         # Tight budget: fits tool_result + request but not the big first event and tool_response
-        budget_chars = len(str(tool_result)) + len(str(request)) + 10
-        policy = TokenBudgetPolicy(max_tokens=budget_chars // 4 + 1)
+        budget_tokens = estimated_tokens(tool_result) + estimated_tokens(request)
+        policy = TokenBudgetPolicy(max_tokens=budget_tokens)
 
         _, result = await policy.apply([], events, context)
 
@@ -107,8 +189,8 @@ class TestOrphanedToolResults:
             tr2,
             request,
         ]
-        budget_chars = len(str(tr1)) + len(str(tr2)) + len(str(request)) + 10
-        policy = TokenBudgetPolicy(max_tokens=budget_chars // 4 + 1)
+        budget_tokens = sum(estimated_tokens(event) for event in [tr1, tr2, request])
+        policy = TokenBudgetPolicy(max_tokens=budget_tokens)
 
         _, result = await policy.apply([], events, context)
 
@@ -125,8 +207,8 @@ class TestOrphanedToolResults:
             tr,
             request,
         ]
-        budget_chars = len(str(tr)) + len(str(request)) + 10
-        policy = TokenBudgetPolicy(max_tokens=budget_chars // 4 + 1, transparent=True)
+        budget_tokens = estimated_tokens(tr) + estimated_tokens(request)
+        policy = TokenBudgetPolicy(max_tokens=budget_tokens, transparent=True)
 
         prompts, result = await policy.apply([], events, context)
 
@@ -146,8 +228,8 @@ class TestOrphanedToolResults:
             tr,
             req_b,
         ]
-        budget_chars = len(str(req_a)) + len(str(tr)) + len(str(req_b)) + 10
-        policy = TokenBudgetPolicy(max_tokens=budget_chars // 4 + 1)
+        budget_tokens = sum(estimated_tokens(event) for event in [req_a, tr, req_b])
+        policy = TokenBudgetPolicy(max_tokens=budget_tokens)
 
         _, result = await policy.apply([], events, context)
 
