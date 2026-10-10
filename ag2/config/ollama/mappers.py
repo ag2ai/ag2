@@ -116,15 +116,14 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                parts: list[dict[str, Any]] = []
+                parts: list[str] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
-                        parts.append({"type": "text", "text": part.content})
+                        parts.append(part.content)
                     elif isinstance(part, DataInput):
-                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                        parts.append(serializer.encode(part.data).decode())
                     else:
                         raise UnsupportedInputError(type(part).__name__, "ollama")
-                content = parts[0]["text"] if len(parts) == 1 and parts[0]["type"] == "text" else parts
-                result.append({"role": "tool", "content": content})
+                result.append({"role": "tool", "content": "\n".join(parts)})
 
     return result
