@@ -73,11 +73,15 @@ just calls `tool.register(...)` over a flat `Iterable[Tool]`, plus a fallback
   toolkits nest, and lets `MCPToolkit` lazily turn a server into a toolkit of
   proxies without the agent knowing.
 
-- **`MCPToolkit.schemas()` mutates `self._tools` on first call (lazy
-  discovery).** This looks like a side effect in a getter, but it is the
-  *correct* place per the project rule "no side effects in init": the MCP
-  handshake (network I/O) must happen at runtime, not construction. The double-
-  checked `_discover_lock` guards concurrent first calls.
+- **`MCPToolkit.schemas()` mutates `self._tools` on first call and when the
+  resolved configuration changes (lazy discovery).** This looks like a side
+  effect in a getter, but it is the *correct* place per the project rule
+  "no side effects in init": the MCP handshake (network I/O) must happen at
+  runtime, not construction. The `_discover_lock` keeps discovery and schema
+  generation consistent, and it is held across the MCP handshake, so turns that
+  resolve different configurations discover one after another. Only the most
+  recent resolved configuration is retained, with its mutable values copied so
+  an in-place edit cannot silently change the cache's comparison value.
 
 - **`set_provider` is a no-op on most tools.** Only `FunctionTool` (and via the
   composite, `Toolkit`) needs the DI provider, because only locally-executed
