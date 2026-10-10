@@ -21,7 +21,7 @@ from ag2.events import (
     ToolResultsEvent,
     Usage,
 )
-from ag2.exceptions import AG2Error, UnsupportedInputError, UnsupportedToolError
+from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.response import DecisionSpec, NotADecisionError, ResponseProto
 from ag2.tools.schemas import ToolSchema
 
@@ -30,7 +30,7 @@ PROVIDER = "typesafe"
 ANSWER_KEY = "answer"  # Name of the single question sent per request
 
 
-class UnsupportedResponseSchemaError(AG2Error):
+class UnsupportedResponseSchemaError(NotADecisionError):
     """Raised when a ``response_schema`` cannot be expressed as a TypeSafe question."""
 
     def __init__(self, reason: str) -> None:
@@ -88,7 +88,7 @@ def response_proto_to_question(
     criteria: Mapping[str, str] | None = None,
 ) -> Question:
     """Convert a ``response_schema`` to the single Jev question: noul, choice or score."""
-    spec = _decision_spec(response)
+    spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
     instructions = "\n\n".join(s for s in (instructions, spec.question) if s) or None
     criteria = criteria or {}
 
@@ -119,11 +119,7 @@ def response_proto_to_question(
 
     # A rubric is levels 0..n-1 in numeric order, each saying what it means.
     levels = [criteria.get(str(o.value)) or o.description for o in spec.options]
-    if (
-        [o.value for o in spec.options] != list(range(len(spec.options)))
-        or not 2 <= len(levels) <= 10
-        or not all(levels)
-    ):
+    if not spec.is_rubric or not 2 <= len(levels) <= 10 or not all(levels):
         raise UnsupportedResponseSchemaError(
             "A score needs 2-10 levels numbered from 0, each described by a docstring under "
             "the member (unreadable when the source is unavailable, e.g. in a REPL or for a functional `Enum`), "
@@ -134,7 +130,7 @@ def response_proto_to_question(
 
 def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, boolean_threshold: float = 0.5) -> str:
     """Render a Jev answer as the JSON the ``response_schema`` validates."""
-    spec = _decision_spec(response)
+    spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
 
     value: bool | int | float | str
     if isinstance(answer, NoulAnswer):
@@ -146,13 +142,6 @@ def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, bo
         value = spec.snap_score(answer.score)
 
     return spec.render(value)
-
-
-def _decision_spec(response: ResponseProto[Any] | None) -> DecisionSpec:
-    try:
-        return DecisionSpec.from_response(response)
-    except NotADecisionError as e:
-        raise UnsupportedResponseSchemaError(e.reason) from e
 
 
 def normalize_usage(raw: TypeSafeUsage) -> Usage:

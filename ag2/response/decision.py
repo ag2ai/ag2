@@ -35,10 +35,6 @@ _PY310_ENUM_DOC = "An enumeration."
 class NotADecisionError(AG2Error):
     """Raised when a ``response_schema`` is not a yes/no, choice or score question."""
 
-    def __init__(self, reason: str) -> None:
-        self.reason = reason
-        super().__init__(reason)
-
 
 @dataclass(frozen=True, slots=True)
 class Question:
@@ -72,13 +68,14 @@ class DecisionSpec:
     embedded: bool  # ``ResponseSchema`` wrapped the value as ``{"data": ...}``
 
     @classmethod
-    def from_response(cls, response: ResponseProto[Any] | None) -> "DecisionSpec":
+    def from_response(
+        cls, response: ResponseProto[Any] | None, *, error: type[NotADecisionError] = NotADecisionError
+    ) -> "DecisionSpec":
+        """Read ``response``, raising ``error`` (a provider's own subclass, say) if it is not a decision."""
         if response is None:
-            raise NotADecisionError("A `response_schema` is required.")
+            raise error("A `response_schema` is required.")
         if not (root := response.json_schema):
-            raise NotADecisionError(
-                f"`response_schema` {response.name!r} is not a decision type: it has no JSON schema."
-            )
+            raise error(f"`response_schema` {response.name!r} is not a decision type: it has no JSON schema.")
 
         node, embedded = _decision_node(root)
         enum_type = _enum_type(response)
@@ -98,7 +95,12 @@ class DecisionSpec:
         if values and all(isinstance(v, int) and not isinstance(v, bool) for v in values):
             return cls("score", question, _options(values, enum_type, markers), False, embedded)
 
-        raise NotADecisionError("`response_schema` is not a decision type.")
+        raise error("`response_schema` is not a decision type.")
+
+    @property
+    def is_rubric(self) -> bool:
+        """Whether the options are the levels ``0..n-1`` in order, as the score APIs number them."""
+        return [o.value for o in self.options] == list(range(len(self.options)))
 
     def predicate_value(self, probability: float, *, threshold: float) -> bool | float:
         """For a predicate: its probability as the schema's value, thresholded for ``bool``, raw otherwise."""

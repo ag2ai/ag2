@@ -55,7 +55,7 @@ PROVIDER = "openai-decisions"
 ANSWER_KEY = "answer"  # Name of the single question sent per request
 
 
-class UnsupportedResponseSchemaError(AG2Error):
+class UnsupportedResponseSchemaError(NotADecisionError):
     """Raised when a ``response_schema`` cannot be expressed as a Decisions API question."""
 
     def __init__(self, reason: str) -> None:
@@ -153,7 +153,7 @@ def response_proto_to_question(
     descriptions: Mapping[str, str] | None = None,
 ) -> Question:
     """Convert a ``response_schema`` to the single Decisions question: predicate, choice or score."""
-    spec = _decision_spec(response)
+    spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
     instructions = "\n\n".join(s for s in (instructions, spec.question) if s)
     if not instructions:
         # Every question type requires instructions; fail before the request with a way out.
@@ -176,7 +176,7 @@ def response_proto_to_question(
         return QuestionQuestionParamChoice(type="choice", name=ANSWER_KEY, instructions=instructions, choices=choices)
 
     # The API numbers levels by position, so the rubric must already be 0..n-1.
-    if [o.value for o in spec.options] != list(range(len(spec.options))) or len(spec.options) < 2:
+    if not spec.is_rubric or len(spec.options) < 2:
         raise UnsupportedResponseSchemaError("A score needs 2 or more levels numbered from 0.")
     levels: list[QuestionQuestionParamScoreLevel] = []
     for option in spec.options:
@@ -201,7 +201,7 @@ def find_answer(decision: Decision) -> Answer:
 
 def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, boolean_threshold: float = 0.5) -> str:
     """Render a Decisions answer as the JSON the ``response_schema`` validates."""
-    spec = _decision_spec(response)
+    spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
 
     value: bool | int | float | str
     if isinstance(answer, AnswerAnswerResourcePredicate):
@@ -219,13 +219,6 @@ def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, bo
 
 def answer_metadata(answer: Answer) -> dict[str, Any]:
     return answer.model_dump(mode="json", exclude={"type", "name"})
-
-
-def _decision_spec(response: ResponseProto[Any] | None) -> DecisionSpec:
-    try:
-        return DecisionSpec.from_response(response)
-    except NotADecisionError as e:
-        raise UnsupportedResponseSchemaError(e.reason) from e
 
 
 def normalize_usage(usage: DecisionUsage) -> Usage:
