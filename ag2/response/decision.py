@@ -63,6 +63,8 @@ class DecisionOption:
 
 @dataclass(frozen=True, slots=True)
 class DecisionSpec:
+    """A ``response_schema`` read as one question; ``from_response`` builds it, providers translate it."""
+
     kind: DecisionKind
     question: str | None
     options: tuple[DecisionOption, ...]
@@ -74,13 +76,16 @@ class DecisionSpec:
         if response is None:
             raise NotADecisionError("A `response_schema` is required.")
         if not (root := response.json_schema):
-            raise NotADecisionError(f"`response_schema` {response.name!r} has no JSON schema.")
+            raise NotADecisionError(
+                f"`response_schema` {response.name!r} is not a decision type: it has no JSON schema."
+            )
 
         node, embedded = _decision_node(root)
         enum_type = _enum_type(response)
         markers = _markers(response)
-        question = _question(response, node, markers)
+        question = _question(response, node, enum_type, markers)
         values = node.get("enum")
+        _check_option_keys(markers, values or [])
 
         is_bool = node.get("type") == "boolean" and (values is None or set(values) == {True, False})
         is_probability = node.get("type") == "number" and node.get("minimum") == 0 and node.get("maximum") == 1
@@ -96,11 +101,11 @@ class DecisionSpec:
         raise NotADecisionError("`response_schema` is not a decision type.")
 
     def predicate_value(self, probability: float, *, threshold: float) -> bool | float:
-        """A predicate's probability as the schema's value: thresholded for ``bool``, raw otherwise."""
+        """For a predicate: its probability as the schema's value, thresholded for ``bool``, raw otherwise."""
         return probability >= threshold if self.boolean else probability
 
     def snap_score(self, score: float) -> int:
-        """The nearest valid level of a score, clamped to the rubric."""
+        """For a score: the nearest valid level, clamped to the rubric."""
         return min(max(round(score), 0), len(self.options) - 1)
 
     def render(self, value: bool | int | float | str) -> str:
@@ -137,32 +142,40 @@ def _markers(response: ResponseProto[Any]) -> list[Question]:
     return [m for m in get_args(response.types)[1:] if isinstance(m, Question)]
 
 
-def _question(response: ResponseProto[Any], node: Mapping[str, Any], markers: list[Question]) -> str | None:
+def _question(
+    response: ResponseProto[Any], node: Mapping[str, Any], enum_type: type[Enum] | None, markers: list[Question]
+) -> str | None:
     """The closest statement of the question: ``description=``, then ``Question``, then the ``Enum`` docstring."""
-    description = response.description
-    docstring = None
     if isinstance(response, ResponseSchema):
-        if enum_type := _enum_type(response):
-            docstring = None if description == _PY310_ENUM_DOC else description
-            if description == inspect.cleandoc(enum_type.__doc__ or ""):
-                description = None
-        elif description == getattr(strip_annotated(response.types), "__doc__", None):
-            description = None
+        explicit = response.explicit_description
+        docstring = response.description if enum_type and response.description != _PY310_ENUM_DOC else None
+    else:
+        explicit, docstring = response.description, None
     marked = next((m.question for m in reversed(markers) if m.question), None)
-    return description or marked or docstring or node.get("description")
+    return explicit or marked or docstring or node.get("description")
+
+
+def _check_option_keys(markers: list[Question], values: list[str] | list[int]) -> None:
+    """Fail on ``Question(options=)`` keys that name no option, which would otherwise be silently ignored."""
+    unknown = [k for m in markers for k in (m.options or {}) if k not in values]
+    if unknown:
+        raise ValueError(
+            f"`Question(options=...)` names {unknown!r}, which is not an option of the schema: "
+            "use the values as the schema has them (`'billing'`, or `0` and `1` for a score)."
+        )
 
 
 def _options(
     values: list[str] | list[int], enum_type: type[Enum] | None, markers: list[Question]
 ) -> tuple[DecisionOption, ...]:
     names = {m.value: m.name for m in enum_type} if enum_type else {}
-    docs = member_docstrings(enum_type) if enum_type else {}
+    docs = _member_docstrings(enum_type) if enum_type else {}
     marked = {k: v for m in markers for k, v in (m.options or {}).items()}
     return tuple(DecisionOption(v, names.get(v, str(v)), marked.get(v) or docs.get(v)) for v in values)
 
 
 @cache
-def member_docstrings(enum_type: type[Enum]) -> dict[Any, str]:
+def _member_docstrings(enum_type: type[Enum]) -> dict[Any, str]:
     """Map each member's value to the string literal under it, read from the class source."""
     try:
         tree = ast.parse(textwrap.dedent(inspect.getsource(enum_type)))

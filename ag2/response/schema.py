@@ -55,6 +55,7 @@ class ResponseSchema(ResponseProto[T]):
         if not name:
             name = schema_title if (schema_title := (schema or {}).pop("title", None)) else "ResponseSchema"
         self.name = name
+        self.explicit_description = description or None  # the caller's, not a docstring fallback
 
         if not description:
             if schema_description := (schema or {}).pop("description", None):
@@ -199,6 +200,7 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
 
 
 def strip_annotated(types: ClassInfo) -> ClassInfo:
+    """The type under any ``Annotated`` wrappers."""
     while get_origin(types) is Annotated:
         types = get_args(types)[0]
     return types

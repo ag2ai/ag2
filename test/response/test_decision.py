@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Callable
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Annotated, Any
@@ -70,115 +70,109 @@ class Asked:
     options: dict[str, str | None]
 
 
-@dataclass
-class Provider:
-    name: str
+class Provider(ABC):
+    """A decision provider behind a fake HTTP API; subclasses supply the wire format."""
+
     unsupported: type[Exception]
-    requests: list[Any]
-    ask: Callable[..., Any]
-    describe: str  # name of the config field that overrides option descriptions
+    describe: str  # config field that overrides option descriptions
 
-    def asked(self) -> Asked:
-        [question] = self.requests
-        if self.name == "openai":
-            options = {
-                str(o.get("value", i)): o.get("description")
-                for i, o in enumerate(question.get("choices") or question.get("levels") or [])
-            }
-        else:
-            criteria = question.get("criteria") or {}
-            options = criteria if isinstance(criteria, dict) else {str(i): c for i, c in enumerate(criteria)}
-            options = {k: v for k, v in options.items() if k not in {"true", "false"} or v is not None}
-        return Asked(question.get("instructions"), options)
+    def __init__(self) -> None:
+        self.questions: list[Any] = []
+        self.answer: dict[str, Any] = {}
+        self.client = httpx2.AsyncClient(transport=httpx2.MockTransport(self._handle))
 
+    @abstractmethod
+    def _handle(self, request: httpx2.Request) -> httpx2.Response: ...
 
-def _openai(**config: Any) -> Provider:
-    requests: list[Any] = []
-    answers: dict[str, Any] = {}
+    @abstractmethod
+    def _config(self, **config: Any) -> Any: ...
 
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        requests.extend(json.loads(request.content)["questions"])
-        return httpx2.Response(200, json={"model": "m", "answers": [answers["a"]], "usage": USAGE})
+    @abstractmethod
+    def predicate(self, probability: float) -> dict[str, Any]: ...
 
-    client = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    @abstractmethod
+    def choice(self, value: str, options: tuple[str, ...]) -> dict[str, Any]: ...
 
-    async def ask(schema: Any, answer: dict[str, Any], *, prompt: str | None = None, **cfg: Any) -> Any:
-        answers["a"] = {"name": "answer", **answer}
-        agent = Agent(
-            "a",
-            prompt=prompt or [],
-            config=OpenAIDecisionsConfig(api_key="k", http_client=client, **config, **cfg),
-            response_schema=schema,
-        )
+    @abstractmethod
+    def score(self, value: float, levels: int) -> dict[str, Any]: ...
+
+    @abstractmethod
+    def asked(self) -> Asked: ...
+
+    async def ask(self, schema: Any, answer: dict[str, Any], *, prompt: str | None = None, **config: Any) -> Any:
+        self.answer = answer
+        agent = Agent("a", prompt=prompt or [], config=self._config(**config), response_schema=schema)
         return await (await agent.ask("hi")).content()
 
-    return Provider("openai", OpenAIUnsupported, requests, ask, "descriptions")
 
+class OpenAIProvider(Provider):
+    unsupported = OpenAIUnsupported
+    describe = "descriptions"
 
-def _typesafe(**config: Any) -> Provider:
-    requests: list[Any] = []
-    answers: dict[str, Any] = {}
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        requests.append(json.loads(request.content)["questions"]["answer"])
-        body = {"model": "m", "answers": {"answer": answers["a"]}, "usage": {"input_tokens": 1, "output_tokens": 0}}
+    def _handle(self, request: httpx2.Request) -> httpx2.Response:
+        self.questions.extend(json.loads(request.content)["questions"])
+        body = {"model": "m", "answers": [{"name": "answer", **self.answer}], "usage": USAGE}
         return httpx2.Response(200, json=body)
 
-    client = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    def _config(self, **config: Any) -> Any:
+        return OpenAIDecisionsConfig(api_key="k", http_client=self.client, **config)
 
-    async def ask(schema: Any, answer: dict[str, Any], *, prompt: str | None = None, **cfg: Any) -> Any:
-        answers["a"] = answer
-        if "criteria" not in cfg and "descriptions" in cfg:
-            cfg["criteria"] = cfg.pop("descriptions")
-        agent = Agent(
-            "a",
-            prompt=prompt or [],
-            config=TypeSafeConfig(api_key="k", http_client=client, **config, **cfg),
-            response_schema=schema,
-        )
-        return await (await agent.ask("hi")).content()
-
-    return Provider("typesafe", TypeSafeUnsupported, requests, ask, "criteria")
-
-
-@pytest.fixture(params=["openai", "typesafe"])
-def provider(request: pytest.FixtureRequest) -> Provider:
-    return _openai() if request.param == "openai" else _typesafe()
-
-
-def predicate(p: Provider, probability: float) -> dict[str, Any]:
-    if p.name == "openai":
+    def predicate(self, probability: float) -> dict[str, Any]:
         return {"type": "predicate", "probability": probability}
-    return {"type": "noul", "noul": probability}
+
+    def choice(self, value: str, options: tuple[str, ...]) -> dict[str, Any]:
+        probabilities = [{"value": o, "probability": 1 / len(options)} for o in options]
+        return {"type": "choice", "choice": value, "confidence": 0.9, "probabilities": probabilities}
+
+    def score(self, value: float, levels: int) -> dict[str, Any]:
+        probabilities = [{"value": i, "label": str(i), "probability": 1 / levels} for i in range(levels)]
+        return {"type": "score", "score": value, "confidence": 0.5, "probabilities": probabilities}
+
+    def asked(self) -> Asked:
+        [question] = self.questions
+        entries = question.get("choices") or question.get("levels") or []
+        return Asked(
+            question["instructions"],
+            {str(o.get("value", i)): o.get("description") for i, o in enumerate(entries)},
+        )
 
 
-def choice(p: Provider, value: str, options: tuple[str, ...]) -> dict[str, Any]:
-    even = 1 / len(options)
-    if p.name == "openai":
-        return {
-            "type": "choice",
-            "choice": value,
-            "confidence": 0.9,
-            "probabilities": [{"value": o, "probability": even} for o in options],
-        }
-    return {"type": "choice", "choice": value, "confidence": 0.9, "probabilities": dict.fromkeys(options, even)}
+class TypeSafeProvider(Provider):
+    unsupported = TypeSafeUnsupported
+    describe = "criteria"
+
+    def _handle(self, request: httpx2.Request) -> httpx2.Response:
+        self.questions.append(json.loads(request.content)["questions"]["answer"])
+        body = {"model": "m", "answers": {"answer": self.answer}, "usage": {"input_tokens": 1, "output_tokens": 0}}
+        return httpx2.Response(200, json=body)
+
+    def _config(self, **config: Any) -> Any:
+        return TypeSafeConfig(api_key="k", http_client=self.client, **config)
+
+    def predicate(self, probability: float) -> dict[str, Any]:
+        return {"type": "noul", "noul": probability}
+
+    def choice(self, value: str, options: tuple[str, ...]) -> dict[str, Any]:
+        probabilities = {o: 1 / len(options) for o in options}
+        return {"type": "choice", "choice": value, "confidence": 0.9, "probabilities": probabilities}
+
+    def score(self, value: float, levels: int) -> dict[str, Any]:
+        legend = {str(i): "x" for i in range(levels)}
+        probabilities = {str(i): 1 / levels for i in range(levels)}
+        return {"type": "score", "score": value, "confidence": 0.5, "legend": legend, "probabilities": probabilities}
+
+    def asked(self) -> Asked:
+        [question] = self.questions
+        criteria = question.get("criteria") or {}
+        if isinstance(criteria, list):
+            criteria = {str(i): c for i, c in enumerate(criteria)}
+        return Asked(question.get("instructions"), criteria)
 
 
-def score(p: Provider, value: float, levels: int) -> dict[str, Any]:
-    if p.name == "openai":
-        return {
-            "type": "score",
-            "score": value,
-            "confidence": 0.5,
-            "probabilities": [{"value": i, "label": str(i), "probability": 1 / levels} for i in range(levels)],
-        }
-    return {
-        "type": "score",
-        "score": value,
-        "confidence": 0.5,
-        "legend": {str(i): "x" for i in range(levels)},
-        "probabilities": {str(i): 1 / levels for i in range(levels)},
-    }
+@pytest.fixture(params=[OpenAIProvider, TypeSafeProvider], ids=["openai", "typesafe"])
+def provider(request: pytest.FixtureRequest) -> Provider:
+    provider_type: type[Provider] = request.param
+    return provider_type()
 
 
 @pytest.mark.asyncio
@@ -186,25 +180,25 @@ class TestQuestionMarker:
     async def test_question_on_plain_bool(self, provider: Provider) -> None:
         schema = Annotated[bool, Question("Is this a refund request?")]
 
-        assert await provider.ask(schema, predicate(provider, 0.9)) is True
+        assert await provider.ask(schema, provider.predicate(0.9)) is True
         assert provider.asked() == Asked("Is this a refund request?", {})
 
     async def test_options_on_third_party_enum(self, provider: Provider) -> None:
         schema = Annotated[Plain, Question("Pick one", options={"a": "First", "b": "Second"})]
 
-        assert await provider.ask(schema, choice(provider, "b", ("a", "b"))) is Plain.B
+        assert await provider.ask(schema, provider.choice("b", ("a", "b"))) is Plain.B
         assert provider.asked() == Asked("Pick one", {"a": "First", "b": "Second"})
 
     async def test_score_levels_keyed_by_int(self, provider: Provider) -> None:
         schema = Annotated[Bare, Question("Rate it", options={0: "Fine", 1: "Broken"})]
 
-        assert await provider.ask(schema, score(provider, 0.8, 2)) is Bare.HIGH
+        assert await provider.ask(schema, provider.score(0.8, 2)) is Bare.HIGH
         assert provider.asked() == Asked("Rate it", {"0": "Fine", "1": "Broken"})
 
     async def test_question_without_options_keeps_docstring_options(self, provider: Provider) -> None:
         schema = Annotated[Department, Question("Route it")]
 
-        await provider.ask(schema, choice(provider, "billing", ("billing", "technical")))
+        await provider.ask(schema, provider.choice("billing", ("billing", "technical")))
 
         assert provider.asked() == Asked(
             "Route it", {"billing": "Payments, invoicing, refunds.", "technical": "Bugs, outages, integrations."}
@@ -214,13 +208,13 @@ class TestQuestionMarker:
 @pytest.mark.asyncio
 class TestPrecedence:
     async def test_docstring_is_the_question(self, provider: Provider) -> None:
-        await provider.ask(Department, choice(provider, "billing", ("billing", "technical")))
+        await provider.ask(Department, provider.choice("billing", ("billing", "technical")))
 
         assert provider.asked().instructions == "Which team should handle this ticket?"
 
     async def test_marker_beats_docstring(self, provider: Provider) -> None:
         await provider.ask(
-            Annotated[Department, Question("From marker")], choice(provider, "billing", ("billing", "technical"))
+            Annotated[Department, Question("From marker")], provider.choice("billing", ("billing", "technical"))
         )
 
         assert provider.asked().instructions == "From marker"
@@ -228,14 +222,14 @@ class TestPrecedence:
     async def test_description_beats_marker(self, provider: Provider) -> None:
         schema = ResponseSchema(Annotated[Department, Question("From marker")], description="From description")
 
-        await provider.ask(schema, choice(provider, "billing", ("billing", "technical")))
+        await provider.ask(schema, provider.choice("billing", ("billing", "technical")))
 
         assert provider.asked().instructions == "From description"
 
     async def test_marker_options_beat_docstrings(self, provider: Provider) -> None:
         schema = Annotated[Department, Question(options={"billing": "Money"})]
 
-        await provider.ask(schema, choice(provider, "billing", ("billing", "technical")))
+        await provider.ask(schema, provider.choice("billing", ("billing", "technical")))
 
         assert provider.asked().options == {"billing": "Money", "technical": "Bugs, outages, integrations."}
 
@@ -243,13 +237,13 @@ class TestPrecedence:
         schema = Annotated[Department, Question(options={"billing": "Money", "technical": "Code"})]
 
         await provider.ask(
-            schema, choice(provider, "billing", ("billing", "technical")), **{provider.describe: {"billing": "Cash"}}
+            schema, provider.choice("billing", ("billing", "technical")), **{provider.describe: {"billing": "Cash"}}
         )
 
         assert provider.asked().options == {"billing": "Cash", "technical": "Code"}
 
     async def test_prompt_and_question_are_joined(self, provider: Provider) -> None:
-        await provider.ask(Annotated[bool, Question("Is it?")], predicate(provider, 0.1), prompt="Be strict.")
+        await provider.ask(Annotated[bool, Question("Is it?")], provider.predicate(0.1), prompt="Be strict.")
 
         assert provider.asked().instructions == "Be strict.\n\nIs it?"
 
@@ -258,25 +252,25 @@ class TestPrecedence:
 class TestAnswers:
     @pytest.mark.parametrize(("probability", "expected"), [(0.7, True), (0.2, False)])
     async def test_bool_is_thresholded(self, provider: Provider, probability: float, expected: bool) -> None:
-        assert await provider.ask(Annotated[bool, Question("?")], predicate(provider, probability)) is expected
+        assert await provider.ask(Annotated[bool, Question("?")], provider.predicate(probability)) is expected
 
     async def test_probability_is_returned_raw(self, provider: Provider) -> None:
         schema = ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="p", description="?")
 
-        assert await provider.ask(schema, predicate(provider, 0.37)) == "0.37"
+        assert await provider.ask(schema, provider.predicate(0.37)) == "0.37"
 
     @pytest.mark.parametrize(("raw", "expected"), [(0.4, Severity.LOW), (0.6, Severity.HIGH), (9.0, Severity.HIGH)])
     async def test_score_snaps_and_clamps(self, provider: Provider, raw: float, expected: Severity) -> None:
-        assert await provider.ask(Severity, score(provider, raw, 2)) is expected
+        assert await provider.ask(Severity, provider.score(raw, 2)) is expected
 
     async def test_envelope_does_not_change_the_question(self, provider: Provider) -> None:
         wrapped = ResponseSchema(bool, description="Is it?")
         bare = ResponseSchema(bool, description="Is it?", embed=False)
 
-        assert await provider.ask(wrapped, predicate(provider, 0.9)) is True
+        assert await provider.ask(wrapped, provider.predicate(0.9)) is True
         first = provider.asked()
-        provider.requests.clear()
-        assert await provider.ask(bare, predicate(provider, 0.9)) is True
+        provider.questions.clear()
+        assert await provider.ask(bare, provider.predicate(0.9)) is True
 
         assert provider.asked() == first
 
@@ -286,21 +280,21 @@ class TestRejections:
     @pytest.mark.parametrize("schema", [str, int, ResponseSchema(str, description="?")])
     async def test_non_decision_schema(self, provider: Provider, schema: Any) -> None:
         with pytest.raises(provider.unsupported, match="decision-only"):
-            await provider.ask(schema, predicate(provider, 0.5), prompt="Q")
+            await provider.ask(schema, provider.predicate(0.5), prompt="Q")
 
-        assert provider.requests == []
+        assert provider.questions == []
 
     async def test_bare_bool_without_prompt(self, provider: Provider) -> None:
         with pytest.raises(ValueError, match="question|asking"):
-            await provider.ask(bool, predicate(provider, 0.5))
+            await provider.ask(bool, provider.predicate(0.5))
 
-        assert provider.requests == []
+        assert provider.questions == []
 
 
 @pytest.mark.asyncio
 class TestUnreadableSource:
     async def test_choice_proceeds_without_descriptions(self, provider: Provider) -> None:
-        assert await provider.ask(UnreadableChoice, choice(provider, "a", ("a", "b")), prompt="Q") is (
+        assert await provider.ask(UnreadableChoice, provider.choice("a", ("a", "b")), prompt="Q") is (
             UnreadableChoice.A
         )
 
@@ -309,28 +303,67 @@ class TestUnreadableSource:
     async def test_marker_describes_unreadable_choice(self, provider: Provider) -> None:
         schema = Annotated[UnreadableChoice, Question(options={"a": "First"})]
 
-        await provider.ask(schema, choice(provider, "a", ("a", "b")), prompt="Q")
+        await provider.ask(schema, provider.choice("a", ("a", "b")), prompt="Q")
 
         assert provider.asked().options == {"a": "First", "b": None}
 
     async def test_score_without_descriptions(self) -> None:
-        provider = _openai()
+        provider = OpenAIProvider()
 
-        assert await provider.ask(UnreadableScore, score(provider, 0.9, 2), prompt="Q") is UnreadableScore.HIGH
+        assert await provider.ask(UnreadableScore, provider.score(0.9, 2), prompt="Q") is UnreadableScore.HIGH
         assert provider.asked().options == {"0": None, "1": None}
 
     async def test_typesafe_score_requires_descriptions_and_names_the_way_out(self) -> None:
-        provider = _typesafe()
+        provider = TypeSafeProvider()
 
         with pytest.raises(TypeSafeUnsupported, match=r"Question\(options=") as e:
-            await provider.ask(UnreadableScore, score(provider, 0.9, 2), prompt="Q")
+            await provider.ask(UnreadableScore, provider.score(0.9, 2), prompt="Q")
 
         assert "criteria" in str(e.value)
-        assert provider.requests == []
+        assert provider.questions == []
 
     async def test_marker_makes_typesafe_score_succeed(self) -> None:
-        provider = _typesafe()
+        provider = TypeSafeProvider()
         schema = Annotated[UnreadableScore, Question(options={0: "Fine", 1: "Broken"})]
 
-        assert await provider.ask(schema, score(provider, 0.9, 2), prompt="Q") is UnreadableScore.HIGH
+        assert await provider.ask(schema, provider.score(0.9, 2), prompt="Q") is UnreadableScore.HIGH
         assert provider.asked().options == {"0": "Fine", "1": "Broken"}
+
+
+@pytest.mark.asyncio
+class TestEdges:
+    async def test_description_equal_to_docstring_still_beats_marker(self, provider: Provider) -> None:
+        schema = ResponseSchema(Annotated[Department, Question("From marker")], description=Department.__doc__)
+
+        await provider.ask(schema, provider.choice("billing", ("billing", "technical")))
+
+        assert provider.asked().instructions == "Which team should handle this ticket?"
+
+    async def test_stdlib_enum_placeholder_is_not_a_question(self, provider: Provider) -> None:
+        class Placeholder(Enum):
+            """An enumeration."""
+
+            A = "a"
+            B = "b"
+
+        await provider.ask(Placeholder, provider.choice("a", ("a", "b")), prompt="Q")
+
+        assert provider.asked().instructions == "Q"
+
+    @pytest.mark.parametrize(
+        "schema",
+        [
+            pytest.param(Annotated[Department, Question(options={"nope": "x"})], id="unknown-choice"),
+            pytest.param(Annotated[Severity, Question(options={"0": "zero"})], id="score-as-string"),
+            pytest.param(Annotated[bool, Question("?", options={"true": "x"})], id="predicate"),
+        ],
+    )
+    async def test_option_keys_must_name_options(self, provider: Provider, schema: Any) -> None:
+        with pytest.raises(ValueError, match=r"Question\(options="):
+            await provider.ask(schema, provider.predicate(0.5), prompt="Q")
+
+        assert provider.questions == []
+
+    async def test_annotated_str_is_not_a_decision(self, provider: Provider) -> None:
+        with pytest.raises(provider.unsupported, match="not a decision type"):
+            await provider.ask(Annotated[str, Question("?")], provider.predicate(0.5), prompt="Q")

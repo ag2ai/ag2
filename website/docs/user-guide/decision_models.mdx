@@ -675,7 +675,7 @@ The question and each option's description can be stated in several places. The 
 | Question text | `ResponseSchema(..., description=...)` | `Question("...")` in `Annotated` | the `Enum` class docstring |
 | Option descriptions | `descriptions=` / `criteria=` on the config | `Question(options={...})` in `Annotated` | the string under each member |
 
-`Question` is a provider-neutral marker that you attach with `Annotated`, so a plain `bool` or an `Enum` you do not own can carry its question without a wrapper type. Option keys are the values as they appear in the schema: `"billing"` for a choice, `0` and `1` for a score.
+`Question` is a provider-neutral marker that you attach with `Annotated`, so a plain `bool` or an `Enum` you do not own can carry its question without a wrapper type. Option keys are the values as they appear in the schema: `"billing"` for a choice, `0` and `1` for a score. A key that names no option, such as `"0"` for an `IntEnum`, raises `ValueError` before any request.
 
 ```python linenums="1"
 from enum import Enum
