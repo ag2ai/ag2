@@ -82,8 +82,10 @@ class _DiskChangeHandler:
     def on_moved(self, event: Any) -> None:
         if getattr(event, "is_directory", False):
             return
+        self._dispatch(event.src_path)
         dest = getattr(event, "dest_path", None) or event.src_path
-        self._dispatch(dest)
+        if dest != event.src_path:
+            self._dispatch(dest)
 
     def dispatch(self, event: Any) -> None:
         """watchdog's entry point. Delegates to the per-type hooks above."""
