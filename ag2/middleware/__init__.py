@@ -15,6 +15,8 @@ from .base import (
 )
 from .builtin import (
     ApprovalRequired,
+    BudgetConfig,
+    BudgetMiddleware,
     HistoryLimiter,
     LoggingMiddleware,
     MetricsMiddleware,
@@ -23,12 +25,16 @@ from .builtin import (
     TokenLimiter,
     approval_required,
 )
+from .builtin.budget import BudgetExceededError
 from .describe import DescribableMiddleware, DescribedMiddleware, MiddlewareDescription
 
 __all__ = (
     "AgentTurn",
     "ApprovalRequired",
     "BaseMiddleware",
+    "BudgetConfig",
+    "BudgetExceededError",
+    "BudgetMiddleware",
     "ConditionalMiddleware",
     "DescribableMiddleware",
     "DescribedMiddleware",
