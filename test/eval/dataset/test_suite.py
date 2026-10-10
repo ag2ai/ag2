@@ -191,6 +191,23 @@ class TestFromJsonl:
         assert task.tags == ()
         assert task.metadata == {}
 
+    def test_leading_bom_is_stripped(self, tmp_path: Path) -> None:
+        path = tmp_path / "bom.jsonl"
+        path.write_text(
+            "\ufeff"
+            + "\n".join([
+                json.dumps({"task_id": "a", "inputs": {"input": "1"}}),
+                json.dumps({"task_id": "b", "inputs": {"input": "2"}}),
+            ])
+            + "\n",
+            encoding="utf-8",
+        )
+
+        suite = Suite.from_jsonl(path)
+
+        assert len(suite) == 2
+        assert suite.tasks[0].inputs == {"input": "1"}
+
 
 def test_suite_iterates_in_dataset_order() -> None:
     suite = Suite.from_list([{"inputs": {"input": str(i)}} for i in range(3)])
