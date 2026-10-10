@@ -579,7 +579,7 @@ An agent on `OpenAIDecisionsConfig` **must** set `response_schema`, and the sche
 
 Anything else (`str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema`) raises `UnsupportedResponseSchemaError` before a request is sent.
 
-The agent `prompt` and the schema's description (an `Enum`'s class docstring, or an explicit `ResponseSchema(..., description=...)`) are joined into the question's `instructions`. Every question type requires instructions, so a schema with no description on an agent with no prompt raises `ValueError` locally.
+The agent `prompt` and the schema's description (an explicit `ResponseSchema(..., description=...)`, an `Annotated[..., Question("...")]` marker, or an `Enum`'s class docstring, in that order of precedence) are joined into the question's `instructions`. Every question type requires instructions, so a schema with no description on an agent with no prompt raises `ValueError` locally.
 
 #### Describing options and levels
 
@@ -610,7 +610,7 @@ await reply.content()              # Severity.WORKAROUND_AVAILABLE
 reply.response.metadata["score"]   # e.g. 1.1, before snapping to a level
 ```
 
-`descriptions` on the config overrides or supplies descriptions without touching the type, keyed by choice value or by score level as a string (`{"0": "...", "1": "..."}`). Member docstrings are read from the source file, so pass `descriptions` for enums defined in a REPL or notebook.
+`descriptions` on the config overrides or supplies descriptions without touching the type, keyed by choice value or by score level as a string (`{"0": "...", "1": "..."}`). `descriptions` outrank `Annotated[..., Question(options=...)]`, which outranks member docstrings (see [Decision Models](/docs/user-guide/decision_models#where-the-question-and-descriptions-come-from)). Member docstrings are read from the source file, so use either for enums defined in a REPL or notebook.
 
 #### Images
 
@@ -717,7 +717,7 @@ config = TypeSafeConfig(
 
 !!! note "Member docstrings need the source file"
 
-    Docstrings are read with `inspect.getsource`, so an `Enum` defined in a REPL, a notebook cell or a frozen app has none. Pass `criteria` there.
+    Docstrings are read with `inspect.getsource`, so an `Enum` defined in a REPL, a notebook cell or a frozen app has none. Pass `criteria` or `Annotated[..., Question(options=...)]` there; `criteria` wins when both are set.
 
 #### Confidence and probabilities
 

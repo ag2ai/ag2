@@ -128,7 +128,7 @@ confidence = reply.response.metadata["confidence"]
 
 !!! note "Member docstrings are read from the source file"
 
-    Python drops the string under an `Enum` member at runtime, so AG2 reads it back with `inspect.getsource`. An enum defined in a REPL or a notebook cell has no source, and its options go out undescribed. Pass the descriptions on the config instead (see [Describe every option](#describe-every-option)).
+    Python drops the string under an `Enum` member at runtime, so AG2 reads it back with `inspect.getsource`. An enum defined in a REPL or a notebook cell has no source, and its options go out undescribed. Describe the options with `Question(options=...)` or on the config instead (see [Where the question and descriptions come from](#where-the-question-and-descriptions-come-from)).
 
 ## Routing
 
@@ -665,6 +665,48 @@ for label, agent in agents.items():
 </Tabs>
 
 Descriptions passed on the config outrank member docstrings. They are keyed by choice value, or by score level as a string (`{"0": "...", "1": "..."}`), and they are the way in when the enum's source is unavailable: a REPL, a notebook, a frozen app.
+
+## Where the question and descriptions come from
+
+The question and each option's description can be stated in several places. The closer to where the agent is created, the stronger, and the order is the same on both providers.
+
+| | Strongest | | Weakest |
+| :--- | :--- | :--- | :--- |
+| Question text | `ResponseSchema(..., description=...)` | `Question("...")` in `Annotated` | the `Enum` class docstring |
+| Option descriptions | `descriptions=` / `criteria=` on the config | `Question(options={...})` in `Annotated` | the string under each member |
+
+`Question` is a provider-neutral marker that you attach with `Annotated`, so a plain `bool` or an `Enum` you do not own can carry its question without a wrapper type. Option keys are the values as they appear in the schema: `"billing"` for a choice, `0` and `1` for a score.
+
+```python linenums="1"
+from enum import Enum
+from typing import Annotated
+
+from ag2 import Agent
+from ag2.config import OpenAIDecisionsConfig
+from ag2.response import Question
+
+Refund = Annotated[bool, Question("Is this a refund request?")]
+
+
+class Department(Enum):
+    BILLING = "billing"
+    TECHNICAL = "technical"
+
+
+Routed = Annotated[
+    Department,
+    Question("Which team should handle this ticket?", options={"billing": "Payments", "technical": "Bugs"}),
+]
+
+refunds = Agent("refunds", config=OpenAIDecisionsConfig(), response_schema=Refund)
+router = Agent("router", config=OpenAIDecisionsConfig(), response_schema=Routed)
+```
+
+The same types work with `TypeSafeConfig`. A non-`Enum` type's own docstring is never a question, so `bool`'s docstring is not sent.
+
+!!! note "When the enum's source is unreadable"
+
+    Where option descriptions are optional (a choice on either provider, a score on OpenAI), an enum without readable source simply goes out undescribed. A TypeSafe score needs every level described, so it raises before any request; describe the levels with `Question(options={0: "...", 1: "..."})` or `criteria`.
 
 ## Next steps
 
