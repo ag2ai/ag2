@@ -4,6 +4,7 @@
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
+from copy import copy
 from typing import Any, overload
 
 from ag2.annotations import Context
@@ -38,6 +39,10 @@ class Toolkit(Tool):
     @property
     def tools(self) -> tuple[Tool, ...]:
         return tuple(self._tools.values())
+
+    def _snapshot(self) -> "Toolkit":
+        """Copy the discovered state before resolving members for one turn."""
+        return copy(self)
 
     def _add_tool(self, tool: Tool | Callable[..., Any], *, unsafe: bool = False) -> None:
         t = FunctionTool.ensure_tool(tool)
