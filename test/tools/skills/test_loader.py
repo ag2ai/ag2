@@ -123,6 +123,21 @@ def test_parse_frontmatter_recovers_unquoted_colon() -> None:
     assert result["description"] == "Use this skill when: the user asks"
 
 
+@pytest.mark.parametrize(
+    "description",
+    [
+        r"Use when: reading C:\Users\me\notes",
+        r"Use when: matching \d+ digits",
+        r'Use when: reading C:\path with "quotes"',
+    ],
+)
+def test_parse_frontmatter_recovers_unquoted_colon_with_backslashes(description: str) -> None:
+    text = f"---\nname: my-skill\ndescription: {description}\n---\nBody"
+    result = parse_frontmatter(text)
+    assert result["name"] == "my-skill"
+    assert result["description"] == description
+
+
 def _write_skill(base: Path, dir_name: str, body: str) -> None:
     skill_dir = base / dir_name
     skill_dir.mkdir(parents=True)

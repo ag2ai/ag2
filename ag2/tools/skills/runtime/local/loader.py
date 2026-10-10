@@ -56,7 +56,7 @@ def _recover_malformed_yaml(block: str) -> object:
         if m and ":" in m.group(2):
             value = m.group(2).strip()
             if value and value[0] not in "\"'>|[{":
-                escaped = value.replace('"', '\\"')
+                escaped = value.replace("\\", "\\\\").replace('"', '\\"')
                 line = f'{m.group(1)}"{escaped}"'
         fixed_lines.append(line)
     try:
