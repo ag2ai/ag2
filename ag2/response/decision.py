@@ -93,7 +93,8 @@ class DecisionSpec:
             return cls("choice", question, _options(values, enum_type, markers), False, embedded)
 
         if values and all(isinstance(v, int) and not isinstance(v, bool) for v in values):
-            return cls("score", question, _options(values, enum_type, markers), False, embedded)
+            # The score APIs number levels by position, so order them by value, not by declaration.
+            return cls("score", question, _options(sorted(values), enum_type, markers), False, embedded)
 
         raise error("`response_schema` is not a decision type.")
 
@@ -150,7 +151,10 @@ def _question(
     """The closest statement of the question: ``description=``, then ``Question``, then the ``Enum`` docstring."""
     if isinstance(response, ResponseSchema):
         explicit = response.explicit_description
-        docstring = response.description if enum_type and response.description != _PY310_ENUM_DOC else None
+        # An ``Enum`` docstring is the question; other types' docstrings are not, but a description
+        # Pydantic lifted out of the schema (``RootModel`` + ``Field(description=)``) is.
+        type_doc = None if enum_type else getattr(strip_annotated(response.types), "__doc__", None)
+        docstring = None if response.description in (_PY310_ENUM_DOC, type_doc) else response.description
     else:
         explicit, docstring = response.description, None
     marked = next((m.question for m in reversed(markers) if m.question), None)
@@ -159,7 +163,8 @@ def _question(
 
 def _check_option_keys(markers: list[Question], values: list[str] | list[int]) -> None:
     """Fail on ``Question(options=)`` keys that name no option, which would otherwise be silently ignored."""
-    unknown = [k for m in markers for k in (m.options or {}) if k not in values]
+    # ``True == 1``, so a ``bool`` key must not match a score level.
+    unknown = [k for m in markers for k in (m.options or {}) if isinstance(k, bool) or k not in values]
     if unknown:
         raise ValueError(
             f"`Question(options=...)` names {unknown!r}, which is not an option of the schema: "

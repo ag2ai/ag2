@@ -9,6 +9,7 @@ from enum import Enum, IntEnum
 from typing import Annotated, Any
 
 import pytest
+from pydantic import Field, RootModel
 
 pytest.importorskip("openai")
 pytest.importorskip("typesafe_sdk")
@@ -56,6 +57,15 @@ class Severity(IntEnum):
 class Bare(IntEnum):
     LOW = 0
     HIGH = 1
+
+
+class Reversed(IntEnum):
+    HIGH = 1
+    LOW = 0
+
+
+class Refund(RootModel[Annotated[bool, Field(description="Is this a refund?")]]):
+    pass
 
 
 UnreadableChoice = Enum("UnreadableChoice", {"A": "a", "B": "b"})
@@ -361,6 +371,24 @@ class TestEdges:
     async def test_option_keys_must_name_options(self, provider: Provider, schema: Any) -> None:
         with pytest.raises(ValueError, match=r"Question\(options="):
             await provider.ask(schema, provider.predicate(0.5), prompt="Q")
+
+        assert provider.questions == []
+
+    async def test_score_declared_out_of_order_is_sent_by_value(self, provider: Provider) -> None:
+        schema = Annotated[Reversed, Question("Rate it", options={0: "Fine", 1: "Broken"})]
+
+        assert await provider.ask(schema, provider.score(0.8, 2)) is Reversed.HIGH
+        assert list(provider.asked().options.items()) == [("0", "Fine"), ("1", "Broken")]
+
+    async def test_question_lifted_from_pydantic_schema(self, provider: Provider) -> None:
+        assert await provider.ask(Refund, provider.predicate(0.9)) == Refund(True)
+        assert provider.asked() == Asked("Is this a refund?", {})
+
+    async def test_bool_key_does_not_name_a_score_level(self, provider: Provider) -> None:
+        schema = Annotated[Bare, Question(options={True: "x"})]
+
+        with pytest.raises(ValueError, match=r"Question\(options="):
+            await provider.ask(schema, provider.score(0.5, 2), prompt="Q")
 
         assert provider.questions == []
 

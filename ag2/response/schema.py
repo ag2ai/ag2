@@ -161,7 +161,8 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
     origin = get_origin(bare)
     embedded_type = True
 
-    if bare is str:
+    # Only a bare ``str`` is plain text; ``Annotated[str, Field(...)]`` keeps its adapter so the metadata validates.
+    if types is str:
         return None, True
 
     if _is_safe_subclass(bare, (list, tuple)):

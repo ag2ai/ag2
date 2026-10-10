@@ -303,7 +303,7 @@ for detector in detectors:
 
 ## Scoring
 
-Severity, frustration, quality, suitability. An `IntEnum` numbered from `0` is a rubric. The string under each member describes that level, and on OpenAI the member names become level labels (`FRUSTRATED` is sent as `Frustrated`). The model answers with the probability-weighted level, so `#!python await reply.content()` snaps it to the nearest member and the metadata keeps the raw score.
+Severity, frustration, quality, suitability. An `IntEnum` numbered `0` to `n-1` is a rubric, whatever order its members are declared in: levels go out sorted by value. The string under each member describes that level, and on OpenAI the member names become level labels (`FRUSTRATED` is sent as `Frustrated`). The model answers with the probability-weighted level, so `#!python await reply.content()` snaps it to the nearest member and the metadata keeps the raw score.
 
 <Tabs>
   <Tab title="OpenAI Decisions">
@@ -673,10 +673,10 @@ The question and each option's description can be stated in several places. The 
 
 | What | 1st (wins) | 2nd | 3rd |
 | :--- | :--- | :--- | :--- |
-| Question text | `ResponseSchema(..., description=...)` | `Question("...")` in `Annotated` | the `Enum` class docstring |
+| Question text | `ResponseSchema(..., description=...)` | `Question("...")` in `Annotated` | the `Enum` class docstring, or a description Pydantic carries (`Field(description=...)` on a `RootModel`) |
 | Option descriptions | `descriptions=` (OpenAI) / `criteria=` (TypeSafe) on the config | `Question(options={...})` in `Annotated` | the string under each member |
 
-`Question` is a provider-neutral marker attached with `Annotated`, so a plain `bool`, or an `Enum` you do not own, carries its question without a wrapper type. Option keys are the values as they appear in the schema: `"billing"` for a choice, `0` and `1` for a score. A key that names no option, such as `"0"` for an `IntEnum`, raises `ValueError` before any request. The agent `prompt` is joined in front of whichever question text wins.
+`Question` is a provider-neutral marker attached with `Annotated`, so a plain `bool`, or an `Enum` you do not own, carries its question without a wrapper type. Option keys are the values as they appear in the schema: `"billing"` for a choice, `0` and `1` for a score. A key that names no option, such as `"0"` for an `IntEnum` or `True` for a score, raises `ValueError` before any request. The agent `prompt` is joined in front of whichever question text wins.
 
 <Tabs>
   <Tab title="OpenAI Decisions">
@@ -742,7 +742,7 @@ await reply.content()  # Department.BILLING
   </Tab>
 </Tabs>
 
-A non-`Enum` type's own docstring is never a question, so `bool`'s docstring is not sent.
+A non-`Enum` type's own docstring is never a question, so `bool`'s docstring is not sent. A description that Pydantic itself puts on the type, as `Field(description=...)` does on a `RootModel`, is the question.
 
 !!! note "When the enum's source is unreadable"
 

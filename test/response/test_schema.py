@@ -9,7 +9,7 @@ from typing import Annotated, Any, Union
 
 import pytest
 from dirty_equals import IsPartialDict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from typing_extensions import TypedDict
 
 from ag2.response import ResponseSchema
@@ -569,6 +569,13 @@ class TestAnnotatedValidation:
         schema = ResponseSchema(type_)
 
         assert await schema.validate(raw, context=None) == expected  # type: ignore[arg-type]
+
+    async def test_annotated_str_keeps_its_constraints(self) -> None:
+        schema = ResponseSchema(Annotated[str, Field(min_length=3)], embed=False)
+
+        with pytest.raises(ValidationError):
+            await schema.validate('"x"', context=None)  # type: ignore[arg-type]
+        assert await schema.validate('"xyz"', context=None) == "xyz"  # type: ignore[arg-type]
 
     async def test_enum(self) -> None:
         class Color(Enum):
