@@ -11,7 +11,6 @@ from typesafe_sdk import Answer, Choice, ChoiceAnswer, JSONValue, Noul, NoulAnsw
 from typesafe_sdk import Usage as TypeSafeUsage
 
 from ag2.compact import CompactionSummary
-from ag2.config.decision_schema import decision_node, explicit_description, option_docs
 from ag2.events import (
     BaseEvent,
     DataInput,
@@ -23,7 +22,7 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import AG2Error, UnsupportedInputError, UnsupportedToolError
-from ag2.response import ResponseProto
+from ag2.response import DecisionSpec, NotADecisionError, ResponseProto
 from ag2.tools.schemas import ToolSchema
 
 PROVIDER = "typesafe"
@@ -89,16 +88,11 @@ def response_proto_to_question(
     criteria: Mapping[str, str] | None = None,
 ) -> Question:
     """Convert a ``response_schema`` to the single Jev question: noul, choice or score."""
-    node, _ = _decision_node(response)
-    question = explicit_description(response) or node.get("description")
-    instructions = "\n\n".join(s for s in (instructions, question) if s) or None
+    spec = _decision_spec(response)
+    instructions = "\n\n".join(s for s in (instructions, spec.question) if s) or None
     criteria = criteria or {}
-    values = node.get("enum")
-    docs = option_docs(response)
 
-    is_bool = node.get("type") == "boolean" and (values is None or set(values) == {True, False})
-    is_probability = node.get("type") == "number" and node.get("minimum") == 0 and node.get("maximum") == 1
-    if is_bool or is_probability:
+    if spec.kind == "predicate":
         noul_criteria = NoulCriteria()
         if "true" in criteria:
             noul_criteria["true"] = criteria["true"]
@@ -116,43 +110,49 @@ def response_proto_to_question(
         if (described_true := criteria.get("true")) is not None:
             return Noul(criteria={"true": described_true, "false": criteria.get("false")})
         return Noul(criteria={"true": None, "false": criteria["false"]})
-    if values and all(isinstance(v, str) for v in values):
-        return Choice(instructions=instructions, criteria={v: criteria.get(v) or docs.get(v) for v in values})
-    if values and all(isinstance(v, int) and not isinstance(v, bool) for v in values):
-        # A rubric is levels 0..n-1 in numeric order, each saying what it means.
-        levels = [criteria.get(str(v)) or docs.get(v) for v in range(len(values))]
-        if sorted(values) != list(range(len(values))) or not 2 <= len(values) <= 10 or not all(levels):
-            raise UnsupportedResponseSchemaError(
-                "A score needs 2-10 levels numbered from 0, each described by a docstring under "
-                "the member or by `criteria`."
-            )
-        return Score(instructions=instructions, criteria=levels)
 
-    raise UnsupportedResponseSchemaError("`response_schema` is not a decision type.")
+    if spec.kind == "choice":
+        return Choice(
+            instructions=instructions,
+            criteria={str(o.value): criteria.get(str(o.value)) or o.description for o in spec.options},
+        )
+
+    # A rubric is levels 0..n-1 in numeric order, each saying what it means.
+    levels = [criteria.get(str(o.value)) or o.description for o in spec.options]
+    if (
+        [o.value for o in spec.options] != list(range(len(spec.options)))
+        or not 2 <= len(levels) <= 10
+        or not all(levels)
+    ):
+        raise UnsupportedResponseSchemaError(
+            "A score needs 2-10 levels numbered from 0, each described by a docstring under "
+            "the member (unreadable when the source is unavailable, e.g. in a REPL or for a functional `Enum`), "
+            "by `Annotated[..., Question(options=...)]` or by `criteria`."
+        )
+    return Score(instructions=instructions, criteria=levels)
 
 
 def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, boolean_threshold: float = 0.5) -> str:
     """Render a Jev answer as the JSON the ``response_schema`` validates."""
-    node, embedded = _decision_node(response)
+    spec = _decision_spec(response)
 
     value: bool | int | float | str
     if isinstance(answer, NoulAnswer):
-        value = answer.noul >= boolean_threshold if node.get("type") == "boolean" else answer.noul
+        value = spec.predicate_value(answer.noul, threshold=boolean_threshold)
     elif isinstance(answer, ChoiceAnswer):
         value = answer.choice
     else:
         # `score` is the expected value on the 0..n-1 rubric; snap to the nearest level.
-        value = min(max(round(answer.score), 0), len(node["enum"]) - 1)
+        value = spec.snap_score(answer.score)
 
-    return json.dumps({"data": value} if embedded else value)
+    return spec.render(value)
 
 
-def _decision_node(response: ResponseProto[Any] | None) -> tuple[Mapping[str, Any], bool]:
-    if response is None:
-        raise UnsupportedResponseSchemaError("A `response_schema` is required.")
-    if not (root := response.json_schema):
-        raise UnsupportedResponseSchemaError(f"`response_schema` {response.name!r} has no JSON schema.")
-    return decision_node(root)
+def _decision_spec(response: ResponseProto[Any] | None) -> DecisionSpec:
+    try:
+        return DecisionSpec.from_response(response)
+    except NotADecisionError as e:
+        raise UnsupportedResponseSchemaError(e.reason) from e
 
 
 def normalize_usage(raw: TypeSafeUsage) -> Usage:

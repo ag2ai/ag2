@@ -400,6 +400,7 @@ python_version = "3.10"
 # that already pass under `strict = true`.
 files = [
     "ag2/_import_utils.py",
+    "ag2/response/decision.py",
     "ag2/__init__.py",
     "ag2/acp/client.py",
     "ag2/acp/elicitation.py",

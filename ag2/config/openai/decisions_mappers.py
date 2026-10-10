@@ -4,9 +4,7 @@
 
 
 import base64
-import json
 from collections.abc import Iterable, Mapping, Sequence
-from enum import Enum
 from typing import Any, NoReturn
 
 from fast_depends.library.serializer import SerializerProto
@@ -33,7 +31,6 @@ from openai.types.decision_create_params import (
 )
 
 from ag2.compact import CompactionSummary
-from ag2.config.decision_schema import decision_node, explicit_description, option_docs
 from ag2.events import (
     BaseEvent,
     BinaryInput,
@@ -48,7 +45,7 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import AG2Error, UnsupportedInputError, UnsupportedToolError
-from ag2.response import ResponseProto, ResponseSchema
+from ag2.response import DecisionSpec, NotADecisionError, ResponseProto
 from ag2.tools.schemas import ToolSchema
 
 from .mappers import _RESPONSES_IMAGE_DETAILS, _image_detail, _kind_label
@@ -156,9 +153,8 @@ def response_proto_to_question(
     descriptions: Mapping[str, str] | None = None,
 ) -> Question:
     """Convert a ``response_schema`` to the single Decisions question: predicate, choice or score."""
-    node, _ = _decision_node(response)
-    question = explicit_description(response) or node.get("description")
-    instructions = "\n\n".join(s for s in (instructions, question) if s)
+    spec = _decision_spec(response)
+    instructions = "\n\n".join(s for s in (instructions, spec.question) if s)
     if not instructions:
         # Every question type requires instructions; fail before the request with a way out.
         raise ValueError(
@@ -166,44 +162,29 @@ def response_proto_to_question(
         )
 
     descriptions = descriptions or {}
-    values = node.get("enum")
-    docs = option_docs(response)
 
-    is_bool = node.get("type") == "boolean" and (values is None or set(values) == {True, False})
-    is_probability = node.get("type") == "number" and node.get("minimum") == 0 and node.get("maximum") == 1
-    if is_bool or is_probability:
+    if spec.kind == "predicate":
         return QuestionQuestionParamPredicate(type="predicate", name=ANSWER_KEY, instructions=instructions)
 
-    if values and all(isinstance(v, str) for v in values):
+    if spec.kind == "choice":
         choices: list[QuestionQuestionParamChoiceChoice] = []
-        for v in values:
-            choice = QuestionQuestionParamChoiceChoice(value=v)
-            if description := descriptions.get(v) or docs.get(v):
+        for option in spec.options:
+            choice = QuestionQuestionParamChoiceChoice(value=str(option.value))
+            if description := descriptions.get(str(option.value)) or option.description:
                 choice["description"] = description
             choices.append(choice)
         return QuestionQuestionParamChoice(type="choice", name=ANSWER_KEY, instructions=instructions, choices=choices)
 
-    if values and all(isinstance(v, int) and not isinstance(v, bool) for v in values):
-        # The API numbers levels by position, so the rubric must already be 0..n-1.
-        if sorted(values) != list(range(len(values))) or len(values) < 2:
-            raise UnsupportedResponseSchemaError("A score needs 2 or more levels numbered from 0.")
-        labels = _level_labels(response)
-        levels: list[QuestionQuestionParamScoreLevel] = []
-        for v in range(len(values)):
-            level = QuestionQuestionParamScoreLevel(label=labels.get(v, str(v)))
-            if description := descriptions.get(str(v)) or docs.get(v):
-                level["description"] = description
-            levels.append(level)
-        return QuestionQuestionParamScore(type="score", name=ANSWER_KEY, instructions=instructions, levels=levels)
-
-    raise UnsupportedResponseSchemaError("`response_schema` is not a decision type.")
-
-
-def _level_labels(response: ResponseProto[Any] | None) -> dict[Any, str]:
-    """An ``IntEnum``'s member names as level labels, ``SEVERE_OUTAGE`` read as ``Severe outage``."""
-    if isinstance(response, ResponseSchema) and isinstance(response.types, type) and issubclass(response.types, Enum):
-        return {m.value: m.name.replace("_", " ").capitalize() for m in response.types}
-    return {}
+    # The API numbers levels by position, so the rubric must already be 0..n-1.
+    if [o.value for o in spec.options] != list(range(len(spec.options))) or len(spec.options) < 2:
+        raise UnsupportedResponseSchemaError("A score needs 2 or more levels numbered from 0.")
+    levels: list[QuestionQuestionParamScoreLevel] = []
+    for option in spec.options:
+        level = QuestionQuestionParamScoreLevel(label=option.name.replace("_", " ").capitalize())
+        if description := descriptions.get(str(option.value)) or option.description:
+            level["description"] = description
+        levels.append(level)
+    return QuestionQuestionParamScore(type="score", name=ANSWER_KEY, instructions=instructions, levels=levels)
 
 
 def find_answer(decision: Decision) -> Answer:
@@ -220,32 +201,31 @@ def find_answer(decision: Decision) -> Answer:
 
 def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, boolean_threshold: float = 0.5) -> str:
     """Render a Decisions answer as the JSON the ``response_schema`` validates."""
-    node, embedded = _decision_node(response)
+    spec = _decision_spec(response)
 
     value: bool | int | float | str
     if isinstance(answer, AnswerAnswerResourcePredicate):
-        value = answer.probability >= boolean_threshold if node.get("type") == "boolean" else answer.probability
+        value = spec.predicate_value(answer.probability, threshold=boolean_threshold)
     elif isinstance(answer, AnswerAnswerResourceChoice):
         value = answer.choice
     elif isinstance(answer, AnswerAnswerResourceRefusal):
         raise DecisionRefusedError(answer.name)
     else:
         # `score` is the probability-weighted mean of the level indices; snap to the nearest level.
-        value = min(max(round(answer.score), 0), len(node["enum"]) - 1)
+        value = spec.snap_score(answer.score)
 
-    return json.dumps({"data": value} if embedded else value)
+    return spec.render(value)
 
 
 def answer_metadata(answer: Answer) -> dict[str, Any]:
     return answer.model_dump(mode="json", exclude={"type", "name"})
 
 
-def _decision_node(response: ResponseProto[Any] | None) -> tuple[Mapping[str, Any], bool]:
-    if response is None:
-        raise UnsupportedResponseSchemaError("A `response_schema` is required.")
-    if not (root := response.json_schema):
-        raise UnsupportedResponseSchemaError(f"`response_schema` {response.name!r} has no JSON schema.")
-    return decision_node(root)
+def _decision_spec(response: ResponseProto[Any] | None) -> DecisionSpec:
+    try:
+        return DecisionSpec.from_response(response)
+    except NotADecisionError as e:
+        raise UnsupportedResponseSchemaError(e.reason) from e
 
 
 def normalize_usage(usage: DecisionUsage) -> Usage:

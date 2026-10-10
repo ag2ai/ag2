@@ -59,7 +59,7 @@ class ResponseSchema(ResponseProto[T]):
         if not description:
             if schema_description := (schema or {}).pop("description", None):
                 self.description = schema_description
-            elif (docstring := getattr(_strip_annotated(types), "__doc__", None)) and "PEP" not in docstring:
+            elif (docstring := getattr(strip_annotated(types), "__doc__", None)) and "PEP" not in docstring:
                 self.description = docstring
             else:
                 self.description = None
@@ -156,7 +156,7 @@ class RawSchema(ResponseProto[str]):
 
 def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]:
     # Classify by the bare type, but build the adapter from the full annotated one so metadata is kept.
-    bare = _strip_annotated(types)
+    bare = strip_annotated(types)
     origin = get_origin(bare)
     embedded_type = True
 
@@ -198,7 +198,7 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
     return TypeAdapter[T](_final_type), embedded_type
 
 
-def _strip_annotated(types: ClassInfo) -> ClassInfo:
+def strip_annotated(types: ClassInfo) -> ClassInfo:
     while get_origin(types) is Annotated:
         types = get_args(types)[0]
     return types
