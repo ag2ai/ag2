@@ -40,10 +40,9 @@ member docstrings describe options; `descriptions` on the config overrides them.
 Answers are rendered back through the `ResponseSchema` envelope, and the raw
 answer (minus `type` and `name`) lands on `reply.response.metadata`.
 
-The schema-reading helpers (`decision_node`, `member_docstrings`, …) moved from
-`ag2/config/typesafe/mappers.py` into the provider-neutral
-`ag2/config/decision_schema.py` so both mappers share them without the OpenAI
-extra depending on `typesafe-sdk`.
+The schema is read once, in the provider-neutral `ag2/response/decision.py`
+(`DecisionSpec`, `Question`), so both mappers share it without the OpenAI
+extra depending on `typesafe-sdk`; each mapper only translates the result.
 
 ### 2. Where the APIs differ, follow OpenAI
 
