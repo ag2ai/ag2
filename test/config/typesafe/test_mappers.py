@@ -132,18 +132,27 @@ def test_string_literal_maps_to_choice() -> None:
     assert question == Choice(criteria={"calm": None, "angry": "Hostile or upset"})
 
 
-def test_enum_maps_to_choice() -> None:
-    schema = ResponseSchema(Department)
+@pytest.mark.parametrize("embed", [True, False], ids=["embedded", "unembedded"])
+@pytest.mark.parametrize(
+    "instructions, expected_instructions",
+    [
+        (None, "Which team should handle this ticket?"),
+        ("You triage support tickets.", "You triage support tickets.\n\nWhich team should handle this ticket?"),
+    ],
+    ids=["without-prompt", "with-prompt"],
+)
+def test_enum_maps_to_choice(embed: bool, instructions: str | None, expected_instructions: str) -> None:
+    schema = ResponseSchema(Department, embed=embed)
     answer = ChoiceAnswer(
         type="choice", choice="technical", confidence=0.9, probabilities={"billing": 0.1, "technical": 0.9}
     )
 
     # The agent prompt frames the question; the Enum docstring is the question.
-    assert response_proto_to_question(schema, instructions="You triage support tickets.") == Choice(
-        instructions="You triage support tickets.\n\nWhich team should handle this ticket?",
+    assert response_proto_to_question(schema, instructions=instructions) == Choice(
+        instructions=expected_instructions,
         criteria={"billing": "Payments, invoicing, refunds.", "technical": None},
     )
-    assert json.loads(answer_to_content(schema, answer)) == {"data": "technical"}
+    assert json.loads(answer_to_content(schema, answer)) == ({"data": "technical"} if embed else "technical")
 
 
 def test_int_enum_maps_to_score_and_snaps_to_nearest_level() -> None:

@@ -73,10 +73,11 @@ and a `data:` `UrlInput` passes through. Hosted URLs, `file_id`s and non-image
 binaries raise `UnsupportedInputError`; `create_files_client()` raises
 `NotImplementedError`.
 
-### 5. The SDK floor moves to `openai>=3.26.0`
+### 5. The SDK floor moves to `openai>=3.27.0`
 
-`client.decisions.create` first ships in 3.26.0. Calling the endpoint with
-`client.post` would avoid the bump, but would lose the typed `Decision` models;
+The provider requires `openai>=3.27.0` for `client.decisions.create` and the
+typed `Decision` models. Calling the endpoint with `client.post` would avoid
+the bump, but would lose those models;
 the floor is raised for every `ag2[openai]` user instead.
 
 ## Consequences

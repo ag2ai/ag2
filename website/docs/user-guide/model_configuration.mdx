@@ -534,7 +534,7 @@ The image URL is a short-lived signed link, so download it promptly if you need 
 
 ### OpenAI Decisions Configuration
 
-`OpenAIDecisionsConfig` connects to OpenAI's [Decisions API](https://developers.openai.com/api/docs/guides/decisions){.external-link target="_blank"} (`POST /v1/decisions`), which is in public beta. It ships with the `openai` extra (`openai>=3.26.0`), and like the other OpenAI configs reads `OPENAI_API_KEY` when `api_key` is not passed. `model` defaults to `gpt-6-luna`, the only model the endpoint serves today.
+`OpenAIDecisionsConfig` connects to OpenAI's [Decisions API](https://developers.openai.com/api/docs/guides/decisions){.external-link target="_blank"} (`POST /v1/decisions`), which is in public beta. It ships with the `openai` extra (`openai>=3.27.0`), and like the other OpenAI configs reads `OPENAI_API_KEY` when `api_key` is not passed. `model` defaults to `gpt-6-luna`, the only model the endpoint serves today.
 
 Like [TypeSafe's Jev](#typesafe-jev-configuration), the Decisions API does not generate text. It answers **one typed question** about the conversation: the probability that a condition is true, one option out of several, or a score on an ordered rubric, along with the probabilities behind it. Use it to classify, route or grade cheaply, then hand the text work to a generative agent.
 

@@ -23,7 +23,9 @@ __all__ = ("decision_node", "explicit_description", "member_docstrings", "option
 
 
 def explicit_description(response: ResponseProto[Any] | None) -> str | None:
-    """A ``description=`` the user gave, ignoring ``ResponseSchema``'s fallback to the type's docstring."""
+    """The question description, retaining enum docstrings but ignoring other type docstring fallbacks."""
+    if isinstance(response, ResponseSchema) and isinstance(response.types, type) and issubclass(response.types, Enum):
+        return response.description
     if response is None or (
         isinstance(response, ResponseSchema) and response.description == getattr(response.types, "__doc__", None)
     ):

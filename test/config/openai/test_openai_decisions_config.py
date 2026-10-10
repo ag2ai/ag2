@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -40,12 +41,18 @@ def lookup(order_id: str) -> str:
     return order_id
 
 
-def _fake_api(requests: list[httpx2.Request], *answers: dict[str, Any]) -> httpx2.AsyncClient:
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        requests.append(request)
-        return httpx2.Response(200, json={"model": "gpt-6-luna", "answers": list(answers), "usage": USAGE})
+@dataclass
+class _FakeAPI:
+    requests: list[httpx2.Request]
+    answers: tuple[dict[str, Any], ...]
 
-    return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    def __call__(self, request: httpx2.Request) -> httpx2.Response:
+        self.requests.append(request)
+        return httpx2.Response(200, json={"model": "gpt-6-luna", "answers": list(self.answers), "usage": USAGE})
+
+
+def _fake_api(requests: list[httpx2.Request], *answers: dict[str, Any]) -> httpx2.AsyncClient:
+    return httpx2.AsyncClient(transport=httpx2.MockTransport(_FakeAPI(requests, answers)))
 
 
 def test_defaults() -> None:

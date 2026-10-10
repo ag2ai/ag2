@@ -82,13 +82,24 @@ PROBABILITY = ResponseSchema.from_schema(
 
 
 class TestQuestion:
-    def test_enum_is_a_choice_described_by_member_docstrings(self) -> None:
-        question = response_proto_to_question(ResponseSchema(Department), instructions="You triage tickets.")
+    @pytest.mark.parametrize("embed", [True, False], ids=["embedded", "unembedded"])
+    @pytest.mark.parametrize(
+        "instructions, expected_instructions",
+        [
+            (None, "Which team should handle this ticket?"),
+            ("You triage tickets.", "You triage tickets.\n\nWhich team should handle this ticket?"),
+        ],
+        ids=["without-prompt", "with-prompt"],
+    )
+    def test_enum_is_a_choice_described_by_member_docstrings(
+        self, embed: bool, instructions: str | None, expected_instructions: str
+    ) -> None:
+        question = response_proto_to_question(ResponseSchema(Department, embed=embed), instructions=instructions)
 
         assert question == {
             "type": "choice",
             "name": "answer",
-            "instructions": "You triage tickets.\n\nWhich team should handle this ticket?",
+            "instructions": expected_instructions,
             "choices": [
                 {"value": "billing", "description": "Payments, invoicing, refunds."},
                 {"value": "technical", "description": "Bugs, outages, integrations."},
@@ -138,9 +149,10 @@ class TestQuestion:
         assert question["type"] == "predicate"
         assert question["instructions"] in {"Is this a refund request?", "How likely is churn?"}
 
-    def test_bool_docstring_is_not_a_question(self) -> None:
+    @pytest.mark.parametrize("embed", [True, False], ids=["embedded", "unembedded"])
+    def test_bool_docstring_is_not_a_question(self, embed: bool) -> None:
         with pytest.raises(ValueError, match="needs a question"):
-            response_proto_to_question(ResponseSchema(bool), instructions=None)
+            response_proto_to_question(ResponseSchema(bool, embed=embed), instructions=None)
 
     @pytest.mark.parametrize(
         "schema",
