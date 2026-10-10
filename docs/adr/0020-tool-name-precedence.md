@@ -49,9 +49,8 @@ another tool's schemas. Selection, pruning and registration use that same tree:
 another turn refreshing a shared `MCPToolkit` must not change the members of a
 turn that is still being resolved. This applies recursively to nested toolkits
 and deferred tools in `ToolSearchTool`.
-`Toolkit._snapshot()` lets a lazy composite retain the state it just discovered:
-`MCPToolkit` binds the snapshot's discovery config to its resolved values, so
-generating final schemas cannot refresh the snapshot and reintroduce a dropped tool.
+A lazy composite pins what it just discovered in its snapshot, so generating final
+schemas cannot refresh the snapshot and reintroduce a dropped tool.
 
 Precedence only holds within a turn, and the tool behind a name can change between turns
 (`ask(tools=...)`, an MCP server's changing tool list). So `approval_required` grants an

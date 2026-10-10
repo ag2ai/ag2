@@ -76,7 +76,7 @@ async def _collect_leaves(tool: Tool, context: Context, parent: str, out: list[_
         # Another turn may rediscover different members while a later tool's
         # schemas are awaited. Selection, pruning and registration must all
         # operate on the members discovered for this turn, including nesting.
-        snapshot = tool._snapshot() if isinstance(tool, Toolkit) else copy(tool)
+        snapshot = tool._snapshot()
         members = tuple(snapshot._tools.items())
         snapshot._tools = {name: await _collect_leaves(child, context, f"{source} > ", out) for name, child in members}
         return snapshot
