@@ -19,13 +19,16 @@ from typing import Any
 
 from ag2.response import ResponseProto, ResponseSchema
 
+# Python 3.10 gives an undocumented ``Enum`` this docstring; later versions give ``None``.
+_PY310_ENUM_DOC = "An enumeration."
+
 __all__ = ("decision_node", "explicit_description", "member_docstrings", "option_docs")
 
 
 def explicit_description(response: ResponseProto[Any] | None) -> str | None:
     """The question description, retaining enum docstrings but ignoring other type docstring fallbacks."""
     if isinstance(response, ResponseSchema) and isinstance(response.types, type) and issubclass(response.types, Enum):
-        return response.description
+        return None if response.description == _PY310_ENUM_DOC else response.description
     if response is None or (
         isinstance(response, ResponseSchema) and response.description == getattr(response.types, "__doc__", None)
     ):

@@ -205,6 +205,9 @@ class TestInput:
             },
         ]
 
+    def test_empty_assistant_turn_is_skipped(self) -> None:
+        assert convert_input([ModelResponse(message=ModelMessage(""))], SerializerCls) == []
+
     def test_images_become_data_urls(self) -> None:
         image = BinaryInput(
             b"\x89PNG", media_type="image/png", kind=BinaryType.IMAGE, vendor_metadata={"detail": "low"}
@@ -266,6 +269,15 @@ class TestAnswer:
     def test_refusal_raises(self) -> None:
         with pytest.raises(DecisionRefusedError, match="'answer'"):
             find_answer(_decision({"type": "refusal", "name": "answer"}))
+
+    def test_missing_answer_among_several_raises(self) -> None:
+        decision = _decision(
+            {"type": "predicate", "name": "other", "probability": 0.1},
+            {"type": "predicate", "name": "another", "probability": 0.2},
+        )
+
+        with pytest.raises(ValueError, match="no answer"):
+            find_answer(decision)
 
     def test_unnamed_single_answer_is_used(self) -> None:
         answer = find_answer(_decision({"type": "choice", "choice": "billing", "confidence": 1, "probabilities": []}))

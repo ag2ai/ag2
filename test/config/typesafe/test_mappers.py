@@ -259,3 +259,14 @@ def test_normalize_usage() -> None:
         prompt_tokens=12, completion_tokens=0, total_tokens=12
     )
     assert normalize_usage(TypeSafeUsage()) == Usage()
+
+
+@pytest.mark.parametrize(
+    "criteria",
+    [{"true": "Billing issue"}, {"false": "Anything else"}],
+    ids=["true-only", "false-only"],
+)
+def test_bool_with_instructions_keeps_only_described_outcomes(criteria: dict[str, str]) -> None:
+    question = response_proto_to_question(ResponseSchema(bool), instructions="Triage.", criteria=criteria)
+
+    assert question.model_dump(mode="json") == {"type": "noul", "instructions": "Triage.", "criteria": criteria}
