@@ -12,7 +12,7 @@ from functools import cache
 from typing import Any, NoReturn
 
 from fast_depends.library.serializer import SerializerProto
-from typesafe_sdk import Answer, Choice, ChoiceAnswer, JSONValue, Noul, NoulAnswer, Question, Score
+from typesafe_sdk import Answer, Choice, ChoiceAnswer, JSONValue, Noul, NoulAnswer, NoulCriteria, Question, Score
 from typesafe_sdk import Usage as TypeSafeUsage
 
 from ag2.compact import CompactionSummary
@@ -103,7 +103,11 @@ def response_proto_to_question(
     is_bool = node.get("type") == "boolean" and (values is None or set(values) == {True, False})
     is_probability = node.get("type") == "number" and node.get("minimum") == 0 and node.get("maximum") == 1
     if is_bool or is_probability:
-        noul_criteria = {k: criteria[k] for k in ("true", "false") if k in criteria}
+        noul_criteria = NoulCriteria()
+        if "true" in criteria:
+            noul_criteria["true"] = criteria["true"]
+        if "false" in criteria:
+            noul_criteria["false"] = criteria["false"]
         if not instructions and not noul_criteria:
             # The API rejects a bare yes/no question; fail before the request with a way out.
             raise ValueError(
@@ -111,7 +115,11 @@ def response_proto_to_question(
                 "`ResponseSchema(bool, description=...)`, or describe the outcomes with "
                 "`TypeSafeConfig(criteria={'true': ..., 'false': ...})`."
             )
-        return Noul(instructions=instructions, criteria=noul_criteria or None)
+        if instructions:
+            return Noul(instructions=instructions, criteria=noul_criteria or None)
+        if (described_true := criteria.get("true")) is not None:
+            return Noul(criteria={"true": described_true, "false": criteria.get("false")})
+        return Noul(criteria={"true": None, "false": criteria["false"]})
     if values and all(isinstance(v, str) for v in values):
         return Choice(instructions=instructions, criteria={v: criteria.get(v) or docs.get(v) for v in values})
     if values and all(isinstance(v, int) and not isinstance(v, bool) for v in values):
