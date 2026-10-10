@@ -436,6 +436,60 @@ For full control (e.g. enabling `include_thoughts`), pass a `google.genai.types.
 
 The number of thinking tokens consumed is reported on `ModelResponse.usage.thinking_tokens` and emitted as the `gen_ai.usage.thinking_tokens` OpenTelemetry attribute by `TelemetryMiddleware`.
 
+### Ollama Configuration
+
+`OllamaConfig` connects to a local or hosted [Ollama](https://docs.ollama.com/api/introduction){.external-link target="_blank"} server through the official `ollama` SDK (`ollama>=0.5.2`). Install the optional dependency with `pip install "ag2[ollama]"`.
+
+`host` defaults to `http://localhost:11434`; the SDK fills in the scheme and default port for a bare host such as `gpu-box`.
+
+```python linenums="1"
+from ag2.config import OllamaConfig
+
+config = OllamaConfig(model="qwen3:8b", host="http://gpu-box:11434", streaming=True)
+```
+
+#### API Key
+
+[Ollama Cloud](https://docs.ollama.com/cloud){.external-link target="_blank"} needs a bearer token. Pass `api_key` and it is sent as `Authorization: Bearer <key>` on every request:
+
+```python linenums="1" hl_lines="6"
+from ag2.config import OllamaConfig
+
+config = OllamaConfig(
+    model="gpt-oss:120b",
+    host="https://ollama.com",
+    api_key="...",
+)
+```
+
+#### Custom HTTP Client
+
+Pass `http_client` to route requests through your own client, for a proxy, custom TLS, a transport or tracing. The `ollama` SDK is built on [`httpx`](https://www.python-httpx.org){.external-link target="_blank"}, so `http_client` takes an `#!python httpx.AsyncClient`:
+
+```python linenums="1" hl_lines="6"
+import httpx
+from ag2.config import OllamaConfig
+
+config = OllamaConfig(
+    model="qwen3:8b",
+    http_client=httpx.AsyncClient(proxy="http://proxy.example.com:8080"),
+)
+```
+
+`host` and `api_key` still apply on top of your client: AG2 supplies the URL and the bearer token for each request and leaves the client itself unmodified. Your client's own headers, timeout, proxy and transport are used as given.
+
+!!! note "You own the client's lifetime"
+
+    AG2 never closes a client you pass in. Close it yourself with `#!python await client.aclose()` when you are done with it.
+
+!!! warning "`httpx`, not `httpx2`"
+
+    Unlike `OpenAIConfig` and `AnthropicConfig`, which take an `httpx2` client, Ollama's `http_client` is an `httpx` client. Use `proxy=` rather than `proxies=`, which current `httpx` rejects.
+
+#### Tool Results
+
+When a tool round is sent back to the model, each result carries the name of the tool it answers as `tool_name`, as Ollama's tool-calling protocol describes. Results are still sent in call order: two parallel calls to the *same* tool are told apart by position only.
+
 ### Z.AI (GLM) Configuration
 
 `ZAIConfig` connects to Z.AI's [GLM models](https://docs.z.ai){.external-link target="_blank"} through the official `zai-sdk`. Install the optional dependency with `pip install "ag2[zai]"`.
