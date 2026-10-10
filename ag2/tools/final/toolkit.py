@@ -50,13 +50,17 @@ class Toolkit(Tool):
         self._tools[t.name] = t
 
     def __or__(self, other: Any) -> "Toolkit":
+        # Existing members already carry the toolkit middleware. Copy them
+        # without applying it again; incoming members still need it.
+        merged = Toolkit(*self.tools, name=self.name)
+        merged._middleware = self._middleware
         if isinstance(other, Toolkit):
-            tools = self._tools | other._tools
+            for t in other.tools:
+                merged._add_tool(t, unsafe=True)
         else:
-            tool = FunctionTool.ensure_tool(other)
-            tools = self._tools | {tool.name: tool}
+            merged._add_tool(other, unsafe=True)
 
-        return Toolkit(*tools.values(), name=self.name, middleware=self._middleware)
+        return merged
 
     @overload
     def tool(
