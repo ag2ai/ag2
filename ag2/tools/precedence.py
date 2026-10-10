@@ -57,8 +57,8 @@ async def resolve_tools(tools: Iterable[Tool], context: Context) -> ResolvedTool
     """
     declared = list(tools)
     leaves: list[_Leaf] = []
-    for tool in declared:
-        await _collect_leaves(tool, context, "", leaves)
+    for index, tool in enumerate(declared):
+        declared[index] = await _collect_leaves(tool, context, "", leaves)
 
     keep = iter(_select(leaves))
     resolved = [pruned for tool in declared if (pruned := _prune(tool, keep)) is not None]
@@ -68,20 +68,25 @@ async def resolve_tools(tools: Iterable[Tool], context: Context) -> ResolvedTool
     return ResolvedTools(resolved, schemas, known_tools)
 
 
-async def _collect_leaves(tool: Tool, context: Context, parent: str, out: list[_Leaf]) -> None:
+async def _collect_leaves(tool: Tool, context: Context, parent: str, out: list[_Leaf]) -> Tool:
     source = f"{parent}{type(tool).__name__}({tool.name!r})"
     if isinstance(tool, Toolkit | ToolSearchTool):
         # A toolkit may discover its members here (e.g. ``MCPToolkit``).
         await tool.schemas(context)
-        for child in tool.tools:
-            await _collect_leaves(child, context, f"{source} > ", out)
-        return
+        # Another turn may rediscover different members while a later tool's
+        # schemas are awaited. Selection, pruning and registration must all
+        # operate on the members discovered for this turn, including nesting.
+        snapshot = tool._snapshot() if isinstance(tool, Toolkit) else copy(tool)
+        members = tuple(snapshot._tools.items())
+        snapshot._tools = {name: await _collect_leaves(child, context, f"{source} > ", out) for name, child in members}
+        return snapshot
 
     keys = [
         (s.function.name, True) if isinstance(s, FunctionToolSchema) else (s.type, False)
         for s in await tool.schemas(context)
     ]
     out.append(_Leaf(tool, keys, source))
+    return tool
 
 
 def _select(leaves: list[_Leaf]) -> list[bool]:

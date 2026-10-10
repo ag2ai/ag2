@@ -332,6 +332,8 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 
 Every field of both configs except `connection_timeout`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
 
+`MCPToolkit` reuses tool discovery while the resolved configuration is unchanged. Changing the server address, credentials, stdio launch settings, filters or prefix triggers discovery again. Concurrent agent turns keep separate snapshots of the tools they discovered. Only the most recent configuration is cached, so alternating configurations can require another discovery request. Changes to a server's tool list alone do not invalidate this cache.
+
 ### `MCPAnswerPolicy`
 
 `elicitation` (`"decline"`), `sampling` (`False`), `roots` (`()`), `max_rounds` (`10`) — see [What the MCP answer policy hands over](#what-the-mcp-answer-policy-hands-over).

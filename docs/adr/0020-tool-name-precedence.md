@@ -44,6 +44,15 @@ subscribed and never receives a call. `Agent` and `LiveAgent` both assemble thei
 through `resolve_tools`. `Tool.declared_in_code` marks the rank; MCP proxies and
 `ClientTool` set it to `False`.
 
+Composite membership is snapshotted immediately after discovery, before awaiting
+another tool's schemas. Selection, pruning and registration use that same tree:
+another turn refreshing a shared `MCPToolkit` must not change the members of a
+turn that is still being resolved. This applies recursively to nested toolkits
+and deferred tools in `ToolSearchTool`.
+`Toolkit._snapshot()` lets a lazy composite retain the state it just discovered:
+`MCPToolkit` binds the snapshot's discovery config to its resolved values, so
+generating final schemas cannot refresh the snapshot and reintroduce a dropped tool.
+
 Precedence only holds within a turn, and the tool behind a name can change between turns
 (`ask(tools=...)`, an MCP server's changing tool list). So `approval_required` grants an
 "always" answer to the implementation behind the call, not to its name: a tool sets
