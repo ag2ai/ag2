@@ -679,7 +679,7 @@ There is no free-text path, so an agent on `TypeSafeConfig` **must** set `respon
 
 Anything else — `str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema` — raises `UnsupportedResponseSchemaError` before any request is sent.
 
-The agent `prompt` frames the question; the schema's own description asks it. For an `Enum` that is the class docstring, and for everything else an explicit `ResponseSchema(..., description=...)`. The two are joined, so the router above asks *"You triage customer support tickets. Which team should handle this ticket?"*.
+The agent `prompt` frames the question; the schema's own description asks it. That is an explicit `ResponseSchema(..., description=...)`, an `Annotated[..., Question("...")]` marker, or an `Enum`'s class docstring, in that order of precedence. The prompt and the question are joined, so the router above asks *"You triage customer support tickets. Which team should handle this ticket?"*.
 
 !!! warning "A yes/no question has to be asked"
 
@@ -701,7 +701,7 @@ class Severity(IntEnum):
     """An outage or data loss."""
 ```
 
-A score rubric **requires** a description for every level; a choice works without them. `criteria` on the config overrides or supplies descriptions without touching the type — keyed by choice label, by score level as a string, or by `"true"` / `"false"` for a yes/no question:
+A score rubric **requires** a description for every level; a choice works without them. `criteria` on the config overrides or supplies descriptions without touching the type (`Annotated[..., Question(options=...)]` does the same beside the type, and `criteria` wins) — keyed by choice label, by score level as a string, or by `"true"` / `"false"` for a yes/no question:
 
 ```python linenums="1" hl_lines="4-8"
 from ag2.config import TypeSafeConfig

@@ -65,6 +65,7 @@ The answer is on `#!python await reply.content()`. Everything else the model ret
 | Confidence (choice and score) | `metadata["confidence"]` | `metadata["confidence"]` |
 | Expected score, before snapping to a level | `metadata["score"]` | `metadata["score"]` |
 | Option descriptions on the config | `descriptions={...}` | `criteria={...}` |
+| Question and options beside the type | `Annotated[T, Question(...)]` | `Annotated[T, Question(...)]` |
 
 ## Classification
 
@@ -670,14 +671,16 @@ Descriptions passed on the config outrank member docstrings. They are keyed by c
 
 The question and each option's description can be stated in several places. The closer to where the agent is created, the stronger, and the order is the same on both providers.
 
-| | Strongest | | Weakest |
+| What | 1st (wins) | 2nd | 3rd |
 | :--- | :--- | :--- | :--- |
 | Question text | `ResponseSchema(..., description=...)` | `Question("...")` in `Annotated` | the `Enum` class docstring |
-| Option descriptions | `descriptions=` / `criteria=` on the config | `Question(options={...})` in `Annotated` | the string under each member |
+| Option descriptions | `descriptions=` (OpenAI) / `criteria=` (TypeSafe) on the config | `Question(options={...})` in `Annotated` | the string under each member |
 
-`Question` is a provider-neutral marker that you attach with `Annotated`, so a plain `bool` or an `Enum` you do not own can carry its question without a wrapper type. Option keys are the values as they appear in the schema: `"billing"` for a choice, `0` and `1` for a score. A key that names no option, such as `"0"` for an `IntEnum`, raises `ValueError` before any request.
+`Question` is a provider-neutral marker attached with `Annotated`, so a plain `bool`, or an `Enum` you do not own, carries its question without a wrapper type. Option keys are the values as they appear in the schema: `"billing"` for a choice, `0` and `1` for a score. A key that names no option, such as `"0"` for an `IntEnum`, raises `ValueError` before any request. The agent `prompt` is joined in front of whichever question text wins.
 
-```python linenums="1"
+<Tabs>
+  <Tab title="OpenAI Decisions">
+```python linenums="1" hl_lines="9 18 22 23"
 from enum import Enum
 from typing import Annotated
 
@@ -685,24 +688,61 @@ from ag2 import Agent
 from ag2.config import OpenAIDecisionsConfig
 from ag2.response import Question
 
+# A question on a plain type
 Refund = Annotated[bool, Question("Is this a refund request?")]
-
 
 class Department(Enum):
     BILLING = "billing"
     TECHNICAL = "technical"
 
-
+# A question and option descriptions on an enum without docstrings
 Routed = Annotated[
     Department,
     Question("Which team should handle this ticket?", options={"billing": "Payments", "technical": "Bugs"}),
 ]
 
-refunds = Agent("refunds", config=OpenAIDecisionsConfig(), response_schema=Refund)
-router = Agent("router", config=OpenAIDecisionsConfig(), response_schema=Routed)
-```
+config = OpenAIDecisionsConfig()
+refunds = Agent("refunds", config=config, response_schema=Refund)
+router = Agent("router", config=config, response_schema=Routed)
 
-The same types work with `TypeSafeConfig`. A non-`Enum` type's own docstring is never a question, so `bool`'s docstring is not sent.
+reply = await router.ask("I was charged twice this month.")
+await reply.content()  # Department.BILLING
+```
+  </Tab>
+
+  <Tab title="TypeSafe">
+```python linenums="1" hl_lines="9 18 22 23"
+from enum import Enum
+from typing import Annotated
+
+from ag2 import Agent
+from ag2.config import TypeSafeConfig
+from ag2.response import Question
+
+# A question on a plain type
+Refund = Annotated[bool, Question("Is this a refund request?")]
+
+class Department(Enum):
+    BILLING = "billing"
+    TECHNICAL = "technical"
+
+# A question and option descriptions on an enum without docstrings
+Routed = Annotated[
+    Department,
+    Question("Which team should handle this ticket?", options={"billing": "Payments", "technical": "Bugs"}),
+]
+
+config = TypeSafeConfig()
+refunds = Agent("refunds", config=config, response_schema=Refund)
+router = Agent("router", config=config, response_schema=Routed)
+
+reply = await router.ask("I was charged twice this month.")
+await reply.content()  # Department.BILLING
+```
+  </Tab>
+</Tabs>
+
+A non-`Enum` type's own docstring is never a question, so `bool`'s docstring is not sent.
 
 !!! note "When the enum's source is unreadable"
 
