@@ -5,7 +5,7 @@
 import warnings
 from dataclasses import is_dataclass
 from types import UnionType
-from typing import Annotated, Any, Union, get_origin, overload
+from typing import Annotated, Any, Union, get_args, get_origin, overload
 
 from fast_depends import Provider
 from pydantic import BaseModel, Field, TypeAdapter
@@ -59,7 +59,7 @@ class ResponseSchema(ResponseProto[T]):
         if not description:
             if schema_description := (schema or {}).pop("description", None):
                 self.description = schema_description
-            elif (docstring := getattr(types, "__doc__", None)) and "PEP" not in docstring:
+            elif (docstring := getattr(_strip_annotated(types), "__doc__", None)) and "PEP" not in docstring:
                 self.description = docstring
             else:
                 self.description = None
@@ -155,25 +155,27 @@ class RawSchema(ResponseProto[str]):
 
 
 def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]:
-    origin = get_origin(types)
+    # Classify by the bare type, but build the adapter from the full annotated one so metadata is kept.
+    bare = _strip_annotated(types)
+    origin = get_origin(bare)
     embedded_type = True
 
-    if types is str:
+    if bare is str:
         return None, True
 
-    if _is_safe_subclass(types, (list, tuple)):
+    if _is_safe_subclass(bare, (list, tuple)):
         # Process `T1, T2]` and `(T1, T2)`
-        _final_type = Union[tuple(types)]  # noqa: UP007
+        _final_type = Union[tuple(bare)]  # noqa: UP007
 
     elif origin and origin in (Union, UnionType):
         # Process `typing.Union[T1, T2]` and `T1 | T2`
         _final_type = types
 
     elif any((
-        is_dataclass(types),
+        is_dataclass(bare),
         origin and issubclass(origin, dict),
-        _is_safe_subclass(types, BaseModel),
-        _is_safe_subclass(types, dict),
+        _is_safe_subclass(bare, BaseModel),
+        _is_safe_subclass(bare, dict),
     )):
         embedded_type = False
         _final_type = types
@@ -194,6 +196,12 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
         _final_type = _EmbeddedSchema
 
     return TypeAdapter[T](_final_type), embedded_type
+
+
+def _strip_annotated(types: ClassInfo) -> ClassInfo:
+    while get_origin(types) is Annotated:
+        types = get_args(types)[0]
+    return types
 
 
 def _is_safe_subclass(cls: type, base: type | tuple[type, ...]) -> bool:
