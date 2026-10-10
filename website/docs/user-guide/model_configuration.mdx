@@ -15,6 +15,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | :--- | :--- | :--- |
 | **[OpenAI Responses](https://developers.openai.com/api/reference/responses/overview)** | `OpenAIResponsesConfig` | `pip install "ag2[openai]"` |
 | **[OpenAI](https://developers.openai.com/api/reference/overview)** | `OpenAIConfig` | `pip install "ag2[openai]"` |
+| **[OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions)** | `OpenAIDecisionsConfig` | `pip install "ag2[openai]"` |
 | **[Anthropic](https://platform.claude.com/docs/en/build-with-claude/overview)** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
 | **[Gemini](https://ai.google.dev/gemini-api/docs)** | `GeminiConfig` | `pip install "ag2[gemini]"` |
 | **[Gemini on Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs)** | `VertexAIConfig` | `pip install "ag2[gemini]"` |
@@ -170,6 +171,20 @@ config = MistralConfig(
 ```
   </Tab>
 
+  <Tab title="OpenAI Decisions">
+```python linenums="1"
+from ag2.config import OpenAIDecisionsConfig
+
+# Configure OpenAI's Decisions API (non-streaming)
+config = OpenAIDecisionsConfig(
+    model="gpt-6-luna",
+    api_key="...",
+)
+```
+
+The Decisions API answers a typed question instead of generating text, so the agent must set a decision `response_schema`. See [OpenAI Decisions Configuration](#openai-decisions-configuration).
+  </Tab>
+
   <Tab title="TypeSafe">
 ```python linenums="1"
 from ag2.config import TypeSafeConfig
@@ -188,7 +203,7 @@ Jev answers a typed question instead of generating text, so the agent must set a
 
 !!! tip
 
-    **AG2** is designed to be async and streaming-first, so for the best user experience it is recommended to enable streaming on the model provider configurations for models that support it. As shown above, `Streaming` has been set to `True` in each config that supports it; TypeSafe's Jev answers in a single response and has no streaming option.
+    **AG2** is designed to be async and streaming-first, so for the best user experience it is recommended to enable streaming on the model provider configurations for models that support it. As shown above, `Streaming` has been set to `True` in each config that supports it; TypeSafe's Jev and OpenAI's Decisions API answer in a single response and have no streaming option.
 
 ### Using Environment Variables
 
@@ -517,9 +532,108 @@ The image URL is a short-lived signed link, so download it promptly if you need 
     pip install "mistralai>=2.8.0" "opentelemetry-api>=1.43" "opentelemetry-sdk>=1.43" "opentelemetry-semantic-conventions>=0.64b0"
     ```
 
+### OpenAI Decisions Configuration
+
+`OpenAIDecisionsConfig` connects to OpenAI's [Decisions API](https://developers.openai.com/api/docs/guides/decisions){.external-link target="_blank"} (`POST /v1/decisions`), which is in public beta. It ships with the `openai` extra (`openai>=3.27.0`), and like the other OpenAI configs reads `OPENAI_API_KEY` when `api_key` is not passed. `model` defaults to `gpt-6-luna`, the only model the endpoint serves today.
+
+Like [TypeSafe's Jev](#typesafe-jev-configuration), the Decisions API does not generate text. It answers **one typed question** about the conversation: the probability that a condition is true, one option out of several, or a score on an ordered rubric, along with the probabilities behind it. Use it to classify, route or grade cheaply, then hand the text work to a generative agent.
+
+```python linenums="1" hl_lines="6-14 18-19"
+from enum import Enum
+
+from ag2 import Agent
+from ag2.config import OpenAIDecisionsConfig
+
+class Department(Enum):
+    """Which department should handle this complaint?"""
+
+    BILLING = "billing"
+    """Payments, invoices, and refunds."""
+    TECHNICAL = "technical"
+    """Problems using the product."""
+    OTHER = "other"
+    """Requests outside these categories."""
+
+router = Agent(
+    "router",
+    config=OpenAIDecisionsConfig(),  # auth resolved from OPENAI_API_KEY
+    response_schema=Department,
+)
+
+reply = await router.ask("I was charged twice for my order.")
+department = await reply.content()        # Department.BILLING
+reply.response.metadata["confidence"]     # e.g. 0.93
+reply.response.metadata["probabilities"]  # [{"value": "billing", "probability": 0.95}, ...]
+```
+
+#### The response schema is the question
+
+An agent on `OpenAIDecisionsConfig` **must** set `response_schema`, and the schema picks the question type:
+
+| `response_schema` | Question type | `#!python await reply.content()` returns |
+| :--- | :--- | :--- |
+| `bool` | `predicate` | `True` once the probability reaches `boolean_threshold` (default `0.5`) |
+| a number schema bounded to `0..1`, e.g. `#!python ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | `predicate` | the probability as JSON text, unparsed; `reply.response.metadata["probability"]` has it as a `float` |
+| an `Enum` of strings | `choice` | the selected member |
+| an `IntEnum` numbered `0..n-1` (at least two levels) | `score` | the member nearest the returned score |
+
+Anything else (`str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema`) raises `UnsupportedResponseSchemaError` before a request is sent.
+
+The agent `prompt` and the schema's description (an `Enum`'s class docstring, or an explicit `ResponseSchema(..., description=...)`) are joined into the question's `instructions`. Every question type requires instructions, so a schema with no description on an agent with no prompt raises `ValueError` locally.
+
+#### Describing options and levels
+
+The string literal under each `Enum` member becomes that choice's `description`. For an `IntEnum`, member names become the level `label`s (`WORKAROUND_AVAILABLE` is sent as `Workaround available`), and the docstrings become level descriptions. Unlike Jev, a level without a docstring is allowed.
+
+```python linenums="1"
+from enum import IntEnum
+
+from ag2 import Agent, ResponseSchema
+from ag2.config import OpenAIDecisionsConfig
+
+class Severity(IntEnum):
+    COSMETIC = 0
+    """Appearance only; no lost functionality."""
+    WORKAROUND_AVAILABLE = 1
+    """A task fails, but another way works."""
+    FULLY_BLOCKED = 2
+    """A task fails with no workaround."""
+
+grader = Agent(
+    "grader",
+    config=OpenAIDecisionsConfig(),
+    response_schema=ResponseSchema(Severity, description="How severe is this issue?"),
+)
+
+reply = await grader.ask("Export fails in Safari but works in Chrome.")
+await reply.content()              # Severity.WORKAROUND_AVAILABLE
+reply.response.metadata["score"]   # e.g. 1.1, before snapping to a level
+```
+
+`descriptions` on the config overrides or supplies descriptions without touching the type, keyed by choice value or by score level as a string (`{"0": "...", "1": "..."}`). Member docstrings are read from the source file, so pass `descriptions` for enums defined in a REPL or notebook.
+
+#### Images
+
+Image inputs are sent inline as base64 data URLs, the only image form the endpoint accepts. `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work, and `vendor_metadata={"detail": ...}` is forwarded. Hosted image URLs, `file_id`s and non-image files raise `UnsupportedInputError`.
+
+#### Refusals and what the Decisions API does not do
+
+- **Refusals.** The API may decline a question. That raises `DecisionRefusedError` (from `ag2.config.openai`) rather than returning a made-up answer.
+- **Tools.** Passing any tool raises `UnsupportedToolError`.
+- **Streaming.** There is no `streaming` field; the answer arrives as one `ModelMessage`.
+- **Files API.** `create_files_client()` raises `NotImplementedError`.
+- **History roles.** The endpoint takes only user messages, so earlier assistant replies and tool results are sent as user text tagged `[Assistant]` / `[Tool result]`.
+- **Batching.** The API can answer several independent questions in one request; each `ask()` sends exactly one.
+
+`safety_identifier`, `extra_body` and the usual client options (`base_url`, `organization`, `project`, `timeout`, `max_retries`, `default_headers`, `http_client`) are forwarded to the OpenAI SDK. Usage lands on `ModelResponse.usage`. Decisions bill input tokens only.
+
+For recipes covering classification, routing, detection, scoring, ranking, verification, feature extraction and image inspection, see [Decision Models](/docs/user-guide/decision_models).
+
 ### TypeSafe (Jev) Configuration
 
 `TypeSafeConfig` connects to [TypeSafe AI's](https://docs.typesafe.ai){.external-link target="_blank"} Jev decision model through the official `typesafe-sdk`. Install the optional dependency with `pip install "ag2[typesafe]"`.
+
+For task recipes with Jev, see [Decision Models](/docs/user-guide/decision_models).
 
 Jev is not a text generator. It answers **one typed question** about the conversation so far — yes or no, one label out of several, or a level on a rubric — and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
 

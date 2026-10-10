@@ -2,13 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import ast
-import inspect
 import json
-import textwrap
 from collections.abc import Iterable, Mapping, Sequence
-from enum import Enum
-from functools import cache
 from typing import Any, NoReturn
 
 from fast_depends.library.serializer import SerializerProto
@@ -16,6 +11,7 @@ from typesafe_sdk import Answer, Choice, ChoiceAnswer, JSONValue, Noul, NoulAnsw
 from typesafe_sdk import Usage as TypeSafeUsage
 
 from ag2.compact import CompactionSummary
+from ag2.config.decision_schema import decision_node, explicit_description, option_docs
 from ag2.events import (
     BaseEvent,
     DataInput,
@@ -27,7 +23,7 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import AG2Error, UnsupportedInputError, UnsupportedToolError
-from ag2.response import ResponseProto, ResponseSchema
+from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
 PROVIDER = "typesafe"
@@ -94,11 +90,11 @@ def response_proto_to_question(
 ) -> Question:
     """Convert a ``response_schema`` to the single Jev question: noul, choice or score."""
     node, _ = _decision_node(response)
-    question = _explicit_description(response) or node.get("description")
+    question = explicit_description(response) or node.get("description")
     instructions = "\n\n".join(s for s in (instructions, question) if s) or None
     criteria = criteria or {}
     values = node.get("enum")
-    docs = _option_docs(response)
+    docs = option_docs(response)
 
     is_bool = node.get("type") == "boolean" and (values is None or set(values) == {True, False})
     is_probability = node.get("type") == "number" and node.get("minimum") == 0 and node.get("maximum") == 1
@@ -151,61 +147,12 @@ def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, bo
     return json.dumps({"data": value} if embedded else value)
 
 
-def _explicit_description(response: ResponseProto[Any] | None) -> str | None:
-    """A ``description=`` the user gave, ignoring ``ResponseSchema``'s fallback to the type's docstring."""
-    if response is None or (
-        isinstance(response, ResponseSchema) and response.description == getattr(response.types, "__doc__", None)
-    ):
-        return None
-    return response.description
-
-
-def _option_docs(response: ResponseProto[Any] | None) -> dict[Any, str]:
-    if isinstance(response, ResponseSchema) and isinstance(response.types, type) and issubclass(response.types, Enum):
-        return _member_docstrings(response.types)
-    return {}
-
-
-@cache
-def _member_docstrings(enum_type: type[Enum]) -> dict[Any, str]:
-    """Map each member's value to the string literal under it, read from the class source."""
-    try:
-        tree = ast.parse(textwrap.dedent(inspect.getsource(enum_type)))
-    except (OSError, TypeError, SyntaxError):
-        return {}
-
-    body = tree.body[0].body if tree.body and isinstance(tree.body[0], ast.ClassDef) else []
-    docs = {
-        stmt.targets[0].id: inspect.cleandoc(doc.value.value)
-        for stmt, doc in zip(body, body[1:])
-        if isinstance(stmt, ast.Assign)
-        and len(stmt.targets) == 1
-        and isinstance(stmt.targets[0], ast.Name)
-        and isinstance(doc, ast.Expr)
-        and isinstance(doc.value, ast.Constant)
-        and isinstance(doc.value.value, str)
-    }
-    return {member.value: docs[member.name] for member in enum_type if member.name in docs}
-
-
 def _decision_node(response: ResponseProto[Any] | None) -> tuple[Mapping[str, Any], bool]:
-    """Return the schema node to decide on, and whether ``ResponseSchema`` wrapped it as ``{"data": ...}``."""
     if response is None:
         raise UnsupportedResponseSchemaError("A `response_schema` is required.")
     if not (root := response.json_schema):
         raise UnsupportedResponseSchemaError(f"`response_schema` {response.name!r} has no JSON schema.")
-
-    node: Mapping[str, Any] = root
-    properties = root.get("properties")
-    embedded = root.get("type") == "object" and isinstance(properties, Mapping) and set(properties) == {"data"}
-    if embedded:
-        # The envelope's description is ag2 boilerplate, not a question for Jev.
-        node = {k: v for k, v in properties["data"].items() if k != "description"}  # type: ignore[index]
-
-    ref = node.get("$ref")
-    if isinstance(ref, str) and ref.startswith("#/$defs/"):
-        node = root.get("$defs", {}).get(ref.removeprefix("#/$defs/"), node)
-    return node, embedded
+    return decision_node(root)
 
 
 def normalize_usage(raw: TypeSafeUsage) -> Usage:
