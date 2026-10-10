@@ -95,6 +95,8 @@ support_tools = Toolkit(search_orders, cancel_order, middleware=[log_calls])
 
 Toolkit middleware is the **outermost** layer: it runs before any per-tool middleware defined with `@tool(middleware=[...])`.
 
+When combining tools with `left | right`, the left toolkit's middleware is applied to incoming tools, outside their existing hooks. Tools retained from the left keep their middleware without adding another copy. The source toolkits are unchanged, and tools added to the merged toolkit via `@toolkit.tool` inherit its middleware.
+
 ### Per-tool middleware
 
 `@toolkit.tool` also accepts the same `middleware=[...]` option as `@tool` and `@agent.tool`. These per-tool hooks run **inside** the toolkit-level middleware. See [Tool middleware](/docs/user-guide/tools/tool_middleware).
