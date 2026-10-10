@@ -79,7 +79,7 @@ acp = [
 ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
-openai = ["openai>=3.9.0,<4"]
+openai = ["openai>=3.27.0,<4"]
 anthropic = ["anthropic>=1.9.0,<2"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
@@ -99,7 +99,7 @@ mistral = ["mistralai>=2.8.0,<3"]
 ollama = ["ollama>=0.4.7"]
 bedrock = ["aiobotocore>=3.9.1,<4"]
 dashscope = ["dashscope>=1.25.13"]
-typesafe = ["typesafe-sdk>=0.7.1,<0.7.3"]
+typesafe = ["typesafe-sdk>=0.7.4,<0.8"]
 
 redis = ["redis>=5.0,<9"]
 # SDK only: ag2 builds spans and hands them to whatever SpanProcessor the caller

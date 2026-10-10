@@ -162,10 +162,10 @@ class OllamaClient(LLMClient):
                 full_content += msg.content
                 await context.send(ModelMessageChunk(msg.content))
 
-            for i, tc in enumerate(msg.tool_calls or []):
+            for tc in msg.tool_calls or []:
                 calls.append(
                     ToolCallEvent(
-                        id=f"call_{len(calls) + i}",
+                        id=f"call_{len(calls)}",
                         name=tc.function.name,
                         arguments=json.dumps(tc.function.arguments),
                     )
