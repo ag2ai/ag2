@@ -14,7 +14,6 @@ from collections.abc import Sequence
 from typing import Any
 from uuid import UUID, uuid4
 
-import acp
 import pytest
 from acp import schema
 from acp.exceptions import RequestError
@@ -102,7 +101,7 @@ class TestReplay:
 
         async with connect(server) as (conn, recorder):
             sid = (await conn.new_session(cwd="/tmp")).session_id
-            await conn.prompt(session_id=sid, prompt=[acp.text_block("what is 2 + 2")])
+            await conn.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="what is 2 + 2")])
             live = len(recorder.updates_for(sid))
 
             await conn.load_session(session_id=sid, cwd="/tmp")
@@ -128,7 +127,7 @@ class TestReplay:
 
         async with connect(server) as (conn, recorder):
             sid = (await conn.new_session(cwd="/tmp")).session_id
-            await conn.prompt(session_id=sid, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="go")])
 
             await conn.load_session(session_id=sid, cwd="/tmp")
             await asyncio.sleep(0.05)
@@ -144,11 +143,11 @@ class TestReplay:
 
         async with connect(server) as (first, _):
             sid = (await first.new_session(cwd="/tmp")).session_id
-            await first.prompt(session_id=sid, prompt=[acp.text_block("first")])
+            await first.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="first")])
 
         async with connect(server) as (second, _):
             await second.load_session(session_id=sid, cwd="/tmp")
-            await second.prompt(session_id=sid, prompt=[acp.text_block("second")])
+            await second.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="second")])
             session = await server.sessions.get(sid)
             events = list(await server.sessions.stream(session).history.get_events())
 
@@ -175,13 +174,15 @@ class TestAcrossConnections:
 
         async with connect(server) as (first, _):
             sid = (await first.new_session(cwd="/tmp")).session_id
-            await first.prompt(session_id=sid, prompt=[acp.text_block("hello")])
+            await first.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="hello")])
 
         async with connect(server) as (second, recorder):
             await second.load_session(session_id=sid, cwd="/tmp")
             await asyncio.sleep(0.05)
             replay = list(recorder.updates_for(sid))
-            response = await second.prompt(session_id=sid, prompt=[acp.text_block("still there?")])
+            response = await second.prompt(
+                session_id=sid, prompt=[schema.TextContentBlock(type="text", text="still there?")]
+            )
 
         assert _kinds(replay) == [schema.UserMessageChunk, schema.AgentMessageChunk]
         assert [u.content.text for u in replay] == ["hello", "one"]
@@ -192,7 +193,7 @@ class TestAcrossConnections:
 
         async with connect(server) as (first, _):
             sid = (await first.new_session(cwd="/tmp")).session_id
-            await first.prompt(session_id=sid, prompt=[acp.text_block("hello")])
+            await first.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="hello")])
 
         async with connect(server) as (second, _):
             with pytest.raises(RequestError) as caught:
@@ -223,7 +224,7 @@ class TestAcrossConnections:
 
         async with connect(server) as (conn, recorder):
             first = (await conn.new_session(cwd="/tmp")).session_id
-            await conn.prompt(session_id=first, prompt=[acp.text_block("hello")])
+            await conn.prompt(session_id=first, prompt=[schema.TextContentBlock(type="text", text="hello")])
             await conn.new_session(cwd="/tmp")  # evicts ``first``
 
             if retain:
@@ -241,7 +242,7 @@ class TestAcrossConnections:
 
         async with connect(server) as (first, _):
             sid = (await first.new_session(cwd="/tmp")).session_id
-            await first.prompt(session_id=sid, prompt=[acp.text_block("hello")])
+            await first.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="hello")])
 
         async with connect(server) as (second, _):
             await second.load_session(session_id=str(UUID(sid)), cwd="/tmp")
@@ -271,7 +272,7 @@ class TestSessionState:
 
         async with connect(server) as (first, _):
             sid = (await first.new_session(cwd="/tmp")).session_id
-            await first.prompt(session_id=sid, prompt=[acp.text_block("spend")])
+            await first.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="spend")])
             assert (await server.sessions.get(sid)).variables["budget"] == [1, 2]
 
         async with connect(server) as (second, _):
@@ -286,7 +287,7 @@ class TestSessionState:
 
         async with connect(server) as (conn, _):
             sid = (await conn.new_session(cwd="/tmp")).session_id
-            await conn.prompt(session_id=sid, prompt=[acp.text_block("spend")])
+            await conn.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="spend")])
             await conn.load_session(session_id=sid, cwd="/tmp")
             kept = (await server.sessions.get(sid)).variables
 
@@ -347,7 +348,9 @@ class TestRepair:
 
         async with connect(server) as (first, _):
             sid = (await first.new_session(cwd="/tmp")).session_id
-            turn = asyncio.create_task(first.prompt(session_id=sid, prompt=[acp.text_block("go")]))
+            turn = asyncio.create_task(
+                first.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="go")])
+            )
             await asyncio.wait_for(entered.wait(), timeout=5)
         with pytest.raises(ConnectionError):
             await asyncio.wait_for(turn, timeout=5)
@@ -419,7 +422,9 @@ class TestRefusals:
 
         async with connect(server) as (conn, _):
             sid = (await conn.new_session(cwd="/tmp")).session_id
-            turn = asyncio.create_task(conn.prompt(session_id=sid, prompt=[acp.text_block("slow")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="slow")])
+            )
             await asyncio.wait_for(config.entered.wait(), timeout=5)
 
             with pytest.raises(RequestError) as caught:
@@ -469,7 +474,7 @@ class TestOnSession:
 
         async with connect(server) as (first, _):
             sid = (await first.new_session(cwd="/tmp")).session_id
-            await first.prompt(session_id=sid, prompt=[acp.text_block("hello")])
+            await first.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="hello")])
 
         async with connect(server) as (second, _):
             await second.load_session(session_id=sid, cwd="/tmp")
@@ -488,7 +493,7 @@ class TestOnSession:
 
         async with connect(server, client=_OrderingRecorder()) as (conn, _):
             sid = (await conn.new_session(cwd="/tmp")).session_id
-            await conn.prompt(session_id=sid, prompt=[acp.text_block("hello")])
+            await conn.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="hello")])
             order.clear()
             await conn.load_session(session_id=sid, cwd="/tmp")
             await asyncio.sleep(0.05)
@@ -525,7 +530,7 @@ class TestOnSession:
 
         async with connect(server) as (first, _):
             sid = (await first.new_session(cwd="/tmp")).session_id
-            await first.prompt(session_id=sid, prompt=[acp.text_block("private")])
+            await first.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="private")])
 
         async with connect(server) as (second, _):
             with pytest.raises(RequestError):
@@ -533,7 +538,7 @@ class TestOnSession:
 
             assert len(server.sessions) == 0
             with pytest.raises(RequestError) as caught:
-                await second.prompt(session_id=sid, prompt=[acp.text_block("mine now?")])
+                await second.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="mine now?")])
 
         assert caught.value.code == NOT_FOUND
         # And the conversation itself was left exactly as it was found.

@@ -355,6 +355,22 @@ class ACPBridge(acp.Client):
         await self.state.terminals.release(terminal_id)
         return schema.ReleaseTerminalResponse()
 
+    async def connect_mcp(self, server_id: str, **kwargs: Any) -> schema.ConnectMcpResponse:
+        raise acp.RequestError.method_not_found("mcp/connect")
+
+    async def disconnect_mcp(self, connection_id: str, **kwargs: Any) -> schema.DisconnectMcpResponse:
+        raise acp.RequestError.method_not_found("mcp/disconnect")
+
+    async def mcp_message(
+        self, connection_id: str, method: str, params: dict[str, Any] | None = None, **kwargs: Any
+    ) -> Any:
+        raise acp.RequestError.method_not_found("mcp/message")
+
+    async def notify_mcp(
+        self, connection_id: str, method: str, params: dict[str, Any] | None = None, **kwargs: Any
+    ) -> None:
+        """Ignore the notification: the bridge advertises no ACP-hosted MCP servers."""
+
     def on_connect(self, conn: "acp.Agent") -> None:
         """No-op: the bridge does not need the reverse agent handle."""
 

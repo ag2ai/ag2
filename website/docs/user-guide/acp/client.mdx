@@ -30,14 +30,16 @@ launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
 from ag2 import Agent
 from ag2.acp import ClaudeCodeConfig
 
-agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+async with ClaudeCodeConfig(cwd="/path/to/repo") as config:
+    agent = Agent("coder", config=config)
 
-reply = await agent.ask("Refactor the auth module and add tests")
-print(reply.body)
+    reply = await agent.ask("Refactor the auth module and add tests")
+    print(reply.body)
 ```
 
 A single `ask()`/`run()` maps to one ACP *prompt turn*: the CLI agent runs its
-own internal tool loop and AG2 streams every step as it happens.
+own internal tool loop and AG2 streams every step as it happens. The `async with`
+closes the CLI agent's subprocess on exit; see [Lifecycle](#lifecycle).
 
 ## Choosing an agent
 
@@ -187,8 +189,6 @@ from ag2.events import ModelMessageChunk, ModelReasoning
 from ag2.events.tool_events import BuiltinToolCallEvent
 from ag2.acp.events import ACPPlan
 
-agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
-
 def observe(event):
     if isinstance(event, ModelReasoning):
         print("💭", event.content)
@@ -200,9 +200,12 @@ def observe(event):
         for step in event.entries:
             print(f"  [{step.status}] {step.content}")
 
-async with agent.run("Add a healthcheck endpoint") as run:
-    run.stream.subscribe(observe)  # subscribe before driving
-    reply = await run.result()
+async with ClaudeCodeConfig(cwd="/path/to/repo") as config:
+    agent = Agent("coder", config=config)
+
+    async with agent.run("Add a healthcheck endpoint") as run:
+        run.stream.subscribe(observe)  # subscribe before driving
+        reply = await run.result()
 ```
 
 | ACP update | AG2 event |
@@ -313,7 +316,7 @@ There is deliberately no `"auto"`. A permission request has an allow option AG2
 could pick blind; an arbitrary form has no answer AG2 could invent without
 fabricating data on your behalf.
 
-```python linenums="1" hl_lines="5-7 12"
+```python linenums="1" hl_lines="5-7 10"
 from ag2 import Agent
 from ag2.acp import ClaudeCodeConfig
 from ag2.events import HumanInputRequest
@@ -322,12 +325,9 @@ def answer(event: HumanInputRequest) -> str:
     """Show the agent's question and return the human's answer."""
     return input(f"{event.content}\n> ")
 
-agent = Agent(
-    "coder",
-    config=ClaudeCodeConfig(cwd="/repo"),  # elicitation_policy="ask" by default
-    hitl_hook=answer,
-)
-reply = await agent.ask("Split this module up — ask me before choosing a layout.")
+async with ClaudeCodeConfig(cwd="/repo") as config:  # elicitation_policy="ask" by default
+    agent = Agent("coder", config=config, hitl_hook=answer)
+    reply = await agent.ask("Split this module up — ask me before choosing a layout.")
 ```
 
 Two shapes reach you:

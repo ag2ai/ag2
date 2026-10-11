@@ -104,7 +104,9 @@ class TestSessionsDoNotOutliveTheirConnection:
 
         async with connect(server) as (second, _):
             with pytest.raises(acp.RequestError):
-                await second.prompt(session_id=stale, prompt=[acp.text_block("still there?")])
+                await second.prompt(
+                    session_id=stale, prompt=[schema.TextContentBlock(type="text", text="still there?")]
+                )
 
     async def test_one_connection_s_teardown_leaves_another_s_sessions_alone(self) -> None:
         """Scopes are per-connection, so teardown has to be too."""
@@ -131,7 +133,9 @@ class TestTeardownStopsLiveWork:
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="slow")])
+            )
             await asyncio.wait_for(config.entered.wait(), timeout=5)
 
         assert config.cancelled.is_set()
@@ -146,7 +150,9 @@ class TestTeardownStopsLiveWork:
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="slow")])
+            )
             await asyncio.wait_for(config.entered.wait(), timeout=5)
 
         assert len(server.sessions) == 0
@@ -163,7 +169,7 @@ class TestDurableHistoryIsDropped:
 
         async with connect(server) as (conn, _):
             session_id = (await conn.new_session(cwd="/tmp")).session_id
-            await conn.prompt(session_id=session_id, prompt=[acp.text_block("hello")])
+            await conn.prompt(session_id=session_id, prompt=[schema.TextContentBlock(type="text", text="hello")])
             store = server.sessions
             session = await store.get(session_id)
             assert await store.stream(session).history.get_events() != []
@@ -177,13 +183,13 @@ class TestDurableHistoryIsDropped:
 
         async with connect(server) as (first, _):
             kept_id = (await first.new_session(cwd="/tmp")).session_id
-            await first.prompt(session_id=kept_id, prompt=[acp.text_block("hello")])
+            await first.prompt(session_id=kept_id, prompt=[schema.TextContentBlock(type="text", text="hello")])
             survivor = server.sessions
             kept = await survivor.get(kept_id)
 
             async with connect(server) as (second, _):
                 doomed_id = (await second.new_session(cwd="/tmp")).session_id
-                await second.prompt(session_id=doomed_id, prompt=[acp.text_block("hello")])
+                await second.prompt(session_id=doomed_id, prompt=[schema.TextContentBlock(type="text", text="hello")])
                 doomed_store = server.sessions
                 doomed = await doomed_store.get(doomed_id)
 
@@ -200,7 +206,7 @@ class TestDurableHistoryIsDropped:
 
         async with connect(server) as (conn, _):
             session_id = (await conn.new_session(cwd="/tmp")).session_id
-            await conn.prompt(session_id=session_id, prompt=[acp.text_block("hello")])
+            await conn.prompt(session_id=session_id, prompt=[schema.TextContentBlock(type="text", text="hello")])
             store = server.sessions
             session = await store.get(session_id)
 
@@ -283,10 +289,10 @@ class TestBackgroundWorkBelongsToTheSession:
 
         async with connect(server) as (conn, _):
             created = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=created.session_id, prompt=[acp.text_block("one")])
+            await conn.prompt(session_id=created.session_id, prompt=[schema.TextContentBlock(type="text", text="one")])
             session = await server.sessions.get(created.session_id)
             first = server.sessions.stream(session)
-            await conn.prompt(session_id=created.session_id, prompt=[acp.text_block("two")])
+            await conn.prompt(session_id=created.session_id, prompt=[schema.TextContentBlock(type="text", text="two")])
 
             assert server.sessions.stream(session) is first
 
@@ -296,7 +302,7 @@ class TestBackgroundWorkBelongsToTheSession:
 
         async with connect(server) as (conn, _):
             created = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=created.session_id, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=created.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
             session = await server.sessions.get(created.session_id)
 
             assert server.sessions.stream(session)._background_tasks
@@ -308,7 +314,7 @@ class TestBackgroundWorkBelongsToTheSession:
 
         async with connect(server) as (conn, _):
             created = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=created.session_id, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=created.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
             await server.sessions.close(created.session_id)
             await asyncio.sleep(0.2)
 
@@ -323,8 +329,8 @@ class TestBackgroundWorkBelongsToTheSession:
 
         async with connect(server) as (conn, recorder):
             created = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=created.session_id, prompt=[acp.text_block("one")])
-            await conn.prompt(session_id=created.session_id, prompt=[acp.text_block("two")])
+            await conn.prompt(session_id=created.session_id, prompt=[schema.TextContentBlock(type="text", text="one")])
+            await conn.prompt(session_id=created.session_id, prompt=[schema.TextContentBlock(type="text", text="two")])
 
         # Two turns, so two message updates. A leaked forwarder would make the
         # second turn deliver its update once per prompt the session had run.

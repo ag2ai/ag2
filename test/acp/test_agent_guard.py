@@ -12,8 +12,8 @@ against.
 
 from typing import Any
 
-import acp
 import pytest
+from acp import schema
 from acp.exceptions import RequestError
 
 from ag2 import Agent
@@ -146,7 +146,7 @@ class TestLegitimateMetadataStillWorks:
             session = await conn.new_session(cwd="/tmp")
             response = await conn.prompt(
                 session_id=session.session_id,
-                prompt=[acp.text_block("what's 100 + 100")],
+                prompt=[schema.TextContentBlock(type="text", text="what's 100 + 100")],
             )
 
         assert response.stop_reason == "end_turn"

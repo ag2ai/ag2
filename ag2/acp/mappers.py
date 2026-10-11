@@ -22,7 +22,6 @@ import logging
 from collections.abc import Sequence
 from typing import Any, cast
 
-import acp
 from acp import schema
 
 from ag2.events import (
@@ -232,10 +231,10 @@ def event_to_session_update(event: BaseEvent, *, stream_thoughts: bool = False) 
     the reply twice.
     """
     if isinstance(event, ModelMessageChunk):
-        return acp.update_agent_message_text(event.content)
+        return schema.AgentMessageChunk(content=_text_block(event.content))
 
     if isinstance(event, ModelReasoning):
-        return acp.update_agent_thought_text(event.content) if stream_thoughts else None
+        return schema.AgentThoughtChunk(content=_text_block(event.content)) if stream_thoughts else None
 
     if isinstance(event, ToolResultEvent):
         return _tool_result_update(event)
@@ -247,8 +246,8 @@ def event_to_session_update(event: BaseEvent, *, stream_thoughts: bool = False) 
 
 
 def _tool_call_start(event: ToolCallEvent) -> SessionUpdate:
-    return acp.start_tool_call(
-        event.id,
+    return schema.ToolCallStart(
+        tool_call_id=event.id,
         title=event.name,
         kind=DEFAULT_TOOL_KIND,
         status="in_progress",
@@ -259,18 +258,26 @@ def _tool_call_start(event: ToolCallEvent) -> SessionUpdate:
 def _tool_result_update(event: ToolResultEvent) -> SessionUpdate:
     # ToolErrorEvent subclasses ToolResultEvent, so it must be tested first.
     if isinstance(event, ToolErrorEvent):
-        return acp.update_tool_call(
-            event.parent_id,
+        return schema.ToolCallProgress(
+            tool_call_id=event.parent_id,
             title=event.name,
             status="failed",
-            content=[acp.tool_content(acp.text_block(str(event.error)))],
+            content=[_text_tool_content(str(event.error))],
         )
-    return acp.update_tool_call(
-        event.parent_id,
+    return schema.ToolCallProgress(
+        tool_call_id=event.parent_id,
         title=event.name,
         status="completed",
-        content=[acp.tool_content(acp.text_block(tool_result_text(event.result)))],
+        content=[_text_tool_content(tool_result_text(event.result))],
     )
+
+
+def _text_block(text: str) -> schema.TextContentBlock:
+    return schema.TextContentBlock(type="text", text=text)
+
+
+def _text_tool_content(text: str) -> schema.ContentToolCallContent:
+    return schema.ContentToolCallContent(type="content", content=_text_block(text))
 
 
 def input_to_block(part: Input) -> ContentBlock:
@@ -282,21 +289,21 @@ def input_to_block(part: Input) -> ContentBlock:
     binary parts: the Client is being reminded what it sent, not re-sent it.
     """
     if isinstance(part, TextInput):
-        return acp.text_block(part.content)
+        return _text_block(part.content)
     if isinstance(part, DataInput):
-        return acp.text_block(_render_data(part.data))
+        return _text_block(_render_data(part.data))
     if isinstance(part, BinaryInput):
         data = base64.b64encode(part.data).decode()
         if part.kind is BinaryType.IMAGE:
             return schema.ImageContentBlock(type="image", data=data, mime_type=str(part.media_type))
         if part.kind is BinaryType.AUDIO:
             return schema.AudioContentBlock(type="audio", data=data, mime_type=str(part.media_type))
-        return acp.text_block(f"[{part.kind.value}]")
+        return _text_block(f"[{part.kind.value}]")
     if isinstance(part, UrlInput):
-        return acp.text_block(f"[{part.kind.value}] {part.url}")
+        return _text_block(f"[{part.kind.value}] {part.url}")
     if isinstance(part, FileIdInput):
-        return acp.text_block(f"[file] {part.filename or part.file_id}")
-    return acp.text_block(f"[{getattr(part, 'kind', 'input')}]")
+        return _text_block(f"[file] {part.filename or part.file_id}")
+    return _text_block(f"[{getattr(part, 'kind', 'input')}]")
 
 
 def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str) -> list[SessionUpdate]:
@@ -361,7 +368,7 @@ def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str
                     schema.AgentMessageChunk(
                         session_update="agent_message_chunk",
                         message_id=f"{session_id}:a{agent_turns}",
-                        content=acp.text_block(event.message.content),
+                        content=_text_block(event.message.content),
                     )
                 )
             for call in event.tool_calls.calls:
@@ -382,7 +389,7 @@ def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str
                 schema.AgentMessageChunk(
                     session_update="agent_message_chunk",
                     message_id=f"{session_id}:a{agent_turns}",
-                    content=acp.text_block(event.content),
+                    content=_text_block(event.content),
                 )
             )
         elif isinstance(event, HumanMessage):
@@ -391,7 +398,7 @@ def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str
                 schema.UserMessageChunk(
                     session_update="user_message_chunk",
                     message_id=f"{session_id}:u{user_turns}",
-                    content=acp.text_block(event.content),
+                    content=_text_block(event.content),
                 )
             )
     return updates

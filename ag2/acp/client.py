@@ -188,7 +188,7 @@ class ACPClient:
                 # ACP 0.11 dropped PromptRequest.message_id; extra kwargs would only
                 # end up in the request's `_meta`, so send none.
                 return await conn.prompt(
-                    prompt=[acp.text_block(text)],
+                    prompt=[schema.TextContentBlock(type="text", text=text)],
                     session_id=session_id,
                 )
             except self.config._transport_errors as e:

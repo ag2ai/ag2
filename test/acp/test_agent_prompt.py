@@ -7,7 +7,6 @@ import threading
 from collections.abc import Sequence
 from typing import Any
 
-import acp
 import pytest
 from acp import schema
 from acp.exceptions import RequestError
@@ -115,7 +114,7 @@ class TestPromptTurn:
             session = await conn.new_session(cwd="/tmp")
             response = await conn.prompt(
                 session_id=session.session_id,
-                prompt=[acp.text_block("what's 100 + 100")],
+                prompt=[schema.TextContentBlock(type="text", text="what's 100 + 100")],
             )
 
         assert response.stop_reason == "end_turn"
@@ -124,14 +123,16 @@ class TestPromptTurn:
     async def test_an_unknown_session_is_a_protocol_error(self) -> None:
         async with connect(ACPAgent(_agent())) as (conn, _):
             with pytest.raises(RequestError):
-                await conn.prompt(session_id="never-issued", prompt=[acp.text_block("hi")])
+                await conn.prompt(session_id="never-issued", prompt=[schema.TextContentBlock(type="text", text="hi")])
 
     async def test_prompt_text_reaches_the_agent(self) -> None:
         agent, config = _recording_agent()
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hello agent")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hello agent")]
+            )
 
         assert "hello agent" in str(config.calls[-1])
 
@@ -142,7 +143,10 @@ class TestPromptTurn:
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(
                 session_id=session.session_id,
-                prompt=[acp.text_block("first"), acp.text_block("second")],
+                prompt=[
+                    schema.TextContentBlock(type="text", text="first"),
+                    schema.TextContentBlock(type="text", text="second"),
+                ],
             )
 
         rendered = str(config.calls[-1])
@@ -199,7 +203,9 @@ class TestPromptTurn:
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError):
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
     async def test_a_failure_tells_the_client_what_went_wrong(self) -> None:
         """The Client is another process — an error without its cause is unusable."""
@@ -213,7 +219,9 @@ class TestPromptTurn:
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError) as caught:
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         assert caught.value.data == {
             "reason": "the specific thing that broke",
@@ -236,7 +244,9 @@ class TestPromptTurn:
         async with connect(ACPAgent(Agent("workie", config=_Exploding()))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError) as caught:
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         assert "authentication" in caught.value.data["reason"]
 
@@ -252,7 +262,9 @@ class TestPromptTurn:
         async with connect(ACPAgent(agent)) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError):
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         [progress] = [u for u in recorder.updates_for(session.session_id) if isinstance(u, schema.ToolCallProgress)]
         assert progress.status == "failed"
@@ -277,7 +289,9 @@ class TestPromptTurn:
             session = await conn.new_session(cwd="/tmp")
             for _ in range(2):
                 with pytest.raises(RequestError):
-                    await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                    await conn.prompt(
+                        session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                    )
 
 
 @pytest.mark.asyncio
@@ -296,7 +310,9 @@ class TestUpdateProjection:
     async def test_tool_activity_is_reported_in_order(self) -> None:
         async with connect(ACPAgent(self._adding_agent())) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("100+100")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="100+100")]
+            )
 
         kinds = [u.session_update for u in recorder.updates_for(session.session_id)]
         assert kinds == ["tool_call", "tool_call_update", "agent_message_chunk"]
@@ -304,7 +320,9 @@ class TestUpdateProjection:
     async def test_a_tool_result_carries_its_value(self) -> None:
         async with connect(ACPAgent(self._adding_agent())) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("100+100")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="100+100")]
+            )
 
         [progress] = [u for u in recorder.updates_for(session.session_id) if isinstance(u, schema.ToolCallProgress)]
         assert progress.status == "completed"
@@ -313,7 +331,9 @@ class TestUpdateProjection:
     async def test_a_tool_call_and_its_result_share_an_id(self) -> None:
         async with connect(ACPAgent(self._adding_agent())) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("100+100")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="100+100")]
+            )
 
         updates = recorder.updates_for(session.session_id)
         [start] = [u for u in updates if isinstance(u, schema.ToolCallStart)]
@@ -323,7 +343,9 @@ class TestUpdateProjection:
     async def test_a_tool_call_carries_its_arguments(self) -> None:
         async with connect(ACPAgent(self._adding_agent())) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("100+100")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="100+100")]
+            )
 
         [start] = [u for u in recorder.updates_for(session.session_id) if isinstance(u, schema.ToolCallStart)]
         assert start.title == "add"
@@ -333,7 +355,7 @@ class TestUpdateProjection:
         """No chunks were emitted, so the assembled reply must be sent instead."""
         async with connect(ACPAgent(_agent("just once"))) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
         assert _texts(recorder.updates_for(session.session_id)) == ["just once"]
 
@@ -342,7 +364,9 @@ class TestUpdateProjection:
 
         async with connect(ACPAgent(agent)) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("capital of France?")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="capital of France?")]
+            )
 
         assert _texts(recorder.updates_for(session.session_id)) == [
             "Paris is ",
@@ -356,7 +380,9 @@ class TestUpdateProjection:
 
         async with connect(ACPAgent(agent)) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("capital of France?")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="capital of France?")]
+            )
 
         assembled = "".join(_texts(recorder.updates_for(session.session_id)))
         assert assembled == "Paris is the capital of France."
@@ -364,7 +390,7 @@ class TestUpdateProjection:
     async def test_reasoning_is_withheld_by_default(self) -> None:
         async with connect(ACPAgent(_agent("answer"))) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
         thoughts = [u for u in recorder.updates_for(session.session_id) if isinstance(u, schema.AgentThoughtChunk)]
         assert thoughts == []
@@ -378,8 +404,12 @@ class TestSessionIsolation:
         async with connect(ACPAgent(agent)) as (conn, _):
             first = await conn.new_session(cwd="/tmp")
             second = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=first.session_id, prompt=[acp.text_block("secret to first")])
-            await conn.prompt(session_id=second.session_id, prompt=[acp.text_block("hello second")])
+            await conn.prompt(
+                session_id=first.session_id, prompt=[schema.TextContentBlock(type="text", text="secret to first")]
+            )
+            await conn.prompt(
+                session_id=second.session_id, prompt=[schema.TextContentBlock(type="text", text="hello second")]
+            )
 
         assert "secret to first" not in str(config.calls[-1])
         assert "hello second" in str(config.calls[-1])
@@ -389,8 +419,12 @@ class TestSessionIsolation:
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("remember this")])
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("and now")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="remember this")]
+            )
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="and now")]
+            )
 
         assert "remember this" in str(config.calls[-1])
 
@@ -398,8 +432,8 @@ class TestSessionIsolation:
         async with connect(ACPAgent(_agent("reply"))) as (conn, recorder):
             first = await conn.new_session(cwd="/tmp")
             second = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=first.session_id, prompt=[acp.text_block("one")])
-            await conn.prompt(session_id=second.session_id, prompt=[acp.text_block("two")])
+            await conn.prompt(session_id=first.session_id, prompt=[schema.TextContentBlock(type="text", text="one")])
+            await conn.prompt(session_id=second.session_id, prompt=[schema.TextContentBlock(type="text", text="two")])
 
         assert len(recorder.updates_for(first.session_id)) == 1
         assert len(recorder.updates_for(second.session_id)) == 1
@@ -470,7 +504,7 @@ class TestDeliveryFailures:
                 session=session,
                 store=store,
                 client=self._DeadClient(),
-                blocks=[acp.text_block("hi")],
+                blocks=[schema.TextContentBlock(type="text", text="hi")],
             )
 
     async def test_history_survives_a_delivery_failure(self) -> None:
@@ -484,7 +518,7 @@ class TestDeliveryFailures:
                 session=session,
                 store=store,
                 client=self._DeadClient(),
-                blocks=[acp.text_block("hi")],
+                blocks=[schema.TextContentBlock(type="text", text="hi")],
             )
 
         assert list(await store.stream(session).history.get_events())
@@ -555,7 +589,9 @@ class TestDynamicPrompt:
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("refund me")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="refund me")]
+            )
 
         assert config.prompts[-1] == ["POLICY: decline refunds."]
 
@@ -569,7 +605,7 @@ class TestDynamicPrompt:
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
         assert config.prompts[-1] == ["You are workie.", "POLICY: decline refunds."]
 
@@ -583,7 +619,7 @@ class TestDynamicPrompt:
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
         assert config.prompts[-1] == ["Caller tier: enterprise."]
 
@@ -602,7 +638,7 @@ class TestDynamicPrompt:
             session=session,
             store=store,
             client=RecordingClient(),
-            blocks=[acp.text_block("hi")],
+            blocks=[schema.TextContentBlock(type="text", text="hi")],
             meta={"ag2.space": {"room": "!r"}},
         )
 
@@ -619,7 +655,7 @@ class TestDynamicPrompt:
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
         over_acp = config.prompts[-1]
         await agent.ask("hi")
@@ -684,7 +720,7 @@ class TestStreamingToolTurns:
     async def test_the_answer_is_not_sent_twice(self) -> None:
         async with connect(ACPAgent(self._agent_streaming_both_calls())) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("2+2")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="2+2")])
 
         assert _texts(recorder.updates_for(session.session_id)) == [
             "Let me calculate. ",
@@ -694,7 +730,7 @@ class TestStreamingToolTurns:
     async def test_the_preamble_still_reaches_the_client(self) -> None:
         async with connect(ACPAgent(self._agent_streaming_both_calls())) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("2+2")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="2+2")])
 
         assert "Let me calculate. " in _texts(recorder.updates_for(session.session_id))
 
@@ -714,7 +750,7 @@ class TestStreamingToolTurns:
 
         async with connect(ACPAgent(agent)) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("2+2")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="2+2")])
 
         assert _texts(recorder.updates_for(session.session_id)) == ["The answer is 4."]
 
@@ -753,7 +789,9 @@ class TestSessionVariables:
         async with connect(ACPAgent(self._counting_agent(reports))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             for _ in range(2):
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         assert reports == [(1, 1), (2, 2)]
 
@@ -763,9 +801,9 @@ class TestSessionVariables:
 
         async with connect(ACPAgent(self._counting_agent(reports))) as (conn, _):
             first = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=first.session_id, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=first.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
             second = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=second.session_id, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=second.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
 
         assert reports == [(1, 1), (1, 1)]
 
@@ -775,7 +813,7 @@ class TestSessionVariables:
 
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
 
         assert agent._agent_variables == {"seen": [], "n": 0}
 

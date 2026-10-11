@@ -74,7 +74,9 @@ class TestCancel:
 
         async with connect(ACPAgent(Agent("workie", config=config))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="slow")])
+            )
             await config.entered.wait()
 
             await conn.cancel(session_id=session.session_id)
@@ -87,7 +89,9 @@ class TestCancel:
 
         async with connect(ACPAgent(Agent("workie", config=config))) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="slow")])
+            )
             await config.entered.wait()
 
             await conn.cancel(session_id=session.session_id)
@@ -104,12 +108,16 @@ class TestCancel:
 
             # A completed turn first, so there is delivered history to preserve.
             config.release.set()
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("first")])
+            await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="first")]
+            )
             delivered = list(recorder.updates_for(session.session_id))
 
             config.release.clear()
             config.entered.clear()
-            turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("second")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="second")])
+            )
             await config.entered.wait()
             await conn.cancel(session_id=session.session_id)
             await turn
@@ -123,13 +131,17 @@ class TestCancel:
             cancelled = await conn.new_session(cwd="/tmp")
             other = await conn.new_session(cwd="/tmp")
 
-            held = asyncio.create_task(conn.prompt(session_id=cancelled.session_id, prompt=[acp.text_block("slow")]))
+            held = asyncio.create_task(
+                conn.prompt(session_id=cancelled.session_id, prompt=[schema.TextContentBlock(type="text", text="slow")])
+            )
             await config.entered.wait()
             await conn.cancel(session_id=cancelled.session_id)
             assert (await held).stop_reason == "cancelled"
 
             config.release.set()
-            survivor = await conn.prompt(session_id=other.session_id, prompt=[acp.text_block("fine")])
+            survivor = await conn.prompt(
+                session_id=other.session_id, prompt=[schema.TextContentBlock(type="text", text="fine")]
+            )
 
         assert survivor.stop_reason == "end_turn"
 
@@ -139,7 +151,9 @@ class TestCancel:
             await conn.cancel(session_id="never-issued")
 
             session = await conn.new_session(cwd="/tmp")
-            response = await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
+            response = await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hi")]
+            )
 
         assert response.stop_reason == "end_turn"
 
@@ -148,13 +162,17 @@ class TestCancel:
 
         async with connect(ACPAgent(Agent("workie", config=config))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            held = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("slow")]))
+            held = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="slow")])
+            )
             await config.entered.wait()
             await conn.cancel(session_id=session.session_id)
             await held
 
             config.release.set()
-            response = await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("again")])
+            response = await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="again")]
+            )
 
         assert response.stop_reason == "end_turn"
 
@@ -166,9 +184,13 @@ class TestBusySession:
 
         async with connect(ACPAgent(Agent("workie", config=config))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            first = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("one")]))
+            first = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="one")])
+            )
             await config.entered.wait()
-            second = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("two")]))
+            second = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="two")])
+            )
             await asyncio.sleep(0.01)
 
             assert not second.done()  # queued behind the running turn
@@ -182,9 +204,13 @@ class TestBusySession:
 
         async with connect(ACPAgent(Agent("workie", config=config))) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            first = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("one")]))
+            first = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="one")])
+            )
             await config.entered.wait()
-            second = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("two")]))
+            second = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="two")])
+            )
             await asyncio.sleep(0.01)
 
             await conn.cancel(session_id=session.session_id)
@@ -198,17 +224,25 @@ class TestBusySession:
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            running = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("one")]))
+            running = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="one")])
+            )
             await config.entered.wait()
 
             queued = [
-                asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("more")]))
+                asyncio.create_task(
+                    conn.prompt(
+                        session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="more")]
+                    )
+                )
                 for _ in range(2)
             ]
             await asyncio.sleep(0.01)
 
             with pytest.raises(acp.RequestError):
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("overflow")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="overflow")]
+                )
 
             config.release.set()
             await running
@@ -243,7 +277,9 @@ class TestCancelLeavesAUsableSession:
 
     async def _cancel_mid_tool(self, server: ACPAgent, conn: Any) -> str:
         session = await conn.new_session(cwd="/tmp")
-        turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")]))
+        turn = asyncio.create_task(
+            conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
+        )
         await self.entered.wait()
         await conn.cancel(session_id=session.session_id)
         assert (await turn).stop_reason == "cancelled"
@@ -301,7 +337,9 @@ class TestCancelLeavesAUsableSession:
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hi")])
+            )
             await config.entered.wait()
             await conn.cancel(session_id=session.session_id)
             await turn
@@ -401,12 +439,16 @@ class TestRepairIsSerialised:
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            first = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")]))
+            first = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
+            )
             await entered.wait()
 
             # Fire the follow-up prompt without waiting for the repair to finish.
             cancelling = asyncio.create_task(conn.cancel(session_id=session.session_id))
-            second = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("again")]))
+            second = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="again")])
+            )
             await first
             await cancelling
             await second
@@ -459,7 +501,9 @@ class TestParallelToolCancellation:
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
+            )
             await entered.wait()
             await asyncio.sleep(0.05)
             await conn.cancel(session_id=session.session_id)
@@ -478,7 +522,9 @@ class TestParallelToolCancellation:
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
+            )
             await entered.wait()
             await asyncio.sleep(0.05)
             await conn.cancel(session_id=session.session_id)
@@ -496,7 +542,9 @@ class TestParallelToolCancellation:
 
         async with connect(server) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            turn = asyncio.create_task(conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")]))
+            turn = asyncio.create_task(
+                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
+            )
             await entered.wait()
             await asyncio.sleep(0.05)
             await conn.cancel(session_id=session.session_id)
@@ -569,7 +617,12 @@ class TestConnectionWideLimits:
 
         async with connect(server) as (conn, _):
             ids = [(await conn.new_session(cwd="/tmp")).session_id for _ in range(6)]
-            turns = [asyncio.create_task(conn.prompt(session_id=sid, prompt=[acp.text_block("go")])) for sid in ids]
+            turns = [
+                asyncio.create_task(
+                    conn.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="go")])
+                )
+                for sid in ids
+            ]
             try:
                 await probe.wait_until_running(3)
                 await asyncio.sleep(0.1)
@@ -591,7 +644,12 @@ class TestConnectionWideLimits:
 
         async with connect(server) as (conn, _):
             ids = [(await conn.new_session(cwd="/tmp")).session_id for _ in range(5)]
-            turns = [asyncio.create_task(conn.prompt(session_id=sid, prompt=[acp.text_block("go")])) for sid in ids]
+            turns = [
+                asyncio.create_task(
+                    conn.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="go")])
+                )
+                for sid in ids
+            ]
             try:
                 await probe.wait_until_running(2)
                 await asyncio.sleep(0.1)
@@ -612,12 +670,17 @@ class TestConnectionWideLimits:
 
         async with connect(server) as (conn, _):
             ids = [(await conn.new_session(cwd="/tmp")).session_id for _ in range(5)]
-            turns = [asyncio.create_task(conn.prompt(session_id=sid, prompt=[acp.text_block("go")])) for sid in ids[:4]]
+            turns = [
+                asyncio.create_task(
+                    conn.prompt(session_id=sid, prompt=[schema.TextContentBlock(type="text", text="go")])
+                )
+                for sid in ids[:4]
+            ]
             try:
                 await probe.wait_until_running(2)
 
                 with pytest.raises(acp.RequestError):
-                    await conn.prompt(session_id=ids[4], prompt=[acp.text_block("go")])
+                    await conn.prompt(session_id=ids[4], prompt=[schema.TextContentBlock(type="text", text="go")])
             finally:
                 probe.release.set()
             await asyncio.gather(*turns)
@@ -634,7 +697,11 @@ class TestConnectionWideLimits:
             second = await conn.new_session(cwd="/tmp")
             probe.release.set()
 
-            assert (await conn.prompt(session_id=first.session_id, prompt=[acp.text_block("a")])).stop_reason
-            assert (await conn.prompt(session_id=second.session_id, prompt=[acp.text_block("b")])).stop_reason
+            assert (
+                await conn.prompt(session_id=first.session_id, prompt=[schema.TextContentBlock(type="text", text="a")])
+            ).stop_reason
+            assert (
+                await conn.prompt(session_id=second.session_id, prompt=[schema.TextContentBlock(type="text", text="b")])
+            ).stop_reason
 
         assert probe.running == 0
