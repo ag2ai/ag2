@@ -75,6 +75,7 @@ from .types import MCPServerConfig, MCPStdioServerConfig, ProtocolMode
 AnyMCPConfig: TypeAlias = MCPServerConfig | MCPStdioServerConfig
 
 _MAX_TOOL_PAGES = 1000
+_MAX_DISCOVERY_CONFIGS = 8
 
 
 @asynccontextmanager
@@ -288,9 +289,9 @@ class MCPToolkit(Toolkit):
     one. The agent never sees that these are MCP tools — they look and behave
     like ordinary :class:`FunctionTool` instances.
 
-    Discovery is reused while the resolved configuration stays the same. A
-    changed configuration replaces the cached remote tools; concurrent agent
-    turns retain their own discovered tool snapshots.
+    Discovery is cached for the eight most recently used resolved configurations.
+    Switching configurations replaces the active remote tools, reusing a cached
+    catalog when available; concurrent agent turns retain their own tool snapshots.
 
     Set ``tool_name_prefix`` on the config to namespace the agent-visible tool
     names, so that two servers exposing the same generic name (``search``) do
@@ -320,7 +321,7 @@ class MCPToolkit(Toolkit):
     answering: MCPAnswerPolicy
     """Which of the operator's own resources this server may use."""
 
-    __slots__ = ("config", "answering", "_discovered_config", "_discover_lock")
+    __slots__ = ("config", "answering", "_discovered_config", "_discovery_cache", "_discover_lock")
 
     def __init__(
         self,
@@ -334,6 +335,7 @@ class MCPToolkit(Toolkit):
         self.config: AnyMCPConfig = server
         self.answering = answering if answering is not None else MCPAnswerPolicy()
         self._discovered_config: AnyMCPConfig | None = None
+        self._discovery_cache: list[tuple[AnyMCPConfig, list[MCPTool]]] = []
         self._discover_lock = asyncio.Lock()
 
         label = server.server_label if isinstance(server.server_label, str) else ""
@@ -362,24 +364,30 @@ class MCPToolkit(Toolkit):
         # headers must not also change the configuration we compare against.
         resolved = deepcopy(_resolve_config(self.config, context))
         if self._discovered_config != resolved:
-            async with _mcp_session(resolved) as session:
-                page = await session.list_tools()
-                raw_tools = list(page.tools)
-                seen_cursors: set[str] = set()
-                runaway: str | None = None
-                while (cursor := page.next_cursor) is not None:
-                    if cursor in seen_cursors:
-                        runaway = "MCP server returned a repeated pagination cursor while listing tools"
-                        break
-                    if len(seen_cursors) + 1 >= _MAX_TOOL_PAGES:
-                        runaway = f"MCP server did not end tools/list pagination within {_MAX_TOOL_PAGES} pages"
-                        break
-                    seen_cursors.add(cursor)
-                    page = await session.list_tools(params=PaginatedRequestParams(cursor=cursor))
-                    raw_tools.extend(page.tools)
+            # Configs contain unhashable lists/dicts; equality over this small,
+            # bounded cache keeps every resolved field in the key.
+            cached = next((entry for entry in self._discovery_cache if entry[0] == resolved), None)
+            if cached is not None:
+                raw_tools = cached[1]
+            else:
+                async with _mcp_session(resolved) as session:
+                    page = await session.list_tools()
+                    raw_tools = list(page.tools)
+                    seen_cursors: set[str] = set()
+                    runaway: str | None = None
+                    while (cursor := page.next_cursor) is not None:
+                        if cursor in seen_cursors:
+                            runaway = "MCP server returned a repeated pagination cursor while listing tools"
+                            break
+                        if len(seen_cursors) + 1 >= _MAX_TOOL_PAGES:
+                            runaway = f"MCP server did not end tools/list pagination within {_MAX_TOOL_PAGES} pages"
+                            break
+                        seen_cursors.add(cursor)
+                        page = await session.list_tools(params=PaginatedRequestParams(cursor=cursor))
+                        raw_tools.extend(page.tools)
 
-            if runaway is not None:
-                raise RuntimeError(runaway)
+                if runaway is not None:
+                    raise RuntimeError(runaway)
 
             # All already resolved (Variable -> concrete) by _resolve_config above.
             allowed = resolved.allowed_tools
@@ -395,12 +403,22 @@ class MCPToolkit(Toolkit):
                     continue
                 proxy = _MCPProxyTool(
                     config=self.config,
-                    raw_tool=raw,
+                    # Exposed schemas must not mutate the cached raw catalog.
+                    raw_tool=deepcopy(raw),
                     tool_name_prefix=prefix,
                     middleware=self._middleware,
                     answering=self.answering,
                 )
                 tools.setdefault(proxy.name, proxy)
+
+            # Cache catalogs, not proxies: the current config may use different
+            # Variables even when it resolves to a previously seen value.
+            # Failed discovery/proxy construction must not evict a good entry.
+            if cached is not None:
+                self._discovery_cache.remove(cached)
+            self._discovery_cache.append((resolved, raw_tools))
+            if len(self._discovery_cache) > _MAX_DISCOVERY_CONFIGS:
+                self._discovery_cache.pop(0)
 
             # Replace the previous remote tools only after discovery succeeds.
             self._tools = tools

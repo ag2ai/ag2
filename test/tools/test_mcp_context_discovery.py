@@ -6,6 +6,7 @@ import asyncio
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -77,36 +78,41 @@ def _offered(config: TrackingConfig) -> list[list[str]]:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("field", "values", "expected"),
+    ("field", "values", "expected", "discoveries"),
     [
-        ("allowed_tools", [["echo"], ["reverse"], [], ["echo"]], [["echo"], ["reverse"], [], ["echo"]]),
+        ("allowed_tools", [["echo"], ["reverse"], [], ["echo"]], [["echo"], ["reverse"], [], ["echo"]], 3),
         (
             "blocked_tools",
-            [["ask", "reverse"], ["ask", "echo"], ["ask", "echo", "reverse"], []],
-            [["echo"], ["reverse"], [], ["ask", "echo", "reverse"]],
+            [["ask", "reverse"], ["ask", "echo"], ["ask", "echo", "reverse"], [], ["ask", "reverse"]],
+            [["echo"], ["reverse"], [], ["ask", "echo", "reverse"], ["echo"]],
+            4,
         ),
         (
             "tool_name_prefix",
-            ["first_", "second_", ""],
+            ["first_", "second_", "", "first_"],
             [
                 ["first_ask", "first_echo", "first_reverse"],
                 ["second_ask", "second_echo", "second_reverse"],
                 ["ask", "echo", "reverse"],
+                ["first_ask", "first_echo", "first_reverse"],
             ],
+            3,
         ),
     ],
 )
 async def test_each_conversation_uses_its_discovery_configuration(
-    field: str, values: list[Any], expected: list[list[str]]
+    field: str, values: list[Any], expected: list[list[str]], discoveries: int
 ) -> None:
+    counter = _DiscoveryCounter()
     tracking = TrackingConfig(TestConfig("done"))
-    async with _serve(echo, reverse) as url:
+    async with _serve(echo, reverse, counter=counter) as url:
         toolkit = MCPToolkit(MCPServerConfig(server_url=url, **{field: Variable("selection")}))
         agent = Agent("consumer", config=tracking, tools=[toolkit])
         for value in values:
             await agent.ask("List tools", variables={"selection": value})
 
     assert _offered(tracking) == expected
+    assert counter.calls == discoveries
 
 
 @pytest.mark.asyncio
@@ -132,36 +138,48 @@ async def test_switching_server_urls_refreshes_the_tools_and_calls_the_current_s
     reverse_call = ToolCallEvent(name="reverse", arguments='{"message":"hi"}')
     first = TrackingConfig(TestConfig(echo_call, "done"))
     second = TrackingConfig(TestConfig(reverse_call, "done"))
+    revisited = TrackingConfig(TestConfig(echo_call, "done"))
     toolkit = MCPToolkit(MCPServerConfig(server_url=Variable("url")))
     agent = Agent("consumer", config=TestConfig("unused"), tools=[toolkit])
+    [toolkit] = agent.tools
+    assert isinstance(toolkit, MCPToolkit)
 
     async with _serve(echo) as first_url, _serve(reverse) as second_url:
         await agent.ask("Echo", config=first, variables={"url": first_url})
-        await agent.ask("Reverse", config=second, variables={"url": second_url})
+        # A cached catalog must not reuse proxies bound to an old Variable recipe.
+        toolkit.config = MCPServerConfig(server_url=Variable("current_url"))
+        await agent.ask("Reverse", config=second, variables={"current_url": second_url})
+        await agent.ask("Echo again", config=revisited, variables={"current_url": first_url})
 
     assert _offered(first) == [["ask", "echo"], ["ask", "echo"]]
     assert _offered(second) == [["ask", "reverse"], ["ask", "reverse"]]
+    assert _offered(revisited) == [["ask", "echo"], ["ask", "echo"]]
     first.mock.assert_called_with(ToolResultsEvent([ToolResultEvent.from_call(echo_call, result="echo: hi")]))
     second.mock.assert_called_with(ToolResultsEvent([ToolResultEvent.from_call(reverse_call, result="ih")]))
+    revisited.mock.assert_called_with(ToolResultsEvent([ToolResultEvent.from_call(echo_call, result="echo: hi")]))
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("variable", [False, True], ids=["static", "variable"])
 async def test_mutating_an_allowlist_does_not_mutate_the_cached_configuration(variable: bool) -> None:
+    counter = _DiscoveryCounter()
     allowed = ["echo"]
     context = Context(stream=MemoryStream(), variables={"allowed": allowed})
-    async with _serve(echo, reverse) as url:
+    async with _serve(echo, reverse, counter=counter) as url:
         toolkit = MCPToolkit(
             MCPServerConfig(server_url=url, allowed_tools=Variable("allowed") if variable else allowed)
         )
         first = list(await toolkit.schemas(context))
         allowed[:] = ["reverse"]
         second = list(await toolkit.schemas(context))
+        allowed[:] = ["echo"]
+        third = list(await toolkit.schemas(context))
 
     assert [
         [schema.function.name for schema in schemas if isinstance(schema, FunctionToolSchema)]
-        for schemas in (first, second)
-    ] == [["echo"], ["reverse"]]
+        for schemas in (first, second, third)
+    ] == [["echo"], ["reverse"], ["echo"]]
+    assert counter.calls == 2
 
 
 @pytest.mark.asyncio
@@ -181,6 +199,78 @@ async def test_unchanged_configuration_reuses_discovery_across_contexts() -> Non
 
 
 @pytest.mark.asyncio
+async def test_alternating_configurations_only_discover_each_catalog_once() -> None:
+    counter = _DiscoveryCounter()
+    tracking = TrackingConfig(TestConfig("done"))
+    selections = [["echo"], ["reverse"]] * 6
+    async with _serve(echo, reverse, counter=counter) as url:
+        agent = Agent(
+            "consumer",
+            config=tracking,
+            tools=[MCPToolkit(MCPServerConfig(server_url=url, allowed_tools=Variable("allowed")))],
+        )
+        for allowed in selections:
+            await agent.ask("List tools", variables={"allowed": allowed})
+
+    assert _offered(tracking) == selections
+    assert counter.calls == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed_miss", [False, True], ids=["successful-miss", "failed-miss"])
+async def test_discovery_cache_evicts_the_least_recently_used_configuration(failed_miss: bool) -> None:
+    counter = _DiscoveryCounter()
+    tracking = TrackingConfig(TestConfig("done"))
+    async with _serve(echo, counter=counter) as url:
+        agent = Agent(
+            "consumer",
+            config=tracking,
+            tools=[
+                MCPToolkit(MCPServerConfig(server_url=url, allowed_tools=["echo"], tool_name_prefix=Variable("prefix")))
+            ],
+        )
+        # Fill the eight-entry cache, refresh the oldest, then insert a ninth.
+        for index in range(8):
+            await agent.ask("List tools", variables={"prefix": f"p{index}_"})
+        assert counter.calls == 8
+        if failed_miss:
+            counter.fail_next = True
+            with pytest.RaisesGroup(
+                pytest.RaisesExc(MCPError, match="test discovery failure"), flatten_subgroups=True, allow_unwrapped=True
+            ):
+                await agent.ask("Failed miss must not evict", variables={"prefix": "p8_"})
+        attempts = 9 if failed_miss else 8
+        await agent.ask("Keep the oldest", variables={"prefix": "p0_"})
+        assert counter.calls == attempts
+        await agent.ask("New configuration", variables={"prefix": "p8_"})
+        assert counter.calls == attempts + 1
+        await agent.ask("Still cached", variables={"prefix": "p0_"})
+        assert counter.calls == attempts + 1
+        await agent.ask("Evicted configuration", variables={"prefix": "p1_"})
+        assert counter.calls == attempts + 2
+
+    assert _offered(tracking) == [[f"p{index}_echo"] for index in [*range(8), 0, 8, 0, 1]]
+
+
+@pytest.mark.asyncio
+async def test_editing_an_exposed_schema_does_not_change_the_cached_catalog() -> None:
+    context = Context(stream=MemoryStream(), variables={"allowed": ["echo"]})
+    async with _serve(echo, reverse) as url:
+        toolkit = MCPToolkit(MCPServerConfig(server_url=url, allowed_tools=Variable("allowed")))
+        [first] = await toolkit.schemas(context)
+        assert isinstance(first, FunctionToolSchema)
+        expected = deepcopy(first.function.parameters)
+        first.function.parameters["properties"]["message"]["type"] = "integer"
+        context.variables["allowed"] = ["reverse"]
+        await toolkit.schemas(context)
+        context.variables["allowed"] = ["echo"]
+        [revisited] = await toolkit.schemas(context)
+
+    assert isinstance(revisited, FunctionToolSchema)
+    assert revisited.function.parameters == expected
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("field", ["headers", "authorization_token"])
 async def test_new_credentials_trigger_discovery_even_when_the_url_is_unchanged(field: str) -> None:
     counter = _DiscoveryCounter()
@@ -189,10 +279,10 @@ async def test_new_credentials_trigger_discovery_even_when_the_url_is_unchanged(
         toolkit = MCPToolkit(MCPServerConfig(server_url=url, **{field: Variable("credentials")}))
         agent = Agent("consumer", config=tracking, tools=[toolkit])
         values = [{"X-Tenant": "first"}, {"X-Tenant": "second"}] if field == "headers" else ["first", "second"]
-        for value in values:
+        for value in [*values, values[0]]:
             await agent.ask("List tools", variables={"credentials": value})
 
-    assert _offered(tracking) == [["ask", "echo"], ["ask", "echo"]]
+    assert _offered(tracking) == [["ask", "echo"]] * 3
     assert counter.calls == 2
 
 
@@ -213,8 +303,9 @@ async def test_failed_rediscovery_does_not_return_stale_tools_and_can_be_retried
         ):
             await agent.ask("Second", variables={"allowed": ["reverse"]})
         await agent.ask("Retry", variables={"allowed": ["reverse"]})
+        await agent.ask("Return to first", variables={"allowed": ["echo"]})
 
-    assert _offered(tracking) == [["echo"], ["reverse"]]
+    assert _offered(tracking) == [["echo"], ["reverse"], ["echo"]]
     assert counter.calls == 3
 
 
@@ -229,8 +320,13 @@ async def test_rediscovery_preserves_tools_added_locally_to_the_toolkit(local_na
     tracking = TrackingConfig(TestConfig(call, "done"))
     async with _serve(echo, reverse) as url:
         toolkit = MCPToolkit(MCPServerConfig(server_url=url, allowed_tools=Variable("allowed")))
-        toolkit.tool(local_echo, name=local_name)
         agent = Agent("consumer", config=tracking, tools=[toolkit])
+        await agent.ask("Warm cache", config=TestConfig("done"), variables={"allowed": ["echo"]})
+        await agent.ask("Switch tools", config=TestConfig("done"), variables={"allowed": ["reverse"]})
+        # Add a local tool after caching the remote catalog with that name.
+        [toolkit] = agent.tools
+        assert isinstance(toolkit, MCPToolkit)
+        toolkit.tool(local_echo, name=local_name)
         await agent.ask("First", variables={"allowed": ["reverse"]})
         await agent.ask("Second", variables={"allowed": ["echo"]})
 
@@ -286,8 +382,9 @@ async def test_rediscovered_remote_tools_still_lose_to_tools_declared_in_code() 
         )
         await agent.ask("First", variables={"allowed": ["echo", "reverse"]})
         await agent.ask("Second", variables={"allowed": ["echo"]})
+        await agent.ask("Revisit first", variables={"allowed": ["echo", "reverse"]})
 
-    assert _offered(tracking) == [["echo", "reverse"]] * 2 + [["echo"]] * 2
+    assert _offered(tracking) == [["echo", "reverse"]] * 2 + [["echo"]] * 2 + [["echo", "reverse"]] * 2
     tracking.mock.assert_called_with(ToolResultsEvent([ToolResultEvent.from_call(call, result="local: hi")]))
 
 
@@ -306,7 +403,7 @@ async def test_stdio_discovery_tracks_the_current_launch_configuration(field: st
             directory.mkdir()
     agent = Agent("consumer", config=TestConfig("unused"), tools=[MCPToolkit(MCPStdioServerConfig(**options))])
 
-    for name, value in zip(("first", "second"), values, strict=True):
+    for name, value in zip(("first", "second", "first"), [*values, values[0]], strict=True):
         call = ToolCallEvent(name=name)
         tracking = TrackingConfig(TestConfig(call, "done"))
         await agent.ask("Call the available tool", config=tracking, variables={"launch": value})
@@ -326,7 +423,10 @@ class _PauseBeforeRegistration(Tool):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("wrapper", ["direct", "toolkit", "deferred"])
-async def test_concurrent_conversations_keep_their_own_tools_during_registration(wrapper: str) -> None:
+@pytest.mark.parametrize("warm_cache", [False, True], ids=["cold", "warm"])
+async def test_concurrent_conversations_keep_their_own_tools_during_registration(
+    wrapper: str, warm_cache: bool
+) -> None:
     first_call = ToolCallEvent(name="first_echo", arguments='{"message":"hi"}')
     second_call = ToolCallEvent(name="second_reverse", arguments='{"message":"hi"}')
     first = TrackingConfig(TestConfig(first_call, "done"))
@@ -342,6 +442,9 @@ async def test_concurrent_conversations_keep_their_own_tools_during_registration
             Toolkit(toolkit) if wrapper == "toolkit" else ToolSearchTool(toolkit) if wrapper == "deferred" else toolkit
         )
         agent = Agent("consumer", config=TestConfig("unused"), tools=[wrapped, _PauseBeforeRegistration()])
+        if warm_cache:
+            await agent.ask("Warm first", variables={"allowed": ["echo"], "prefix": "first_"})
+            await agent.ask("Warm second", variables={"allowed": ["echo", "reverse"], "prefix": "second_"})
         pending = asyncio.create_task(
             agent.ask(
                 "First",

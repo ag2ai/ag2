@@ -79,9 +79,12 @@ just calls `tool.register(...)` over a flat `Iterable[Tool]`, plus a fallback
   "no side effects in init": the MCP handshake (network I/O) must happen at
   runtime, not construction. The `_discover_lock` keeps discovery and schema
   generation consistent, and it is held across the MCP handshake, so turns that
-  resolve different configurations discover one after another. Only the most
-  recent resolved configuration is retained, with its mutable values copied so
-  an in-place edit cannot silently change the cache's comparison value.
+  need discovery run one after another. The eight most recently used resolved
+  configurations retain their raw tool catalogs, with mutable config values
+  copied so an in-place edit cannot silently change a cache key. Equality over
+  this bounded cache handles unhashable lists and dictionaries without a separate
+  serialization format. Switching to a cached configuration rebuilds proxies
+  from the current config rather than retaining an old Variable resolution recipe.
 
 - **`set_provider` is a no-op on most tools.** Only `FunctionTool` (and via the
   composite, `Toolkit`) needs the DI provider, because only locally-executed
