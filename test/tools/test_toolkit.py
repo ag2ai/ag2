@@ -378,15 +378,13 @@ def test_tool_name_conflict() -> None:
 
 class TestMerger:
     def test_merge_toolkits(self) -> None:
-        def add1(a: int, b: int) -> int:
-            pass
+        left = Toolkit(first_tool)
+        right = Toolkit(second_tool)
+        members = (*left.tools, *right.tools)
 
-        def add2(a: int, b: int) -> int:
-            pass
+        merged = left | right
 
-        toolkit = Toolkit(add1) | Toolkit(add2)
-
-        assert [t.name for t in toolkit.tools] == ["add1", "add2"]
+        assert merged.tools == members
 
     def test_merge_toolkit_and_tool(self) -> None:
         def add1(a: int, b: int) -> int:
@@ -457,14 +455,13 @@ class TestMergeMiddleware:
 
         assert await run_toolkit(merged, "first_tool") == ["left:first_tool", "body:first"]
 
-    async def test_incoming_tool_runs_left_right_and_per_tool_middleware_in_order(self) -> None:
+    async def test_incoming_tool_keeps_its_own_middleware(self) -> None:
         left = Toolkit(middleware=[left_middleware])
         right = Toolkit(tool(second_tool, middleware=[tool_middleware]), middleware=[right_middleware])
 
         merged = left | right
 
         assert await run_toolkit(merged, "second_tool") == [
-            "left:second_tool",
             "right:second_tool",
             "tool:second_tool",
             "body:second",
@@ -482,13 +479,13 @@ class TestMergeMiddleware:
         assert await run_toolkit(left, "first_tool") == ["left:first_tool", "body:first"]
         assert await run_toolkit(right, "second_tool") == ["right:second_tool", "body:second"]
 
-    async def test_tool_added_after_merge_inherits_left_middleware(self) -> None:
+    async def test_tool_added_after_merge_does_not_inherit_source_middleware(self) -> None:
         left = Toolkit(middleware=[left_middleware])
         merged = left | second_tool
 
         merged.tool()(third_tool)
 
-        assert await run_toolkit(merged, "third_tool") == ["left:third_tool", "body:third"]
+        assert await run_toolkit(merged, "third_tool") == ["body:third"]
 
     async def test_tool_replaces_same_named_tool_and_its_hooks(self) -> None:
         old = tool(first_tool, name="shared", middleware=[old_tool_middleware])

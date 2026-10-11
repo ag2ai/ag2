@@ -55,16 +55,15 @@ class Toolkit(Tool):
         self._tools[t.name] = t
 
     def __or__(self, other: Any) -> "Toolkit":
-        # Existing members already carry the toolkit middleware. Copy them
-        # without applying it again; incoming members still need it.
-        merged = Toolkit(*self.tools, name=self.name)
-        merged._middleware = self._middleware
         if isinstance(other, Toolkit):
-            for t in other.tools:
-                merged._add_tool(t, unsafe=True)
+            incoming = other._tools
         else:
-            merged._add_tool(other, unsafe=True)
+            t = other if isinstance(other, Tool) else FunctionTool.ensure_tool(other)
+            incoming = {t.name: t}
 
+        # Members already have their middleware. Composition only joins collections.
+        merged = Toolkit(name=self.name)
+        merged._tools = self._tools | incoming
         return merged
 
     @overload
