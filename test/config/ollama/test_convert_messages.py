@@ -21,6 +21,7 @@ from ag2.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolErrorEvent,
     ToolNotFoundEvent,
     ToolResultsEvent,
 )
@@ -53,6 +54,18 @@ class TestConvertMessagesEmptyArguments:
 
         assert result[0] == IsPartialDict({
             "tool_calls": [IsPartialDict({"function": IsPartialDict({"arguments": {"category": "books"}})})],
+        })
+
+    def test_truncated_arguments_produce_empty_dict(self) -> None:
+        truncated = '{"city": "Par'
+        call = ToolCallEvent(id="tc_1", name="list_items", arguments=truncated)
+        response = ModelResponse(tool_calls=ToolCallsEvent([call]))
+        error = ToolErrorEvent.from_call(call, ValueError("boom"))
+        result = convert_messages([], [response, ToolResultsEvent([error])], SerializerCls)
+
+        assert result[0] == IsPartialDict({
+            "role": "assistant",
+            "tool_calls": [IsPartialDict({"function": IsPartialDict({"arguments": {}})})],
         })
 
 

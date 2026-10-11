@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import json
 from collections.abc import Iterable
 from typing import Any, cast
 from urllib.parse import urlparse
@@ -275,7 +274,7 @@ def convert_messages(
             for call in message.tool_calls.calls:
                 fc_part = types.Part.from_function_call(
                     name=call.name,
-                    args=json.loads(call.arguments or "{}"),
+                    args=call.safe_serialized_arguments,
                 )
                 if isinstance(call, GeminiToolCallEvent) and call.thought_signature is not None:
                     fc_part.thought_signature = call.thought_signature

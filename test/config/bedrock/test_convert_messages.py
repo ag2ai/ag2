@@ -168,6 +168,17 @@ class TestModelResponse:
             {"toolUse": {"toolUseId": "tc_1", "name": "list_items", "input": {}}},
         ]
 
+    def test_truncated_arguments_produce_empty_dict(self) -> None:
+        truncated = '{"city": "Par'
+        call = ToolCallEvent(id="tc_1", name="list_items", arguments=truncated)
+        response = ModelResponse(tool_calls=ToolCallsEvent([call]))
+        error = ToolErrorEvent.from_call(call, ValueError("boom"))
+        result = convert_messages([response, ToolResultsEvent([error])], SerializerCls)
+
+        assert result[-2]["content"] == [
+            {"toolUse": {"toolUseId": "tc_1", "name": "list_items", "input": {}}},
+        ]
+
 
 class TestToolResults:
     def test_text_result(self) -> None:

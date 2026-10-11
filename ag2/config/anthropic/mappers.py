@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
-import json
 import logging
 from collections.abc import Iterable, Sequence
 from typing import Any, Literal, TypeAlias, TypeGuard, cast, get_args
@@ -759,7 +758,7 @@ def convert_messages(
                     "type": "tool_use",
                     "id": call.id,
                     "name": call.name,
-                    "input": json.loads(call.arguments or "{}"),
+                    "input": call.safe_serialized_arguments,
                 }
                 if (caller := _caller(call)) is not None:
                     use_block["caller"] = caller

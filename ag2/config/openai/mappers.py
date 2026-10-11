@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
-import json
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Literal, TypeVar, cast
 
@@ -509,7 +508,7 @@ def _assistant_message(message: ModelResponse) -> ChatCompletionAssistantMessage
             {
                 "id": call.id,
                 "type": "function",
-                "function": {"arguments": json.dumps(call.serialized_arguments), "name": call.name},
+                "function": {"arguments": call.safe_arguments_string, "name": call.name},
             }
             for call in message.tool_calls.calls
         ]
