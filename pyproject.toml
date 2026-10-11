@@ -79,7 +79,7 @@ acp = [
 ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
-openai = ["openai>=3.9.0,<4"]
+openai = ["openai>=3.27.0,<4"]
 anthropic = ["anthropic>=1.9.0,<2"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
@@ -96,10 +96,10 @@ elevenlabs = ["elevenlabs>=1.50.0,<3"]
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
 mistral = ["mistralai>=2.8.0,<3"]
-ollama = ["ollama>=0.4.7"]
+ollama = ["ollama>=0.5.2,<1"]
 bedrock = ["aiobotocore>=3.9.1,<4"]
 dashscope = ["dashscope>=1.25.13"]
-typesafe = ["typesafe-sdk>=0.7.1,<0.8"]
+typesafe = ["typesafe-sdk>=0.7.4,<0.8"]
 
 redis = ["redis>=5.0,<9"]
 # SDK only: ag2 builds spans and hands them to whatever SpanProcessor the caller
@@ -427,6 +427,7 @@ files = [
     "ag2/network/client/checkpoint.py",
     "ag2/network/transport/frames.py",
     "ag2/policies/conversation.py",
+    "ag2/response/decision.py",
     "ag2/config",
     "ag2/live/__init__.py",
     "ag2/live/cascade.py",

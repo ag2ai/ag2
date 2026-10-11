@@ -170,7 +170,13 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
 
     result = convert_messages([], [event], SerializerCls)
 
-    assert result == [{"role": "tool", "content": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"}]
+    assert result == [
+        {
+            "role": "tool",
+            "content": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
+            "tool_name": "ghost_tool",
+        }
+    ]
 
 
 def test_compaction_summary_renders_as_user_turn() -> None:

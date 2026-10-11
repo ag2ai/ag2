@@ -7,7 +7,7 @@ from enum import Enum, IntEnum
 from typing import Any
 
 import pytest
-from fast_depends.use import SerializerCls
+from fast_depends.pydantic import PydanticSerializer
 from typesafe_sdk import Choice, ChoiceAnswer, Noul, NoulAnswer, Score, ScoreAnswer
 from typesafe_sdk import Usage as TypeSafeUsage
 
@@ -79,6 +79,20 @@ def test_bool_criteria_override() -> None:
     assert question == Noul(criteria={"true": "Billing issue", "false": "Anything else"})
 
 
+@pytest.mark.parametrize(
+    "criteria, expected",
+    [
+        ({"true": "Billing issue"}, {"true": "Billing issue", "false": None}),
+        ({"false": "Anything else"}, {"true": None, "false": "Anything else"}),
+    ],
+    ids=["true-only", "false-only"],
+)
+def test_bool_one_described_outcome_is_enough(criteria: dict[str, str], expected: dict[str, str | None]) -> None:
+    question = response_proto_to_question(ResponseSchema(bool), instructions=None, criteria=criteria)
+
+    assert question.model_dump(mode="json") == {"type": "noul", "criteria": expected}
+
+
 def test_bool_needs_a_question() -> None:
     with pytest.raises(ValueError, match="yes/no question needs asking"):
         response_proto_to_question(ResponseSchema(bool), instructions=None)
@@ -121,18 +135,27 @@ def test_string_literal_maps_to_choice() -> None:
     assert question == Choice(criteria={"calm": None, "angry": "Hostile or upset"})
 
 
-def test_enum_maps_to_choice() -> None:
-    schema = ResponseSchema(Department)
+@pytest.mark.parametrize("embed", [True, False], ids=["embedded", "unembedded"])
+@pytest.mark.parametrize(
+    "instructions, expected_instructions",
+    [
+        (None, "Which team should handle this ticket?"),
+        ("You triage support tickets.", "You triage support tickets.\n\nWhich team should handle this ticket?"),
+    ],
+    ids=["without-prompt", "with-prompt"],
+)
+def test_enum_maps_to_choice(embed: bool, instructions: str | None, expected_instructions: str) -> None:
+    schema = ResponseSchema(Department, embed=embed)
     answer = ChoiceAnswer(
         type="choice", choice="technical", confidence=0.9, probabilities={"billing": 0.1, "technical": 0.9}
     )
 
     # The agent prompt frames the question; the Enum docstring is the question.
-    assert response_proto_to_question(schema, instructions="You triage support tickets.") == Choice(
-        instructions="You triage support tickets.\n\nWhich team should handle this ticket?",
+    assert response_proto_to_question(schema, instructions=instructions) == Choice(
+        instructions=expected_instructions,
         criteria={"billing": "Payments, invoicing, refunds.", "technical": None},
     )
-    assert json.loads(answer_to_content(schema, answer)) == {"data": "technical"}
+    assert json.loads(answer_to_content(schema, answer)) == ({"data": "technical"} if embed else "technical")
 
 
 def test_int_enum_maps_to_score_and_snaps_to_nearest_level() -> None:
@@ -207,7 +230,7 @@ def test_convert_state_serialises_history() -> None:
             CompactionSummary(summary="The customer was refunded.", event_count=3),
             ModelRequest([DataInput({"order": 42})]),
         ],
-        SerializerCls,
+        PydanticSerializer(),
     )
 
     assert state == [
@@ -221,7 +244,7 @@ def test_convert_state_serialises_history() -> None:
 
 def test_convert_state_rejects_files() -> None:
     with pytest.raises(UnsupportedInputError, match="FileIdInput"):
-        convert_state([ModelRequest([FileIdInput("file_1")])], SerializerCls)
+        convert_state([ModelRequest([FileIdInput("file_1")])], PydanticSerializer())
 
 
 def test_answer_metadata() -> None:
@@ -239,3 +262,14 @@ def test_normalize_usage() -> None:
         prompt_tokens=12, completion_tokens=0, total_tokens=12
     )
     assert normalize_usage(TypeSafeUsage()) == Usage()
+
+
+@pytest.mark.parametrize(
+    "criteria",
+    [{"true": "Billing issue"}, {"false": "Anything else"}],
+    ids=["true-only", "false-only"],
+)
+def test_bool_with_instructions_keeps_only_described_outcomes(criteria: dict[str, str]) -> None:
+    question = response_proto_to_question(ResponseSchema(bool), instructions="Triage.", criteria=criteria)
+
+    assert question.model_dump(mode="json") == {"type": "noul", "instructions": "Triage.", "criteria": criteria}
