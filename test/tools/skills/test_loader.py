@@ -182,6 +182,26 @@ def test_loader_collision_warns_and_first_wins(tmp_path: Path, caplog: pytest.Lo
     assert "shadowed" in caplog.text
 
 
+def test_parse_frontmatter_recovers_backslashes_in_non_description_key() -> None:
+    text = "---\nname: my-skill\ndescription: A skill\ncompatibility: Needs: C:\\tools\\bin\n---\nBody"
+    assert parse_frontmatter(text) == {
+        "name": "my-skill",
+        "description": "A skill",
+        "compatibility": r"Needs: C:\tools\bin",
+    }
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_loader_loads_skill_with_backslashes_in_unquoted_description(tmp_path: Path, strict: bool) -> None:
+    description = r"Use when: reading C:\Users\me\notes or matching \d+"
+    _write_skill(tmp_path, "my-skill", f"---\nname: my-skill\ndescription: {description}\n---\nBody")
+
+    [meta] = SkillLoader(tmp_path, strict=strict).discover()
+
+    assert meta.name == "my-skill"
+    assert meta.metadata.description == description
+
+
 def test_loader_strict_requires_name_and_description(tmp_path: Path) -> None:
     skill_dir = tmp_path / "no-frontmatter-required-fields"
     skill_dir.mkdir(parents=True)
