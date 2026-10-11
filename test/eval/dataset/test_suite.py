@@ -205,8 +205,17 @@ class TestFromJsonl:
 
         suite = Suite.from_jsonl(path)
 
-        assert len(suite) == 2
-        assert suite.tasks[0].inputs == {"input": "1"}
+        assert [(t.task_id, t.inputs) for t in suite] == [("a", {"input": "1"}), ("b", {"input": "2"})]
+
+    def test_bom_after_the_first_line_is_still_invalid(self, tmp_path: Path) -> None:
+        path = tmp_path / "dataset.jsonl"
+        path.write_text(
+            json.dumps({"inputs": {"input": "1"}}) + "\n\ufeff" + json.dumps({"inputs": {"input": "2"}}) + "\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="line 2"):
+            Suite.from_jsonl(path)
 
 
 def test_suite_iterates_in_dataset_order() -> None:
