@@ -13,6 +13,17 @@ from .base import KnowledgeStore
 from .constants import LOG_PREFIX
 
 
+def _dropped_segments(entries: Iterable[str], prefix: str) -> list[tuple[int, str]]:
+    """``(n, entry)`` for each ``{prefix}{n}.jsonl`` entry, in segment order; non-integer ``n`` is ignored."""
+    segments: list[tuple[int, str]] = []
+    for entry in entries:
+        if entry.startswith(prefix) and entry.endswith(".jsonl"):
+            suffix = entry[len(prefix) : -len(".jsonl")]
+            if suffix.isascii() and suffix.isdigit():
+                segments.append((int(suffix), entry))
+    return sorted(segments)
+
+
 class EventLogWriter:
     """Persists stream events to the knowledge store as WAL entries.
 
@@ -38,11 +49,10 @@ class EventLogWriter:
         """
         prefix = f"{stream_id}.dropped-"
         entries = await self._store.list(LOG_PREFIX)
-        existing = [e for e in entries if e.startswith(prefix) and e.endswith(".jsonl")]
         # Number after the highest existing segment, not the count: once an older
         # segment is gone, the count would reuse (and overwrite) a live one.
-        suffixes = (e[len(prefix) : -len(".jsonl")] for e in existing)
-        n = max((int(s) for s in suffixes if s.isdigit()), default=0) + 1
+        segments = _dropped_segments(entries, prefix)
+        n = (segments[-1][0] if segments else 0) + 1
         path = f"{LOG_PREFIX}{stream_id}.dropped-{n}.jsonl"
         lines = self._serialize_events(events)
         await self._store.write(path, "\n".join(lines))
@@ -56,11 +66,7 @@ class EventLogWriter:
 
         entries = await self._store.list(LOG_PREFIX)
         prefix = f"{stream_id}.dropped-"
-        segments = sorted(
-            [e for e in entries if e.startswith(prefix) and e.endswith(".jsonl")],
-            key=lambda e: int(e[len(prefix) : -len(".jsonl")]),
-        )
-        for segment in segments:
+        for _, segment in _dropped_segments(entries, prefix):
             events = await self._load_file(f"{LOG_PREFIX}{segment}")
             all_events.extend(events)
 
