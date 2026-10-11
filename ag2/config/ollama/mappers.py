@@ -125,6 +125,11 @@ def convert_messages(
                     else:
                         raise UnsupportedInputError(type(part).__name__, "ollama")
                 content = parts[0]["text"] if len(parts) == 1 and parts[0]["type"] == "text" else parts
-                result.append({"role": "tool", "content": content})
+                tool_message: dict[str, Any] = {"role": "tool", "content": content}
+                # Names supplement position: Ollama matches results to calls by order, and two parallel
+                # calls of the same tool can only be told apart that way.
+                if r.name:
+                    tool_message["tool_name"] = r.name
+                result.append(tool_message)
 
     return result

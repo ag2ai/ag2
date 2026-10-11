@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
-from mistralai.client.models import UsageInfo
+from mistralai.client.models import DeltaMessage, FunctionCall, ToolCall, UsageInfo
 
 
 def make_usage(
@@ -37,12 +37,8 @@ def make_tool_call(
     name: str = "search_docs",
     arguments: Any = '{"query": "x"}',
     index: int | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        id=call_id,
-        index=index,
-        function=SimpleNamespace(name=name, arguments=arguments),
-    )
+) -> ToolCall:
+    return ToolCall(id=call_id, index=index, function=FunctionCall(name=name, arguments=arguments))
 
 
 def make_server_tool_turns(
@@ -51,12 +47,15 @@ def make_server_tool_turns(
     arguments: str = '{"prompt": "a red circle"}',
     url: str = "https://example.com/generated.jpg",
     text: str = "Here is your image.",
-) -> list[SimpleNamespace]:
-    """The `messages` trace a server-executed tool produces: call, result, answer."""
+) -> list[DeltaMessage]:
+    """The `messages` trace a server-executed tool produces: call, result, answer.
+
+    The SDK's own model, so a turn that is not a `DeltaMessage` fails here rather than passing silently.
+    """
     return [
-        SimpleNamespace(content="", tool_call_id=None, tool_calls=[make_tool_call(call_id, name, arguments)]),
-        SimpleNamespace(content=f'{{"url": "{url}"}}', tool_call_id=call_id, tool_calls=None),
-        SimpleNamespace(content=text, tool_call_id=None, tool_calls=None),
+        DeltaMessage(content="", tool_calls=[make_tool_call(call_id, name, arguments)]),
+        DeltaMessage(content=f'{{"url": "{url}"}}', tool_call_id=call_id),
+        DeltaMessage(content=text),
     ]
 
 

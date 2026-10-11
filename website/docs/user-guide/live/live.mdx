@@ -24,7 +24,7 @@ Patterns 2 and 3 are interchangeable at the config line — `LiveAgent` drives b
 See [Provider support](/docs/user-guide/live/stt_tts) for the matrix of currently supported providers.
 
 !!! note
-    Both patterns share the same audio I/O primitives — [`SoundDevicePlayer`](/docs/user-guide/live/stt_tts) and [`SoundDeviceRecorder`](/docs/user-guide/live/stt_tts) — and the same event stream. You can mix observers (TTS, logging, persistence) across both.
+    All three patterns share the same audio I/O primitives — [`SoundDevicePlayer`](/docs/user-guide/live/stt_tts) and [`SoundDeviceRecorder`](/docs/user-guide/live/stt_tts) — and the same event stream. You can mix observers (TTS, logging, persistence) across both.
 
 ## Installation
 
@@ -36,6 +36,20 @@ pip install "ag2[openai,gemini,elevenlabs] sounddevice[numpy]"
 
 !!! warning
     `SoundDevicePlayer` and `SoundDeviceRecorder` require `sounddevice[numpy]` as an **additional** dependency (not optional)
+
+## Imports and credentials
+
+Every provider config is importable from `ag2.live` under a provider-prefixed name: `OpenAIRealTimeConfig`, `OpenAITranscriber`, `OpenAITranslationTranscriber`, `OpenAITTSConfig`, `GeminiRealTimeConfig`, `ElevenLabsTranscriber`, `ElevenLabsTTSConfig`, `ElevenLabsStreamingTTSConfig`. The same classes also live in the provider modules `ag2.live.openai`, `ag2.live.gemini`, and `ag2.live.elevenlabs` under their short names (`openai.RealTimeConfig`, `openai.STTConfig`, …).
+
+The provider-specific option types — `AudioOutput`, `TextOutput`, `InputConfig` — are only available from the provider module, so a realtime example that tunes the voice imports the module (`from ag2.live import openai`) and uses `openai.RealTimeConfig` alongside `openai.AudioOutput`. Both spellings are equivalent; the pages in this section use whichever keeps the example shortest.
+
+Each provider reads its key from the environment unless you pass one:
+
+| Provider | Environment variable | Explicit key |
+|---|---|---|
+| OpenAI | `OPENAI_API_KEY` | `api_key=` on the four OpenAI configs, see [OpenAI credentials](/docs/user-guide/live/stt_tts#openai-credentials) |
+| Gemini | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | pass a preconfigured `client=` |
+| ElevenLabs | `ELEVENLABS_API_KEY` | pass a preconfigured `client=` |
 
 ## The flows at a glance
 

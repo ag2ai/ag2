@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from google.genai import types
 
 from ag2.config.gemini.files import GeminiFilesClient
 from ag2.files.types import FileContent, FileProvider, UploadedFile
@@ -43,7 +44,7 @@ class TestGeminiFilesClient:
     ) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client
-        mock_client.aio.files.upload.return_value = SimpleNamespace(name="files/x", size_bytes=3)
+        mock_client.aio.files.upload.return_value = types.File(name="files/x", size_bytes=3)
 
         await GeminiFilesClient(gemini_config).upload(b"abc", "blob.unknownext")
 

@@ -60,6 +60,7 @@ from typing_extensions import assert_never
 
 from ag2 import Agent, Context, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig, ModelProvider
+from ag2.config.input_acceptance import accepts_input
 from ag2.context import strip_reserved_variables
 from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, UsageEvent
 from ag2.hitl import HumanHook
@@ -71,7 +72,6 @@ from ag2.usage import collect_usage_events
 
 from .capabilities import served_capabilities
 from .events import AGUIEvent
-from .input_acceptance import accepts_input
 from .interrupts import (
     DEFAULT_RETENTION,
     ClientInterrupter,

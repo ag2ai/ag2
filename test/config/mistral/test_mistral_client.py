@@ -2,12 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from types import SimpleNamespace
 
 import httpx
 import pytest
 from fast_depends.use import SerializerCls
-from mistralai.client.models import TextChunk, ThinkChunk, Tool
+from mistralai.client.models import DeltaMessage, TextChunk, ThinkChunk, Tool
 from pydantic import BaseModel
 
 from ag2.config.mistral import MistralClient
@@ -219,13 +218,7 @@ class TestServerExecutedTools:
         assert response.tool_calls.calls == []
 
     async def test_client_side_call_without_a_result_is_still_dispatched(self) -> None:
-        turns = [
-            SimpleNamespace(
-                content="",
-                tool_call_id=None,
-                tool_calls=[make_tool_call("tc_1", "search_docs", '{"query": "x"}')],
-            )
-        ]
+        turns = [DeltaMessage(content="", tool_calls=[make_tool_call("tc_1", "search_docs", '{"query": "x"}')])]
         chat = FakeChat(make_agentic_response(turns=turns, finish_reason="tool_calls"))
 
         response = await _ask(_make_client(chat))

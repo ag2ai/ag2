@@ -126,7 +126,7 @@ class StreamingTTSConfig(TTSConfigProtocol[bytes]):
     the plain `TTSConfig` protocol. `TTSObserver` and `CascadeConfig` both
     detect `stream` and use it automatically. Not supported by ``eleven_v3``.
 
-    Needs an api key in ELEVENLABS_API_KEY env var or can accept an api_key argument
+    Needs an api key in ELEVENLABS_API_KEY env var, or pass a preconfigured `client`.
     """
 
     def __init__(

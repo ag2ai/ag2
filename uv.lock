@@ -56,7 +56,7 @@ wheels = [
 
 [[package]]
 name = "ag2"
-version = "1.1.2"
+version = "1.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
@@ -149,7 +149,7 @@ zai = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
     { name = "codespell" },
     { name = "daytona" },
     { name = "dirty-equals" },
@@ -250,7 +250,7 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "perplexity", "typesafe", "xai", "zai"] },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "httpx2" },
@@ -289,8 +289,8 @@ requires-dist = [
     { name = "mcp-types", marker = "extra == 'mcp'", specifier = ">=2.2.0,<3" },
     { name = "mcp-ui-server", marker = "extra == 'mcp-ui'", specifier = ">=1.0.0" },
     { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=2.8.0,<3" },
-    { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.4.7" },
-    { name = "openai", marker = "extra == 'openai'", specifier = ">=3.9.0,<4" },
+    { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.5.2,<1" },
+    { name = "openai", marker = "extra == 'openai'", specifier = ">=3.27.0,<4" },
     { name = "opentelemetry-sdk", marker = "extra == 'tracing'", specifier = ">=1.20" },
     { name = "perplexityai", marker = "extra == 'perplexity'", specifier = ">=0.30.0,<1" },
     { name = "prometheus-client", marker = "extra == 'metrics'", specifier = ">=0.20.0,<0.30.0" },
@@ -300,7 +300,7 @@ requires-dist = [
     { name = "starlette", marker = "extra == 'a2ui'", specifier = ">=0.40,<2" },
     { name = "starlette", marker = "extra == 'acp'", specifier = ">=0.40,<2" },
     { name = "tavily-python", marker = "extra == 'tavily'", specifier = ">=0.7.4,<0.9" },
-    { name = "typesafe-sdk", marker = "extra == 'typesafe'", specifier = ">=0.7.1,<0.8" },
+    { name = "typesafe-sdk", marker = "extra == 'typesafe'", specifier = ">=0.7.4,<0.8" },
     { name = "uvicorn", marker = "extra == 'acp'", specifier = ">=0.51.0,<1" },
     { name = "xai-sdk", marker = "extra == 'xai'", specifier = ">=1.12.2,<2" },
     { name = "zai-sdk", marker = "extra == 'zai'", specifier = ">=0.2.3,<1" },
@@ -313,6 +313,7 @@ dev = [
     { name = "ag2", extras = ["ag-ui"] },
     { name = "ag2", extras = ["anthropic"] },
     { name = "ag2", extras = ["dashscope"] },
+    { name = "ag2", extras = ["ddgs", "perplexity"] },
     { name = "ag2", extras = ["gemini"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
@@ -320,7 +321,7 @@ dev = [
     { name = "ag2", extras = ["mistral"] },
     { name = "ag2", extras = ["ollama"] },
     { name = "ag2", extras = ["openai"] },
-    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "a2a", "ag-ui", "acp"] },
+    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
     { name = "ag2", extras = ["redis"] },
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
@@ -458,9 +459,10 @@ test-core = [
     { name = "pytest-timeout", specifier = ">=2.4.0,<3" },
 ]
 types = [
+    { name = "ag2", extras = ["ddgs", "perplexity"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
-    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "a2a", "ag-ui", "acp"] },
+    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
@@ -3773,7 +3775,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "3.19.2"
+version = "3.27.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -3783,9 +3785,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/91/2d5722388a50cc86e162779df5fbfe0afa652a6e2d5c9ee616e081a82098/openai-3.19.2.tar.gz", hash = "sha256:de185f9834ad064d965ec42bd0766731cf66bceea16a7670294a835d207019e6", size = 1716953, upload-time = "2026-09-24T00:06:07.315Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/41/d0fdf732f76433de3e9c4c6fbe5d83975c1e8379d46a48d0d7aa631b1c5a/openai-3.27.0.tar.gz", hash = "sha256:b84a941b8e488cd29c1555dd6edda4aa57452add9e3a0eb29eb732cec49e4468", size = 1822874, upload-time = "2026-10-09T13:48:35.936Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/20/4fe123e60525375878c67d1d8d051c9c5dec81cc56a579ba9304ca743303/openai-3.19.2-py3-none-any.whl", hash = "sha256:66247fcd07266e72536e90656dc27f3b0bb1e9d8696d4013fc55402c0b96a5c2", size = 2071459, upload-time = "2026-09-24T00:06:05.416Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/e1/e99eef310f4d41c19509de49ac8fa829dc217e4e3fa6e5ce01eeb75a3242/openai-3.27.0-py3-none-any.whl", hash = "sha256:342cc911201c0b7acc5b566e4c71212c05b00a30b4b4c4c67b65d96e1db66c8c", size = 2168575, upload-time = "2026-10-09T13:48:33.659Z" },
 ]
 
 [[package]]
@@ -6020,18 +6022,20 @@ wheels = [
 
 [[package]]
 name = "typesafe-sdk"
-version = "0.7.2"
+version = "0.7.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx2" },
+    { name = "packaging" },
     { name = "pydantic" },
     { name = "pydantic-core" },
     { name = "tenacity" },
+    { name = "truststore", marker = "sys_platform != 'emscripten'" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/42/ac/8bad2c02c038b85039cdb198ba106650d54bade0c0c986c68dc6e9cef8c3/typesafe_sdk-0.7.2.tar.gz", hash = "sha256:2434f4af5cdfc45d6ab5ff27048e8b257207f786b60456e69995e345b32e77e1", size = 23169, upload-time = "2026-09-26T21:20:24.988Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/12/3a897e9f424be6f4db0648a955f8fadbe62149d118a03614df897b5a2ec9/typesafe_sdk-0.7.4.tar.gz", hash = "sha256:a20dca217a746db1ac5534ac502de16e1f86a400b4ec09f8594e6221c2bc9558", size = 24388, upload-time = "2026-10-09T15:47:14.978Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/99/5e/2b97ba9b0b77612e3a480ddb60c0c0325b4809ef57a7b565341d65ef7bec/typesafe_sdk-0.7.2-py3-none-any.whl", hash = "sha256:0a961148187d52e18276ed7f2d02617cfac48e3b97673cb631a8749397d43d1e", size = 36448, upload-time = "2026-09-26T21:20:23.511Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/49/6cd65684e41e25069f4d12c09cd7e1e3f81477f06acb29bf0d1815e27d1e/typesafe_sdk-0.7.4-py3-none-any.whl", hash = "sha256:61cf3f2fe9da20b68c3d3fe2fb76bbb2f35f8c4a9a65a6b81c43a535d2a53210", size = 37700, upload-time = "2026-10-09T15:47:12.418Z" },
 ]
 
 [[package]]

@@ -19,6 +19,7 @@ from openai.types.responses import (
     ResponseFunctionToolCall,
     ResponseOutputItemDoneEvent,
     ResponseOutputMessage,
+    ResponseOutputText,
     ResponseReasoningItem,
     ResponseShellCallCommandDeltaEvent,
     ResponseShellCallOutputContentDeltaEvent,
@@ -255,7 +256,7 @@ class OpenAIResponsesClient(LLMClient):
 
             elif isinstance(item, ResponseOutputMessage):
                 for part in item.content:
-                    if hasattr(part, "text") and part.text:
+                    if isinstance(part, ResponseOutputText) and part.text:
                         model_msg = ModelMessage(part.text)
                         await context.send(model_msg)
 

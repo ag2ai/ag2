@@ -1,15 +1,17 @@
 ---
-title: Using Jev for agent decisions
-sidebarTitle: Jev decisions
+title: Decision models in agent workflows
+sidebarTitle: Decision workflows
 ---
 
-# Using Jev for agent decisions
+# Decision models in agent workflows
 
-Use Jev to answer bounded questions around a generative agent: which model should handle a task, whether a tool should run, or which evidence belongs in its context. These recipes connect an AG2 decision agent through existing configuration, middleware, and observer interfaces.
+Connect OpenAI Decisions or TypeSafe's Jev to an AG2 agent workflow: choose a model before a dialogue, review a tool call, select context, match a memory entity, or monitor progress. These recipes use existing configuration, middleware, observer, and knowledge-store interfaces.
+
+Read [Decision Models](/docs/user-guide/decision_models) for schemas, option descriptions, probabilities, and provider setup. The examples here show where to run the decision and how application code applies its result.
 
 ## Choose a decision pattern
 
-Jev returns a typed decision. Your application maps that result to an action; the generative agent keeps responsibility for text generation and tool use.
+A decision agent returns a typed decision. Your application maps that result to an action; the generative agent keeps responsibility for text generation and tool use.
 
 | Goal | Example question | Decision shape | Where to connect it |
 |---|---|---|---|
@@ -19,51 +21,38 @@ Jev returns a typed decision. Your application maps that result to an action; th
 | Match a memory entity | Which retrieved entity matches this mention, or is there no match? | String enum with a `none` option | Memory-update code or an aggregation strategy |
 | Classify outcomes | Does the evidence show resolution, progress, a stall, or an unclear outcome? | String enum | An observer or post-run trace processing |
 
-The recipes below implement patterns described in public operator reports. They are AG2 examples, rather than the operators' own code, and the reports do not establish a popularity ranking or guarantee the same results on your workload.
+The production motivations below come from public operator reports about Jev. Each recipe demonstrates the corresponding integration in AG2 with either provider; the reports describe the operators' implementations and results.
 
-## Set up a decision agent
+## Run the recipes
 
-Install the Jev provider and the generative provider used by these examples:
+Install AG2 1.2 or later with both providers and the environment-file helper used by the scripts:
 
 ```bash
-pip install "ag2[typesafe,openai]" python-dotenv
+pip install "ag2[openai,typesafe]>=1.2" python-dotenv
 ```
 
-Set `TYPESAFE_API_KEY` in your environment or local `.env`. The examples that call an OpenAI agent also need `OPENAI_API_KEY`. Each script loads `.env` at runtime.
+Save each Python example as a separate script. Each script loads `.env` from the current directory at runtime. Choose the decision provider through `DECISION_PROVIDER`; the default is `openai`.
 
-Save each Python example as a separate script and run it from the directory containing your `.env`, or provide the credentials through environment variables.
-
-A decision agent needs a question and a compatible response schema. Here is a single Boolean question:
-
-```python linenums="1"
-import asyncio
-from pathlib import Path
-
-from dotenv import load_dotenv
-
-from ag2 import Agent, MemoryStream
-from ag2.config import TypeSafeConfig
-
-async def main() -> None:
-    load_dotenv(Path.cwd() / ".env")
-    judge = Agent(
-        "follow-up-judge",
-        config=TypeSafeConfig(timeout=10.0),
-        prompt="Does this message request a concrete action from the agent?",
-        response_schema=bool,
-    )
-    reply = await judge.ask(
-        "Please investigate why checkout started returning HTTP 503.",
-        stream=MemoryStream(),
-    )
-    print("Follow up:", await reply.content())
-    print("Yes probability:", reply.response.metadata["noul"])
-
-if __name__ == "__main__":
-    asyncio.run(main())
+<Tabs>
+  <Tab title="OpenAI Decisions">
+```bash
+export DECISION_PROVIDER="openai"
+# Set OPENAI_API_KEY in your environment or local .env.
+python recipe.py
 ```
+  </Tab>
 
-`bool` returns the answer after applying `boolean_threshold`. A string enum returns one of its members; choice metadata includes `confidence` and `probabilities`. See [TypeSafe configuration](/docs/user-guide/model_configuration#typesafe-jev-configuration) for probability schemas, rubric scores, option descriptions, and provider settings.
+  <Tab title="TypeSafe (Jev)">
+```bash
+export DECISION_PROVIDER="typesafe"
+# Set TYPESAFE_API_KEY in your environment or local .env.
+# Recipes with a generative OpenAI agent also need OPENAI_API_KEY.
+python recipe.py
+```
+  </Tab>
+</Tabs>
+
+The `make_decision_config()` helper in each script selects the provider with a ten-second request timeout and SDK retries disabled. The schemas and workflow code are shared. See [provider metadata](/docs/user-guide/decision_models#set-up) when using probabilities or confidence to apply your own thresholds.
 
 !!! note "Keep independent decisions on independent streams"
 
@@ -78,13 +67,14 @@ Run the decision before launching the generative agent. Map the selected label t
 ```python linenums="1"
 import asyncio
 from enum import Enum
+from os import getenv
 from pathlib import Path
 
 from dotenv import load_dotenv
 from typesafe_sdk import RetryPolicy
 
 from ag2 import Agent, MemoryStream
-from ag2.config import OpenAIConfig, TypeSafeConfig
+from ag2.config import ModelConfig, OpenAIConfig, OpenAIDecisionsConfig, TypeSafeConfig
 
 class Route(Enum):
     """Should this incoming task be deferred or assigned to a model preset?"""
@@ -96,12 +86,20 @@ class Route(Enum):
     STRONG = "strong"
     """A difficult task requiring multi-step analysis or careful planning."""
 
+def make_decision_config() -> ModelConfig:
+    provider = getenv("DECISION_PROVIDER", "openai")
+    if provider == "openai":
+        return OpenAIDecisionsConfig(timeout=10.0, max_retries=0)
+    if provider == "typesafe":
+        return TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0))
+    raise ValueError("DECISION_PROVIDER must be openai or typesafe.")
+
 async def main() -> None:
     load_dotenv(Path.cwd() / ".env")
     task = "Plan a safe migration of a payment database with no downtime."
     router = Agent(
         "task-router",
-        config=TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0)),
+        config=make_decision_config(),
         response_schema=Route,
     )
     decision = await router.ask(task, stream=MemoryStream())
@@ -128,20 +126,21 @@ Continue with `reply.ask()` to reuse the selected client and conversation. If yo
 
 ## Review a tool call before execution
 
-Put the judgement immediately around a local tool's execution. Use a fixed application policy for permissions; Jev classifies the proposed action within that policy.
+Put the judgement immediately around a local tool's execution. Use a fixed application policy for permissions; the decision model classifies the proposed action within that policy.
 
 [Recruitly reports checks for risky or destructive agent actions](https://recruitly.io/resources/decision-model-in-production-the-day-it-was-released){.external-link target="_blank"}. [FutureProof Agents describes a Jev check before shell execution in its own working agent](https://futureproofagents.com/blog/jev-use-cases/){.external-link target="_blank"}. The example below uses a local tool and an allow/confirm/deny decision.
 
 ```python linenums="1"
 import asyncio
 from enum import Enum
+from os import getenv
 from pathlib import Path
 
 from dotenv import load_dotenv
 from typesafe_sdk import RetryPolicy
 
 from ag2 import Agent, Context, DataInput, MemoryStream, tool
-from ag2.config import OpenAIConfig, TypeSafeConfig
+from ag2.config import ModelConfig, OpenAIConfig, OpenAIDecisionsConfig, TypeSafeConfig
 from ag2.events import ToolCallEvent, ToolResultEvent
 from ag2.middleware import ToolExecution, ToolResultType
 
@@ -188,12 +187,20 @@ def set_service_status(service: str, status: str, context: Context) -> str:
     context.dependencies["services"][service] = status
     return f"{service}: {status}"
 
+def make_decision_config() -> ModelConfig:
+    provider = getenv("DECISION_PROVIDER", "openai")
+    if provider == "openai":
+        return OpenAIDecisionsConfig(timeout=10.0, max_retries=0)
+    if provider == "typesafe":
+        return TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0))
+    raise ValueError("DECISION_PROVIDER must be openai or typesafe.")
+
 async def main() -> None:
     load_dotenv(Path.cwd() / ".env")
     services = {"sandbox-api": "running"}
     judge = Agent(
         "action-judge",
-        config=TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0)),
+        config=make_decision_config(),
         response_schema=Verdict,
     )
     assistant = Agent(
@@ -226,13 +233,22 @@ Judge retrieved candidates before adding them to the generative request. The dec
 
 ```python linenums="1"
 import asyncio
+from os import getenv
 from pathlib import Path
 
 from dotenv import load_dotenv
 from typesafe_sdk import RetryPolicy
 
 from ag2 import Agent, DataInput, MemoryStream, ResponseSchema
-from ag2.config import OpenAIConfig, TypeSafeConfig
+from ag2.config import ModelConfig, OpenAIConfig, OpenAIDecisionsConfig, TypeSafeConfig
+
+def make_decision_config() -> ModelConfig:
+    provider = getenv("DECISION_PROVIDER", "openai")
+    if provider == "openai":
+        return OpenAIDecisionsConfig(timeout=10.0, max_retries=0)
+    if provider == "typesafe":
+        return TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0))
+    raise ValueError("DECISION_PROVIDER must be openai or typesafe.")
 
 async def main() -> None:
     load_dotenv(Path.cwd() / ".env")
@@ -243,7 +259,7 @@ async def main() -> None:
     ]
     judge = Agent(
         "relevance-judge",
-        config=TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0)),
+        config=make_decision_config(),
         response_schema=ResponseSchema(bool, description="Is this candidate relevant to solving the task?"),
     )
     selected = []
@@ -272,7 +288,7 @@ Selecting a skill description influences the model's instructions. To restrict w
 
 ## Match a memory entity
 
-Extract the mention and retrieve candidate entities first. Ask Jev to choose from that bounded candidate set, including `none`. Application code decides whether the result is sufficient to update the stored entity.
+Extract the mention and retrieve candidate entities first. Ask the decision model to choose from that bounded candidate set, including `none`. Application code decides whether the result is sufficient to update the stored entity.
 
 [Construct reports this pattern for its live entity-resolution workflow](https://construct.computer/blog/jev-ai-agents/){.external-link target="_blank"}: extraction, candidate retrieval, a Jev match decision, and an application-controlled merge.
 
@@ -280,13 +296,14 @@ Extract the mention and retrieve candidate entities first. Ask Jev to choose fro
 import asyncio
 import json
 from enum import Enum
+from os import getenv
 from pathlib import Path
 
 from dotenv import load_dotenv
 from typesafe_sdk import RetryPolicy
 
 from ag2 import Agent, DataInput, MemoryStream
-from ag2.config import TypeSafeConfig
+from ag2.config import ModelConfig, OpenAIDecisionsConfig, TypeSafeConfig
 from ag2.knowledge import KnowledgeStore, MemoryKnowledgeStore
 
 class Match(Enum):
@@ -316,6 +333,14 @@ async def merge_mention(mention: dict, candidates: list[dict], judge: Agent, sto
     await store.write(path, json.dumps(current, sort_keys=True))
     return f"Merged into {candidate['id']}; canonical identity preserved."
 
+def make_decision_config() -> ModelConfig:
+    provider = getenv("DECISION_PROVIDER", "openai")
+    if provider == "openai":
+        return OpenAIDecisionsConfig(timeout=10.0, max_retries=0)
+    if provider == "typesafe":
+        return TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0))
+    raise ValueError("DECISION_PROVIDER must be openai or typesafe.")
+
 async def main() -> None:
     load_dotenv(Path.cwd() / ".env")
     store = MemoryKnowledgeStore()
@@ -328,7 +353,7 @@ async def main() -> None:
     judge = Agent(
         "entity-matcher",
         prompt="Match identity using the supplied names and domains. Similar names alone do not justify a merge.",
-        config=TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0)),
+        config=make_decision_config(),
         response_schema=Match,
     )
     mention = {"mention_id": "m1", "name": "Acme Corp", "domain": "acme.example", "facts": ["Billing contact is Sara."]}
@@ -354,13 +379,14 @@ Attach a judgement to a completed response or a collected event batch, then surf
 ```python linenums="1"
 import asyncio
 from enum import Enum
+from os import getenv
 from pathlib import Path
 
 from dotenv import load_dotenv
 from typesafe_sdk import RetryPolicy
 
 from ag2 import Agent, Context, DataInput, MemoryStream, observer
-from ag2.config import OpenAIConfig, TypeSafeConfig
+from ag2.config import ModelConfig, OpenAIConfig, OpenAIDecisionsConfig, TypeSafeConfig
 from ag2.events import ModelResponse, ObserverAlert, Severity
 
 class Outcome(Enum):
@@ -386,11 +412,19 @@ async def classify_outcome(event: ModelResponse, context: Context) -> None:
     outcome = await reply.content()
     context.dependencies["outcomes"].append(outcome.value)
     await context.send(ObserverAlert(
-        source="jev-outcome",
+        source="decision-outcome",
         severity=Severity.WARNING if outcome is Outcome.STALLED else Severity.INFO,
         message=f"Progress classification: {outcome.value}",
         data={"outcome": outcome.value},
     ))
+
+def make_decision_config() -> ModelConfig:
+    provider = getenv("DECISION_PROVIDER", "openai")
+    if provider == "openai":
+        return OpenAIDecisionsConfig(timeout=10.0, max_retries=0)
+    if provider == "typesafe":
+        return TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0))
+    raise ValueError("DECISION_PROVIDER must be openai or typesafe.")
 
 async def main() -> None:
     load_dotenv(Path.cwd() / ".env")
@@ -399,7 +433,7 @@ async def main() -> None:
     judge = Agent(
         "outcome-judge",
         prompt="Classify only the evidence supplied. A suggested fix is progress, not proof of resolution.",
-        config=TypeSafeConfig(timeout=10.0, retry=RetryPolicy(max_retries=0)),
+        config=make_decision_config(),
         response_schema=Outcome,
     )
     assistant = Agent(
@@ -427,11 +461,11 @@ For stateful checks over several events, use [trigger-driven observers](/docs/us
 Keep the operational policy explicit for each question:
 
 - **Bound the wait.** Set a provider timeout and, where required, an overall deadline for the complete decision including retries.
-- **Define the inconclusive path.** Decide what happens on low confidence, malformed output, timeout, or an unavailable provider. A tool gate can require human review; a memory matcher can leave the record unchanged; a router can use a configured default. Do not turn an unavailable judgement into an implicit approval.
+- **Define the inconclusive path.** Decide what happens on low confidence, a refused question, malformed output, timeout, or an unavailable provider. A tool gate can require human review; a memory matcher can leave the record unchanged; a router can use a configured default. Do not turn an unavailable judgement into an implicit approval.
 - **Evaluate the question you deploy.** Use labelled examples from the actual decision point, including ambiguous and out-of-scope inputs. Measure accuracy and the consequences of false positives/negatives before choosing thresholds.
-- **Observe before changing actions.** In shadow mode, record Jev's answer alongside the existing decision without letting it change execution. Compare outcomes before enabling the new path.
+- **Observe before changing actions.** In shadow mode, record the decision model's answer alongside the existing decision without letting it change execution. Compare outcomes before enabling the new path.
 - **Account for the decision call.** Record its latency, model, answer, and usage separately from the generative call. A judge on a separate stream has its own usage history; it is not automatically part of the parent's `reply.usage()`.
 
 Keep evidence for the question compact and identify the source of each fact. Confidence is useful input to an application policy, but it is not proof that a particular decision is right.
 
-These patterns use the existing `TypeSafeConfig`, `Agent`, tools, middleware, observers, and memory interfaces. See the [TypeSafe reference](/docs/user-guide/model_configuration#typesafe-jev-configuration) when choosing a different decision schema or configuring the provider.
+For provider-specific options and error behavior, see [OpenAI Decisions configuration](/docs/user-guide/model_configuration#openai-decisions-configuration) and [TypeSafe (Jev) configuration](/docs/user-guide/model_configuration#typesafe-jev-configuration).
