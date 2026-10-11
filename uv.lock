@@ -43,6 +43,22 @@ sqlite = [
 ]
 
 [[package]]
+name = "a2ui-core"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "babel" },
+    { name = "jsonschema" },
+    { name = "pydantic" },
+    { name = "referencing" },
+    { name = "regex" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d0/0d/342269425dc6371d15f8cce104740bc728bb4e9e4452639531fb44cd3c2a/a2ui_core-0.3.0.tar.gz", hash = "sha256:89319844242068447cb98036ca3305132210f0643a188ca129b1188b053d2b45", size = 224301, upload-time = "2026-10-08T16:40:32.769Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/be/44acceb9be2a18ced0d479e4477e5528c2861723a0ec2763a37d4b1e348a/a2ui_core-0.3.0-py3-none-any.whl", hash = "sha256:6bf3c0c84bfd21f0c3d7b073aaabfb1a8d0c743f7152080e4333e3459afcbf5b", size = 217482, upload-time = "2026-10-08T16:40:29.784Z" },
+]
+
+[[package]]
 name = "ag-ui-protocol"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -72,6 +88,10 @@ a2a = [
 ]
 a2ui = [
     { name = "jsonschema" },
+    { name = "starlette" },
+]
+a2ui-beta = [
+    { name = "a2ui-core" },
     { name = "starlette" },
 ]
 acp = [
@@ -149,7 +169,7 @@ zai = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui-beta", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
     { name = "codespell" },
     { name = "daytona" },
     { name = "dirty-equals" },
@@ -219,7 +239,7 @@ lint = [
 ]
 optionals = [
     { name = "a2a-sdk", extra = ["signing", "sqlite"] },
-    { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui", "a2ui-beta", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
     { name = "agent-client-protocol", extra = ["http"] },
     { name = "daytona" },
     { name = "docker" },
@@ -250,7 +270,7 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "perplexity", "typesafe", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "a2ui-beta", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "perplexity", "typesafe", "xai", "zai"] },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "httpx2" },
@@ -269,6 +289,7 @@ types = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk", marker = "extra == 'a2a'", specifier = ">=1.2.0,<2" },
+    { name = "a2ui-core", marker = "extra == 'a2ui-beta'", specifier = ">=0.3,<0.4" },
     { name = "ag-ui-protocol", marker = "extra == 'ag-ui'", specifier = ">=1.0,<2" },
     { name = "ag2", extras = ["mcp"], marker = "extra == 'acp'" },
     { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.12.1,<0.13" },
@@ -298,6 +319,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0,<9" },
     { name = "starlette", marker = "extra == 'a2ui'", specifier = ">=0.40,<2" },
+    { name = "starlette", marker = "extra == 'a2ui-beta'", specifier = ">=0.40,<2" },
     { name = "starlette", marker = "extra == 'acp'", specifier = ">=0.40,<2" },
     { name = "tavily-python", marker = "extra == 'tavily'", specifier = ">=0.7.4,<0.9" },
     { name = "typesafe-sdk", marker = "extra == 'typesafe'", specifier = ">=0.7.4,<0.8" },
@@ -305,7 +327,7 @@ requires-dist = [
     { name = "xai-sdk", marker = "extra == 'xai'", specifier = ">=1.12.2,<2" },
     { name = "zai-sdk", marker = "extra == 'zai'", specifier = ">=0.2.3,<1" },
 ]
-provides-extras = ["a2a", "a2ui", "acp", "ag-ui", "openai", "anthropic", "gemini", "elevenlabs", "xai", "zai", "mistral", "ollama", "bedrock", "dashscope", "typesafe", "redis", "tracing", "metrics", "tavily", "ddgs", "perplexity", "mcp", "mcp-ui"]
+provides-extras = ["a2a", "a2ui", "a2ui-beta", "acp", "ag-ui", "openai", "anthropic", "gemini", "elevenlabs", "xai", "zai", "mistral", "ollama", "bedrock", "dashscope", "typesafe", "redis", "tracing", "metrics", "tavily", "ddgs", "perplexity", "mcp", "mcp-ui"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -321,7 +343,7 @@ dev = [
     { name = "ag2", extras = ["mistral"] },
     { name = "ag2", extras = ["ollama"] },
     { name = "ag2", extras = ["openai"] },
-    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
+    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "a2ui-beta", "ag-ui", "acp"] },
     { name = "ag2", extras = ["redis"] },
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
@@ -409,6 +431,7 @@ optionals = [
     { name = "a2a-sdk", extras = ["signing", "sqlite"] },
     { name = "ag2", extras = ["a2a"] },
     { name = "ag2", extras = ["a2ui"] },
+    { name = "ag2", extras = ["a2ui-beta"] },
     { name = "ag2", extras = ["acp"] },
     { name = "ag2", extras = ["ag-ui"] },
     { name = "ag2", extras = ["anthropic"] },
@@ -462,7 +485,7 @@ types = [
     { name = "ag2", extras = ["ddgs", "perplexity"] },
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
-    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
+    { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "a2ui-beta", "ag-ui", "acp"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
