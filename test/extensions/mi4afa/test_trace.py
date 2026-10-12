@@ -2,13 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
 from uuid import uuid4
 
 import pytest
 
-from ag2 import Agent, tool
+from ag2 import Agent, MemoryStream, tool
 from ag2.eval import Trace
 from ag2.events import (
+    HumanMessage,
     ModelMessage,
     ModelResponse,
     TaskCompleted,
@@ -20,7 +22,8 @@ from ag2.events import (
     Usage,
 )
 from ag2.events.types import UsageEvent
-from ag2.extensions.mi4afa import Turn, conversation_from_trace, subagent_names
+from ag2.extensions.mi4afa import TraceConversation, Turn, conversation_from_trace, subagent_names
+from ag2.middleware import approval_required
 from ag2.testing import TestConfig
 from ag2.tools.final import Toolkit
 from ag2.tools.subagents import background_agent_tool, subagent_tool
@@ -66,7 +69,7 @@ def test_turns_and_event_indices() -> None:
     )
 
 
-def test_subagents_name_delegated_results_and_errors() -> None:
+def test_subagents_name_delegated_results_but_not_errors() -> None:
     delegate = ToolCallEvent("task_researcher", arguments='{"objective": "find prices"}')
     retry = ToolCallEvent("task_researcher", arguments='{"objective": "find prices again"}')
     search = ToolCallEvent("search", arguments="{}")
@@ -92,7 +95,7 @@ def test_subagents_name_delegated_results_and_errors() -> None:
         Turn("planner", 'calls task_researcher({"objective": "find prices"})'),
         Turn("researcher", "$60"),
         Turn("planner", 'calls task_researcher({"objective": "find prices again"})'),
-        Turn("researcher", "error: timeout"),
+        Turn("tool:task_researcher", "error: timeout"),
         Turn("planner", "calls search({})"),
         Turn("tool:search", "no results"),
     )
@@ -128,6 +131,81 @@ async def test_run_agent_delegation_is_named_by_subagent_names() -> None:
     )
 
 
+async def _run_delegation(
+    calculator: Agent, worker_stream: MemoryStream, call: ToolCallEvent, **planner_options: Any
+) -> TraceConversation:
+    pytest.importorskip("opentelemetry.sdk")
+    from ag2.eval import run_agent
+
+    tool_middleware = planner_options.pop("tool_middleware", ())
+    planner = Agent(
+        "Planner",
+        tools=[calculator.as_tool(description="Do arithmetic.", stream=worker_stream, middleware=tool_middleware)],
+        **planner_options,
+    )
+    replies = TestConfig(call, ModelResponse(ModelMessage("The answer is 5.")), raise_tool_errors=False)
+
+    result = await run_agent("What is 2 + 2?", agent=planner, model_config=replies)
+    [task] = result.tasks
+    converted = conversation_from_trace(
+        task.trace, question="Q", ground_truth="4", agent_name="Planner", subagents=subagent_names(planner)
+    )
+    assert converted is not None
+    return converted
+
+
+@pytest.mark.asyncio()
+async def test_rejected_delegation_is_not_the_subagents_turn() -> None:
+    """Review reproduction: arguments the tool rejects never reach the sub-agent, so its error is not the sub-agent's."""
+    calculator = Agent("Calculator", config=TestConfig(ModelResponse(ModelMessage("2 + 2 = 5"))))
+    worker_stream = MemoryStream()
+
+    converted = await _run_delegation(calculator, worker_stream, ToolCallEvent(name="task_Calculator", arguments="{}"))
+
+    assert await worker_stream.history.get_events() == []
+    planner_call, rejection, answer = converted.conversation.history
+    assert planner_call == Turn("Planner", "calls task_Calculator({})")
+    assert rejection.name == "tool:task_Calculator"
+    assert rejection.content.startswith("error: ")
+    assert "objective" in rejection.content
+    assert answer == Turn("Planner", "The answer is 5.")
+    assert "Calculator" not in {turn.name for turn in converted.conversation.history}
+
+
+@pytest.mark.asyncio()
+async def test_denied_delegation_is_not_the_subagents_turn() -> None:
+    """An approval denial answers in the tool's place, so a tool with middleware is not mapped to its sub-agent."""
+    calculator = Agent("Calculator", config=TestConfig(ModelResponse(ModelMessage("2 + 2 = 5"))))
+    worker_stream = MemoryStream()
+
+    converted = await _run_delegation(
+        calculator,
+        worker_stream,
+        ToolCallEvent(name="task_Calculator", arguments='{"objective": "add 2 and 2"}'),
+        tool_middleware=[approval_required()],
+        hitl_hook=lambda event: HumanMessage("n"),
+    )
+
+    assert await worker_stream.history.get_events() == []
+    assert converted.conversation.history[1] == Turn("tool:task_Calculator", "User denied the tool call request")
+    assert "Calculator" not in {turn.name for turn in converted.conversation.history}
+
+
+@pytest.mark.asyncio()
+async def test_failed_subtask_is_the_subagents_turn() -> None:
+    calculator = Agent("Calculator", config=TestConfig(ToolCallEvent(name="missing_tool", arguments="{}")))
+    worker_stream = MemoryStream()
+
+    converted = await _run_delegation(
+        calculator, worker_stream, ToolCallEvent(name="task_Calculator", arguments='{"objective": "add 2 and 2"}')
+    )
+
+    assert await worker_stream.history.get_events() != []
+    failure = converted.conversation.history[1]
+    assert failure.name == "Calculator"
+    assert failure.content.startswith("Sub-task 'Calculator' failed: ")
+
+
 def test_subagent_names_reads_delegation_tools() -> None:
     @tool
     def search(query: str) -> str:
@@ -136,12 +214,16 @@ def test_subagent_names_reads_delegation_tools() -> None:
     coder = Agent("coder")
     researcher = Agent("researcher")
     writer = Agent("writer")
+    reviewer = Agent("reviewer")
+    auditor = Agent("auditor")
     planner = Agent(
         "planner",
         tools=[
             coder.as_tool(description="Write code."),
             subagent_tool(researcher, description="Research.", name="ask_research"),
             Toolkit(writer.as_tool(description="Write.")),
+            reviewer.as_tool(description="Review.", middleware=[approval_required()]),
+            Toolkit(auditor.as_tool(description="Audit."), middleware=[approval_required()]),
             background_agent_tool(coder, description="Code in the background."),
             search,
         ],

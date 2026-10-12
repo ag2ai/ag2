@@ -62,8 +62,9 @@ def conversation_from_trace(
     the mapping is best effort:
 
     * a model response with text, and each tool call, is a turn by ``agent_name``;
-    * a tool result or tool error is a turn by ``tool:<tool name>``, or by the
-      sub-agent ``subagents`` maps that tool to;
+    * a tool result is a turn by ``tool:<tool name>``, or by the sub-agent
+      ``subagents`` maps that tool to;
+    * a tool error is a turn by ``tool:<tool name>``, even for a delegation tool;
     * a completed or failed sub-task is a turn by the sub-agent that ran it
       (``TaskCompleted.agent_name`` / ``TaskFailed.agent_name``).
 
@@ -72,6 +73,11 @@ def conversation_from_trace(
     A trace rebuilt from spans, as :func:`ag2.eval.run_agent` and the OTEL
     trace sources produce, has no sub-task events: a sub-agent's work appears
     only as its delegation tool's result, so pass ``subagents`` to name it.
+    A delegation tool returns a result only after running its sub-agent, and
+    a sub-agent that fails comes back as a ``Sub-task '<name>' failed: ...``
+    result. A delegation tool's error is raised before or around the
+    sub-agent, for example when the caller's arguments fail validation and the
+    sub-agent never starts, so it stays with the tool.
 
     Args:
         trace: The captured run.
@@ -79,7 +85,8 @@ def conversation_from_trace(
         ground_truth: The expected answer.
         agent_name: Speaker of the traced agent's own turns.
         subagents: Delegation tool name to the sub-agent it runs, such as
-            :func:`subagent_names` returns.
+            :func:`subagent_names` returns. Only those tools' results are
+            renamed.
 
     Returns:
         The conversation and each turn's event index, or ``None`` when the
@@ -105,10 +112,15 @@ def subagent_names(agent: "Agent") -> dict[str, str]:
     """Map each delegation tool of ``agent`` to the name of the sub-agent it runs.
 
     Covers tools made with :meth:`ag2.Agent.as_tool` or ``subagent_tool``,
-    under their default or a custom name, including inside toolkits. A
-    background sub-agent tool returns a task id rather than the sub-agent's
-    answer, so it is left out, as are tools passed to ``ask`` instead of
-    ``agent.tools``.
+    under their default or a custom name, including inside toolkits. Only
+    tools whose result can come from nothing but the sub-agent are mapped:
+
+    * a tool with its own middleware is left out, because middleware such as
+      ``approval_required`` can return a result in the tool's place, without
+      starting the sub-agent;
+    * a background sub-agent tool returns a task id rather than the
+      sub-agent's answer, so it is left out;
+    * tools passed to ``ask`` instead of ``agent.tools`` are not seen.
     """
     return dict(_subagent_names(agent.tools))
 
@@ -116,16 +128,17 @@ def subagent_names(agent: "Agent") -> dict[str, str]:
 def _subagent_names(tools: Iterable[Tool]) -> Iterable[tuple[str, str]]:
     for tool in tools:
         if isinstance(tool, SubagentTool):
-            yield tool.name, tool.agent.name
+            if not tool.middleware:
+                yield tool.name, tool.agent.name
         elif isinstance(tool, Toolkit):
             yield from _subagent_names(tool.tools)
 
 
 def _turn(event: BaseEvent, agent_name: str, subagents: Mapping[str, str]) -> Turn | None:
     if isinstance(event, ToolErrorEvent):
-        return Turn(name=_tool_speaker(event.name, subagents), content=f"error: {event.error}")
+        return Turn(name=f"tool:{event.name}", content=f"error: {event.error}")
     if isinstance(event, ToolResultEvent):
-        return Turn(name=_tool_speaker(event.name, subagents), content=_result_text(event))
+        return Turn(name=_result_speaker(event.name, subagents), content=_result_text(event))
     if isinstance(event, ToolCallEvent):
         return Turn(name=agent_name, content=f"calls {event.name}({event.arguments})")
     if isinstance(event, ModelResponse):
@@ -137,7 +150,7 @@ def _turn(event: BaseEvent, agent_name: str, subagents: Mapping[str, str]) -> Tu
     return None
 
 
-def _tool_speaker(tool_name: str | None, subagents: Mapping[str, str]) -> str:
+def _result_speaker(tool_name: str | None, subagents: Mapping[str, str]) -> str:
     if tool_name is not None and tool_name in subagents:
         return subagents[tool_name]
     return f"tool:{tool_name}"

@@ -45,6 +45,10 @@ def probe_failure_attribution(
         agent_name: Speaker assigned to the traced agent's own turns.
         subagents: Delegation tool name to the sub-agent it runs, so delegated
             results are blamed on that sub-agent; see :func:`subagent_names`.
+            Traces from :func:`ag2.eval.run_agent` and the OTEL sources need
+            it: without it a delegated result is blamed on
+            ``tool:<tool name>``. A delegation tool's errors, such as rejected
+            arguments, stay with ``tool:<tool name>`` either way.
         ground_truth_field: Field of ``reference_outputs`` holding the expected
             answer. When omitted, a single-field ``reference_outputs`` uses its
             only value and anything else is shown as JSON.

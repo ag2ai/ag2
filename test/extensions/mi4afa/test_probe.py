@@ -74,10 +74,11 @@ def test_fit_needs_two_rows() -> None:
         LogisticProbe.fit(torch.randn(1, 16), torch.ones(1))
 
 
-@pytest.mark.parametrize("label", [0.0, 1.0])
-def test_fit_needs_both_classes(label: float) -> None:
-    with pytest.raises(ValueError, match="mistake and non-mistake rows"):
+@pytest.mark.parametrize(("label", "one_turn_hint"), [(0.0, False), (1.0, True)])
+def test_fit_needs_both_classes(label: float, one_turn_hint: bool) -> None:
+    with pytest.raises(ValueError, match="mistake and non-mistake rows") as raised:
         LogisticProbe.fit(torch.randn(4, 3), torch.full((4,), label))
+    assert ("one-turn conversations" in str(raised.value)) is one_turn_hint
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf")])

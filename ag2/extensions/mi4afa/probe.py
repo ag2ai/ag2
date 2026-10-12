@@ -69,9 +69,10 @@ class LogisticProbe:
             raise ValueError(f"a probe needs at least two training rows, got {len(features)}")
         positives = int(labels.sum())
         if positives == 0 or positives == len(labels):
+            hint = "; one-turn conversations have no non-mistake turn" if positives else ""
             raise ValueError(
                 f"a probe needs mistake and non-mistake rows, got {positives} of {len(labels)} rows labelled "
-                "as the mistake; one-turn conversations have no non-mistake turn"
+                f"as the mistake{hint}"
             )
         if not torch.isfinite(features).all():
             raise ValueError("training features contain NaN or infinity")
