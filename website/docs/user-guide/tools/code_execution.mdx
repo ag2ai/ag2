@@ -47,7 +47,7 @@ See the [Built-in Tools page](/docs/user-guide/tools/builtin_tools#code-executio
 !!! note "When to use this"
     You need custom packages or images, persistent state across calls, your own infrastructure, or you're working with a provider that doesn't have a native code-execution capability.
 
-Three environments are available: **Tenki** and **Daytona** (hosted), plus **Docker** (local container). You can also implement your own — see the **Custom** tab below.
+Built-in environments include **Tenki**, **Daytona**, and [**Sprites**](/docs/user-guide/extensions/sprites) (hosted), plus **Docker** (local container). You can also implement your own — see the **Custom** tab below.
 
 <Tabs>
   <Tab title="Tenki">
@@ -177,7 +177,7 @@ async with DaytonaEnvironment(image="python:3.12") as env:
 # sandbox deleted here
 ```
 
-The same pattern works with `TenkiEnvironment`, `DockerEnvironment` (container stopped + removed), and any other backend that implements `__aenter__` / `__aexit__`.
+The same pattern works with `TenkiEnvironment` and `DockerEnvironment` (container stopped + removed). [SpritesEnvironment](/docs/user-guide/extensions/sprites) also supports async context management, but leaves the caller-owned Sprite and SDK client open.
 
 ### Credentials and runtime config
 
