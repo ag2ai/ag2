@@ -16,6 +16,7 @@ from openai.types.chat import (
 from openai.types.chat.completion_create_params import PromptCacheOptions, WebSearchOptions
 from openai.types.responses import ServiceTier as ResponseServiceTier
 from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
+from openai.types.shared_params import Reasoning
 from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
@@ -205,6 +206,7 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     prompt_cache_key: str | Omit
     prompt_cache_options: ResponsePromptCacheOptions | Omit
     prompt_cache_diagnostics: bool
+    reasoning: Reasoning | None | Omit
     service_tier: ResponseServiceTier | None | Omit
     user: str
     truncation: Truncation | None | Omit
@@ -247,6 +249,7 @@ class OpenAIResponsesConfig(ModelConfig):
     # reuses the originating turn's client. A fresh `agent.ask(...)` builds a new one and
     # starts over. An explicit `prompt_cache_options["comparison_response_id"]` outranks it.
     prompt_cache_diagnostics: bool = False
+    reasoning: Reasoning | None | Omit = omit
     service_tier: ResponseServiceTier | None | Omit = omit
     user: str = ""
     truncation: Truncation | None | Omit = omit
@@ -273,6 +276,7 @@ class OpenAIResponsesConfig(ModelConfig):
             prompt_cache_key=self.prompt_cache_key,
             # an empty object is not a setting, and a model without the feature 400s on one
             prompt_cache_options=self.prompt_cache_options or omit,
+            reasoning=self.reasoning,
             service_tier=self.service_tier,
             truncation=self.truncation,
         )

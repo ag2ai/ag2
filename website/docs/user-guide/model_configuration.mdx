@@ -436,6 +436,21 @@ For full control (e.g. enabling `include_thoughts`), pass a `google.genai.types.
 
 The number of thinking tokens consumed is reported on `ModelResponse.usage.thinking_tokens` and emitted as the `gen_ai.usage.thinking_tokens` OpenTelemetry attribute by `TelemetryMiddleware`.
 
+### Controlling OpenAI Reasoning
+
+`OpenAIConfig` takes the Chat Completions `reasoning_effort` directly. `OpenAIResponsesConfig` takes the Responses API `reasoning` object, which also lets you request a reasoning summary:
+
+```python linenums="1"
+from ag2.config import OpenAIResponsesConfig
+
+config = OpenAIResponsesConfig(
+    model="gpt-5-mini",
+    reasoning={"effort": "low", "summary": "auto"},
+)
+```
+
+When a summary is requested, it is emitted as reasoning events on the stream.
+
 ### Ollama Configuration
 
 `OllamaConfig` connects to a local or hosted [Ollama](https://docs.ollama.com/api/introduction){.external-link target="_blank"} server through the official `ollama` SDK (`ollama>=0.5.2`). Install the optional dependency with `pip install "ag2[ollama]"`.
