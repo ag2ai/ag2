@@ -30,7 +30,7 @@ from openai.types.responses import (
 )
 from openai.types.responses.response_create_params import PromptCacheOptions
 from openai.types.responses.response_output_item import ImageGenerationCall
-from openai.types.shared_params import Metadata
+from openai.types.shared_params import Metadata, Reasoning
 from typing_extensions import Required
 
 from ag2.config.client import LLMClient
@@ -88,6 +88,7 @@ class CreateOptions(TypedDict, total=False):
     metadata: Metadata | None | Omit
     prompt_cache_key: str | Omit
     prompt_cache_options: PromptCacheOptions | Omit
+    reasoning: Reasoning | None | Omit
     service_tier: ServiceTier | None | Omit
     user: str
     stream: bool
