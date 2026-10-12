@@ -61,7 +61,7 @@ if __name__ == "__main__":
 
 ### Rename the tool, or return a schema
 
-The conversational tool takes a required `message` and an optional `context` string prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`. If the agent has a `response_schema`, that schema is advertised verbatim as the tool's `outputSchema` and validated replies come back as `structuredContent`:
+The conversational tool takes a required `message` and an optional `context` string prepended to it. Rename it with `tool_name=` and reword its description with `tool_description=`. With an object response schema, validated replies come back as `structuredContent`. For a Pydantic model, the tool's `outputSchema` describes the serialized reply, while the schema used to validate the LLM's response stays unchanged:
 
 ```python linenums="1"
 from pydantic import BaseModel
@@ -81,6 +81,8 @@ agent = Agent(
 )
 app = MCPServer(agent, tool_name="forecast")
 ```
+
+Pydantic replies use `model_dump(mode="json")`, respecting each model's `serialize_by_alias` setting, including nested models. For example, `item_id: str = Field(alias="itemId")` accepts `itemId` from the LLM but returns `item_id` by default; enabling alias serialization returns `itemId` instead. The MCP output schema follows the returned keys and serialized field types. The original LLM response remains in text content.
 
 Presentation metadata (`name`, `version`, `title`, `description`, `instructions`, `website_url`, `icons`) is never derived from the agent — `instructions` in particular is client-facing "how to use this server" guidance, not the agent's system prompt. Pass it explicitly when you want it.
 
@@ -305,7 +307,7 @@ The handle comes back twice, for two different readers:
 - in a **text content block**, so the model driving the tool can read it and carry it into its next call without any help from the host;
 - in the result's **`_meta`**, under the key `ai.ag2/conversation`, for clients threading it programmatically.
 
-`structuredContent` is deliberately left alone: on this tool it is the agent's response schema and is advertised verbatim as `outputSchema`, which MCP requires structured content to conform to.
+`structuredContent` is reserved for the agent's validated, serialized reply, which must conform to the advertised `outputSchema`. The conversation handle is never mixed into that data.
 
 !!! note "The handle comes back on every reply"
     Both readers get the handle whether or not the caller ever names a conversation, and in both protocol eras — so a handshake-era client that never touches the `conversation` argument still sees the extra content block and `_meta` key. A client that asserts on the exact shape of a reply will notice; one that reads the first text block, or `structuredContent`, will not.

@@ -92,11 +92,10 @@ def _json_default(obj: Any) -> Any:
     return str(obj)
 
 
-def _render_tool_result_part(part: Input) -> str:
+def _render_tool_result_part(part: Input) -> str | None:
     """Render one ``Input`` part of a tool result as span-attribute text.
 
-    Binary parts render as a descriptor, never their bytes. Mirrors
-    ``_stringify_tool_result`` in ``ag2/ag_ui/stream.py``.
+    ``None`` for a binary or file part: it has no text, and none is invented for it.
     """
     if isinstance(part, TextInput):
         return part.content
@@ -108,10 +107,8 @@ def _render_tool_result_part(part: Input) -> str:
             return repr(part.data)
     if isinstance(part, UrlInput):
         return part.url
-    if isinstance(part, FileIdInput):
-        return f"[file:{part.file_id}]"
-    if isinstance(part, BinaryInput):
-        return f"[binary:{part.media_type} {len(part.data)}B]"
+    if isinstance(part, (FileIdInput, BinaryInput)):
+        return None
     return repr(part)
 
 
@@ -123,7 +120,7 @@ def _serialize_tool_result(result: ToolResult, max_chars: int | None) -> tuple[s
     because the attribute is read as free text. ``max_chars=None`` disables
     truncation.
     """
-    rendered = "\n".join(_render_tool_result_part(p) for p in result.parts)
+    rendered = "\n".join(text for p in result.parts if (text := _render_tool_result_part(p)) is not None)
     if max_chars is None or len(rendered) <= max_chars:
         return rendered, False
     keep = max(max_chars - len(_TOOL_RESULT_TRUNCATION_MARKER), 0)

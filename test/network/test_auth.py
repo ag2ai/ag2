@@ -241,7 +241,7 @@ class TestHelloFrameAuthWiring:
             frame = await _read_frame(client)
             assert isinstance(frame, ErrorFrame)
             assert frame.code == "auth_failed"
-            assert "unknown auth scheme" in frame.message
+            assert "does not match" in frame.message
             assert passport.agent_id not in hub._agent_to_endpoint
         finally:
             await client.close()

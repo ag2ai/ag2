@@ -33,7 +33,9 @@ try:
     # ``add_event`` is a no-op on a non-recording span.
     from opentelemetry import trace as _otel_trace
 except ImportError:
-    _otel_trace = None
+    _HAS_OTEL = False
+else:
+    _HAS_OTEL = True
 
 if TYPE_CHECKING:
     from ..hub import Hub
@@ -60,7 +62,7 @@ class HubBackedCheckpointStore:
     async def write(self, task_id: str, state: dict[str, Any]) -> None:
         payload = dict(state)
         await self._hub.checkpoint_task(task_id, payload)
-        if _otel_trace is not None:
+        if _HAS_OTEL:
             # Pin a marker on the active task/turn span — checkpoints bypass
             # the envelope path, so this is the only place they surface in a
             # trace. ``payload`` already serialised cleanly inside the hub
@@ -75,7 +77,7 @@ class HubBackedCheckpointStore:
 
     async def read(self, task_id: str) -> dict[str, Any] | None:
         result = await self._hub.read_task_checkpoint(task_id)
-        if _otel_trace is not None:
+        if _HAS_OTEL:
             # On a resume read, ``task_id`` is the prior task being resumed
             # from — so this event on the new run's span is the link back.
             _otel_trace.get_current_span().add_event(

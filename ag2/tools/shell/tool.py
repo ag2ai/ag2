@@ -58,15 +58,15 @@ class SandboxShellTool(Tool):
                      ``DaytonaEnvironment``). ``None`` defaults to a
                      local subprocess (``LocalEnvironment()``).
         allowed: Whitelist of command prefixes, matched word by word. Setting it
-                 (or ``readonly``) switches on restricted mode: the command is split
-                 into argv once and run without a shell, so pipes, redirects,
-                 globs, variables and brace expansion are not available.
-        blocked: Blacklist of command prefixes. Best-effort only: it matches
-                 just the head command's prefix, so chaining (``;`` / ``|`` /
-                 ``&&`` / ``$(...)``) bypasses it (``echo x; rm -rf ~`` is not
-                 blocked by ``blocked=["rm"]``). It is **not** a security
-                 boundary — use ``allowed`` / ``readonly`` or an isolated
-                 container backend for that.
+                 (or ``readonly``, ``blocked`` or ``ignore``) switches on restricted
+                 mode: the command is split into argv once and run without a shell,
+                 so pipes, redirects, globs, variables and brace expansion are not
+                 available.
+        blocked: Blacklist of command prefixes, matched word by word against the
+                 argv (the program by its base name). It cannot stop a program
+                 that runs another one (``sh -c``, ``env``, ``xargs``), so it is
+                 not a security boundary on its own — use ``allowed`` /
+                 ``readonly`` or an isolated container backend for that.
         ignore: Glob patterns of paths that may not appear in a command.
         readonly: Restrict to commands that cannot write files or run other
                   programs (cat/ls/grep/…), in restricted mode. Ignored when

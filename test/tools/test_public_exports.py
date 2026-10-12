@@ -93,10 +93,10 @@ class TestPublicReturnTypesAreImportable:
 
         assert isinstance(my_tool, FunctionTool)
 
-    def test_agent_as_tool_returns_function_tool(self) -> None:
+    def test_agent_as_tool_returns_tool(self) -> None:
         child = Agent("child", prompt="You are a child agent.")
 
-        assert isinstance(child.as_tool(description="Delegate to the child."), FunctionTool)
+        assert isinstance(child.as_tool(description="Delegate to the child."), Tool)
 
     def test_toolkit_tool_decorator_returns_function_tool(self) -> None:
         toolkit = Toolkit()

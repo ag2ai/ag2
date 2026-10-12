@@ -32,9 +32,10 @@ import dataclasses
 import fnmatch
 import json
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ag2.knowledge import KnowledgeStore
 from ag2.task import TERMINAL_TASK_STATES, TaskMetadata, TaskState
@@ -60,6 +61,7 @@ from ..envelope import (
     EV_CHANNEL_INVITE_ACK,
     EV_CHANNEL_INVITE_REJECT,
     EV_CHANNEL_OPENED,
+    EV_TASK_CANCEL_REQUEST,
     EV_TEXT,
     Envelope,
 )
@@ -105,10 +107,12 @@ from .layout import (
     channels_root,
     inbox_cursor_path,
     passport_path,
+    remote_owners_path,
     resume_path,
     rule_path,
     skill_path,
     task_checkpoint_path,
+    task_checkpoint_writers_path,
     task_metadata_path,
     tasks_root,
     wal_path,
@@ -191,12 +195,137 @@ def _is_protocol_event(event_type: str) -> bool:
     return _is_channel_protocol_event(event_type) or _is_task_event(event_type)
 
 
+def _without_claim(passport: Passport) -> Passport:
+    """Copy of ``passport`` whose ``auth`` keeps the scheme but no claim."""
+    return dataclasses.replace(passport, auth=dataclasses.replace(passport.auth, claim={}))
+
+
+def _public_passport(passport: Passport) -> dict[str, Any]:
+    """Wire form of ``passport``: never carries an ``auth.claim``."""
+    return _without_claim(passport).to_dict()
+
+
+def _malformed_field(frame: Frame) -> str | None:
+    """Name the first field of an inbound frame whose JSON type is wrong, or ``None``.
+
+    Frames arrive as decoded JSON, so their annotated types are not
+    enforced; a string field holding a list would otherwise raise deep in
+    the handler and drop the connection.
+    """
+    if isinstance(frame, HelloFrame):
+        fields: tuple[tuple[str, object, bool], ...] = (
+            ("name", frame.name, False),
+            ("auth_scheme", frame.auth_scheme, False),
+            ("since_envelope_id", frame.since_envelope_id, True),
+        )
+    elif isinstance(frame, ReceiptFrame):
+        fields = (
+            ("envelope_id", frame.envelope_id, False),
+            ("status", frame.status, False),
+            ("recipient_id", frame.recipient_id, False),
+            ("channel_id", frame.channel_id, False),
+            ("reason", frame.reason, False),
+        )
+    elif isinstance(frame, RequestFrame):
+        if not isinstance(frame.params, dict):
+            return "params"
+        fields = (("request_id", frame.request_id, False), ("op", frame.op, False))
+    else:
+        return None
+    for name, value, optional in fields:
+        if not (isinstance(value, str) or (optional and value is None)):
+            return name
+    return None
+
+
+def _wire_task_ids(params: dict[str, Any]) -> list[object]:
+    """Task ids a wire request names: top-level, in task metadata, or on an envelope."""
+    ids = [params.get("task_id")]
+    for nested in ("metadata", "envelope"):
+        if isinstance(params.get(nested), dict):
+            ids.append(params[nested].get("task_id"))
+    return [task_id for task_id in ids if task_id is not None]
+
+
 def _expires_at(now_iso: str, ttl_seconds: int) -> str:
     """Compute ``expires_at`` ISO timestamp from a base + duration."""
     if ttl_seconds <= 0:
         return ""
     base = datetime.fromisoformat(now_iso)
     return (base + timedelta(seconds=ttl_seconds)).isoformat()
+
+
+# Authorization scope of every wire control-plane op, enforced by
+# ``Hub._authorize_request``. ``register``, ``post_envelope``,
+# ``observe_task`` and ``list_channels`` carry their identity in a nested
+# or optional param and are checked there directly; any other op missing from these tables is
+# rejected, so a new op must be classified before it is reachable.
+
+# Task ids a wire client may name. They become store path segments, so
+# separators and dot-only names are excluded; ``uuid4().hex`` and
+# human-readable ids like ``task-1`` fit.
+_TASK_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+
+# Longest free-text field (a peer cancel ``reason``, a ``mirror_failed``
+# message) a wire client may place in front of another agent or the audit
+# log.
+_MAX_WIRE_TEXT = 500
+
+# Payload keys of ``TaskMirror``'s ``mirror_failed`` report — the only task
+# event a wire client may fire.
+_MIRROR_FAILURE_KEYS: frozenset[str] = frozenset({"op", "owner_id", "channel_id", "exc_type", "exc_message"})
+
+# Shape of a hub-minted agent id (``make_id``). A name of this shape could
+# be mistaken for another agent's id, so none may be registered.
+_AGENT_ID_RE = re.compile(r"[0-9a-f]{32}")
+
+# Ops open to any connection: hub-wide discovery reads. Task records are
+# not among them: ``get_task`` / ``list_tasks`` show a task only to its
+# owner and to the participants of its channel (``Hub._task_visible``). ``register`` is
+# open too, except that a ``remote_agent`` needs an owner (see
+# ``Hub._authorize_request``).
+_UNSCOPED_OPS: frozenset[str] = frozenset({
+    "get_agent",
+    "get_resume",
+    "get_skill",
+    "get_rule",
+    "find_agent_id",
+    "names_for",
+    "list_agents",
+})
+
+# Ops that act as, or read the private state of, the agent named by the
+# mapped param; that agent must be bound to the calling connection.
+_AGENT_SCOPED_OPS: dict[str, str] = {
+    "set_resume": "agent_id",
+    "set_skill": "agent_id",
+    "set_rule": "agent_id",
+    "unregister": "agent_id",
+    "create_channel": "creator_id",
+    "can_send": "sender_id",
+    "pending_turns_for": "agent_id",
+    "report_turn_failure": "agent_id",
+    "record_observation": "owner_id",
+}
+
+# Ops on ``params["channel_id"]``; an agent bound to the calling
+# connection must be one of the channel's participants.
+_CHANNEL_SCOPED_OPS: frozenset[str] = frozenset({
+    "get_channel",
+    "close_channel",
+    "read_wal",
+    "find_envelope_by_causation",
+})
+
+# Ops on ``params["task_id"]``; when the hub has observed the task, its
+# owner must be bound to the calling connection. A checkpoint of a task
+# the hub has not observed belongs to the agents of its first writer.
+_TASK_SCOPED_OPS: frozenset[str] = frozenset({
+    "update_task",
+    "fire_task_event",
+    "checkpoint_task",
+    "read_task_checkpoint",
+})
 
 
 class Hub:
@@ -217,6 +346,7 @@ class Hub:
         expectation_sweep_interval: float = 10.0,
         invite_ack_timeout: float = 30.0,
         tracer_provider: object | None = None,
+        allow_remote_agent_registration: bool = False,
     ) -> None:
         # __init__ stores params; side effects deferred to start()/hydrate().
         self._store = store
@@ -225,6 +355,9 @@ class Hub:
         self._ttl_sweep_interval = ttl_sweep_interval
         self._expectation_sweep_interval = expectation_sweep_interval
         self._invite_ack_timeout = invite_ack_timeout
+        # Off by default: federation operators register ``remote_agent``
+        # identities in-process; wire clients may only when this is set.
+        self._allow_remote_agent_registration = allow_remote_agent_registration
 
         # Opt-in: when ``tracer_provider`` is given, the hub brackets WAL
         # append + dispatch in a span and injects its W3C traceparent into
@@ -259,6 +392,8 @@ class Hub:
         self._rules: dict[str, Rule] = {}
         self._skills: dict[str, str] = {}
         self._name_to_id: dict[str, str] = {}
+        # remote_agent id → agents that own it (registered over the wire).
+        self._remote_owners: dict[str, list[str]] = {}
         # capability name → set of agent_ids that claim or have observed it.
         # Persisted as registry/by_capability.json on every mutation
         # (rebuilt from resumes on hydrate — the file is a derived cache).
@@ -276,11 +411,18 @@ class Hub:
         # Task caches (observed; not owned).
         self._tasks: dict[str, TaskMetadata] = {}
         self._channel_tasks: dict[str, set[str]] = {}
-        # task_ids whose terminal observation has been recorded into
-        # the owner's ``Resume.observed`` already. Prevents double-counting
-        # when the same task receives multiple terminal events (e.g. a
-        # channel-cascade EXPIRED followed by an owner-emitted COMPLETED).
-        self._observed_task_ids: set[str] = set()
+        # (owner_id, task_id) pairs whose terminal observation has been
+        # recorded into the owner's ``Resume.observed`` already. Prevents
+        # double-counting when the same task receives multiple terminal
+        # events (e.g. a channel-cascade EXPIRED followed by an
+        # owner-emitted COMPLETED). Keyed by owner so one agent's report
+        # never suppresses another's for the same id.
+        self._observed_task_ids: set[tuple[str, str]] = set()
+        # task_id → non-participants that already sent it a peer cancel
+        # request (each may send one). Checked and extended under the
+        # channel's WAL lock; dropped when the task turns terminal and
+        # rebuilt from active-channel WALs on ``hydrate()``.
+        self._peer_cancel_senders: dict[str, set[str]] = {}
 
         # Per-recipient outstanding-envelope counter for ``InboxBlock.max_pending``
         # enforcement. Incremented on dispatch to that recipient,
@@ -346,6 +488,8 @@ class Hub:
         # Per-channel locks for WAL append + dispatch ordering.
         self._channel_locks: dict[str, asyncio.Lock] = {}
         self._registration_lock = asyncio.Lock()
+        # Serialises the read-then-write that records a checkpoint's first writer.
+        self._checkpoint_claim_lock = asyncio.Lock()
 
         self._ttl_sweeper: _IntervalSweeper | None = None
         self._expectation_sweeper: _IntervalSweeper | None = None
@@ -378,6 +522,7 @@ class Hub:
         invite_ack_timeout: float = 30.0,
         tracer_provider: object | None = None,
         register_default_adapters: bool = True,
+        allow_remote_agent_registration: bool = False,
     ) -> "Hub":
         """Construct + hydrate from disk + start sweepers. Production entry point.
 
@@ -392,6 +537,11 @@ class Hub:
         Set ``expectation_sweep_interval=0`` to disable the expectation
         sweeper entirely (tests usually do this to avoid background
         timer noise).
+
+        ``allow_remote_agent_registration=True`` lets wire clients
+        register ``kind="remote_agent"`` identities (owned by the
+        registering connection's agents); by default only in-process
+        callers can.
         """
         hub = cls(
             store,
@@ -401,6 +551,7 @@ class Hub:
             expectation_sweep_interval=expectation_sweep_interval,
             invite_ack_timeout=invite_ack_timeout,
             tracer_provider=tracer_provider,
+            allow_remote_agent_registration=allow_remote_agent_registration,
         )
         if register_default_adapters:
             hub.register_adapter(ConsultingAdapter())
@@ -427,6 +578,7 @@ class Hub:
         self._rules.clear()
         self._skills.clear()
         self._name_to_id.clear()
+        self._remote_owners.clear()
         self._capability_index.clear()
         self._channels.clear()
         self._active_channels.clear()
@@ -435,6 +587,7 @@ class Hub:
         self._channel_tasks.clear()
         self._inbox_cursors.clear()
         self._causation_index.clear()
+        self._peer_cancel_senders.clear()
 
         # Identities.
         agent_children = await self._store.list(agents_root())
@@ -653,6 +806,11 @@ class Hub:
         recognised values, but tenants may emit additional kinds.
         """
         await self._fan_out("on_task_event", task_id, kind, payload)
+
+    @property
+    def auth_schemes(self) -> list[str]:
+        """Auth schemes this hub accepts at registration and re-attach."""
+        return self._auth.schemes()
 
     @property
     def audit_log(self) -> AuditLog:
@@ -1043,6 +1201,8 @@ class Hub:
             # registration's passport / resume / rule / SKILL.md would
             # be orphaned on disk under a now-unreachable agent_id.
             # Tenants must explicitly ``unregister`` first.
+            if _AGENT_ID_RE.fullmatch(passport.name) or passport.name in self._passports:
+                raise ProtocolError(f"name {passport.name!r} is, or has the shape of, an agent id")
             if passport.name in self._name_to_id:
                 raise ProtocolError(
                     f"name {passport.name!r} already registered "
@@ -1052,16 +1212,19 @@ class Hub:
             agent_id = make_id()
             passport.agent_id = agent_id
             passport.created_at = self._clock()
+            # The claim proved the identity at registration; the hub keeps
+            # only the scheme. A remote agent's claim is proxy routing data.
+            stored = passport if passport.effective_kind == "remote_agent" else _without_claim(passport)
 
             effective_rule = rule if rule is not None else Rule()
 
-            await self._persist_passport(passport)
+            await self._persist_passport(stored)
             await self._persist_resume(agent_id, resume)
             await self._persist_rule(agent_id, effective_rule)
             if skill_md is not None:
                 await self._persist_skill(agent_id, skill_md)
 
-            self._passports[agent_id] = passport
+            self._passports[agent_id] = stored
             self._resumes[agent_id] = resume
             self._rules[agent_id] = effective_rule
             if skill_md is not None:
@@ -1079,7 +1242,7 @@ class Hub:
             "on_agent_event",
             agent_id,
             "registered",
-            {"passport": passport, "at": self._clock()},
+            {"passport": stored, "at": self._clock()},
         )
         return passport
 
@@ -1092,6 +1255,7 @@ class Hub:
             self._resumes.pop(agent_id, None)
             self._rules.pop(agent_id, None)
             self._skills.pop(agent_id, None)
+            self._remote_owners.pop(agent_id, None)
             if passport is not None and self._name_to_id.get(passport.name) == agent_id:
                 self._name_to_id.pop(passport.name, None)
 
@@ -1122,6 +1286,7 @@ class Hub:
             await self._store.delete(resume_path(agent_id))
             await self._store.delete(rule_path(agent_id))
             await self._store.delete(skill_path(agent_id))
+            await self._store.delete(remote_owners_path(agent_id))
 
             # Drop inbox accounting so a future re-register with a
             # different agent_id starts from zero.
@@ -1155,7 +1320,8 @@ class Hub:
         return default if default is not None else agent_id
 
     async def get_agent(self, name_or_id: str) -> Passport:
-        agent_id = self._name_to_id.get(name_or_id, name_or_id)
+        # An exact agent id wins over a name.
+        agent_id = name_or_id if name_or_id in self._passports else self._name_to_id.get(name_or_id, name_or_id)
         passport = self._passports.get(agent_id)
         if passport is None:
             raise NotFoundError(f"agent not found: {name_or_id}")
@@ -1353,7 +1519,7 @@ class Hub:
         """
         if outcome not in TERMINAL_TASK_STATES:
             return
-        if task_id is not None and task_id in self._observed_task_ids:
+        if task_id is not None and (owner_id, task_id) in self._observed_task_ids:
             return
         resume = self._resumes.get(owner_id)
         if resume is None:
@@ -1379,7 +1545,7 @@ class Hub:
             await self._persist_capability_index()
 
         if task_id is not None:
-            self._observed_task_ids.add(task_id)
+            self._observed_task_ids.add((owner_id, task_id))
 
         await self._fan_out(
             "on_agent_event",
@@ -1762,6 +1928,7 @@ class Hub:
             if state in TERMINAL_TASK_STATES:
                 metadata.completed_at = self._clock()
                 terminal_reached = True
+                self._peer_cancel_senders.pop(task_id, None)
         await self._persist_task_metadata(metadata)
         if terminal_reached:
             # Mirror the terminal fan-out ``_transition_task`` performs, so
@@ -1909,6 +2076,16 @@ class Hub:
             raise ProtocolError(f"channel {envelope.channel_id!r} is {metadata.state.value}")
         if not _is_protocol_event(envelope.event_type) and metadata.state != ChannelState.ACTIVE:
             raise ProtocolError(f"channel {envelope.channel_id!r} not active (state={metadata.state.value})")
+        # Every event comes only from participants, whatever the adapter
+        # accepts — hub-generated protocol envelopes carry the creator and
+        # invitees are participants from creation. The one exception is a
+        # well-formed task cancel request, which any peer may send once
+        # per task (enforced under the WAL lock below).
+        peer_cancel = envelope.sender_id not in metadata.participant_ids()
+        if peer_cancel and not self._is_peer_cancel_request(envelope, metadata):
+            raise ProtocolError(
+                f"channel {envelope.channel_id!r} only accepts sends from participants, got {envelope.sender_id!r}"
+            )
 
         # Adapter must be registered to dispatch on this channel.
         # Distinct from create_channel's NotFoundError (where the user
@@ -1960,6 +2137,10 @@ class Hub:
                     f"(manifest {metadata.manifest.type!r}@v{metadata.manifest.version} "
                     "may not be registered)"
                 )
+            if peer_cancel and envelope.sender_id in self._peer_cancel_senders.get(envelope.task_id or "", set()):
+                raise ProtocolError(
+                    f"channel {envelope.channel_id!r} only accepts sends from participants, got {envelope.sender_id!r}"
+                )
             adapter.validate_send(metadata, envelope, state)
 
             envelope.envelope_id = self._mint_envelope_id()
@@ -1976,6 +2157,8 @@ class Hub:
                 self._envelope_tracer.inject_traceparent(envelope, envelope_span)
 
             await self._wal_append(envelope)
+            if peer_cancel:
+                self._peer_cancel_senders.setdefault(envelope.task_id or "", set()).add(envelope.sender_id)
             new_state = adapter.fold(envelope, state)
             self._adapter_states[envelope.channel_id] = new_state
             result = adapter.on_accepted(metadata, envelope, new_state)
@@ -2032,6 +2215,32 @@ class Hub:
             )
 
         return envelope.envelope_id
+
+    def _is_peer_cancel_request(self, envelope: Envelope, metadata: ChannelMetadata) -> bool:
+        """True for a cancel request shaped as the ``tasks`` tool sends it.
+
+        That is: an ``EV_TASK_CANCEL_REQUEST`` on an active channel, for a
+        live task the hub has observed in that same channel, addressed
+        only to the task's owner, whose ``event_data`` is exactly
+        ``{"task_id", "reason"}`` naming the envelope's task with a
+        string ``reason``. The one-per-sender limit (protocol events
+        bypass the recipient's inbox cap) is checked separately, under
+        the channel's WAL lock, against ``_peer_cancel_senders``.
+        """
+        if envelope.event_type != EV_TASK_CANCEL_REQUEST or envelope.task_id is None:
+            return False
+        task = self._tasks.get(envelope.task_id)
+        return (
+            task is not None
+            and task.state not in TERMINAL_TASK_STATES
+            and metadata.state == ChannelState.ACTIVE
+            and task.channel_id == envelope.channel_id
+            and envelope.audience == [task.owner_id]
+            and set(envelope.event_data) == {"task_id", "reason"}
+            and envelope.event_data["task_id"] == envelope.task_id
+            and isinstance(envelope.event_data["reason"], str)
+            and len(envelope.event_data["reason"]) <= _MAX_WIRE_TEXT
+        )
 
     # ── Endpoint management ─────────────────────────────────────────────────
 
@@ -2291,6 +2500,12 @@ class Hub:
                 self._agent_to_endpoint.pop(agent_id, None)
 
     async def _dispatch_frame(self, endpoint: LinkEndpoint, frame: Frame) -> None:
+        malformed = _malformed_field(frame)
+        if malformed is not None:
+            await endpoint.send_frame(
+                ErrorFrame(code="protocol_error", message=f"malformed {frame.kind} frame: {malformed}")
+            )
+            return
         if isinstance(frame, RequestFrame):
             await self._handle_request(endpoint, frame)
         elif isinstance(frame, HelloFrame):
@@ -2304,8 +2519,24 @@ class Hub:
                 await endpoint.send_frame(ErrorFrame(code="not_found", message=f"no passport for {frame.name}"))
                 return
             try:
-                adapter = self._auth.get(frame.auth_scheme)
-                await adapter.validate(passport, frame.auth_claim)
+                if not isinstance(frame.auth_claim, dict):
+                    raise AuthError("auth_claim must be a JSON object")
+                # A remote_agent's scheme is a routing label, not a credential:
+                # it re-attaches only on a connection holding one of its owners.
+                # Any other identity re-attaches with its registered scheme;
+                # a Hello naming another scheme is refused.
+                if passport.effective_kind == "remote_agent":
+                    bound = self._endpoint_to_agents.get(endpoint.endpoint_id, set())
+                    if not bound & set(self._remote_owners.get(agent_id, [])):
+                        raise AuthError(f"remote agent {frame.name!r} re-attaches only alongside its owner")
+                elif frame.auth_scheme != passport.auth.scheme:
+                    raise AuthError(
+                        f"auth scheme {frame.auth_scheme!r} does not match {frame.name!r}'s "
+                        f"registered scheme {passport.auth.scheme!r}"
+                    )
+                else:
+                    adapter = self._auth.get(passport.auth.scheme)
+                    await adapter.validate(passport, frame.auth_claim)
             except AuthError as exc:
                 await endpoint.send_frame(ErrorFrame(code="auth_failed", message=str(exc)))
                 return
@@ -2318,7 +2549,7 @@ class Hub:
             if frame.since_envelope_id is not None:
                 await self._replay_for_recipient(agent_id, frame.since_envelope_id)
         elif isinstance(frame, ReceiptFrame):
-            await self._handle_receipt(frame)
+            await self._handle_receipt(endpoint, frame)
         elif isinstance(frame, PingFrame):
             await endpoint.send_frame(PongFrame())
 
@@ -2365,25 +2596,34 @@ class Hub:
         Long but flat by design: one place to see the entire wire
         control surface. Each branch deserialises ``params`` into the
         hub method's arguments and serialises the return value back to
-        a JSON-compatible shape.
+        a JSON-compatible shape. :meth:`_authorize_request` runs first,
+        so every branch acts only within the calling connection's bound
+        identities.
         """
+        await self._authorize_request(endpoint, op, params)
+
         # ── Registration / identity ──────────────────────────────────
         if op == "register":
             passport = Passport.from_dict(params["passport"])
             resume = Resume.from_dict(params["resume"])
             rule = Rule.from_dict(params["rule"]) if params.get("rule") is not None else None
+            owners = self._remote_owner_candidates(endpoint) if passport.effective_kind == "remote_agent" else []
             registered = await self.register_identity(
                 passport,
                 resume,
                 skill_md=params.get("skill_md"),
                 rule=rule,
             )
+            if owners:
+                assert registered.agent_id is not None
+                await self._store.write(remote_owners_path(registered.agent_id), json.dumps(owners))
+                self._remote_owners[registered.agent_id] = owners
             # Bind the calling connection to the freshly-stamped identity
             # so dispatched notifies route back to this endpoint.
             self.bind_endpoint(endpoint.endpoint_id, registered.agent_id)
-            return registered.to_dict()
+            return _public_passport(registered)
         if op == "get_agent":
-            return (await self.get_agent(params["name_or_id"])).to_dict()
+            return _public_passport(await self.get_agent(params["name_or_id"]))
         if op == "get_resume":
             return (await self.get_resume(params["agent_id"])).to_dict()
         if op == "get_skill":
@@ -2402,7 +2642,7 @@ class Hub:
                 sort_by=params.get("sort_by"),
                 limit=params.get("limit", 50),
             )
-            return [p.to_dict() for p in agents]
+            return [_public_passport(p) for p in agents]
         if op == "set_resume":
             await self.set_resume(params["agent_id"], Resume.from_dict(params["resume"]))
             return None
@@ -2433,10 +2673,13 @@ class Hub:
         if op == "get_channel":
             return (await self.get_channel(params["channel_id"])).to_dict()
         if op == "list_channels":
-            channels = await self.list_channels(
-                agent_id=params.get("agent_id"),
-                limit=params.get("limit", 50),
-            )
+            if params.get("agent_id") is not None:
+                channels = await self.list_channels(agent_id=params["agent_id"], limit=params.get("limit", 50))
+            else:
+                # No agent named: list the channels of every agent bound here.
+                bound = self._endpoint_to_agents.get(endpoint.endpoint_id, set())
+                channels = [m for m in self._channels.values() if bound & set(m.participant_ids())]
+                channels = channels[: params.get("limit", 50)]
             return [m.to_dict() for m in channels]
         if op == "close_channel":
             metadata = await self.close_channel(params["channel_id"], reason=params.get("reason", ""))
@@ -2484,9 +2727,10 @@ class Hub:
                 agent_id=params.get("agent_id"),
                 channel_id=params.get("channel_id"),
                 state=state,
-                limit=params.get("limit", 50),
+                limit=max(len(self._tasks), 1),
             )
-            return [t.to_dict() for t in tasks]
+            visible = [t for t in tasks if self._task_visible(endpoint, t)]
+            return [t.to_dict() for t in visible[: params.get("limit", 50)]]
         if op == "observe_task":
             await self.observe_task(TaskMetadata.from_dict(params["metadata"]))
             return None
@@ -2510,7 +2754,11 @@ class Hub:
             )
             return None
         if op == "fire_task_event":
-            await self.fire_task_event(params["task_id"], params["kind"], params.get("payload", {}))
+            payload = {
+                key: value[:_MAX_WIRE_TEXT] if isinstance(value, str) else value
+                for key, value in params.get("payload", {}).items()
+            }
+            await self.fire_task_event(params["task_id"], params["kind"], payload)
             return None
         if op == "checkpoint_task":
             await self.checkpoint_task(params["task_id"], params["state"])
@@ -2520,7 +2768,196 @@ class Hub:
 
         raise ProtocolError(f"unknown control-plane op: {op!r}")
 
-    async def _handle_receipt(self, frame: ReceiptFrame) -> None:
+    async def _authorize_request(self, endpoint: LinkEndpoint, op: str, params: dict[str, Any]) -> None:
+        """Reject a control-plane request outside the connection's identities.
+
+        A connection acts only as the agents bound to it — by a
+        ``register`` op or an authenticated ``HelloFrame`` — and one
+        connection may hold several. Agent-scoped ops (and the sender of
+        a posted envelope, the owner of an observed task) must name a
+        bound agent; channel-scoped ops need a bound participant;
+        task-scoped ops need the observed task's owner to be bound, and a
+        checkpoint of an unobserved task needs one of its first writer's
+        agents, as does observing that task. Observing a task onto a
+        channel needs its owner to participate there. Discovery reads and
+        ``register`` are open, but registering a ``remote_agent`` needs a
+        non-remote agent bound here, which becomes its owner. Every task
+        id named must match ``_TASK_ID_RE`` (``ProtocolError`` otherwise).
+        Task-scoped ops need a bound agent; ``fire_task_event`` is
+        limited to the mirror's ``mirror_failed`` report (see
+        :meth:`_authorize_mirror_failure`).
+        Other violations raise :class:`AccessDeniedError`, which the
+        caller returns as an ``access_denied`` response.
+        """
+        for task_id in _wire_task_ids(params):
+            if not isinstance(task_id, str) or not _TASK_ID_RE.fullmatch(task_id):
+                raise ProtocolError(f"invalid task_id: {task_id!r}")
+        if op in _UNSCOPED_OPS or op == "list_tasks":
+            return
+        if op == "get_task":
+            task = self._tasks.get(params["task_id"])
+            if task is not None and not self._task_visible(endpoint, task):
+                # Same answer as an unknown id, so ids cannot be probed.
+                raise NotFoundError(f"task not found: {params['task_id']}")
+        elif op == "register":
+            if params["passport"].get("kind") == "remote_agent":
+                if not self._allow_remote_agent_registration:
+                    raise AccessDeniedError("this hub does not accept remote_agent registration over the wire")
+                if not self._remote_owner_candidates(endpoint):
+                    raise AccessDeniedError(
+                        "registering a remote_agent needs a connection holding an agent of this hub"
+                    )
+        elif op in _AGENT_SCOPED_OPS:
+            self._require_bound(endpoint, params[_AGENT_SCOPED_OPS[op]])
+            if op == "record_observation" and params.get("task_id") is not None:
+                self._require_task_owner(endpoint, params["task_id"])
+            if op == "report_turn_failure":
+                # A failure is reported for a turn in a channel the agent is in.
+                channel = self._channels.get(params["channel_id"])
+                if channel is None or params["agent_id"] not in channel.participant_ids():
+                    raise AccessDeniedError(f"agent is not a participant of channel {params['channel_id']!r}")
+        elif op in _CHANNEL_SCOPED_OPS:
+            self._require_participant(endpoint, params["channel_id"])
+        elif op in _TASK_SCOPED_OPS:
+            if not self._endpoint_to_agents.get(endpoint.endpoint_id):
+                raise AccessDeniedError("connection has no bound agent")
+            if op == "fire_task_event":
+                self._authorize_mirror_failure(endpoint, params["task_id"], params["kind"], params.get("payload", {}))
+                if params["task_id"] not in self._tasks:
+                    await self._require_checkpoint_writer(endpoint, params["task_id"], claim=False)
+            elif params["task_id"] in self._tasks:
+                self._require_task_owner(endpoint, params["task_id"])
+            elif op in ("checkpoint_task", "read_task_checkpoint"):
+                await self._require_checkpoint_writer(endpoint, params["task_id"], claim=op == "checkpoint_task")
+        elif op == "post_envelope":
+            self._require_bound(endpoint, params["envelope"]["sender_id"])
+            event_type = params["envelope"]["event_type"]
+            if _is_channel_protocol_event(event_type) and event_type not in (
+                EV_CHANNEL_INVITE_ACK,
+                EV_CHANNEL_INVITE_REJECT,
+            ):
+                raise ProtocolError(f"{event_type!r} is emitted only by the hub")
+            # A wire client addresses only participants of the channel; it
+            # cannot push content to an agent that is not in it.
+            audience = params["envelope"].get("audience")
+            channel = self._channels.get(params["envelope"]["channel_id"])
+            if (
+                audience is not None
+                and channel is not None
+                and (not isinstance(audience, list) or not set(audience) <= set(channel.participant_ids()))
+            ):
+                raise ProtocolError("audience must list only participants of the channel")
+        elif op == "observe_task":
+            self._require_bound(endpoint, params["metadata"]["owner_id"])
+            if params["metadata"].get("channel_id"):
+                # A task joins a channel only through a participant owner.
+                channel = self._channels.get(params["metadata"]["channel_id"])
+                if channel is None or params["metadata"]["owner_id"] not in channel.participant_ids():
+                    raise AccessDeniedError(
+                        f"task owner is not a participant of channel {params['metadata']['channel_id']!r}"
+                    )
+            if params["metadata"]["task_id"] in self._tasks:
+                self._require_task_owner(endpoint, params["metadata"]["task_id"])
+            else:
+                # Observing makes the caller the owner, so an id whose
+                # checkpoint another connection wrote stays with its writers.
+                await self._require_checkpoint_writer(endpoint, params["metadata"]["task_id"], claim=False)
+        elif op == "list_channels":
+            if params.get("agent_id") is not None:
+                self._require_bound(endpoint, params["agent_id"])
+        else:
+            raise ProtocolError(f"unknown control-plane op: {op!r}")
+
+    def _authorize_mirror_failure(self, endpoint: LinkEndpoint, task_id: str, kind: str, payload: object) -> None:
+        """Admit a wire ``fire_task_event`` only as a ``TaskMirror`` failure report.
+
+        Listeners record task events as they come (the audit log keys
+        ``task_terminated`` on the payload's owner and channel), and the
+        hub emits real terminal events itself from ``update_task``. So
+        over the wire only ``mirror_failed`` is accepted, with exactly
+        the mirror's payload keys; its ``owner_id`` must be bound (and be
+        the owner of an observed task), and its ``channel_id`` must be
+        the observed task's channel or, for an unobserved task, one the
+        owner participates in.
+        """
+        if kind != "mirror_failed":
+            raise AccessDeniedError(f"only 'mirror_failed' task events are accepted over the wire, got {kind!r}")
+        if not isinstance(payload, dict) or not set(payload) <= _MIRROR_FAILURE_KEYS:
+            raise ProtocolError(f"mirror_failed payload keys must be within {sorted(_MIRROR_FAILURE_KEYS)}")
+        owner_id = payload.get("owner_id")
+        channel_id = payload.get("channel_id")
+        if not isinstance(owner_id, str):
+            raise ProtocolError("mirror_failed payload needs the reporting agent's owner_id")
+        self._require_bound(endpoint, owner_id)
+        task = self._tasks.get(task_id)
+        if task is not None:
+            if task.owner_id != owner_id or (channel_id or None) != (task.channel_id or None):
+                raise AccessDeniedError(f"mirror_failed for task {task_id!r} must carry its own owner and channel")
+        elif channel_id is not None:
+            channel = self._channels.get(channel_id) if isinstance(channel_id, str) else None
+            if channel is None or owner_id not in channel.participant_ids():
+                raise AccessDeniedError(f"task owner is not a participant of channel {channel_id!r}")
+
+    def _remote_owner_candidates(self, endpoint: LinkEndpoint) -> list[str]:
+        """Non-remote agents bound to ``endpoint``, sorted — the owners a
+        ``remote_agent`` registered on it gets."""
+        bound = self._endpoint_to_agents.get(endpoint.endpoint_id, set())
+        return sorted(a for a in bound if a in self._passports and self._passports[a].effective_kind != "remote_agent")
+
+    def _require_bound(self, endpoint: LinkEndpoint, agent_id: str) -> None:
+        """Raise :class:`AccessDeniedError` unless ``agent_id`` is bound to ``endpoint``."""
+        if agent_id not in self._endpoint_to_agents.get(endpoint.endpoint_id, set()):
+            raise AccessDeniedError(f"connection is not bound to agent {agent_id!r}")
+
+    def _require_participant(self, endpoint: LinkEndpoint, channel_id: str) -> None:
+        """Raise unless an agent bound to ``endpoint`` participates in ``channel_id``."""
+        metadata = self._channels.get(channel_id)
+        if metadata is None:
+            raise NotFoundError(f"channel not found: {channel_id}")
+        bound = self._endpoint_to_agents.get(endpoint.endpoint_id, set())
+        if not bound & set(metadata.participant_ids()):
+            raise AccessDeniedError(f"connection has no participant in channel {channel_id!r}")
+
+    async def _require_checkpoint_writer(self, endpoint: LinkEndpoint, task_id: str, *, claim: bool) -> None:
+        """Raise unless ``endpoint`` holds a writer of unobserved task ``task_id``'s checkpoint.
+
+        The first ``checkpoint_task`` for the id records the agents bound
+        to the writing connection (``claim=True``); later reads and writes
+        need one of them bound. An id with no recorded writers reads as
+        open — it has no checkpoint written over the wire to protect.
+        """
+        bound = self._endpoint_to_agents.get(endpoint.endpoint_id, set())
+        if not bound:
+            raise AccessDeniedError("connection has no bound agent")
+        async with self._checkpoint_claim_lock:
+            raw = await self._store.read(task_checkpoint_writers_path(task_id))
+            if raw is None:
+                if claim:
+                    await self._store.write(task_checkpoint_writers_path(task_id), json.dumps(sorted(bound)))
+                return
+        if not bound & set(json.loads(raw)):
+            raise AccessDeniedError(f"connection holds no writer of task {task_id!r}'s checkpoint")
+
+    def _task_visible(self, endpoint: LinkEndpoint, task: TaskMetadata) -> bool:
+        """True if ``endpoint`` holds the task's owner or a participant of its channel."""
+        bound = self._endpoint_to_agents.get(endpoint.endpoint_id, set())
+        if task.owner_id in bound:
+            return True
+        channel = self._channels.get(task.channel_id) if task.channel_id else None
+        return channel is not None and bool(bound & set(channel.participant_ids()))
+
+    def _require_task_owner(self, endpoint: LinkEndpoint, task_id: str) -> None:
+        """Raise unless the owner of observed task ``task_id`` is bound to ``endpoint``.
+
+        A task the hub has not observed has no owner, so it passes;
+        checkpoints of such ids are guarded by
+        :meth:`_require_checkpoint_writer` instead.
+        """
+        metadata = self._tasks.get(task_id)
+        if metadata is not None:
+            self._require_bound(endpoint, metadata.owner_id)
+
+    async def _handle_receipt(self, endpoint: LinkEndpoint, frame: ReceiptFrame) -> None:
         """Process a delivery receipt from a client.
 
         ``status="ack"`` advances the recipient's cursor for the acked
@@ -2531,13 +2968,16 @@ class Hub:
         operational visibility.
 
         Receipts whose ``recipient_id`` or ``channel_id`` is empty, or
-        whose ``recipient_id`` is unknown, are dropped silently: an
-        ack the hub cannot attribute to a (recipient, channel) cursor
-        has nothing to advance, and a stale receipt for an unregistered
-        agent has nothing to act on.
+        whose ``recipient_id`` is unknown or not bound to ``endpoint``,
+        are dropped silently: an ack the hub cannot attribute to a
+        (recipient, channel) cursor has nothing to advance, a stale
+        receipt for an unregistered agent has nothing to act on, and a
+        connection only acks deliveries for the agents it holds.
         """
         recipient_id = frame.recipient_id
         if not recipient_id or recipient_id not in self._passports:
+            return
+        if recipient_id not in self._endpoint_to_agents.get(endpoint.endpoint_id, set()):
             return
         if frame.status == "ack":
             if frame.envelope_id and frame.channel_id:
@@ -2806,6 +3246,7 @@ class Hub:
             return
         metadata.state = new_state
         if new_state in TERMINAL_TASK_STATES:
+            self._peer_cancel_senders.pop(task_id, None)
             metadata.completed_at = self._clock()
             if new_state == TaskState.EXPIRED:
                 metadata.error = reason or metadata.error or "expired"
@@ -2855,6 +3296,10 @@ class Hub:
         if passport_data is None:
             return
         passport = Passport.from_dict(json.loads(passport_data))
+        if passport.effective_kind != "remote_agent" and passport.auth.claim:
+            # Stores written before claims were dropped: forget it on disk too.
+            passport = _without_claim(passport)
+            await self._persist_passport(passport)
         self._passports[agent_id] = passport
         self._name_to_id[passport.name] = agent_id
 
@@ -2867,6 +3312,10 @@ class Hub:
             self._rules[agent_id] = Rule.from_dict(json.loads(rule_data))
         else:
             self._rules[agent_id] = Rule()
+
+        owners_data = await self._store.read(remote_owners_path(agent_id))
+        if owners_data is not None:
+            self._remote_owners[agent_id] = list(json.loads(owners_data))
 
         cursor_blob = await self._store.read(inbox_cursor_path(agent_id))
         if cursor_blob:
@@ -2909,6 +3358,13 @@ class Hub:
             if not metadata.is_terminal() and envelope.causation_id and envelope.envelope_id:
                 key = (channel_id, envelope.sender_id, envelope.causation_id)
                 self._causation_index[key] = envelope.envelope_id
+            if (
+                not metadata.is_terminal()
+                and envelope.event_type == EV_TASK_CANCEL_REQUEST
+                and envelope.task_id
+                and envelope.sender_id not in metadata.participant_ids()
+            ):
+                self._peer_cancel_senders.setdefault(envelope.task_id, set()).add(envelope.sender_id)
         self._adapter_states[channel_id] = state
 
     async def _load_task(self, task_id: str) -> None:

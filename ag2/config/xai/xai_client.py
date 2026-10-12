@@ -39,7 +39,7 @@ from .mappers import (
     tool_to_api,
 )
 
-__all__ = ["CreateOptions", "IncludeOption", "ReasoningEffort", "XAIClient"]
+__all__ = ["CreateOptions", "IncludeOption", "ReasoningEffort", "ToolMode", "XAIClient"]
 
 
 class CreateOptions(TypedDict, total=False):
@@ -172,7 +172,7 @@ class XAIClient(LLMClient):
     ) -> ModelResponse:
         full_content: str = ""
         usage: Usage = Usage()
-        finish_reason_raw: str | int | sample_pb2.FinishReason.ValueType | None = None
+        finish_reason_raw: str | int | None = None
         resolved_model: str | None = None
         last_response: XAIResponse | None = None
         # tool_calls accumulate by id; the SDK delivers whole calls per chunk.

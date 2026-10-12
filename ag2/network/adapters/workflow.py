@@ -31,7 +31,7 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from ag2.events import BaseEvent, DataInput, ToolCallEvent, ToolResultEvent
+from ag2.events import BaseEvent, DataInput, Input, TextInput, ToolCallEvent, ToolResultEvent
 
 from ..channel import (
     ChannelManifest,
@@ -67,6 +67,7 @@ from .base import (
     ExpectedTurn,
     default_build_packet_envelope,
     default_build_text_envelope,
+    default_extract_turn_input,
     default_render_envelope,
     default_tools_for,
 )
@@ -359,17 +360,14 @@ class WorkflowAdapter:
         recent_n = max(len(metadata.participants) * 2, 4)
         return NamedWindowedSummary(recent_n=recent_n)
 
-    def extract_turn_input(self, envelope: Envelope) -> str | None:
+    def extract_turn_input(self, envelope: Envelope) -> list[Input] | None:
         """Decode an inbound substantive envelope into the next
         speaker's prompt. Workflow handles ``EV_TEXT`` and
-        ``EV_PACKET`` (concatenates the routing-handoff line with
-        the body)."""
-        if envelope.event_type == EV_TEXT:
-            text = envelope.event_data.get("text", "")
-            return text if isinstance(text, str) else None
+        ``EV_PACKET`` (the routing-handoff line and the body, as
+        separate parts)."""
         if envelope.event_type == EV_PACKET:
-            return _packet_turn_text(envelope) or None
-        return None
+            return list(_packet_parts(envelope)) or None
+        return default_extract_turn_input(envelope)
 
     def build_round_envelope(
         self,
@@ -417,12 +415,12 @@ class WorkflowAdapter:
         )
 
     def render_envelope(self, envelope):
-        """Project ``EV_PACKET`` via :func:`_packet_text`; defer to
+        """Project ``EV_PACKET`` via :func:`_packet_parts`; defer to
         :func:`default_render_envelope` for everything else (notably
         ``EV_TEXT`` for participant text emitted outside the
         workflow's round-end packet)."""
         if envelope.event_type == EV_PACKET:
-            return _packet_text(envelope)
+            return _packet_parts(envelope) or None
         return default_render_envelope(envelope)
 
     def tools_for(self, client, metadata, state, participant_id):
@@ -482,65 +480,28 @@ class WorkflowAdapter:
 # ── Packet-construction helpers ──────────────────────────────────────────────
 
 
-def _packet_turn_text(envelope: Envelope) -> str:
-    """Synthesise a turn prompt from an ``EV_PACKET`` envelope.
+def _packet_parts(envelope: Envelope) -> list[TextInput]:
+    """Decode an ``EV_PACKET`` envelope into the parts a speaker reads.
 
-    Concatenates the handoff signal line (if any) with the body
-    (if any) using a newline. Mirrors the view projection so the
-    next speaker sees the same shape on their first turn after a
-    handoff that they'd see in the conversation history afterwards.
+    The handoff signal line (if ``routing.kind == "handoff"``) and the
+    body (if any) stay separate :class:`TextInput` parts. The same shape
+    serves the first turn after a handoff and the view projection, so the
+    next speaker sees it identically on both. Empty when both are absent.
     """
     routing = envelope.event_data.get("routing", {}) or {}
     body = envelope.event_data.get("body", "")
     if not isinstance(body, str):
         body = ""
 
-    parts: list[str] = []
+    parts: list[TextInput] = []
     if routing.get("kind") == "handoff":
-        tool = routing.get("tool", "handoff")
-        reason = routing.get("reason", "")
-        if not isinstance(tool, str):
-            tool = str(tool)
-        if not isinstance(reason, str):
-            reason = str(reason)
-        if reason:
-            parts.append(f"[Handed off via {tool}] {reason}")
-        else:
-            parts.append(f"[Handed off via {tool}]")
+        tool = str(routing.get("tool", "handoff"))
+        reason = str(routing.get("reason", ""))
+        signal = f"[Handed off via {tool}] {reason}" if reason else f"[Handed off via {tool}]"
+        parts.append(TextInput(signal))
     if body:
-        parts.append(body)
-    return "\n".join(parts)
-
-
-def _packet_text(envelope: Envelope) -> "str | None":
-    """Render an ``EV_PACKET`` envelope for view projection.
-
-    Concatenates the handoff signal line (if ``routing.kind ==
-    "handoff"``) with the body (if any) using a newline. Returns
-    ``None`` if both are empty so the projection skips the envelope.
-    """
-    routing = envelope.event_data.get("routing", {}) or {}
-    body = envelope.event_data.get("body", "")
-    if not isinstance(body, str):
-        body = ""
-
-    parts: list[str] = []
-    if routing.get("kind") == "handoff":
-        tool = routing.get("tool", "")
-        reason = routing.get("reason", "")
-        if not isinstance(tool, str):
-            tool = str(tool)
-        if not isinstance(reason, str):
-            reason = str(reason)
-        handoff_line = f"[Handed off via {tool}] {reason}".strip()
-        if handoff_line:
-            parts.append(handoff_line)
-    if body:
-        parts.append(body)
-
-    if not parts:
-        return None
-    return "\n".join(parts)
+        parts.append(TextInput(body))
+    return parts
 
 
 def _resolve_routing(
@@ -597,7 +558,9 @@ def _resolve_routing(
             }
         handoff = _extract_handoff(result_event) if result_event else None
         if handoff is not None:
-            target = name_to_id.get(handoff.target, handoff.target)
+            # An exact agent id wins over a name, as in ``Hub.get_agent``.
+            known_ids = set(name_to_id.values())
+            target = handoff.target if handoff.target in known_ids else name_to_id.get(handoff.target, handoff.target)
             return {
                 "kind": "handoff",
                 "tool": call.name,

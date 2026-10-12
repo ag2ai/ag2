@@ -79,6 +79,8 @@ Which is why `__str__` is worth writing: a text-only client gets *"Espresso cup 
 
 Both pydantic models and dataclasses work. This applies to any custom tool, not only a UI-bound one — see [Structured output](/docs/user-guide/tools/serving_mcp#structured-output).
 
+For Pydantic models, `outputSchema` describes `model_dump(mode="json")`, including serialized field types and each nested model's `serialize_by_alias` policy. Input-only aliases do not become output keys. An explicit `output_schema=` still takes precedence, and a manually returned `CallToolResult` keeps the content you supplied.
+
 ### Three levels of control
 
 A handler returns whichever of these fits, in increasing order of control:
@@ -106,7 +108,7 @@ async def explicit() -> CallToolResult:
 ```
 
 !!! note "The schema follows the annotation, not the value"
-    `outputSchema` is decided once, when the tool is declared. Annotating `-> CallToolResult` is what opts a tool out of an advertised schema; returning one from a handler annotated `-> Item` still advertises `Item`'s schema, and MCP requires your `structuredContent` to conform to it.
+    `outputSchema` is decided once, when the tool is declared. Annotating `-> CallToolResult` is what opts a tool out of an advertised schema; returning one from a handler annotated `-> Item` still advertises `Item`'s schema, and MCP requires your `structuredContent` to conform to it. For a Pydantic model this is its serialization schema. If you assemble a different shape by hand, supply an explicit `output_schema=` or annotate the handler `-> CallToolResult`.
 
 ## Inside the document: `ag2ui`
 

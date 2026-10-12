@@ -181,6 +181,13 @@ class UsageEvent(BaseEvent):
     finish_reason: str | None = Field(default=None, compare=False)
     label: str | None = Field(default=None, compare=False)
     """Sub-agent name for ``"subtask"`` events; ``None`` otherwise."""
+    parts: "list[UsageEvent]" = Field(default_factory=list, compare=False)
+    """For a ``"subtask"`` rollup, the model calls it sums, each under its own provider and model.
+
+    For a reader that has to count each provider's figures its own way before
+    adding them up. :class:`~ag2.UsageReport` reads the rollup alone, so these
+    are never counted twice.
+    """
 
 
 class ModelMessageChunk(ModelEvent):
@@ -206,6 +213,12 @@ class HumanInputRequest(BaseEvent):
     id: str = Field(default_factory=lambda: str(uuid4()), compare=False)
     content: str = Field(kw_only=False)
     timeout: float | None = Field(default=None, compare=False)
+    task_id: str | None = Field(default=None, compare=False)
+    """The delegation this request reached the stream through, or ``None`` if raised on it directly.
+
+    Stamped by ``run_task`` as it forwards a sub-task's question to its parent,
+    so a transport can say which delegation is asking.
+    """
 
 
 class ToolApprovalRequest(HumanInputRequest):

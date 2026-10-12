@@ -11,6 +11,7 @@ are required) and it does not survive a restart.
 import asyncio
 import functools
 import logging
+import re
 import secrets
 import time
 from collections.abc import AsyncIterator, Callable, Coroutine
@@ -20,27 +21,47 @@ from math import inf
 from typing import Any
 
 from ag_ui.core import (
-    AgentCapabilities,
+    PROTOCOL_VERSION,
     BaseEvent,
-    HumanInTheLoopCapabilities,
-    IdentityCapabilities,
+    EventType,
     Interrupt,
+    Metadata,
+    ReasoningEndEvent,
+    ReasoningMessageEndEvent,
+    ReasoningMessageStartEvent,
+    ReasoningStartEvent,
     ResumeEntry,
     RunAgentInput,
     RunErrorEvent,
+    RunFinishedCancelledOutcome,
     RunFinishedEvent,
     RunFinishedInterruptOutcome,
     RunFinishedSuccessOutcome,
     RunStartedEvent,
+    SubagentErrorEvent,
+    SubagentFinishedEvent,
+    SubagentFinishedSuspendedOutcome,
+    SubagentStartedEvent,
+    TextMessageEndEvent,
+    TextMessageStartEvent,
+    TokenUsage,
+    ToolCallChunkEvent,
+    ToolCallEndEvent,
+    ToolCallResultEvent,
+    ToolCallStartEvent,
 )
 from ag_ui.encoder import EventEncoder
 from anyio import BrokenResourceError, ClosedResourceError, create_memory_object_stream
 from anyio.streams.memory import MemoryObjectSendStream
+from typing_extensions import assert_never
 
 from ag2.annotations import Context
 from ag2.events import BaseEvent as AG2Event
-from ag2.events import HumanInputRequest, HumanMessage, ToolApprovalRequest
+from ag2.events import HumanInputRequest, HumanMessage, ToolApprovalRequest, UsageEvent
 from ag2.exceptions import AG2Error, HumanInputTimeoutError
+
+from .run_input import strip_unrecognised
+from .usage import map_usage_events_to_ag_ui
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +92,16 @@ APPROVAL_SCHEMA: dict[str, Any] = {
 
 # Codes on the `RUN_ERROR` a refused resume produces, so a client can branch
 # without parsing prose.
-NO_HELD_TURN = "INTERRUPT_NOT_HELD"
-NOT_OUTSTANDING = "INTERRUPT_NOT_OUTSTANDING"
+NOT_COVERED = "INTERRUPT_NOT_COVERED"
 PAYLOAD_REFUSED = "INTERRUPT_PAYLOAD_REFUSED"
 NOT_PROVEN = "INTERRUPT_NOT_PROVEN"
+
+# The code on the lone `RUN_ERROR` a client declaring another major version of
+# the protocol gets, before any run starts.
+UNSUPPORTED_PROTOCOL_VERSION = "UNSUPPORTED_PROTOCOL_VERSION"
+
+# The two-component grammar a declared protocol version is read in.
+_VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
 
 # Where this server's own envelope data sits inside a metadata object. Not
 # `ag_ui.core.AGUI_METADATA_KEY` (`"ag-ui"`): the protocol reserves that one
@@ -131,7 +158,7 @@ class ResumeRefusedError(AG2Error):
     __slots__ = ("code",)
 
     code: str
-    """One of `NO_HELD_TURN`, `NOT_OUTSTANDING`, `NOT_PROVEN`, `PAYLOAD_REFUSED`.
+    """One of `NOT_COVERED`, `NOT_PROVEN`, `PAYLOAD_REFUSED`.
 
     Branch on this rather than on the message.
     """
@@ -153,40 +180,236 @@ class TurnOutput:
     turn keeps working while it waits — a sibling tool call finishing — and
     none of that may be lost. Sending into an exchange that closed otherwise
     (the client went away mid-run) drops the event rather than failing the turn.
+
+    Also the ledger of what the turn has open on the wire — messages, reasoning,
+    tool calls, subagent invocations — read off the events as they are sent, so
+    a run can be closed in order however it ends, and of the tool calls the
+    turn has left unanswered.
+
+    And the meter of what the turn spent: each run reports what was spent since
+    the run before it reported, so a turn carried by several runs is counted once.
     """
 
-    __slots__ = ("thread_id", "run_id", "_send", "_paused", "_kept")
+    __slots__ = (
+        "thread_id",
+        "run_id",
+        "usage",
+        "_metered",
+        "_send",
+        "_paused",
+        "_kept",
+        "_open",
+        "_announced",
+        "_reannounce",
+        "_repeats",
+        "_calls",
+    )
 
     def __init__(self, *, thread_id: str, run_id: str, send: MemoryObjectSendStream[BaseEvent]) -> None:
         self.thread_id = thread_id
         self.run_id = run_id
+        self.usage: list[UsageEvent] = []
+        """Everything the turn has spent, as it is spent. The transport running it appends here."""
+        self._metered = 0
+        """How much of `usage` a run has already reported."""
         self._send = send
         self._paused = False
         self._kept: list[BaseEvent] = []
+        self._open: dict[tuple[EventType, str], BaseEvent] = {}
+        """Every entity opened and not yet closed, by (kind, id), in opening order."""
+        self._announced: set[str] = set()
+        """Every subagent invocation id this turn has announced."""
+        self._reannounce: list[SubagentStartedEvent] = []
+        """Invocations closed as suspended, announced again first thing on resume."""
+        self._repeats: dict[str, int] = {}
+        """Starts refused for an invocation id still open, each owed one silenced end."""
+        self._calls: dict[str, bool] = {}
+        """Tool calls the current run started, in call order, and whether it answered them."""
 
     def rebind(self, *, run_id: str, send: MemoryObjectSendStream[BaseEvent]) -> None:
         """Point the turn at the exchange now carrying it."""
         self.run_id = run_id
         self._send = send
         self._paused = False
+        # A run reports the calls it started: the protocol has it list exactly
+        # those, and a call an earlier run announced is that run's. The events
+        # kept across the pause go out now, so they are this run's.
+        self._calls = {}
+        for event in self._kept:
+            self._record_call(event)
+        # Ahead of anything kept: an event about a suspended invocation must
+        # follow its re-announcement, and the invocation is still open.
+        self._kept[:0] = self._take_reannouncements()
+
+    @property
+    def paused(self) -> bool:
+        """Whether the turn is waiting on a question, its run already ending or ended."""
+        return self._paused
+
+    def take_usage(self) -> list[TokenUsage] | None:
+        """What the turn spent since a run last reported, for the run reporting now."""
+        spent, self._metered = self.usage[self._metered :], len(self.usage)
+        return map_usage_events_to_ag_ui(spent)
+
+    def is_open_subagent(self, subagent_run_id: str | None) -> bool:
+        """Whether `subagent_run_id` names an invocation open on the wire."""
+        return subagent_run_id is not None and (EventType.SUBAGENT_STARTED, subagent_run_id) in self._open
+
+    def success_outcome(self) -> RunFinishedSuccessOutcome:
+        """The outcome of the current run finishing, naming the calls it left for the client."""
+        # Stated on every run, not only on interrupts: the protocol reads an
+        # omitted outcome as a producer predating the interrupt-aware lifecycle,
+        # and declaring the capability while behaving as one is not a described
+        # state. An empty list is left out, since it would claim nothing.
+        pending = [call_id for call_id, answered in self._calls.items() if not answered]
+        return RunFinishedSuccessOutcome(pending_tool_call_ids=pending or None)
 
     async def pause(self, interrupt: RunFinishedEvent) -> None:
         """End the current exchange on `interrupt`, keeping what follows for the next."""
-        while self._kept:
-            await self._deliver(self._kept.pop(0))
-        # Paused before the interrupt is sent, not after: the send can wait for
-        # the exchange to read it, and an event sent meanwhile would land behind
-        # the RUN_FINISHED it no longer belongs to.
+        # Paused before anything is awaited: each send below can wait for the
+        # exchange to read it, and whatever the turn sends meanwhile — a sibling
+        # delegation finishing, or a new one starting — belongs to the run that
+        # resumes it, not between the closes below and the RUN_FINISHED.
         self._paused = True
+        owed, self._kept = self._kept, []
+        # No run finishes with an invocation open, so each is closed as
+        # suspended — naming the interrupts it raised itself — and announced
+        # again when the turn resumes. It stays open in the ledger meanwhile,
+        # so an end sent while paused is kept for after its re-announcement.
+        suspended = [e for e in self._open.values() if isinstance(e, SubagentStartedEvent)]
+        self._reannounce.extend(suspended)
+        for event in owed:
+            await self._deliver(event)
+        interrupts = interrupt.outcome.interrupts if isinstance(interrupt.outcome, RunFinishedInterruptOutcome) else []
+        for started in suspended:
+            raised = [i.id for i in interrupts if i.subagent_run_id == started.subagent_run_id]
+            await self._deliver(
+                SubagentFinishedEvent(
+                    subagent_run_id=started.subagent_run_id,
+                    outcome=SubagentFinishedSuspendedOutcome(interrupt_ids=raised or None),
+                    timestamp=timestamp_ms(),
+                )
+            )
         await self._deliver(interrupt)
 
+    async def succeed(self) -> None:
+        """Finish the current run as a success, closing first whatever it left open."""
+        await self._close_open("the run ended before this invocation finished")
+        await self.send(
+            RunFinishedEvent(
+                thread_id=self.thread_id,
+                run_id=self.run_id,
+                timestamp=timestamp_ms(),
+                usage=self.take_usage(),
+                outcome=self.success_outcome(),
+            )
+        )
+
+    async def stop(self) -> None:
+        """Finish the current run as cancelled, because the server stopped it."""
+        await self._close_open("the run was cancelled before this invocation finished")
+        await self.send(
+            RunFinishedEvent(
+                thread_id=self.thread_id,
+                run_id=self.run_id,
+                timestamp=timestamp_ms(),
+                usage=self.take_usage(),
+                outcome=RunFinishedCancelledOutcome(),
+            )
+        )
+
+    async def fail(self, error: Exception) -> None:
+        """End the current run on `error`. Nothing needs closing: the client abandons it all."""
+        await self.send(RunErrorEvent(message=repr(error), timestamp=timestamp_ms(), usage=self.take_usage()))
+
+    async def _close_open(self, message: str) -> None:
+        # Every start refused as a repeat is moot once its invocation is closed here.
+        self._repeats = {}
+        for kind, entity_id in reversed(list(self._open)):
+            await self.send(_closing(kind, entity_id, message))
+
     async def send(self, event: BaseEvent) -> None:
+        if not self._admit(event):
+            return
         if self._paused:
             self._kept.append(event)
             return
         while self._kept:
             await self._deliver(self._kept.pop(0))
         await self._deliver(event)
+
+    def abandon(self) -> list[BaseEvent]:
+        """Everything owed to the run that abandons this paused turn, short of its end.
+
+        What the turn kept while paused, then an end for each entity still
+        open, innermost first. Call once the turn has stopped sending.
+        """
+        owed = [*self._take_reannouncements(), *self._kept]
+        owed.extend(
+            _closing(kind, entity_id, "the run was cancelled before this invocation finished")
+            for kind, entity_id in reversed(self._open)
+        )
+        self._kept, self._open, self._repeats = [], {}, {}
+        return owed
+
+    def _take_reannouncements(self) -> list[BaseEvent]:
+        again: list[BaseEvent] = [e.model_copy(update={"timestamp": timestamp_ms()}) for e in self._reannounce]
+        self._reannounce = []
+        return again
+
+    def _admit(self, event: BaseEvent) -> bool:
+        """Record what `event` opens or closes, and whether it may go out at all."""
+        # Tracked as sent, not as delivered: kept events are delivered in the
+        # order they were sent, so the ledger is what the wire will have seen.
+        match event:
+            case SubagentStartedEvent():
+                if event.subagent_run_id in self._announced:
+                    logger.warning(
+                        "not announcing subagent invocation %s again: this turn has already announced it",
+                        event.subagent_run_id,
+                    )
+                    # Ends under one id cannot be told apart, so the invocation
+                    # stays open until the last delegation under it has ended.
+                    if (EventType.SUBAGENT_STARTED, event.subagent_run_id) in self._open:
+                        self._repeats[event.subagent_run_id] = self._repeats.get(event.subagent_run_id, 0) + 1
+                    return False
+                self._announced.add(event.subagent_run_id)
+                self._open[EventType.SUBAGENT_STARTED, event.subagent_run_id] = event
+            case SubagentFinishedEvent() | SubagentErrorEvent() if event.subagent_run_id in self._repeats:
+                if (left := self._repeats.pop(event.subagent_run_id) - 1) > 0:
+                    self._repeats[event.subagent_run_id] = left
+                return False
+            case SubagentFinishedEvent() | SubagentErrorEvent():
+                if self._open.pop((EventType.SUBAGENT_STARTED, event.subagent_run_id), None) is None:
+                    logger.warning(
+                        "not ending subagent invocation %s: it is not open on the wire", event.subagent_run_id
+                    )
+                    return False
+            case TextMessageStartEvent():
+                self._open[EventType.TEXT_MESSAGE_START, event.message_id] = event
+            case TextMessageEndEvent():
+                self._open.pop((EventType.TEXT_MESSAGE_START, event.message_id), None)
+            case ReasoningStartEvent():
+                self._open[EventType.REASONING_START, event.message_id] = event
+            case ReasoningEndEvent():
+                self._open.pop((EventType.REASONING_START, event.message_id), None)
+            case ReasoningMessageStartEvent():
+                self._open[EventType.REASONING_MESSAGE_START, event.message_id] = event
+            case ReasoningMessageEndEvent():
+                self._open.pop((EventType.REASONING_MESSAGE_START, event.message_id), None)
+            case ToolCallStartEvent():
+                self._open[EventType.TOOL_CALL_START, event.tool_call_id] = event
+            case ToolCallEndEvent():
+                self._open.pop((EventType.TOOL_CALL_START, event.tool_call_id), None)
+        self._record_call(event)
+        return True
+
+    def _record_call(self, event: BaseEvent) -> None:
+        match event:
+            case ToolCallStartEvent() | ToolCallChunkEvent() if event.tool_call_id is not None:
+                self._calls.setdefault(event.tool_call_id, False)
+            case ToolCallResultEvent() if event.tool_call_id in self._calls:
+                self._calls[event.tool_call_id] = True
 
     async def _deliver(self, event: BaseEvent) -> None:
         try:
@@ -196,6 +419,26 @@ class TurnOutput:
 
     async def aclose(self) -> None:
         await self._send.aclose()
+
+
+def _closing(kind: EventType, entity_id: str, message: str) -> BaseEvent:
+    """The event that ends an open entity, for a run ending before it did.
+
+    `message` is what an invocation closed this way is told.
+    """
+    now = timestamp_ms()
+    match kind:
+        case EventType.SUBAGENT_STARTED:
+            return SubagentErrorEvent(subagent_run_id=entity_id, message=message, timestamp=now)
+        case EventType.TEXT_MESSAGE_START:
+            return TextMessageEndEvent(message_id=entity_id, timestamp=now)
+        case EventType.REASONING_START:
+            return ReasoningEndEvent(message_id=entity_id, timestamp=now)
+        case EventType.REASONING_MESSAGE_START:
+            return ReasoningMessageEndEvent(message_id=entity_id, timestamp=now)
+        case EventType.TOOL_CALL_START:
+            return ToolCallEndEvent(tool_call_id=entity_id, timestamp=now)
+    raise AssertionError(f"no closing event for a {kind}")
 
 
 class ServedTurn:
@@ -234,14 +477,20 @@ class ServedTurn:
         self._task = task
         return task
 
-    async def result(self) -> None:
-        """Wait for the turn to end, re-raising whatever it raised.
+    async def settle(self) -> None:
+        """Wait for the turn to end.
 
-        Never call this on a *held* turn: nothing will end it but the answer
-        that has not arrived.
+        Whatever it raised is not raised here: the turn reported that on the
+        wire itself. Cancelled while waiting, it cancels the turn too, since
+        nothing else is carrying it. Never call this on a *held* turn: nothing
+        will end it but the answer that has not arrived.
         """
-        assert self._task is not None, "result() before start()"
-        await self._task
+        assert self._task is not None, "settle() before start()"
+        try:
+            await asyncio.wait({self._task})
+        except asyncio.CancelledError:
+            self.release()
+            raise
 
     def suspend(self, interrupt: Interrupt, answer: "asyncio.Future[str]") -> None:
         """Park the turn on `interrupt` until `answer` is resolved.
@@ -292,17 +541,19 @@ class ServedTurns:
     `asyncio` task nobody references may be collected mid-flight.
     """
 
-    __slots__ = ("_live", "_held", "retention", "_now")
+    __slots__ = ("_live", "_held", "retention", "require_proof", "_now")
 
     def __init__(
         self,
         *,
         retention: Retention = DEFAULT_RETENTION,
+        require_proof: bool = False,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._live: set[ServedTurn] = set()
         self._held: dict[str, ServedTurn] = {}
         self.retention = retention
+        self.require_proof = require_proof
         self._now = now
 
     def track(self, turn: ServedTurn, task: "asyncio.Task[None]") -> None:
@@ -337,6 +588,9 @@ class ServedTurns:
                     thread_id=turn.output.thread_id,
                     run_id=turn.output.run_id,
                     timestamp=timestamp_ms(),
+                    # Spent up to the pause: the run resuming the turn reports
+                    # only what it spends itself.
+                    usage=turn.output.take_usage(),
                     outcome=RunFinishedInterruptOutcome(interrupts=[interrupt]),
                 )
             )
@@ -415,11 +669,10 @@ class ServedTurns:
         self._live.discard(turn)
         self.discard(turn)
 
-    def release_thread(self, thread_id: str) -> None:
-        """Cancel whatever `thread_id` was holding, because it has moved on."""
-        turn = self._held.pop(thread_id, None)
-        if turn is not None:
-            turn.release()
+    def holds(self, thread_id: str) -> bool:
+        """Whether `thread_id` holds a question that can still be answered."""
+        self._evict_expired()
+        return thread_id in self._held
 
     async def release_all(self) -> None:
         """Cancel every turn this process is running, and wait for them to unwind.
@@ -528,7 +781,11 @@ class ClientInterrupter:
         # A request gating a tool call says so and names the call, so a client
         # can offer buttons rather than a text box without parsing the prose.
         approval = event if isinstance(event, ToolApprovalRequest) else None
+        # Tagged only with an invocation the client was told about: a transport
+        # that does not announce delegations has nothing to attribute it to.
+        output = self._turn.output
         return Interrupt(
+            subagent_run_id=event.task_id if output.is_open_subagent(event.task_id) else None,
             id=event.id,
             reason=INPUT_REQUIRED_REASON if approval is None else TOOL_CALL_REASON,
             message=event.content,
@@ -547,11 +804,18 @@ def issue_proof() -> str:
     return secrets.token_urlsafe(_PROOF_BYTES)
 
 
-def check_proof(entry: ResumeEntry, interrupt: Interrupt) -> None:
-    """Verify that `entry` carries the proof `interrupt` was issued with.
+def check_proof(entry: ResumeEntry, interrupt: Interrupt, *, required: bool) -> None:
+    """Verify the proof `entry` carries against the one `interrupt` was issued with.
 
-    Raises `ResumeRefusedError` under `NOT_PROVEN` if it does not.
+    A proof that is present must be the one issued. One that is absent is
+    refused only when `required`: a standard client copies nothing from an
+    interrupt's metadata, and the protocol does not ask a producer to check
+    what it was told to keep.
+
+    Raises `ResumeRefusedError` under `NOT_PROVEN` if the check fails.
     """
+    if not required and not _has_proof(entry.metadata):
+        return
     if not secrets.compare_digest(_proof_in(entry.metadata), _proof_in(interrupt.metadata)):
         raise ResumeRefusedError(
             NOT_PROVEN,
@@ -559,11 +823,17 @@ def check_proof(entry: ResumeEntry, interrupt: Interrupt) -> None:
         )
 
 
-def _proof_in(metadata: "dict[str, Any] | None") -> bytes:
-    # Absent and malformed are one case: both mean nothing was proved, and
-    # telling them apart would only say which half to fix. Bytes, not str: a
-    # proof off the wire is arbitrary text and `compare_digest` raises
-    # TypeError on a non-ASCII str rather than reporting a mismatch.
+def _has_proof(metadata: Metadata | None) -> bool:
+    envelope = (metadata or {}).get(AG2_METADATA_KEY)
+    return isinstance(envelope, dict) and PROOF_KEY in envelope
+
+
+def _proof_in(metadata: Metadata | None) -> bytes:
+    # A malformed proof and a missing one are one case when a proof is required:
+    # both mean nothing was proved, and telling them apart would only say which
+    # half to fix. Bytes, not str: a proof off the wire is arbitrary text and
+    # `compare_digest` raises TypeError on a non-ASCII str rather than reporting
+    # a mismatch.
     envelope = (metadata or {}).get(AG2_METADATA_KEY)
     proof = envelope.get(PROOF_KEY) if isinstance(envelope, dict) else None
     return proof.encode("utf-8", "surrogatepass") if isinstance(proof, str) else b""
@@ -593,53 +863,67 @@ def answer_from(entry: ResumeEntry, interrupt: Interrupt) -> str:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class Abandoned:
+    """A held turn whose question the client gave up on, for its run to close as cancelled."""
+
+    turn: "ServedTurn"
+
+
 def resume_held_turn(
     turns: ServedTurns,
     incoming: RunAgentInput,
     send: MemoryObjectSendStream[BaseEvent],
-) -> "ServedTurn | None":
+) -> "ServedTurn | Abandoned | None":
     """Hand a resume to the turn it addresses, and point that turn at this exchange.
 
-    Returns the turn now carrying the run, or `None` when the client gave up on
-    the question: the turn is ended and this exchange has nothing to carry.
+    Returns the turn now carrying the run, `Abandoned` when the client gave up
+    on the question (the turn is to be stopped, not carried), or `None` when
+    the thread holds no question to answer.
 
-    A resume that cannot be honoured raises `ResumeRefusedError`. Except under
-    `NO_HELD_TURN` the turn is put back with its deadline unchanged, so a
-    legitimate answer arriving in time still resumes it.
+    A resume that cannot be honoured raises `ResumeRefusedError`, and the turn
+    is put back with its deadline unchanged, so a legitimate answer arriving in
+    time still resumes it.
     """
     turn = turns.take(incoming.thread_id)
-    if turn is None or turns.expired(turn):
-        # Refused under the same code either way: whether a turn past its
-        # deadline is still in the registry or was already swept by someone
-        # else's traffic is timing, and a client cannot be told two different
-        # things about one answer arriving too late.
+    outstanding = turn.outstanding if turn is not None else None
+    if turn is None or outstanding is None or turns.expired(turn):
+        # Unknown, already answered, expired, or held by another process: which
+        # of them is timing or routing, and none is the client's error. What it
+        # sent answers nothing this server asked.
         if turn is not None:
             turn.release()
-        raise ResumeRefusedError(
-            NO_HELD_TURN,
-            f"thread {incoming.thread_id} is not holding an interrupt: it is unknown, already answered, or expired",
-        )
+        return None
 
-    outstanding = turn.outstanding
-    entry = next((e for e in resume_entry(incoming) if e.interrupt_id == outstanding.id), None) if outstanding else None
-    if outstanding is None or entry is None:
+    entry = None
+    for candidate in resume_entry(incoming):
+        if candidate.interrupt_id == outstanding.id and entry is None:
+            entry = candidate
+        else:
+            # An answer to something this thread is not asking: the protocol
+            # says to carry on without it, and to say so.
+            logger.warning(
+                "ignoring an AG-UI resume entry for interrupt %r: thread %s is not waiting on it",
+                candidate.interrupt_id,
+                incoming.thread_id,
+            )
+    if entry is None:
         turns.restore(turn)
-        raise ResumeRefusedError(
-            NOT_OUTSTANDING,
-            f"thread {incoming.thread_id} is not waiting on any interrupt this run addresses",
-        )
+        raise ResumeRefusedError(NOT_COVERED, _uncovered(incoming.thread_id))
 
     try:
         # Before the payload is so much as looked at, and before "cancelled" is
         # honoured: ending someone else's turn is not a lesser act than
         # answering it.
-        check_proof(entry, outstanding)
+        check_proof(entry, outstanding, required=turns.require_proof)
 
-        if entry.status == "cancelled":
-            turn.release()
-            return None
-
-        payload = answer_from(entry, outstanding)
+        match entry.status:
+            case "cancelled":
+                return Abandoned(turn)
+            case "resolved":
+                payload = answer_from(entry, outstanding)
+            case _:
+                assert_never(entry.status)
     except Exception:
         # Anything short of delivering the answer puts the turn back, so a
         # legitimate resume inside the deadline still reaches it. Not only
@@ -667,56 +951,163 @@ async def serve_exchange(
 
     Wrap in `contextlib.aclosing`: this holds a channel open across yields.
     """
+    # Here as well as where a body is read: a caller building the input itself
+    # has the SDK's models, which keep what they do not recognise.
+    strip_unrecognised(incoming)
+    if (unsupported := refuse_protocol_version(incoming)) is not None:
+        # Before RUN_STARTED: no run starts that this server cannot speak to.
+        yield encoder.encode(unsupported)  # noqa: ASYNC119
+        return
+
     send, receive = create_memory_object_stream[BaseEvent]()
 
-    # Emitted by the exchange, not by the turn: a resumed turn started under an
-    # earlier run id in an earlier exchange, and it is *this* run that is
-    # starting.
-    yield encoder.encode(  # noqa: ASYNC119
-        RunStartedEvent(thread_id=incoming.thread_id, run_id=incoming.run_id, timestamp=timestamp_ms())
-    )
-
+    # Before RUN_STARTED, like the version check: a resume that cannot be
+    # honoured is refused before anything is sent.
     try:
         turn = begin_turn(turns, incoming, send, start)
     except ResumeRefusedError as refused:
         yield encoder.encode(refused.as_event(timestamp_ms()))  # noqa: ASYNC119
         return
     except Exception as error:
-        # A run already started on the wire is always terminated on the wire: a
-        # stream that just stops leaves the client with no outcome to act on.
+        # A stream that just stops leaves the client with no outcome to act on.
         logger.exception("failed to begin an AG-UI turn for thread %s", incoming.thread_id)
         yield encoder.encode(  # noqa: ASYNC119
             RunErrorEvent(message=str(error) or type(error).__name__, timestamp=timestamp_ms())
         )
         return
 
-    if turn is None:
-        # The client gave up on the question. The turn is gone and will say
-        # nothing further, so this run has only its own ending to report.
-        yield encoder.encode(  # noqa: ASYNC119
-            RunFinishedEvent(
-                thread_id=incoming.thread_id,
-                run_id=incoming.run_id,
-                timestamp=timestamp_ms(),
-                outcome=success_outcome(),
-            )
+    # Emitted by the exchange, not by the turn: a resumed turn started under an
+    # earlier run id in an earlier exchange, and it is *this* run that is
+    # starting. The version is this server's own, never an echo of the client's.
+    yield encoder.encode(  # noqa: ASYNC119
+        RunStartedEvent(
+            thread_id=incoming.thread_id,
+            run_id=incoming.run_id,
+            protocol_version=PROTOCOL_VERSION,
+            timestamp=timestamp_ms(),
         )
+    )
+
+    if isinstance(turn, Abandoned):
+        async for chunk in _cancel(turn.turn, incoming, encoder):
+            yield chunk  # noqa: ASYNC119
         return
 
-    held = False
+    ended = held = False
     async with receive:
         async for event in receive:
             yield encoder.encode(event)  # noqa: ASYNC119
             if isinstance(event, (RunFinishedEvent, RunErrorEvent)):
                 # The exchange ends on the event that terminates the run, not on
                 # the turn's own end: a turn can outlive this response.
-                held = is_interrupt(event)
+                ended, held = True, is_interrupt(event)
                 break
+
+    if not ended:
+        # The turn let go of the run without ending it — stopped while it was
+        # pausing, which leaves nothing that can be closed in order. A run that
+        # started on the wire is always ended on it.
+        logger.error("an AG-UI turn for thread %s stopped without ending run %s", incoming.thread_id, incoming.run_id)
+        yield encoder.encode(  # noqa: ASYNC119
+            RunErrorEvent(message="the run was stopped before it could finish", timestamp=timestamp_ms())
+        )
 
     if not held:
         # A held turn is waiting for an answer this exchange will not bring, so
         # awaiting it would never return.
-        await turn.result()
+        await turn.settle()
+
+
+async def _cancel(turn: ServedTurn, incoming: RunAgentInput, encoder: EventEncoder) -> AsyncIterator[str]:
+    """Stop an abandoned turn, and close its run as cancelled.
+
+    Stopping is what abandonment means here; the agent does not carry on past
+    the question. The protocol forbids reporting a stopped run as success, and
+    a run finishing with anything open, so the run first sends what the turn
+    kept while paused and an end for everything still open.
+    """
+    try:
+        await turn.aclose()
+        owed = turn.output.abandon()
+    except Exception as error:
+        logger.exception("failed to stop an abandoned AG-UI turn for thread %s", incoming.thread_id)
+        yield encoder.encode(RunErrorEvent(message=str(error) or type(error).__name__, timestamp=timestamp_ms()))
+        return
+
+    for event in owed:
+        yield encoder.encode(event)
+    yield encoder.encode(
+        RunFinishedEvent(
+            thread_id=incoming.thread_id,
+            run_id=incoming.run_id,
+            timestamp=timestamp_ms(),
+            usage=turn.output.take_usage(),
+            outcome=RunFinishedCancelledOutcome(),
+        )
+    )
+
+
+async def drive_run(output: TurnOutput, work: Coroutine[Any, Any, None]) -> None:
+    """Carry out a turn's `work`, then end its run on the wire however the work ended.
+
+    A failure is logged and reported as `RUN_ERROR`, not raised: the run has
+    already answered, and raising would cut its body short behind the event. A
+    stop the server makes — shutdown, eviction — closes what the run opened and
+    finishes it as cancelled, unless the turn was pausing, whose run is ending
+    on its interrupt already.
+    """
+    try:
+        await work
+    except asyncio.CancelledError:
+        if not output.paused:
+            await output.stop()
+        raise
+    except Exception as error:
+        logger.exception("AG-UI run %s on thread %s failed", output.run_id, output.thread_id)
+        await output.fail(error)
+    else:
+        await output.succeed()
+    finally:
+        # The exchange reading this turn ends on its terminating event, but
+        # the channel is the turn's: closed here, once there is nothing more
+        # to say, on every path including cancellation while held.
+        await output.aclose()
+
+
+def refuse_protocol_version(incoming: RunAgentInput) -> RunErrorEvent | None:
+    """The refusal for a client declaring a protocol major other than this server's, if it does.
+
+    An absent version is a client predating 1.0, served quietly. A newer minor,
+    or a version that cannot be read, is served with a warning: the protocol
+    forbids rejecting either.
+    """
+    declared = incoming.protocol_version
+    if declared is None:
+        return None
+
+    ours = _parse_version(PROTOCOL_VERSION)
+    theirs = _parse_version(declared)
+    if theirs is None or ours is None:
+        logger.warning("serving an AG-UI client declaring protocol version %r, which cannot be read", declared)
+        return None
+    if theirs[0] != ours[0]:
+        return RunErrorEvent(
+            message=f"this server speaks AG-UI {PROTOCOL_VERSION}, and cannot serve a client on {declared}",
+            code=UNSUPPORTED_PROTOCOL_VERSION,
+            timestamp=timestamp_ms(),
+        )
+    if theirs > ours:
+        logger.warning(
+            "serving an AG-UI client on protocol %s with %s: what the newer minor adds will not be used",
+            declared,
+            PROTOCOL_VERSION,
+        )
+    return None
+
+
+def _parse_version(version: str) -> tuple[int, int] | None:
+    match = _VERSION.fullmatch(version)
+    return None if match is None else (int(match[1]), int(match[2]))
 
 
 def begin_turn(
@@ -724,28 +1115,40 @@ def begin_turn(
     incoming: RunAgentInput,
     send: MemoryObjectSendStream[BaseEvent],
     start: "Callable[[TurnOutput], ServedTurn]",
-) -> "ServedTurn | None":
+) -> "ServedTurn | Abandoned":
     """The turn this run drives — a held one resumed, or a fresh one started.
 
-    `None` when the run abandons the question it addresses. Raises
-    `ResumeRefusedError` if it addresses one that cannot be honoured.
+    `Abandoned` when the run gives up on the question it addresses. Raises
+    `ResumeRefusedError` if it addresses one that cannot be honoured, or leaves
+    the question the thread holds unanswered. A resume on a thread holding none
+    is dropped with a warning, and the run starts as an ordinary one.
     """
     if resume_entry(incoming):
-        return resume_held_turn(turns, incoming, send)
+        if (held := resume_held_turn(turns, incoming, send)) is not None:
+            return held
+        # Answers to nothing this server holds: the protocol has a producer
+        # treat them as unrecognised, proceed without them and say so — a
+        # restart, or another worker, is no reason to fail the run.
+        for entry in resume_entry(incoming):
+            logger.warning(
+                "ignoring an AG-UI resume entry for interrupt %r: thread %s holds no interrupt",
+                entry.interrupt_id,
+                incoming.thread_id,
+            )
+        incoming.resume = None
 
-    # A fresh run on a thread still holding a question has abandoned it — the
-    # protocol's own client will not send one — and the turn behind it would
-    # otherwise sit here until its deadline.
-    turns.release_thread(incoming.thread_id)
+    # Omission is not abandonment: the question stays held until it is answered,
+    # given up with a "cancelled" entry, or expires.
+    if turns.holds(incoming.thread_id):
+        raise ResumeRefusedError(NOT_COVERED, _uncovered(incoming.thread_id))
     return start(TurnOutput(thread_id=incoming.thread_id, run_id=incoming.run_id, send=send))
 
 
-def success_outcome() -> RunFinishedSuccessOutcome:
-    """The outcome of a run that finished."""
-    # Stated on every run, not only on interrupts: the protocol reads an omitted
-    # outcome as a producer predating the interrupt-aware lifecycle, and
-    # declaring the capability while behaving as one is not a described state.
-    return RunFinishedSuccessOutcome()
+def _uncovered(thread_id: str) -> str:
+    return (
+        f"thread {thread_id} is waiting on an interrupt this run does not answer: "
+        'resume it, or give it up with a "cancelled" entry'
+    )
 
 
 def is_interrupt(event: BaseEvent) -> bool:
@@ -753,32 +1156,23 @@ def is_interrupt(event: BaseEvent) -> bool:
     return isinstance(event, RunFinishedEvent) and isinstance(event.outcome, RunFinishedInterruptOutcome)
 
 
-def interrupt_capabilities(agent_name: str) -> AgentCapabilities:
-    """What this agent tells a client it can do, at connect time."""
-    return AgentCapabilities(
-        identity=IdentityCapabilities(name=agent_name, type="ag2"),
-        human_in_the_loop=HumanInTheLoopCapabilities(supported=True, interrupts=True),
-    )
-
-
 __all__ = (
     "AG2_METADATA_KEY",
     "DEFAULT_RETENTION",
     "INPUT_REQUIRED_REASON",
-    "NOT_OUTSTANDING",
+    "NOT_COVERED",
     "NOT_PROVEN",
-    "NO_HELD_TURN",
     "PAYLOAD_REFUSED",
     "PROOF_KEY",
     "TOOL_CALL_REASON",
+    "UNSUPPORTED_PROTOCOL_VERSION",
     "ClientInterrupter",
     "Retention",
     "ServedTurn",
     "ServedTurns",
     "TurnOutput",
-    "interrupt_capabilities",
+    "drive_run",
     "serve_exchange",
-    "success_outcome",
     "timestamp_ms",
     "utc_now",
 )

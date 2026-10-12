@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeAlias
 from unittest.mock import MagicMock
 
@@ -19,11 +20,13 @@ from ag2.events import (
     ToolCallsEvent,
     ToolErrorEvent,
 )
+from ag2.tools.schemas import ToolSchema
 
 if TYPE_CHECKING:
     from ag2.files.protocol import FilesClient
 
 __all__ = (
+    "ModelCall",
     "TestConfig",
     "TrackingConfig",
     "Turn",
@@ -94,10 +97,21 @@ class TestClient(LLMClient):
             return ModelResponse(tool_calls=ToolCallsEvent(list(scripted)))
 
 
+@dataclass(frozen=True, slots=True)
+class ModelCall:
+    """What the framework handed the LLM for one call: the prompt, tools and context at that moment."""
+
+    prompt: tuple[str, ...]
+    tools: tuple[ToolSchema, ...]
+    dependencies: Mapping[Any, Any]
+    variables: Mapping[Any, Any]
+
+
 class TrackingClient(LLMClient):
-    def __init__(self, client: LLMClient, mock: MagicMock) -> None:
+    def __init__(self, client: LLMClient, mock: MagicMock, calls: list[ModelCall] | None = None) -> None:
         self.client = client
         self.mock = mock
+        self.calls = calls if calls is not None else []
 
     async def __call__(
         self,
@@ -106,6 +120,17 @@ class TrackingClient(LLMClient):
         **kwargs: Any,
     ) -> ModelResponse:
         self.mock(messages[-1])
+        tools = tuple(kwargs.get("tools", ()))
+        if "tools" in kwargs:
+            kwargs["tools"] = tools
+        self.calls.append(
+            ModelCall(
+                prompt=tuple(context.prompt),
+                tools=tools,
+                dependencies=dict(context.dependencies),
+                variables=dict(context.variables),
+            )
+        )
         return await self.client(messages, context=context, **kwargs)
 
 
@@ -113,6 +138,7 @@ class TrackingConfig(ModelConfig):
     def __init__(self, config: ModelConfig) -> None:
         self.config = config
         self.mock = MagicMock()
+        self.calls: list[ModelCall] = []
 
     @property
     def provider(self) -> ModelProvider:
@@ -126,7 +152,7 @@ class TrackingConfig(ModelConfig):
         return self
 
     def create(self) -> TrackingClient:
-        return TrackingClient(self.config.create(), self.mock)
+        return TrackingClient(self.config.create(), self.mock, self.calls)
 
     def create_files_client(self) -> "FilesClient":
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

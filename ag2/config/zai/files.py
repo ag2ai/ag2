@@ -4,20 +4,36 @@
 
 import asyncio
 from io import BytesIO
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from zai import ZaiClient
+from zai.types.files import FileObject
 
 from ag2.files.types import FileContent, FileProvider, UploadedFile, _created_at_to_float
 
 if TYPE_CHECKING:
     from ag2.config.zai.config import ZAIConfig
 
+# The purposes Z.AI's Files API accepts. The SDK declares them inline on `Files.create`
+# rather than as an exported alias, so they are restated here.
+ZAIFilePurpose = Literal["fine-tune", "retrieval", "batch", "voice-clone-input"]
+
 # Default upload purpose; see ZAIFilesClient.upload for why "batch".
-_DEFAULT_PURPOSE = "batch"
+_DEFAULT_PURPOSE: ZAIFilePurpose = "batch"
 
 # Purposes that GET /files can enumerate without extra params; see ZAIFilesClient.list.
 _LISTABLE_PURPOSES = ("batch", "fine-tune", "voice-clone-input")
+
+
+def _file_id(file: FileObject) -> str:
+    """Read the id off a file object, which the SDK declares optional on every field.
+
+    A file with no id cannot be read, sent or deleted, so it is named here rather than
+    carried on as `None` through an `UploadedFile` that promises a `str`.
+    """
+    if file.id is None:
+        raise ValueError("Z.AI answered with a file that has no id.")
+    return file.id
 
 
 class ZAIFilesClient:
@@ -58,7 +74,7 @@ class ZAIFilesClient:
         self,
         data: bytes,
         filename: str,
-        purpose: str | None = None,
+        purpose: ZAIFilePurpose | None = None,
         *,
         knowledge_id: str | None = None,
         sentence_size: int | None = None,
@@ -83,7 +99,7 @@ class ZAIFilesClient:
             **extra,
         )
         return UploadedFile(
-            file_id=result.id,
+            file_id=_file_id(result),
             filename=result.filename,
             provider=FileProvider.ZAI,
             bytes_count=result.bytes,
@@ -111,7 +127,7 @@ class ZAIFilesClient:
         )
         return [
             UploadedFile(
-                file_id=f.id,
+                file_id=_file_id(f),
                 filename=f.filename,
                 provider=FileProvider.ZAI,
                 bytes_count=f.bytes,

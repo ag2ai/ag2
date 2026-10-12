@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+import copy
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from ag2.annotations import Context
 from ag2.events import (
@@ -42,17 +43,19 @@ class TaskResult:
     error: Exception | None = None
 
 
-def _make_hitl_bridge(parent_context: Context):
+def _make_hitl_bridge(parent_context: Context, task_id: str) -> Callable[[HumanInputRequest, Context], Awaitable[None]]:
     """Forward ``HumanInputRequest`` events from the child stream to the parent.
 
-    Defined at module level so it isn't re-created per ``run_task`` call (per
-    AGENTS.md: no nested functions in runtime execution paths). The closure
-    over ``parent_context`` is captured here, at definition time of the
-    bridge, not inside any hot loop.
+    A copy stamped with ``task_id`` is forwarded: on the parent's stream it is
+    this delegation asking. A nested delegation's own stamp is replaced, since
+    the parent never saw that one start. The copy keeps the request's ``id``,
+    which is what the answer is matched on.
     """
 
     async def _bridge_hitl(event: HumanInputRequest, ctx: Context) -> None:
-        await parent_context.stream.send(event, ctx)
+        forwarded = copy.copy(event)
+        forwarded.task_id = task_id
+        await parent_context.stream.send(forwarded, ctx)
 
     return _bridge_hitl
 
@@ -78,7 +81,21 @@ async def _emit_rollup(parent_context: Context, agent_name: str, incurred: list[
         return
 
     provider, model = _sole_pair(incurred)
-    await parent_context.send(UsageEvent(usage, kind="subtask", label=agent_name, provider=provider, model=model))
+    await parent_context.send(
+        UsageEvent(
+            usage,
+            kind="subtask",
+            label=agent_name,
+            provider=provider,
+            model=model,
+            parts=_model_calls(incurred),
+        )
+    )
+
+
+def _model_calls(incurred: Iterable[UsageEvent]) -> list[UsageEvent]:
+    """The labelled calls behind this spend, a nested delegation's taken from its own rollup."""
+    return [call for event in incurred if event.usage for call in (event.parts or [event])]
 
 
 def _rollup_usage(incurred: Iterable[UsageEvent]) -> Usage:
@@ -141,15 +158,22 @@ async def run_task(
         prompt = f"{objective}\n\n## Context\n{context}"
 
     if emit_events:
-        await parent_context.send(TaskStarted(task_id=task_id, agent_name=agent.name, objective=objective))
+        await parent_context.send(
+            TaskStarted(
+                task_id=task_id,
+                agent_name=agent.name,
+                objective=objective,
+                parent_tool_call_id=parent_context.tool_call_id,
+            )
+        )
 
     # Bridge HITL events to the parent stream so the parent's hook can handle
     # them. If the subagent has its own HITL hook, it is registered as an
     # interrupter and swallows the event first.
-    sub_id: str | None = None
+    sub_id: UUID | None = None
     if not agent._hitl_hook:
         sub_id = task_stream.where(HumanInputRequest).subscribe(
-            _make_hitl_bridge(parent_context),
+            _make_hitl_bridge(parent_context, task_id),
             interrupt=True,
         )
 

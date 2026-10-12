@@ -121,7 +121,7 @@ Top-level modules:
 - `ag2.tools.subagents` - Agent-to-agent delegation (see [below](#subagent-delegation))
 - `ag2.testing` - Testing utilities
 - `ag2.middleware` - Request/response interception (see [below](#middleware))
-- `ag2.observer` - Reusable observer implementations
+- `ag2.observers` - Reusable observer implementations
 - `ag2.eval` - Offline evaluation framework (datasets, scorers, runner, persistence)
 
 Advanced modules:

@@ -20,15 +20,16 @@ class TaskEvent(BaseEvent):
 
 
 class TaskStarted(TaskEvent):
+    parent_tool_call_id: str | None = None
     # Optional ``TaskSpec`` describing what the task is doing. Set by the
     # framework-core ``Task`` primitive (``ag2.task``); legacy
     # ``run_task`` callers leave it ``None``.
-    spec: "TaskSpec | None" = Field(None)
+    spec: "TaskSpec | None" = Field(default=None)
     # Absolute ISO deadline (start + ttl_seconds) if the task was created
     # with a TTL, else ``None``. Carried on the event so the network's
     # ``TaskMirror`` can hand it to the hub, whose TTL sweeper expires
     # tasks past ``expires_at``. ``TaskSpec`` does not hold the TTL.
-    expires_at: str | None = Field(None)
+    expires_at: str | None = Field(default=None)
 
 
 class TaskProgress(TaskEvent):

@@ -446,7 +446,7 @@ class ToolGateway:
         call = ToolCallEvent(name, arguments=json.dumps(arguments))
         try:
             async with context.stream.get(
-                (ToolErrorEvent.parent_id == call.id)
+                (ToolErrorEvent.parent_id == call.id)  # type: ignore[arg-type]  # event-field DSL: `==` builds a Condition
                 | (ToolResultEvent.parent_id == call.id)
                 | (ClientToolCallEvent.id == call.id)
             ) as pending:

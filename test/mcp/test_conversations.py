@@ -475,11 +475,10 @@ class TestAdvertisedConversationArgument:
 
 @pytest.mark.asyncio
 async def test_structured_content_is_exactly_the_output_schema() -> None:
-    """``structuredContent`` is the agent's response schema, and nothing else.
+    """``structuredContent`` is the agent's serialized response, and nothing else.
 
-    It is advertised verbatim as the tool's ``outputSchema``, which MCP requires
-    structured content to conform to, so a server field mixed in would break the
-    tool's own declared contract.
+    It must conform to the tool's ``outputSchema``, so a server field mixed in
+    would break the tool's own declared contract.
     """
     agent = Agent(
         "weather",

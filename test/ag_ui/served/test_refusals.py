@@ -9,12 +9,17 @@ left with an event that ends the run. A stream that simply stops is the one
 outcome a client cannot recover from — it waits.
 """
 
+import asyncio
 from typing import Any
 
 import pytest
 from dirty_equals import IsPartialDict
 
-from ag2.ag_ui import NOT_OUTSTANDING, NO_HELD_TURN, PAYLOAD_REFUSED, AGUIStream, Retention
+from ag2 import Agent, Context
+from ag2.ag_ui import NOT_COVERED, PAYLOAD_REFUSED, AGUIStream, Retention
+from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.observers import observer
+from ag2.testing import TestConfig
 from test.ag_ui.harness import only, outcome_of, sole_interrupt, types_of
 from test.ag_ui.serving import (
     QUESTION,
@@ -38,15 +43,32 @@ SECOND_QUESTION = "And your favourite number?"
 async def refusal(
     app: Any, *, thread_id: str = "t1", run_id: str = "r2", resume: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Drive one exchange expected to be refused, and return its run error."""
+    """Drive one exchange expected to be refused, and return its run error.
+
+    Refused before the run starts: the stream is the error alone.
+    """
     events = await post_run(app, run_body(thread_id=thread_id, run_id=run_id, text=None, resume=resume))
-    assert types_of(events)[-1] == "RUN_ERROR", f"the client was left without a terminating event: {types_of(events)}"
+    assert types_of(events) == ["RUN_ERROR"], f"not refused before the run started: {types_of(events)}"
     return only(events, "RUN_ERROR")
 
 
+async def ignored(
+    app: Any, *, thread_id: str = "t1", run_id: str = "r2", resume: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Drive one exchange whose resume answers nothing the thread holds, and return its events.
+
+    The protocol has a producer treat such entries as unrecognised: the run
+    starts without them, and never fails over an answer nobody asked for.
+    """
+    events = await post_run(app, run_body(thread_id=thread_id, run_id=run_id, text=None, resume=resume))
+    assert types_of(events)[0] == "RUN_STARTED", f"the run did not start: {types_of(events)}"
+    assert "RUN_ERROR" not in types_of(events)
+    return events
+
+
 class TestGivingUp:
-    async def test_abandoning_the_question_ends_the_turn(self) -> None:
-        """An outcome, not a failure: nobody is answering, and the run is over."""
+    async def test_abandoning_the_question_ends_the_run_as_cancelled(self) -> None:
+        """Neither a failure nor a success: nobody is answering, and the turn was stopped."""
         agent, asked = asking_agent()
         app = app_for(AGUIStream(agent))
 
@@ -56,10 +78,58 @@ class TestGivingUp:
             run_body(thread_id="t1", run_id="r2", text=None, resume=abandon(interrupt)),
         )
 
-        assert types_of(events)[-1] == "RUN_FINISHED"
-        assert outcome_of(events) == {"type": "success"}
+        assert types_of(events) == ["RUN_STARTED", "RUN_FINISHED"]
+        assert outcome_of(events) == {"type": "cancelled"}
+        assert "result" not in only(events, "RUN_FINISHED")
         assert asked.answers == []
         assert await asked.ending_within() == "cancelled"
+
+    async def test_the_thread_holds_nothing_after_it(self) -> None:
+        """The next run on the thread is an ordinary new run, not a resume."""
+        agent, _ = asking_agent()
+        app = app_for(AGUIStream(agent))
+
+        interrupt = await ask_once(app)
+        await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=abandon(interrupt)))
+        again = await post_run(app, run_body(thread_id="t1", run_id="r3"))
+
+        assert sole_interrupt(again)["id"] != interrupt["id"]
+
+    async def test_work_kept_while_the_question_waited_is_sent_and_closed_first(self) -> None:
+        """What the turn did while paused belongs to the cancelled run, and ends before it does."""
+        question_out, sibling_started, sibling_done = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(
+                [ToolCallEvent(name="ask_human", arguments="{}"), ToolCallEvent(name="look_up", arguments="{}")],
+                "all done",
+            ),
+            observers=[observer(ToolResultEvent, lambda _event: sibling_done.set(), sync_to_thread=False)],
+        )
+
+        @agent.tool
+        async def ask_human(context: Context) -> str:
+            """Ask the human, once the sibling call has been announced."""
+            await sibling_started.wait()
+            return await context.input(QUESTION)
+
+        @agent.tool
+        async def look_up() -> str:
+            """Finish only once the question is out."""
+            sibling_started.set()
+            await question_out.wait()
+            return "looked up"
+
+        app = app_for(AGUIStream(agent))
+
+        interrupt = await ask_once(app)
+        question_out.set()
+        await asyncio.wait_for(sibling_done.wait(), timeout=5.0)
+        events = await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=abandon(interrupt)))
+
+        assert types_of(events) == ["RUN_STARTED", "TOOL_CALL_RESULT", "RUN_FINISHED"]
+        assert only(events, "TOOL_CALL_RESULT") == IsPartialDict({"content": "looked up"})
+        assert outcome_of(events) == {"type": "cancelled"}
 
     async def test_the_abandoned_turn_cannot_be_resumed_afterwards(self) -> None:
         agent, asked = asking_agent()
@@ -68,20 +138,19 @@ class TestGivingUp:
         interrupt = await ask_once(app)
         await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=abandon(interrupt)))
 
-        error = await refusal(app, run_id="r3", resume=answer(interrupt, "blue"))
+        await ignored(app, run_id="r3", resume=answer(interrupt, "blue"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
         assert asked.answers == []
 
 
 class TestAnswersThatCannotBeHonoured:
-    async def test_an_interrupt_nobody_is_holding(self) -> None:
-        agent, _ = asking_agent()
+    async def test_an_interrupt_nobody_is_holding_is_ignored(self) -> None:
+        agent, asked = asking_agent()
         app = app_for(AGUIStream(agent))
 
-        error = await refusal(app, resume=resolved("no-such-interrupt", "blue"))
+        await ignored(app, resume=resolved("no-such-interrupt", "blue"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
+        assert asked.answers == []
 
     async def test_an_unknown_id_on_a_thread_that_is_holding_one(self) -> None:
         agent, asked = asking_agent()
@@ -90,22 +159,21 @@ class TestAnswersThatCannotBeHonoured:
         await ask_once(app)
         error = await refusal(app, resume=resolved("no-such-interrupt", "blue"))
 
-        assert error == IsPartialDict({"code": NOT_OUTSTANDING})
+        assert error == IsPartialDict({"code": NOT_COVERED})
         assert asked.answers == []
 
-    async def test_an_interrupt_that_was_already_answered(self) -> None:
+    async def test_an_interrupt_that_was_already_answered_is_ignored(self) -> None:
         agent, asked = asking_agent()
         app = app_for(AGUIStream(agent))
 
         interrupt = await ask_once(app)
         await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")))
 
-        error = await refusal(app, run_id="r3", resume=answer(interrupt, "red"))
+        await ignored(app, run_id="r3", resume=answer(interrupt, "red"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
         assert asked.answers == ["blue"]
 
-    async def test_an_answer_arriving_after_the_deadline(self) -> None:
+    async def test_an_answer_arriving_after_the_deadline_is_ignored(self) -> None:
         clock = Clock()
         agent, asked = asking_agent()
         app = app_for(AGUIStream(agent, retention=Retention(ttl=TTL), now=clock))
@@ -113,9 +181,8 @@ class TestAnswersThatCannotBeHonoured:
         interrupt = await ask_once(app)
         clock.advance(TTL + 1)
 
-        error = await refusal(app, resume=answer(interrupt, "blue"))
+        await ignored(app, resume=answer(interrupt, "blue"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
         assert asked.answers == []
 
     async def test_an_answer_to_an_earlier_round(self) -> None:
@@ -131,7 +198,7 @@ class TestAnswersThatCannotBeHonoured:
 
         error = await refusal(app, run_id="r3", resume=answer(first, "red"))
 
-        assert error == IsPartialDict({"code": NOT_OUTSTANDING})
+        assert error == IsPartialDict({"code": NOT_COVERED})
         assert asked.answers == ["blue"]
         assert sole_interrupt(second) == IsPartialDict({"message": SECOND_QUESTION})
 
@@ -189,7 +256,6 @@ class TestWhatARefusalLeavesBehind:
         await refusal(app, resume=answer(interrupt, 42))
         clock.advance(2)
 
-        error = await refusal(app, run_id="r3", resume=answer(interrupt, "blue"))
+        await ignored(app, run_id="r3", resume=answer(interrupt, "blue"))
 
-        assert error == IsPartialDict({"code": NO_HELD_TURN})
         assert asked.answers == []

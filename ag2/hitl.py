@@ -21,6 +21,7 @@ HumanHook: TypeAlias = (
 )
 
 HitlExecution: TypeAlias = Callable[[HumanInputRequest, Context], Awaitable[None]]
+HitlFactory: TypeAlias = Callable[[Iterable["BaseMiddleware"]], HitlExecution]
 
 # Whether a protocol peer that can put a question to *our* human may be asked, or
 # is refused outright. Deliberately two-valued, unlike a permission policy: a
@@ -38,7 +39,7 @@ ElicitationPolicy = Literal["ask", "decline"]
 
 def wrap_hitl(
     func: HumanHook,
-) -> Callable[[Iterable["BaseMiddleware"]], HitlExecution]:
+) -> HitlFactory:
     call_model = build_model(func)
 
     async def _call_model(event: HumanInputRequest, context: Context) -> HumanMessage:

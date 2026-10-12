@@ -139,8 +139,10 @@ The tool result is always recorded as a string:
 
 - text results verbatim,
 - structured results (dict, Pydantic model, list) as JSON,
-- binary/image/document parts as a `[binary:<media-type> <size>B]` descriptor,
+- parts given by URL as the URL,
 - multi-part results as the above joined with newlines.
+
+Binary and provider-file parts (inline images, audio, documents) have no text and are omitted.
 
 Results longer than `max_tool_result_chars` (default 8192) end with `...[truncated]` and carry
 `ag2.tool.call.result.truncated`; traces reconstructed by `ag2.eval` expose that flag as

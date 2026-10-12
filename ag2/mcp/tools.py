@@ -114,10 +114,11 @@ async def call_with_context(fn: Callable[..., Any], context: "MCPExecutionContex
     annotations ask for.
     """
     call_model = build_model(fn, serialize_result=False)
+    # `asolve` annotates each keyword as a `dict[str, Any]`; the values really are arbitrary.
+    options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}
     async with AsyncExitStack() as stack:
         return await call_model.asolve(
-            context,
-            **{CONTEXT_OPTION_NAME: context},
+            **options,
             stack=stack,
             cache_dependencies={},
         )
@@ -285,8 +286,8 @@ def mcp_tool(
     *,
     name: str | None = None,
     description: str | None = None,
-    title: str | None = None,
-    annotations: ToolAnnotations | None = None,
+    title: str | Variable | None = None,
+    annotations: ToolAnnotations | Variable | None = None,
     output_schema: dict[str, Any] | None = None,
     meta: Mapping[str, Any] | None = None,
     sync_to_thread: bool = True,
@@ -299,8 +300,8 @@ def mcp_tool(
     *,
     name: str | None = None,
     description: str | None = None,
-    title: str | None = None,
-    annotations: ToolAnnotations | None = None,
+    title: str | Variable | None = None,
+    annotations: ToolAnnotations | Variable | None = None,
     output_schema: dict[str, Any] | None = None,
     meta: Mapping[str, Any] | None = None,
     sync_to_thread: bool = True,
@@ -312,8 +313,8 @@ def mcp_tool(
     *,
     name: str | None = None,
     description: str | None = None,
-    title: str | None = None,
-    annotations: ToolAnnotations | None = None,
+    title: str | Variable | None = None,
+    annotations: ToolAnnotations | Variable | None = None,
     output_schema: dict[str, Any] | None = None,
     meta: Mapping[str, Any] | None = None,
     sync_to_thread: bool = True,
@@ -335,9 +336,11 @@ def mcp_tool(
         function: The function (when used as a bare ``@mcp_tool``).
         name: Tool name. Defaults to the function name.
         description: Tool description. Defaults to the function docstring.
-        title: Human-readable display name for ``tools/list``.
+        title: Human-readable display name for ``tools/list``; a ``Variable``
+            is resolved per request.
         annotations: ``mcp.types.ToolAnnotations`` behavior hints
-            (``readOnlyHint``, ``destructiveHint``, …) for the host.
+            (``readOnlyHint``, ``destructiveHint``, …) for the host; a
+            ``Variable`` is resolved per request.
         output_schema: Overrides the schema derived from the return annotation.
         meta: ``_meta`` to advertise on the tool.
         sync_to_thread: Run a sync function in a worker thread.

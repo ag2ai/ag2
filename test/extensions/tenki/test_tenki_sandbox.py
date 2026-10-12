@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from tenki import CommandResult
+from tenki import CommandResult, CommandTimeoutError
 
 from ag2.annotations import Variable
 from ag2.extensions.tenki.sandbox import TenkiSandbox
@@ -186,6 +186,52 @@ class TestExec:
 
         assert await sandbox.exec(["sleep", "10"], timeout=2) == ExecResult(
             output="Tenki execution timed out after 2s",
+            exit_code=124,
+        )
+
+    @pytest.mark.parametrize("exit_code", [0, 3, -1])
+    async def test_timeout_flag_overrides_exit_code_and_preserves_output(self, exit_code: int) -> None:
+        result = CommandResult(
+            argv=["sh"],
+            exit_code=exit_code,
+            stdout=b"partial output\n",
+            stderr=b"partial error\n",
+            reason="exit",
+            timed_out=True,
+        )
+        sandbox = TenkiSandbox(
+            client=_fake_client(_fake_remote(result=result)),
+            create_options={"workspace_id": "workspace-1"},
+        )
+
+        assert await sandbox.exec(["sh"], timeout=2) == ExecResult(
+            output="partial output\npartial error\nTenki execution timed out after 2s",
+            exit_code=124,
+        )
+
+    async def test_timeout_flag_reports_silent_timeout_with_default_budget(self) -> None:
+        result = CommandResult(argv=["sleep", "10"], exit_code=0, timed_out=True)
+        sandbox = TenkiSandbox(
+            client=_fake_client(_fake_remote(result=result)),
+            create_options={"workspace_id": "workspace-1"},
+            timeout=2,
+        )
+
+        assert await sandbox.exec(["sleep", "10"]) == ExecResult(
+            output="Tenki execution timed out after 2s",
+            exit_code=124,
+        )
+
+    async def test_timeout_error_reports_the_budget(self) -> None:
+        remote = _fake_remote()
+        remote.exec = AsyncMock(side_effect=CommandTimeoutError("deadline exceeded"))
+        sandbox = TenkiSandbox(
+            client=_fake_client(remote),
+            create_options={"workspace_id": "workspace-1"},
+        )
+
+        assert await sandbox.exec(["sleep", "10"], timeout=2) == ExecResult(
+            output="Tenki execution timed out after 2s: deadline exceeded",
             exit_code=124,
         )
 

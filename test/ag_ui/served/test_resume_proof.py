@@ -78,10 +78,57 @@ async def test_the_proof_it_was_issued_with_is_accepted() -> None:
     assert outcome_of(events) == {"type": "success"}
 
 
-class TestWhatIsRefused:
-    async def test_no_proof_at_all(self) -> None:
+class TestWithoutRequiringIt:
+    """A client that does not copy an interrupt's metadata into its answer still resumes."""
+
+    async def test_an_answer_without_a_proof_is_accepted(self) -> None:
         agent, asked = asking_agent()
         app = app_for(AGUIStream(agent))
+
+        interrupt = await ask_once(app)
+        events = await post_run(
+            app, run_body(thread_id="t1", run_id="r2", text=None, resume=resolved(interrupt["id"], "blue"))
+        )
+
+        assert asked.answers == ["blue"]
+        assert outcome_of(events) == {"type": "success"}
+
+    async def test_giving_up_without_a_proof_is_accepted(self) -> None:
+        agent, asked = asking_agent()
+        app = app_for(AGUIStream(agent))
+
+        interrupt = await ask_once(app)
+        events = await post_run(
+            app,
+            run_body(
+                thread_id="t1",
+                run_id="r2",
+                text=None,
+                resume=[{"interruptId": interrupt["id"], "status": "cancelled"}],
+            ),
+        )
+
+        assert outcome_of(events) == {"type": "cancelled"}
+        assert asked.answers == []
+
+    async def test_a_proof_that_is_present_must_still_be_the_one_issued(self) -> None:
+        agent, asked = asking_agent()
+        app = app_for(AGUIStream(agent))
+
+        interrupt = await ask_once(app)
+        forged = {AG2_METADATA_KEY: {PROOF_KEY: "not-the-one-that-was-issued"}}
+        error = await refused(app, resolved(interrupt["id"], "blue", metadata=forged))
+
+        assert error == IsPartialDict({"code": NOT_PROVEN})
+        assert asked.answers == []
+
+
+class TestWhatIsRefused:
+    """With `require_resume_proof`, and whatever a proof that is present is worth."""
+
+    async def test_no_proof_at_all(self) -> None:
+        agent, asked = asking_agent()
+        app = app_for(AGUIStream(agent, require_resume_proof=True))
 
         interrupt = await ask_once(app)
         error = await refused(app, resolved(interrupt["id"], "blue"))
@@ -91,7 +138,7 @@ class TestWhatIsRefused:
 
     async def test_an_envelope_of_the_wrong_shape(self) -> None:
         agent, asked = asking_agent()
-        app = app_for(AGUIStream(agent))
+        app = app_for(AGUIStream(agent, require_resume_proof=True))
 
         interrupt = await ask_once(app)
         error = await refused(app, resolved(interrupt["id"], "blue", metadata={AG2_METADATA_KEY: "a-bare-string"}))
@@ -150,7 +197,7 @@ class TestWhatIsRefused:
 
     async def test_an_unproven_answer_can_be_followed_by_a_proven_one(self) -> None:
         agent, asked = asking_agent()
-        app = app_for(AGUIStream(agent))
+        app = app_for(AGUIStream(agent, require_resume_proof=True))
 
         interrupt = await ask_once(app)
         await refused(app, resolved(interrupt["id"], "forged"))
@@ -163,7 +210,7 @@ class TestWhatIsRefused:
     async def test_giving_up_needs_proof_too(self) -> None:
         """Ending someone else's turn is not a lesser act than answering it."""
         agent, asked = asking_agent()
-        app = app_for(AGUIStream(agent))
+        app = app_for(AGUIStream(agent, require_resume_proof=True))
 
         interrupt = await ask_once(app)
         error = await refused(app, [{"interruptId": interrupt["id"], "status": "cancelled"}])

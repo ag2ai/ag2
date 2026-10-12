@@ -123,7 +123,7 @@ class TestTheAnswerDecides:
 class TestItBehavesLikeAnyOtherInterrupt:
     async def test_an_unproven_approval_is_refused(self) -> None:
         agent, ran = gated_agent()
-        app = app_for(AGUIStream(agent))
+        app = app_for(AGUIStream(agent, require_resume_proof=True))
 
         interrupt = await ask_once(app)
         events = await post_run(
@@ -149,5 +149,5 @@ class TestItBehavesLikeAnyOtherInterrupt:
             ),
         )
 
-        assert outcome_of(events) == {"type": "success"}
+        assert outcome_of(events) == {"type": "cancelled"}
         assert ran == []

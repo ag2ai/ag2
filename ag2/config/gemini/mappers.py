@@ -25,7 +25,7 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
-from ag2.files.types import FileProvider
+from ag2.files.types import FileProvider, UploadedFile
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME, FileSearchToolSchema
@@ -345,9 +345,13 @@ def convert_messages(
                         request_parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
 
                 elif isinstance(inp, FileIdInput):
-                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.GEMINI:
+                    if (
+                        isinstance(inp, UploadedFile)
+                        and inp.provider is not None
+                        and inp.provider is not FileProvider.GEMINI
+                    ):
                         raise UnsupportedInputError(
-                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
+                            f"file uploaded via '{inp.provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
                             "gemini",
                         )
                     file_uri = f"https://generativelanguage.googleapis.com/v1beta/{inp.file_id}"
@@ -379,8 +383,16 @@ def normalize_usage(metadata: types.GenerateContentResponseUsageMetadata) -> Usa
     # Read through getattr although the annotation declares the field: test_gemini_usage pins
     # the behaviour for a google-genai below the declared floor, where it is absent.
     thinking = _to_float(getattr(metadata, "thoughts_token_count", None)) or None
+    # Tokens a tool's output put into the prompt (grounding, code execution) are
+    # billed as prompt but counted apart, and the total counts them: leaving
+    # them out would put prompt plus completion below it. Absent before
+    # google-genai added the field, like `thoughts_token_count`.
+    prompt = _to_float(metadata.prompt_token_count)
+    tool_use_prompt = _to_float(getattr(metadata, "tool_use_prompt_token_count", None))
+    if tool_use_prompt is not None:
+        prompt = (prompt or 0.0) + tool_use_prompt
     return Usage(
-        prompt_tokens=_to_float(metadata.prompt_token_count),
+        prompt_tokens=prompt,
         completion_tokens=_to_float(metadata.candidates_token_count),
         total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,

@@ -270,9 +270,9 @@ class ACPBridge(acp.Client):
 
     async def request_permission(
         self,
-        options: list[schema.PermissionOption],
         session_id: str,
         tool_call: schema.ToolCallUpdate,
+        options: list[schema.PermissionOption],
         **kwargs: Any,
     ) -> schema.RequestPermissionResponse:
         chosen = await self.state.resolve_permission(options, tool_call)
@@ -304,28 +304,28 @@ class ACPBridge(acp.Client):
 
     async def read_text_file(
         self,
-        path: str,
         session_id: str,
-        limit: int | None = None,
+        path: str,
         line: int | None = None,
+        limit: int | None = None,
         **kwargs: Any,
     ) -> schema.ReadTextFileResponse:
         content = self.state.read_text_file(path, line=line, limit=limit)
         return schema.ReadTextFileResponse(content=content)
 
     async def write_text_file(
-        self, content: str, path: str, session_id: str, **kwargs: Any
+        self, session_id: str, path: str, content: str, **kwargs: Any
     ) -> schema.WriteTextFileResponse:
         self.state.write_text_file(content, path)
         return schema.WriteTextFileResponse()
 
     async def create_terminal(
         self,
-        command: str,
         session_id: str,
+        command: str,
         args: list[str] | None = None,
-        cwd: str | None = None,
         env: list[schema.EnvVariable] | None = None,
+        cwd: str | None = None,
         output_byte_limit: int | None = None,
         **kwargs: Any,
     ) -> schema.CreateTerminalResponse:

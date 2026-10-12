@@ -14,7 +14,7 @@ import pytest
 from ag2.ag_ui import DEFAULT_RETENTION, NOT_PROVEN, AGUIStream, Retention
 from ag2.ag_ui.interrupts import AG2_METADATA_KEY, PROOF_KEY
 from ag2.exceptions import HumanInputTimeoutError
-from test.ag_ui.harness import only, sole_interrupt, types_of
+from test.ag_ui.harness import only, outcome_of, sole_interrupt, types_of
 from test.ag_ui.serving import (
     QUESTION,
     Clock,
@@ -129,7 +129,7 @@ class TestBoundsOnWhatIsHeld:
             run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")),
         )
 
-        assert types_of(events)[-1] == "RUN_ERROR"
+        assert "RUN_ERROR" not in types_of(events)
         assert asked.answers == []
 
     async def test_holding_past_the_maximum_evicts_the_oldest(self) -> None:
@@ -145,7 +145,8 @@ class TestBoundsOnWhatIsHeld:
             app,
             run_body(thread_id="t1", run_id="r3", text=None, resume=answer(first, "blue")),
         )
-        assert types_of(refused)[-1] == "RUN_ERROR"
+        assert "RUN_ERROR" not in types_of(refused)
+        assert asked.answers == []
 
     async def test_a_refused_resume_does_not_move_a_turn_ahead_of_one_held_after_it(self) -> None:
         """Putting a turn back is not holding it again.
@@ -154,7 +155,7 @@ class TestBoundsOnWhatIsHeld:
         at the front of the queue and have another tenant's evicted in its place.
         """
         clock = Clock()
-        agent, _ = asking_agent()
+        agent, asked = asking_agent()
         app = app_for(AGUIStream(agent, retention=Retention(ttl=TTL, max_held=2), now=clock))
 
         first = await ask_once(app, thread_id="t1", run_id="r1")
@@ -177,10 +178,14 @@ class TestBoundsOnWhatIsHeld:
         await ask_once(app, thread_id="t3", run_id="r4")
 
         # The turn held first is the turn evicted first, refusals notwithstanding.
-        gone = await post_run(app, run_body(thread_id="t1", run_id="r5", text=None, resume=answer(first, "blue")))
-        assert types_of(gone)[-1] == "RUN_ERROR"
+        # Read in the other order the ignored resume's own fresh run would be held
+        # too, and evict the second.
         kept = await post_run(app, run_body(thread_id="t2", run_id="r6", text=None, resume=answer(second, "green")))
-        assert types_of(kept)[-1] == "RUN_FINISHED"
+        assert outcome_of(kept) == {"type": "success"}
+        assert asked.answers == ["green"]
+        gone = await post_run(app, run_body(thread_id="t1", run_id="r5", text=None, resume=answer(first, "blue")))
+        assert "RUN_ERROR" not in types_of(gone)
+        assert asked.answers == ["green"]
 
     async def test_shutdown_cancels_a_held_turn(self) -> None:
         agent, asked = asking_agent()
@@ -242,4 +247,5 @@ async def test_the_callers_own_timeout_still_ends_the_turn_when_it_falls_first()
         app,
         run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, "blue")),
     )
-    assert types_of(events)[-1] == "RUN_ERROR"
+    assert "RUN_ERROR" not in types_of(events)
+    assert asked.answers == []

@@ -8,7 +8,7 @@ import gc
 import sys
 import threading
 import weakref
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from typing import Annotated
 from unittest.mock import MagicMock
 
@@ -1634,6 +1634,43 @@ class TestHitlPropagation:
         mock.worker_hitl.assert_called_once_with("Need approval")
         mock.tool_got.assert_called_once_with("worker answer")
         mock.parent_hitl.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_the_parent_hears_which_delegation_asks(self) -> None:
+        worker = Agent("worker", config=TestConfig(ToolCallEvent(name="ask_human", arguments="{}"), "Done."))
+
+        @worker.tool
+        async def ask_human(ctx: Context) -> str:
+            """Ask the human."""
+            return await ctx.input("Need approval", timeout=1.0)
+
+        coordinator = Agent(
+            "coordinator",
+            config=TestConfig(ToolCallEvent(name="task_worker", arguments='{"objective": "Go"}'), "OK."),
+            tools=[worker.as_tool(description="Worker")],
+        )
+        heard: list[HumanInputRequest] = []
+        started: list[TaskStarted] = []
+
+        @coordinator.hitl_hook
+        def parent_hitl(event: HumanInputRequest) -> HumanMessage:
+            heard.append(event)
+            return HumanMessage("yes")
+
+        stream = MemoryStream()
+        stream.where(TaskStarted).subscribe(_append_to(started))
+        await coordinator.ask("Go", stream=stream)
+
+        [request] = heard
+        [task] = started
+        assert request.task_id == task.task_id
+
+
+def _append_to(into: list[BaseEvent]) -> Callable[[BaseEvent], Awaitable[None]]:
+    async def _append(event: BaseEvent) -> None:
+        into.append(event)
+
+    return _append
 
 
 class TestAsToolStreamArgument:

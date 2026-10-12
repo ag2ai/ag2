@@ -4,7 +4,7 @@
 
 from fast_depends import Depends
 
-from .agent import Agent, AgentReply, AgentRun, KnowledgeConfig, TaskConfig
+from .agent import Agent, AgentReply, AgentRun, TaskConfig
 from .annotations import Context, Inject, Variable
 from .events import (
     AudioInput,
@@ -16,6 +16,7 @@ from .events import (
     VideoInput,
 )
 from .files import FilesAPI
+from .knowledge.config import KnowledgeConfig
 from .middleware import Middleware
 from .observers import observer
 from .plugin import Plugin

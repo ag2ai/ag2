@@ -21,12 +21,13 @@ import pytest
 from dirty_equals import IsPartialDict
 
 pytest.importorskip("ag_ui")
+from ag_ui.core import Context as AGUIContext
 from ag_ui.core import RunAgentInput
 
-from ag2 import Agent, Depends
+from ag2 import Agent, Context, Depends
 from ag2.a2ui import A2UIServer, a2ui_action
 from ag2.a2ui.transports import AgUiTransport
-from ag2.events import ModelMessage, ModelRequest, ModelResponse, TextInput, Usage
+from ag2.events import ModelMessage, ModelRequest, ModelResponse, TextInput, ToolCallEvent, Usage
 from ag2.middleware.base import BaseMiddleware
 from ag2.testing import TestConfig, TrackingConfig
 
@@ -343,3 +344,25 @@ class TestTokenUsage:
 
         [finished] = [e for e in events if e["type"] == "RUN_FINISHED"]
         assert "usage" not in finished
+
+
+@pytest.mark.asyncio
+async def test_client_context_reaches_the_prompt() -> None:
+    seen: list[list[str]] = []
+    agent = Agent("ui", prompt="Be helpful.", config=TestConfig(ToolCallEvent(name="peek"), "done"))
+
+    @agent.tool
+    def peek(context: Context) -> str:
+        """Look at the prompt."""
+        seen.append(list(context.prompt))
+        return "seen"
+
+    server = A2UIServer(agent, transport=AgUiTransport(), validate_responses=False)
+    incoming = _run_input("hi")
+    incoming.context = [AGUIContext(description="The user's locale", value="en-GB")]
+
+    await _dispatch_events(server, incoming)
+
+    [prompt] = seen
+    assert prompt[0] == "Be helpful."
+    assert prompt[-1] == "## Context from the application\n\n- The user's locale: en-GB"

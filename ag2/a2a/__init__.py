@@ -8,7 +8,7 @@ try:
     from .card import build_card
     from .config import A2AConfig
 except ImportError as e:
-    build_card = missing_optional_dependency("build_card", "a2a", e)  # type: ignore[misc]
+    build_card = missing_optional_dependency("build_card", "a2a", e)
     A2AConfig = missing_optional_dependency("A2AConfig", "a2a", e)  # type: ignore[misc]
 
 try:
@@ -19,9 +19,7 @@ except ImportError as e:
 try:
     from .transports.grpc import secure_grpc_channel_factory
 except ImportError as e:
-    secure_grpc_channel_factory = missing_additional_dependency(  # type: ignore[misc]
-        "secure_grpc_channel_factory", "a2a-sdk[grpc]", e
-    )
+    secure_grpc_channel_factory = missing_additional_dependency("secure_grpc_channel_factory", "a2a-sdk[grpc]", e)
 
 __all__ = (
     "A2AConfig",
