@@ -59,13 +59,15 @@ async def _prompt_sent(capabilities: schema.PromptCapabilities | None, *inputs: 
     return prompt
 
 
-_ALL = schema.PromptCapabilities(image=True, audio=True, embedded_context=True)
+@pytest.fixture
+def all_capabilities() -> schema.PromptCapabilities:
+    return schema.PromptCapabilities(image=True, audio=True, embedded_context=True)
 
 
 @pytest.mark.asyncio
-async def test_media_the_agent_accepts_is_sent_as_its_own_block() -> None:
+async def test_media_the_agent_accepts_is_sent_as_its_own_block(all_capabilities: schema.PromptCapabilities) -> None:
     prompt = await _prompt_sent(
-        _ALL,
+        all_capabilities,
         TextInput("look"),
         ImageInput(data=b"img", media_type="image/png"),
         AudioInput(data=b"aud", media_type="audio/wav"),

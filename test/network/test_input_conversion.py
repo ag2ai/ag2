@@ -16,7 +16,10 @@ from ag2.network.views.builtin import FullTranscript, NamedTranscript
 
 from ._helpers import text_envelope, two_party_metadata
 
-_PHOTO = ImageInput("https://example.com/photo.png")
+
+@pytest.fixture
+def photo() -> ImageInput:
+    return ImageInput("https://example.com/photo.png")
 
 
 class TestEnsureParts:
@@ -26,8 +29,8 @@ class TestEnsureParts:
     def test_a_string_is_one_text_part(self) -> None:
         assert ensure_parts("hi") == [TextInput("hi")]
 
-    def test_an_input_is_kept_as_it_is(self) -> None:
-        assert ensure_parts(_PHOTO) == [_PHOTO]
+    def test_an_input_is_kept_as_it_is(self, photo: ImageInput) -> None:
+        assert ensure_parts(photo) == [photo]
 
     def test_structured_data_is_one_data_part(self) -> None:
         assert ensure_parts({"a": 1}) == [DataInput({"a": 1})]
@@ -36,29 +39,29 @@ class TestEnsureParts:
     def test_bytes_are_one_data_part(self, raw: bytes | bytearray) -> None:
         assert ensure_parts(raw) == [DataInput(raw)]
 
-    def test_a_sequence_is_one_part_per_item(self) -> None:
-        assert ensure_parts(["hi", _PHOTO, {"a": 1}]) == [TextInput("hi"), _PHOTO, DataInput({"a": 1})]
+    def test_a_sequence_is_one_part_per_item(self, photo: ImageInput) -> None:
+        assert ensure_parts(["hi", photo, {"a": 1}]) == [TextInput("hi"), photo, DataInput({"a": 1})]
 
 
 @pytest.mark.asyncio
 class TestViewsWithNonTextParts:
-    async def test_a_named_view_labels_a_leading_image_on_its_own(self) -> None:
+    async def test_a_named_view_labels_a_leading_image_on_its_own(self, photo: ImageInput) -> None:
         projection = await NamedTranscript().project(
             [text_envelope("alice", "bob", "ignored")],
             participant_id="bob",
             channel=two_party_metadata("alice", "bob"),
-            render_envelope=lambda envelope: [_PHOTO, TextInput("what is this?")],  # noqa: ARG005
+            render_envelope=lambda envelope: [photo, TextInput("what is this?")],  # noqa: ARG005
             name_for=lambda agent_id: agent_id.title(),
         )
 
-        assert projection == [ModelRequest([TextInput("[Alice]:"), _PHOTO, TextInput("what is this?")])]
+        assert projection == [ModelRequest([TextInput("[Alice]:"), photo, TextInput("what is this?")])]
 
-    async def test_an_own_envelope_projects_only_its_text(self) -> None:
+    async def test_an_own_envelope_projects_only_its_text(self, photo: ImageInput) -> None:
         projection = await FullTranscript().project(
             [text_envelope("bob", "alice", "ignored")],
             participant_id="bob",
             channel=two_party_metadata("alice", "bob"),
-            render_envelope=lambda envelope: [TextInput("here"), _PHOTO],  # noqa: ARG005
+            render_envelope=lambda envelope: [TextInput("here"), photo],  # noqa: ARG005
         )
 
         assert projection == [ModelMessage("here")]

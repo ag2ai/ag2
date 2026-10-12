@@ -43,11 +43,13 @@ def _packet(*, sender: str = "alice", routing: dict | None = None, body: str = "
     )
 
 
-_HANDOFF = {"kind": "handoff", "tool": "to_reviewer", "reason": "needs a check"}
+@pytest.fixture
+def handoff() -> dict[str, str]:
+    return {"kind": "handoff", "tool": "to_reviewer", "reason": "needs a check"}
 
 
-def test_turn_input_keeps_handoff_signal_and_body_apart() -> None:
-    parts = WorkflowAdapter().extract_turn_input(_packet(routing=_HANDOFF, body="draft"))
+def test_turn_input_keeps_handoff_signal_and_body_apart(handoff: dict[str, str]) -> None:
+    parts = WorkflowAdapter().extract_turn_input(_packet(routing=handoff, body="draft"))
 
     assert parts == [TextInput("[Handed off via to_reviewer] needs a check"), TextInput("draft")]
 
@@ -80,17 +82,17 @@ def test_an_empty_packet_yields_nothing_on_both_paths() -> None:
     assert adapter.render_envelope(envelope) is None
 
 
-def test_render_and_turn_input_agree() -> None:
+def test_render_and_turn_input_agree(handoff: dict[str, str]) -> None:
     adapter = WorkflowAdapter()
-    envelope = _packet(routing=_HANDOFF, body="draft")
+    envelope = _packet(routing=handoff, body="draft")
 
     assert adapter.render_envelope(envelope) == adapter.extract_turn_input(envelope)
 
 
 @pytest.mark.asyncio
-async def test_an_inbound_packet_projects_to_one_request_with_both_parts() -> None:
+async def test_an_inbound_packet_projects_to_one_request_with_both_parts(handoff: dict[str, str]) -> None:
     projection = await FullTranscript().project(
-        [_packet(routing=_HANDOFF, body="draft")],
+        [_packet(routing=handoff, body="draft")],
         participant_id="bob",
         channel=two_party_metadata("alice", "bob"),
         render_envelope=WorkflowAdapter().render_envelope,
@@ -102,9 +104,9 @@ async def test_an_inbound_packet_projects_to_one_request_with_both_parts() -> No
 
 
 @pytest.mark.asyncio
-async def test_a_named_view_labels_only_the_leading_part() -> None:
+async def test_a_named_view_labels_only_the_leading_part(handoff: dict[str, str]) -> None:
     projection = await NamedTranscript().project(
-        [_packet(routing=_HANDOFF, body="draft")],
+        [_packet(routing=handoff, body="draft")],
         participant_id="bob",
         channel=two_party_metadata("alice", "bob"),
         render_envelope=WorkflowAdapter().render_envelope,
@@ -117,9 +119,9 @@ async def test_a_named_view_labels_only_the_leading_part() -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_own_packet_projects_to_one_message_per_part() -> None:
+async def test_an_own_packet_projects_to_one_message_per_part(handoff: dict[str, str]) -> None:
     projection = await NamedWindowedSummary(recent_n=5).project(
-        [_packet(sender="bob", routing=_HANDOFF, body="draft")],
+        [_packet(sender="bob", routing=handoff, body="draft")],
         participant_id="bob",
         channel=two_party_metadata("alice", "bob"),
         render_envelope=WorkflowAdapter().render_envelope,
