@@ -20,6 +20,7 @@ so user-supplied overrides can replace only the parts they care about.
 """
 
 import contextlib
+import functools
 import logging
 from typing import TYPE_CHECKING
 
@@ -58,13 +59,13 @@ def _is_task_event(event_type: str) -> bool:
     return event_type.startswith("ag2.task.")
 
 
+def _render_parts(adapter: "ChannelAdapter", envelope: Envelope) -> list[Input] | None:
+    return ensure_parts(adapter.render_envelope(envelope)) or None
+
+
 def _renderer(adapter: "ChannelAdapter") -> EnvelopeRenderer:
     """Hand views the adapter's rendering as ``Input`` parts, whatever shape the adapter produced."""
-
-    def render(envelope: Envelope) -> list[Input] | None:
-        return ensure_parts(adapter.render_envelope(envelope)) or None
-
-    return render
+    return functools.partial(_render_parts, adapter)
 
 
 async def _render_current_input(

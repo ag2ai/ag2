@@ -75,14 +75,14 @@ of them as separate parts. Anything but an ``Input`` is converted the way
 def ensure_parts(content: Rendered | None) -> list[Input]:
     """Normalise what an adapter produced into ``Input`` parts.
 
-    A string, an ``Input`` or any other single message is one part; a
+    A string, bytes, an ``Input`` or any other single message is one part; a
     sequence is one part per item. ``None`` is no parts. Items convert via
     ``Input.ensure_input``, so a string becomes a ``TextInput`` and
     structured data a ``DataInput``.
     """
     if content is None:
         return []
-    if isinstance(content, str) or not isinstance(content, Sequence):
+    if isinstance(content, str | bytes | bytearray) or not isinstance(content, Sequence):
         return [Input.ensure_input(content)]
     return [Input.ensure_input(part) for part in content]
 

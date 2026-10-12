@@ -181,7 +181,11 @@ the host; pass an API key in `env` to bill against the provider's API instead.
 Every part of your message reaches the agent as its own ACP content block, so an image or a document travels beside the text instead of being dropped:
 
 ```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
 from ag2.events import ImageInput
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
 reply = await agent.ask("What is wrong in this screenshot?", ImageInput(path="screenshot.png"))
 ```

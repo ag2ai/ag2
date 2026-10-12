@@ -32,6 +32,10 @@ class TestEnsureParts:
     def test_structured_data_is_one_data_part(self) -> None:
         assert ensure_parts({"a": 1}) == [DataInput({"a": 1})]
 
+    @pytest.mark.parametrize("raw", [b"hi", bytearray(b"hi")])
+    def test_bytes_are_one_data_part(self, raw: bytes | bytearray) -> None:
+        assert ensure_parts(raw) == [DataInput(raw)]
+
     def test_a_sequence_is_one_part_per_item(self) -> None:
         assert ensure_parts(["hi", _PHOTO, {"a": 1}]) == [TextInput("hi"), _PHOTO, DataInput({"a": 1})]
 
