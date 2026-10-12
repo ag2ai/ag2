@@ -12,6 +12,7 @@ from typing import Any
 from a2a.types import Part
 from google.protobuf import json_format, struct_pb2
 
+from ag2.config.input_acceptance import binary_kind_of
 from ag2.events import (
     BinaryInput,
     BinaryType,
@@ -81,7 +82,7 @@ def part_to_input(part: Part) -> Input:
     if file_id:
         return FileIdInput(str(file_id), filename=part.filename or None)
 
-    kind = _binary_kind(metadata)
+    kind = _binary_kind(metadata, part.media_type)
 
     if part.raw:
         return BinaryInput(
@@ -154,8 +155,10 @@ def struct_to_dict(s: struct_pb2.Struct) -> dict[str, Any]:  # type: ignore[no-a
     return result
 
 
-def _binary_kind(metadata: dict[str, Any]) -> BinaryType:
-    raw = metadata.get(_BINARY_KIND_METADATA_KEY, BinaryType.BINARY.value)
+def _binary_kind(metadata: dict[str, Any], media_type: str) -> BinaryType:
+    if _BINARY_KIND_METADATA_KEY not in metadata:
+        return binary_kind_of(media_type) or BinaryType.BINARY
+    raw = metadata[_BINARY_KIND_METADATA_KEY]
     try:
         return BinaryType(raw)
     except ValueError:

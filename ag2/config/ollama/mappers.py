@@ -127,6 +127,12 @@ def convert_messages(
                 # Ollama API only accepts plain-string `content`, so emit one tool
                 # message per part instead of joining them. An empty result still
                 # yields one (empty) message so the call keeps its result.
-                result.extend({"role": "tool", "content": text} for text in parts or [""])
+                for text in parts or [""]:
+                    tool_message: dict[str, Any] = {"role": "tool", "content": text}
+                    # Names supplement position: Ollama matches results to calls by order, and two parallel
+                    # calls of the same tool can only be told apart that way.
+                    if r.name:
+                        tool_message["tool_name"] = r.name
+                    result.append(tool_message)
 
     return result
