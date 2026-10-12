@@ -24,9 +24,10 @@ import logging
 from typing import TYPE_CHECKING
 
 from ag2._telemetry_consts import TRACEPARENT_DEP_KEY
-from ag2.events import BaseEvent, ModelMessage, ModelRequest, TextInput
+from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, TextInput
 from ag2.stream import MemoryStream
 
+from ..adapters.base import ensure_parts
 from ..channel import ChannelMetadata, ChannelState
 from ..envelope import (
     EV_CHANNEL_INVITE,
@@ -35,7 +36,7 @@ from ..envelope import (
 )
 from ..policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, HUB_DEP
 from ..task_mirror import TaskMirror
-from ..views.base import NameResolver, ViewPolicy
+from ..views.base import EnvelopeRenderer, NameResolver, ViewPolicy
 from .channel import Channel
 
 if TYPE_CHECKING:
@@ -57,6 +58,15 @@ def _is_task_event(event_type: str) -> bool:
     return event_type.startswith("ag2.task.")
 
 
+def _renderer(adapter: "ChannelAdapter") -> EnvelopeRenderer:
+    """Hand views the adapter's rendering as ``Input`` parts, whatever shape the adapter produced."""
+
+    def render(envelope: Envelope) -> list[Input] | None:
+        return ensure_parts(adapter.render_envelope(envelope)) or None
+
+    return render
+
+
 async def _render_current_input(
     view: ViewPolicy,
     envelope: Envelope,
@@ -64,31 +74,29 @@ async def _render_current_input(
     participant_id: str,
     metadata: ChannelMetadata,
     name_for: NameResolver,
-) -> str | None:
+) -> list[Input] | None:
     """Render the current-turn envelope through the view.
 
     Calls ``view.project([envelope])`` so named views apply consistent
     values between current envelope and history. Falls back to
-    ``adapter.extract_turn_input`` when the view returns nothing (e.g.
-    rich input types like images or documents that ``render_envelope``
-    cannot represent as a string).
+    ``adapter.extract_turn_input`` when the view returns nothing usable.
     """
     projected = await view.project(
         [envelope],
         participant_id=participant_id,
         channel=metadata,
-        render_envelope=adapter.render_envelope,
+        render_envelope=_renderer(adapter),
         name_for=name_for,
     )
     if projected:
         event = projected[0]
         if isinstance(event, ModelRequest):
-            for part in event.parts:
-                if isinstance(part, TextInput):
-                    return part.content
-        if isinstance(event, ModelMessage):
-            return event.content
-    return adapter.extract_turn_input(envelope)
+            parts = [part for part in event.parts if not isinstance(part, TextInput) or part.content]
+            if parts:
+                return parts
+        if isinstance(event, ModelMessage) and event.content:
+            return [TextInput(event.content)]
+    return ensure_parts(adapter.extract_turn_input(envelope)) or None
 
 
 async def read_wal_until(client: "AgentClient", envelope: Envelope) -> list[Envelope]:
@@ -224,7 +232,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
             history_envelopes,
             participant_id=client.agent_id,
             channel=metadata,
-            render_envelope=adapter.render_envelope,
+            render_envelope=_renderer(adapter),
             name_for=client._hub_client.name_for,
         )
 
@@ -280,7 +288,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         sub_ids = mirror.attach(stream)
         try:
             reply = await client.agent.ask(
-                current_input,
+                *current_input,
                 stream=stream,
                 dependencies=dependencies,
                 tools=adapter_tools,

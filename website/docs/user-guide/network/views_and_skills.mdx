@@ -30,7 +30,7 @@ It takes the WAL up to the current envelope and returns a list of `#!python Base
 
 Two callables are supplied per call so view policies stay adapter-neutral and identity-aware without depending on hub internals:
 
-- `#!python render_envelope: Callable[[Envelope], str | None]` — comes from the channel's `#!python ChannelAdapter.render_envelope`. Lets a view ask "what's the LLM-visible text for this envelope?" without knowing the channel type's envelope shape.
+- `#!python render_envelope: Callable[[Envelope], Sequence[Input] | None]` — comes from the channel's `#!python ChannelAdapter.render_envelope`. Lets a view ask "what does the LLM see for this envelope?" without knowing the channel type's envelope shape. The answer is a list of `#!python Input` parts (`#!python TextInput`, images, and so on), or `#!python None` (or no parts) to skip the envelope. An envelope can carry several parts — a workflow packet gives its handoff signal and its body as separate ones — and a view should keep them apart rather than join them into one string. The adapter itself may return a plain string, an `#!python Input` or a sequence of either; the handler converts it with `#!python Input.ensure_input`, the same conversion `#!python Agent.ask` applies, before a view sees it.
 - `#!python name_for: Callable[[str], str]` — comes from `#!python Hub.name_for`. Lets a view resolve an `#!python agent_id` to its registered `#!python Passport.name` for projection lines that need a speaker label. Falls back to the raw id when the sender is unknown so projection never fails.
 
 ## Built-in Views
@@ -107,13 +107,15 @@ class FromOneOnly(ViewPolicy):
         for env in wal:
             if env.event_type != EV_TEXT or env.sender_id != self.sender_id:
                 continue
-            text = render_envelope(env) or ""
+            parts = render_envelope(env)
+            if not parts:
+                continue
             if env.sender_id == participant_id:
-                out.append(ModelMessage(text))
+                out.extend(ModelMessage(part.content) for part in parts if isinstance(part, TextInput))
             else:
                 # Use name_for to label so the LLM knows who said it.
                 label = name_for(env.sender_id)
-                out.append(ModelRequest([TextInput(f"[{label}]: {text}")]))
+                out.append(ModelRequest([TextInput(f"[{label}]:"), *parts]))
         return out
 ```
 
