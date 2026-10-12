@@ -8,12 +8,20 @@ import dataclasses
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Any, Literal
 
 from .actions import Action
 from .boundary import ContextSize
 from .burden import BoundaryDelta
-from .stats import Interval, bootstrap_mean, exact_permutation_test, exact_sign_test, median
+from .stats import (
+    Interval,
+    PermutationTestTooLargeError,
+    bootstrap_mean,
+    exact_permutation_test,
+    exact_sign_test,
+    median,
+)
 
 __all__ = (
     "BoundaryResult",
@@ -108,8 +116,8 @@ class StrategyReport:
     boundaries: tuple[BoundaryResult, ...]
     sign_test_p: float
     """Exact sign test on per-boundary ``delta_wasted`` at the full horizon."""
-    permutation_p: float
-    """Exact sign-flip permutation test on the same differences."""
+    permutation_p: float | None
+    """Exact sign-flip permutation test on the same differences; ``None`` when too large to compute exactly."""
     median_token_ratio: float
     """Median of POST tokens / PRE tokens: how much of the context the strategy kept."""
     unchanged_boundaries: int
@@ -130,6 +138,8 @@ class StrategyReport:
     """Distinct compaction errors with their counts, most common first."""
     grown_boundaries: int = 0
     """Boundaries where the compacted context was longer than the history it replaced."""
+    permutation_error: str | None = None
+    """Why ``permutation_p`` is ``None``: the exact test would need too much time or memory."""
 
     def at(self, horizon: int) -> HorizonSummary:
         for h in self.horizons:
@@ -163,12 +173,13 @@ class StrategyReport:
         ratios = [r.post_size.tokens / r.pre_size.tokens for r in results if r.post_size and r.pre_size.tokens]
         post_runs = [x for r in results for x in r.post]
         pre_runs = [x for r in results for x in r.pre]
+        permutation_p, permutation_error = _permutation_p([r.at(horizon).exact_wasted for r in scored])
         return cls(
             strategy=strategy,
             horizons=horizons,
             boundaries=tuple(results),
             sign_test_p=exact_sign_test(full),
-            permutation_p=exact_permutation_test(full),
+            permutation_p=permutation_p,
             median_token_ratio=median(ratios) if ratios else 1.0,
             unchanged_boundaries=sum(1 for r in results if r.unchanged),
             unscored_boundaries=len(results) - len(scored),
@@ -180,7 +191,16 @@ class StrategyReport:
             failed_compactions=sum(1 for r in results if r.compaction_error),
             compaction_errors=tuple(Counter(r.compaction_error for r in results if r.compaction_error).most_common()),
             grown_boundaries=sum(1 for r in results if r.post_size and r.post_size.tokens > r.pre_size.tokens),
+            permutation_error=permutation_error,
         )
+
+
+def _permutation_p(deltas: Sequence[Fraction]) -> tuple[float | None, str | None]:
+    """The exact permutation p-value, or ``None`` and the reason it was not computed."""
+    try:
+        return exact_permutation_test(deltas), None
+    except PermutationTestTooLargeError as exc:
+        return None, str(exc)
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,13 +248,16 @@ class VerificationReport:
             else:
                 h = report.at(k)
                 few = few or h.boundaries < MIN_BOUNDARIES_FOR_SIGNIFICANCE
+                p = "n/a" if report.permutation_p is None else f"{report.permutation_p:.3f}"
                 lines.append(
                     f"{name:<20}{n:>7}  {_fmt(h.wasted):>22}  {_fmt(h.blocked):>22}  "
                     f"{_fmt(h.refetch):>22}  {_fmt(h.stopped):>22}  {report.median_token_ratio:>5.0%}  "
-                    f"{report.unchanged_boundaries:>4}  {failed:>9}  {report.permutation_p:>6.3f}"
+                    f"{report.unchanged_boundaries:>4}  {failed:>9}  {p:>6}"
                 )
             notes.extend(_failure_notes(name, report))
             notes.extend(_growth_note(name, report))
+            if report.permutation_error:
+                notes.append(f"{name}: p not computed, the exact test is too large ({report.permutation_error})")
         lines.append(
             "n = boundaries scored / tested; stopped = share of rollouts that ended before the horizon; "
             "kept = median share of context tokens kept; noop = boundaries left unchanged; "
@@ -364,6 +387,7 @@ def _strategy_dict(report: StrategyReport) -> dict[str, Any]:
         "strategy": report.strategy,
         "sign_test_p": report.sign_test_p,
         "permutation_p": report.permutation_p,
+        "permutation_error": report.permutation_error,
         "median_token_ratio": report.median_token_ratio,
         "unchanged_boundaries": report.unchanged_boundaries,
         "unscored_boundaries": report.unscored_boundaries,

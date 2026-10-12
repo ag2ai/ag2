@@ -38,6 +38,7 @@ needs no agent, so recorded rollouts can be scored on their own.
 
 from collections.abc import Iterable, Sequence, Set
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Literal
 
 from .actions import Action
@@ -115,6 +116,16 @@ class BoundaryDelta:
     def harm(self) -> float:
         """Separately clipped two-channel burden; never negative."""
         return max(self.blocked, 0.0) + max(self.refetch, 0.0)
+
+    @property
+    def exact_wasted(self) -> Fraction:
+        """``wasted`` as an exact fraction, from each arm's wasted count and number of rollouts."""
+        return _exact_mean(self.post.wasted, self.post.rollouts) - _exact_mean(self.pre.wasted, self.pre.rollouts)
+
+
+def _exact_mean(mean: float, rollouts: int) -> Fraction:
+    # ``mean`` is an integer count divided by ``rollouts``; the product rounds back to that count
+    return Fraction(round(mean * rollouts), rollouts)
 
 
 def history_signatures(actions: Iterable[Action], key: SignatureKey = "call") -> frozenset[str]:

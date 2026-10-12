@@ -9,7 +9,12 @@ from fractions import Fraction
 
 import pytest
 
-from ag2.extensions.compaction_verifier import bootstrap_mean, exact_permutation_test, exact_sign_test
+from ag2.extensions.compaction_verifier import (
+    PermutationTestTooLargeError,
+    bootstrap_mean,
+    exact_permutation_test,
+    exact_sign_test,
+)
 from ag2.extensions.compaction_verifier.stats import median
 
 
@@ -72,6 +77,9 @@ class TestExactTests:
     def test_permutation_test_rejects_values_off_any_count_grid(self) -> None:
         with pytest.raises(ValueError, match="difference of means"):
             exact_permutation_test([0.123456789])
+        # within 1e-12 of a fraction with a denominator under a million, but not within rounding of one
+        with pytest.raises(ValueError, match="difference of means"):
+            exact_permutation_test([math.sqrt(0.5)])
 
 
 def _brute_force_p(exact: list[Fraction]) -> float:
@@ -132,6 +140,28 @@ class TestPermutationTestAgainstBruteForce:
     )
     def test_review_counterexamples(self, deltas: list[float], expected: float) -> None:
         assert exact_permutation_test(deltas) == expected
+
+    def test_the_second_reviews_unequal_arm_difference_is_accepted(self) -> None:
+        # samples=101 with one failed rollout leaves arms of 100 and 101: a denominator of 10,100
+        delta = Fraction(1, 100) - Fraction(1, 101)
+
+        assert exact_permutation_test([float(delta)]) == 1.0
+        assert exact_permutation_test([delta]) == 1.0
+
+    def test_large_unequal_arms_match_enumeration(self) -> None:
+        rnd = random.Random(101)
+        deltas = [_boundary_delta(rnd, rnd.randint(95, 101), rnd.randint(95, 101)) for _ in range(12)]
+        expected = _brute_force_p([e for _, e in deltas])
+
+        # the common denominator of these arm sizes is far too fine to convolve, so the patterns are enumerated
+        assert exact_permutation_test([e for _, e in deltas]) == expected
+        assert exact_permutation_test([f for f, _ in deltas]) == expected
+
+    def test_too_many_differences_on_too_fine_a_grid_raise(self) -> None:
+        deltas = [Fraction(2, b) - Fraction(1, a) for a, b in zip(range(70, 95), range(75, 100), strict=True)]
+
+        with pytest.raises(PermutationTestTooLargeError, match="25 non-zero differences"):
+            exact_permutation_test(deltas)
 
     def test_a_large_cohort_with_mixed_arm_sizes_is_exact_and_quick(self) -> None:
         rnd = random.Random(7)

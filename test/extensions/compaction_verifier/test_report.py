@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from fractions import Fraction
 
 import pytest
 
@@ -14,6 +15,7 @@ from ag2.extensions.compaction_verifier import (
     StrategyReport,
     VerificationReport,
     call_signature,
+    exact_permutation_test,
     score_boundary,
 )
 
@@ -36,6 +38,19 @@ def ran(arm: str, sample: int) -> Rollout:
 
 def failed(arm: str, sample: int, error: str = "BadRequestError: orphaned tool result") -> Rollout:
     return Rollout(arm=arm, sample=sample, actions=(), ending="error", error=error)  # type: ignore[arg-type]
+
+
+def wasted_once(arm: str, sample: int) -> Rollout:
+    """A rollout whose single action was blocked: one wasted action."""
+    action = Action(
+        call_id=f"{arm}{sample}x", name="f", arguments="{}", signature=call_signature("f", "{}"), blocked=True
+    )
+    return Rollout(arm=arm, sample=sample, actions=(action,), ending="answer")  # type: ignore[arg-type]
+
+
+def arm(name: str, size: int, wasted: int) -> list[Rollout]:
+    """``size`` scorable rollouts of which ``wasted`` waste one action each."""
+    return [wasted_once(name, i) if i < wasted else ran(name, i) for i in range(size)]
 
 
 def boundary(
@@ -133,6 +148,42 @@ class TestHorizonLookup:
             result.at(HORIZON + 1)
         with pytest.raises(KeyError):
             s.at(0)
+
+
+class TestPermutationP:
+    def test_unequal_arms_past_the_old_denominator_cap_are_tested(self) -> None:
+        # samples=101 and samples=1001, each with one failed PRE rollout; the second delta's
+        # denominator (1000 * 1001) is past what a float can be recovered from, so only exact counts work
+        results = [
+            boundary(10, [*arm("pre", 100, 1), failed("pre", 100)], arm("post", 101, 1)),
+            boundary(20, [*arm("pre", 1000, 1), failed("pre", 1000)], arm("post", 1001, 3)),
+        ]
+
+        s = StrategyReport.build("s", results, HORIZON)
+
+        expected = exact_permutation_test([Fraction(1, 101) - Fraction(1, 100), Fraction(3, 1001) - Fraction(1, 1000)])
+        assert s.permutation_p == expected
+        assert s.permutation_error is None
+
+    def test_a_p_value_too_large_to_compute_keeps_the_report(self) -> None:
+        # 25 boundaries whose arms kept different numbers of rollouts: no exact grid fits
+        results = [
+            boundary(c, arm("pre", a, 1), arm("post", b, 2))
+            for c, (a, b) in enumerate(zip(range(70, 95), range(75, 100), strict=True))
+        ]
+
+        r = report({"tail": results})
+        s = r.strategies["tail"]
+        lines = r.summary().splitlines()
+
+        assert s.permutation_p is None
+        assert s.permutation_error is not None and "25 non-zero differences" in s.permutation_error
+        assert s.at(HORIZON).boundaries == 25
+        assert next(line for line in lines if line.startswith("tail ")).endswith("   n/a")
+        assert any(line.startswith("tail: p not computed, the exact test is too large (25 non-zero") for line in lines)
+        dumped = json.loads(json.dumps(r.to_dict()))["strategies"]["tail"]
+        assert dumped["permutation_p"] is None
+        assert dumped["permutation_error"] == s.permutation_error
 
 
 class TestSummary:

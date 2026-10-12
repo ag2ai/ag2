@@ -38,7 +38,7 @@ from .control import IdentityCompact
 from .environment import Environment, ReplayEnvironment, ReplayMismatchError
 from .report import BoundaryResult, HorizonSummary, Rollout, StrategyReport, VerificationReport
 from .runner import ActionBudget, CompactionVerifier, Recording, run_rollout
-from .stats import Interval, bootstrap_mean, exact_permutation_test, exact_sign_test
+from .stats import Interval, PermutationTestTooLargeError, bootstrap_mean, exact_permutation_test, exact_sign_test
 
 __all__ = (
     "Action",
@@ -55,6 +55,7 @@ __all__ = (
     "HorizonSummary",
     "IdentityCompact",
     "Interval",
+    "PermutationTestTooLargeError",
     "Recording",
     "ReplayEnvironment",
     "ReplayMismatchError",
