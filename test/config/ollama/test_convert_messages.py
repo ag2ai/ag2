@@ -186,19 +186,19 @@ def test_compaction_summary_renders_as_user_turn() -> None:
 
 
 @pytest.mark.parametrize(
-    ("tool_result", "content"),
+    ("tool_result", "contents"),
     [
-        pytest.param(ToolResult("first", "second"), "first\nsecond", id="multiple-text-parts"),
-        pytest.param(ToolResult("items", DataInput({"count": 2})), 'items\n{"count":2}', id="mixed-text-data"),
-        pytest.param(ToolResult(), "", id="empty-result"),
-        pytest.param(ToolResult("unchanged\n"), "unchanged\n", id="single-text"),
-        pytest.param(ToolResult(DataInput({"count": 2})), '{"count":2}', id="single-data"),
+        pytest.param(ToolResult("first", "second"), ["first", "second"], id="multiple-text-parts"),
+        pytest.param(ToolResult("items", DataInput({"count": 2})), ["items", '{"count":2}'], id="mixed-text-data"),
+        pytest.param(ToolResult(), [""], id="empty-result"),
+        pytest.param(ToolResult("unchanged\n"), ["unchanged\n"], id="single-text"),
+        pytest.param(ToolResult(DataInput({"count": 2})), ['{"count":2}'], id="single-data"),
     ],
 )
-def test_tool_result_is_valid_ollama_message(tool_result: ToolResult, content: str) -> None:
+def test_tool_result_parts_stay_separate_valid_ollama_messages(tool_result: ToolResult, contents: list[str]) -> None:
     event = ToolResultsEvent([ToolResultEvent(parent_id="tc_1", name="lookup", result=tool_result)])
 
-    [message] = convert_messages([], [event], SerializerCls)
+    messages = convert_messages([], [event], SerializerCls)
 
-    assert Message.model_validate(message).content == content
-    assert message == {"role": "tool", "content": content}
+    assert [Message.model_validate(m).content for m in messages] == contents
+    assert messages == [IsPartialDict({"role": "tool", "content": content}) for content in contents]

@@ -124,6 +124,9 @@ def convert_messages(
                         parts.append(serializer.encode(part.data).decode())
                     else:
                         raise UnsupportedInputError(type(part).__name__, "ollama")
-                result.append({"role": "tool", "content": "\n".join(parts)})
+                # Ollama API only accepts plain-string `content`, so emit one tool
+                # message per part instead of joining them. An empty result still
+                # yields one (empty) message so the call keeps its result.
+                result.extend({"role": "tool", "content": text} for text in parts or [""])
 
     return result
