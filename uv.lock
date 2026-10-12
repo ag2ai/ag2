@@ -288,7 +288,7 @@ requires-dist = [
     { name = "mcp", marker = "extra == 'mcp-ui'", specifier = ">=2.2.0,<3" },
     { name = "mcp-types", marker = "extra == 'mcp'", specifier = ">=2.2.0,<3" },
     { name = "mcp-ui-server", marker = "extra == 'mcp-ui'", specifier = ">=1.0.0" },
-    { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=2.8.0,<3" },
+    { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=3.2.0,<4" },
     { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.5.2,<1" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=3.27.0,<4" },
     { name = "opentelemetry-sdk", marker = "extra == 'tracing'", specifier = ">=1.20" },
@@ -3240,11 +3240,11 @@ wheels = [
 
 [[package]]
 name = "mistralai"
-version = "2.10.1"
+version = "3.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eval-type-backport" },
-    { name = "httpx" },
+    { name = "httpx2" },
     { name = "jsonpath-python" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-semantic-conventions" },
@@ -3252,9 +3252,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ca/db/a80c4ab96b1fec9529115dafaa3f14b28d0407fe1cb9b051ec2df9336fb7/mistralai-2.10.1.tar.gz", hash = "sha256:43b61643ba4f120463e5faf7305a6f40eb29f8e3a21321893969e56c20ed3fbc", size = 590127, upload-time = "2026-09-15T08:12:30.79Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/dc/7756ce9cf855ec0db089770a176ed652cded4c5ecd61931fb0b9331e655f/mistralai-3.2.0.tar.gz", hash = "sha256:b3f2139bde538fe8ed4a19e2adb624fd46dfd175b609231c0836bba21d738730", size = 643870, upload-time = "2026-10-09T09:41:12.157Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ec/98/f64b54166a607ece4e5c8494c843ac1f9c7c0af6f1014272cc420fe1d519/mistralai-2.10.1-py3-none-any.whl", hash = "sha256:443b306392ae1e86edaec39dbafcf79deb735799a00abef4611531004e22b1b2", size = 1392946, upload-time = "2026-09-15T08:12:28.704Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/d7/c499fb9a610f4abe2f8e7ad7e18f7f0254ddec49c7971116fe1e110da37b/mistralai-3.2.0-py3-none-any.whl", hash = "sha256:66c1cd32e886b2bc55f67d61cdba6d8c2c38e68720a6b6d69bb3fe7b10034779", size = 1532235, upload-time = "2026-10-09T09:41:10.005Z" },
 ]
 
 [[package]]
