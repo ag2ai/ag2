@@ -76,14 +76,13 @@ async def test_error_for_hallucinated_tool_names_that_tool(ollama: FakeOllama) -
     assert _tool_messages(ollama) == [IsPartialDict({"role": "tool", "tool_name": "ghost_tool"})]
 
 
-def test_multi_part_result_names_its_tool() -> None:
-    # Mapper-level: the SDK rejects list `content`, so a multi-part result cannot cross the seam.
+def test_each_part_of_a_multi_part_result_is_its_own_message_naming_the_tool() -> None:
+    # Mapper-level: the SDK rejects list `content`, so each part crosses the seam as a plain-string message.
     result = ToolResultEvent(parent_id="c", name="get_weather", result=ToolResult(TextInput("a"), TextInput("b")))
 
-    [message] = convert_messages([], _round(result)[1:], SerializerCls)
+    messages = convert_messages([], _round(result)[1:], SerializerCls)
 
-    assert message == {
-        "role": "tool",
-        "content": [{"type": "text", "text": "a"}, {"type": "text", "text": "b"}],
-        "tool_name": "get_weather",
-    }
+    assert messages == [
+        {"role": "tool", "content": "a", "tool_name": "get_weather"},
+        {"role": "tool", "content": "b", "tool_name": "get_weather"},
+    ]
