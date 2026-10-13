@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import Any, Literal
 
 from mistralai.client import Mistral
-from mistralai.client.models import File
+from mistralai.client.models import AudioFormat, File, RealtimeTranscriptionError, TranscriptionStreamDone
+from mistralai.client.models import TranscriptionStreamTextDelta as TextDelta
 
 from ag2 import events
 from ag2.annotations import Context
@@ -15,6 +16,10 @@ from .stt import STTConfig as STTConfigProtocol
 from .stt import VoiceInput, voice_to_wav_buffer
 
 TranscriptionModel = Literal["voxtral-mini-latest",]
+RealtimeModel = Literal["voxtral-mini-transcribe-realtime-2602",]
+
+# Duration of the PCM slice sent per websocket frame, at any sample rate.
+CHUNK_MS = 100
 
 
 class STTConfig(STTConfigProtocol):
@@ -64,3 +69,66 @@ class STTConfig(STTConfigProtocol):
 
         await context.send(events.TranscriptionCompletedEvent(response.text))
         return response.text
+
+
+class RealtimeSTTConfig(STTConfigProtocol):
+    """Voxtral realtime transcription over a websocket: text arrives while the clip is still being read.
+
+    Fits the existing `STTConfig` contract — one finished clip in, the full text out —
+    and sends a `TranscriptionChunkEvent` per delta before the closing
+    `TranscriptionCompletedEvent`, so a subscriber sees the words as the model
+    produces them instead of after the upload. `CascadeConfig` hands STT a whole
+    utterance cut by its turn detector, so the audio is streamed from that clip; a
+    protocol that accepts audio while the user is still speaking is a separate,
+    larger change to the cascade.
+
+    The clip must be mono. Needs an api key in MISTRAL_API_KEY env var, or pass
+    `api_key` / a preconfigured `client`.
+    """
+
+    def __init__(
+        self,
+        model: "RealtimeModel | str" = "voxtral-mini-transcribe-realtime-2602",
+        *,
+        target_streaming_delay_ms: int | None = None,
+        client: "Mistral | None" = None,
+        api_key: str | None = None,
+    ) -> None:
+        self._model = model
+        self._target_streaming_delay_ms = target_streaming_delay_ms
+        self._client = client or (Mistral(api_key=api_key) if api_key else Mistral())
+
+    async def transcribe(self, voice: VoiceInput, context: Context) -> str:
+        if voice.channels != 1:
+            raise ValueError(f"Mistral realtime transcription takes mono audio, got {voice.channels} channels")
+
+        deltas: list[str] = []
+        text: str | None = None
+
+        async for event in self._client.audio.realtime.transcribe_stream(
+            _frames(voice),
+            model=self._model,
+            audio_format=AudioFormat(encoding="pcm_s16le", sample_rate=voice.frame_rate),
+            target_streaming_delay_ms=self._target_streaming_delay_ms,
+        ):
+            if isinstance(event, TextDelta):
+                deltas.append(event.text)
+                await context.send(events.TranscriptionChunkEvent(event.text))
+
+            elif isinstance(event, TranscriptionStreamDone):
+                text = event.text
+
+            elif isinstance(event, RealtimeTranscriptionError):
+                raise RuntimeError(f"Mistral realtime transcription failed: {event.error.message}")
+
+        # The final event carries the authoritative text; the deltas are the fallback
+        # for a stream that closed without one.
+        text = "".join(deltas) if text is None else text
+        await context.send(events.TranscriptionCompletedEvent(text))
+        return text
+
+
+async def _frames(voice: VoiceInput) -> AsyncIterator[bytes]:
+    size = voice.frame_rate * 2 * CHUNK_MS // 1000
+    for start in range(0, len(voice.content), size):
+        yield voice.content[start : start + size]

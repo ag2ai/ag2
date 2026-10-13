@@ -32,6 +32,8 @@ Mistral classes need the `mistral` extra and `MISTRAL_API_KEY` in the environmen
 pip install "ag2[mistral]"
 ```
 
+`MistralRealtimeTranscriber` also needs the SDK's websocket client: `pip install "mistralai[realtime]"`.
+
 ## OpenAI credentials
 
 The OpenAI voice configs (`OpenAIRealTimeConfig`, `OpenAITranscriber`, `OpenAITranslationTranscriber`, `OpenAITTSConfig`) accept a keyword-only `api_key`. Omit it to keep the SDK's `OPENAI_API_KEY` default:
@@ -133,6 +135,16 @@ pipeline = MistralTranscriber("voxtral-mini-latest").pipe(agent)
 ```
 
 `language` and `context_bias` (up to 100 words or phrases to favour) are only sent when you set them — leave `language` unset and the model auto-detects. `diarize=True` requests speaker diarization (segment timestamps are sent automatically, as the API requires); `transcribe()` still returns plain text. Pass `api_key` or a preconfigured `client` to override the `MISTRAL_API_KEY` default.
+
+`MistralRealtimeTranscriber` streams the clip to Voxtral Realtime over a websocket, so the words arrive as they are recognised: a `TranscriptionChunkEvent` per delta, then a closing `TranscriptionCompletedEvent`. It keeps the same `transcribe(voice, context) -> str` contract, so it drops into `.pipe()` and `CascadeConfig` unchanged:
+
+```python linenums="1"
+from ag2.live import MistralRealtimeTranscriber
+
+pipeline = MistralRealtimeTranscriber(target_streaming_delay_ms=480).pipe(agent)
+```
+
+The audio is the finished utterance (the turn detector decides where it ends), sent as `pcm_s16le` at the clip's sample rate, and it must be mono. `target_streaming_delay_ms` trades latency for accuracy; leave it unset for the model default.
 
 ## Text-to-Speech
 
