@@ -214,12 +214,17 @@ class DiskKnowledgeStore:
         (inotify on Linux, FSEvents on macOS, ReadDirectoryChangesW on
         Windows). Falls back to :class:`PollingObserver` if the native
         backend cannot be initialized, and to :class:`NoopChangeSubscription`
-        if ``watchdog`` is not installed at all.
+        if ``watchdog`` is not installed at all. File paths are supported
+        by watching the parent directory and filtering events to the file.
         """
 
         virtual_path = _normalize(path)
         physical_target = self._resolve(virtual_path)
-        physical_target.mkdir(parents=True, exist_ok=True)
+        if physical_target.is_dir():
+            watch_root = physical_target
+        else:
+            physical_target.parent.mkdir(parents=True, exist_ok=True)
+            watch_root = physical_target.parent
 
         try:
             loop = asyncio.get_running_loop()
@@ -236,11 +241,11 @@ class DiskKnowledgeStore:
         observer: Any
         try:
             observer = Observer()
-            observer.schedule(handler, str(physical_target), recursive=True)
+            observer.schedule(handler, str(watch_root), recursive=True)
             observer.start()
         except Exception:
             observer = PollingObserver()
-            observer.schedule(handler, str(physical_target), recursive=True)
+            observer.schedule(handler, str(watch_root), recursive=True)
             observer.start()
 
         return _DiskChangeSubscription(observer)

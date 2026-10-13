@@ -25,7 +25,7 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
-from ag2.files.types import FileProvider
+from ag2.files.types import FileProvider, UploadedFile
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME, FileSearchToolSchema
@@ -345,9 +345,13 @@ def convert_messages(
                         request_parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
 
                 elif isinstance(inp, FileIdInput):
-                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.GEMINI:
+                    if (
+                        isinstance(inp, UploadedFile)
+                        and inp.provider is not None
+                        and inp.provider is not FileProvider.GEMINI
+                    ):
                         raise UnsupportedInputError(
-                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
+                            f"file uploaded via '{inp.provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
                             "gemini",
                         )
                     file_uri = f"https://generativelanguage.googleapis.com/v1beta/{inp.file_id}"

@@ -19,7 +19,7 @@ from .events import (
     ModelRequest,
 )
 from .events.conditions import Condition
-from .hitl import HumanHook, wrap_hitl
+from .hitl import HitlFactory, HumanHook, wrap_hitl
 from .middleware.base import (
     MiddlewareFactory,
     ToolMiddleware,
@@ -261,7 +261,7 @@ class PluginTarget(PromptObserverMixin):
     dependency_provider: Provider
     _serializer: SerializerProto
     _tool_executor: ToolExecutor
-    _hitl_hook: HumanHook | None
+    _hitl_hook: HitlFactory | None
     _agent_dependencies: dict[Any, Any]
     _agent_variables: dict[Any, Any]
 
