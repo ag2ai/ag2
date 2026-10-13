@@ -94,6 +94,7 @@ class TestMistralTranscriber:
         assert b'name="language"' in body and b"fr" in body
         assert b"AG2" in body and b"Voxtral" in body
         assert b'name="diarize"' in body
+        assert b'name="timestamp_granularities' in body and b"segment" in body
 
     async def test_builds_a_client_from_api_key(self) -> None:
         config = MistralTranscriber(api_key="explicit-key")

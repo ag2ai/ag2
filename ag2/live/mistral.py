@@ -50,6 +50,9 @@ class STTConfig(STTConfigProtocol):
             extra["language"] = self._language
         if self._context_bias:
             extra["context_bias"] = self._context_bias
+        # Without streaming, the API rejects `diarize` unless segment timestamps are requested.
+        if self._diarize:
+            extra["timestamp_granularities"] = ["segment"]
 
         wav = voice_to_wav_buffer(voice)
         response = await self._client.audio.transcriptions.complete_async(

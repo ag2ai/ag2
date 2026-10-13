@@ -132,7 +132,7 @@ from ag2.live import MistralTranscriber
 pipeline = MistralTranscriber("voxtral-mini-latest").pipe(agent)
 ```
 
-`language` and `context_bias` (up to 100 words or phrases to favour) are only sent when you set them — leave `language` unset and the model auto-detects. `diarize=True` asks for speaker labels. Pass `api_key` or a preconfigured `client` to override the `MISTRAL_API_KEY` default. `timestamp_granularities` is not exposed: `transcribe()` returns plain text, and the API rejects it together with `language`.
+`language` and `context_bias` (up to 100 words or phrases to favour) are only sent when you set them — leave `language` unset and the model auto-detects. `diarize=True` requests speaker diarization (segment timestamps are sent automatically, as the API requires); `transcribe()` still returns plain text. Pass `api_key` or a preconfigured `client` to override the `MISTRAL_API_KEY` default.
 
 ## Text-to-Speech
 
