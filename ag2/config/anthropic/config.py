@@ -33,6 +33,7 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     metadata: dict[str, str] | None
     service_tier: str | None
     prompt_caching: bool
+    cache_diagnostics: bool
     extra_body: dict[str, Any] | None
 
 
@@ -54,6 +55,7 @@ class AnthropicConfig(ModelConfig):
     metadata: dict[str, str] | None = None
     service_tier: str | None = None
     prompt_caching: bool = True
+    cache_diagnostics: bool = False
     extra_body: dict[str, Any] | None = None
 
     @property
@@ -86,6 +88,7 @@ class AnthropicConfig(ModelConfig):
             http_client=self.http_client,
             create_options=options,
             prompt_caching=self.prompt_caching,
+            cache_diagnostics=self.cache_diagnostics,
             extra_body=self._request_extra_body(),
         )
 

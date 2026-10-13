@@ -72,7 +72,7 @@ from ag2.exceptions import (
     WebFetchOptionUnsupportedError,
     WebFetchUrlSourceToolNotFoundError,
 )
-from ag2.files import FileProvider
+from ag2.files import FileProvider, UploadedFile
 from ag2.response import ResponseProto
 from ag2.tools.builtin.anthropic_bash import ANTHROPIC_BASH_TOOL_NAME, AnthropicBashToolSchema
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
@@ -698,16 +698,13 @@ def convert_messages(
     for message in event_list:
         if isinstance(message, ToolResultsEvent):
             for r in message.results:
-                parent = getattr(r, "parent_id", None)
-                if parent:
-                    resolved_tool_ids.add(parent)
+                if r.parent_id:
+                    resolved_tool_ids.add(r.parent_id)
         # Loose ToolResultEvent / ToolErrorEvent entries appear when the
         # ToolResultsEvent wrapper failed to save. Treat them as
         # resolving their parent so the tool_use stays valid.
-        elif isinstance(message, (ToolResultEvent, ToolErrorEvent)):
-            parent = getattr(message, "parent_id", None)
-            if parent:
-                resolved_tool_ids.add(parent)
+        elif isinstance(message, (ToolResultEvent, ToolErrorEvent)) and message.parent_id:
+            resolved_tool_ids.add(message.parent_id)
 
     # A member tool_use's toolset_name has to be repeated on its tool_result. Read only for
     # the tool_use blocks that are emitted, so an orphan is still dropped rather than refused.
@@ -812,9 +809,13 @@ def convert_messages(
                     content_parts.append(_text_block(serializer.encode(inp.data).decode()))
 
                 elif isinstance(inp, FileIdInput):
-                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.ANTHROPIC:
+                    if (
+                        isinstance(inp, UploadedFile)
+                        and inp.provider is not None
+                        and inp.provider is not FileProvider.ANTHROPIC
+                    ):
                         raise UnsupportedInputError(
-                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.ANTHROPIC.value}'",
+                            f"file uploaded via '{inp.provider.value}' cannot be used with '{FileProvider.ANTHROPIC.value}'",
                             "anthropic",
                         )
                     content_parts.append(_file_id_block(inp.file_id, inp.filename))
@@ -862,7 +863,7 @@ def convert_messages(
             # fails to persist (the exact failure mode that motivated
             # `resolved_tool_ids` above). Emit as its own user turn so
             # the conversation stays consistent.
-            parent = getattr(message, "parent_id", None)
+            parent = message.parent_id
             if parent and parent in valid_tool_ids and parent not in emitted_result_ids:
                 emitted_result_ids.add(parent)
                 turns.append(("user", [_tool_result_block(message, serializer, toolset_names.get(parent))]))

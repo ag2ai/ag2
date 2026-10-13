@@ -4,6 +4,7 @@
 
 import json
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeGuard
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     from referencing import Registry
 
 logger = logging.getLogger(__name__)
+
+_SINGLE_LINE_FENCE_INFO_STRING_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*(?=\s|[{[])")
 
 
 @dataclass
@@ -49,10 +52,14 @@ class A2UIParseResult:
 
 
 def strip_markdown_fences(text: str) -> str:
-    """Remove markdown code fences (`````json ... `````) wrapping JSON content."""
+    """Remove markdown code fences (`````json ... `````) wrapping JSON content.
+
+    Handles multi-line fences (info string on the opening line) and single-line
+    fences with an optional info string (e.g. ```json {"a": 1}```).
+    """
     text = text.strip()
     if text.startswith("```"):
-        text = text.split("\n", 1)[-1] if "\n" in text else text[3:]
+        text = text.split("\n", 1)[-1] if "\n" in text else _SINGLE_LINE_FENCE_INFO_STRING_RE.sub("", text[3:], count=1)
     if text.endswith("```"):
         text = text[:-3]
     return text.strip()
