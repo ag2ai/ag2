@@ -9,7 +9,7 @@ from typing import Annotated, Any, Union
 
 import pytest
 from dirty_equals import IsPartialDict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from typing_extensions import TypedDict
 
 from ag2.response import ResponseSchema
@@ -551,3 +551,68 @@ class TestValidation:
 
         with pytest.raises(Exception):
             await schema.validate("not a number", context=None)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio()
+class TestAnnotatedValidation:
+    @pytest.mark.parametrize(
+        ("type_", "raw", "expected"),
+        [
+            pytest.param(Annotated[bool, "note"], '{"data": true}', True, id="bool"),
+            pytest.param(Annotated[int, "note"], '{"data": 3}', 3, id="int"),
+            pytest.param(Annotated[list[int], "note"], '{"data": [1, 2]}', [1, 2], id="list"),
+            pytest.param(Annotated[dict[str, int], "note"], '{"a": 1}', {"a": 1}, id="dict"),
+            pytest.param(Annotated[int | str, "note"], '{"data": "x"}', "x", id="union"),
+        ],
+    )
+    async def test_validates(self, type_: ClassInfo, raw: str, expected: Any) -> None:
+        schema = ResponseSchema(type_)
+
+        assert await schema.validate(raw, context=None) == expected  # type: ignore[arg-type]
+
+    async def test_annotated_str_keeps_its_constraints(self) -> None:
+        schema = ResponseSchema(Annotated[str, Field(min_length=3)], embed=False)
+
+        with pytest.raises(ValidationError):
+            await schema.validate('"x"', context=None)  # type: ignore[arg-type]
+        assert await schema.validate('"xyz"', context=None) == "xyz"  # type: ignore[arg-type]
+
+    async def test_enum(self) -> None:
+        class Color(Enum):
+            RED = "red"
+
+        schema = ResponseSchema(Annotated[Color, "note"])
+
+        assert await schema.validate('{"data": "red"}', context=None) is Color.RED  # type: ignore[arg-type]
+
+    async def test_dataclass(self) -> None:
+        @dataclass
+        class Point:
+            x: int
+
+        schema = ResponseSchema(Annotated[Point, "note"])
+
+        assert await schema.validate('{"x": 1}', context=None) == Point(1)  # type: ignore[arg-type]
+
+    async def test_model(self) -> None:
+        class Point(BaseModel):
+            x: int
+
+        schema = ResponseSchema(Annotated[Point, "note"])
+
+        assert await schema.validate('{"x": 1}', context=None) == Point(x=1)  # type: ignore[arg-type]
+
+
+class TestAnnotatedSchemas:
+    def test_dataclass_schema_matches_bare_type(self) -> None:
+        @dataclass
+        class Point:
+            x: int
+
+        assert ResponseSchema(Annotated[Point, "note"]).json_schema == ResponseSchema(Point).json_schema
+
+    def test_primitive_schema_matches_bare_type(self) -> None:
+        assert ResponseSchema(Annotated[int, "note"]).json_schema == ResponseSchema(int).json_schema
+
+    def test_description_matches_bare_type(self) -> None:
+        assert ResponseSchema(Annotated[bool, "note"]).description == ResponseSchema(bool).description

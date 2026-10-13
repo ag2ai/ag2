@@ -46,9 +46,9 @@ class GeminiFilesClient:
             file_id=_file_id(result),
             filename=filename,
             provider=FileProvider.GEMINI,
-            bytes_count=result.size_bytes if hasattr(result, "size_bytes") else len(data),
+            bytes_count=result.size_bytes if result.size_bytes is not None else len(data),
             purpose=purpose,
-            created_at=_created_at_to_float(result.create_time if hasattr(result, "create_time") else None),
+            created_at=_created_at_to_float(result.create_time),
         )
 
     async def read(self, file_id: str) -> FileContent:
@@ -74,7 +74,7 @@ class GeminiFilesClient:
                 provider=FileProvider.GEMINI,
                 bytes_count=f.size_bytes if f.size_bytes else None,
                 purpose=None,
-                created_at=_created_at_to_float(f.create_time if hasattr(f, "create_time") else None),
+                created_at=_created_at_to_float(f.create_time),
             )
             for f in pager.page
         ]
