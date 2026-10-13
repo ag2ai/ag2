@@ -212,6 +212,21 @@ class TestShellAdapterFiltering:
         adapter = ShellAdapter(LocalSandbox(tmp_path), ignore=[".env"])
         assert "Access denied" not in await adapter.run("ls *.txt")
 
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("dd if=.env of=out.txt", id="dd-read"),
+            pytest.param("dd if=a.txt of=.env", id="dd-write"),
+            pytest.param("git diff --output=.env", id="git-output"),
+        ],
+    )
+    async def test_ignore_denies_option_value_after_equals(self, command: str) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, ignore=[".env"])
+        result = await adapter.run(command)
+        assert "Access denied" in result
+        assert sandbox.execs == []
+
     async def test_blocked_or_ignore_alone_switches_on_restricted_mode(self) -> None:
         assert ShellAdapter(RecordingSandbox(), blocked=["rm"]).restricted
         assert ShellAdapter(RecordingSandbox(), ignore=[".env"]).restricted

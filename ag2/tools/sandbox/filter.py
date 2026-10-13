@@ -124,13 +124,21 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
     except ValueError:
         tokens = command.split()
 
+    # A `key=value` word (e.g. `of=.env`, `--output=.env`) carries a path
+    # after the `=` that must be checked as well as the whole word.
+    expanded_tokens: list[str] = []
+    for token in tokens:
+        expanded_tokens.append(token)
+        if "=" in token:
+            expanded_tokens.extend(part for part in token.split("=") if part)
+
     host_backed = isinstance(workdir, Path)
     if host_backed:
         resolved_workdir: PurePath = workdir.resolve()
     else:
         resolved_workdir = PurePosixPath(posixpath.normpath(str(workdir)))
 
-    for token in tokens:
+    for token in expanded_tokens:
         if host_backed:
             try:
                 literal: PurePath = (workdir / token).resolve()
