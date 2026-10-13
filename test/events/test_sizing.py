@@ -5,6 +5,7 @@
 """Tests for content-size estimation and prompt rendering (ag2.events.sizing)."""
 
 from ag2.events import (
+    BinaryInput,
     ImageInput,
     ModelMessage,
     ModelRequest,
@@ -65,3 +66,9 @@ def test_render_uses_placeholder_for_non_text() -> None:
     )
     assert rendered == "User: look [image]"
     assert "PNG" not in rendered  # raw bytes never leak into the prompt
+
+
+def test_unknown_kind_falls_back_to_media_type() -> None:
+    event = ModelRequest([BinaryInput(b"x", media_type="image/png", kind="weird-unknown")])
+    assert estimated_tokens(event) == 1000
+    assert render_for_prompt(event) == "User: [image]"
