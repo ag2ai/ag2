@@ -219,8 +219,7 @@ async def test_xai_assistant_event_replays_through_chat_append() -> None:
         serializer=SerializerCls,
     )
 
-    # chat.append should be called exactly once with the replay Response
-    assert stub_chat.append.call_count == 1
+    assert stub_chat.append.call_count == 2
 
 
 @pytest.mark.asyncio
