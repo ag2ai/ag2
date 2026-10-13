@@ -10,6 +10,7 @@ from contextlib import ExitStack
 from typing import Any
 
 import pytest
+from dirty_equals import IsPartialDict
 
 pytest.importorskip("mistralai")
 
@@ -64,9 +65,16 @@ class FakeSpeech:
         )
 
 
-class FakeClient:
+class FakeAudio:
     def __init__(self, deltas: list[bytes]) -> None:
         self.speech = FakeSpeech(deltas)
+
+
+class FakeClient:
+    """Mirrors the real `Mistral` client's `client.audio.speech` path."""
+
+    def __init__(self, deltas: list[bytes]) -> None:
+        self.audio = FakeAudio(deltas)
 
 
 @pytest.fixture
@@ -113,7 +121,7 @@ class TestVoiceSelection:
 
         await config.synthesize("hi")
 
-        assert client.speech.calls == [
+        assert client.audio.speech.calls == [
             {
                 "input": "hi",
                 "model": DEFAULT_MODEL,
@@ -128,7 +136,7 @@ class TestVoiceSelection:
 
         await config.synthesize("hi")
 
-        assert client.speech.calls == [
+        assert client.audio.speech.calls == [
             {
                 "input": "hi",
                 "model": "custom-model",
@@ -172,7 +180,7 @@ class TestStreamingTTSConfig:
 
         async for chunk in config.stream("hi"):
             assert chunk == INT16[:4]
-            assert client.speech.yielded == 1
+            assert client.audio.speech.yielded == 1
             break
 
     async def test_yields_int16_chunks_skipping_non_audio_events(self, client: FakeClient) -> None:
@@ -200,7 +208,7 @@ class TestStreamingTTSConfig:
         config = MistralStreamingTTSConfig(voice_id="v", client=client)  # type: ignore[arg-type]
 
         assert await config.synthesize("hi") == INT16
-        assert [call["stream"] for call in client.speech.calls] == [True]
+        assert client.audio.speech.calls == [IsPartialDict({"stream": True})]
 
 
 class TestViaTTSObserver:

@@ -65,7 +65,7 @@ class TTSConfig(TTSConfigProtocol[bytes]):
     def _request(self, text: str, *, stream: bool) -> Any:
         # Only the selected voice is sent, never the other one as None.
         voice = {"voice_id": self._voice_id} if self._voice_id else {"ref_audio": self._ref_audio}
-        return self._client.speech.complete_async(
+        return self._client.audio.speech.complete_async(
             input=text,
             model=self._model,
             response_format="pcm",
