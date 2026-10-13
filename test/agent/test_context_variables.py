@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ag2 import Agent, Context, Variable
+from ag2 import Agent, Context, Inject, Variable
 from ag2.context import strip_reserved_variables
 from ag2.events import ToolCallEvent
 from ag2.middleware.builtin.tools.approval import BYPASS_KEY
@@ -223,6 +223,31 @@ async def test_variable_with_default_factory_called_once(mock: MagicMock) -> Non
     mock.factory.assert_called_once()
     mock.first.assert_called_once_with([1])
     mock.second.assert_called_once_with([1, 2])
+
+
+@pytest.mark.asyncio()
+async def test_falsy_values_are_resolved(mock: MagicMock) -> None:
+    def my_tool(
+        var: Annotated[str, Variable("myvar")],
+        dep: Annotated[int, Inject("mydep")],
+    ) -> str:
+        mock(var, dep)
+        return ""
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="my_tool"),
+            "result",
+        ),
+        tools=[my_tool],
+        variables={"myvar": ""},
+        dependencies={"mydep": 0},
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called_once_with("", 0)
 
 
 class TestReservedVariables:
