@@ -226,10 +226,11 @@ async def test_variable_with_default_factory_called_once(mock: MagicMock) -> Non
 
 
 @pytest.mark.asyncio()
-async def test_falsy_values_are_resolved(mock: MagicMock) -> None:
+@pytest.mark.parametrize("value", ["", 0, False, [], {}], ids=repr)
+async def test_falsy_values_are_resolved(mock: MagicMock, value: Any) -> None:
     def my_tool(
-        var: Annotated[str, Variable("myvar")],
-        dep: Annotated[int, Inject("mydep")],
+        var: Annotated[Any, Variable("myvar")],
+        dep: Annotated[Any, Inject("mydep")],
     ) -> str:
         mock(var, dep)
         return ""
@@ -241,13 +242,40 @@ async def test_falsy_values_are_resolved(mock: MagicMock) -> None:
             "result",
         ),
         tools=[my_tool],
-        variables={"myvar": ""},
-        dependencies={"mydep": 0},
+        variables={"myvar": value},
+        dependencies={"mydep": value},
     )
 
     await agent.ask("Hi!")
 
-    mock.assert_called_once_with("", 0)
+    mock.assert_called_once_with(value, value)
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize("value", ["", 0, False, [], {}], ids=repr)
+async def test_falsy_values_win_over_defaults(mock: MagicMock, value: Any) -> None:
+    def my_tool(
+        ctx: Context,
+        var: Annotated[Any, Variable("myvar", default="default")],
+        dep: Annotated[Any, Inject("mydep", default="default")],
+    ) -> str:
+        mock(var, dep, ctx.variables["myvar"], ctx.dependencies["mydep"])
+        return ""
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="my_tool"),
+            "result",
+        ),
+        tools=[my_tool],
+        variables={"myvar": value},
+        dependencies={"mydep": value},
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called_once_with(value, value, value, value)
 
 
 class TestReservedVariables:
