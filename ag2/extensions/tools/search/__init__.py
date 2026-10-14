@@ -10,6 +10,11 @@ except ImportError as e:
     ExaToolkit = missing_additional_dependency("ExaToolkit", "exa-py>=2.12.1,<3", e)  # type: ignore[misc]
 
 try:
+    from .firecrawl import FirecrawlToolkit
+except ImportError as e:
+    FirecrawlToolkit = missing_additional_dependency("FirecrawlToolkit", "firecrawl-py>=4.46,<5", e)  # type: ignore[misc]
+
+try:
     from .tinyfish import TinyFishSearchToolkit
 except ImportError as e:
     TinyFishSearchToolkit = missing_additional_dependency("TinyFishSearchToolkit", "tinyfish>=0.2.3", e)  # type: ignore[misc]
@@ -19,6 +24,7 @@ from .xquik import XquikSearchToolkit
 
 __all__ = (
     "ExaToolkit",
+    "FirecrawlToolkit",
     "SerplySearchToolkit",
     "TinyFishSearchToolkit",
     "XquikSearchToolkit",
