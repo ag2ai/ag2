@@ -18,6 +18,7 @@ from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from functools import cache
+from pathlib import PurePath
 from typing import TYPE_CHECKING, Any, cast
 
 import acp
@@ -149,6 +150,11 @@ class _FakeConnection:
         )
 
     async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
+        # Real adapters reject relative paths here; so does the double, or a config
+        # left on its default `cwd` would pass every test and fail on first real use.
+        for path in [kwargs["cwd"], *(kwargs.get("additional_directories") or [])]:
+            if not PurePath(path).is_absolute():
+                raise acp.RequestError.invalid_params({"path": f"must be an absolute path, but received: {path}"})
         self.new_session_kwargs = kwargs
         return schema.NewSessionResponse(
             session_id=FAKE_SESSION_ID,

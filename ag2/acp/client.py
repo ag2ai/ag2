@@ -23,6 +23,7 @@ import logging
 import weakref
 from asyncio.subprocess import Process
 from collections.abc import Awaitable, Callable, Iterable, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import acp
@@ -141,10 +142,10 @@ class ACPClient:
             await session.ensure(
                 session.bridge,
                 connect=self.config._open_connection,
-                cwd=self.config.cwd,
+                cwd=str(Path(self.config.cwd).resolve()),
                 protocol_version=acp.PROTOCOL_VERSION,
                 client_capabilities=self._client_capabilities(),
-                additional_directories=self.config.additional_directories,
+                additional_directories=[str(Path(d).resolve()) for d in self.config.additional_directories],
                 model=self.config.model,
                 mcp_servers=mcp_servers or None,
                 agent_label=self.config._agent_label,

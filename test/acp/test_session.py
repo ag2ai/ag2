@@ -71,3 +71,13 @@ async def test_agent_that_cannot_be_launched_surfaces_the_failure() -> None:
     async with cfg:
         with pytest.raises(FileNotFoundError):
             await Agent("acp", config=cfg).ask("hello")
+
+
+@pytest.mark.asyncio
+async def test_relative_workspace_paths_reach_the_agent_as_absolute_ones() -> None:
+    cfg = fake_acp_config(_says("hi"), permission_policy="auto", cwd=".", additional_directories=["."])
+
+    async with cfg:
+        reply = await Agent("acp", config=cfg).ask("hello")
+
+    assert reply.body == "hi"
