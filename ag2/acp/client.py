@@ -12,7 +12,8 @@ Lifecycle: the framework calls ``config.create()`` once per ``AgentRun``, so the
 live ACP session is keyed by ``context.stream.id`` in a per-config registry and
 reused across the run's internal model-turns. A ``weakref.finalize`` on the
 stream terminates the subprocess if the run is dropped without an explicit
-``config.aclose()``. When the run's tools include function tools, a per-session
+``config.aclose()``, and the subprocess of a session still open when the event loop shuts
+down exits with it. When the run's tools include function tools, a per-session
 :class:`~.tool_gateway.ToolGateway` serves them to the agent over HTTP MCP; it
 lives and dies with the session.
 """
