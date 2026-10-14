@@ -17,11 +17,11 @@ from ag_ui.core import (
 )
 
 from ag2 import Agent
+from ag2.config.input_acceptance import input_modalities
 from ag2.tools.final import Toolkit
 from ag2.tools.subagents.subagent_tool import SubagentTool
 from ag2.tools.tool import Tool
 
-from .input_acceptance import input_modalities
 from .provider import GEMINI_FAMILY, provider_of
 
 

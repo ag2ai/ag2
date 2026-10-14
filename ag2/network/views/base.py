@@ -18,10 +18,10 @@ between history and the triggering message.
 Built-ins: :class:`FullTranscript` and :class:`WindowedSummary`.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Protocol
 
-from ag2.events import BaseEvent
+from ag2.events import BaseEvent, Input
 
 from ..channel import ChannelMetadata
 from ..envelope import Envelope
@@ -29,9 +29,11 @@ from ..envelope import Envelope
 __all__ = ("EnvelopeRenderer", "NameResolver", "ViewPolicy", "default_name_resolver")
 
 
-EnvelopeRenderer = Callable[[Envelope], "str | None"]
-"""Project a single envelope to its LLM-visible string, or ``None``
-to skip. Supplied by the channel's adapter via
+EnvelopeRenderer = Callable[[Envelope], "Sequence[Input] | None"]
+"""Project a single envelope to its LLM-visible parts, or ``None``
+(or no parts) to skip. Each part stays its own :class:`Input`, so a
+view keeps the boundary between, say, a handoff signal and the body that
+follows it. Supplied by the channel's adapter via
 ``ChannelAdapter.render_envelope`` so view policies stay
 adapter-neutral."""
 

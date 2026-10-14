@@ -15,7 +15,9 @@ class SkillsLock:
 
     def read(self) -> dict[str, Any]:
         if self._path.exists():
-            return json.loads(self._path.read_text(encoding="utf-8"))
+            # `json.loads` is `Any`; the file is this class's own format.
+            data: dict[str, Any] = json.loads(self._path.read_text(encoding="utf-8"))
+            return data
         return {"version": 1, "skills": {}}
 
     def record(self, name: str, source: str, computed_hash: str) -> None:
@@ -37,4 +39,7 @@ class SkillsLock:
 
     def get_hash(self, name: str) -> str | None:
         """Return the recorded hash for a skill, or ``None``."""
-        return self.read().get("skills", {}).get(name, {}).get("computedHash")
+        skills: dict[str, Any] = self.read().get("skills", {})
+        entry: dict[str, Any] = skills.get(name, {})
+        computed_hash: str | None = entry.get("computedHash")
+        return computed_hash

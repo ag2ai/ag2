@@ -7,10 +7,17 @@ from itertools import chain
 from typing import Any, Literal, TypedDict
 from urllib.parse import urlparse
 
-import httpx
+import httpx2
 from fast_depends.library.serializer import SerializerProto
 from mistralai.client import Mistral
-from mistralai.client.models import ChatCompletionResponse
+from mistralai.client.models import (
+    ChatCompletionResponse,
+    DeltaMessage,
+    GuardrailConfig,
+    GuardrailConfigTypedDict,
+    Prediction,
+    PredictionTypedDict,
+)
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
@@ -74,7 +81,17 @@ class CreateOptions(TypedDict, total=False):
     random_seed: int | None
     presence_penalty: float | None
     frequency_penalty: float | None
+    top_k: int | None
+    min_tokens: int | None
+    repetition_penalty: float | None
+    logprobs: bool | None
+    top_logprobs: int | None
+    prompt_logprobs: bool | None
+    top_prompt_logprobs: int | None
+    service_tier: Literal["auto", "standard_only"] | None
     n: int | None
+    prediction: Prediction | PredictionTypedDict | None
+    guardrails: list[GuardrailConfig] | list[GuardrailConfigTypedDict] | None
     parallel_tool_calls: bool | None
     tool_choice: str | dict[str, Any] | None
     reasoning_effort: ReasoningEffort | None
@@ -96,7 +113,7 @@ class MistralClient(LLMClient):
         api_key: str | None = None,
         server_url: str | None = None,
         timeout_ms: int | None = None,
-        async_client: httpx.AsyncClient | None = None,
+        async_client: httpx2.AsyncClient | None = None,
         streaming: bool = False,
         create_options: CreateOptions | None = None,
     ) -> None:
@@ -165,14 +182,14 @@ class MistralClient(LLMClient):
         the URL is still on the tool-result event.
         """
         try:
-            client = self._async_client or httpx.AsyncClient()
+            client = self._async_client or httpx2.AsyncClient()
             try:
                 response = await client.get(url, timeout=IMAGE_FETCH_TIMEOUT_S)
                 response.raise_for_status()
             finally:
                 if self._async_client is None:
                     await client.aclose()
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             return None
 
         media_type = _image_media_type(url, response.headers.get("content-type"))
@@ -238,7 +255,8 @@ class MistralClient(LLMClient):
         results: dict[str, Any] = {}
 
         for turn in turns:
-            if getattr(turn, "tool_call_id", None):
+            # Only a `DeltaMessage` carries a tool result; the SDK leaves an absent id as a falsy `Unset`.
+            if isinstance(turn, DeltaMessage) and isinstance(turn.tool_call_id, str) and turn.tool_call_id:
                 results[turn.tool_call_id] = turn.content
                 continue
             turn_text, turn_reasoning = split_content(turn.content)
@@ -301,8 +319,8 @@ class MistralClient(LLMClient):
                     continue
 
                 # A server-executed tool reports back mid-stream on its own delta.
-                if tool_call_id := getattr(delta, "tool_call_id", None):
-                    results[tool_call_id] = delta.content
+                if isinstance(delta.tool_call_id, str) and delta.tool_call_id:
+                    results[delta.tool_call_id] = delta.content
                     continue
 
                 text, reasoning = split_content(delta.content)
