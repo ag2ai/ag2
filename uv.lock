@@ -300,7 +300,7 @@ requires-dist = [
     { name = "starlette", marker = "extra == 'a2ui'", specifier = ">=0.40,<2" },
     { name = "starlette", marker = "extra == 'acp'", specifier = ">=0.40,<2" },
     { name = "tavily-python", marker = "extra == 'tavily'", specifier = ">=0.7.4,<0.9" },
-    { name = "typesafe-sdk", marker = "extra == 'typesafe'", specifier = ">=0.7.4,<0.8" },
+    { name = "typesafe-sdk", marker = "extra == 'typesafe'", specifier = ">=0.7.5,<0.8" },
     { name = "uvicorn", marker = "extra == 'acp'", specifier = ">=0.51.0,<1" },
     { name = "xai-sdk", marker = "extra == 'xai'", specifier = ">=1.12.2,<2" },
     { name = "zai-sdk", marker = "extra == 'zai'", specifier = ">=0.2.3,<1" },
@@ -6022,9 +6022,10 @@ wheels = [
 
 [[package]]
 name = "typesafe-sdk"
-version = "0.7.4"
+version = "0.7.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "anyio" },
     { name = "httpx2" },
     { name = "packaging" },
     { name = "pydantic" },
@@ -6033,9 +6034,9 @@ dependencies = [
     { name = "truststore", marker = "sys_platform != 'emscripten'" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/94/12/3a897e9f424be6f4db0648a955f8fadbe62149d118a03614df897b5a2ec9/typesafe_sdk-0.7.4.tar.gz", hash = "sha256:a20dca217a746db1ac5534ac502de16e1f86a400b4ec09f8594e6221c2bc9558", size = 24388, upload-time = "2026-10-09T15:47:14.978Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/4d/383aa14f4cfe5fb41023ea1cab52d7f79cc31ab200ee7314317cf89db744/typesafe_sdk-0.7.5.tar.gz", hash = "sha256:1eeeb0dc80a7161d84896db42a5016dc0a7c8872fa16540b70163e5357b6d398", size = 34152, upload-time = "2026-10-14T21:21:42.837Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a2/49/6cd65684e41e25069f4d12c09cd7e1e3f81477f06acb29bf0d1815e27d1e/typesafe_sdk-0.7.4-py3-none-any.whl", hash = "sha256:61cf3f2fe9da20b68c3d3fe2fb76bbb2f35f8c4a9a65a6b81c43a535d2a53210", size = 37700, upload-time = "2026-10-09T15:47:12.418Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/f6/bee4c3b49570c2d312057c9e37c1446cf37eb1b86bf5872f7a797e803326/typesafe_sdk-0.7.5-py3-none-any.whl", hash = "sha256:967a8b61494d536abb55ee3f3a2b10e81685cb6baad6ccdcab588bdc6c9b86d2", size = 49948, upload-time = "2026-10-14T21:21:41.337Z" },
 ]
 
 [[package]]
