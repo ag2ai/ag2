@@ -72,7 +72,6 @@ async def test_custom_key_preserves_passthrough_feedback(score: bool | None, val
     feedback = await _run(gate, outputs={"feedback": original})
 
     assert feedback == [Feedback(key="release_gate", score=score, value=value, comment="reason", detail={"attempt": 1})]
-    assert feedback[0].detail == {"attempt": 1}
     assert original == Feedback(key="original", score=score, value=value, comment="reason", detail={"attempt": 1})
 
 

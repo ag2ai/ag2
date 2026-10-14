@@ -55,7 +55,8 @@ def threshold(
         at_least: Inclusive lower bound — pass requires ``score >= at_least``.
         at_most: Inclusive upper bound — pass requires ``score <= at_most``.
         key: Feedback key for the gate. Defaults to the source feedback's key (the
-            column simply becomes pass/fail).
+            column simply becomes pass/fail). When set, it replaces the key of every
+            feedback the scorer returns, so feedbacks with distinct keys merge into one.
 
     At least one of ``at_least`` / ``at_most`` must be set. A numeric feedback becomes
     ``Feedback(score=<pass bool>, detail={"score": <n>, ...})`` (the raw number is kept in
