@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import gc
 import json
 from typing import Any
 
@@ -17,7 +18,6 @@ from firecrawl.v2.utils.error_handler import FirecrawlError, PaymentRequiredErro
 
 from ag2 import Agent, Context, DataInput, Variable
 from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
-from ag2.extensions.tools.search import firecrawl as firecrawl_module
 from ag2.extensions.tools.search.firecrawl import (
     FirecrawlNewsResult,
     FirecrawlScrapeResult,
@@ -607,16 +607,6 @@ class TestScrapeExecution:
         assert _request_body(route) == IsPartialDict({"formats": ["html"], "onlyMainContent": False})
 
 
-class RecordingClient(AsyncFirecrawlClient):  # type: ignore[misc]
-    """The real SDK client; keeps each instance so a test can inspect it after the tool ran."""
-
-    instances: list["RecordingClient"] = []
-
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        RecordingClient.instances.append(self)
-
-
 @pytest.mark.asyncio
 class TestClientLifecycle:
     @respx.mock
@@ -630,19 +620,21 @@ class TestClientLifecycle:
         ],
     )
     async def test_client_closed_after_call(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tool_name: str,
-        arguments: dict[str, Any],
-        url: str,
-        status: int,
+        self, tool_name: str, arguments: dict[str, Any], url: str, status: int
     ) -> None:
         body = SAMPLE_SEARCH_RAW if tool_name == "firecrawl_search" else SAMPLE_SCRAPE_RAW
         if status != 200:
             body = {"success": False, "error": "Insufficient credits"}
-        respx.post(url).mock(return_value=httpx.Response(status, json=body))
-        RecordingClient.instances = []
-        monkeypatch.setattr(firecrawl_module, "AsyncFirecrawlClient", RecordingClient)
+        earlier_clients = {id(o) for o in gc.get_objects() if isinstance(o, AsyncFirecrawlClient)}
+        live_clients: list[AsyncFirecrawlClient] = []
+
+        def capture_client(request: httpx.Request) -> httpx.Response:
+            live_clients.extend(
+                o for o in gc.get_objects() if isinstance(o, AsyncFirecrawlClient) and id(o) not in earlier_clients
+            )
+            return httpx.Response(status, json=body)
+
+        respx.post(url).mock(side_effect=capture_client)
         toolkit = FirecrawlToolkit(api_key="test")
 
         agent = Agent("a", config=_tool_call_config(arguments, tool_name=tool_name), tools=[toolkit])
@@ -652,7 +644,7 @@ class TestClientLifecycle:
             with pytest.raises(PaymentRequiredError):
                 await agent.ask("go")
 
-        [client] = RecordingClient.instances
+        [client] = live_clients
         with pytest.raises(RuntimeError, match="client has been closed"):
             await client.async_http_client.get("/v2/team/credit-usage")
 
@@ -669,9 +661,21 @@ class TestMaxCharacters:
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        [result] = tool_results_event.results[0].result.parts[0].data.web
-        assert result.markdown == "# AG2"
-        assert result.truncated is True
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            FirecrawlSearchResponse(
+                query="AG2",
+                web=[
+                    FirecrawlSearchResult(
+                        url="https://ag2.ai/",
+                        title="AG2 Framework",
+                        description="AG2 is an agent framework.",
+                        position=1,
+                        markdown="# AG2",
+                        truncated=True,
+                    )
+                ],
+            )
+        )
 
     @respx.mock
     async def test_scraped_news_markdown_truncated(self) -> None:
@@ -687,9 +691,21 @@ class TestMaxCharacters:
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        [result] = tool_results_event.results[0].result.parts[0].data.news
-        assert result.markdown == "# A"
-        assert result.truncated is True
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            FirecrawlSearchResponse(
+                query="AG2",
+                news=[
+                    FirecrawlNewsResult(
+                        url="https://news.example/ag2",
+                        title="AG2 1.1 released",
+                        snippet="Release notes.",
+                        position=1,
+                        markdown="# A",
+                        truncated=True,
+                    )
+                ],
+            )
+        )
 
     @respx.mock
     async def test_short_content_not_marked_truncated(self) -> None:
@@ -701,9 +717,21 @@ class TestMaxCharacters:
         await agent.ask("search")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        [result] = tool_results_event.results[0].result.parts[0].data.web
-        assert result.markdown == "# AG2\nFull page"
-        assert result.truncated is False
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            FirecrawlSearchResponse(
+                query="AG2",
+                web=[
+                    FirecrawlSearchResult(
+                        url="https://ag2.ai/",
+                        title="AG2 Framework",
+                        description="AG2 is an agent framework.",
+                        position=1,
+                        markdown="# AG2\nFull page",
+                        truncated=False,
+                    )
+                ],
+            )
+        )
 
     @respx.mock
     async def test_scrape_markdown_and_html_truncated(self) -> None:
@@ -715,10 +743,19 @@ class TestMaxCharacters:
         await agent.ask("scrape")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        result = tool_results_event.results[0].result.parts[0].data
-        assert result.markdown == "# AG"
-        assert result.html == "<h1>"
-        assert result.truncated is True
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            FirecrawlScrapeResult(
+                url="https://ag2.ai/",
+                title="AG2",
+                description="Agent framework",
+                language="en",
+                status_code=200,
+                markdown="# AG",
+                html="<h1>",
+                links=[],
+                truncated=True,
+            )
+        )
 
     @respx.mock
     async def test_max_characters_resolved_from_variable(self) -> None:
@@ -735,9 +772,53 @@ class TestMaxCharacters:
         await agent.ask("scrape")
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        result = tool_results_event.results[0].result.parts[0].data
-        assert result.markdown == "# A"
-        assert result.truncated is True
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            FirecrawlScrapeResult(
+                url="https://ag2.ai/",
+                title="AG2",
+                description="Agent framework",
+                language="en",
+                status_code=200,
+                markdown="# A",
+                html="<h1",
+                links=[],
+                truncated=True,
+            )
+        )
+
+    @respx.mock
+    @pytest.mark.parametrize(
+        ("max_characters", "expected_links", "truncated"),
+        [
+            (20, ["https://a.io"], True),
+            (24, ["https://a.io", "https://b.io"], False),
+        ],
+    )
+    async def test_scrape_links_truncated(
+        self, max_characters: int, expected_links: list[str], truncated: bool
+    ) -> None:
+        raw = {"success": True, "data": {**SAMPLE_SCRAPE_RAW["data"], "links": ["https://a.io", "https://b.io"]}}
+        respx.post(FIRECRAWL_SCRAPE_URL).mock(return_value=httpx.Response(200, json=raw))
+        toolkit = FirecrawlToolkit(api_key="test", formats=["links"], max_characters=max_characters)
+
+        config = TrackingConfig(_tool_call_config({"url": "https://ag2.ai"}, tool_name="firecrawl_scrape"))
+        agent = Agent("a", config=config, tools=[toolkit])
+        await agent.ask("scrape")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            FirecrawlScrapeResult(
+                url="https://ag2.ai/",
+                title="AG2",
+                description="Agent framework",
+                language="en",
+                status_code=200,
+                markdown="# AG2\nFull text",
+                html="<h1>AG2</h1>",
+                links=expected_links,
+                truncated=truncated,
+            )
+        )
 
 
 @pytest.mark.asyncio

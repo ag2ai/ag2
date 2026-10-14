@@ -47,6 +47,22 @@ def _truncate(text: str | None, max_characters: int | None) -> tuple[str | None,
     return text[:max_characters], True
 
 
+def _truncate_links(links: Sequence[str] | None, max_characters: int | None) -> tuple[list[str], bool]:
+    """Keep leading links while their combined length stays within ``max_characters``."""
+    if not links:
+        return [], False
+    if max_characters is None:
+        return list(links), False
+    kept: list[str] = []
+    used = 0
+    for link in links:
+        used += len(link)
+        if used > max_characters:
+            return kept, True
+        kept.append(link)
+    return kept, False
+
+
 def _check_domain_filters(include_domains: Any, exclude_domains: Any) -> None:
     if include_domains and exclude_domains:
         raise ValueError("include_domains and exclude_domains cannot both be set")
@@ -130,7 +146,8 @@ class FirecrawlToolkit(Toolkit):
     timeouts in milliseconds.
 
     ``max_characters`` caps the page content each tool returns (markdown and
-    HTML, per result); results that were cut have ``truncated=True``.
+    HTML, and the combined length of links); results that were cut have
+    ``truncated=True``.
 
     ``firecrawl_scrape`` returns ``{"error": ...}`` for a URL that is not
     http or https, so the model can correct it. Every other problem (invalid
@@ -318,7 +335,8 @@ class FirecrawlToolkit(Toolkit):
             store_in_cache: Whether Firecrawl may cache this page.
             timeout: Firecrawl API timeout in milliseconds.
             max_characters: Cut the markdown and the HTML to this many
-                characters each and set ``truncated=True`` on the result.
+                characters each, keep links only while their combined length
+                fits, and set ``truncated=True`` on the result.
             name: Tool name exposed to the model.
             description: Tool description exposed to the model.
             middleware: Tool middleware applied to this tool.
@@ -350,6 +368,7 @@ class FirecrawlToolkit(Toolkit):
                 "timeout": resolve_variable(timeout, ctx, param_name="timeout"),
             }
             kwargs = {k: v for k, v in params.items() if v is not None}
+            limit_chars = resolve_variable(max_characters, ctx, param_name="max_characters")
 
             client = AsyncFirecrawlClient(**client_kwargs)
             try:
@@ -359,9 +378,9 @@ class FirecrawlToolkit(Toolkit):
                 # client. It is not documented as public, so check it on SDK upgrades.
                 await client.async_http_client.close()
 
-            limit_chars = resolve_variable(max_characters, ctx, param_name="max_characters")
             markdown, markdown_cut = _truncate(doc.markdown, limit_chars)
             html, html_cut = _truncate(doc.html, limit_chars)
+            links, links_cut = _truncate_links(doc.links, limit_chars)
             metadata = doc.metadata_typed
             return ToolResult(
                 FirecrawlScrapeResult(
@@ -372,8 +391,8 @@ class FirecrawlToolkit(Toolkit):
                     status_code=metadata.status_code,
                     markdown=markdown,
                     html=html,
-                    links=list(doc.links or []),
-                    truncated=markdown_cut or html_cut,
+                    links=links,
+                    truncated=markdown_cut or html_cut or links_cut,
                 )
             )
 
@@ -390,22 +409,42 @@ class FirecrawlToolkit(Toolkit):
         return kwargs
 
 
+@dataclass(slots=True)
+class _ScrapedPage:
+    url: str
+    title: str | None
+    description: str | None
+    markdown: str | None
+    truncated: bool
+
+
 # With scrape options the SDK returns each result as a ``Document``, which keeps
 # only the page metadata (no search ``position``, ``date`` or snippet). Results
 # keep their rank order, so the list index is used as the position.
+def _scraped_page(item: Any, max_characters: int | None) -> _ScrapedPage:
+    metadata = item.metadata_typed
+    markdown, truncated = _truncate(item.markdown, max_characters)
+    return _ScrapedPage(
+        url=metadata.url or metadata.source_url or "",
+        title=metadata.title,
+        description=metadata.description,
+        markdown=markdown,
+        truncated=truncated,
+    )
+
+
 # ``item`` is ``SearchResultWeb``/``SearchResultNews`` or ``Document``; firecrawl-py
 # ships no type information, so it is typed as ``Any``.
 def _web_result(item: Any, rank: int, max_characters: int | None) -> FirecrawlSearchResult:
     if isinstance(item, Document):
-        metadata = item.metadata_typed
-        markdown, truncated = _truncate(item.markdown, max_characters)
+        page = _scraped_page(item, max_characters)
         return FirecrawlSearchResult(
-            url=metadata.url or metadata.source_url or "",
-            title=metadata.title,
-            description=metadata.description,
+            url=page.url,
+            title=page.title,
+            description=page.description,
             position=rank,
-            markdown=markdown,
-            truncated=truncated,
+            markdown=page.markdown,
+            truncated=page.truncated,
         )
     return FirecrawlSearchResult(
         url=item.url,
@@ -417,15 +456,14 @@ def _web_result(item: Any, rank: int, max_characters: int | None) -> FirecrawlSe
 
 def _news_result(item: Any, rank: int, max_characters: int | None) -> FirecrawlNewsResult:
     if isinstance(item, Document):
-        metadata = item.metadata_typed
-        markdown, truncated = _truncate(item.markdown, max_characters)
+        page = _scraped_page(item, max_characters)
         return FirecrawlNewsResult(
-            url=metadata.url or metadata.source_url or "",
-            title=metadata.title,
-            snippet=metadata.description,
+            url=page.url,
+            title=page.title,
+            snippet=page.description,
             position=rank,
-            markdown=markdown,
-            truncated=truncated,
+            markdown=page.markdown,
+            truncated=page.truncated,
         )
     return FirecrawlNewsResult(
         url=item.url or "",

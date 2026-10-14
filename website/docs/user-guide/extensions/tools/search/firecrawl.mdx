@@ -52,7 +52,7 @@ The constructor also accepts `api_url` (for a self-hosted Firecrawl), `http_time
 
 ## Limiting result size
 
-A scraped page can be very long, and `firecrawl_search` with `scrape_results=True` returns one page per result. Set `max_characters` to cut each page's markdown (and HTML for `firecrawl_scrape`) to that many characters. Results that were cut have `truncated=True`, so the model knows the text is incomplete:
+A scraped page can be very long, and `firecrawl_search` with `scrape_results=True` returns one page per result. Set `max_characters` to cut each page's markdown (and HTML for `firecrawl_scrape`) to that many characters. For `firecrawl_scrape`, links are kept only while their combined length fits. Results that were cut have `truncated=True`, so the model knows the text is incomplete:
 
 ```python linenums="1"
 toolkit = FirecrawlToolkit(api_key=...)
@@ -123,6 +123,7 @@ agent = Agent("researcher", config=config, tools=[scrape_tool])
 `toolkit.scrape()` also accepts `include_tags`, `headers`, `mobile`, `proxy`, `block_ads` and `store_in_cache`.
 
 The search and scrape options (everything except `api_key`, `api_url`, `http_timeout` and `max_retries`) accept a `Variable` for deferred context resolution.
+
 ## Errors
 
 `firecrawl_scrape` returns `{"error": ...}` for a URL that is not `http` or `https`, so the model can try again with a valid one. Everything else is raised:
@@ -153,7 +154,7 @@ Errors raised while a tool runs reach the model as tool errors.
 | `title`, `description`, `language` | Page metadata |
 | `status_code` | HTTP status code of the page |
 | `markdown`, `html`, `links` | Page content in the requested formats |
-| `truncated` | `True` when `max_characters` cut the markdown or HTML |
+| `truncated` | `True` when `max_characters` cut the markdown, the HTML or the links |
 
 !!! tip
     Use `firecrawl_search` with `scrape_results=True` when the agent needs to read several sources for one question. Use `firecrawl_scrape` when the agent already knows the URL it wants to read.
