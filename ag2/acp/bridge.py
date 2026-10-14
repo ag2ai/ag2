@@ -154,7 +154,9 @@ class BridgeState:
     def __init__(self, config: "ACPConfig") -> None:
         self.config = config
         self.context: ConversationContext | None = None  # updated by ACPClient before each turn
-        self._turn_parts: list[str] = []
+        # One entry per message the agent sent, each reassembled from its own chunks.
+        self._turn_messages: list[str] = []
+        self._message_key: str | None = None
         self._turn_files: list[BinaryResult] = []
         self._turn_worked = False
         # Set when a tool served over the gateway asked a human and could not
@@ -169,7 +171,8 @@ class BridgeState:
         self.updates = InOrderUpdates()
 
     def begin_turn(self) -> None:
-        self._turn_parts = []
+        self._turn_messages = []
+        self._message_key = None
         self._turn_files = []
         self._turn_worked = False
         self.channel_failure = None
@@ -189,8 +192,8 @@ class BridgeState:
         self.channel_failed.set()
 
     @property
-    def turn_text(self) -> str:
-        return "".join(self._turn_parts)
+    def turn_messages(self) -> list[str]:
+        return list(self._turn_messages)
 
     @property
     def turn_files(self) -> list[BinaryResult]:
@@ -210,7 +213,7 @@ class BridgeState:
     async def handle_update(self, update: SessionUpdate) -> None:
         """Route one ``session/update`` to the stream + accumulate agent output."""
         if isinstance(update, schema.AgentMessageChunk):
-            self._turn_parts.append(block_text(update.content))
+            self._add_message_text(block_text(update.content), update.message_id)
             self._turn_files.extend(block_to_files(update.content))
         if isinstance(
             update,
@@ -224,6 +227,21 @@ class BridgeState:
         event = map_session_update(update)
         if event is not None and self.context is not None:
             await self.context.send(event)
+
+    def _add_message_text(self, text: str, message_id: str | None) -> None:
+        """File a chunk's text under the message it belongs to.
+
+        Chunks are the pieces of one message, so they are put back together; a chunk
+        that names a different message (or, for agents that name none, follows
+        a gap) starts the next one rather than being run into it.
+        """
+        if not text:
+            return
+        if self._turn_messages and message_id == self._message_key:
+            self._turn_messages[-1] += text
+        else:
+            self._turn_messages.append(text)
+        self._message_key = message_id
 
     @property
     def _fs_root(self) -> str:

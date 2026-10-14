@@ -1,171 +1,178 @@
 # Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+"""What an ACP agent can ask of AG2, as the agent sees it: files, terminals and permission."""
 
 import sys
+from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import Any
 
+import acp
 import pytest
-from acp import schema
+from acp import RequestError, schema
+from acp.agent.connection import AgentSideConnection
 
-from ag2.acp.bridge import BridgeState, make_bridge
-from ag2.acp.config import ACPConfig
-from ag2.events import BaseEvent, ModelMessageChunk, ModelReasoning
+from ag2 import Agent
+from ag2.acp.testing import duplex_acp_config
 
+SESSION_ID = "calling-session"
 
-def _text(text: str) -> schema.TextContentBlock:
-    return schema.TextContentBlock(type="text", text=text)
-
-
-class FakeContext:
-    def __init__(self) -> None:
-        self.sent: list[BaseEvent] = []
-
-    async def send(self, event: BaseEvent) -> None:
-        self.sent.append(event)
+Act = Callable[[AgentSideConnection, str], Awaitable[Any]]
 
 
-def _state(context: FakeContext, **cfg: object) -> BridgeState:
-    st = BridgeState(ACPConfig(**cfg))  # type: ignore[arg-type]
-    st.context = context  # type: ignore[assignment]
-    st.begin_turn()
-    return st
+class CallingAgent:
+    """An ACP agent whose one prompt turn is a script of requests to the client."""
+
+    def __init__(self, conn: AgentSideConnection, act: Act, outcome: list[Any]) -> None:
+        self._conn = conn
+        self._act = act
+        self._outcome = outcome
+
+    async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
+        return schema.InitializeResponse(protocol_version=acp.PROTOCOL_VERSION)
+
+    async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
+        return schema.NewSessionResponse(session_id=SESSION_ID)
+
+    async def prompt(self, **kwargs: Any) -> schema.PromptResponse:
+        try:
+            self._outcome.append(await self._act(self._conn, SESSION_ID))
+        except RequestError as error:
+            self._outcome.append(error)
+        return schema.PromptResponse(stop_reason="end_turn")
 
 
-@pytest.mark.asyncio
-async def test_handle_update_sends_event_and_accumulates_text() -> None:
-    ctx = FakeContext()
-    st = _state(ctx)
-    await st.handle_update(schema.AgentMessageChunk(session_update="agent_message_chunk", content=_text("Hello ")))
-    await st.handle_update(schema.AgentMessageChunk(session_update="agent_message_chunk", content=_text("world")))
-    assert all(isinstance(e, ModelMessageChunk) for e in ctx.sent)
-    assert st.turn_text == "Hello world"
+async def agent_asks(act: Act, workspace: Path, **config: Any) -> Any:
+    """Run one turn in which the agent does ``act``, and return what ``act`` returned.
 
-
-@pytest.mark.asyncio
-async def test_thought_is_sent_but_not_in_turn_text() -> None:
-    ctx = FakeContext()
-    st = _state(ctx)
-    await st.handle_update(schema.AgentThoughtChunk(session_update="agent_thought_chunk", content=_text("thinking")))
-    assert isinstance(ctx.sent[0], ModelReasoning)
-    assert st.turn_text == ""
-
-
-@pytest.mark.asyncio
-async def test_unknown_update_sends_nothing() -> None:
-    ctx = FakeContext()
-    st = _state(ctx)
-    await st.handle_update(schema.SessionInfoUpdate(session_update="session_info_update", title="x"))
-    assert ctx.sent == []
+    A request the client refuses comes back as the ``RequestError`` the agent got.
+    """
+    outcome: list[Any] = []
+    cfg = duplex_acp_config(lambda conn: CallingAgent(conn, act, outcome), cwd=str(workspace), **config)
+    try:
+        await Agent("acp", config=cfg).ask("go")
+    finally:
+        await cfg.aclose()
+    [result] = outcome
+    return result
 
 
 @pytest.mark.asyncio
-async def test_begin_turn_resets_buffer() -> None:
-    ctx = FakeContext()
-    st = _state(ctx)
-    await st.handle_update(schema.AgentMessageChunk(session_update="agent_message_chunk", content=_text("a")))
-    st.begin_turn()
-    assert st.turn_text == ""
+class TestFiles:
+    async def test_a_file_the_agent_writes_can_be_read_back(self, tmp_path: Path) -> None:
+        async def act(conn: AgentSideConnection, sid: str) -> str:
+            await conn.write_text_file(session_id=sid, path="notes.txt", content="hi\nthere\n")
+            return (await conn.read_text_file(session_id=sid, path="notes.txt")).content
 
+        assert await agent_asks(act, tmp_path) == "hi\nthere\n"
+        assert (tmp_path / "notes.txt").read_text() == "hi\nthere\n"
 
-def test_fs_write_then_read(tmp_path: Path) -> None:
-    st = BridgeState(ACPConfig(cwd=str(tmp_path)))
-    st.write_text_file("hi\nthere\n", "notes.txt")
-    assert (tmp_path / "notes.txt").read_text() == "hi\nthere\n"
-    assert st.read_text_file("notes.txt") == "hi\nthere\n"
-    # absolute paths inside the root are equally fine
-    assert st.read_text_file(str(tmp_path / "notes.txt")) == "hi\nthere\n"
+    async def test_an_absolute_path_inside_the_workspace_is_fine(self, tmp_path: Path) -> None:
+        (tmp_path / "notes.txt").write_text("hi\n")
 
+        async def act(conn: AgentSideConnection, sid: str) -> str:
+            return (await conn.read_text_file(session_id=sid, path=str(tmp_path / "notes.txt"))).content
 
-def test_fs_read_with_line_and_limit(tmp_path: Path) -> None:
-    st = BridgeState(ACPConfig(cwd=str(tmp_path)))
-    st.write_text_file("l1\nl2\nl3\nl4\n", "f.txt")
-    assert st.read_text_file("f.txt", line=2, limit=2) == "l2\nl3\n"
+        assert await agent_asks(act, tmp_path) == "hi\n"
 
+    async def test_a_read_can_ask_for_a_window_of_lines(self, tmp_path: Path) -> None:
+        (tmp_path / "f.txt").write_text("l1\nl2\nl3\nl4\n")
 
-def test_fs_rejects_escape(tmp_path: Path) -> None:
-    st = BridgeState(ACPConfig(cwd=str(tmp_path)))
-    with pytest.raises(PermissionError):
-        st.read_text_file("../../etc/passwd")
-    with pytest.raises(PermissionError):
-        st.read_text_file(str(tmp_path / ".." / "etc" / "passwd"))
+        async def act(conn: AgentSideConnection, sid: str) -> str:
+            return (await conn.read_text_file(session_id=sid, path="f.txt", line=2, limit=2)).content
 
+        assert await agent_asks(act, tmp_path) == "l2\nl3\n"
 
-@pytest.mark.asyncio
-async def test_permission_auto_returns_allow_id() -> None:
-    st = BridgeState(ACPConfig(permission_policy="auto"))
-    chosen = await st.resolve_permission(
-        [schema.PermissionOption(option_id="ok", kind="allow_once", name="Allow")],
-        schema.ToolCallUpdate(tool_call_id="tc1", title="Edit"),
-    )
-    assert chosen == "ok"
+    @pytest.mark.parametrize("path", ["../../etc/passwd", "/etc/passwd"])
+    async def test_a_path_outside_the_workspace_is_refused(self, tmp_path: Path, path: str) -> None:
+        async def act(conn: AgentSideConnection, sid: str) -> str:
+            return (await conn.read_text_file(session_id=sid, path=path)).content
 
+        assert isinstance(await agent_asks(act, tmp_path), RequestError)
 
-@pytest.mark.asyncio
-async def test_request_permission_allows_selected_option() -> None:
-    bridge = make_bridge(ACPConfig(permission_policy="auto"))
-    resp = await bridge.request_permission(
-        options=[schema.PermissionOption(option_id="ok", kind="allow_once", name="Allow")],
-        session_id="s",
-        tool_call=schema.ToolCallUpdate(tool_call_id="tc1", title="Edit"),
-    )
-    assert resp.outcome == schema.AllowedOutcome(option_id="ok", outcome="selected")
+    async def test_a_write_outside_the_workspace_is_refused(self, tmp_path: Path) -> None:
+        workspace = tmp_path / "work"
+        workspace.mkdir()
+
+        async def act(conn: AgentSideConnection, sid: str) -> None:
+            await conn.write_text_file(session_id=sid, path="../escaped.txt", content="x")
+
+        assert isinstance(await agent_asks(act, workspace), RequestError)
+        assert not (tmp_path / "escaped.txt").exists()
 
 
 @pytest.mark.asyncio
-async def test_request_permission_denies_without_crashing() -> None:
-    # policy="deny" but no reject option -> resolve yields None -> the bridge must
-    # return a well-formed DeniedOutcome (regression: DeniedOutcome() was invalid).
-    bridge = make_bridge(ACPConfig(permission_policy="deny"))
-    resp = await bridge.request_permission(
-        options=[schema.PermissionOption(option_id="ok", kind="allow_once", name="Allow")],
-        session_id="s",
-        tool_call=schema.ToolCallUpdate(tool_call_id="tc1", title="Edit"),
-    )
-    assert resp.outcome == schema.DeniedOutcome(outcome="cancelled")
+class TestPermission:
+    OPTIONS = [schema.PermissionOption(option_id="ok", kind="allow_once", name="Allow")]
+
+    async def ask_permission(self, workspace: Path, policy: str) -> Any:
+        async def act(conn: AgentSideConnection, sid: str) -> schema.RequestPermissionResponse:
+            return await conn.request_permission(
+                session_id=sid,
+                options=self.OPTIONS,
+                tool_call=schema.ToolCallUpdate(tool_call_id="tc1", title="Edit"),
+            )
+
+        return await agent_asks(act, workspace, permission_policy=policy)
+
+    async def test_auto_allows_with_the_offered_option(self, tmp_path: Path) -> None:
+        response = await self.ask_permission(tmp_path, "auto")
+
+        assert response.outcome == schema.AllowedOutcome(option_id="ok", outcome="selected")
+
+    async def test_deny_with_nothing_to_reject_with_is_a_clean_cancel(self, tmp_path: Path) -> None:
+        # No reject option was offered, so there is nothing to pick; the answer must still be well-formed.
+        response = await self.ask_permission(tmp_path, "deny")
+
+        assert response.outcome == schema.DeniedOutcome(outcome="cancelled")
 
 
 @pytest.mark.asyncio
-async def test_terminal_runs_and_captures_output(tmp_path: Path) -> None:
-    st = BridgeState(ACPConfig(cwd=str(tmp_path)))
-    tid = await st.terminals.create("printf", ["hello"])
-    exit_status = await st.terminals.wait(tid)
-    output, truncated, status = st.terminals.output(tid)
-    assert output == "hello"
-    assert truncated is False
-    assert exit_status == schema.TerminalExitStatus(exit_code=0, signal=None)
-    assert status == schema.TerminalExitStatus(exit_code=0, signal=None)
-    await st.terminals.release(tid)
+class TestTerminal:
+    async def test_a_command_runs_and_its_output_is_captured(self, tmp_path: Path) -> None:
+        async def act(conn: AgentSideConnection, sid: str) -> tuple[Any, ...]:
+            terminal = await conn.create_terminal(session_id=sid, command="printf", args=["hello"])
+            exited = await conn.wait_for_terminal_exit(session_id=sid, terminal_id=terminal.terminal_id)
+            output = await conn.terminal_output(session_id=sid, terminal_id=terminal.terminal_id)
+            await conn.release_terminal(session_id=sid, terminal_id=terminal.terminal_id)
+            return exited, output
 
+        exited, output = await agent_asks(act, tmp_path)
 
-@pytest.mark.asyncio
-async def test_terminal_output_byte_limit_truncates(tmp_path: Path) -> None:
-    st = BridgeState(ACPConfig(cwd=str(tmp_path)))
-    tid = await st.terminals.create("printf", ["abcdefghij"], output_byte_limit=4)
-    await st.terminals.wait(tid)
-    output, truncated, _ = st.terminals.output(tid)
-    assert output == "abcd"
-    assert truncated is True
-    await st.terminals.release(tid)
+        assert (exited.exit_code, exited.signal) == (0, None)
+        assert (output.output, output.truncated) == ("hello", False)
 
+    async def test_output_past_the_byte_limit_is_truncated(self, tmp_path: Path) -> None:
+        async def act(conn: AgentSideConnection, sid: str) -> Any:
+            terminal = await conn.create_terminal(
+                session_id=sid, command="printf", args=["abcdefghij"], output_byte_limit=4
+            )
+            await conn.wait_for_terminal_exit(session_id=sid, terminal_id=terminal.terminal_id)
+            return await conn.terminal_output(session_id=sid, terminal_id=terminal.terminal_id)
 
-@pytest.mark.asyncio
-async def test_terminal_cwd_confined(tmp_path: Path) -> None:
-    st = BridgeState(ACPConfig(cwd=str(tmp_path)))
-    with pytest.raises(PermissionError):
-        await st.terminals.create("printf", ["x"], cwd="../../etc")
+        output = await agent_asks(act, tmp_path)
 
+        assert (output.output, output.truncated) == ("abcd", True)
 
-@pytest.mark.asyncio
-async def test_terminal_kill(tmp_path: Path) -> None:
-    st = BridgeState(ACPConfig(cwd=str(tmp_path)))
-    tid = await st.terminals.create("sleep", ["30"])
-    await st.terminals.kill(tid)
-    exit_status = await st.terminals.wait(tid)
-    if sys.platform == "win32":
-        # Windows has no signals: TerminateProcess surfaces as a non-zero exit
-        # code, so exit_status() reports exit_code instead.
-        assert exit_status.exit_code is not None
-    else:
-        assert exit_status.signal is not None  # terminated by signal
-    await st.terminals.release(tid)
+    async def test_a_working_directory_outside_the_workspace_is_refused(self, tmp_path: Path) -> None:
+        async def act(conn: AgentSideConnection, sid: str) -> Any:
+            return await conn.create_terminal(session_id=sid, command="printf", args=["x"], cwd="../../etc")
+
+        assert isinstance(await agent_asks(act, tmp_path), RequestError)
+
+    async def test_a_running_command_can_be_killed(self, tmp_path: Path) -> None:
+        async def act(conn: AgentSideConnection, sid: str) -> Any:
+            terminal = await conn.create_terminal(session_id=sid, command="sleep", args=["30"])
+            await conn.kill_terminal(session_id=sid, terminal_id=terminal.terminal_id)
+            exited = await conn.wait_for_terminal_exit(session_id=sid, terminal_id=terminal.terminal_id)
+            await conn.release_terminal(session_id=sid, terminal_id=terminal.terminal_id)
+            return exited
+
+        exited = await agent_asks(act, tmp_path)
+
+        if sys.platform == "win32":
+            # No signals on Windows: TerminateProcess surfaces as a non-zero exit code.
+            assert exited.exit_code is not None
+        else:
+            assert exited.signal is not None

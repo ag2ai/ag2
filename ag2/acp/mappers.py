@@ -59,20 +59,37 @@ DEFAULT_TOOL_KIND: "schema.ToolKind" = "other"
 
 
 def block_text(block: ContentBlock | None) -> str:
-    """The text of a single content block, or ``""`` if it carries no text."""
-    return block.text if isinstance(block, schema.TextContentBlock) else ""
+    """The text of a single content block, or ``""`` if it carries no text.
+
+    Text, a text resource and a resource link all read as text; media and blob
+    resources do not (see :func:`block_to_files`).
+    """
+    if isinstance(block, schema.TextContentBlock):
+        return block.text
+    if isinstance(block, schema.EmbeddedResourceContentBlock) and not isinstance(
+        block.resource, schema.TextResourceContents
+    ):
+        return ""
+    if isinstance(block, schema.EmbeddedResourceContentBlock | schema.ResourceContentBlock):
+        part = block_to_input(block)
+        return part.content if isinstance(part, TextInput) else ""
+    return ""
 
 
 def block_to_files(block: ContentBlock | None) -> list[BinaryResult]:
-    """Decode a single ``image``/``audio`` content block into binary results."""
+    """Decode a single ``image``/``audio``/blob-resource content block into binary results."""
     if isinstance(block, (schema.ImageContentBlock, schema.AudioContentBlock)):
         return [BinaryResult(data=base64.b64decode(block.data), metadata={"mimeType": block.mime_type})]
+    if isinstance(block, schema.EmbeddedResourceContentBlock) and isinstance(
+        block.resource, schema.BlobResourceContents
+    ):
+        return [
+            BinaryResult(
+                data=base64.b64decode(block.resource.blob),
+                metadata={"mimeType": block.resource.mime_type or "application/octet-stream"},
+            )
+        ]
     return []
-
-
-def content_blocks_to_text(blocks: list[ContentBlock] | None) -> str:
-    """Concatenate the text of any ``text`` content blocks; ignore the rest."""
-    return "".join(block_text(b) for b in (blocks or ()))
 
 
 def content_blocks_to_files(blocks: list[ContentBlock] | None) -> list[BinaryResult]:
@@ -83,11 +100,18 @@ def content_blocks_to_files(blocks: list[ContentBlock] | None) -> list[BinaryRes
     return files
 
 
-def _tool_content_text(content: list[ToolCallContent] | None) -> str:
-    """Extract text from a tool call's ``content`` list (``ContentToolCallContent``)."""
-    return "".join(
-        block_text(item.content) for item in (content or ()) if isinstance(item, schema.ContentToolCallContent)
-    )
+def _tool_call_result(content: list[ToolCallContent] | None, status: str | None) -> ToolResult:
+    """A tool call's ``content`` list as a result, one part per content item.
+
+    Only ``ContentToolCallContent`` items carry content blocks; the status stands
+    in when there is none.
+    """
+    parts = [
+        part
+        for item in (content or ())
+        if isinstance(item, schema.ContentToolCallContent) and (part := block_to_input(item.content)) is not None
+    ]
+    return ToolResult(parts=parts) if parts else ToolResult(status or "")
 
 
 def map_usage(usage: schema.Usage | None) -> Usage:
@@ -126,11 +150,10 @@ def map_session_update(update: SessionUpdate) -> BaseEvent | None:
         )
 
     if isinstance(update, schema.ToolCallProgress):
-        text = _tool_content_text(update.content) or (update.status or "")
         return BuiltinToolResultEvent(
             parent_id=update.tool_call_id,
             name=update.title,
-            result=ToolResult(text),
+            result=_tool_call_result(update.content, update.status),
         )
 
     if isinstance(update, schema.AgentPlanUpdate):

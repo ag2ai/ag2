@@ -10,8 +10,6 @@ provenance, say — so that data must not be able to name the session a prompt r
 against.
 """
 
-from typing import Any
-
 import pytest
 from acp import schema
 from acp.exceptions import RequestError
@@ -19,16 +17,12 @@ from acp.exceptions import RequestError
 from ag2 import Agent
 from ag2.acp import ACPAgent
 from ag2.acp.guard import colliding_meta_keys
-from ag2.acp.testing import connect
+from ag2.acp.testing import connect, send_raw
 from ag2.testing import TestConfig
 
 
 def _agent(*turns: str) -> Agent:
     return Agent("workie", config=TestConfig(*(turns or ("ok",))))
-
-
-def _raw(conn: Any) -> Any:
-    return conn._conn if hasattr(conn, "_conn") else conn._connection
 
 
 class TestCollisionDetection:
@@ -61,7 +55,8 @@ class TestOverrideIsRefused:
             mine = (await conn.new_session(cwd="/tmp")).session_id
 
             with pytest.raises(RequestError):
-                await _raw(conn).send_request(
+                await send_raw(
+                    conn,
                     "session/prompt",
                     {
                         "sessionId": mine,
@@ -80,7 +75,8 @@ class TestOverrideIsRefused:
             session = await conn.new_session(cwd="/tmp")
 
             with pytest.raises(RequestError):
-                await _raw(conn).send_request(
+                await send_raw(
+                    conn,
                     "session/prompt",
                     {
                         "sessionId": session.session_id,
@@ -94,7 +90,8 @@ class TestOverrideIsRefused:
 
         async with connect(server) as (conn, _):
             with pytest.raises(RequestError):
-                await _raw(conn).send_request(
+                await send_raw(
+                    conn,
                     "session/new",
                     {"cwd": "/tmp", "mcpServers": [], "_meta": {"cwd": "/etc"}},
                 )
@@ -107,7 +104,8 @@ class TestOverrideIsRefused:
             mine = (await conn.new_session(cwd="/tmp")).session_id
 
             with pytest.raises(RequestError) as caught:
-                await _raw(conn).send_request(
+                await send_raw(
+                    conn,
                     "session/load",
                     {"sessionId": mine, "cwd": "/tmp", "mcpServers": [], "_meta": {"sessionId": victim}},
                 )
@@ -119,7 +117,8 @@ class TestOverrideIsRefused:
 
         async with connect(server) as (conn, _):
             with pytest.raises(RequestError) as caught:
-                await _raw(conn).send_request(
+                await send_raw(
+                    conn,
                     "session/new",
                     {"cwd": "/tmp", "mcpServers": [], "_meta": {"cwd": "/etc"}},
                 )
@@ -133,11 +132,8 @@ class TestLegitimateMetadataStillWorks:
         server = ACPAgent(_agent())
 
         async with connect(server) as (conn, _):
-            response = await _raw(conn).send_request(
-                "session/new",
-                {"cwd": "/tmp", "mcpServers": [], "_meta": {"ag2.space": {"room": "!r"}}},
-            )
-            session = await server.sessions.get(response["sessionId"])
+            created = await conn.new_session(cwd="/tmp", **{"ag2.space": {"room": "!r"}})
+            session = await server.sessions.get(created.session_id)
 
         assert session.meta == {"ag2.space": {"room": "!r"}}
 

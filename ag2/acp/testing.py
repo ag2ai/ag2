@@ -52,6 +52,7 @@ __all__ = (
     "duplex_acp_config",
     "fake_acp_config",
     "fake_remote_acp_config",
+    "send_raw",
 )
 
 
@@ -468,6 +469,18 @@ class RecordingClient:
 
     async def ext_notification(self, method: str, params: dict[str, Any]) -> None:
         return None
+
+
+async def send_raw(conn: "ClientSideConnection", method: str, params: dict[str, Any]) -> Any:
+    """Send ``method`` with ``params`` exactly as given and return the raw JSON result.
+
+    The typed client builds well-formed requests; this is for the wire-level ones it
+    will not, such as an ``_meta`` that names a field the protocol owns. Errors
+    surface as the SDK's ``RequestError``, as they do from the typed methods.
+    """
+    # The SDK has no public way to send an arbitrary method (``ext_method`` prefixes
+    # its name with ``_``), so this one test-support helper reaches for the JSON-RPC layer.
+    return await conn._conn.send_request(method, params)
 
 
 @asynccontextmanager

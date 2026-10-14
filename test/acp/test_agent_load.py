@@ -297,12 +297,7 @@ class TestSessionState:
         server = ACPAgent(_agent())
 
         async with connect(server) as (conn, _):
-            raw = conn._conn if hasattr(conn, "_conn") else conn._connection
-            created = await raw.send_request(
-                "session/new",
-                {"cwd": "/a", "mcpServers": [], "_meta": {"ag2.space": {"room": "!r"}}},
-            )
-            sid = created["sessionId"]
+            sid = (await conn.new_session(cwd="/a", **{"ag2.space": {"room": "!r"}})).session_id
 
             await conn.load_session(session_id=sid, cwd="/b", additional_directories=["/extra"])
             session = await server.sessions.get(sid)
@@ -315,11 +310,7 @@ class TestSessionState:
 
         async with connect(server) as (conn, _):
             sid = (await conn.new_session(cwd="/tmp")).session_id
-            raw = conn._conn if hasattr(conn, "_conn") else conn._connection
-            await raw.send_request(
-                "session/load",
-                {"sessionId": sid, "cwd": "/tmp", "mcpServers": [], "_meta": {"ag2.space": {"room": "!r"}}},
-            )
+            await conn.load_session(session_id=sid, cwd="/tmp", **{"ag2.space": {"room": "!r"}})
             session = await server.sessions.get(sid)
 
         assert session.meta == {"ag2.space": {"room": "!r"}}

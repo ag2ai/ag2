@@ -528,19 +528,12 @@ class TestDeliveryFailures:
 class TestRequestMetadata:
     """ACP `_meta` is where applications put provenance; it must survive intact."""
 
-    @staticmethod
-    def _raw(conn: Any) -> Any:
-        return conn._conn if hasattr(conn, "_conn") else conn._connection
-
     async def test_wire_meta_is_captured_on_the_session(self) -> None:
         server = ACPAgent(_agent())
 
         async with connect(server) as (conn, _):
-            response = await self._raw(conn).send_request(
-                "session/new",
-                {"cwd": "/tmp", "mcpServers": [], "_meta": {"ag2.space": {"room": "!r"}}},
-            )
-            session = await server.sessions.get(response["sessionId"])
+            created = await conn.new_session(cwd="/tmp", **{"ag2.space": {"room": "!r"}})
+            session = await server.sessions.get(created.session_id)
 
         assert session.meta == {"ag2.space": {"room": "!r"}}
 
@@ -559,13 +552,10 @@ class TestRequestMetadata:
 
         async with connect(server) as (conn, _):
             created = await conn.new_session(cwd="/tmp")
-            await self._raw(conn).send_request(
-                "session/prompt",
-                {
-                    "sessionId": created.session_id,
-                    "prompt": [{"type": "text", "text": "hi"}],
-                    "_meta": {"ag2.space": {"event": "$abc"}},
-                },
+            await conn.prompt(
+                session_id=created.session_id,
+                prompt=[schema.TextContentBlock(type="text", text="hi")],
+                **{"ag2.space": {"event": "$abc"}},
             )
 
         assert config.variables[-1][META_VARIABLE] == {"ag2.space": {"event": "$abc"}}
@@ -814,8 +804,9 @@ class TestSessionVariables:
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
+        await agent.ask("go")  # a plain run afterwards still starts from the defaults
 
-        assert agent._agent_variables == {"seen": [], "n": 0}
+        assert reports == [(1, 1), (1, 1)]
 
     async def test_an_uncopyable_default_is_shared_rather_than_failing(self) -> None:
         """Degrading loudly beats refusing to open a session over one odd value.
@@ -823,11 +814,12 @@ class TestSessionVariables:
         ``threading.Lock`` is the shape this guards: a real handle that a deep
         copy cannot reproduce.
         """
-        agent = Agent("workie", variables={"lock": threading.Lock()}, config=TestConfig("ok"))
+        lock = threading.Lock()
+        agent = Agent("workie", variables={"lock": lock}, config=TestConfig("ok"))
         server = ACPAgent(agent)
 
         async with connect(server) as (conn, _):
             created = await conn.new_session(cwd="/tmp")
             session = await server.sessions.get(created.session_id)
 
-        assert session.variables["lock"] is agent._agent_variables["lock"]
+        assert session.variables["lock"] is lock

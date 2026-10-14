@@ -418,47 +418,45 @@ class TestCancelIsScoped:
 
 
 @pytest.mark.asyncio
-class TestRepairIsSerialised:
+async def test_a_prompt_racing_the_repair_still_sees_valid_history() -> None:
     """The repair rewrites the whole transcript, so no turn may run alongside it."""
+    agent = Agent(
+        "workie",
+        config=TestConfig(ToolCallEvent(name="slow", arguments="{}"), "done", "second"),
+    )
+    entered = asyncio.Event()
 
-    async def test_a_prompt_racing_the_repair_still_sees_valid_history(self) -> None:
-        agent = Agent(
-            "workie",
-            config=TestConfig(ToolCallEvent(name="slow", arguments="{}"), "done", "second"),
+    @agent.tool
+    async def slow() -> str:
+        """Never finishes on its own."""
+        entered.set()
+        await asyncio.Event().wait()
+        return "unreachable"  # pragma: no cover - cancelled first
+
+    server = ACPAgent(agent)
+
+    async with connect(server) as (conn, _):
+        session = await conn.new_session(cwd="/tmp")
+        first = asyncio.create_task(
+            conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
         )
-        entered = asyncio.Event()
+        await entered.wait()
 
-        @agent.tool
-        async def slow() -> str:
-            """Never finishes on its own."""
-            entered.set()
-            await asyncio.Event().wait()
-            return "unreachable"  # pragma: no cover - cancelled first
+        # Fire the follow-up prompt without waiting for the repair to finish.
+        cancelling = asyncio.create_task(conn.cancel(session_id=session.session_id))
+        second = asyncio.create_task(
+            conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="again")])
+        )
+        await first
+        await cancelling
+        await second
 
-        server = ACPAgent(agent)
+        live = await server.sessions.get(session.session_id)
+        events = list(await server.sessions.stream(live).history.get_events())
 
-        async with connect(server) as (conn, _):
-            session = await conn.new_session(cwd="/tmp")
-            first = asyncio.create_task(
-                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
-            )
-            await entered.wait()
-
-            # Fire the follow-up prompt without waiting for the repair to finish.
-            cancelling = asyncio.create_task(conn.cancel(session_id=session.session_id))
-            second = asyncio.create_task(
-                conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="again")])
-            )
-            await first
-            await cancelling
-            await second
-
-            live = await server.sessions.get(session.session_id)
-            events = list(await server.sessions.stream(live).history.get_events())
-
-        calls = {c.id for e in events if isinstance(e, ToolCallsEvent) for c in e.calls}
-        answered = {r.parent_id for e in events if isinstance(e, ToolResultsEvent) for r in e.results}
-        assert calls and calls <= answered
+    calls = {c.id for e in events if isinstance(e, ToolCallsEvent) for c in e.calls}
+    answered = {r.parent_id for e in events if isinstance(e, ToolResultsEvent) for r in e.results}
+    assert calls and calls <= answered
 
 
 @pytest.mark.asyncio

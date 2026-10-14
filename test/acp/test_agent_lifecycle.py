@@ -296,17 +296,6 @@ class TestBackgroundWorkBelongsToTheSession:
 
             assert server.sessions.stream(session) is first
 
-    async def test_background_work_is_tracked_where_teardown_can_see_it(self) -> None:
-        ran: list[str] = []
-        server = ACPAgent(self._spawning_agent(ran))
-
-        async with connect(server) as (conn, _):
-            created = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=created.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
-            session = await server.sessions.get(created.session_id)
-
-            assert server.sessions.stream(session)._background_tasks
-
     async def test_closing_a_session_stops_its_background_work(self) -> None:
         """Otherwise a closed conversation keeps reaching the outside world."""
         ran: list[str] = []

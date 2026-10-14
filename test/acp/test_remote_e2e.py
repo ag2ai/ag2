@@ -368,7 +368,7 @@ class TestLifecycle:
         try:
             async with Agent("acp", config=cfg).run("hang") as run:
                 reply = await run.result()
-            assert reply.body == ""
+            assert reply.body is None
             assert cfg.sessions  # the cancel was honoured, so the session survives
         finally:
             await cfg.aclose()
@@ -392,7 +392,7 @@ class TestLifecycle:
         )
         try:
             reply = await Agent("acp", config=cfg).ask("hang")
-            assert reply.body == ""
+            assert reply.body is None
         finally:
             await cfg.aclose()
 
