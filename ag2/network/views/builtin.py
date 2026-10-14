@@ -29,8 +29,10 @@ current-turn input using the same method as for history, so named views
 label both history and the triggering message consistently.
 """
 
+from collections.abc import Sequence
+
 from ag2.compact import CompactionSummary
-from ag2.events import BaseEvent, ModelMessage, ModelRequest, TextInput
+from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, TextInput
 
 from ..channel import ChannelMetadata
 from ..envelope import Envelope, visible_to
@@ -47,8 +49,8 @@ __all__ = (
 class FullTranscript:
     """Translate every envelope visible to ``participant_id``.
 
-    Projects whichever envelope types ``render_envelope`` returns a
-    string for; other protocol-level events (``EV_CHANNEL_*``,
+    Projects whichever envelope types ``render_envelope`` returns
+    parts for; other protocol-level events (``EV_CHANNEL_*``,
     ``EV_TASK_*``, expectation violations) are hub bookkeeping that
     the LLM doesn't need to reason about. The
     ``NetworkContextPolicy`` renders channel expectations / active task
@@ -76,10 +78,10 @@ class FullTranscript:
         for envelope in wal:
             if not visible_to(envelope, participant_id):
                 continue
-            text = render_envelope(envelope)
-            if text is None:
+            parts = render_envelope(envelope)
+            if not parts:
                 continue
-            events.append(_to_event(envelope, text, participant_id))
+            events.extend(_to_events(envelope, parts, participant_id))
         return events
 
 
@@ -119,24 +121,24 @@ class WindowedSummary:
         render_envelope: EnvelopeRenderer,
         name_for: NameResolver = default_name_resolver,  # noqa: ARG002
     ) -> list[BaseEvent]:
-        visible: list[tuple[Envelope, str]] = []
+        visible: list[tuple[Envelope, Sequence[Input]]] = []
         for envelope in wal:
             if not visible_to(envelope, participant_id):
                 continue
-            text = render_envelope(envelope)
-            if text is None:
+            parts = render_envelope(envelope)
+            if not parts:
                 continue
-            visible.append((envelope, text))
+            visible.append((envelope, parts))
 
         if len(visible) <= self._recent_n:
-            return [_to_event(env, txt, participant_id) for env, txt in visible]
+            return [event for env, parts in visible for event in _to_events(env, parts, participant_id)]
 
         cutoff = len(visible) - self._recent_n
         older = visible[:cutoff]
         recent = visible[cutoff:]
         summary = _summarize_older([env for env, _ in older])
         compaction = CompactionSummary(summary=summary, event_count=len(older))
-        return [compaction, *(_to_event(env, txt, participant_id) for env, txt in recent)]
+        return [compaction, *(event for env, parts in recent for event in _to_events(env, parts, participant_id))]
 
 
 class NamedTranscript:
@@ -167,10 +169,10 @@ class NamedTranscript:
         for envelope in wal:
             if not visible_to(envelope, participant_id):
                 continue
-            text = render_envelope(envelope)
-            if text is None:
+            parts = render_envelope(envelope)
+            if not parts:
                 continue
-            events.append(_to_named_event(envelope, text, participant_id, name_for))
+            events.extend(_to_named_events(envelope, parts, participant_id, name_for))
         return events
 
 
@@ -205,17 +207,17 @@ class NamedWindowedSummary:
         render_envelope: EnvelopeRenderer,
         name_for: NameResolver = default_name_resolver,
     ) -> list[BaseEvent]:
-        visible: list[tuple[Envelope, str]] = []
+        visible: list[tuple[Envelope, Sequence[Input]]] = []
         for envelope in wal:
             if not visible_to(envelope, participant_id):
                 continue
-            text = render_envelope(envelope)
-            if text is None:
+            parts = render_envelope(envelope)
+            if not parts:
                 continue
-            visible.append((envelope, text))
+            visible.append((envelope, parts))
 
         if len(visible) <= self._recent_n:
-            return [_to_named_event(env, txt, participant_id, name_for) for env, txt in visible]
+            return [event for env, parts in visible for event in _to_named_events(env, parts, participant_id, name_for)]
 
         cutoff = len(visible) - self._recent_n
         older = visible[:cutoff]
@@ -224,25 +226,37 @@ class NamedWindowedSummary:
         compaction = CompactionSummary(summary=summary, event_count=len(older))
         return [
             compaction,
-            *(_to_named_event(env, txt, participant_id, name_for) for env, txt in recent),
+            *(event for env, parts in recent for event in _to_named_events(env, parts, participant_id, name_for)),
         ]
 
 
-def _to_event(envelope: Envelope, text: str, participant_id: str) -> BaseEvent:
+def _to_events(envelope: Envelope, parts: Sequence[Input], participant_id: str) -> list[BaseEvent]:
+    """Own envelopes become one ``ModelMessage`` per text part; inbound ones a single ``ModelRequest``.
+
+    An assistant message is text, so own parts of any other kind are not projected.
+    """
     if envelope.sender_id == participant_id:
-        return ModelMessage(text)
-    return ModelRequest([TextInput(text)])
+        return [ModelMessage(part.content) for part in parts if isinstance(part, TextInput)]
+    return [ModelRequest(list(parts))]
 
 
-def _to_named_event(
+def _to_named_events(
     envelope: Envelope,
-    text: str,
+    parts: Sequence[Input],
     participant_id: str,
     name_for: NameResolver,
-) -> BaseEvent:
+) -> list[BaseEvent]:
+    """Like :func:`_to_events`, with the sender label leading an inbound request.
+
+    The label joins a leading text part; ahead of any other kind of part it stands alone.
+    """
     if envelope.sender_id == participant_id:
-        return ModelMessage(text)
-    return ModelRequest([TextInput(f"[{name_for(envelope.sender_id)}]: {text}")])
+        return _to_events(envelope, parts, participant_id)
+    label = f"[{name_for(envelope.sender_id)}]:"
+    first, *rest = parts
+    if isinstance(first, TextInput):
+        return [ModelRequest([TextInput(f"{label} {first.content}", metadata=first.metadata), *rest])]
+    return [ModelRequest([TextInput(label), *parts])]
 
 
 def _summarize_older(older: list[Envelope], *, name_for: NameResolver | None = None) -> str:
