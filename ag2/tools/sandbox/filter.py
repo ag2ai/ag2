@@ -124,13 +124,7 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
     except ValueError:
         tokens = command.split()
 
-    # A `key=value` word (e.g. `of=.env`, `--output=.env`) carries a path
-    # after the `=` that must be checked as well as the whole word.
-    expanded_tokens: list[str] = []
-    for token in tokens:
-        expanded_tokens.append(token)
-        if "=" in token:
-            expanded_tokens.extend(part for part in token.split("=") if part)
+    expanded_tokens = [candidate for token in tokens for candidate in _embedded_paths(token)]
 
     if isinstance(workdir, Path):
         resolved_workdir: PurePath = workdir.resolve()
@@ -153,6 +147,22 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
                 return denied
 
     return None
+
+
+def _embedded_paths(token: str) -> list[str]:
+    """Return *token* plus the paths a program may read out of it.
+
+    A word can carry a path inside it: after ``=`` (``of=.env``,
+    ``--output=.env``) or glued to a short option (``-o.env``, ``-ro.env``).
+    Each tail is checked as well as the whole word, so the filter errs towards
+    refusing (``-ofoo.env`` is refused when ``.env`` is ignored).
+    """
+    found = [token]
+    if "=" in token:
+        found.extend(part for part in token.split("=") if part)
+    if token.startswith("-") and not token.startswith("--"):
+        found.extend(token[i:] for i in range(2, len(token)))
+    return found
 
 
 def _glob_matches(workdir: Path, token: str) -> list[Path]:

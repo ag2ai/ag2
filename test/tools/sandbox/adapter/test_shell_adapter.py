@@ -218,9 +218,11 @@ class TestShellAdapterFiltering:
             pytest.param("dd if=.env of=out.txt", id="dd-read"),
             pytest.param("dd if=a.txt of=.env", id="dd-write"),
             pytest.param("git diff --output=.env", id="git-output"),
+            pytest.param("sort a.txt -o.env", id="short-option-attached"),
+            pytest.param("sort a.txt -ro.env", id="short-options-attached"),
         ],
     )
-    async def test_ignore_denies_option_value_after_equals(self, command: str) -> None:
+    async def test_ignore_denies_path_embedded_in_a_word(self, command: str) -> None:
         sandbox = RecordingSandbox()
         adapter = ShellAdapter(sandbox, ignore=[".env"])
         result = await adapter.run(command)
