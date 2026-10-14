@@ -1,0 +1,83 @@
+---
+title: Linkup Search
+sidebarTitle: Linkup Search
+---
+
+`LinkupToolkit` gives an agent two related tools powered by the [Linkup](https://www.linkup.so){.external-link target="_blank"} web search API: real-time web search (raw sources or a sourced answer) and web page fetching as clean markdown.
+
+!!! note
+    Requires the `linkup-sdk` package and an API key from [app.linkup.so](https://app.linkup.so){.external-link target="_blank"}: `pip install "linkup-sdk>=0.23.0,<1"`
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import LinkupToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[LinkupToolkit(api_key=os.environ["LINKUP_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the Linkup SDK reads `LINKUP_API_KEY` from the environment automatically.
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `linkup_search` | Real-time web search with filters (depth, domains, dates); returns sources or a sourced answer |
+| `linkup_fetch` | Fetch a single web page and return its content as markdown |
+
+## Shared defaults
+
+`depth` and `max_results` on the constructor are applied to the default `linkup_search` tool:
+
+```python linenums="1"
+toolkit = LinkupToolkit(
+    api_key=...,
+    depth="standard",   # "flash" | "fast" | "standard" | "deep"
+    max_results=10,
+)
+```
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.fetch()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = LinkupToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search()],
+)
+```
+
+## Per-tool configuration
+
+Per-call parameters (depth, output type, domains, dates, `max_results`, etc.) live on the factory methods, not on the toolkit itself:
+
+```python linenums="1"
+toolkit = LinkupToolkit(api_key=...)
+
+search_tool = toolkit.search(
+    depth="deep",                   # "deep" for complex multi-step questions
+    output_type="sourcedAnswer",    # "searchResults" | "sourcedAnswer"
+    max_results=5,
+    include_domains=["arxiv.org"],
+    exclude_domains=["medium.com"],
+    from_date="2024-01-01",         # YYYY-MM-DD
+    to_date="2024-12-31",
+)
+
+agent = Agent("researcher", config=config, tools=[search_tool, toolkit.fetch(render_js=True)])
+```
+
+With `output_type="searchResults"` (the default), `linkup_search` returns a list of sources, each with `name`, `url`, and `content`. With `output_type="sourcedAnswer"`, it returns an `answer` string plus the `sources` (`name`, `url`, `snippet`) that support it.
+
+`depth="standard"` suits most queries; `depth="deep"` runs several search iterations and takes longer, but gives better coverage on complex multi-step questions.
+
+All runtime parameters accept `Variable` for deferred context resolution.

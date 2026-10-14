@@ -157,6 +157,7 @@ dev = [
     { name = "exa-py" },
     { name = "httpx2" },
     { name = "jinja2" },
+    { name = "linkup-sdk" },
     { name = "mcp" },
     { name = "mdx-include" },
     { name = "mkdocs-git-revision-date-localized-plugin" },
@@ -194,6 +195,7 @@ docs = [
     { name = "docker" },
     { name = "exa-py" },
     { name = "jinja2" },
+    { name = "linkup-sdk" },
     { name = "mcp" },
     { name = "mdx-include" },
     { name = "mkdocs-git-revision-date-localized-plugin" },
@@ -224,6 +226,7 @@ optionals = [
     { name = "daytona" },
     { name = "docker" },
     { name = "exa-py" },
+    { name = "linkup-sdk" },
     { name = "tenki" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'" },
     { name = "watchdog" },
@@ -333,6 +336,7 @@ dev = [
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
     { name = "jinja2", specifier = "==3.1.6" },
+    { name = "linkup-sdk", specifier = ">=0.23.0,<1" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
     { name = "mdx-include", specifier = "==1.4.2" },
     { name = "mkdocs-git-revision-date-localized-plugin", specifier = "==1.6.0" },
@@ -382,6 +386,7 @@ docs = [
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "jinja2", specifier = "==3.1.6" },
+    { name = "linkup-sdk", specifier = ">=0.23.0,<1" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
     { name = "mdx-include", specifier = "==1.4.2" },
     { name = "mkdocs-git-revision-date-localized-plugin", specifier = "==1.6.0" },
@@ -432,6 +437,7 @@ optionals = [
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
+    { name = "linkup-sdk", specifier = ">=0.23.0,<1" },
     { name = "tenki", specifier = ">=1.4.0,<2" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
     { name = "watchdog", specifier = ">=4.0,<7" },
@@ -2892,6 +2898,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/ea/7421d9e6db894cd6cd788b604b3394a163ded6b942052b6f96c23ccf08e1/librt-0.16.0-cp315-cp315t-win32.whl", hash = "sha256:375bfe6b572a8f6cfc398709356046173bf27e64c4c5edaf5f7062f051fb4bf9", size = 104355, upload-time = "2026-09-29T00:55:04.533Z" },
     { url = "https://files.pythonhosted.org/packages/85/6d/7c31a506eb847bc58aeb2402d58e17605e821f68ab5df5e66fe274a6df41/librt-0.16.0-cp315-cp315t-win_amd64.whl", hash = "sha256:bd3150023d3dc2bc70f3784e59ffa1140d56ddba3d8125b3d6f9f85221279bfc", size = 126134, upload-time = "2026-09-29T00:55:06.017Z" },
     { url = "https://files.pythonhosted.org/packages/36/69/7a5d10ac409c4da0355e054a14371871da9b5557fcc42772cd00181c6cce/librt-0.16.0-cp315-cp315t-win_arm64.whl", hash = "sha256:8ceafb70f2a4f0826f11031942e59c0728fd98da112dc346d4352bde1e486866", size = 116391, upload-time = "2026-09-29T00:55:07.484Z" },
+]
+
+[[package]]
+name = "linkup-sdk"
+version = "0.23.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/74/b2/511a35464ec6985ed6adee4d6757bcbfa8f7bd0119a7c54c42ba13050b03/linkup_sdk-0.23.1.tar.gz", hash = "sha256:4474ea8608e404d04074928ae1612a2eca4800627960f7485d99d25c967255f0", size = 196782, upload-time = "2026-09-30T10:15:31.556Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6b/c8/2794afbfa44419852cdd3a0d9282e42eaebfd88038152282cb4ba42d70a7/linkup_sdk-0.23.1-py3-none-any.whl", hash = "sha256:29a1e1c9537588ee7206017b3fbdabc46ce99a09901b55c819300498fa0d60f9", size = 22241, upload-time = "2026-09-30T10:15:30.116Z" },
 ]
 
 [[package]]

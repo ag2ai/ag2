@@ -10,6 +10,11 @@ except ImportError as e:
     ExaToolkit = missing_additional_dependency("ExaToolkit", "exa-py>=2.12.1,<3", e)  # type: ignore[misc]
 
 try:
+    from .linkup import LinkupToolkit
+except ImportError as e:
+    LinkupToolkit = missing_additional_dependency("LinkupToolkit", "linkup-sdk>=0.23.0,<1", e)  # type: ignore[misc]
+
+try:
     from .tinyfish import TinyFishSearchToolkit
 except ImportError as e:
     TinyFishSearchToolkit = missing_additional_dependency("TinyFishSearchToolkit", "tinyfish>=0.2.3", e)  # type: ignore[misc]
@@ -19,6 +24,7 @@ from .xquik import XquikSearchToolkit
 
 __all__ = (
     "ExaToolkit",
+    "LinkupToolkit",
     "SerplySearchToolkit",
     "TinyFishSearchToolkit",
     "XquikSearchToolkit",
