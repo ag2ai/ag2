@@ -7,7 +7,7 @@
 import pytest
 from dirty_equals import IsPartialDict
 
-from ag2.eval import InMemoryTraceSource, Suite, TraceRef, evaluate_traces, scorer
+from ag2.eval import Feedback, InMemoryTraceSource, Suite, TraceRef, evaluate_traces, scorer
 from ag2.eval.dataset.task import Task
 from ag2.eval.scorers import agent_judge, threshold
 from ag2.eval.trace import Trace
@@ -43,6 +43,56 @@ def already_bool(outputs) -> bool:
 @scorer
 def category(outputs) -> str:
     return outputs["label"]
+
+
+@scorer
+def echo_feedback(outputs) -> Feedback:
+    return outputs["feedback"]
+
+
+@scorer
+def answer_is_present(outputs) -> bool:
+    return bool(outputs["body"])
+
+
+@scorer
+def answer_label(outputs) -> str:
+    return outputs["body"]
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    ("score", "value"),
+    [(True, None), (False, None), (None, "timeout")],
+)
+async def test_custom_key_preserves_passthrough_feedback(score: bool | None, value: str | None) -> None:
+    original = Feedback(key="original", score=score, value=value, comment="reason", detail={"attempt": 1})
+    gate = threshold(echo_feedback, at_least=0.7, key="release_gate")
+
+    feedback = await _run(gate, outputs={"feedback": original})
+
+    assert feedback == [Feedback(key="release_gate", score=score, value=value, comment="reason", detail={"attempt": 1})]
+    assert feedback[0].detail == {"attempt": 1}
+    assert original == Feedback(key="original", score=score, value=value, comment="reason", detail={"attempt": 1})
+
+
+@pytest.mark.asyncio()
+async def test_custom_key_lands_in_passthrough_result_accessors() -> None:
+    trace = Trace(events=[ModelResponse(message=ModelMessage("ans"))], exception=None, duration_ms=1)
+    source = InMemoryTraceSource([(TraceRef("t1", task_id="task-1"), trace)])
+    suite = Suite.from_list([{"task_id": "task-1", "inputs": {"input": "q"}}])
+    boolean_gate = threshold(answer_is_present, at_least=0.7, key="release_gate")
+    category_gate = threshold(answer_label, at_least=0.7, key="category_gate")
+
+    result = await evaluate_traces(
+        source,
+        scorers=[boolean_gate, category_gate],
+        suite=suite,
+        store_dir=None,
+    )
+
+    assert result.pass_rate(boolean_gate.key) == 1.0
+    assert result.value_counts(category_gate.key) == {"ans": 1}
 
 
 @pytest.mark.asyncio()

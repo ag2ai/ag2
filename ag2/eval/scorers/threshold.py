@@ -20,13 +20,15 @@ A gated criterion emits ONE :class:`~ag2.eval.Feedback`: ``score`` is the boolea
 (so it lands in ``result.pass_rate(key)`` and ``diff().regressions``), and the raw number +
 bounds are recorded in ``detail`` (persisted in the run JSON). A feedback with no numeric
 grade — the judge returned no verdict, or the scorer raised → ``score=None`` — is a **fail**.
-Already-boolean and categorical (``value``) feedback passes through unchanged.
+Already-boolean and categorical (``value``) feedback keeps its verdict and
+metadata, with ``key`` applied when supplied.
 
 This mirrors DeepEval's / promptfoo's ``threshold`` and Braintrust's "pass threshold". For a
 per-task token/time *resource* gate, see :class:`~ag2.eval.BudgetThresholds` — a
 different axis.
 """
 
+from dataclasses import replace
 from typing import Any
 
 from .._types import Feedback
@@ -48,8 +50,8 @@ def threshold(
 
     Args:
         scorer: The scorer to gate. Its numeric feedback is converted to a boolean
-            pass/fail; already-boolean, categorical, and no-signal feedback passes
-            through unchanged.
+            pass/fail; already-boolean and categorical feedback keeps its verdict
+            and metadata, with ``key`` applied when supplied.
         at_least: Inclusive lower bound — pass requires ``score >= at_least``.
         at_most: Inclusive upper bound — pass requires ``score <= at_most``.
         key: Feedback key for the gate. Defaults to the source feedback's key (the
@@ -103,7 +105,8 @@ def _gate(fb: Feedback, at_least: float | None, at_most: float | None, key: str 
             detail={**(fb.detail or {}), "score": None, **bounds},
         )
 
-    return fb  # already bool, or categorical: not a numeric grade to threshold
+    # Already bool, or categorical: preserve the verdict while honoring the key.
+    return replace(fb, key=out_key) if out_key != fb.key else fb
 
 
 def _bound_text(at_least: float | None, at_most: float | None) -> str:
