@@ -435,6 +435,7 @@ files = [
     "ag2/live/cascade.py",
     "ag2/live/elevenlabs.py",
     "ag2/live/gemini.py",
+    "ag2/live/mistral.py",
     "ag2/live/observer.py",
     "ag2/live/openai.py",
     "ag2/live/protocols.py",

@@ -11,6 +11,7 @@ The STT → Agent → TTS flow turns any existing `Agent` into a voice agent wit
 |---|---|---|---|---|---|
 | OpenAI | ✅ | ✅ | ✅ | — | ✅ |
 | ElevenLabs | ✅ | — | ✅ | ✅ | — |
+| Mistral | ✅ | — | — | — | — |
 | Gemini | — | — | — | — | ✅ |
 
 
@@ -23,6 +24,12 @@ ElevenLabs classes need the optional dependency and `ELEVENLABS_API_KEY` in the 
 
 ```bash
 pip install "ag2[elevenlabs] sounddevice[numpy]"
+```
+
+Mistral classes need the `mistral` extra and `MISTRAL_API_KEY` in the environment (or pass `api_key`):
+
+```bash
+pip install "ag2[mistral]"
 ```
 
 ## OpenAI credentials
@@ -115,6 +122,17 @@ pipeline = ElevenLabsTranscriber("scribe_v2").pipe(agent)
 
 `language_code` is only sent when you set it — leave it unset and Scribe auto-detects. `diarize=True` asks for speaker labels.
 
+### Mistral (Voxtral)
+
+`MistralTranscriber` uploads the clip as WAV to Mistral's offline transcription endpoint and sends a single `TranscriptionCompletedEvent`:
+
+```python linenums="1"
+from ag2.live import MistralTranscriber
+
+pipeline = MistralTranscriber("voxtral-mini-latest").pipe(agent)
+```
+
+`language` and `context_bias` (up to 100 words or phrases to favour) are only sent when you set them — leave `language` unset and the model auto-detects. `diarize=True` requests speaker diarization (segment timestamps are sent automatically, as the API requires); `transcribe()` still returns plain text. Pass `api_key` or a preconfigured `client` to override the `MISTRAL_API_KEY` default.
 
 ## Text-to-Speech
 
