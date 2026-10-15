@@ -99,7 +99,7 @@ mistral = ["mistralai>=3.2.0,<4"]
 ollama = ["ollama>=0.5.2,<1"]
 bedrock = ["aiobotocore>=3.9.1,<4"]
 dashscope = ["dashscope>=1.25.13"]
-typesafe = ["typesafe-sdk>=0.7.4,<0.8"]
+typesafe = ["typesafe-sdk>=0.7.5,<0.8"]
 
 redis = ["redis>=5.0,<9"]
 # SDK only: ag2 builds spans and hands them to whatever SpanProcessor the caller
@@ -180,6 +180,7 @@ optionals = [
     "tenki>=1.4.0,<2",
     "tinyfish>=0.5,<0.6; python_version>='3.11'",
     "exa-py>=2.12.1,<3",
+    "firecrawl-py>=4.46,<5",
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
@@ -204,6 +205,7 @@ docs = [
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",
     "exa-py>=2.12.1,<3",
+    "firecrawl-py>=4.46,<5",
     "docker>=6.0.0,<8",                # Code execution tools are exposed in the public API by the optional `ag2.tools` module
     "nlip-sdk>=0.1.0,<1",              # NLIP is exposed in the public API by the optional `autogen.extensions.nlip` module
     "nlip-server>=0.1.3,<1",
@@ -433,6 +435,7 @@ files = [
     "ag2/live/cascade.py",
     "ag2/live/elevenlabs.py",
     "ag2/live/gemini.py",
+    "ag2/live/mistral.py",
     "ag2/live/observer.py",
     "ag2/live/openai.py",
     "ag2/live/protocols.py",

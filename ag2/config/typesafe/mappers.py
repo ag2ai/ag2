@@ -7,7 +7,18 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, NoReturn
 
 from fast_depends.library.serializer import SerializerProto
-from typesafe_sdk import Answer, Choice, ChoiceAnswer, JSONValue, Noul, NoulAnswer, NoulCriteria, Question, Score
+from typesafe_sdk import (
+    Answer,
+    Choice,
+    ChoiceAnswer,
+    JSONValue,
+    Noul,
+    NoulAnswer,
+    NoulCriteria,
+    Question,
+    Score,
+    ScoreAnswer,
+)
 from typesafe_sdk import Usage as TypeSafeUsage
 
 from ag2.compact import CompactionSummary
@@ -137,9 +148,11 @@ def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, bo
         value = spec.predicate_value(answer.noul, threshold=boolean_threshold)
     elif isinstance(answer, ChoiceAnswer):
         value = answer.choice
-    else:
+    elif isinstance(answer, ScoreAnswer):
         # `score` is the expected value on the 0..n-1 rubric; snap to the nearest level.
         value = spec.snap_score(answer.score)
+    else:  # pragma: no cover - we never send a box question
+        raise UnsupportedResponseSchemaError(f"TypeSafe returned an unexpected {answer.type!r} answer.")
 
     return spec.render(value)
 
