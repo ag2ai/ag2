@@ -394,7 +394,7 @@ class MCPToolkit(Toolkit):
                 if raw.name in blocked:
                     continue
                 proxy = _MCPProxyTool(
-                    config=self.config,
+                    config=resolved,
                     raw_tool=raw,
                     tool_name_prefix=prefix,
                     middleware=self._middleware,
