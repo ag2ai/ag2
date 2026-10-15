@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from google.protobuf.timestamp_pb2 import Timestamp
 
 from ag2.config import XAIConfig
 from ag2.config.xai import XAIFilesClient
@@ -38,7 +39,7 @@ class TestXAIFilesClient:
             id="file_123",
             filename="hello.txt",
             size=5,
-            created_at=123,
+            created_at=Timestamp(seconds=123),
         )
 
         result = await XAIFilesClient(XAIConfig(model="grok-4-fast")).upload(
@@ -78,7 +79,7 @@ class TestXAIFilesClient:
                     id="file_1",
                     filename="a.txt",
                     size=100,
-                    created_at=123,
+                    created_at=Timestamp(seconds=123),
                 ),
             ]
         )
