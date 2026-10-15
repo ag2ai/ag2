@@ -110,11 +110,7 @@ class TestEventLogWriter:
         ]
         await writer.persist(stream_id, events)
 
-        loaded = await writer.load(stream_id)
-        assert len(loaded) == 2
-        assert loaded[0].parts[0].content == "hello"
-        assert loaded[1].agent_name == "analyzer"
-        assert loaded[1].result == "done"
+        assert await writer.load(stream_id) == events
 
     async def test_persist_dropped_segments(self) -> None:
         store = MemoryKnowledgeStore()
@@ -131,11 +127,7 @@ class TestEventLogWriter:
         await writer.persist(stream_id, final)
 
         # Load should return all in order: dropped-1, dropped-2, final
-        loaded = await writer.load(stream_id)
-        assert len(loaded) == 3
-        assert loaded[0].parts[0].content == "old-1"
-        assert loaded[1].parts[0].content == "old-2"
-        assert loaded[2].parts[0].content == "recent"
+        assert await writer.load(stream_id) == [*dropped1, *dropped2, *final]
 
     async def test_persist_dropped_multiple_writers_no_overwrite(self) -> None:
         """Multiple EventLogWriter instances must not overwrite each other's segments.
@@ -159,17 +151,70 @@ class TestEventLogWriter:
         await writer3.persist(stream_id, [ModelRequest([TextInput("final")])])
 
         # All three segments must be present and loadable
-        loaded = await EventLogWriter(store).load(stream_id)
-        assert len(loaded) == 3
-        assert loaded[0].parts[0].content == "batch-1"
-        assert loaded[1].parts[0].content == "batch-2"
-        assert loaded[2].parts[0].content == "final"
+        assert await EventLogWriter(store).load(stream_id) == [
+            ModelRequest([TextInput("batch-1")]),
+            ModelRequest([TextInput("batch-2")]),
+            ModelRequest([TextInput("final")]),
+        ]
+
+    async def test_persist_dropped_after_gap_uses_max_plus_one(self) -> None:
+        store = MemoryKnowledgeStore()
+        writer = EventLogWriter(store)
+        stream_id = uuid4()
+
+        await writer.persist_dropped(stream_id, [ModelRequest([TextInput("batch-1")])])
+        await writer.persist_dropped(stream_id, [ModelRequest([TextInput("batch-2")])])
+
+        # Simulate cleanup/retention removing the earliest segment.
+        await store.delete(f"/log/{stream_id}.dropped-1.jsonl")
+
+        await writer.persist_dropped(stream_id, [ModelRequest([TextInput("batch-3")])])
+        await writer.persist(stream_id, [ModelRequest([TextInput("final")])])
+
+        entries = await store.list("/log/")
+        assert f"{stream_id}.dropped-2.jsonl" in entries
+        assert f"{stream_id}.dropped-3.jsonl" in entries
+        assert f"{stream_id}.dropped-1.jsonl" not in entries
+
+        assert await writer.load(stream_id) == [
+            ModelRequest([TextInput("batch-2")]),
+            ModelRequest([TextInput("batch-3")]),
+            ModelRequest([TextInput("final")]),
+        ]
+
+    @pytest.mark.parametrize("junk", ["abc", "1x", "²"])
+    async def test_non_integer_segment_names_are_ignored(self, junk: str) -> None:
+        store = MemoryKnowledgeStore()
+        writer = EventLogWriter(store)
+        stream_id = uuid4()
+
+        await writer.persist_dropped(stream_id, [ModelRequest([TextInput("batch-1")])])
+        await store.write(f"/log/{stream_id}.dropped-{junk}.jsonl", "not an event log")
+
+        await writer.persist_dropped(stream_id, [ModelRequest([TextInput("batch-2")])])
+        await writer.persist(stream_id, [ModelRequest([TextInput("final")])])
+
+        assert await writer.load(stream_id) == [
+            ModelRequest([TextInput("batch-1")]),
+            ModelRequest([TextInput("batch-2")]),
+            ModelRequest([TextInput("final")]),
+        ]
+
+    async def test_segments_load_in_numeric_order(self) -> None:
+        store = MemoryKnowledgeStore()
+        writer = EventLogWriter(store)
+        stream_id = uuid4()
+
+        for i in range(1, 11):
+            await writer.persist_dropped(stream_id, [ModelRequest([TextInput(f"batch-{i}")])])
+
+        assert f"{stream_id}.dropped-10.jsonl" in await store.list("/log/")
+        assert await writer.load(stream_id) == [ModelRequest([TextInput(f"batch-{i}")]) for i in range(1, 11)]
 
     async def test_load_empty(self) -> None:
         store = MemoryKnowledgeStore()
         writer = EventLogWriter(store)
-        loaded = await writer.load(uuid4())
-        assert loaded == []
+        assert await writer.load(uuid4()) == []
 
     async def test_unknown_event_fallback(self) -> None:
         store = MemoryKnowledgeStore()
@@ -179,10 +224,9 @@ class TestEventLogWriter:
         await store.write(f"/log/{stream_id}.jsonl", record)
 
         writer = EventLogWriter(store)
-        loaded = await writer.load(stream_id)
-        assert len(loaded) == 1
-        assert isinstance(loaded[0], UnknownEvent)
-        assert loaded[0].type_name == "nonexistent.module.FakeEvent"
+        assert await writer.load(stream_id) == [
+            UnknownEvent(type_name="nonexistent.module.FakeEvent", data={"key": "val"})
+        ]
 
 
 @pytest.mark.asyncio

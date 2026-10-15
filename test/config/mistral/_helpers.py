@@ -163,7 +163,7 @@ class FakeHttpResponse:
 
 
 class FakeHttpClient:
-    """Stands in for httpx.AsyncClient so image fetches never touch the network."""
+    """Stands in for httpx2.AsyncClient so image fetches never touch the network."""
 
     def __init__(
         self, data: bytes = b"\xff\xd8image", content_type: str = "image/jpeg", error: Exception | None = None

@@ -8,10 +8,18 @@ from .client import LLMClient
 from .config import ModelConfig, ModelProvider
 
 try:
-    from .openai import ContainerInfo, ContainerManager, ExpiresAfter, OpenAIConfig, OpenAIResponsesConfig
+    from .openai import (
+        ContainerInfo,
+        ContainerManager,
+        ExpiresAfter,
+        OpenAIConfig,
+        OpenAIDecisionsConfig,
+        OpenAIResponsesConfig,
+    )
 except ImportError as e:
     OpenAIConfig = missing_optional_dependency("OpenAIConfig", "openai", e)  # type: ignore[misc]
     OpenAIResponsesConfig = missing_optional_dependency("OpenAIResponsesConfig", "openai", e)  # type: ignore[misc]
+    OpenAIDecisionsConfig = missing_optional_dependency("OpenAIDecisionsConfig", "openai", e)  # type: ignore[misc]
     ContainerManager = missing_optional_dependency("ContainerManager", "openai", e)  # type: ignore[misc]
     ContainerInfo = missing_optional_dependency("ContainerInfo", "openai", e)  # type: ignore[misc]
     ExpiresAfter = missing_optional_dependency("ExpiresAfter", "openai", e)  # type: ignore[misc]
@@ -76,6 +84,7 @@ __all__ = (
     "ModelProvider",
     "OllamaConfig",
     "OpenAIConfig",
+    "OpenAIDecisionsConfig",
     "OpenAIResponsesConfig",
     "TypeSafeConfig",
     "VertexAIConfig",

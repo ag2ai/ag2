@@ -5,7 +5,8 @@
 from dataclasses import dataclass, replace
 from typing import Any, Literal, TypedDict
 
-import httpx
+import httpx2
+from mistralai.client.models import GuardrailConfig, GuardrailConfigTypedDict, Prediction, PredictionTypedDict
 from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
@@ -19,7 +20,7 @@ class MistralConfigOverrides(TypedDict, total=False):
     api_key: str | None
     server_url: str | None
     timeout_ms: int | None
-    async_client: httpx.AsyncClient | None
+    async_client: httpx2.AsyncClient | None
     streaming: bool
     temperature: float | None
     top_p: float | None
@@ -28,7 +29,17 @@ class MistralConfigOverrides(TypedDict, total=False):
     random_seed: int | None
     presence_penalty: float | None
     frequency_penalty: float | None
+    top_k: int | None
+    min_tokens: int | None
+    repetition_penalty: float | None
+    logprobs: bool | None
+    top_logprobs: int | None
+    prompt_logprobs: bool | None
+    top_prompt_logprobs: int | None
+    service_tier: Literal["auto", "standard_only"] | None
     n: int | None
+    prediction: Prediction | PredictionTypedDict | None
+    guardrails: list[GuardrailConfig] | list[GuardrailConfigTypedDict] | None
     parallel_tool_calls: bool | None
     tool_choice: str | dict[str, Any] | None
     reasoning_effort: ReasoningEffort | None
@@ -50,7 +61,7 @@ class MistralConfig(ModelConfig):
     api_key: str | None = None
     server_url: str | None = None
     timeout_ms: int | None = None
-    async_client: httpx.AsyncClient | None = None
+    async_client: httpx2.AsyncClient | None = None
     streaming: bool = False
     temperature: float | None = None
     top_p: float | None = None
@@ -59,7 +70,17 @@ class MistralConfig(ModelConfig):
     random_seed: int | None = None
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
+    top_k: int | None = None
+    min_tokens: int | None = None
+    repetition_penalty: float | None = None
+    logprobs: bool | None = None
+    top_logprobs: int | None = None
+    prompt_logprobs: bool | None = None
+    top_prompt_logprobs: int | None = None
+    service_tier: Literal["auto", "standard_only"] | None = None
     n: int | None = None
+    prediction: Prediction | PredictionTypedDict | None = None
+    guardrails: list[GuardrailConfig] | list[GuardrailConfigTypedDict] | None = None
     parallel_tool_calls: bool | None = None
     tool_choice: str | dict[str, Any] | None = None
     reasoning_effort: ReasoningEffort | None = None
@@ -85,7 +106,17 @@ class MistralConfig(ModelConfig):
             random_seed=self.random_seed,
             presence_penalty=self.presence_penalty,
             frequency_penalty=self.frequency_penalty,
+            top_k=self.top_k,
+            min_tokens=self.min_tokens,
+            repetition_penalty=self.repetition_penalty,
+            logprobs=self.logprobs,
+            top_logprobs=self.top_logprobs,
+            prompt_logprobs=self.prompt_logprobs,
+            top_prompt_logprobs=self.top_prompt_logprobs,
+            service_tier=self.service_tier,
             n=self.n,
+            prediction=self.prediction,
+            guardrails=self.guardrails,
             parallel_tool_calls=self.parallel_tool_calls,
             tool_choice=self.tool_choice,
             reasoning_effort=self.reasoning_effort,
