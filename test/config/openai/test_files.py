@@ -108,26 +108,10 @@ class TestOpenAIFilesClient:
     async def test_list(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_openai_cls.return_value = mock_client
-        mock_client.files.list.return_value = MagicMock(
-            data=[
-                SimpleNamespace(
-                    id="file-1",
-                    filename="a.txt",
-                    bytes=100,
-                    purpose="assistants",
-                    created_at=None,
-                ),
-                SimpleNamespace(
-                    id="file-2",
-                    filename="b.csv",
-                    bytes=200,
-                    purpose="fine-tune",
-                    created_at=1700000000,
-                ),
-            ]
-        )
-
-        mock_client.files.list.return_value.__aiter__.return_value = mock_client.files.list.return_value.data
+        mock_client.files.list.return_value.__aiter__.return_value = [
+            SimpleNamespace(id="file-1", filename="a.txt", bytes=100, purpose="assistants", created_at=None),
+            SimpleNamespace(id="file-2", filename="b.csv", bytes=200, purpose="fine-tune", created_at=1700000000),
+        ]
         result = await OpenAIFilesClient(openai_config).list()
 
         assert result == [

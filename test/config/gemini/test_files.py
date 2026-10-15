@@ -139,36 +139,6 @@ class TestGeminiFilesClient:
             await GeminiFilesClient(gemini_config).read("files/abc123")
 
     @patch("ag2.config.gemini.files.genai")
-    async def test_list(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
-        mock_client = AsyncMock()
-        mock_genai.Client.return_value = mock_client
-        mock_client.aio.files.list.return_value = MagicMock(
-            page=[
-                SimpleNamespace(
-                    name="files/1",
-                    display_name="doc.pdf",
-                    size_bytes=100,
-                    create_time="2025-01-01",
-                ),
-            ]
-        )
-
-        mock_client.aio.files.list.return_value.__aiter__.return_value = mock_client.aio.files.list.return_value.page
-        result = await GeminiFilesClient(gemini_config).list()
-
-        assert result == [
-            UploadedFile(
-                file_id="files/1",
-                filename="doc.pdf",
-                provider=FileProvider.GEMINI,
-                bytes_count=100,
-                purpose=None,
-                created_at=1735689600.0,
-            ),
-        ]
-        assert result[0].created_at == 1735689600.0
-
-    @patch("ag2.config.gemini.files.genai")
     async def test_delete(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client

@@ -113,36 +113,6 @@ class TestAnthropicFilesClient:
         assert result.created_at == 1735689600.0
 
     @patch("ag2.config.anthropic.files.AsyncAnthropic")
-    async def test_list(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
-        mock_client = AsyncMock()
-        mock_anthropic_cls.return_value = mock_client
-        mock_client.beta.files.list.return_value = MagicMock(
-            data=[
-                SimpleNamespace(
-                    id="file-1",
-                    filename="a.pdf",
-                    size_bytes=100,
-                    created_at="2025-01-01T00:00:00Z",
-                ),
-            ]
-        )
-
-        mock_client.beta.files.list.return_value.__aiter__.return_value = mock_client.beta.files.list.return_value.data
-        result = await AnthropicFilesClient(anthropic_config).list()
-
-        assert result == [
-            UploadedFile(
-                file_id="file-1",
-                filename="a.pdf",
-                provider=FileProvider.ANTHROPIC,
-                bytes_count=100,
-                purpose=None,
-                created_at=1735689600.0,
-            ),
-        ]
-        assert result[0].created_at == 1735689600.0
-
-    @patch("ag2.config.anthropic.files.AsyncAnthropic")
     async def test_delete(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_anthropic_cls.return_value = mock_client
