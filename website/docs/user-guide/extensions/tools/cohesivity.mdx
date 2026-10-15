@@ -1,0 +1,99 @@
+---
+title: Cohesivity
+sidebarTitle: Cohesivity
+---
+
+`CohesivityToolkit` gives an agent on-demand backend infrastructure through the [Cohesivity](https://cohesivity.ai/docs?ref=gh-ag2){.external-link target="_blank"} API: databases, hosting, email, object storage, and more. No account or API keys are required to start.
+
+!!! note
+    No additional Python package is required. The toolkit uses `httpx`, which is already an AG2 dependency.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools import CohesivityToolkit
+
+agent = Agent(
+    "backend-agent",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[CohesivityToolkit()],
+)
+```
+
+When no `management_key` is provided, the agent calls `cohesivity_create_tenant` to create an ephemeral 72-hour tenant and then provisions resources against it. Pass an existing key to skip tenant creation:
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools import CohesivityToolkit
+
+toolkit = CohesivityToolkit(management_key=os.environ["COHESIVITY_MANAGEMENT_KEY"])
+
+agent = Agent(
+    "backend-agent",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[toolkit],
+)
+```
+
+The toolkit also reads `COHESIVITY_MANAGEMENT_KEY` from the environment when `management_key` is omitted.
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `cohesivity_create_tenant` | Create an ephemeral tenant (72-hour lifetime) and receive management and application keys |
+| `cohesivity_provision` | Provision a backend resource (postgres, redis, hosting, inbox, object-storage, and others) |
+| `cohesivity_status` | Check tenant status, provisioned resources, and remaining quota |
+
+## Available resources
+
+The `cohesivity_provision` tool accepts any of these resource names:
+
+| Resource | What it provides |
+| :--- | :--- |
+| `postgres` | Managed PostgreSQL 17 database, queried over HTTP |
+| `redis` | Key-value cache |
+| `object-storage` | File and image storage (R2) |
+| `vector-database` | Pinecone-backed vector store for embeddings |
+| `inbox` | Email address for sending and receiving |
+| `railway-hosting` | Web hosting via direct upload |
+| `cloudflare-workers` | Scheduled code execution |
+| `realtime` | WebSocket and HTTP live updates |
+| `social-login` | Google OAuth authentication |
+| `openai-api` | OpenAI chat and images |
+| `ai-gateway` | Multi-provider AI (OpenAI, Anthropic, Google, xAI) |
+| `deepgram-api` | Speech-to-text and text-to-speech |
+| `exa-api` | Web search and answers |
+| `steel-browser` | Managed browser for scraping and automation |
+| `openweather-api` | Weather conditions and 5-day forecast |
+| `google-geocoding-api` | Address-to-coordinate conversion |
+
+## Using provisioned resources
+
+After provisioning, each resource exposes an edge URL for data operations. The agent uses these directly with standard HTTP calls:
+
+```python
+# After provisioning postgres, the agent can query via:
+# POST https://cohesivity.ai/edge/postgres
+# Authorization: Bearer <application_key>
+# Body: {"query": "SELECT * FROM users LIMIT 10"}
+```
+
+See the [Cohesivity documentation](https://cohesivity.ai/docs?ref=gh-ag2){.external-link target="_blank"} for the full edge API reference.
+
+## Individual tools
+
+Each tool is available as a factory method for custom names or descriptions:
+
+```python linenums="1"
+toolkit = CohesivityToolkit()
+
+# Only provision and status (skip create_tenant for pre-configured tenants)
+agent = Agent(
+    "backend-agent",
+    config=config,
+    tools=[toolkit.provision(), toolkit.status()],
+)
+```
