@@ -13,7 +13,7 @@ from typesafe_sdk import RetryPolicy, TypeSafeAuthenticationError
 
 from ag2 import Agent, ResponseSchema
 from ag2.config import TypeSafeConfig
-from ag2.config.typesafe import TypeSafeClient
+from ag2.config.typesafe import BoundingBox, TypeSafeClient
 from ag2.events import Usage
 from ag2.exceptions import UnsupportedToolError
 from ag2.tools import tool
@@ -175,6 +175,26 @@ async def test_agent_scores_with_int_enum_schema() -> None:
                 })
             },
         })
+    ]
+
+
+@pytest.mark.asyncio
+async def test_agent_locates_with_bounding_box_schema() -> None:
+    requests: list[dict[str, Any]] = []
+    answer = {"type": "box", "box": {"top": 0.1, "bottom": 0.4, "left": 0.6, "right": 0.85}, "confidence": 0.9}
+    finder = Agent(
+        "finder",
+        prompt="The red square",
+        config=TypeSafeConfig(api_key="test-key", http_client=_fake_api(requests, {"answer": answer})),
+        response_schema=ResponseSchema(BoundingBox),
+    )
+
+    reply = await finder.ask("Where is it?")
+
+    assert await reply.content() == BoundingBox(top=0.1, bottom=0.4, left=0.6, right=0.85)
+    assert reply.response.metadata["confidence"] == 0.9
+    assert requests == [
+        IsPartialDict({"questions": {"answer": IsPartialDict({"type": "box", "instructions": "The red square"})}})
     ]
 
 

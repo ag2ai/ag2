@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .config import TypeSafeConfig
-from .mappers import UnsupportedResponseSchemaError
+from .mappers import BoundingBox, UnsupportedResponseSchemaError
 from .typesafe_client import TypeSafeClient
 
 __all__ = (
+    "BoundingBox",
     "TypeSafeClient",
     "TypeSafeConfig",
     "UnsupportedResponseSchemaError",

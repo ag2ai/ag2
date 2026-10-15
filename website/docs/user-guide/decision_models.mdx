@@ -20,9 +20,9 @@ On a decision model the agent's `response_schema` is not a format hint, it **is*
 | [Ranking](#ranking): order candidates by relevance | `bool`, asked once per candidate | the probabilities, sorted |
 | [Verification](#verification): check an artifact against a source | `bool`, one per failure mode | `True` / `False` per check |
 | [Feature extraction](#feature-extraction): signals for a downstream model | `bool`, one per signal | the probabilities as features |
-| [Image inspection](#image-inspection): a question about a photo | `bool` (OpenAI only) | `True` / `False`, plus the raw probability |
+| [Image inspection](#image-inspection): a question about a photo | `bool` (OpenAI), `BoundingBox` (TypeSafe) | `True` / `False` plus the raw probability, or the box |
 
-Anything else (`str`, a dataclass, a Pydantic model) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
+Anything else (`str`, a dataclass, another Pydantic model) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
 
 ## Set up
 
@@ -557,7 +557,7 @@ features = {d.name: r.response.metadata["noul"] for d, r in zip(detectors, repli
 
 ## Image inspection
 
-Damage checks, content moderation, document triage. OpenAI's Decisions API evaluates images together with text; Jev takes text and structured data only.
+Damage checks, content moderation, document triage. OpenAI's Decisions API evaluates images together with text and answers a yes/no question about them. Jev takes images only for locating things: its `BoundingBox` answer is described under [TypeSafe (Jev) Configuration](/docs/user-guide/model_configuration#locating-things-in-an-image).
 
 ```python linenums="1" hl_lines="7-8 11"
 from ag2 import Agent, ImageInput, ResponseSchema
