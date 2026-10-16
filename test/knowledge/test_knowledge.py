@@ -375,6 +375,19 @@ class TestDiskKnowledgeStore:
         assert not (tmp_path / "test.txt").exists()
         assert await store.read("/test.txt") is None
 
+    async def test_delete_file_prunes_empty_parent_directories(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/dir/a.txt", "a")
+        await store.delete("/dir/a.txt")
+        assert await store.list("/") == []
+        assert await store.exists("/dir") is False
+
+        await store.write("/a/b/c/deep.txt", "x")
+        await store.delete("/a/b/c/deep.txt")
+        assert await store.list("/") == []
+        assert await store.exists("/a") is False
+        assert await store.exists("/a/b") is False
+
     async def test_delete_directory_recursively(self, tmp_path: Path) -> None:
         store = DiskKnowledgeStore(str(tmp_path))
         await store.write("/dir/a.txt", "a")
