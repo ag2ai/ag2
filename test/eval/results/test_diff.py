@@ -184,3 +184,21 @@ class TestDiff:
         diff = current.diff(baseline)
 
         assert diff.mean_deltas["quality"] == (1.0, 1.0)
+
+    def test_scores_with_no_shared_task_are_omitted(self) -> None:
+        # Each side scored a different task, so there is nothing to compare.
+        baseline = _run(
+            _tr("t1", (Feedback(key="judge", score=True), Feedback(key="quality", score=1.0))),
+            _tr("t2", (Feedback(key="judge", score=None), Feedback(key="quality", score=None))),
+        )
+        current = _run(
+            _tr("t1", (Feedback(key="judge", score=None), Feedback(key="quality", score=None))),
+            _tr("t2", (Feedback(key="judge", score=True), Feedback(key="quality", score=0.5))),
+        )
+
+        diff = current.diff(baseline)
+
+        assert "judge" not in diff.pass_rate_deltas
+        assert "quality" not in diff.mean_deltas
+        assert diff.flipped_to_fail == ()
+        assert diff.flipped_to_pass == ()
