@@ -280,7 +280,7 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.0.0,<5.0.0" },
     { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.25.13" },
     { name = "ddgs", marker = "extra == 'ddgs'", specifier = ">=9.0.0,<10" },
-    { name = "elevenlabs", marker = "extra == 'elevenlabs'", specifier = ">=1.50.0,<3" },
+    { name = "elevenlabs", marker = "extra == 'elevenlabs'", specifier = ">=2.73.0,<3" },
     { name = "fast-depends", extras = ["pydantic"], specifier = ">=3.0.8,<4.0.0" },
     { name = "google-auth", marker = "extra == 'gemini'" },
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.68.0,<3.0" },
@@ -1703,7 +1703,7 @@ wheels = [
 
 [[package]]
 name = "elevenlabs"
-version = "2.70.0"
+version = "2.73.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -1713,9 +1713,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/63/db/cb7bc1004f44f05d138cc8f23be9507edc6d7efe4d46a9b8274e851f434e/elevenlabs-2.70.0.tar.gz", hash = "sha256:d83aedddea61a7c8f025697c1276c47b6e0ff85917bc8f6927da47bce12483cf", size = 837193, upload-time = "2026-09-28T15:22:52.468Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c1/7f/ae047ca9c2cb52775966f62831066f836af777b3449cce7a8d2617e66a24/elevenlabs-2.73.0.tar.gz", hash = "sha256:20bdfe59601b21c7a545ef8e0118dc47c015c3ae19d952e92551a07a95350b0f", size = 872841, upload-time = "2026-10-15T10:08:30.091Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ac/4e/c0d5d468696f4154b66bc4ba407dcaab8958247fe6a6ce6beafba25bfeb8/elevenlabs-2.70.0-py3-none-any.whl", hash = "sha256:27b933cd6651a6ca0b668ed0408f7256ed30b431c7d83b7b47ac81e93aa2e688", size = 2211251, upload-time = "2026-09-28T15:22:50.561Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/22/984024b6464c6999dcbf5e638773b073f9ec728f8557805d900851dd3ba8/elevenlabs-2.73.0-py3-none-any.whl", hash = "sha256:47f60f1fe7917e32f5469500b7d89926bc2c52df75292e3fe4ba5380b172b8fd", size = 2281827, upload-time = "2026-10-15T10:08:28.284Z" },
 ]
 
 [[package]]
