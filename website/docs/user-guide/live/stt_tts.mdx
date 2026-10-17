@@ -120,7 +120,20 @@ from ag2.live import ElevenLabsTranscriber
 pipeline = ElevenLabsTranscriber("scribe_v2").pipe(agent)
 ```
 
-`language_code` is only sent when you set it — leave it unset and Scribe auto-detects. `diarize=True` asks for speaker labels.
+Optional settings are only sent when you set them — leave `language_code` unset and Scribe auto-detects. `diarize=True` asks for speaker labels, and `num_speakers` caps how many.
+
+Scribe tags non-speech sounds in the transcript by default (for example `(laughter)`), and the agent sees that text. Pass `tag_audio_events=False` to drop the tags, and `keyterms=[...]` to bias recognition toward names and jargon:
+
+```python linenums="1" hl_lines="5-6"
+from ag2.live import ElevenLabsTranscriber
+
+transcriber = ElevenLabsTranscriber(
+    "scribe_v2",
+    tag_audio_events=False,
+    keyterms=["AG2"],
+)
+pipeline = transcriber.pipe(agent)
+```
 
 ### Mistral (Voxtral)
 
@@ -211,11 +224,24 @@ config = MistralTTSConfig(
 
 `ElevenLabsTTSConfig` is the buffered mode — required by `eleven_v3`, which cannot stream. For the flash and turbo families, prefer streaming (below).
 
+Both ElevenLabs TTS configs also take `voice_settings`, `language_code` and `seed`; each is sent only when set. `voice_settings` is the SDK's `VoiceSettings` (stability, speed, and so on):
+
+```python linenums="1" hl_lines="6-7"
+from elevenlabs.types import VoiceSettings
+from ag2.live import ElevenLabsTTSConfig
+
+config = ElevenLabsTTSConfig(
+    "eleven_v3",
+    voice_settings=VoiceSettings(stability=0.5, speed=1.1),
+    language_code="en",
+)
+```
+
 !!! note
     Mistral needs exactly one of `voice_id` (a saved voice) or `ref_audio` (a base64 reference clip); there is no default voice. It needs `MISTRAL_API_KEY` (or `api_key=`) and `pip install "ag2[mistral]"`. Mistral returns float32 PCM; the configs convert it to the int16 PCM that `SoundDevicePlayer` plays.
 
 !!! note
-    `output_format` defaults to `pcm_24000`, matching what `SoundDevicePlayer` and `SoundDeviceRecorder` expect. If you change it, change the player to match.
+    `output_format` defaults to `pcm_24000`, matching what `SoundDevicePlayer` and `SoundDeviceRecorder` expect. Use a raw PCM format only — the player does not decode mp3 or other containers — and if you change the sample rate, change the player to match.
 
 ## Streaming TTS
 
