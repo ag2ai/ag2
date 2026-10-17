@@ -91,7 +91,7 @@ gemini = [
     "google-auth",
 ]
 # === Voice / TTS providers (ag2.live) ===
-elevenlabs = ["elevenlabs>=1.50.0,<3"]
+elevenlabs = ["elevenlabs>=2.73.0,<3"]
 
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
