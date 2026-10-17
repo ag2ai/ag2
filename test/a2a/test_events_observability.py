@@ -16,73 +16,66 @@ from ag2.stream import MemoryStream
 from ._helpers import make_pair
 
 
+def _collect_a2a_events() -> tuple[MemoryStream, list[BaseEvent]]:
+    """A stream plus the list every ``A2AEvent`` published on it lands in."""
+    stream = MemoryStream()
+    captured: list[BaseEvent] = []
+
+    @stream.where(A2AEvent).subscribe
+    async def collect(ev: BaseEvent) -> None:
+        captured.append(ev)
+
+    return stream, captured
+
+
+def _states(events: list[BaseEvent]) -> list[int]:
+    return [ev.state for ev in events if isinstance(ev, A2ATaskStatusUpdate)]
+
+
 @pytest.mark.asyncio
 class TestA2AEventsReachClientStream:
-    async def test_streaming_publishes_a2a_events_to_user_stream(self) -> None:
+    async def test_streaming_publishes_the_whole_task_lifecycle(self) -> None:
         pair = make_pair("hello world", streaming=True)
-        stream = MemoryStream()
-        captured: list[BaseEvent] = []
-
-        @stream.where(A2AEvent).subscribe
-        async def collect(ev: BaseEvent) -> None:
-            captured.append(ev)
+        stream, captured = _collect_a2a_events()
 
         await pair.client.ask("ping", stream=stream)
 
-        # Every captured event must be one of our typed wrappers.
-        assert captured, "expected at least one A2AEvent in the user stream"
-        assert all(isinstance(ev, A2AEvent) for ev in captured)
+        assert [type(ev) for ev in captured] == [
+            A2ATaskSnapshot,
+            A2ATaskStatusUpdate,
+            A2ATaskStatusUpdate,
+        ]
+        assert _states(captured) == [
+            TaskState.TASK_STATE_WORKING,
+            TaskState.TASK_STATE_COMPLETED,
+        ]
 
     async def test_streaming_carries_final_text_on_completion_status(self) -> None:
-        # ``StatelessScript`` mock emits a complete ``ModelMessage`` rather
-        # than per-token ``ModelMessageChunk``s, so the server finalises
-        # via ``updater.complete(message=...)`` and the wire surfaces the
-        # text on the COMPLETED ``status.message``, not on a separate
-        # message payload.
+        # ``StatelessScript`` emits a complete ``ModelMessage`` rather than
+        # per-token ``ModelMessageChunk``s, so the server finalises via
+        # ``updater.complete(message=...)`` and the wire surfaces the text on
+        # the COMPLETED ``status.message``, not as a separate message payload.
         pair = make_pair("final reply", streaming=True)
-        stream = MemoryStream()
-        completed: list[A2ATaskStatusUpdate] = []
-
-        @stream.where(A2ATaskStatusUpdate).subscribe
-        async def collect(ev: A2ATaskStatusUpdate) -> None:
-            if ev.state == TaskState.TASK_STATE_COMPLETED:
-                completed.append(ev)
+        stream, captured = _collect_a2a_events()
 
         reply = await pair.client.ask("ping", stream=stream)
 
-        assert reply.response.content == "final reply"
-        [final] = completed
+        assert reply.body == "final reply"
+        [final] = [
+            ev for ev in captured if isinstance(ev, A2ATaskStatusUpdate) and ev.state == TaskState.TASK_STATE_COMPLETED
+        ]
         assert list(final.update.status.message.parts) == [Part(text="final reply")]
 
-    async def test_streaming_emits_completed_status_update(self) -> None:
-        pair = make_pair("done", streaming=True)
-        stream = MemoryStream()
-        status_updates: list[A2ATaskStatusUpdate] = []
-
-        @stream.where(A2ATaskStatusUpdate).subscribe
-        async def collect(ev: A2ATaskStatusUpdate) -> None:
-            status_updates.append(ev)
-
-        await pair.client.ask("ping", stream=stream)
-
-        assert any(s.state == TaskState.TASK_STATE_COMPLETED for s in status_updates)
-
-    async def test_polling_publishes_initial_task_snapshot(self) -> None:
-        # Polling drains only the bootstrap ``send_message`` response
-        # through ``_drain_stream`` (where typed events are published);
-        # subsequent ``get_task`` polls feed ``_absorb_task_artifacts``
-        # without re-emitting events. Confirm at least the bootstrap
-        # ``A2ATaskSnapshot`` reaches the user stream so observers can
-        # latch onto the task lifecycle even in polling mode.
+    async def test_polling_publishes_only_the_bootstrap_snapshot(self) -> None:
+        # Polling drains just the bootstrap send-message response through the
+        # event-publishing path; the later get_task polls are absorbed without
+        # re-emitting. Subscribers therefore see the task appear, but not its
+        # lifecycle — pinning that here so the asymmetry with streaming is a
+        # deliberate, visible contract rather than an accident.
         pair = make_pair("polled reply", streaming=False)
-        stream = MemoryStream()
-        captured: list[BaseEvent] = []
-
-        @stream.where(A2AEvent).subscribe
-        async def collect(ev: BaseEvent) -> None:
-            captured.append(ev)
+        stream, captured = _collect_a2a_events()
 
         reply = await pair.client.ask("ping", stream=stream)
 
-        assert reply.response.content == "polled reply"
-        assert any(isinstance(ev, A2ATaskSnapshot) for ev in captured)
+        assert reply.body == "polled reply"
+        assert [type(ev) for ev in captured] == [A2ATaskSnapshot]

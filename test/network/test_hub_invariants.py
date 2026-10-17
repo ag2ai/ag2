@@ -28,6 +28,7 @@ Covers:
 import asyncio
 import contextlib
 import json
+import logging
 from typing import Any
 
 import pytest
@@ -38,8 +39,11 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_CHANNEL_INVITE,
     EV_CHANNEL_INVITE_ACK,
+    EV_CHANNEL_OPENED,
     EV_TEXT,
     AccessDeniedError,
+    Decision,
+    Deny,
     Envelope,
     Hub,
     HubClient,
@@ -49,6 +53,7 @@ from ag2.network import (
     ProtocolError,
     Resume,
     Rule,
+    RuleBasedArbiter,
 )
 from ag2.network.adapters.conversation import (
     CONVERSATION_TYPE,
@@ -73,6 +78,7 @@ from ag2.network.hub.layout import (
     rule_path,
     skill_path,
 )
+from ag2.network.policies import AGENT_CLIENT_DEP
 from ag2.network.rule import InboxBlock, LimitsBlock
 from ag2.stream import MemoryStream
 from ag2.task import (
@@ -378,8 +384,6 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    from ag2.network.policies import AGENT_CLIENT_DEP
-
     alice = await hub.register(_agent("alice"))
     await hub.register(_agent("bob", "the answer is 42"))
 
@@ -391,6 +395,138 @@ async def test_delegate_returns_target_reply_without_dropping_fast_reply() -> No
     )
     assert "42" in result
 
+    await hub.close()
+
+
+class _RejectTextArbiter(RuleBasedArbiter):
+    async def authorize_send(
+        self,
+        envelope: Envelope,
+        sender: Passport,
+        sender_rule: Rule,
+        recipients: list[Passport],
+    ) -> Decision:
+        if envelope.event_type == EV_TEXT:
+            return Deny(reason="prompt rejected")
+        return await super().authorize_send(envelope, sender, sender_rule, recipients)
+
+
+class _CloseFailingHub(Hub):
+    async def close_channel(self, channel_id: str, *, reason: str = "") -> ChannelMetadata:
+        raise RuntimeError("channel cleanup failed")
+
+
+@pytest.mark.asyncio
+async def test_delegate_closes_channel_when_prompt_send_fails() -> None:
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    try:
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
+        hub.register_arbiter(_RejectTextArbiter())
+
+        result = await _invoke(make_delegate_tool(alice), {"target": "bob", "prompt": "hi"})
+
+        assert result == "Error: prompt send failed: prompt rejected"
+        [channel] = await hub.list_channels(agent_id=alice.agent_id)
+        assert channel.manifest.type == "consulting"
+        events = await hub.read_wal(channel.channel_id)
+        assert EV_CHANNEL_OPENED in [event.event_type for event in events]
+        assert all(event.event_type != EV_TEXT for event in events)
+        assert await hub.list_channels(state=ChannelState.ACTIVE) == []
+        assert channel.state == ChannelState.CLOSED
+        assert channel.close_reason == "prompt_send_failed"
+    finally:
+        await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_delegate_preserves_prompt_send_error_when_channel_close_fails() -> None:
+    store = MemoryKnowledgeStore()
+    hub = await _CloseFailingHub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    try:
+        alice = await hub.register(_agent("alice"))
+        await hub.register(_agent("bob"))
+        hub.register_arbiter(_RejectTextArbiter())
+
+        result = await _invoke(make_delegate_tool(alice), {"target": "bob", "prompt": "hi"})
+
+        assert result == "Error: prompt send failed: prompt rejected"
+    finally:
+        await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_delegate_resolves_functions_namespaced_target() -> None:
+    """A ``functions.``-prefixed target still resolves to the real peer.
+
+    Regression for #3022: LLMs occasionally echo OpenAI's ``functions.`` tool
+    namespace into the delegate target (e.g. ``functions.bob``). The literal
+    name misses the registry, so the consult would fail and the model re-guess
+    into a stalled run. ``delegate`` must fall back to the unprefixed name.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await bob_hc.register(_agent("bob", "the answer is 42"), Passport(name="bob"), Resume())
+
+    delegate_tool = make_delegate_tool(alice)
+    result = await _invoke(
+        delegate_tool,
+        {"target": "functions.bob", "prompt": "what's the answer?"},
+        dependencies={AGENT_CLIENT_DEP: alice},
+    )
+
+    assert "42" in result
+    assert "not found" not in result
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_delegate_unknown_target_lists_available_peers() -> None:
+    """An invented target's not-found error enumerates the real peers.
+
+    Regression for #3022: when the model invents a target (e.g.
+    ``PPTDialogScript``) no prefix-strip recovers it, and a bare ``not found``
+    error gives the model nothing to correct toward, so it re-guesses into a
+    stalled run. The error must list the live targets so the next turn can pick
+    a real one. The caller itself is not a valid delegate target, so it must be
+    excluded from the list.
+    """
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    link = LocalLink(hub)
+
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    carol_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register(_agent("alice"), Passport(name="alice"), Resume())
+    await bob_hc.register(_agent("bob"), Passport(name="bob"), Resume())
+    await carol_hc.register(_agent("carol"), Passport(name="carol"), Resume())
+
+    delegate_tool = make_delegate_tool(alice)
+    result = await _invoke(
+        delegate_tool,
+        {"target": "PPTDialogScript", "prompt": "generate a script"},
+        dependencies={AGENT_CLIENT_DEP: alice},
+    )
+
+    assert "not found" in result
+    assert "bob" in result
+    assert "carol" in result
+    # The initiator is not a valid delegate target and must not be suggested.
+    assert "alice" not in result
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await carol_hc.close()
     await hub.close()
 
 
@@ -407,8 +543,6 @@ async def test_delegate_to_self_returns_actionable_error() -> None:
     """
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-
-    from ag2.network.policies import AGENT_CLIENT_DEP
 
     alice = await hub.register(_agent("alice"))
 
@@ -434,8 +568,6 @@ async def test_delegate_fails_fast_when_channel_closes_before_reply() -> None:
     delegate returns immediately with an error — not after the 300s timeout."""
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
-
-    from ag2.network.policies import AGENT_CLIENT_DEP
 
     alice = await hub.register(_agent("alice"))
     bob = await hub.register(_agent("bob"), attach_plugin=False)
@@ -773,8 +905,6 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
 
-    from ag2.network.policies import AGENT_CLIENT_DEP
-
     alice = await hub.register(_agent("alice"))
     bob = await hub.register(_agent("bob"), attach_plugin=False)
     bob.on_envelope(_ack_only_handler(bob))
@@ -812,5 +942,54 @@ async def test_delegate_fails_fast_on_channel_expire() -> None:
     lowered = result.lower()
     assert "channel closed" in lowered or "prompt send failed" in lowered, result
     assert "expired" in lowered, result
+
+    await hub.close()
+
+
+class _FailingEndpoint:
+    """A ``LinkEndpoint`` whose inbound stream errors mid-read.
+
+    Models a transport that drops with an unexpected error while the hub reads
+    frames — the failure the hub must surface before dropping the endpoint.
+    """
+
+    def __init__(self) -> None:
+        self.endpoint_id = "failing-ep-001"
+        self.agent_id: str | None = None
+
+    async def send_frame(self, frame: object) -> None:  # noqa: D102
+        pass
+
+    async def frames(self):  # type: ignore[override]
+        raise RuntimeError("transport read failed")
+        yield  # pragma: no cover - marks this coroutine as an async generator
+
+    async def close(self) -> None:  # noqa: D102
+        pass
+
+
+@pytest.mark.asyncio
+async def test_endpoint_frame_loop_failure_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """When an endpoint's frame stream errors, the hub logs at ERROR before dropping it
+    rather than swallowing the failure silently.
+
+    Drives the public ``attach_endpoint`` path with a transport whose ``frames()`` raises,
+    then awaits the spawned endpoint task to completion — no patching of hub internals.
+    """
+    store = MemoryKnowledgeStore()
+    hub = Hub(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
+
+    with caplog.at_level(logging.ERROR, logger="ag2.network.hub.core"):
+        before = asyncio.all_tasks()
+        hub.attach_endpoint(_FailingEndpoint())  # type: ignore[arg-type]
+        spawned = asyncio.all_tasks() - before
+        await asyncio.gather(*spawned, return_exceptions=True)
+
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert any("endpoint frame loop failed" in r.getMessage() for r in errors), (
+        f"Expected ERROR log for the dropped endpoint; got records: {[r.getMessage() for r in caplog.records]}"
+    )
+    # The original transport failure is attached to the log record (logged via ``exception``).
+    assert any(r.exc_info and isinstance(r.exc_info[1], RuntimeError) for r in errors)
 
     await hub.close()

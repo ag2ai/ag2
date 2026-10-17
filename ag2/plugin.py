@@ -5,6 +5,7 @@
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AsyncExitStack
+from functools import wraps
 from typing import Any, TypeAlias, overload
 
 from fast_depends import Provider
@@ -18,7 +19,7 @@ from .events import (
     ModelRequest,
 )
 from .events.conditions import Condition
-from .hitl import HumanHook, wrap_hitl
+from .hitl import HitlFactory, HumanHook, wrap_hitl
 from .middleware.base import (
     MiddlewareFactory,
     ToolMiddleware,
@@ -260,7 +261,7 @@ class PluginTarget(PromptObserverMixin):
     dependency_provider: Provider
     _serializer: SerializerProto
     _tool_executor: ToolExecutor
-    _hitl_hook: HumanHook | None
+    _hitl_hook: HitlFactory | None
     _agent_dependencies: dict[Any, Any]
     _agent_variables: dict[Any, Any]
 
@@ -357,6 +358,9 @@ def _wrap_prompt_hook(
 ) -> Callable[[ModelRequest, Context], Awaitable[str]]:
     call_model = build_model(func)
 
+    # Carry the hook's identity onto the wrapper, so `Agent.dynamic_prompt`
+    # yields something nameable rather than a row of anonymous `wrapper`s.
+    @wraps(func)
     async def wrapper(event: ModelRequest, context: Context) -> str:
         async with AsyncExitStack() as stack:
             r = await call_model.asolve(

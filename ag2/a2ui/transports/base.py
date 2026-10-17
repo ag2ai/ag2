@@ -32,5 +32,13 @@ class A2UITransport(Protocol):
         """
         ...
 
+    async def aclose(self) -> None:
+        """Release whatever this transport still holds, on ASGI shutdown.
+
+        Called by :class:`A2UIServer`. A transport holding nothing beyond a
+        single request implements it as a no-op.
+        """
+        ...
+
 
 __all__ = ("A2UITransport",)

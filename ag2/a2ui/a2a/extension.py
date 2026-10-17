@@ -16,6 +16,10 @@ from ..constants import (
     A2UI_EXTENSION_URI_BY_VERSION,
 )
 
+# Key under which activated extension URIs accumulate on the per-request
+# ``ServerCallContext.state``. Shared across extensions, not A2UI-specific.
+ACTIVATED_EXTENSIONS_KEY = "activated_extensions"
+
 
 def get_a2ui_agent_extension(
     *,
@@ -67,16 +71,32 @@ def try_activate_a2ui_extension(
 
     Call this in an ``AgentExecutor`` to negotiate A2UI support. If the
     client's request includes the A2UI extension URI for ``version``, it is
-    recorded under ``context.metadata['activated_extensions']`` and the
-    function returns True.
+    recorded under ``context.call_context.state[ACTIVATED_EXTENSIONS_KEY]``
+    and the function returns True.
+
+    The record lives on the ``ServerCallContext`` rather than
+    ``RequestContext.metadata``: the latter is a read-only property
+    deriving a fresh dict from the request params on every access, so a
+    write to it lands on a throwaway. ``state`` is the SDK's per-call
+    scratch space and is shared by every helper handling the request, so
+    activations from several extensions accumulate in one list.
     """
     extension_uri = A2UI_EXTENSION_URI_BY_VERSION[version]
     requested = getattr(context, "requested_extensions", None) or []
     if extension_uri not in requested:
         return False
-    if context.metadata is None:
-        context.metadata = {}
-    activated = context.metadata.setdefault("activated_extensions", [])
+    activated = context.call_context.state.setdefault(ACTIVATED_EXTENSIONS_KEY, [])
     if extension_uri not in activated:
         activated.append(extension_uri)
     return True
+
+
+def get_activated_extensions(context: RequestContext) -> list[str]:
+    """Extension URIs activated so far on ``context``, in activation order.
+
+    Reading side of :func:`try_activate_a2ui_extension`. Prefer this over
+    indexing ``call_context.state`` directly — it returns an empty list
+    rather than raising when nothing has been activated.
+    """
+    activated: list[str] = context.call_context.state.get(ACTIVATED_EXTENSIONS_KEY, [])
+    return list(activated)

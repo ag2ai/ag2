@@ -1,24 +1,62 @@
 # Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Pure translation between ACP SDK models and AG2 beta events.
+"""Pure translation between ACP SDK models and AG2 events.
 
 Functions here take the ``acp.schema`` model objects directly (no ``model_dump``
 indirection) and dispatch with :func:`isinstance`, so the mapping is checked
 against the real SDK types rather than stringly-typed dicts.
+
+Both directions live here:
+
+* **ACP -> AG2** (:func:`map_session_update`, :func:`content_blocks_to_text`, …)
+  serves the *client* side — AG2 driving an external CLI agent.
+* **AG2 -> ACP** (:func:`prompt_to_inputs`, :func:`event_to_session_update`,
+  :func:`history_to_session_updates`) serves the *serving* side —
+  :class:`~ag2.acp.agent.ACPAgent` exposing an AG2 agent to an ACP Client.
 """
 
 import base64
 import json
+import logging
+from collections.abc import Sequence
+from typing import Any, cast
 
+import acp
 from acp import schema
 
-from ag2.events import BaseEvent, ModelMessageChunk, ModelReasoning
+from ag2.events import (
+    AudioInput,
+    BaseEvent,
+    DataInput,
+    DocumentInput,
+    HumanInputRequest,
+    ImageInput,
+    Input,
+    ModelMessageChunk,
+    ModelReasoning,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
+)
+from ag2.events.input_events import BinaryInput, BinaryType, FileIdInput, UrlInput
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent, ToolResult
-from ag2.events.types import BinaryResult, Usage
+from ag2.events.types import BinaryResult, HumanMessage, Usage
+from ag2.types import SendableMessage
 
 from .events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
 from .types import ContentBlock, SessionUpdate, ToolCallContent
+
+logger = logging.getLogger(__name__)
+
+# AG2 tool events carry no ACP ``kind`` (read / edit / execute / …), and guessing
+# one from a tool's name would be wrong more often than useful.
+DEFAULT_TOOL_KIND: "schema.ToolKind" = "other"
 
 
 def block_text(block: ContentBlock | None) -> str:
@@ -97,9 +135,13 @@ def map_session_update(update: SessionUpdate) -> BaseEvent | None:
         )
 
     if isinstance(update, schema.AgentPlanUpdate):
-        return ACPPlan(
-            entries=[ACPPlanEntry(content=e.content, status=e.status, priority=e.priority) for e in update.entries]
-        )
+        return _plan(update.entries)
+
+    # Incremental plan updates: only the ``items`` payload carries plan entries;
+    # ``file``/``markdown`` reference a plan by URI or raw markdown and have no
+    # ACPPlan equivalent, so they fall through to the debug log below.
+    if isinstance(update, schema.AgentPlanContentUpdate) and isinstance(update.plan, schema.PlanUpdateItems):
+        return _plan(update.plan.entries)
 
     if isinstance(update, schema.CurrentModeUpdate):
         return ACPModeChange(mode_id=update.current_mode_id)
@@ -107,4 +149,310 @@ def map_session_update(update: SessionUpdate) -> BaseEvent | None:
     if isinstance(update, schema.AvailableCommandsUpdate):
         return ACPAvailableCommands(commands=[c.name for c in update.available_commands])
 
+    # ``usage_update`` is consumed out-of-band by map_usage; anything else reaching
+    # here is a session update this version has no event for — say so rather than
+    # dropping it silently, so a protocol addition is visible in a debug log.
+    if not isinstance(update, schema.UsageUpdate):
+        logger.debug("no AG2 event for ACP session update %r; ignored", getattr(update, "session_update", update))
     return None
+
+
+def _plan(entries: "Sequence[schema.PlanEntry]") -> ACPPlan:
+    return ACPPlan(entries=[ACPPlanEntry(content=e.content, status=e.status, priority=e.priority) for e in entries])
+
+
+def block_to_input(block: ContentBlock) -> Input | None:
+    """Translate one ACP prompt content block into an AG2 input.
+
+    Returns ``None`` for a block this version has no AG2 representation for —
+    the caller decides whether to drop it or fail.
+
+    Resource *links* are deliberately not fetched: a URI named by a Client is
+    context, not authorization to dereference it. The link is passed through as
+    text so the model can see it was referenced.
+    """
+    if isinstance(block, schema.TextContentBlock):
+        return TextInput(block.text)
+
+    if isinstance(block, schema.ImageContentBlock):
+        if block.data:
+            return ImageInput(data=base64.b64decode(block.data), media_type=cast(Any, block.mime_type))
+        return ImageInput(block.uri) if block.uri else None
+
+    if isinstance(block, schema.AudioContentBlock):
+        return AudioInput(data=base64.b64decode(block.data), media_type=cast(Any, block.mime_type))
+
+    if isinstance(block, schema.EmbeddedResourceContentBlock):
+        resource = block.resource
+        if isinstance(resource, schema.TextResourceContents):
+            return TextInput(resource.text)
+        # A blob the Client inlined — its bytes travelled with the prompt, so
+        # using them reads nothing from the host filesystem.
+        return DocumentInput(
+            data=base64.b64decode(resource.blob),
+            media_type=cast(Any, resource.mime_type or "application/octet-stream"),
+        )
+
+    if isinstance(block, schema.ResourceContentBlock):
+        label = block.name or block.title or block.uri
+        return TextInput(f"[resource] {label} ({block.uri})")
+
+    return None
+
+
+def prompt_to_inputs(blocks: "Sequence[ContentBlock]") -> list[Input]:
+    """Translate an ACP ``session/prompt`` payload into AG2 inputs, in order.
+
+    Blocks with no AG2 equivalent are logged and skipped rather than failing the
+    turn — a Client sending one richer block should not lose the rest of its
+    prompt.
+    """
+    inputs: list[Input] = []
+    for block in blocks:
+        mapped = block_to_input(block)
+        if mapped is None:
+            logger.debug("no AG2 input for ACP content block %r; skipped", getattr(block, "type", block))
+            continue
+        inputs.append(mapped)
+    return inputs
+
+
+def input_to_prompt_block(part: Input, capabilities: "schema.PromptCapabilities | None") -> ContentBlock:
+    """Translate one AG2 input into the ACP block a ``session/prompt`` carries.
+
+    ACP lets a Client send only the content the Agent advertised in
+    ``initialize``: text and resource links always, image, audio and embedded
+    resources only when the matching capability is on (``capabilities`` is
+    ``None`` when the Agent advertised none). A part the Agent cannot take is
+    *named* rather than dropped, the way :func:`tool_result_text` names binary
+    parts, so the model still learns it was sent something.
+
+    A URL travels as a resource link, which every Agent accepts, and is not
+    fetched here. A pre-uploaded file id has no ACP form and is named.
+    """
+    caps = capabilities or schema.PromptCapabilities()
+    if isinstance(part, BinaryInput):
+        data = base64.b64encode(part.data).decode()
+        if part.kind is BinaryType.IMAGE and caps.image:
+            return acp.image_block(data, str(part.media_type))
+        if part.kind is BinaryType.AUDIO and caps.audio:
+            return acp.audio_block(data, str(part.media_type))
+        if part.kind is BinaryType.DOCUMENT and caps.embedded_context:
+            name = str(part.vendor_metadata.get("filename") or "document")
+            return acp.resource_block(
+                schema.BlobResourceContents(blob=data, mime_type=str(part.media_type), uri=f"attachment:{name}")
+            )
+        logger.warning("ACP agent did not advertise %s prompts; sent a placeholder", part.kind.value)
+        return acp.text_block(f"[{part.kind.value}]")
+    if isinstance(part, UrlInput):
+        return acp.resource_link_block(name=part.url, uri=part.url)
+    return input_to_block(part)
+
+
+def event_to_session_update(event: BaseEvent, *, stream_thoughts: bool = False) -> SessionUpdate | None:
+    """Translate one AG2 event into an ACP ``session/update``.
+
+    Returns ``None`` for events with no ACP equivalent, so the caller can drop
+    them without a branch per event type.
+
+    ``stream_thoughts`` gates :class:`ModelReasoning`. Reasoning is internal by
+    default and an ACP Client may be an external audience, so exposing it is an
+    explicit opt-in rather than a side effect of connecting.
+
+    The final :class:`~ag2.events.ModelResponse` is intentionally *not* mapped:
+    its text was already delivered chunk by chunk, and re-sending it would show
+    the reply twice.
+    """
+    if isinstance(event, ModelMessageChunk):
+        return acp.update_agent_message_text(event.content)
+
+    if isinstance(event, ModelReasoning):
+        return acp.update_agent_thought_text(event.content) if stream_thoughts else None
+
+    if isinstance(event, ToolResultEvent):
+        return _tool_result_update(event)
+
+    if isinstance(event, ToolCallEvent):
+        return _tool_call_start(event)
+
+    return None
+
+
+def _tool_call_start(event: ToolCallEvent) -> SessionUpdate:
+    return acp.start_tool_call(
+        event.id,
+        title=event.name,
+        kind=DEFAULT_TOOL_KIND,
+        status="in_progress",
+        raw_input=event.serialized_arguments,
+    )
+
+
+def _tool_result_update(event: ToolResultEvent) -> SessionUpdate:
+    # ToolErrorEvent subclasses ToolResultEvent, so it must be tested first.
+    if isinstance(event, ToolErrorEvent):
+        return acp.update_tool_call(
+            event.parent_id,
+            title=event.name,
+            status="failed",
+            content=[acp.tool_content(acp.text_block(str(event.error)))],
+        )
+    return acp.update_tool_call(
+        event.parent_id,
+        title=event.name,
+        status="completed",
+        content=[acp.tool_content(acp.text_block(tool_result_text(event.result)))],
+    )
+
+
+def input_to_block(part: Input) -> ContentBlock:
+    """The inverse of :func:`block_to_input`, for replaying a stored user turn.
+
+    Text and data render as text; image and audio bytes go back out as the
+    blocks they arrived in. Anything else — a document blob, a URL, a file id —
+    is *named* rather than reproduced, the way :func:`tool_result_text` treats
+    binary parts: the Client is being reminded what it sent, not re-sent it.
+    """
+    if isinstance(part, TextInput):
+        return acp.text_block(part.content)
+    if isinstance(part, DataInput):
+        return acp.text_block(_render_data(part.data))
+    if isinstance(part, BinaryInput):
+        data = base64.b64encode(part.data).decode()
+        if part.kind is BinaryType.IMAGE:
+            return schema.ImageContentBlock(type="image", data=data, mime_type=str(part.media_type))
+        if part.kind is BinaryType.AUDIO:
+            return schema.AudioContentBlock(type="audio", data=data, mime_type=str(part.media_type))
+        return acp.text_block(f"[{part.kind.value}]")
+    if isinstance(part, UrlInput):
+        return acp.text_block(f"[{part.kind.value}] {part.url}")
+    if isinstance(part, FileIdInput):
+        return acp.text_block(f"[file] {part.filename or part.file_id}")
+    return acp.text_block(f"[{getattr(part, 'kind', 'input')}]")
+
+
+def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str) -> list[SessionUpdate]:
+    """Retell a session's stored history as the ``session/update``s of a ``session/load``.
+
+    ACP has an Agent replay the whole conversation before it answers
+    ``session/load``, in the same notifications a live turn sends. Storage does
+    not hold what the live turn sent, though; it holds what the agent loop
+    persisted, and the two differ in three ways bridged here:
+
+    * Text goes out live as transient ``ModelMessageChunk``s that are never
+      stored; the stored ``ModelResponse`` carries the whole message. Replay
+      emits one ``agent_message_chunk`` per response that has one.
+    * A user turn is never sent live at all — the Client typed it. Replay emits
+      it as ``user_message_chunk``s, one per input part, because a cold Client
+      has nothing else to show for its own side of the conversation.
+    * A tool call is persisted up to three times (inside the ``ModelResponse``,
+      as the ``ToolCallsEvent`` the loop emits, as the loose ``ToolCallEvent``
+      the executor sends) and its result twice (loose, and inside the
+      ``ToolResultsEvent`` a finished or repaired batch is folded into). Replay
+      starts each call once and settles it once, at whichever record it meets
+      first, and never settles a call it did not start.
+
+    Every chunk carries a ``message_id`` so a Client can group chunks into
+    messages. Ids count per role from the start of the history, so replaying
+    the same history twice yields the same ids.
+
+    Within a response the text comes before its tool calls — the order a live
+    turn streams them. Not replayed: ``UsageEvent`` (telemetry), a compaction
+    summary (not a message the Client ever saw), and anything else with no ACP
+    counterpart.
+    """
+    updates: list[SessionUpdate] = []
+    started: set[str] = set()
+    settled: set[str] = set()
+    user_turns = agent_turns = 0
+
+    def start(call: ToolCallEvent) -> None:
+        if call.id not in started:
+            started.add(call.id)
+            updates.append(_tool_call_start(call))
+
+    def settle(result: ToolResultEvent) -> None:
+        if result.parent_id in started and result.parent_id not in settled:
+            settled.add(result.parent_id)
+            updates.append(_tool_result_update(result))
+
+    for event in events:
+        if isinstance(event, ModelRequest):
+            user_turns += 1
+            message_id = f"{session_id}:u{user_turns}"
+            for part in event.parts:
+                updates.append(
+                    schema.UserMessageChunk(
+                        session_update="user_message_chunk", message_id=message_id, content=input_to_block(part)
+                    )
+                )
+        elif isinstance(event, ModelResponse):
+            if event.message is not None and event.message.content:
+                agent_turns += 1
+                updates.append(
+                    schema.AgentMessageChunk(
+                        session_update="agent_message_chunk",
+                        message_id=f"{session_id}:a{agent_turns}",
+                        content=acp.text_block(event.message.content),
+                    )
+                )
+            for call in event.tool_calls.calls:
+                start(call)
+        elif isinstance(event, ToolCallsEvent):
+            for call in event.calls:
+                start(call)
+        elif isinstance(event, ToolCallEvent):
+            start(event)
+        elif isinstance(event, ToolResultsEvent):
+            for result in event.results:
+                settle(result)
+        elif isinstance(event, ToolResultEvent):
+            settle(event)
+        elif isinstance(event, HumanInputRequest):
+            agent_turns += 1
+            updates.append(
+                schema.AgentMessageChunk(
+                    session_update="agent_message_chunk",
+                    message_id=f"{session_id}:a{agent_turns}",
+                    content=acp.text_block(event.content),
+                )
+            )
+        elif isinstance(event, HumanMessage):
+            user_turns += 1
+            updates.append(
+                schema.UserMessageChunk(
+                    session_update="user_message_chunk",
+                    message_id=f"{session_id}:u{user_turns}",
+                    content=acp.text_block(event.content),
+                )
+            )
+    return updates
+
+
+def tool_result_text(result: ToolResult) -> str:
+    """Flatten a tool result's parts into the text ACP carries in ``content``.
+
+    A tool returning a non-string (an ``int``, a ``dict``) is coerced by AG2 into
+    a :class:`DataInput`, so rendering only :class:`TextInput` would reduce every
+    such result to a placeholder. Binary parts *do* get a placeholder — their
+    bytes have no faithful text form and must not be smuggled into a text block.
+    """
+    pieces: list[str] = []
+    for part in result.parts:
+        if isinstance(part, TextInput):
+            pieces.append(part.content)
+        elif isinstance(part, DataInput):
+            pieces.append(_render_data(part.data))
+        else:
+            pieces.append(f"[{getattr(part, 'kind', 'binary')}]")
+    return "".join(pieces)
+
+
+def _render_data(data: SendableMessage) -> str:
+    """Render a ``DataInput`` payload as text, preferring JSON for structures."""
+    if isinstance(data, str):
+        return data
+    try:
+        return json.dumps(data)
+    except (TypeError, ValueError):
+        return str(data)

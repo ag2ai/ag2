@@ -15,6 +15,16 @@ if TYPE_CHECKING:
 
 
 def persistent_stream() -> StreamFactory:
+    """Return a StreamFactory that reuses one stream per agent and context.
+
+    The stream *id* is cached in ``context.dependencies``; each delegation
+    rebuilds a MemoryStream from that id and the parent's storage backend. Same
+    id, same storage — so the worker reads back its own accumulated history,
+    while each delegation keeps its own subscriber set and is accounted for on
+    its own. Turns still serialize: a stream's identity is its id, not the
+    object (see ``_get_stream_turn_lock`` in ``agent.py``).
+    """
+
     def stream_factory(agent: "Agent", ctx: "Context") -> MemoryStream:
         key = f"ag:{agent.name}:stream"
         if not (stream_id := ctx.dependencies.get(key)):

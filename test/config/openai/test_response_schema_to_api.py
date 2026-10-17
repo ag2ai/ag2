@@ -253,7 +253,12 @@ class TestRawSchema:
         assert result == {
             "type": "json_schema",
             "json_schema": {
-                "schema": {"type": "object", "properties": {"x": {"type": "integer"}}, "additionalProperties": False},
+                "schema": {
+                    "type": "object",
+                    "properties": {"x": {"type": "integer"}},
+                    "additionalProperties": False,
+                    "required": ["x"],
+                },
                 "name": "Custom",
                 "description": "A custom schema",
                 "strict": True,

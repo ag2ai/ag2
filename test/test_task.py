@@ -28,7 +28,7 @@ from ag2.task import TERMINAL_TASK_STATES, TaskState
 
 def _agent() -> Agent:
     """A bare Agent — no model calls, just a name."""
-    return Agent(name="researcher", config=AnthropicConfig(model="claude-sonnet-4-6"))
+    return Agent(name="researcher", config=AnthropicConfig(model="claude-sonnet-5"))
 
 
 async def _persisted(stream: MemoryStream) -> list[BaseEvent]:

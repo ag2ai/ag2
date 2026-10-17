@@ -10,6 +10,7 @@ malformed output, very large responses.
 import asyncio
 
 import pytest
+from pydantic import BaseModel, Field
 
 from ag2 import Agent
 from ag2.agent import KnowledgeConfig, TaskConfig
@@ -180,15 +181,7 @@ async def test_history_limiter_caps_context(provider_config) -> None:
 
 
 async def test_response_schema_strict_validation(provider_config) -> None:
-    """AgentReply.content() returns a validated instance for strict schemas.
-
-    NOTE: with ``temperature=0`` the model produces a valid response on the
-    first try, so this test exercises the happy path of strict-output
-    validation — *not* the retry-on-malformed recovery path. The retry
-    branch is covered by unit tests; here we assert the typed result and
-    that ``retries=0`` succeeds (proving no retry was needed).
-    """
-    from pydantic import BaseModel, Field
+    """AgentReply.content() returns a validated instance for strict schemas."""
 
     class StrictAnswer(BaseModel):
         answer: int = Field(..., description="The numeric answer, no text")
@@ -201,7 +194,7 @@ async def test_response_schema_strict_validation(provider_config) -> None:
     )
 
     reply = await agent.ask("What is 100 / 4? Return the integer answer.")
-    result = await reply.content(retries=0)
+    result = await reply.content(retries=1)
     assert isinstance(result, StrictAnswer)
     assert result.answer == 25
 

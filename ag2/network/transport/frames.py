@@ -214,7 +214,7 @@ Frame: TypeAlias = (
 )
 
 
-_FRAME_CLASSES: dict[str, type] = {
+_FRAME_CLASSES: dict[str, type[Frame]] = {
     "hello": HelloFrame,
     "welcome": WelcomeFrame,
     "ping": PingFrame,

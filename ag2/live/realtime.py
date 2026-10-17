@@ -2,32 +2,37 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncGenerator, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, suppress
 from typing import Any, Protocol
 
 from fast_depends.library.serializer import SerializerProto
 
-from ag2.agent import HumanHook, Plugin, PluginTarget, PromptType, wrap_hitl
 from ag2.context import ConversationContext, Stream
 from ag2.events import HumanInputRequest, ModelRequest, ObserverCompleted, ObserverStarted
+from ag2.hitl import HumanHook, wrap_hitl
 from ag2.middleware.base import BaseMiddleware, MiddlewareFactory
 from ag2.observers import Observer
+from ag2.plugin import Plugin, PluginTarget, PromptType
 from ag2.stream import MemoryStream
-from ag2.tools.final import FunctionTool, FunctionToolSchema
+from ag2.tools.final import FunctionTool
+from ag2.tools.precedence import resolve_tools
 from ag2.tools.schemas import ToolSchema
 from ag2.tools.tool import Tool
 from ag2.usage import UsageReport
 
 
 class RealtimeConfig(Protocol):
-    """A speech-to-text config that holds an open bidirectional session.
+    """A config that holds an open bidirectional audio session.
 
     Unlike `STTConfig` (one-shot transcribe), realtime configs run for the
     duration of the `session()` context manager. The session subscribes to
     `RecordedAudioEvent` on the supplied context's stream, pumps captured
     audio into the provider, and emits transcription events back onto the
     same stream.
+
+    `LiveAgent` needs no separate STT/LLM/TTS parts. For a cascade of
+    separate providers, see `STTConfig.pipe` and `TTSObserver`.
 
     Framework-level concepts (such as the agent's prompt) flow in via the
     keyword parameters of `session()`, allowing `LiveAgent` to inject them
@@ -45,7 +50,7 @@ class RealtimeConfig(Protocol):
 
 
 class LiveAgent(PluginTarget):
-    """Realtime STT agent. Open a session via `agent.run()`.
+    """Realtime (Speech-to-Speech/S2S) agent. Open a session via `agent.run()`.
 
     If `stream` is omitted, owns a fresh `MemoryStream`; otherwise binds to
     the supplied one. `run()` is an async context manager that yields the
@@ -85,8 +90,8 @@ class LiveAgent(PluginTarget):
             tools=tools,
             middleware=middleware,
             observers=observers,
-            dependencies=dependencies,
-            variables=variables,
+            dependencies=dependencies or {},
+            variables=variables or {},
             plugins=plugins,
         )
         self._config = config
@@ -110,7 +115,7 @@ class LiveAgent(PluginTarget):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         hitl_hook: HumanHook | None = None,
-    ) -> AsyncIterator[ConversationContext]:
+    ) -> AsyncGenerator[ConversationContext]:
         stream = self._stream if self._stream is not None else MemoryStream()
 
         context = ConversationContext(
@@ -140,23 +145,14 @@ class LiveAgent(PluginTarget):
                     ),
                 )
 
-            all_schemas: list[ToolSchema] = []
-            known_tools: set[str] = set()
-            for t in all_tools:
-                schemas = await t.schemas(context)
-                all_schemas.extend(schemas)
-                for schema in schemas:
-                    if isinstance(schema, FunctionToolSchema):
-                        known_tools.add(schema.function.name)
-                    else:
-                        known_tools.add(schema.type)
+            resolved_tools = await resolve_tools(all_tools, context)
 
             if all_tools:
                 self._tool_executor.register(
                     s,
                     context,
-                    tools=all_tools,
-                    known_tools=known_tools,
+                    tools=resolved_tools.tools,
+                    known_tools=resolved_tools.known_tools,
                     middleware=middleware_instances,
                 )
 
@@ -167,7 +163,7 @@ class LiveAgent(PluginTarget):
                 active_config.session(
                     context,
                     instructions=instructions,
-                    tools=all_schemas,
+                    tools=resolved_tools.schemas,
                     serializer=self._serializer,
                 )
             )

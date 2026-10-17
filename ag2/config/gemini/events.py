@@ -41,7 +41,7 @@ class GeminiServerToolCallEvent(BuiltinToolCallEvent):
             name=CODE_EXECUTION_TOOL_NAME,
             arguments=json.dumps({
                 "code": part.executable_code.code or "",
-                "language": language.name if language.name else str(language) or "",
+                "language": language.name if language is not None else "",
             }),
             part=part,
         )

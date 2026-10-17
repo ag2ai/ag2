@@ -3,8 +3,8 @@
 AG2 is an agent framework, and we welcome contributors who use AI tools —
 including AG2 itself — to help build it. With that comes a high bar: **you
 remain responsible for everything you publish** — code, issue descriptions,
-pull request bodies, and comments — and we take care with what we merge and
-release.
+pull request bodies, comments, and reviews — and we take care with what we
+merge and release.
 
 ## Code: ownership and licensing
 
@@ -43,6 +43,42 @@ body — it helps reviewers calibrate their attention.
 If you have reason to share raw AI output in a comment, place it in a quote
 block (e.g., using `>`), disclose it as such, and add your own commentary
 explaining its relevance. Please avoid sharing long snippets.
+
+## Reviews
+
+We welcome reviews from anyone in the community, not just maintainers — a
+second pair of eyes on a diff is valuable regardless of who it comes from. AI
+tools can help you read a large diff faster or spot patterns worth a closer
+look, but **the review must reflect that a person actually engaged with the
+code**, the same standard we hold contributions to.
+
+A review reads as unverified AI output — and undermines the trust reviewers
+are supposed to add — when it does things like:
+
+- restate the PR description back as findings, instead of responding to the
+  diff itself,
+- praise implementation choices in generic terms without pointing at specific
+  lines or behavior,
+- ask questions that reading the code would answer directly (e.g., "is this
+  tested or mocked?" when the test file is in the diff),
+- approve or say "LGTM" while leaving its own open question unresolved,
+- reuse the same template (e.g., a numbered "Observations" list) across
+  otherwise unrelated PRs.
+
+None of this means AI-assisted review is unwelcome — it means the reviewer
+stands behind it the same way an author stands behind AI-assisted code. If
+you used AI to help draft a review, disclose it and make sure the content
+reflects your own read of the change, not the PR description reflected back.
+
+**Maintainers may hide or minimize a review that shows clear signs of
+unverified AI-generated content**, and will leave a comment explaining why
+(see the [`ai-slop-review`](review/replies/ai-slop-review.md) canned reply).
+Reviews don't gate a PR — only a core maintainer's approval does (see the
+[Triage Policy](review/TRIAGE_POLICY.md#4-pull-request-flow)) — but a
+low-effort AI review can still mislead less experienced contributors into
+thinking a change has been vetted when it hasn't. An account that repeats
+this pattern across multiple PRs may have its ability to comment or review on
+this repository restricted.
 
 ## Non-native English speakers
 

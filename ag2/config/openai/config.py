@@ -2,20 +2,33 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
-import httpx
+import httpx2
 from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
 from openai.types import ChatModel
+from openai.types.chat import (
+    ChatCompletionPredictionContentParam,
+    ChatCompletionToolChoiceOptionParam,
+)
+from openai.types.chat.completion_create_params import PromptCacheOptions, WebSearchOptions
+from openai.types.responses import ServiceTier as ResponseServiceTier
+from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
+from openai.types.shared_params import Reasoning
 from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
 
 from .files import OpenAIFilesClient
-from .openai_client import CreateOptions, OpenAIClient, ReasoningEffort
+from .openai_client import CreateOptions, Modality, OpenAIClient, ReasoningEffort, ServiceTier, Verbosity
+from .openai_decisions_client import OpenAIDecisionsClient
 from .openai_responses_client import CreateOptions as ResponseCreateOptions
-from .openai_responses_client import OpenAIResponsesClient
+from .openai_responses_client import OpenAIResponsesClient, Truncation
+
+if TYPE_CHECKING:
+    from ag2.files.protocol import FilesClient
 
 
 class OpenAIConfigOverrides(TypedDict, total=False):
@@ -34,7 +47,7 @@ class OpenAIConfigOverrides(TypedDict, total=False):
     max_retries: int
     default_headers: dict[str, str] | None
     default_query: dict[str, object] | None
-    http_client: httpx.AsyncClient | None
+    http_client: httpx2.AsyncClient | None
     frequency_penalty: float | None | Omit
     presence_penalty: float | None | Omit
     seed: int | None | Omit
@@ -43,19 +56,20 @@ class OpenAIConfigOverrides(TypedDict, total=False):
     user: str | Omit
     logprobs: bool | None | Omit
     top_logprobs: int | None | Omit
-    tool_choice: str | dict[str, Any] | Omit
+    tool_choice: ChatCompletionToolChoiceOptionParam | Omit
     parallel_tool_calls: bool | Omit
     reasoning_effort: ReasoningEffort | None | Omit
     logit_bias: dict[str, int] | None | Omit
     metadata: dict[str, str] | None | Omit
-    modalities: list[str] | None | Omit
-    prediction: dict[str, Any] | None | Omit
+    modalities: list[Modality] | None | Omit
+    prediction: ChatCompletionPredictionContentParam | None | Omit
     prompt_cache_key: str | Omit
+    prompt_cache_options: PromptCacheOptions | Omit
     safety_identifier: str | Omit
-    service_tier: str | None | Omit
+    service_tier: ServiceTier | None | Omit
     store: bool | None | Omit
-    verbosity: str | None | Omit
-    web_search_options: dict[str, Any] | Omit
+    verbosity: Verbosity | None | Omit
+    web_search_options: WebSearchOptions | Omit
     extra_body: dict[str, Any] | None
 
 
@@ -76,7 +90,7 @@ class OpenAIConfig(ModelConfig):
     max_retries: int = DEFAULT_MAX_RETRIES
     default_headers: dict[str, str] | None = None
     default_query: dict[str, object] | None = None
-    http_client: httpx.AsyncClient | None = None
+    http_client: httpx2.AsyncClient | None = None
     frequency_penalty: float | None | Omit = omit
     presence_penalty: float | None | Omit = omit
     seed: int | None | Omit = omit
@@ -85,19 +99,27 @@ class OpenAIConfig(ModelConfig):
     user: str | Omit = omit
     logprobs: bool | None | Omit = omit
     top_logprobs: int | None | Omit = omit
-    tool_choice: str | dict[str, Any] | Omit = omit
+    tool_choice: ChatCompletionToolChoiceOptionParam | Omit = omit
     parallel_tool_calls: bool | Omit = omit
     reasoning_effort: ReasoningEffort | None | Omit = omit
     logit_bias: dict[str, int] | None | Omit = omit
     metadata: dict[str, str] | None | Omit = omit
-    modalities: list[str] | None | Omit = omit
-    prediction: dict[str, Any] | None | Omit = omit
+    modalities: list[Modality] | None | Omit = omit
+    prediction: ChatCompletionPredictionContentParam | None | Omit = omit
+    # A routing hint, not a partition, and best effort in both directions: a second key
+    # has been measured reading a prefix the first one wrote, and one key has been
+    # measured not reading back its own.
     prompt_cache_key: str | Omit = omit
+    # Supported from ``gpt-5.6`` onwards; an earlier model answers the object with a 400.
+    # ``mode: "explicit"`` turns caching off here rather than tuning it — ag2 exposes no
+    # per-block ``prompt_cache_breakpoint`` for it to write. The deprecated
+    # ``prompt_cache_retention`` and the ``prewarm`` flag are not exposed at all.
+    prompt_cache_options: PromptCacheOptions | Omit = omit
     safety_identifier: str | Omit = omit
-    service_tier: str | None | Omit = omit
+    service_tier: ServiceTier | None | Omit = omit
     store: bool | None | Omit = omit
-    verbosity: str | None | Omit = omit
-    web_search_options: dict[str, Any] | Omit = omit
+    verbosity: Verbosity | None | Omit = omit
+    web_search_options: WebSearchOptions | Omit = omit
     extra_body: dict[str, Any] | None = None
 
     @property
@@ -131,6 +153,8 @@ class OpenAIConfig(ModelConfig):
             modalities=self.modalities,
             prediction=self.prediction,
             prompt_cache_key=self.prompt_cache_key,
+            # an empty object is not a setting, and a model without the feature 400s on one
+            prompt_cache_options=self.prompt_cache_options or omit,
             safety_identifier=self.safety_identifier,
             service_tier=self.service_tier,
             store=self.store,
@@ -175,13 +199,17 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     max_retries: int
     default_headers: dict[str, str] | None
     default_query: dict[str, object] | None
-    http_client: httpx.AsyncClient | None
+    http_client: httpx2.AsyncClient | None
     parallel_tool_calls: bool
     top_logprobs: int | None | Omit
     metadata: dict[str, str] | None | Omit
-    service_tier: str | None | Omit
+    prompt_cache_key: str | Omit
+    prompt_cache_options: ResponsePromptCacheOptions | Omit
+    prompt_cache_diagnostics: bool
+    reasoning: Reasoning | None | Omit
+    service_tier: ResponseServiceTier | None | Omit
     user: str
-    truncation: str | None | Omit
+    truncation: Truncation | None | Omit
 
 
 @dataclass(slots=True)
@@ -202,13 +230,29 @@ class OpenAIResponsesConfig(ModelConfig):
     max_retries: int = DEFAULT_MAX_RETRIES
     default_headers: dict[str, str] | None = None
     default_query: dict[str, object] | None = None
-    http_client: httpx.AsyncClient | None = None
+    http_client: httpx2.AsyncClient | None = None
     parallel_tool_calls: bool = True
     top_logprobs: int | None | Omit = omit
     metadata: dict[str, str] | None | Omit = omit
-    service_tier: str | None | Omit = omit
+    # A routing hint, not a partition, and best effort in both directions: a second key
+    # has been measured reading a prefix the first one wrote, and one key has been
+    # measured not reading back its own.
+    prompt_cache_key: str | Omit = omit
+    # Supported from ``gpt-5.6`` onwards; an earlier model answers the object with a 400.
+    # ``mode: "explicit"`` turns caching off here rather than tuning it — ag2 exposes no
+    # per-block ``prompt_cache_breakpoint`` for it to write. The deprecated
+    # ``prompt_cache_retention`` and the ``prewarm`` flag are not exposed at all.
+    prompt_cache_options: ResponsePromptCacheOptions | Omit = omit
+    # Diagnose each call against the one before it, so an application learns which change
+    # broke the prefix without tracking response ids itself. The chain spans one client:
+    # a turn's tool loop, and any conversation continued through `reply.ask(...)`, which
+    # reuses the originating turn's client. A fresh `agent.ask(...)` builds a new one and
+    # starts over. An explicit `prompt_cache_options["comparison_response_id"]` outranks it.
+    prompt_cache_diagnostics: bool = False
+    reasoning: Reasoning | None | Omit = omit
+    service_tier: ResponseServiceTier | None | Omit = omit
     user: str = ""
-    truncation: str | None | Omit = omit
+    truncation: Truncation | None | Omit = omit
 
     @property
     def provider(self) -> ModelProvider:
@@ -229,6 +273,10 @@ class OpenAIResponsesConfig(ModelConfig):
             parallel_tool_calls=self.parallel_tool_calls,
             top_logprobs=self.top_logprobs,
             metadata=self.metadata,
+            prompt_cache_key=self.prompt_cache_key,
+            # an empty object is not a setting, and a model without the feature 400s on one
+            prompt_cache_options=self.prompt_cache_options or omit,
+            reasoning=self.reasoning,
             service_tier=self.service_tier,
             truncation=self.truncation,
         )
@@ -249,7 +297,77 @@ class OpenAIResponsesConfig(ModelConfig):
             default_query=self.default_query,
             http_client=self.http_client,
             create_options=options,
+            prompt_cache_diagnostics=self.prompt_cache_diagnostics,
         )
 
     def create_files_client(self) -> OpenAIFilesClient:
         return OpenAIFilesClient(self)
+
+
+class OpenAIDecisionsConfigOverrides(TypedDict, total=False):
+    model: str
+    api_key: str | None
+    base_url: str | None
+    organization: str | None
+    project: str | None
+    timeout: Any
+    max_retries: int
+    default_headers: dict[str, str] | None
+    default_query: dict[str, object] | None
+    http_client: httpx2.AsyncClient | None
+    safety_identifier: str | None | Omit
+    boolean_threshold: float
+    descriptions: Mapping[str, str] | None
+    extra_body: dict[str, Any] | None
+
+
+@dataclass(slots=True)
+class OpenAIDecisionsConfig(ModelConfig):
+    """OpenAI's Decisions API: one typed question per call, taken from the agent's ``response_schema``."""
+
+    model: str = "gpt-6-luna"
+    api_key: str | None = None
+    base_url: str | None = None
+    organization: str | None = None
+    project: str | None = None
+    timeout: Any = not_given
+    max_retries: int = DEFAULT_MAX_RETRIES
+    default_headers: dict[str, str] | None = None
+    default_query: dict[str, object] | None = None
+    http_client: httpx2.AsyncClient | None = None
+    safety_identifier: str | None | Omit = omit
+    # A ``bool`` schema is ``True`` once the predicate's probability reaches this.
+    boolean_threshold: float = 0.5
+    # Option descriptions keyed by choice value or score level as a string; they
+    # outrank the docstrings under ``Enum`` members.
+    descriptions: Mapping[str, str] | None = None
+    extra_body: dict[str, Any] | None = None
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.OPENAI
+
+    def copy(self, /, **overrides: Unpack[OpenAIDecisionsConfigOverrides]) -> "OpenAIDecisionsConfig":
+        return replace(self, **overrides)
+
+    def create(self) -> OpenAIDecisionsClient:
+        return OpenAIDecisionsClient(
+            model=self.model,
+            api_key=self.api_key,
+            organization=self.organization,
+            project=self.project,
+            base_url=self.base_url,
+            timeout=self.timeout,
+            max_retries=self.max_retries,
+            default_headers=self.default_headers,
+            default_query=self.default_query,
+            http_client=self.http_client,
+            safety_identifier=self.safety_identifier,
+            boolean_threshold=self.boolean_threshold,
+            descriptions=self.descriptions,
+            extra_body=self.extra_body,
+        )
+
+    def create_files_client(self) -> "FilesClient":
+        # The endpoint takes inline data URLs only; an uploaded ``file_id`` is rejected.
+        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

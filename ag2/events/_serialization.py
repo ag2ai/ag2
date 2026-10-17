@@ -54,7 +54,7 @@ def serialize_value(value: Any) -> Any:
     if _is_event_instance(value):
         return {"__event__": qualified_name(value), **event_to_dict(value)}
     if isinstance(value, Enum):
-        return value.value
+        return {"__enum__": qualified_name_from_class(type(value)), "value": value.value}
     if isinstance(value, Exception):
         return {"__exception__": type(value).__name__, "message": str(value)}
     if isinstance(value, dict):
@@ -104,6 +104,17 @@ def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
             return base64.b64decode(value["__bytes__"])
         if "__uuid__" in value:
             return UUID(value["__uuid__"])
+        if "__enum__" in value:
+            # Fail open: an enum whose class can no longer be imported, or whose
+            # member has since been removed, degrades to its raw value rather
+            # than failing the load and taking the whole event with it.
+            try:
+                enum_cls = _resolve_class(value["__enum__"])
+                if issubclass(enum_cls, Enum):
+                    return enum_cls(value["value"])
+            except (ImportError, ValueError):
+                pass
+            return value["value"]
         if "__exception__" in value:
             # Reconstruct as a generic Exception with the original message
             return Exception(value.get("message", ""))

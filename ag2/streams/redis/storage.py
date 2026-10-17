@@ -15,7 +15,17 @@ from .serializer import Serializer, deserialize, serialize
 
 
 class RedisStorage(Storage):
-    """Redis-backed storage implementing the Storage protocol from ag2.history."""
+    """Redis-backed storage implementing the Storage protocol from ag2.history.
+
+    Args:
+        redis_url: Redis connection URL.
+        prefix: Key prefix for stored event lists.
+        serializer: Format for events stored in Redis. Defaults to `Serializer.JSON`.
+
+            `Serializer.PICKLE` keeps exact Python types, but unpickling runs arbitrary
+            code: anyone who can write to this Redis can execute code in every process
+            that reads the history. Use it only with a Redis you fully trust.
+    """
 
     def __init__(
         self,

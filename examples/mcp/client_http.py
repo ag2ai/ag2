@@ -9,7 +9,7 @@ async def main() -> None:
     # The remote MCP server's tools become ordinary local tools for the agent.
     agent = Agent(
         name="client",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[MCPToolkit("http://127.0.0.1:8000/mcp")],
     )
 

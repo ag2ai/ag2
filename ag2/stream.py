@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from functools import partial
 from typing import Any, overload
@@ -31,7 +31,7 @@ class ABCStream(Stream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
-    ) -> Iterator[None]:
+    ) -> Generator[None]:
         sub_id = self.subscribe(
             func,
             interrupt=interrupt,
@@ -44,7 +44,7 @@ class ABCStream(Stream):
             self.unsubscribe(sub_id)
 
     @contextmanager
-    def join(self, *, max_events: int | None = None) -> Iterator[AsyncIterator[BaseEvent]]:
+    def join(self, *, max_events: int | None = None) -> Generator[AsyncIterator[BaseEvent]]:
         queue = asyncio.Queue[BaseEvent]()
 
         async def write_events(event: BaseEvent) -> None:
@@ -77,7 +77,7 @@ class ABCStream(Stream):
     async def get(
         self,
         condition: ClassInfo | Condition,
-    ) -> AsyncIterator[asyncio.Future[BaseEvent]]:
+    ) -> AsyncGenerator[asyncio.Future[BaseEvent]]:
         result = asyncio.Future[BaseEvent]()
 
         async def wait_result(event: BaseEvent) -> None:
@@ -109,12 +109,17 @@ class MemoryStream(ABCStream):
         "history",
         "pending_messages",
         "_background_tasks",
-        # Lazy per-stream asyncio.Lock used by Agent._execute to serialize
-        # concurrent turns on a shared stream. See agent.py's
-        # `_get_stream_turn_lock`. Declared here (not initialized in
-        # __init__) so __slots__ doesn't reject the attribute set.
+        # Lazy asyncio.Lock used by Agent._execute to serialize concurrent
+        # turns on this stream. Shared with every other object carrying the
+        # same `id`; cached here so the lookup is one attribute read. See
+        # agent.py's `_get_stream_turn_lock`. Declared here so __slots__
+        # doesn't reject the assignment.
         "_ag2_turn_lock",
     )
+
+    # Writable here; the `Stream` protocol only promises they can be read.
+    history: History
+    pending_messages: list[ModelRequest]
 
     def __init__(
         self,
@@ -136,7 +141,7 @@ class MemoryStream(ABCStream):
         # single ``ask`` so a background task that finishes after ``ask``
         # returns still delivers — the next ``ask`` on this stream merges
         # the leftover into its initial request.
-        self.pending_messages: list[ModelRequest] = []
+        self.pending_messages = []
         self._background_tasks: set[asyncio.Task[None]] = set()
 
         # Agent._execute populates this lazily on first turn — setting it
@@ -257,7 +262,9 @@ class SubStream(ABCStream):
         parent: Stream,
         condition: Condition,
     ) -> None:
-        self.id: StreamId = uuid4()
+        # A subscription filter shares its parent's conversation. History storage
+        # and agent turn locks must therefore use the same stream identity.
+        self.id: StreamId = parent.id
 
         self._filter_condition = condition
         self._parent = parent
@@ -311,6 +318,10 @@ class SubStream(ABCStream):
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
         await self._parent.send(event, context)
+
+    @property
+    def history(self) -> History:
+        return self._parent.history
 
     @property
     def pending_messages(self) -> list[ModelRequest]:

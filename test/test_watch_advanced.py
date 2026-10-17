@@ -83,7 +83,7 @@ class TestCadenceWatchTimeTrigger:
 
         assert len(batches) == 0
 
-    def test_disarm_resets_armed_flag(self) -> None:
+    async def test_disarm_resets_armed_flag(self) -> None:
         stream = MemoryStream()
 
         async def callback(events, ctx):

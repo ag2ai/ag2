@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import Enum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from typing_extensions import Self
 
@@ -18,8 +18,10 @@ class ModelProvider(str, Enum):
     BEDROCK = "bedrock"
     DASHSCOPE = "dashscope"
     GEMINI = "gemini"
+    MISTRAL = "mistral"
     OLLAMA = "ollama"
     OPENAI = "openai"
+    TYPESAFE = "typesafe"
     VERTEXAI = "vertexai"
     XAI = "xai"
     ZAI = "zai"
@@ -38,5 +40,6 @@ class ModelConfig(Protocol):
 
     def create(self) -> LLMClient: ...
 
-    def create_files_client(self) -> "FilesClient":
+    # `Any` because the purpose type is the provider's own; `FilesAPI` hands over a plain `str`.
+    def create_files_client(self) -> "FilesClient[Any]":
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

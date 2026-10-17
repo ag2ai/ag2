@@ -18,7 +18,10 @@ import acp
 from acp import schema
 
 from ag2.events.types import BinaryResult
+from ag2.exceptions import HumanInputError
 
+from .dispatch import InOrderUpdates
+from .elicitation import resolve_elicitation_response
 from .mappers import block_text, block_to_files, map_session_update
 from .permissions import resolve_permission_option_id
 from .types import SessionUpdate
@@ -153,11 +156,37 @@ class BridgeState:
         self.context: ConversationContext | None = None  # updated by ACPClient before each turn
         self._turn_parts: list[str] = []
         self._turn_files: list[BinaryResult] = []
+        self._turn_worked = False
+        # Set when a tool served over the gateway asked a human and could not
+        # reach one. The gateway runs each ``tools/call`` on the HTTP server's
+        # own task, so it cannot raise into the task awaiting ``session/prompt``;
+        # this is how the failure crosses over. See :meth:`fail_channel`.
+        self.channel_failure: HumanInputError | None = None
+        self.channel_failed = asyncio.Event()
         self.terminals = TerminalManager(config.fs_root or config.cwd)
+        # Owned here rather than per-connection: it orders the updates of whatever
+        # connection this bridge is currently serving, and only one is ever live.
+        self.updates = InOrderUpdates()
 
     def begin_turn(self) -> None:
         self._turn_parts = []
         self._turn_files = []
+        self._turn_worked = False
+        self.channel_failure = None
+        self.channel_failed.clear()
+
+    def fail_channel(self, error: "HumanInputError") -> None:
+        """Record that this turn's human-input channel failed, and stop the turn.
+
+        First one wins: a batch of tools can each hit a dead channel, and the
+        first is the one that describes what happened — the ones after it are
+        being cancelled, not diagnosing anything. Setting the event is what lets
+        the client stop the agent instead of waiting out a prompt whose answer
+        is already known to be worthless.
+        """
+        if self.channel_failure is None:
+            self.channel_failure = error
+        self.channel_failed.set()
 
     @property
     def turn_text(self) -> str:
@@ -167,11 +196,31 @@ class BridgeState:
     def turn_files(self) -> list[BinaryResult]:
         return list(self._turn_files)
 
+    @property
+    def turn_worked(self) -> bool:
+        """Whether the agent did anything this turn beyond replying with text.
+
+        Thoughts, tool calls and plans all count. Session-scoped updates (mode,
+        available commands, usage) do not — they arrive even on a turn where the
+        agent never ran, so counting them would mask exactly the case this
+        tracks: a turn that produced nothing at all.
+        """
+        return self._turn_worked
+
     async def handle_update(self, update: SessionUpdate) -> None:
         """Route one ``session/update`` to the stream + accumulate agent output."""
         if isinstance(update, schema.AgentMessageChunk):
             self._turn_parts.append(block_text(update.content))
             self._turn_files.extend(block_to_files(update.content))
+        if isinstance(
+            update,
+            schema.AgentThoughtChunk
+            | schema.ToolCallStart
+            | schema.ToolCallProgress
+            | schema.AgentPlanUpdate
+            | schema.AgentPlanContentUpdate,
+        ):
+            self._turn_worked = True
         event = map_session_update(update)
         if event is not None and self.context is not None:
             await self.context.send(event)
@@ -203,6 +252,9 @@ class BridgeState:
     ) -> str | None:
         return await resolve_permission_option_id(self.config.permission_policy, options, tool_call, self.context)
 
+    async def resolve_elicitation(self, message: str, mode: schema.ElicitationMode) -> schema.CreateElicitationResponse:
+        return await resolve_elicitation_response(self.config.elicitation_policy, message, mode, self.context)
+
 
 class ACPBridge(acp.Client):
     """Concrete ``acp.Client`` that routes ACP callbacks into a ``BridgeState``."""
@@ -211,13 +263,16 @@ class ACPBridge(acp.Client):
         self.state = state
 
     async def session_update(self, session_id: str, update: SessionUpdate, **kwargs: Any) -> None:
-        await self.state.handle_update(update)
+        # Serialized: the SDK spawns a task per notification, so without this the
+        # handlers can interleave and chunks land out of order (see `dispatch`).
+        async with self.state.updates.in_order():
+            await self.state.handle_update(update)
 
     async def request_permission(
         self,
-        options: list[schema.PermissionOption],
         session_id: str,
         tool_call: schema.ToolCallUpdate,
+        options: list[schema.PermissionOption],
         **kwargs: Any,
     ) -> schema.RequestPermissionResponse:
         chosen = await self.state.resolve_permission(options, tool_call)
@@ -225,30 +280,52 @@ class ACPBridge(acp.Client):
             return schema.RequestPermissionResponse(outcome=schema.DeniedOutcome(outcome="cancelled"))
         return schema.RequestPermissionResponse(outcome=schema.AllowedOutcome(option_id=chosen, outcome="selected"))
 
+    async def create_elicitation(
+        self, message: str, mode: schema.ElicitationMode, **kwargs: Any
+    ) -> schema.CreateElicitationResponse:
+        """Answer the agent's question — accept, decline or cancel.
+
+        ``mode`` is ``acp``'s own union of the four form/url × session/request
+        models, which is what its router validates before dispatching here. The
+        rendering still guards with ``isinstance``: a mode a later protocol release
+        adds is declined rather than raising, so an agent using a newer mode falls
+        back instead of seeing a transport failure.
+        """
+        return await self.state.resolve_elicitation(message, mode)
+
+    async def complete_elicitation(self, elicitation_id: str, **kwargs: Any) -> None:
+        """Accept the agent's ``elicitation/complete`` and do nothing with it.
+
+        It signals that an out-of-band ``url``-mode flow finished. AG2 waits on
+        the *human's* confirmation rather than on this notification (the human is
+        the one who knows the flow really completed), so there is nothing to act
+        on — but it must not error, or the agent's turn fails over a courtesy.
+        """
+
     async def read_text_file(
         self,
-        path: str,
         session_id: str,
-        limit: int | None = None,
+        path: str,
         line: int | None = None,
+        limit: int | None = None,
         **kwargs: Any,
     ) -> schema.ReadTextFileResponse:
         content = self.state.read_text_file(path, line=line, limit=limit)
         return schema.ReadTextFileResponse(content=content)
 
     async def write_text_file(
-        self, content: str, path: str, session_id: str, **kwargs: Any
+        self, session_id: str, path: str, content: str, **kwargs: Any
     ) -> schema.WriteTextFileResponse:
         self.state.write_text_file(content, path)
         return schema.WriteTextFileResponse()
 
     async def create_terminal(
         self,
-        command: str,
         session_id: str,
+        command: str,
         args: list[str] | None = None,
-        cwd: str | None = None,
         env: list[schema.EnvVariable] | None = None,
+        cwd: str | None = None,
         output_byte_limit: int | None = None,
         **kwargs: Any,
     ) -> schema.CreateTerminalResponse:

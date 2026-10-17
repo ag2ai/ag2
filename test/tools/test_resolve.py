@@ -15,7 +15,7 @@ from ag2.tools.builtin.image_generation import ImageGenerationToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerTool, MCPServerToolSchema
 from ag2.tools.builtin.retrieval import RetrievalTool, RetrievalToolSchema
 from ag2.tools.builtin.shell import ContainerAutoEnvironment, ShellTool, ShellToolSchema
-from ag2.tools.builtin.web_fetch import WebFetchTool, WebFetchToolSchema
+from ag2.tools.builtin.web_fetch import UrlSources, WebFetchTool, WebFetchToolSchema
 from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.builtin.x_search import XSearchTool, XSearchToolSchema
 
@@ -243,4 +243,23 @@ class TestGoogleMapsToolVariable:
         tool = GoogleMapsTool(latitude=Variable("lat"))
 
         with pytest.raises(KeyError):
+            await tool.schemas(context)
+
+
+@pytest.mark.asyncio
+class TestWebFetchUrlSourcesVariable:
+    async def test_resolved(self, make_context: Callable[..., Context]) -> None:
+        sources = UrlSources(user_input="none")
+        ctx = make_context(fetch_policy=sources)
+        tool = WebFetchTool(url_sources=Variable("fetch_policy"))
+
+        [schema] = await tool.schemas(ctx)
+
+        assert isinstance(schema, WebFetchToolSchema)
+        assert schema.url_sources is sources
+
+    async def test_missing_raises(self, context: Context) -> None:
+        tool = WebFetchTool(url_sources=Variable("fetch_policy"))
+
+        with pytest.raises(KeyError, match="fetch_policy"):
             await tool.schemas(context)

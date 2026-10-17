@@ -48,11 +48,11 @@ async def cancel_task(
     metadata: Mapping[str, Any] | None = None,
 ) -> Task:
     """Cancel a task; ``metadata`` is forwarded to server-side handlers."""
-    async with open_session(config) as sdk:
+    async with open_session(config) as (sdk, call_context):
         kwargs = with_tenant(config, tenant, id=task_id)
         if metadata:
             kwargs["metadata"] = struct_from_dict(dict(metadata))
-        return await sdk.cancel_task(CancelTaskRequest(**kwargs))
+        return await sdk.cancel_task(CancelTaskRequest(**kwargs), context=call_context)
 
 
 async def get_task(
@@ -63,12 +63,12 @@ async def get_task(
     history_length: int | None = None,
 ) -> Task:
     """Fetch a task; ``history_length`` truncates ``task.history`` server-side."""
-    async with open_session(config) as sdk:
+    async with open_session(config) as (sdk, call_context):
         kwargs = with_tenant(config, tenant, id=task_id)
         history = _resolve_history(config, history_length)
         if history is not None:
             kwargs["history_length"] = history
-        return await sdk.get_task(GetTaskRequest(**kwargs))
+        return await sdk.get_task(GetTaskRequest(**kwargs), context=call_context)
 
 
 async def list_tasks(
@@ -89,7 +89,7 @@ async def list_tasks(
     server-reported pagination metadata. Iterate over the result or call
     ``.tasks`` for the list directly.
     """
-    async with open_session(config) as sdk:
+    async with open_session(config) as (sdk, call_context):
         kwargs = with_tenant(config, tenant)
         optional = {
             "context_id": context_id,
@@ -102,7 +102,7 @@ async def list_tasks(
         kwargs.update({k: v for k, v in optional.items() if v is not None})
         if include_artifacts:
             kwargs["include_artifacts"] = True
-        response = await sdk.list_tasks(ListTasksRequest(**kwargs))
+        response = await sdk.list_tasks(ListTasksRequest(**kwargs), context=call_context)
         return ListedTasks(
             tasks=list(response.tasks),
             next_page_token=response.next_page_token,

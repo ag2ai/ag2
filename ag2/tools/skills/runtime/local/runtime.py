@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from fast_depends.utils import run_in_threadpool
+
 from ag2.tools.sandbox import Sandbox, SandboxFactory
 from ag2.tools.sandbox.adapter import ShellAdapter
 from ag2.tools.sandbox.local import LocalSandbox
@@ -38,9 +40,9 @@ class LocalRuntime(SkillRuntime):
         timeout:     Per-command timeout in seconds. Defaults to 60.
         max_output:  Maximum characters returned from a script run. Defaults to 100,000.
         blocked:     Command prefixes that are not allowed to run. Empty list → nothing blocked.
-                     Best-effort only (matches the head command prefix; chaining such
-                     as ``;`` / ``|`` / ``&&`` / ``$(...)`` bypasses it) — not a security
-                     boundary.
+                     Matched word by word against the argv, which then runs without a
+                     shell. A script that runs another program (``sh -c``, ``env``)
+                     is not covered — not a security boundary on its own.
         extra_paths: Additional read-only directories to scan for skills.
                      Installed skills always go to *dir*; these paths are only
                      used for discovery.
@@ -98,11 +100,19 @@ class LocalRuntime(SkillRuntime):
     def skills(self) -> list[Skill]:
         return self._loader.discover()
 
-    def read(self, name: str) -> str:
+    async def read(self, name: str, context: "ConversationContext") -> str:
         """Return the model-ready content for *name* (wrapped SKILL.md body).
+
+        *context* is part of the runtime protocol (used by callable-backed runtimes
+        to render a dynamic body); a filesystem read ignores it.
 
         Raises ``SkillNotFoundError`` (via the loader) when *name* is unknown.
         """
+        # Discovery may scan the whole skills tree on a cold cache, so the
+        # filesystem work stays off the event loop.
+        return await run_in_threadpool(self._read, name)
+
+    def _read(self, name: str) -> str:
         skill = self._loader.get_skill(name)
         skill_dir = self._loader.get_path(name)
         # Body only: the frontmatter is already surfaced via the catalog.
@@ -115,6 +125,9 @@ class LocalRuntime(SkillRuntime):
         *context* is part of the runtime protocol (used by callable-backed runtimes
         for dependency injection); a filesystem read ignores it.
         """
+        return await run_in_threadpool(self._read_resource, name, resource)
+
+    def _read_resource(self, name: str, resource: str) -> str:
         skill = self._loader.get_skill(name)
         skill_dir = self._loader.get_path(name)
         resolved = _resolve_within(skill_dir / resource, skill_dir)
@@ -136,17 +149,17 @@ class LocalRuntime(SkillRuntime):
 
         *context* is part of the runtime protocol; a subprocess script ignores it.
         """
+        skill = self._loader.get_skill(name)
         if isinstance(args, dict):
             raise TypeError(
                 f"file-based script {script!r} requires positional string arguments (an array); "
                 "named arguments (an object) are only supported for in-process scripts"
             )
-        skill = self._loader.get_skill(name)
         scripts_dir = self._loader.get_path(name) / "scripts"
         resolved_script = _resolve_within(scripts_dir / script, scripts_dir)
         if script not in {s.name for s in skill.scripts} or resolved_script is None:
             raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
-        command = _script_command(resolved_script)
+        command = _script_command(resolved_script, resolved_script.relative_to(scripts_dir.resolve()))
         if args:
             command.extend(args)
         # async + await env.run(...) so the command runs in the agent's own
@@ -180,7 +193,9 @@ class LocalRuntime(SkillRuntime):
         self._install_dir.mkdir(parents=True, exist_ok=True)
 
     def install(self, source: Path, name: str) -> None:
-        dest = self._install_dir / name
+        dest = (self._install_dir / name).resolve()
+        if not dest.is_relative_to(self._install_dir.resolve()):
+            raise ValueError(f"Cannot install '{name}': path traversal detected")
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(source, dest)
@@ -226,22 +241,23 @@ def _resolve_within(path: Path, base: Path) -> Path | None:
     return resolved
 
 
-def _script_command(resolved_script: Path) -> list[str]:
-    """Build the argv to run *resolved_script* from its own directory.
+def _script_command(resolved_script: Path, relative_script: Path) -> list[str]:
+    """Build the argv to run *resolved_script* from the scripts directory.
 
     A shebang takes precedence; otherwise ``.py``/``.sh`` map to their
     interpreters, and anything else is made executable and run directly.
     """
+    script_arg = f"./{relative_script.as_posix()}"
     first_line = resolved_script.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
     if first_line.startswith("#!"):
         resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        return [f"./{resolved_script.name}"]
+        return [script_arg]
     if resolved_script.suffix.lower() == ".py":
-        return ["python3", f"./{resolved_script.name}"]
+        return ["python3", script_arg]
     if resolved_script.suffix.lower() == ".sh":
-        return ["sh", f"./{resolved_script.name}"]
+        return ["sh", script_arg]
     resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    return [f"./{resolved_script.name}"]
+    return [script_arg]
 
 
 def _wrap_skill_content(name: str, body: str, skill_dir: Path, skill: Skill) -> str:

@@ -21,12 +21,14 @@ import pytest
 from dirty_equals import IsPartialDict
 
 pytest.importorskip("ag_ui")
+from ag_ui.core import Context as AGUIContext
 from ag_ui.core import RunAgentInput
 
-from ag2 import Agent, Depends
+from ag2 import Agent, Context, Depends
 from ag2.a2ui import A2UIServer, a2ui_action
 from ag2.a2ui.transports import AgUiTransport
-from ag2.events import ModelRequest, TextInput
+from ag2.events import ModelMessage, ModelRequest, ModelResponse, TextInput, ToolCallEvent, Usage
+from ag2.middleware.base import BaseMiddleware
 from ag2.testing import TestConfig, TrackingConfig
 
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
@@ -233,3 +235,134 @@ async def test_invalid_body_returns_400() -> None:
 
     assert resp.status_code == 400
     assert "error" in resp.json()
+
+
+class _ExplodeAfterTheTurn(BaseMiddleware):
+    """Fail the turn once the model call behind it has been billed.
+
+    Stands in for the host-side failure a real deployment hits — a telemetry
+    sink or a persistence backend dying while handling the turn — which is what
+    reaches ``RUN_ERROR``. A tool raising does not: ag2 turns that into a tool
+    error and hands it back to the model, and the run completes.
+    """
+
+    async def on_turn(self, call_next: Any, event: Any, context: Any) -> Any:
+        await call_next(event, context)
+        raise RuntimeError("usage persistence backend is down")
+
+
+@pytest.mark.asyncio
+class TestTokenUsage:
+    """What this transport reports a turn cost, on both terminating events."""
+
+    async def test_run_finished_reports_what_the_turn_cost(self) -> None:
+        """A client must not have to know which AG-UI endpoint it reached.
+
+        ``ag2.ag_ui`` fills ``usage`` on both terminating events; this transport is
+        the second AG-UI surface and has to agree, or reported spend becomes a
+        property of the URL rather than of the run.
+        """
+        server = A2UIServer(
+            Agent(
+                name="ui",
+                config=TestConfig(
+                    ModelResponse(
+                        ModelMessage("Just text."),
+                        usage=Usage(prompt_tokens=120, completion_tokens=30, total_tokens=150),
+                        model="gpt-5",
+                        provider="openai",
+                    ),
+                ),
+            ),
+            transport=AgUiTransport(),
+            validate_responses=False,
+        )
+
+        events = await _dispatch_events(server, _run_input("hi"))
+
+        [finished] = [e for e in events if e["type"] == "RUN_FINISHED"]
+        assert finished["usage"] == [
+            {
+                "provider": "openai",
+                "model": "gpt-5",
+                "inputTokens": 120,
+                "outputTokens": 30,
+                "totalTokens": 150,
+            }
+        ]
+
+    async def test_run_error_reports_the_spend_that_preceded_it(self) -> None:
+        """The turn core owns the stream, so the records have to be collected live.
+
+        Reading them back after the fact is not available here, and a failed turn is
+        exactly the one whose cost an operator wants explained.
+        """
+        server = A2UIServer(
+            Agent(
+                name="ui",
+                config=TestConfig(
+                    ModelResponse(
+                        ModelMessage("Just text."),
+                        usage=Usage(prompt_tokens=120, completion_tokens=30, total_tokens=150),
+                        model="gpt-5",
+                        provider="openai",
+                    ),
+                ),
+                # Fails after the model call has already billed, which is the only
+                # ordering that makes a partial spend observable at all.
+                middleware=[_ExplodeAfterTheTurn],
+            ),
+            transport=AgUiTransport(),
+            validate_responses=False,
+        )
+
+        events = await _dispatch_events(server, _run_input("hi"))
+
+        types = [e["type"] for e in events]
+        assert types[-1] == "RUN_ERROR"
+        [error] = [e for e in events if e["type"] == "RUN_ERROR"]
+        assert error["usage"] == [
+            {
+                "provider": "openai",
+                "model": "gpt-5",
+                "inputTokens": 120,
+                "outputTokens": 30,
+                "totalTokens": 150,
+            }
+        ]
+
+    async def test_a_turn_that_spent_nothing_omits_usage(self) -> None:
+        """Absence means "nothing measured"; an empty list would mean "measured, and
+        it was nothing" — the same distinction the counts themselves keep."""
+        server = A2UIServer(
+            Agent(name="ui", config=TestConfig("Just text.")),
+            transport=AgUiTransport(),
+            validate_responses=False,
+        )
+
+        events = await _dispatch_events(server, _run_input("hi"))
+
+        [finished] = [e for e in events if e["type"] == "RUN_FINISHED"]
+        assert "usage" not in finished
+
+
+@pytest.mark.asyncio
+async def test_client_context_reaches_the_prompt() -> None:
+    seen: list[list[str]] = []
+    agent = Agent("ui", prompt="Be helpful.", config=TestConfig(ToolCallEvent(name="peek"), "done"))
+
+    @agent.tool
+    def peek(context: Context) -> str:
+        """Look at the prompt."""
+        seen.append(list(context.prompt))
+        return "seen"
+
+    server = A2UIServer(agent, transport=AgUiTransport(), validate_responses=False)
+    incoming = _run_input("hi")
+    incoming.context = [AGUIContext(description="The user's locale", value="en-GB")]
+
+    await _dispatch_events(server, incoming)
+
+    [prompt] = seen
+    assert prompt[0] == "Be helpful."
+    assert prompt[-1] == "## Context from the application\n\n- The user's locale: en-GB"

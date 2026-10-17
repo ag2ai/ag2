@@ -32,7 +32,13 @@ class AuthAdapter(Protocol):
     scheme: str
 
     async def validate(self, passport: Passport, claim: dict[str, Any]) -> None:
-        """Raise ``AuthError`` on failure; return ``None`` on success."""
+        """Raise ``AuthError`` on failure; return ``None`` on success.
+
+        The hub does not keep claims: at a ``HelloFrame`` re-attach,
+        ``passport`` is the stored one and ``passport.auth.claim`` is
+        always empty. Validate ``claim`` against the adapter's own
+        configured secrets, never against the passport's claim.
+        """
         ...
 
 

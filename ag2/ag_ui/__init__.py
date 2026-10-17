@@ -9,10 +9,30 @@ except ImportError as e:
 
 
 from .events import AGUIEvent
+from .interrupts import (
+    DEFAULT_RETENTION,
+    INPUT_REQUIRED_REASON,
+    NOT_COVERED,
+    NOT_PROVEN,
+    PAYLOAD_REFUSED,
+    TOOL_CALL_REASON,
+    UNSUPPORTED_PROTOCOL_VERSION,
+    Retention,
+)
+from .run_input import read_run_input
 from .stream import AGUIStream
 
 __all__ = (
+    "DEFAULT_RETENTION",
+    "INPUT_REQUIRED_REASON",
+    "NOT_COVERED",
+    "NOT_PROVEN",
+    "PAYLOAD_REFUSED",
+    "TOOL_CALL_REASON",
+    "UNSUPPORTED_PROTOCOL_VERSION",
     "AGUIEvent",
     "AGUIStream",
+    "Retention",
     "RunAgentInput",
+    "read_run_input",
 )

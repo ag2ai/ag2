@@ -87,7 +87,7 @@ class SkillsTool(Tool):
         # Anthropic: first-party skills, auto-adds CodeExecutionTool
         agent = Agent(
             name="analyst",
-            config=AnthropicConfig(model="claude-sonnet-4-6", ...),
+            config=AnthropicConfig(model="claude-sonnet-5", ...),
             tools=[SkillsTool("pptx", Skill("xlsx", version="latest"))],
         )
 

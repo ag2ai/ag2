@@ -4,7 +4,7 @@
 
 import json
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlparse
 
 from fast_depends.library.serializer import SerializerProto
@@ -25,7 +25,7 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
-from ag2.files.types import FileProvider
+from ag2.files.types import FileProvider, UploadedFile
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME, FileSearchToolSchema
@@ -39,7 +39,7 @@ from ag2.tools.schemas import ToolSchema
 from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
 
 
-def response_proto_to_config(response: ResponseProto | None) -> dict[str, Any]:
+def response_proto_to_config(response: ResponseProto | None) -> types.GenerateContentConfigDict:
     """Convert a ResponseProto to Gemini GenerateContentConfig kwargs."""
     if not response or not response.json_schema:
         return {}
@@ -87,7 +87,7 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     raw_type = str(params.get("type", "")).lower()
     if not params or raw_type in ("null", "none", ""):
         return {"type": "object", "properties": {}}
-    return _strip_additional_properties(params)
+    return cast(dict[str, Any], _strip_additional_properties(params))
 
 
 def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
@@ -106,10 +106,7 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
             )
 
         elif isinstance(t, WebSearchToolSchema):
-            gs_kwargs: dict[str, Any] = {}
-            if t.blocked_domains:
-                gs_kwargs["exclude_domains"] = t.blocked_domains
-            extra_tools.append(types.Tool(google_search=types.GoogleSearch(**gs_kwargs)))
+            extra_tools.append(types.Tool(google_search=types.GoogleSearch(exclude_domains=t.blocked_domains or None)))
 
         elif isinstance(t, WebFetchToolSchema):
             extra_tools.append(types.Tool(url_context=types.UrlContext()))
@@ -147,21 +144,41 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
     return result or None
 
 
-def build_tool_config(schemas: list[ToolSchema]) -> types.ToolConfig | None:
+#: Schemas ``build_tools`` maps onto Gemini's server-side (builtin) tools.
+SERVER_SIDE_SCHEMAS: tuple[type[ToolSchema], ...] = (
+    WebSearchToolSchema,
+    WebFetchToolSchema,
+    CodeExecutionToolSchema,
+    FileSearchToolSchema,
+    GoogleMapsToolSchema,
+)
+
+
+def build_tool_config(schemas: list[ToolSchema], *, vertexai: bool = False) -> types.ToolConfig | None:
     """Build a Gemini ToolConfig for schemas that require one.
 
-    Currently only Google Maps geo-biasing (lat/lng) needs a
-    ``retrieval_config``; returns ``None`` when nothing does.
+    Google Maps geo-biasing (lat/lng) needs a ``retrieval_config``.
+
+    Returns ``None`` when nothing needs a config.
     """
+    config: types.ToolConfig | None = None
+
     for t in schemas:
         if isinstance(t, GoogleMapsToolSchema) and t.latitude is not None and t.longitude is not None:
-            return types.ToolConfig(
-                retrieval_config=types.RetrievalConfig(
-                    lat_lng=types.LatLng(latitude=t.latitude, longitude=t.longitude),
-                    language_code=t.language_code,
-                )
+            config = config or types.ToolConfig()
+            config.retrieval_config = types.RetrievalConfig(
+                lat_lng=types.LatLng(latitude=t.latitude, longitude=t.longitude),
+                language_code=t.language_code,
             )
-    return None
+
+    mixes_server_side_with_functions = any(isinstance(t, SERVER_SIDE_SCHEMAS) for t in schemas) and any(
+        isinstance(t, FunctionToolSchema) for t in schemas
+    )
+    if mixes_server_side_with_functions and not vertexai:
+        config = config or types.ToolConfig()
+        config.include_server_side_tool_invocations = True
+
+    return config
 
 
 _URL_EXTENSION_TO_MIME: dict[str, str] = {
@@ -208,13 +225,27 @@ def _mime_from_url(url: str) -> str | None:
     return None
 
 
+def _media_resolution(value: Any) -> Any:
+    """Coerce a vendor_metadata ``media_resolution`` into the SDK's Part shape.
+
+    ``Part.media_resolution`` is a ``PartMediaResolution`` model, not a bare
+    enum, so a level given as a string (the documented form) has to be wrapped —
+    assigning it directly leaves the Part serializing to the wrong wire shape.
+    """
+    if isinstance(value, types.PartMediaResolution):
+        return value
+    if isinstance(value, dict):
+        return types.PartMediaResolution(**value)
+    return types.PartMediaResolution(level=value)
+
+
 def _apply_vendor_metadata(part: types.Part, metadata: dict[str, Any]) -> None:
     """Apply Gemini-specific vendor_metadata fields to a Part."""
     if not metadata:
         return
 
     if "media_resolution" in metadata:
-        part.media_resolution = metadata["media_resolution"]
+        part.media_resolution = _media_resolution(metadata["media_resolution"])
 
     if "video_metadata" in metadata:
         vm = metadata["video_metadata"]
@@ -242,9 +273,12 @@ def convert_messages(
             if message.message:
                 parts.append(types.Part.from_text(text=message.message.content))
             for call in message.tool_calls.calls:
-                fc_part = types.Part.from_function_call(
-                    name=call.name,
-                    args=json.loads(call.arguments or "{}"),
+                fc_part = types.Part(
+                    function_call=types.FunctionCall(
+                        id=call.id,
+                        name=call.name,
+                        args=json.loads(call.arguments or "{}"),
+                    ),
                 )
                 if isinstance(call, GeminiToolCallEvent) and call.thought_signature is not None:
                     fc_part.thought_signature = call.thought_signature
@@ -289,49 +323,56 @@ def convert_messages(
                     response_dict = {}
 
                 parts_list.append(
-                    types.Part.from_function_response(
-                        name=r.name or "",
-                        response=response_dict,
-                        parts=media_parts or None,
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            id=r.parent_id,
+                            name=r.name or "",
+                            response=response_dict,
+                            parts=media_parts or None,
+                        ),
                     )
                 )
             result.append(types.Content(role="user", parts=parts_list))
 
         elif isinstance(message, ModelRequest):
-            parts: list[types.Part] = []
+            request_parts: list[types.Part] = []
             for inp in message.parts:
                 if isinstance(inp, TextInput):
-                    parts.append(types.Part.from_text(text=inp.content))
+                    request_parts.append(types.Part.from_text(text=inp.content))
 
                 elif isinstance(inp, DataInput):
-                    parts.append(types.Part.from_text(text=serializer.encode(inp.data).decode()))
+                    request_parts.append(types.Part.from_text(text=serializer.encode(inp.data).decode()))
 
                 elif isinstance(inp, UrlInput):
                     mime = _mime_from_url(inp.url)
                     if mime is not None:
-                        parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
+                        request_parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
                     else:
-                        parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
+                        request_parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
 
                 elif isinstance(inp, FileIdInput):
-                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.GEMINI:
+                    if (
+                        isinstance(inp, UploadedFile)
+                        and inp.provider is not None
+                        and inp.provider is not FileProvider.GEMINI
+                    ):
                         raise UnsupportedInputError(
-                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
+                            f"file uploaded via '{inp.provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
                             "gemini",
                         )
                     file_uri = f"https://generativelanguage.googleapis.com/v1beta/{inp.file_id}"
-                    parts.append(types.Part(file_data=types.FileData(file_uri=file_uri)))
+                    request_parts.append(types.Part(file_data=types.FileData(file_uri=file_uri)))
 
                 elif isinstance(inp, BinaryInput):
-                    part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
-                    _apply_vendor_metadata(part, inp.vendor_metadata)
-                    parts.append(part)
+                    binary_part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
+                    _apply_vendor_metadata(binary_part, inp.vendor_metadata)
+                    request_parts.append(binary_part)
 
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "gemini")
 
-            if parts:
-                result.append(types.Content(role="user", parts=parts))
+            if request_parts:
+                result.append(types.Content(role="user", parts=request_parts))
 
         elif isinstance(message, CompactionSummary):
             # Surface the summary as a user turn so it stays visible and gives a valid opening turn
@@ -341,13 +382,23 @@ def convert_messages(
     return result
 
 
-def normalize_usage(metadata: Any) -> Usage:
+def normalize_usage(metadata: types.GenerateContentResponseUsageMetadata) -> Usage:
     """Build usage from Gemini UsageMetadata, normalizing to standard keys."""
 
     cache_read = _to_float(metadata.cached_content_token_count) or None
+    # Read through getattr although the annotation declares the field: test_gemini_usage pins
+    # the behaviour for a google-genai below the declared floor, where it is absent.
     thinking = _to_float(getattr(metadata, "thoughts_token_count", None)) or None
+    # Tokens a tool's output put into the prompt (grounding, code execution) are
+    # billed as prompt but counted apart, and the total counts them: leaving
+    # them out would put prompt plus completion below it. Absent before
+    # google-genai added the field, like `thoughts_token_count`.
+    prompt = _to_float(metadata.prompt_token_count)
+    tool_use_prompt = _to_float(getattr(metadata, "tool_use_prompt_token_count", None))
+    if tool_use_prompt is not None:
+        prompt = (prompt or 0.0) + tool_use_prompt
     return Usage(
-        prompt_tokens=_to_float(metadata.prompt_token_count),
+        prompt_tokens=prompt,
         completion_tokens=_to_float(metadata.candidates_token_count),
         total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,

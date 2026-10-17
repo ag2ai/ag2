@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -35,6 +36,7 @@ from ag2.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolErrorEvent,
     ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
@@ -65,6 +67,10 @@ def _matching_tool_result(content: str = "ok") -> ToolResultsEvent:
             )
         ],
     )
+
+
+def _tool_results(result: ToolResult) -> ToolResultsEvent:
+    return ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t", result=result)])
 
 
 class TestConvertMessagesEmptyArguments:
@@ -180,6 +186,72 @@ class TestImageBinaryInput:
             })
         ]
 
+    @pytest.mark.parametrize("media_type", ["image/bmp", "image/tiff", "image/heic", "image/svg+xml"])
+    def test_rejects_media_type_the_api_refuses(self, media_type: str) -> None:
+        # The API answers these with `media_type: Input should be 'image/jpeg', 'image/png', 'image/gif' or 'image/webp'`.
+        with pytest.raises(UnsupportedInputError, match=f"media_type={re.escape(media_type)}.*anthropic"):
+            convert_messages([ModelRequest([ImageInput(data=self.SAMPLE_BYTES, media_type=media_type)])], SerializerCls)
+
+    def test_rejects_citations(self) -> None:
+        # The API answers `image.citations: Extra inputs are not permitted`.
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="image/png",
+            vendor_metadata={"citations": {"enabled": True}},
+            kind=BinaryType.IMAGE,
+        )
+
+        with pytest.raises(UnsupportedInputError, match="citations.*anthropic"):
+            convert_messages([ModelRequest([image])], SerializerCls)
+
+    def test_citations_none_reads_as_unset(self) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES, media_type="image/png", vendor_metadata={"citations": None}, kind=BinaryType.IMAGE
+        )
+
+        result = convert_messages([ModelRequest([image])], SerializerCls)
+
+        assert result == [{"role": "user", "content": [IsPartialDict({"type": "image"})]}]
+
+    def test_rejects_cache_control_the_api_refuses(self) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="image/png",
+            vendor_metadata={"cache_control": {"type": "persistent"}},
+            kind=BinaryType.IMAGE,
+        )
+
+        with pytest.raises(UnsupportedInputError, match="cache_control.*anthropic"):
+            convert_messages([ModelRequest([image])], SerializerCls)
+
+    @pytest.mark.parametrize("ttl", ["24h", ["5m"], {"value": "5m"}])
+    def test_rejects_cache_control_ttl_the_api_refuses(self, ttl: object) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="image/png",
+            vendor_metadata={"cache_control": {"type": "ephemeral", "ttl": ttl}},
+            kind=BinaryType.IMAGE,
+        )
+
+        with pytest.raises(UnsupportedInputError, match="cache_control.*anthropic"):
+            convert_messages([ModelRequest([image])], SerializerCls)
+
+    def test_cache_control_ttl_passes_through(self) -> None:
+        image = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="image/png",
+            vendor_metadata={"cache_control": {"type": "ephemeral", "ttl": "1h"}},
+            kind=BinaryType.IMAGE,
+        )
+
+        result = convert_messages([ModelRequest([image])], SerializerCls)
+
+        assert result == [
+            IsPartialDict({
+                "content": [IsPartialDict({"type": "image", "cache_control": {"type": "ephemeral", "ttl": "1h"}})],
+            })
+        ]
+
     def test_vendor_metadata_filename_filtered_out(self) -> None:
         result = convert_messages(
             [
@@ -263,6 +335,48 @@ class TestDocumentBinaryInput:
                 "content": [IsPartialDict({"type": "document", "cache_control": {"type": "ephemeral"}})],
             })
         ]
+
+    def test_citations_pass_through(self) -> None:
+        document = BinaryInput(
+            data=self.SAMPLE_BYTES,
+            media_type="application/pdf",
+            vendor_metadata={"citations": {"enabled": True}},
+            kind=BinaryType.DOCUMENT,
+        )
+
+        result = convert_messages([ModelRequest([document])], SerializerCls)
+
+        assert result == [
+            IsPartialDict({"content": [IsPartialDict({"type": "document", "citations": {"enabled": True}})]})
+        ]
+
+    def test_plain_text_travels_as_a_text_source(self) -> None:
+        # A base64 `text/plain` source is answered `media_type: Input should be 'application/pdf'`.
+        result = convert_messages(
+            [ModelRequest([DocumentInput(data=b"The word is PELICAN.", media_type="text/plain")])],
+            SerializerCls,
+        )
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {"type": "text", "media_type": "text/plain", "data": "The word is PELICAN."},
+                    }
+                ],
+            }
+        ]
+
+    def test_plain_text_that_is_not_utf8_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="text/plain.*anthropic"):
+            convert_messages([ModelRequest([DocumentInput(data=b"\xff\xfe", media_type="text/plain")])], SerializerCls)
+
+    @pytest.mark.parametrize("media_type", ["text/csv", "text/markdown", "application/json"])
+    def test_rejects_media_type_the_api_refuses(self, media_type: str) -> None:
+        with pytest.raises(UnsupportedInputError, match=f"media_type={re.escape(media_type)}.*anthropic"):
+            convert_messages([ModelRequest([DocumentInput(data=b"x", media_type=media_type)])], SerializerCls)
 
 
 class TestFileIdInput:
@@ -568,6 +682,33 @@ class TestToolResult:
             }
         ]
 
+    def test_plain_text_document_travels_as_a_text_source(self) -> None:
+        result = convert_messages(
+            [_tool_results(ToolResult(DocumentInput(data=b"PELICAN", media_type="text/plain")))], SerializerCls
+        )
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "tc_1",
+                        "content": [
+                            {
+                                "type": "document",
+                                "source": {"type": "text", "media_type": "text/plain", "data": "PELICAN"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+
+    def test_image_media_type_the_api_refuses_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="media_type=image/bmp.*anthropic"):
+            convert_messages([_tool_results(ToolResult(ImageInput(data=b"BM", media_type="image/bmp")))], SerializerCls)
+
     def test_audio_in_tool_result_raises(self) -> None:
         event = ToolResultsEvent(
             results=[
@@ -868,6 +1009,8 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
                     "type": "tool_result",
                     "tool_use_id": "tc_1",
                     "content": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n",
+                    # ToolNotFoundEvent is a ToolErrorEvent: the model must see a failure.
+                    "is_error": True,
                 }
             ],
         }
@@ -880,3 +1023,176 @@ def test_compaction_summary_renders_as_user_turn() -> None:
     result = convert_messages([summary], SerializerCls)
 
     assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]
+
+
+class TestLooseToolResultEvent:
+    """A ToolResultEvent that arrives without its ToolResultsEvent wrapper.
+
+    mappers.py handles this because the wrapper can fail to persist; the
+    fallback must render the same block the wrapped path does.
+    """
+
+    PNG = b"\x89PNG\r\n"
+
+    def test_text_result_renders(self) -> None:
+        events = [
+            _model_response_with_tool_call('{"n": 1}'),
+            ToolResultEvent(parent_id="tc_1", result=ToolResult("ok")),
+        ]
+
+        assert convert_messages(events, SerializerCls)[-1] == {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok"}],
+        }
+
+    def test_non_text_parts_render_like_the_wrapped_path(self) -> None:
+        image = ImageInput(data=self.PNG, media_type="image/png")
+        wrapped = convert_messages(
+            [
+                _model_response_with_tool_call(None),
+                ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", result=ToolResult(image))]),
+            ],
+            SerializerCls,
+        )
+        loose = convert_messages(
+            [_model_response_with_tool_call(None), ToolResultEvent(parent_id="tc_1", result=ToolResult(image))],
+            SerializerCls,
+        )
+
+        assert loose == wrapped
+
+    def test_tool_error_event_renders(self) -> None:
+        error = ToolErrorEvent.from_call(ToolCallEvent(id="tc_1", name="list_items"), ValueError("boom"))
+        events = [_model_response_with_tool_call(None), error]
+
+        assert convert_messages(events, SerializerCls)[-1] == {
+            "role": "user",
+            "content": [
+                {"type": "tool_result", "tool_use_id": "tc_1", "content": "ValueError: boom\n", "is_error": True}
+            ],
+        }
+
+    def test_wrapper_still_wins_when_both_are_present(self) -> None:
+        loose = ToolResultEvent(parent_id="tc_1", result=ToolResult("ok"))
+        events = [_model_response_with_tool_call(None), loose, _matching_tool_result()]
+
+        results = [m for m in convert_messages(events, SerializerCls) if m["role"] == "user"]
+        assert len(results) == 1
+
+
+class TestToolErrorIsError:
+    """A failed tool must reach the model as ``is_error``, not as a successful result."""
+
+    def test_error_sets_is_error(self) -> None:
+        error = ToolErrorEvent.from_call(ToolCallEvent(id="tc_1", name="t"), ValueError("boom"))
+
+        assert convert_messages([ToolResultsEvent(results=[error])], SerializerCls) == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "tc_1", "content": "ValueError: boom\n", "is_error": True}
+                ],
+            }
+        ]
+
+    def test_success_has_no_is_error(self) -> None:
+        ok = ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("fine"))
+
+        assert convert_messages([ToolResultsEvent(results=[ok])], SerializerCls) == [
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "fine"}]}
+        ]
+
+    def test_loose_error_sets_is_error(self) -> None:
+        error = ToolErrorEvent.from_call(ToolCallEvent(id="tc_1", name="list_items"), ValueError("boom"))
+
+        assert convert_messages([_model_response_with_tool_call(None), error], SerializerCls)[-1] == {
+            "role": "user",
+            "content": [IsPartialDict({"tool_use_id": "tc_1", "is_error": True})],
+        }
+
+
+class TestToolUseVendorMetadata:
+    """``caller`` and ``toolset_name`` ride on ToolCallEvent.vendor_metadata.
+
+    ``caller`` says whether the model asked directly or a server tool did (the
+    ``allowed_callers`` feature of ``bash_20250124``). ``toolset_name`` is
+    mandatory on the way back for a browser/computer member tool: the API answers
+    400 "a tool_result answering a member tool_use must carry the paired
+    tool_use's toolset_name". Both round-trip cleanly (verified live).
+    """
+
+    def _response(self, **vendor: object) -> ModelResponse:
+        return ModelResponse(
+            message=None,
+            tool_calls=ToolCallsEvent(
+                calls=[ToolCallEvent(id="tc_1", name="navigate", arguments="{}", vendor_metadata=dict(vendor))],
+            ),
+        )
+
+    def test_caller_replays_on_the_tool_use(self) -> None:
+        events = [
+            self._response(caller={"type": "code_execution_20250825", "tool_id": "srvtoolu_1"}),
+            _matching_tool_result(),
+        ]
+
+        assert convert_messages(events, SerializerCls)[0] == {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "tc_1",
+                    "name": "navigate",
+                    "input": {},
+                    "caller": {"type": "code_execution_20250825", "tool_id": "srvtoolu_1"},
+                }
+            ],
+        }
+
+    def test_toolset_name_replays_on_both_sides(self) -> None:
+        events = [self._response(toolset_name="browser"), _matching_tool_result()]
+
+        assert convert_messages(events, SerializerCls) == [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "tool_use", "id": "tc_1", "name": "navigate", "input": {}, "toolset_name": "browser"}
+                ],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok", "toolset_name": "browser"}],
+            },
+        ]
+
+    def test_empty_toolset_name_is_read_the_same_on_both_sides(self) -> None:
+        events = [self._response(toolset_name=""), _matching_tool_result()]
+
+        use, result = convert_messages(events, SerializerCls)
+
+        assert use["content"] == [IsPartialDict({"type": "tool_use", "toolset_name": ""})]
+        assert result["content"] == [IsPartialDict({"type": "tool_result", "toolset_name": ""})]
+
+    def test_caller_the_sdk_does_not_model_raises(self) -> None:
+        events = [self._response(caller={"type": "somebody_else"}), _matching_tool_result()]
+
+        with pytest.raises(UnsupportedInputError, match="caller.*anthropic"):
+            convert_messages(events, SerializerCls)
+
+    def test_toolset_name_that_is_not_a_string_raises(self) -> None:
+        events = [self._response(toolset_name=["browser"]), _matching_tool_result()]
+
+        with pytest.raises(UnsupportedInputError, match="toolset_name.*anthropic"):
+            convert_messages(events, SerializerCls)
+
+    def test_orphan_with_a_bad_toolset_name_is_still_dropped(self) -> None:
+        orphan = self._response(toolset_name=["browser"])
+
+        assert convert_messages([orphan], SerializerCls) == []
+
+    def test_nothing_added_when_absent(self) -> None:
+        events = [self._response(), _matching_tool_result()]
+
+        assert convert_messages(events, SerializerCls) == [
+            {"role": "assistant", "content": [{"type": "tool_use", "id": "tc_1", "name": "navigate", "input": {}}]},
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok"}]},
+        ]

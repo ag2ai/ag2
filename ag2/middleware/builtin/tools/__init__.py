@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .approval import approval_required
+from .approval import ApprovalRequired, approval_required
 
-__all__ = ("approval_required",)
+__all__ = (
+    "ApprovalRequired",
+    "approval_required",
+)

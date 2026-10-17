@@ -108,7 +108,7 @@ All six built-ins are importable from `#!python ag2.policies`.
 
 ### ConversationPolicy
 
-Keeps only conversation and tool events (`ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `ToolResultsEvent`, `ToolErrorEvent`, plus `CompactionSummary`). Drops alerts, lifecycle events, observer output — anything the LLM does not need to see.
+Keeps only conversation and tool events (`ModelRequest`, `ModelResponse`, `ToolCallEvent`, `ToolResultEvent`, `ToolResultsEvent`, `ToolErrorEvent`, plus `CompactionSummary`), and whatever provider-native state the configured provider needs replayed with them. Drops alerts, lifecycle events, observer output — anything the LLM does not need to see.
 
 ```python linenums="1"
 from ag2.policies import ConversationPolicy
@@ -116,11 +116,11 @@ from ag2.policies import ConversationPolicy
 policy = ConversationPolicy()
 ```
 
-Takes no arguments. Effectively an allowlist — add a new event type to the stream and it is filtered out by default.
+Takes no arguments. Effectively an allowlist — add a new event type to the stream and it is filtered out by default, unless a provider marked it as state it needs back.
 
 ### SlidingWindowPolicy
 
-Keeps only the last `max_events` events. Skips leading orphaned `ToolResultsEvent` entries so the window never starts on an unmatched tool result.
+Keeps the last `max_events` events, minus whatever the cut orphaned — see [Reduction limits are targets](/docs/user-guide/advanced/assembly#reduction-limits-are-targets).
 
 ```python linenums="1"
 from ag2.policies import SlidingWindowPolicy
@@ -128,7 +128,7 @@ from ag2.policies import SlidingWindowPolicy
 policy = SlidingWindowPolicy(max_events=50, transparent=True)
 ```
 
-Set `transparent=True` to append a prompt note like `"[sliding_window] Showing last 50 of 123 events."` — useful while tuning.
+Set `transparent=True` to append a prompt note like `"[sliding_window] Showing last 50 of 123 events."` — useful while tuning. The count in that note is the window actually sent, so it is the cheapest way to see the target being missed.
 
 ### TokenBudgetPolicy
 
@@ -139,6 +139,8 @@ from ag2.policies import TokenBudgetPolicy
 
 policy = TokenBudgetPolicy(max_tokens=32_000, chars_per_token=4, transparent=True)
 ```
+
+The budget is a target for the same reason the window is — see [Reduction limits are targets](/docs/user-guide/advanced/assembly#reduction-limits-are-targets).
 
 ### AlertPolicy
 
@@ -188,6 +190,24 @@ policy = EpisodicMemoryPolicy(max_episodes=5, transparent=True)
 ```
 
 Also requires a `KnowledgeStore` in `#!python context.dependencies`; a no-op otherwise.
+
+## Reduction limits are targets
+
+`max_events` and `max_tokens` are targets, not guarantees. This applies to `SlidingWindowPolicy` and `TokenBudgetPolicy` here, and equally to the [`HistoryLimiter` and `TokenLimiter`](/docs/user-guide/middleware) middleware, which reduce history the same way.
+
+A reduction cuts history at an index and sends everything after it, and a provider only accepts that tail if it can stand on its own. Four retained events cannot:
+
+| Retained event | Needs | If the cut dropped it |
+|---|---|---|
+| a tool result | the call it answers | orphaned `function_call_output` |
+| a builtin (server-side) call | its reasoning item | orphaned `web_search_call` |
+| a response carrying tool calls | the provider turn item recording them | the turn replays text-only, tool calls gone |
+| a bare call event | the `ModelResponse` announcing it | maps to no provider item at all |
+
+Anything left orphaned is dropped from the window, so the retained span can come out **smaller** than the limit. And if dropping the orphans would empty the span, the cut retreats until the span holds something sendable — so a limit narrower than the turn it lands in comes out **larger** than asked. Overshooting a limit is recoverable; an empty request is rejected outright.
+
+!!! note
+    This is why a reduction policy can appear to ignore its limit on turns that use builtin tools: one reasoning item anchors the whole group of server-side calls behind it, and that group only replays intact. Set `transparent=True` to see the size actually sent.
 
 ## A realistic chain
 

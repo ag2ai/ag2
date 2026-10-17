@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from google.genai import types
 
 from ag2.config.gemini.files import GeminiFilesClient
 from ag2.files.types import FileContent, FileProvider, UploadedFile
@@ -43,7 +44,7 @@ class TestGeminiFilesClient:
     ) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client
-        mock_client.aio.files.upload.return_value = SimpleNamespace(name="files/x", size_bytes=3)
+        mock_client.aio.files.upload.return_value = types.File(name="files/x", size_bytes=3)
 
         await GeminiFilesClient(gemini_config).upload(b"abc", "blob.unknownext")
 
@@ -120,3 +121,12 @@ class TestGeminiFilesClient:
         await GeminiFilesClient(gemini_config).delete("files/abc123")
 
         mock_client.aio.files.delete.assert_awaited_once_with(name="files/abc123")
+
+    @patch("ag2.config.gemini.files.genai")
+    async def test_upload_rejects_a_file_without_a_name(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
+        mock_client = AsyncMock()
+        mock_genai.Client.return_value = mock_client
+        mock_client.aio.files.upload.return_value = SimpleNamespace(name=None, size_bytes=512, create_time=None)
+
+        with pytest.raises(ValueError, match="no resource name"):
+            await GeminiFilesClient(gemini_config).upload(b"audio-data", "recording.mp3")

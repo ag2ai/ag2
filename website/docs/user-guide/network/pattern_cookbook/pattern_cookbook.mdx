@@ -9,6 +9,21 @@ AG2 `#!python WorkflowAdapter`. Each pattern lists the classic primitives
 it used, an AG2 translation, the full runnable source, and any gaps
 that don't yet have a clean equivalent.
 
+## Running these examples
+
+Each page's source is runnable as written. Install ag2 with the extra for the
+provider the snippet configures — `anthropic` for most of them, `openai` or
+`gemini` for the rest — plus `python-dotenv`, which the snippets use to read
+the provider's API key out of a local `.env` file:
+
+```bash
+pip install "ag2[anthropic]" python-dotenv
+```
+
+`python-dotenv` is not a dependency of ag2 itself; drop the
+`#!python load_dotenv()` call if the key is already exported in the
+environment.
+
 ## Status Legend
 
 | Status | Meaning |

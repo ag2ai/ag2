@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
+from a2a.server.cluster import TaskEventStream, VersionedTaskStore
 from a2a.server.tasks import (
     InMemoryTaskStore,
     PushNotificationConfigStore,
@@ -18,17 +19,18 @@ from ag2.agent import Agent
 
 from .card import build_card
 from .executor import AgentExecutor
+from .extension import AG2_INPUT_MODES
+from .transports import build_grpc_server, build_jsonrpc_asgi, build_rest_asgi
 from .transports._common import (
     DEFAULT_AGENT_CARD_PATH,
     LEGACY_AGENT_CARD_PATH,
     CardModifier,
+    CardSigner,
     ExtendedCardModifier,
 )
-from .transports.grpc import build_grpc_server
-from .transports.jsonrpc import build_jsonrpc_asgi
-from .transports.rest import build_rest_asgi
 
 if TYPE_CHECKING:
+    import grpc
     from grpc.aio import Server
     from starlette.applications import Starlette
 
@@ -51,17 +53,45 @@ class A2AServer:
 
     A2A spec doesn't define middleware — attach cross-cutting concerns
     (CORS, auth, tracing) to the returned transport object directly.
+
+    Cluster mode: pass a ``VersionedTaskStore`` together with an
+    ``event_stream`` (for example the SDK's ``VersionedDatabaseTaskStore``
+    and ``DatabaseTaskEventStream`` over one engine) and any replica can
+    answer ``GetTask`` or stream a task another replica runs. The two go
+    together — a versioned store without a stream, or a stream without a
+    versioned store, raises ``ValueError``. Push config store and push
+    sender stay per-replica state.
+
+    ``card_signer`` (from :func:`a2a.utils.signing.create_agent_card_signer`)
+    signs every served card; per-request modifier outputs are re-signed
+    automatically, and the card is always signed after AG2 derives its
+    capability flags onto it. Passing an already-signed ``card`` to a
+    ``build_*`` method without a ``card_signer`` raises
+    ``A2AStaleCardSignatureError`` if AG2 would have to flip a capability
+    flag on it, since that would invalidate the signature already there.
+
+    ``validate_input_modes`` makes the SDK reject a message part whose media
+    type is not in the card's ``default_input_modes`` or a skill's
+    ``input_modes``. The default card declares the ``vnd.ag2`` types and the
+    media types the agent's model accepts, so AG2 clients keep working; a custom
+    ``card`` must declare the ``vnd.ag2`` types too.
+    ``build_jsonrpc`` / ``build_rest`` take ``card_cache_control`` to set
+    ``Cache-Control`` on the card route.
     """
 
     __slots__ = (
         "_agent",
         "_card_modifier",
+        "_card_signer",
+        "_event_stream",
         "_executor",
         "_extended_card",
         "_extended_card_modifier",
         "_push_config_store",
         "_push_sender",
+        "_push_url_validator",
         "_task_store",
+        "_validate_input_modes",
     )
 
     def __init__(
@@ -71,21 +101,45 @@ class A2AServer:
         extended_card: AgentCard | None = None,
         card_modifier: CardModifier | None = None,
         extended_card_modifier: ExtendedCardModifier | None = None,
-        task_store: TaskStore | None = None,
+        card_signer: CardSigner | None = None,
+        task_store: TaskStore | VersionedTaskStore | None = None,
+        event_stream: TaskEventStream | None = None,
         push_config_store: PushNotificationConfigStore | None = None,
         push_sender: PushNotificationSender | None = None,
+        push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
         executor: A2AAgentExecutorBase | None = None,
+        validate_input_modes: bool = False,
     ) -> None:
+        if push_url_validator is not None and push_config_store is None:
+            raise ValueError(
+                "push_url_validator has no effect without push_config_store: "
+                "push notifications are disabled until a store is provided."
+            )
+        versioned = isinstance(task_store, VersionedTaskStore)
+        if versioned and event_stream is None:
+            raise ValueError(
+                "a versioned task store needs an event_stream: without one, streaming works only on the "
+                "replica that runs the task. Pass event_stream=, e.g. DatabaseTaskEventStream(engine)."
+            )
+        if event_stream is not None and not versioned:
+            raise ValueError(
+                "event_stream requires a versioned task_store (a VersionedTaskStore, e.g. "
+                "VersionedDatabaseTaskStore(engine)): the stream orders events by task version."
+            )
         self._agent = agent
         self._extended_card = extended_card
         self._card_modifier = card_modifier
         self._extended_card_modifier = extended_card_modifier
+        self._card_signer = card_signer
         # Materialise the store eagerly so multi-transport setups (same
         # server exposed via JSON-RPC + REST + gRPC) all share one task
         # store. Otherwise each builder defaults to its own.
         self._task_store = task_store or InMemoryTaskStore()
+        self._event_stream = event_stream
         self._push_config_store = push_config_store
         self._push_sender = push_sender
+        self._push_url_validator = push_url_validator
+        self._validate_input_modes = validate_input_modes
         # ``executor`` is escape-hatch for tests / advanced use cases that
         # need a custom ``AgentExecutor``. Default wraps the supplied agent.
         self._executor = executor if executor is not None else AgentExecutor(agent)
@@ -99,9 +153,14 @@ class A2AServer:
         return self._extended_card
 
     @property
-    def task_store(self) -> TaskStore:
+    def task_store(self) -> TaskStore | VersionedTaskStore:
         """The shared task store used across all transport builders."""
         return self._task_store
+
+    @property
+    def event_stream(self) -> TaskEventStream | None:
+        """The shared cross-replica event stream, or ``None`` outside cluster mode."""
+        return self._event_stream
 
     def _shared_kwargs(self, *, include_card_modifier: bool) -> dict[str, Any]:
         """Wiring shared by every ``build_*`` method.
@@ -112,13 +171,33 @@ class A2AServer:
             "agent_executor": self._executor,
             "extended_agent_card": self._extended_card,
             "extended_card_modifier": self._extended_card_modifier,
+            "card_signer": self._card_signer,
             "task_store": self._task_store,
+            "event_stream": self._event_stream,
             "push_config_store": self._push_config_store,
             "push_sender": self._push_sender,
+            "push_url_validator": self._push_url_validator,
+            "validate_input_modes": self._validate_input_modes,
         }
         if include_card_modifier:
             kwargs["card_modifier"] = self._card_modifier
         return kwargs
+
+    def _check_input_modes(self, card: AgentCard | None) -> None:
+        """Reject a caller-supplied card that would make validation turn AG2 clients away."""
+        if card is None or not self._validate_input_modes:
+            return
+        declared = set(card.default_input_modes)
+        for skill in card.skills:
+            declared.update(skill.input_modes)
+        # An empty declaration is an absent one: the SDK accepts everything.
+        missing = set(AG2_INPUT_MODES) - declared
+        if declared and missing:
+            raise ValueError(
+                "validate_input_modes=True would reject AG2 clients: the card does not declare "
+                f"{sorted(missing)} as input modes. Build the card with build_card(), or add them to "
+                "default_input_modes."
+            )
 
     def build_jsonrpc(
         self,
@@ -128,8 +207,10 @@ class A2AServer:
         rpc_url: str = "/",
         card_url: str = DEFAULT_AGENT_CARD_PATH,
         legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
+        card_cache_control: str | None = None,
     ) -> "Starlette":
         """Starlette ASGI app exposing JSON-RPC routes + agent card."""
+        self._check_input_modes(card)
         resolved_card = card or build_card(
             self._agent,
             url=url,
@@ -141,6 +222,7 @@ class A2AServer:
             rpc_url=rpc_url,
             card_url=card_url,
             legacy_card_url=legacy_card_url,
+            card_cache_control=card_cache_control,
             **self._shared_kwargs(include_card_modifier=True),
         )
 
@@ -152,12 +234,14 @@ class A2AServer:
         path_prefix: str = "",
         card_url: str = DEFAULT_AGENT_CARD_PATH,
         legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
+        card_cache_control: str | None = None,
     ) -> "Starlette":
         """Starlette ASGI app exposing REST routes + agent card.
 
         ``path_prefix`` mounts REST under a sub-path (e.g. ``"/v1"``); both
         the AgentCard interface URL and the dispatcher respect it.
         """
+        self._check_input_modes(card)
         resolved_card = card or build_card(
             self._agent,
             url=url,
@@ -170,28 +254,33 @@ class A2AServer:
             path_prefix=path_prefix,
             card_url=card_url,
             legacy_card_url=legacy_card_url,
+            card_cache_control=card_cache_control,
             **self._shared_kwargs(include_card_modifier=True),
         )
 
-    def build_grpc(
+    def build_grpc(  # type: ignore[no-any-unimported]
         self,
         *,
         bind: str,
         grpc_url: str,
         card: AgentCard | None = None,
         options: Sequence[tuple[str, Any]] = (),
+        server_credentials: "grpc.ServerCredentials | None" = None,
     ) -> "Server":
         """``grpc.aio.Server`` bound to ``bind``; caller starts/awaits it.
 
         ``bind`` is the listener address (e.g. ``"0.0.0.0:50051"``).
         ``grpc_url`` is the public URL clients will connect to (used in
         the AgentCard interface entry — usually identical to ``bind``,
-        but not when behind a load balancer). Insecure binding only.
+        but not when behind a load balancer). Binding is insecure by default;
+        pass ``server_credentials`` (for example, from
+        ``grpc.ssl_server_credentials(...)``) to enable TLS.
 
         ``card_modifier`` does not apply: A2A v1.x has no ``GetAgentCard``
         gRPC method — the public card is served over HTTP only.
         ``extended_card_modifier`` does apply (gRPC has ``GetExtendedAgentCard``).
         """
+        self._check_input_modes(card)
         resolved_card = card or build_card(
             self._agent,
             url=grpc_url,
@@ -203,5 +292,6 @@ class A2AServer:
             agent_card=resolved_card,
             bind=bind,
             options=options,
+            server_credentials=server_credentials,
             **self._shared_kwargs(include_card_modifier=False),
         )

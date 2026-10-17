@@ -14,6 +14,7 @@ from .base import (
     ToolResultType,
 )
 from .builtin import (
+    ApprovalRequired,
     HistoryLimiter,
     LoggingMiddleware,
     MetricsMiddleware,
@@ -22,17 +23,22 @@ from .builtin import (
     TokenLimiter,
     approval_required,
 )
+from .describe import DescribableMiddleware, DescribedMiddleware, MiddlewareDescription
 
 __all__ = (
     "AgentTurn",
+    "ApprovalRequired",
     "BaseMiddleware",
     "ConditionalMiddleware",
+    "DescribableMiddleware",
+    "DescribedMiddleware",
     "HistoryLimiter",
     "HumanInputHook",
     "LLMCall",
     "LoggingMiddleware",
     "MetricsMiddleware",
     "Middleware",
+    "MiddlewareDescription",
     "RetryMiddleware",
     "TelemetryMiddleware",
     "TokenLimiter",

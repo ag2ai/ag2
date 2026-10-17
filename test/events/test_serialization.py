@@ -6,12 +6,13 @@
 
 import datetime
 from dataclasses import dataclass
+from enum import Enum
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import BaseModel
 
-from ag2.events import BaseEvent, ModelMessage, ToolCallEvent
+from ag2.events import BaseEvent, BinaryInput, BinaryType, ModelMessage, ModelRequest, ToolCallEvent
 from ag2.events._serialization import (
     deserialize_value,
     import_event_class,
@@ -83,6 +84,27 @@ class TestUUID:
         assert isinstance(result, UUID)
 
 
+class _SamplePriority(Enum):
+    LOW = 1
+    HIGH = 2
+
+
+class TestEnum:
+    def test_str_enum_round_trip_preserves_identity(self) -> None:
+        # str-enums compare equal to their value, so assert identity, not equality:
+        # a degraded "image" string would pass `==` but fail `is` (see #3084).
+        result = _round_trip(BinaryType.IMAGE)
+        assert result is BinaryType.IMAGE
+
+    def test_plain_enum_round_trip(self) -> None:
+        result = _round_trip(_SamplePriority.HIGH)
+        assert result is _SamplePriority.HIGH
+
+    def test_enum_inside_dict(self) -> None:
+        result = _round_trip({"kind": BinaryType.DOCUMENT})
+        assert result["kind"] is BinaryType.DOCUMENT
+
+
 @dataclass
 class _SamplePoint:
     x: int
@@ -150,3 +172,13 @@ class TestEventRoundTrip:
         assert isinstance(result, ToolCallEvent)
         assert result.name == "search"
         assert result.arguments == '{"q": "ag2"}'
+
+    def test_binary_input_kind_survives_round_trip(self) -> None:
+        """``BinaryInput.kind`` must come back as the enum, not its string value (#3084)."""
+        event = ModelRequest([BinaryInput(b"\x89PNG", media_type="image/png", kind=BinaryType.IMAGE)])
+        result = _round_trip(event)
+        assert isinstance(result, ModelRequest)
+        part = result.parts[0]
+        assert isinstance(part, BinaryInput)
+        assert part.kind is BinaryType.IMAGE
+        assert part.data == b"\x89PNG"

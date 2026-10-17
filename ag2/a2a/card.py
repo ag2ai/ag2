@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Mapping, Sequence
+from typing import Any
 
-from a2a.client.client_factory import TransportProtocol
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
@@ -13,17 +13,18 @@ from a2a.types import (
     AgentProvider,
     AgentSkill,
 )
-from a2a.utils.constants import PROTOCOL_VERSION_CURRENT
+from a2a.utils.constants import PROTOCOL_VERSION_CURRENT, TransportProtocol
 
 from ag2.agent import Agent
+from ag2.config.input_acceptance import input_media_types
 from ag2.tools.skills.toolkit import SkillsToolkit
 
-from .extension import EXTENSION_URI
+from .extension import AG2_INPUT_MODES, EXTENSION_URI
 from .security import Requirement, Scheme
 from .transports import TransportName
 
 _DEFAULT_VERSION = "1.0.0"
-_DEFAULT_INPUT_MODES = ("text/plain", "application/json")
+_BASE_INPUT_MODES = ("text/plain", "application/json", *AG2_INPUT_MODES)
 _DEFAULT_OUTPUT_MODES = ("text/plain", "application/json")
 
 
@@ -44,12 +45,16 @@ def build_card(
     documentation_url: str | None = None,
     icon_url: str | None = None,
     tenants: Mapping[TransportName, str] | None = None,
+    extensions: Sequence[AgentExtension] = (),
+    input_modes: Sequence[str] | None = None,
 ) -> AgentCard:
     """Construct an ``AgentCard`` describing an AG2 agent for A2A discovery.
 
     Always declares the ``urn:ag2:client-tools:v1`` extension as
     ``required=False`` — the server can transparently fall back to a
     plain text exchange when the client doesn't speak the extension.
+    User extensions passed via ``extensions`` are declared after it;
+    duplicate URIs raise ``ValueError``.
 
     ``supported_interfaces`` is built from ``transports`` — one
     ``AgentInterface`` per enabled binding. JSON-RPC URL is ``url``;
@@ -71,28 +76,43 @@ def build_card(
     referenced in ``security`` — no duplicate declarations needed.
     ``tenants`` maps a transport name to a tenant string surfaced on the
     corresponding ``AgentInterface.tenant``.
+
+    ``default_input_modes`` is derived from the agent: text, JSON and the
+    ``vnd.ag2`` protocol types, plus every media type ``agent.config`` accepts
+    as inline data. ``input_modes`` replaces that list entirely; list the
+    ``vnd.ag2`` types too when the server runs with ``validate_input_modes``.
     """
     if "grpc" in transports and grpc_url is None:
         raise ValueError("grpc_url is required when 'grpc' is in transports")
 
     description_text = description or _agent_description(agent)
     resolved_skills = _resolve_skills(agent, skills, description_text)
+    declared: list[AgentExtension] = [
+        AgentExtension(
+            uri=EXTENSION_URI,
+            description="AG2 client-side tool execution",
+            required=False,
+        ),
+    ]
+    seen_uris = {EXTENSION_URI}
+    for ext in extensions:
+        if ext.uri in seen_uris:
+            reason = (
+                "declared automatically by build_card" if ext.uri == EXTENSION_URI else "already present in extensions="
+            )
+            raise ValueError(f"Duplicate extension URI on AgentCard: {ext.uri!r} is {reason}")
+        seen_uris.add(ext.uri)
+        declared.append(ext)
     capabilities = AgentCapabilities(
         streaming=True,
         push_notifications=push_notifications,
-        extensions=[
-            AgentExtension(
-                uri=EXTENSION_URI,
-                description="AG2 client-side tool execution",
-                required=False,
-            ),
-        ],
+        extensions=declared,
     )
-    card_kwargs: dict[str, object] = {
+    card_kwargs: dict[str, Any] = {
         "name": agent.name,
         "description": description_text,
         "version": version,
-        "default_input_modes": list(_DEFAULT_INPUT_MODES),
+        "default_input_modes": list(_input_modes(agent, input_modes)),
         "default_output_modes": list(_DEFAULT_OUTPUT_MODES),
         "capabilities": capabilities,
         "skills": resolved_skills,
@@ -157,6 +177,13 @@ def _agent_description(agent: Agent) -> str:
     if prompt:
         return prompt[0]
     return ""
+
+
+def _input_modes(agent: Agent, explicit: Sequence[str] | None) -> Sequence[str]:
+    """Explicit modes win; otherwise the protocol base plus what the agent's model accepts."""
+    if explicit is not None:
+        return explicit
+    return (*_BASE_INPUT_MODES, *(t for t in input_media_types(agent.config) if t not in _BASE_INPUT_MODES))
 
 
 def _resolve_skills(

@@ -12,6 +12,7 @@ from typing import Any
 from a2a.types import Part
 from google.protobuf import json_format, struct_pb2
 
+from ag2.config.input_acceptance import binary_kind_of
 from ag2.events import (
     BinaryInput,
     BinaryType,
@@ -81,7 +82,7 @@ def part_to_input(part: Part) -> Input:
     if file_id:
         return FileIdInput(str(file_id), filename=part.filename or None)
 
-    kind = _binary_kind(metadata)
+    kind = _binary_kind(metadata, part.media_type)
 
     if part.raw:
         return BinaryInput(
@@ -130,30 +131,34 @@ def tool_result_to_text(result: ToolResult) -> str:
     return "".join(part.content if isinstance(part, TextInput) else str(part) for part in result.parts)
 
 
-def _value_from(value: Any) -> struct_pb2.Value:
+def _value_from(value: Any) -> struct_pb2.Value:  # type: ignore[no-any-unimported]
     target = struct_pb2.Value()
     json_format.Parse(json.dumps(value, default=_json_default), target)
     return target
 
 
-def _value_to_python(v: struct_pb2.Value) -> Any:
+def _value_to_python(v: struct_pb2.Value) -> Any:  # type: ignore[no-any-unimported]
     return json_format.MessageToDict(v, preserving_proto_field_name=True)
 
 
-def struct_from_dict(payload: dict[str, Any]) -> struct_pb2.Struct:
+def struct_from_dict(payload: dict[str, Any]) -> struct_pb2.Struct:  # type: ignore[no-any-unimported]
     s = struct_pb2.Struct()
     json_format.ParseDict(payload, s)
     return s
 
 
-def struct_to_dict(s: struct_pb2.Struct) -> dict[str, Any]:
+def struct_to_dict(s: struct_pb2.Struct) -> dict[str, Any]:  # type: ignore[no-any-unimported]
     if not s or not s.fields:
         return {}
-    return json_format.MessageToDict(s, preserving_proto_field_name=True)
+    # Annotated, not cast: the protobuf stubs type the result, an unstubbed install leaves it `Any`.
+    result: dict[str, Any] = json_format.MessageToDict(s, preserving_proto_field_name=True)
+    return result
 
 
-def _binary_kind(metadata: dict[str, Any]) -> BinaryType:
-    raw = metadata.get(_BINARY_KIND_METADATA_KEY, BinaryType.BINARY.value)
+def _binary_kind(metadata: dict[str, Any], media_type: str) -> BinaryType:
+    if _BINARY_KIND_METADATA_KEY not in metadata:
+        return binary_kind_of(media_type) or BinaryType.BINARY
+    raw = metadata[_BINARY_KIND_METADATA_KEY]
     try:
         return BinaryType(raw)
     except ValueError:

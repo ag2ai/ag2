@@ -5,8 +5,11 @@
 import pytest
 
 from ag2 import Context
+from ag2.config.openai.decisions_mappers import tool_to_api as tool_to_decisions_api
 from ag2.config.openai.mappers import tool_to_api, tool_to_responses_api
 from ag2.exceptions import UnsupportedToolError
+from ag2.tools import tool
+from ag2.tools.builtin.anthropic_bash import AnthropicBashTool
 from ag2.tools.builtin.code_execution import CodeExecutionTool
 from ag2.tools.builtin.file_search import FileSearchTool
 from ag2.tools.builtin.google_maps import GoogleMapsTool
@@ -19,6 +22,7 @@ from ag2.tools.builtin.skills import SkillsTool
 from ag2.tools.builtin.web_fetch import WebFetchTool
 from ag2.tools.builtin.web_search import WebSearchTool
 from ag2.tools.builtin.x_search import XSearchTool
+from ag2.tools.types import Tool
 
 
 class TestCompletionsApi:
@@ -130,6 +134,15 @@ class TestCompletionsApi:
         with pytest.raises(UnsupportedToolError):
             tool_to_api(schema)
 
+    @pytest.mark.asyncio
+    async def test_anthropic_bash(self, context: Context) -> None:
+        tool = AnthropicBashTool()
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(UnsupportedToolError):
+            tool_to_api(schema)
+
 
 class TestResponsesApi:
     @pytest.mark.asyncio
@@ -176,3 +189,48 @@ class TestResponsesApi:
 
         with pytest.raises(UnsupportedToolError):
             tool_to_responses_api(schema)
+
+    @pytest.mark.asyncio
+    async def test_anthropic_bash(self, context: Context) -> None:
+        tool = AnthropicBashTool()
+
+        [schema] = await tool.schemas(context)
+
+        with pytest.raises(UnsupportedToolError):
+            tool_to_responses_api(schema)
+
+
+@tool
+def lookup(order_id: str) -> str:
+    return order_id
+
+
+class TestDecisionsApi:
+    """The Decisions API does not call tools, so every tool, builtin or function, is rejected."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "rejected",
+        [
+            lookup,
+            WebSearchTool(),
+            WebFetchTool(),
+            CodeExecutionTool(),
+            ShellTool(),
+            MemoryTool(),
+            ImageGenerationTool(),
+            MCPServerTool(server_url="https://mcp.example.com/sse", server_label="example-mcp"),
+            SkillsTool("pptx"),
+            XSearchTool(),
+            RetrievalTool("kb_123"),
+            FileSearchTool(vector_store_ids=["vs_1"]),
+            GoogleMapsTool(),
+            AnthropicBashTool(),
+        ],
+        ids=lambda t: type(t).__name__,
+    )
+    async def test_every_tool_is_rejected(self, rejected: Tool, context: Context) -> None:
+        [schema] = await rejected.schemas(context)
+
+        with pytest.raises(UnsupportedToolError, match="openai-decisions"):
+            tool_to_decisions_api(schema)

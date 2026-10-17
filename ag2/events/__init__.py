@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .alert import HaltEvent, ObserverAlert, Severity
-from .base import BaseEvent, Field, is_conversational
+from .base import BaseEvent, Field, ProviderReplay, is_conversational
 from .conditions import Condition
 from .input_events import (
     AudioInput,
@@ -15,6 +15,7 @@ from .input_events import (
     FileIdInput,
     ImageInput,
     Input,
+    MessageEnqueued,
     ModelRequest,
     TextInput,
     UrlInput,
@@ -61,10 +62,14 @@ from .types import (
     ModelMessageChunk,
     ModelReasoning,
     ModelResponse,
+    ToolApprovalRequest,
     Usage,
     UsageEvent,
 )
 from .voice import (
+    AudioInterruptedEvent,
+    AudioPlaybackCompletedEvent,
+    AudioPlaybackStartedEvent,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
     TranscriptionChunkEvent,
@@ -76,6 +81,9 @@ __all__ = (
     "AggregationFailed",
     "AggregationStarted",
     "AudioInput",
+    "AudioInterruptedEvent",
+    "AudioPlaybackCompletedEvent",
+    "AudioPlaybackStartedEvent",
     "BaseEvent",
     "BinaryInput",
     "BinaryResult",
@@ -98,6 +106,7 @@ __all__ = (
     "HumanMessage",
     "ImageInput",
     "Input",
+    "MessageEnqueued",
     "ModelMessage",
     "ModelMessageChunk",
     "ModelReasoning",
@@ -106,6 +115,7 @@ __all__ = (
     "ObserverAlert",
     "ObserverCompleted",
     "ObserverStarted",
+    "ProviderReplay",
     "RecordedAudioEvent",
     "Severity",
     "SynthesizedAudioEvent",
@@ -116,6 +126,7 @@ __all__ = (
     "TaskProgress",
     "TaskStarted",
     "TextInput",
+    "ToolApprovalRequest",
     "ToolCallEvent",
     "ToolCallsEvent",
     "ToolErrorEvent",

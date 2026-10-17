@@ -12,11 +12,13 @@ decorator; a scorer can also return a :class:`Feedback` (or list of them)
 directly to set the key explicitly or attach a comment.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias
 
 __all__ = (
     "Feedback",
+    "MissingTraceError",
     "ScoreValue",
     "ScorerReturnTypeError",
     "ValueLabel",
@@ -69,3 +71,17 @@ class ScorerReturnTypeError(TypeError):
     Supported return types: ``bool``, ``int``, ``float``, ``str``,
     :class:`Feedback`, ``list[Feedback]``, ``None``.
     """
+
+
+class MissingTraceError(LookupError):
+    """A suite task has no trace in the source.
+
+    Recorded on the task's ``Trace.exception`` under
+    ``evaluate_traces(on_missing_task="error")``, raised for the whole run under
+    ``"raise"``. ``task_ids`` holds every uncovered task id.
+    """
+
+    def __init__(self, task_ids: str | Iterable[str]) -> None:
+        ids = (task_ids,) if isinstance(task_ids, str) else tuple(task_ids)
+        self.task_ids: tuple[str, ...] = ids
+        super().__init__(f"no trace in the source for task(s): {', '.join(ids)}")

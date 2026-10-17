@@ -4,10 +4,10 @@
 
 """Fixtures for end-to-end Agent smoke tests that hit real provider APIs.
 
-Every test parametrizes over ``openai`` / ``anthropic`` / ``gemini`` / ``zai``
-via ``provider_config`` or ``streaming_config``, so each instance carries
-the corresponding per-provider mark and is excluded from
-``test-beta-cov`` by ``_beta_llm_filter``.
+Every test parametrizes over ``openai`` / ``anthropic`` / ``gemini`` / ``zai`` /
+``mistral`` via ``provider_config`` or ``streaming_config``, so each instance
+carries the corresponding per-provider mark and is excluded from
+``test-cov`` by ``_llm_filter``.
 
 Credentials are read from the environment — `just` loads ``.env``
 automatically; for direct ``pytest`` invocation, export the keys
@@ -18,7 +18,7 @@ import os
 
 import pytest
 
-from ag2.config import AnthropicConfig, GeminiConfig, OpenAIConfig, ZAIConfig
+from ag2.config import AnthropicConfig, GeminiConfig, MistralConfig, OpenAIConfig, ZAIConfig
 
 
 def _require(env: str) -> str:
@@ -73,12 +73,22 @@ def zai_config() -> ZAIConfig:
     )
 
 
+@pytest.fixture()
+def mistral_config() -> MistralConfig:
+    return MistralConfig(
+        model="mistral-small-latest",
+        api_key=_require("MISTRAL_API_KEY"),
+        temperature=0,
+    )
+
+
 @pytest.fixture(
     params=[
         pytest.param("openai", marks=pytest.mark.openai),
         pytest.param("anthropic", marks=pytest.mark.anthropic),
         pytest.param("gemini", marks=pytest.mark.gemini),
         pytest.param("zai", marks=[pytest.mark.zai, pytest.mark.timeout(180)]),
+        pytest.param("mistral", marks=pytest.mark.mistral),
     ]
 )
 def streaming_config(request):
@@ -109,6 +119,13 @@ def streaming_config(request):
             thinking=False,
             request_timeout=45,
         )
+    if request.param == "mistral":
+        return MistralConfig(
+            model="mistral-small-latest",
+            api_key=_require("MISTRAL_API_KEY"),
+            temperature=0,
+            streaming=True,
+        )
     return GeminiConfig(
         model="gemini-3.1-flash-lite",
         api_key=_require_gemini_key(),
@@ -123,6 +140,7 @@ def streaming_config(request):
         pytest.param("anthropic", marks=pytest.mark.anthropic),
         pytest.param("gemini", marks=pytest.mark.gemini),
         pytest.param("zai", marks=[pytest.mark.zai, pytest.mark.timeout(180)]),
+        pytest.param("mistral", marks=pytest.mark.mistral),
     ]
 )
 def provider_config(request):

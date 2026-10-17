@@ -240,7 +240,7 @@ This is by design — one broken scorer should never kill an eval over 100 tasks
 
 ## Sync vs async
 
-Either works. The framework detects async with `#!python inspect.iscoroutinefunction` and awaits accordingly:
+Either works. The framework calls the scorer and then awaits the *result* if it is awaitable — so a plain `#!python async def` works, and so does any other callable whose return value is a coroutine (a class with an `#!python async def __call__`, or a sync wrapper that hands back an awaitable):
 
 ```python linenums="1"
 @scorer

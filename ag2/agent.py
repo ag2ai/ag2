@@ -18,8 +18,11 @@ or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
 import asyncio
 import json
 import logging
+import threading
 import types
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
+import warnings
+import weakref
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
@@ -28,6 +31,7 @@ from typing import Any, Generic, Literal, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
@@ -62,8 +66,8 @@ from .events.lifecycle import (
     ObserverCompleted,
     ObserverStarted,
 )
-from .exceptions import ConfigNotProvidedError
-from .history import History
+from .exceptions import ConfigNotProvidedError, HumanInputError
+from .history import HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore
 from .knowledge.config import KnowledgeConfig
@@ -74,23 +78,24 @@ from .middleware.base import (
     MiddlewareFactory,
     ToolMiddleware,
 )
+from .middleware.describe import DescribedMiddleware
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
-from .stream import MemoryStream, Stream
+from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
+from .tools.final import FunctionTool, Toolkit, tool
+from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
-from .tools.subagents.subagent_tool import StreamFactory, subagent_tool
+from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
-from .types import Omittable, SendableMessage, omit
-from .usage import UsageReport
+from .types import Omit, Omittable, SendableMessage, omit
+from .usage import UsageReport, collect_usage_events
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 logger = logging.getLogger(__name__)
-
 
 TResult = TypeVar313("TResult", default=str)
 TAgent = TypeVar313("TAgent", default=str)
@@ -108,7 +113,8 @@ class TaskConfig:
 
     Use ``include_tools`` (allowlist) and ``exclude_tools`` (blocklist) to
     narrow what the subtask sees, and ``extra_tools`` to add capabilities the
-    parent doesn't have.
+    parent doesn't have. ``max_concurrency`` optionally bounds the total
+    number of sub-tasks running for this Agent across both spawning tools.
     """
 
     config: ModelConfig | None = None
@@ -116,6 +122,11 @@ class TaskConfig:
     include_tools: Iterable[str] | None = None
     exclude_tools: Iterable[str] = ()
     extra_tools: Iterable[Callable[..., Any] | Tool] = ()
+    max_concurrency: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_concurrency is not None and self.max_concurrency < 1:
+            raise ValueError(f"max_concurrency must be >= 1 when set, got {self.max_concurrency}.")
 
 
 class AgentReply(Generic[TResult, TAgent]):
@@ -204,6 +215,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -219,6 +231,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -234,6 +247,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -249,6 +263,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -262,6 +277,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -269,22 +285,16 @@ class AgentReply(Generic[TResult, TAgent]):
     ) -> "AgentReply[Any, Any]":
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        context = self.context
-        if dependencies:
-            context.dependencies.update(dependencies)
-        if variables:
-            context.variables.update(variables)
-        if prompt:
-            context.prompt = list(prompt)
-
         client = config.create() if config else self.__client
 
         return await self.__agent._execute(
             initial_event,
-            context=context,
+            context=self.context,
             client=client,
+            context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
             hitl_hook=hitl_hook,
             additional_tools=tools,
+            additional_plugins=plugins,
             additional_middleware=middleware,
             additional_observers=observers,
             response_schema=response_schema,
@@ -299,6 +309,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -314,6 +325,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -329,6 +341,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -344,6 +357,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -357,6 +371,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -370,27 +385,89 @@ class AgentReply(Generic[TResult, TAgent]):
         """
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        context = self.context
-        if dependencies:
-            context.dependencies.update(dependencies)
-        if variables:
-            context.variables.update(variables)
-        if prompt:
-            context.prompt = list(prompt)
-
         client = config.create() if config else self.__client
 
         return self.__agent._make_run(
             initial_event,
-            context=context,
+            context=self.context,
+            context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
             hitl_hook=hitl_hook,
             client=client,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class _ContextOverrides:
+    """Continuation values applied only after acquiring the stream turn lock."""
+
+    dependencies: Mapping[Any, Any]
+    variables: Mapping[str, Any]
+    prompt: tuple[str, ...]
+
+    def apply(self, context: Context) -> None:
+        context.dependencies.update(self.dependencies)
+        context.variables.update(self.variables)
+        if self.prompt:
+            context.prompt = list(self.prompt)
+
+
+class _PluginPrompt(str):
+    """Give a bound prompt fragment its own identity without changing its text."""
+
+    __slots__ = ()
+
+    def __copy__(self) -> "_PluginPrompt":
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "_PluginPrompt":
+        return self
+
+
+def _remove_plugin_prompts(context: Context, fragments: Sequence[str]) -> None:
+    owned = {id(fragment) for fragment in fragments}
+    context.prompt[:] = [fragment for fragment in context.prompt if id(fragment) not in owned]
+
+
+def _remove_plugin_default(context: Context, attribute: str, key: Any, value: Any) -> None:
+    target: dict[Any, Any] = getattr(context, attribute)
+    if target.get(key) is value:
+        target.pop(key, None)
+
+
+class _TurnPlugins:
+    """Snapshot the contributions of plugins passed to one invocation."""
+
+    def __init__(self, plugins: Iterable[Plugin]) -> None:
+        self.static_prompt: list[str] = []
+        self.dynamic_prompt: list[Callable[..., Awaitable[str]]] = []
+        self.tools: list[Tool] = []
+        self.middleware: list[MiddlewareFactory] = []
+        self.observers: list[Observer] = []
+        self.policies: list[AssemblyPolicy] = []
+        self.dependencies: dict[Any, Any] = {}
+        self.variables: dict[Any, Any] = {}
+        self.hitl_hook: HumanHook | None = None
+        self.has_conflicting_hitl_hooks = False
+        for plugin in plugins:
+            self.static_prompt.extend(plugin._system_prompt)
+            self.dynamic_prompt.extend(plugin._dynamic_prompt)
+            self.tools.extend(FunctionTool.ensure_tool(t) for t in plugin._tools)
+            self.middleware.extend(plugin._middleware)
+            self.observers.extend(plugin._observers)
+            self.policies.extend(plugin._policies)
+            self.dependencies.update(plugin._dependencies)
+            self.variables.update(plugin._variables)
+            if plugin._hitl_hook is not None:
+                if self.hitl_hook is not None:
+                    self.has_conflicting_hitl_hooks = True
+                else:
+                    self.hitl_hook = plugin._hitl_hook
 
 
 class AgentRun(Generic[TResult, TAgent]):
@@ -430,17 +507,21 @@ class AgentRun(Generic[TResult, TAgent]):
         context: Context,
         config: ModelConfig | None,
         tools: Iterable[Tool],
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
+        context_overrides: _ContextOverrides | None = None,
     ) -> None:
         self.__agent = agent
         self.__trigger = trigger
         self.__context = context
+        self.__context_overrides = context_overrides
         self.__config = config
         self.__tools = tools
+        self.__plugins = tuple(plugins)
         self.__middleware = middleware
         self.__observers = observers
         self.__response_schema = response_schema
@@ -470,19 +551,20 @@ class AgentRun(Generic[TResult, TAgent]):
         consumed by that turn; one enqueued before ``result()`` merges into the
         first model call; one enqueued after the turn completes waits for the
         next turn on this stream. Safe to call from a stream subscriber (inline
-        during the drive) or a concurrent task — it only appends.
+        during the drive) or a concurrent task — it appends at once and
+        announces the message with ``MessageEnqueued`` from a background task.
         """
         self.__context.enqueue(*content)
 
     async def __aenter__(self) -> "AgentRun[TResult, TAgent]":
-        client = self.__client
-        if client is None:
-            client = await self.__agent._prepare_turn(self.__trigger, self.__context, self.__config)
         self.__driver = await self.__stack.enter_async_context(
             self.__agent._turn_scope(
                 self.__trigger,
                 context=self.__context,
-                client=client,
+                client=self.__client,
+                config=self.__config,
+                context_overrides=self.__context_overrides,
+                additional_plugins=self.__plugins,
                 hitl_hook=self.__hitl_hook,
                 additional_tools=self.__tools,
                 additional_middleware=self.__middleware,
@@ -547,39 +629,52 @@ class AgentRun(Generic[TResult, TAgent]):
 
 _STREAM_TURN_LOCK_ATTR = "_ag2_turn_lock"
 
+# Registry mapping ``stream.id`` -> that stream's turn lock. Weak-valued: each
+# stream instance holds a strong reference to its own lock (see below), so an
+# entry lives exactly as long as some object for that id does, and is reclaimed
+# once the last one is collected.
+_stream_locks_by_id: "weakref.WeakValueDictionary[StreamId, asyncio.Lock]" = weakref.WeakValueDictionary()
 
-def _get_stream_turn_lock(stream: Any) -> asyncio.Lock:
+
+def _get_stream_turn_lock(stream: Stream) -> asyncio.Lock:
     """Return (creating if needed) a per-stream asyncio.Lock.
 
-    Attaching the lock to the stream object itself means:
+    A stream's identity is its ``id`` — that is the key ``History`` is built
+    on — not the Python object holding it. Two objects constructed from the
+    same ``(id, storage)`` pair (``persistent_stream()``, a session resumed
+    from storage, a stream reconstructed in user code) denote one stream and
+    take one lock, so:
       * A fresh stream per turn (the default subtask / subagent path)
         pays a trivial no-contention acquire — no behaviour change.
-      * A stream shared across concurrent ``Agent.ask`` calls
-        serializes those calls so subscribers registered by one turn
-        never fire for events of another.
+      * Concurrent ``Agent.ask`` calls on a stream, however each caller got
+        hold of it, serialize so subscribers registered by one turn never
+        fire for events of another.
+
+    The lock is cached on the stream instance, which keeps the common case a
+    single attribute read and keeps the registry entry alive.
 
     The lock is allocated lazily on first use so Agent instantiation
     outside an event loop (which would bind the lock to the wrong loop)
     still works.
     """
+    # ``_STREAM_TURN_LOCK_ATTR`` is ours, not part of the ``Stream`` protocol,
+    # so it has to be read defensively — unlike ``id``, which the protocol
+    # guarantees.
     lock = getattr(stream, _STREAM_TURN_LOCK_ATTR, None)
+    if lock is not None:
+        return lock
+
+    lock = _stream_locks_by_id.get(stream.id)
     if lock is None:
-        lock = asyncio.Lock()
-        try:
-            setattr(stream, _STREAM_TURN_LOCK_ATTR, lock)
-        except (AttributeError, TypeError):
-            # Stream uses __slots__ and doesn't declare our attr — fall
-            # back to a per-id registry so the lock still persists.
-            _stream_id_locks.setdefault(id(stream), lock)
-            lock = _stream_id_locks[id(stream)]
+        lock = _stream_locks_by_id[stream.id] = asyncio.Lock()
+
+    # Cache on the instance: keeps the common case a single getattr, and the
+    # strong reference keeps this stream's registry entry alive. A stream that
+    # rejects the assignment (``__slots__`` without our attr) still serializes
+    # via the registry, it just re-looks-up each turn.
+    with suppress(AttributeError, TypeError):
+        setattr(stream, _STREAM_TURN_LOCK_ATTR, lock)
     return lock
-
-
-# Fallback for streams that reject attribute assignment. Keyed by
-# ``id(stream)`` — asyncio.Lock has no weakref slot, so we can't key on
-# a weak reference. Only populated for slotted streams without the
-# turn-lock slot (MemoryStream declares it).
-_stream_id_locks: dict[int, asyncio.Lock] = {}
 
 
 class Agent(PluginTarget, Generic[TResult]):
@@ -731,6 +826,13 @@ class Agent(PluginTarget, Generic[TResult]):
         else:
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
+        # One Semaphore per running loop: sharing one raises once a second loop
+        # awaits it contended (the hazard ag2/extensions/docker/sandbox.py also
+        # calls out). Provisioned by ``_task_slots_for``.
+        self._task_slots: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+            weakref.WeakKeyDictionary()
+        )
+        self._task_slots_lock = threading.Lock()
 
         # Knowledge store + compaction/aggregation strategies
         if knowledge:
@@ -758,6 +860,81 @@ class Agent(PluginTarget, Generic[TResult]):
 
             self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
             self.add_middleware(_HaltCheckMiddlewareFactory())
+
+    # --- Composition -----------------------------------------------------
+    # Read-only views of what this agent is made of, for comparing two agents,
+    # asserting on composition in a test, or logging it. Each returns a copy or
+    # a read-only view, so callers cannot mutate the agent through them.
+
+    @property
+    def system_prompt(self) -> tuple[str, ...]:
+        """Static system prompt fragments, in order."""
+
+        return tuple(self._system_prompt)
+
+    @property
+    def dynamic_prompt(self) -> tuple[PromptType, ...]:
+        """Dynamic prompt hooks, in registration order."""
+
+        return tuple(self._dynamic_prompt)
+
+    @property
+    def middleware(self) -> tuple[DescribedMiddleware, ...]:
+        """Agent-level middleware, in registration order.
+
+        Each entry pairs the middleware object with its description. Entries are
+        built on access, so compare ``entry.middleware`` rather than the entry.
+        """
+
+        return tuple(DescribedMiddleware(m) for m in self._middleware)
+
+    @property
+    def dependencies(self) -> Mapping[Any, Any]:
+        """Dependencies injected into tool calls, keyed as they were supplied."""
+
+        return types.MappingProxyType(self._agent_dependencies)
+
+    @property
+    def variables(self) -> Mapping[Any, Any]:
+        """Variables available to this agent."""
+
+        return types.MappingProxyType(self._agent_variables)
+
+    @property
+    def has_hitl_hook(self) -> bool:
+        """Whether a hook answers this agent's questions to a human, rather than the caller's."""
+
+        return self._hitl_hook is not None
+
+    @property
+    def serializer(self) -> SerializerProto:
+        """The serializer that encodes this agent's tool results."""
+
+        return self._serializer
+
+    @property
+    def response_schema(self) -> ResponseProto[TResult] | None:
+        """The response schema, or ``None`` when replies are free text."""
+
+        return self._response_schema
+
+    @property
+    def observers(self) -> tuple[Observer, ...]:
+        """Observers attached to this agent, in registration order."""
+
+        return tuple(self._observers)
+
+    @property
+    def tasks(self) -> TaskConfig | None:
+        """Sub-task configuration, or ``None`` when sub-tasks are not enabled."""
+
+        return self._task_config
+
+    @property
+    def assembly(self) -> tuple[AssemblyPolicy, ...]:
+        """Assembly policies, in the order they are applied."""
+
+        return tuple(self._policies)
 
     def task(
         self,
@@ -820,6 +997,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -837,6 +1015,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -854,6 +1033,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -871,6 +1051,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -885,6 +1066,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -900,6 +1082,7 @@ class Agent(PluginTarget, Generic[TResult]):
             prompt=prompt,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -917,6 +1100,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -934,6 +1118,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -951,6 +1136,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -968,6 +1154,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -982,6 +1169,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1002,6 +1190,7 @@ class Agent(PluginTarget, Generic[TResult]):
             prompt=prompt,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1017,6 +1206,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str],
         config: ModelConfig | None,
         tools: Iterable[Tool],
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
@@ -1038,6 +1228,7 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1051,11 +1242,13 @@ class Agent(PluginTarget, Generic[TResult]):
         context: Context,
         config: ModelConfig | None,
         tools: Iterable[Tool],
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
+        context_overrides: _ContextOverrides | None = None,
     ) -> "AgentRun[Any, Any]":
         """The launch primitive: wrap a ``(trigger, context)`` turn as an ``AgentRun``.
 
@@ -1070,11 +1263,13 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
             hitl_hook=hitl_hook,
             client=client,
+            context_overrides=context_overrides,
         )
 
     async def resume(
@@ -1086,6 +1281,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1119,6 +1315,7 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1132,6 +1329,7 @@ class Agent(PluginTarget, Generic[TResult]):
         context: Context,
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1143,6 +1341,7 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1183,8 +1382,10 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         context: Context,
         client: LLMClient,
+        context_overrides: _ContextOverrides | None = None,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
+        additional_plugins: Iterable[Plugin] = (),
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1200,8 +1401,10 @@ class Agent(PluginTarget, Generic[TResult]):
             event,
             context=context,
             client=client,
+            context_overrides=context_overrides,
             hitl_hook=hitl_hook,
             additional_tools=additional_tools,
+            additional_plugins=additional_plugins,
             additional_middleware=additional_middleware,
             additional_observers=additional_observers,
             response_schema=response_schema,
@@ -1214,13 +1417,74 @@ class Agent(PluginTarget, Generic[TResult]):
         event: BaseEvent,
         *,
         context: Context,
+        client: LLMClient | None = None,
+        config: ModelConfig | None = None,
+        context_overrides: _ContextOverrides | None = None,
+        hitl_hook: HumanHook | None = None,
+        additional_tools: Iterable[Tool] = (),
+        additional_plugins: Iterable[Plugin] = (),
+        additional_middleware: Iterable[MiddlewareFactory] = (),
+        additional_observers: Iterable[Observer] = (),
+        response_schema: ResponseProto[Any] | type | None | Omit = omit,
+    ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
+        """Resolve invocation plugins and bracket their context contributions."""
+        plugins = _TurnPlugins(additional_plugins)
+        async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
+            if context_overrides is not None:
+                context_overrides.apply(context)
+            if plugins.has_conflicting_hitl_hooks:
+                warnings.warn("Multiple invocation plugins set hitl_hook; the first wins.", stacklevel=2)
+            for attribute, defaults in (
+                ("dependencies", plugins.dependencies),
+                ("variables", plugins.variables),
+            ):
+                target = getattr(context, attribute)
+                for key, value in defaults.items():
+                    if key not in target:
+                        target[key] = value
+                        stack.callback(_remove_plugin_default, context, attribute, key, value)
+
+            if client is None:
+                client = await self._prepare_turn(event, context, config)
+
+            if plugins.static_prompt or plugins.dynamic_prompt:
+                fragments: list[str] = [_PluginPrompt(prompt) for prompt in plugins.static_prompt]
+                context.prompt = [*context.prompt, *fragments]
+                stack.callback(_remove_plugin_prompts, context, fragments)
+                for prompt in plugins.dynamic_prompt:
+                    fragment = _PluginPrompt(await prompt(event, context))
+                    fragments.append(fragment)
+                    context.prompt.append(fragment)
+
+            async with self._drive_scope(
+                event,
+                context=context,
+                client=client,
+                hitl_hook=hitl_hook,
+                plugin_hitl_hook=plugins.hitl_hook,
+                additional_tools=(*plugins.tools, *additional_tools),
+                additional_middleware=(*plugins.middleware, *additional_middleware),
+                additional_observers=(*plugins.observers, *additional_observers),
+                additional_policies=plugins.policies,
+                response_schema=response_schema,
+            ) as drive:
+                yield drive
+
+    @asynccontextmanager
+    async def _drive_scope(
+        self,
+        event: BaseEvent,
+        *,
+        context: Context,
         client: LLMClient,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
+        additional_policies: Iterable[AssemblyPolicy] = (),
+        plugin_hitl_hook: HumanHook | None = None,
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
-    ) -> "AsyncIterator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
+    ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
         """Open a turn scope and yield a ``drive`` callable that runs it once.
 
         Sets up everything a turn needs and keeps it live across the ``yield``:
@@ -1244,8 +1508,7 @@ class Agent(PluginTarget, Generic[TResult]):
         no-contention acquire. Sub-tasks spawn on their own stream, so they never
         contend with the parent turn's lock.
         """
-        stream_lock = _get_stream_turn_lock(context.stream)
-        async with stream_lock, self._knowledge_context.enter(context):
+        async with self._knowledge_context.enter(context):
             if response_schema is omit:
                 final_schema = self._response_schema
             else:
@@ -1255,21 +1518,13 @@ class Agent(PluginTarget, Generic[TResult]):
             all_tools: tuple[Tool, ...] = tuple(chain(self.tools, self._additional_tools, additional_tools))
 
             all_schemas: list[ToolSchema] = []
-            known_tools: set[str] = set()
             tool_search_schema: ToolSearchToolSchema | None = None
-            for t in all_tools:
-                schemas = await t.schemas(context)
-
-                for schema in schemas:
-                    if isinstance(schema, FunctionToolSchema):
-                        known_tools.add(schema.function.name)
-                    else:
-                        known_tools.add(schema.type)
-
-                    if isinstance(schema, ToolSearchToolSchema):
-                        tool_search_schema = schema
-                    else:
-                        all_schemas.append(schema)
+            resolved_tools = await resolve_tools(all_tools, context)
+            for schema in resolved_tools.schemas:
+                if isinstance(schema, ToolSearchToolSchema):
+                    tool_search_schema = schema
+                else:
+                    all_schemas.append(schema)
 
             if tool_search_schema is not None:
                 all_schemas.append(tool_search_schema)
@@ -1284,7 +1539,20 @@ class Agent(PluginTarget, Generic[TResult]):
                 serializer=self._serializer,
             )
 
-            for m in reversed(tuple(chain(self._middleware, additional_middleware))):
+            factories = list(self._middleware)
+            policies = list(additional_policies)
+            if policies:
+                policies = [*self._policies, *policies]
+                for warning in AssemblerMiddleware.validate_order(policies):
+                    logger.warning("Assembly policy ordering: %s", warning)
+                for index, factory in enumerate(factories):
+                    if isinstance(factory, _AssemblerMiddlewareFactory):
+                        factories[index] = _AssemblerMiddlewareFactory(policies)
+                        break
+                else:
+                    factories.extend((_AssemblerMiddlewareFactory(policies), _HaltCheckMiddlewareFactory()))
+
+            for m in reversed(tuple(chain(factories, additional_middleware))):
                 mw = m(event, context)
                 middleware_instances.append(mw)
 
@@ -1333,6 +1601,8 @@ class Agent(PluginTarget, Generic[TResult]):
                 )
 
                 hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
+                if hitl_hook_maker is None and plugin_hitl_hook is not None:
+                    hitl_hook_maker = wrap_hitl(plugin_hitl_hook)
                 if hitl_hook_maker is not None:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
@@ -1351,8 +1621,8 @@ class Agent(PluginTarget, Generic[TResult]):
                 self._tool_executor.register(
                     stack,
                     context,
-                    tools=all_tools,
-                    known_tools=known_tools,
+                    tools=resolved_tools.tools,
+                    known_tools=resolved_tools.known_tools,
                     middleware=middleware_instances,
                 )
 
@@ -1363,7 +1633,14 @@ class Agent(PluginTarget, Generic[TResult]):
                 ):
 
                     async def drive() -> "AgentReply[Any, Any]":
-                        message = await agent_turn(event, context)
+                        try:
+                            message = await agent_turn(event, context)
+                        except HumanInputError:
+                            await close_unanswered_tool_calls(
+                                context.stream.history,
+                                result=HUMAN_INPUT_ABANDONED_TOOL_RESULT,
+                            )
+                            raise
                         return AgentReply(
                             message,
                             context=context,
@@ -1390,7 +1667,30 @@ class Agent(PluginTarget, Generic[TResult]):
         tc = self._task_config
         if tc is None:
             return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
+        if tc.max_concurrency is not None:
+            async with self._task_slots_for(tc.max_concurrency):
+                return await self._run_subtask(task, ctx, tc)
+        return await self._run_subtask(task, ctx, tc)
 
+    def _task_slots_for(self, max_concurrency: int) -> asyncio.Semaphore:
+        """The subtask semaphore for the running loop, created on first use.
+
+        A ``threading.Lock`` because several OS threads can drive one Agent, and
+        two racing creators would leave the loser capped by a semaphore nothing
+        else holds. Closed loops are dropped on the way past: a contended
+        ``asyncio.Semaphore`` caches its loop, keeping its own weak key alive.
+        """
+        loop = asyncio.get_running_loop()
+        with self._task_slots_lock:
+            slots = self._task_slots.get(loop)
+            if slots is None:
+                for closed in [cached for cached in self._task_slots if cached.is_closed()]:
+                    del self._task_slots[closed]
+                slots = asyncio.Semaphore(max_concurrency)
+                self._task_slots[loop] = slots
+            return slots
+
+    async def _run_subtask(self, task: str, ctx: Context, tc: TaskConfig) -> str:
         # Inherit only the parent's user-supplied tools — never the
         # auto-injected subtask toolkit or knowledge tool (excluded by
         # identity), so the child can't recurse or see parent-only tooling.
@@ -1432,9 +1732,15 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         description: str,
         name: str | None = None,
-        stream: StreamFactory | None = None,
+        stream: StreamOrFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
-    ) -> FunctionTool:
+    ) -> SubagentTool:
+        """Expose this agent as a delegation tool for another agent.
+
+        ``stream=`` accepts ``None`` (a fresh stream per delegation), a
+        ``Stream`` instance (reused by every delegation, which makes this
+        agent stateful), or a ``StreamFactory``. See ``subagent_tool``.
+        """
         return subagent_tool(
             self,
             description=description,
@@ -1457,7 +1763,7 @@ class _KnowledgeContext:
         self.__bootstrapped = None
 
     @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncIterator[None]:
+    async def enter(self, context: "Context") -> AsyncGenerator[None]:
         store = self.config.store
 
         if not self.__bootstrapped:
@@ -1494,7 +1800,7 @@ class _KnowledgeContext:
 
 class _FakeKnowledgeContext:
     @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncIterator[None]:
+    async def enter(self, context: "Context") -> AsyncGenerator[None]:
         yield
 
 
@@ -1560,7 +1866,7 @@ async def _observer_lifecycle(
     observers: Sequence[Observer],
     stack: ExitStack,
     context: Context,
-) -> AsyncIterator[None]:
+) -> AsyncGenerator[None]:
     """Register ``observers`` on ``stack`` and bracket the turn with lifecycle events.
 
     Observers subscribe to the stream under the caller's ``ExitStack``, then an
@@ -1621,12 +1927,20 @@ def _build_subtask_toolkit(agent: "Agent[Any]") -> Toolkit:
                 *(agent._spawn_subtask(t, ctx) for t in tasks),
                 return_exceptions=True,
             )
+            # One sub-task that could not reach a human sinks the whole call:
+            # rendering it as text would make it the tool's output, and the
+            # model would read an unaskable approval as a subtask that failed.
+            for r in raw:
+                if isinstance(r, HumanInputError):
+                    raise r
             results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
         else:
             results = []
             for t in tasks:
                 try:
                     results.append(await agent._spawn_subtask(t, ctx))
+                except HumanInputError:
+                    raise
                 except Exception as e:
                     results.append(f"Error: {e}")
 
@@ -1828,8 +2142,15 @@ class _CompactionMiddleware(BaseMiddleware):
                     event_count=len(events),
                 )
             )
+            # Collected live rather than re-read from history afterwards: the
+            # summarization call's own record is sent *while* the strategy runs,
+            # so it is in neither ``events`` nor what the strategy returns. A
+            # subscriber sees it as it is sent, which needs no assumption about
+            # how history grew in the meantime and no second full read of it.
+            spent_during: list[UsageEvent] = []
             try:
-                compacted = await self._strategy.compact(events, context, self._store)
+                with context.stream.where(UsageEvent).sub_scope(collect_usage_events(spent_during)):
+                    compacted = await self._strategy.compact(events, context, self._store)
             except Exception as exc:
                 logger.exception("Compaction failed for %s", self._actor_name)
                 with suppress(Exception):
@@ -1843,7 +2164,9 @@ class _CompactionMiddleware(BaseMiddleware):
                     )
                 return result
 
-            await context.stream.history.replace(compacted)
+            await context.stream.history.replace(
+                _with_usage_events(before=events, compacted=compacted, spent_during=spent_during)
+            )
             self._last_compact_event_count = len([e for e in compacted if is_conversational(e)])
 
             usage = getattr(self._strategy, "last_usage", {})
@@ -1859,6 +2182,58 @@ class _CompactionMiddleware(BaseMiddleware):
             )
 
         return result
+
+
+def _with_usage_events(
+    *,
+    before: list[BaseEvent],
+    compacted: list[BaseEvent],
+    spent_during: list[UsageEvent],
+) -> list[BaseEvent]:
+    """``compacted``, with every token record of the run put back around it.
+
+    Compaction replaces stream history with what its strategy retained, and
+    ``UsageEvent`` is the only thing ``UsageReport`` reads (`ADR 0014`), so
+    without this a run that compacted under-reports what it cost — on
+    ``AgentReply.usage()`` and on every transport that reports spend. Two
+    records are lost, for two different reasons: those outside the retained
+    window, which the strategy drops along with the conversation, and the
+    summarization call's own, which is emitted *while* the strategy runs and is
+    therefore absent from the snapshot the strategy returns. ``spent_during``
+    carries the second kind, collected from the stream as they were sent.
+
+    The records are rebuilt from ``before`` rather than from ``compacted``, so a
+    strategy that retained a record and one that dropped it read the same: each
+    record of the run appears exactly once, whatever the strategy did with it.
+    The one case this does not cover is a strategy that *synthesises* a new
+    ``UsageEvent`` into its returned list without sending it — that record is
+    dropped here, because telling it apart from a rebuilt copy of an existing
+    one would need identity, which does not survive a storage backend that
+    deserializes on read, or equality, which is wrong on an event whose
+    ``model`` / ``provider`` / ``label`` are ``compare=False``. A strategy that
+    ``context.send``s its spend, as the built-in ones do, is accounted correctly.
+
+    Order is telemetry from before the compaction, then the retained
+    conversation, then what was spent during it. That is not the chronological
+    order of the run — records from inside the retained window are hoisted ahead
+    of the conversation they were interleaved with — but the token records keep
+    their order relative to each other, which is what consumers that group by
+    first appearance need (AG-UI's per-``(provider, model)`` list among them).
+
+    None of this feeds the model or moves the compaction trigger: ``UsageEvent``
+    is not conversational (`ADR 0010`).
+
+    Note that the kept records accumulate: every compaction carries forward
+    every record the stream has seen, so a long-lived stream keeps one event per
+    model call for its whole life and each compaction rewrites all of them. That
+    is the cost of `ADR 0014`'s decision to keep spend in the event log; bounding
+    it belongs with that decision, not here.
+    """
+    return [
+        *(e for e in before if isinstance(e, UsageEvent)),
+        *(e for e in compacted if not isinstance(e, UsageEvent)),
+        *spent_during,
+    ]
 
 
 class _CompactionMiddlewareFactory:

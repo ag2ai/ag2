@@ -7,7 +7,7 @@ from ag2.mcp import MCPServer, Prompt, PromptArgument, Resource, ResourceTemplat
 agent = Agent(
     name="claude",
     prompt="You are a concise assistant.",
-    config=AnthropicConfig(model="claude-sonnet-4-6"),
+    config=AnthropicConfig(model="claude-sonnet-5"),
 )
 
 # A static resource (fixed URI) and a templated one ({city} is matched from the URI).
@@ -15,7 +15,7 @@ readme = Resource(
     uri="docs://readme",
     name="readme",
     description="Project overview.",
-    read=lambda: "AG2 beta MCP server example.",
+    read=lambda: "AG2 MCP server example.",
     mime_type="text/markdown",
 )
 

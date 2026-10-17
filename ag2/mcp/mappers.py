@@ -3,18 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
-from dataclasses import asdict, is_dataclass
+from dataclasses import is_dataclass
 from typing import TYPE_CHECKING, Any
 
+import jsonschema
 from mcp.types import (
     AudioContent,
     BlobResourceContents,
+    CallToolResult,
     ContentBlock,
     EmbeddedResource,
     ImageContent,
     TextContent,
 )
-from pydantic import AnyUrl, BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from ag2.events import BinaryResult
 
@@ -28,13 +30,35 @@ _MEDIA_TYPE_KEYS = ("media_type", "mime_type", "mimeType")
 _DEFAULT_MEDIA_TYPE = "image/png"
 
 
+def tool_error(message: str) -> CallToolResult:
+    """The ``tools/call`` error result carrying ``message``.
+
+    ``mcp`` 2.0 lets a raising handler propagate as a JSON-RPC error, so a
+    caller that wants a tool-level error converts it here.
+    """
+    return CallToolResult(content=[TextContent(type="text", text=message)], isError=True)
+
+
+def input_validation_error(arguments: dict[str, Any], schema: dict[str, Any]) -> str | None:
+    """The message for ``arguments`` failing ``schema``, or ``None`` when they pass.
+
+    ``mcp`` 2.0 no longer validates arguments against the advertised
+    ``inputSchema``, so a caller that promised that validation performs it here.
+    A malformed *schema* raises ``jsonschema.SchemaError`` rather than returning
+    a message, so keep this inside the caller's tool-error guard.
+    """
+    try:
+        jsonschema.validate(arguments, schema)
+    except jsonschema.ValidationError as e:
+        return f"Input validation error: {e.message}"
+    return None
+
+
 def reply_to_content(reply: "AgentReply[Any, Any]") -> list[ContentBlock]:
     """Convert an :class:`AgentReply` into MCP ``tools/call`` content blocks.
 
-    Inverse of the consume-side ``_extract_content``
-    (``ag2/tools/toolkits/mcp_server/toolkit.py``): the reply body
-    becomes a :class:`TextContent`, and each generated binary file becomes the
-    closest content variant (image / audio / embedded blob resource).
+    The reply body becomes a :class:`TextContent`, and each generated binary
+    file the closest content variant (image / audio / embedded blob resource).
     """
     blocks: list[ContentBlock] = []
     body = reply.body
@@ -58,7 +82,7 @@ def _file_to_content(file: BinaryResult) -> ContentBlock:
     return EmbeddedResource(
         type="resource",
         resource=BlobResourceContents(
-            uri=AnyUrl(f"resource://{file.name}"),
+            uri=f"resource://{file.name}",
             blob=encoded,
             mimeType=media_type,
         ),
@@ -76,13 +100,16 @@ def _media_type(file: BinaryResult) -> str:
 def to_structured_dict(value: Any) -> dict[str, Any] | None:
     """Coerce a validated structured-output value into a JSON-able object dict.
 
-    Returns ``None`` when the value cannot be represented as an object (so the
-    caller can skip ``structuredContent`` rather than emit a malformed result).
+    ``None`` when the value is not representable as an object, so the caller can
+    skip ``structuredContent`` rather than emit a malformed result.
     """
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
     if is_dataclass(value) and not isinstance(value, type):
-        return asdict(value)
+        # Pydantic's dump, not ``asdict``: it honours ``serialize_by_alias`` and
+        # JSON-encodes nested values, which is what the advertised schema describes.
+        dumped: dict[str, Any] = TypeAdapter(type(value)).dump_python(value, mode="json")
+        return dumped
     if isinstance(value, dict):
         return value
     return None

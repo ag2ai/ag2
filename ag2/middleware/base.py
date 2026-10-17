@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from types import MappingProxyType
 from typing import Any, Protocol, TypeAlias
 
 from ag2.annotations import Context
@@ -18,6 +19,7 @@ from ag2.events import (
     ToolResultEvent,
 )
 from ag2.events.conditions import TypeCondition
+from ag2.middleware.describe import MiddlewareDescription, _describe
 
 
 class MiddlewareFactory(Protocol):
@@ -34,6 +36,36 @@ class Middleware(MiddlewareFactory):
     ) -> None:
         self._cls = middleware_cls
         self._options = kwargs
+
+    @property
+    def cls(self) -> type["BaseMiddleware"]:
+        """The middleware class this factory instantiates per turn."""
+
+        return self._cls
+
+    @property
+    def options(self) -> Mapping[str, Any]:
+        """The options this factory was constructed with.
+
+        Unlike :meth:`describe`, this exposes the values. A description is meant
+        to be logged or committed as a fixture, so it reports option names only;
+        reading an option off a factory you already hold is a deliberate act.
+        """
+
+        return MappingProxyType(self._options)
+
+    def describe(self) -> "MiddlewareDescription":
+        """Report the wrapped class and option names, but not option values.
+
+        Always incomplete: option values are caller-supplied and may hold
+        credentials, and the wrapped class is only instantiated per turn.
+        """
+
+        return MiddlewareDescription(
+            kind=self._cls.__qualname__,
+            config={"options": tuple(sorted(self._options))},
+            complete=False,
+        )
 
     def __call__(
         self,
@@ -158,6 +190,13 @@ class ConditionalMiddleware:
     ) -> None:
         self._middleware = middleware
         self._condition = condition if isinstance(condition, Condition) else TypeCondition(condition)
+
+    def describe(self) -> "MiddlewareDescription":
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"condition": type(self._condition).__qualname__},
+            inner=(_describe(self._middleware),),
+        )
 
     def __call__(
         self,

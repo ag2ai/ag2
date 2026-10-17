@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from pydantic_core import to_jsonable_python
 
-from ag2.context import ConversationContext
+from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.stream import MemoryStream
 
 from ._types import A2UIVersion, JsonObject, JsonValue, ServerToClientMessage
@@ -95,11 +95,16 @@ def build_server_action_context(
     ``dependency_provider`` (for ``Depends`` resolution and
     ``dependency_provider.override(...)``) — over a throwaway stream, so a
     handler's ``Depends``/``Inject`` parameters resolve exactly like a tool's.
+
+    *variables* come from the clicking client, so reserved keys are dropped.
     """
     return ConversationContext(
         MemoryStream(),
         dependencies=dict(agent._agent_dependencies),
-        variables={**dict(agent._agent_variables), **(variables or {})},
+        variables={
+            **dict(agent._agent_variables),
+            **strip_reserved_variables(variables or {}, source="an inbound A2UI click"),
+        },
         dependency_provider=agent.dependency_provider,
     )
 

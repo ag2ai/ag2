@@ -114,6 +114,7 @@ These override anything below:
 By design these remain with humans (see [Policy §8](TRIAGE_POLICY.md#8-who-may-do-what)):
 
 - **Closing** anything outside the stale flow — including confirmed duplicates (T1 only proposes).
+- **Flagging/hiding reviews** that show signs of unverified AI-generated content ([Policy §4 P3](TRIAGE_POLICY.md#stage-p3--review), [AI Policy §Reviews](../AI_POLICY.md#reviews)) — telling a templated-but-legitimate review apart from a generic one requires reading the diff and judging the specific content; the bot does not touch review content or post `ai-slop-review`.
 - `status:confirmed` and `priority:*` — Triage Team / maintainers, during triage.
 - `status:needs-review` → `status:changes-requested` on review — the reviewer sets it together with the review itself.
 - Merging (Policy §4 P4 conditions).

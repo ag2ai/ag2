@@ -4,6 +4,7 @@
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
+from copy import copy
 from typing import Any, overload
 
 from ag2.annotations import Context
@@ -39,8 +40,14 @@ class Toolkit(Tool):
     def tools(self) -> tuple[Tool, ...]:
         return tuple(self._tools.values())
 
+    def _snapshot(self) -> "Toolkit":
+        """Copy the discovered state before resolving members for one turn."""
+        return copy(self)
+
     def _add_tool(self, tool: Tool | Callable[..., Any], *, unsafe: bool = False) -> None:
-        t = FunctionTool.ensure_tool(tool).with_middleware(*self._middleware)
+        t = FunctionTool.ensure_tool(tool)
+        if isinstance(t, FunctionTool):
+            t = t.with_middleware(*self._middleware)
 
         if not unsafe and t.name in self._tools:
             raise ToolConflictError(t.name)
@@ -49,12 +56,15 @@ class Toolkit(Tool):
 
     def __or__(self, other: Any) -> "Toolkit":
         if isinstance(other, Toolkit):
-            tools = self._tools | other._tools
+            incoming = other._tools
         else:
-            tool = FunctionTool.ensure_tool(other)
-            tools = self._tools | {tool.name: tool}
+            t = other if isinstance(other, Tool) else FunctionTool.ensure_tool(other)
+            incoming = {t.name: t}
 
-        return Toolkit(*tools.values(), name=self.name, middleware=self._middleware)
+        # Members already have their middleware. Composition only joins collections.
+        merged = Toolkit(name=self.name)
+        merged._tools = self._tools | incoming
+        return merged
 
     @overload
     def tool(

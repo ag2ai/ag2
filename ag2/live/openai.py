@@ -4,9 +4,7 @@
 
 import asyncio
 import base64
-import io
-import wave
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
@@ -28,6 +26,8 @@ from openai.types.realtime import (
     RealtimeTracingConfigParam,
 )
 from openai.types.realtime.realtime_audio_config_input_param import NoiseReduction
+from openai.types.realtime.realtime_audio_formats_param import AudioPCM
+from openai.types.realtime.realtime_audio_input_turn_detection_param import SemanticVad
 
 from ag2.context import ConversationContext
 from ag2.events import (
@@ -51,7 +51,7 @@ from ag2.tools.schemas import ToolSchema
 from .protocols import TTSConfig as TTSConfigProtocol
 from .realtime import RealtimeConfig
 from .stt import STTConfig as STTConfigProtocol
-from .stt import VoiceInput
+from .stt import VoiceInput, voice_to_wav_buffer
 
 if TYPE_CHECKING:
     from openai.types.audio.speech_model import SpeechModel
@@ -90,6 +90,14 @@ ModelName = Literal[
 ]
 
 
+def _pcm_24khz() -> AudioPCM:
+    return {"type": "audio/pcm", "rate": 24000}
+
+
+def _semantic_vad() -> SemanticVad:
+    return {"type": "semantic_vad", "create_response": True, "interrupt_response": True}
+
+
 @dataclass(slots=True)
 class AudioOutput:
     """Audio output config for the realtime session.
@@ -99,7 +107,7 @@ class AudioOutput:
 
     voice: RealtimeVoice | str = "alloy"
     format: RealtimeAudioFormatsParam = field(
-        default_factory=lambda: {"type": "audio/pcm", "rate": 24000},
+        default_factory=_pcm_24khz,
     )
     speed: float = 1.0
 
@@ -120,33 +128,40 @@ class InputConfig:
     """
 
     format: RealtimeAudioFormatsParam = field(
-        default_factory=lambda: {"type": "audio/pcm", "rate": 24000},
+        default_factory=_pcm_24khz,
     )
     transcription: AudioTranscriptionParam | None = None
     noise_reduction: NoiseReduction | None = None
     turn_detection: RealtimeAudioInputTurnDetectionParam | None = field(
-        default_factory=lambda: {
-            "type": "semantic_vad",
-            "create_response": True,
-            "interrupt_response": True,
-        }
+        default_factory=_semantic_vad,
     )
 
 
+def _resolve_client(client: AsyncOpenAI | None, api_key: str | None) -> AsyncOpenAI:
+    if client is None:
+        return AsyncOpenAI(api_key=api_key)
+    if api_key is not None:
+        raise ValueError("Pass either client or api_key, not both.")
+    return client
+
+
 class STTConfig(STTConfigProtocol):
+    """OpenAI speech transcription; takes an ``api_key`` or a reusable ``client``."""
+
     def __init__(
         self,
         model: "AudioModel | str",
         *,
         client: AsyncOpenAI | None = None,
+        api_key: str | None = None,
     ) -> None:
         self.model = model
-        self.client = client or AsyncOpenAI()
+        self.client = _resolve_client(client, api_key)
 
     async def transcribe(self, voice: "VoiceInput", context: "Context") -> str:
         stream = await self.client.audio.transcriptions.create(
             model=self.model,
-            file=_voice_to_wav_buffer(voice),
+            file=voice_to_wav_buffer(voice),
             response_format="text",
             stream=True,
         )
@@ -162,19 +177,22 @@ class STTConfig(STTConfigProtocol):
 
 
 class STTTranslationConfig(STTConfigProtocol):
+    """OpenAI speech translation; takes an ``api_key`` or a reusable ``client``."""
+
     def __init__(
         self,
         model: "AudioModel | str",
         *,
         client: AsyncOpenAI | None = None,
+        api_key: str | None = None,
     ) -> None:
         self.model = model
-        self.client = client or AsyncOpenAI()
+        self.client = _resolve_client(client, api_key)
 
     async def transcribe(self, voice: "VoiceInput", context: "Context") -> str:
         result = await self.client.audio.translations.create(
             model=self.model,
-            file=_voice_to_wav_buffer(voice),
+            file=voice_to_wav_buffer(voice),
             response_format="text",
         )
 
@@ -183,15 +201,18 @@ class STTTranslationConfig(STTConfigProtocol):
 
 
 class TTSConfig(TTSConfigProtocol[bytes]):
+    """OpenAI speech synthesis; takes an ``api_key`` or a reusable ``client``."""
+
     def __init__(
         self,
         model: "SpeechModel | str",
         *,
         client: AsyncOpenAI | None = None,
+        api_key: str | None = None,
         voice: Voice = "alloy",
         speed: float | Omit = omit,
     ) -> None:
-        self._client = client or AsyncOpenAI()
+        self._client = _resolve_client(client, api_key)
 
         self._model = model
         self._voice = voice
@@ -209,11 +230,13 @@ class TTSConfig(TTSConfigProtocol[bytes]):
 
 
 class RealTimeConfig(RealtimeConfig):
-    """Realtime STT config backed by OpenAI's bidirectional realtime API.
+    """Realtime (Speech-to-Speech/S2S) config backed by OpenAI's bidirectional realtime API.
 
     Implements the `RealtimeConfig` protocol — call `session(...)` to open
     a connection that pumps captured audio into the API and emits transcription
     events on the supplied context.
+
+    Takes an ``api_key`` or a reusable ``client``, not both.
     """
 
     def __init__(
@@ -227,6 +250,7 @@ class RealTimeConfig(RealtimeConfig):
         tracing: RealtimeTracingConfigParam | None = None,
         session: RealtimeSessionCreateRequestParam | None = None,
         client: AsyncOpenAI | None = None,
+        api_key: str | None = None,
     ) -> None:
         self.model = model
 
@@ -271,7 +295,7 @@ class RealTimeConfig(RealtimeConfig):
 
         self._session_overrides: RealtimeSessionCreateRequestParam = session or {"type": "realtime"}
 
-        self.client = client or AsyncOpenAI()
+        self.client = _resolve_client(client, api_key)
 
     def _build_session(
         self,
@@ -294,7 +318,7 @@ class RealTimeConfig(RealtimeConfig):
         instructions: Iterable[str] = (),
         tools: Iterable[ToolSchema] = (),
         serializer: SerializerProto,
-    ) -> AsyncIterator[None]:
+    ) -> AsyncGenerator[None]:
         final_session = self._build_session(instructions=instructions, tools=tools)
 
         async with self.client.realtime.connect(model=self.model) as conn:
@@ -376,7 +400,8 @@ async def _pump_events(
     text = ""
     async for event in conn:
         if event.type == "conversation.item.input_audio_transcription.delta":
-            await context.send(TranscriptionChunkEvent(event.delta))
+            if event.delta is not None:
+                await context.send(TranscriptionChunkEvent(event.delta))
         elif event.type == "conversation.item.input_audio_transcription.completed":
             # TODO: process usage
             await context.send(TranscriptionCompletedEvent(event.transcript))
@@ -420,15 +445,3 @@ async def _pump_events(
                 )
             )
             text = ""
-
-
-def _voice_to_wav_buffer(voice: "VoiceInput") -> io.BytesIO:
-    audio_buffer = io.BytesIO()
-    with wave.open(audio_buffer, "wb") as wav_file:
-        wav_file.setnchannels(voice.channels)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(voice.frame_rate)
-        wav_file.writeframes(voice.content)
-    audio_buffer.seek(0)
-    audio_buffer.name = "speech.wav"
-    return audio_buffer

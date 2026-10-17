@@ -241,7 +241,7 @@ class TestPluginHITLHook:
         await agent.ask("Hi!")
         mock.assert_called_once_with("agent_answer")
 
-    def test_warn_on_double_set(self) -> None:
+    async def test_warn_on_double_set(self) -> None:
         plugin = Plugin()
 
         @plugin.hitl_hook

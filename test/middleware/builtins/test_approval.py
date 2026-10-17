@@ -2,14 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from dirty_equals import IsPartialDict
 
-from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2 import Agent, tool
+from ag2.events import ToolApprovalRequest, ToolCallEvent, ToolResultEvent
 from ag2.middleware import approval_required
 from ag2.middleware.builtin.tools.approval import BYPASS_KEY
+from ag2.testing import TestConfig
+from test._helpers import ScriptedHuman
 
 
 def make_context(
@@ -17,9 +22,16 @@ def make_context(
     variables: dict[str, Any] | None = None,
 ) -> AsyncMock:
     context = AsyncMock()
-    context.input = AsyncMock(return_value=response)
+    context.ask = AsyncMock(return_value=response)
     context.variables = variables if variables is not None else {}
     return context
+
+
+def asked(context: AsyncMock) -> ToolApprovalRequest:
+    """The request the middleware put to the human."""
+    [request], _ = context.ask.await_args
+    assert isinstance(request, ToolApprovalRequest)
+    return request
 
 
 @pytest.fixture
@@ -41,7 +53,7 @@ async def test_accepts_various_affirmative_inputs(tool_call: ToolCallEvent, resp
     result = await hook(call_next, tool_call, context)
 
     assert result == expected
-    context.input.assert_awaited_once()
+    context.ask.assert_awaited_once()
 
 
 @pytest.mark.asyncio()
@@ -67,9 +79,10 @@ async def test_custom_message(tool_call: ToolCallEvent) -> None:
 
     await hook(call_next, tool_call, context)
 
-    context.input.assert_awaited_once_with(
+    assert asked(context) == ToolApprovalRequest(
         'Approve calculator with {"a": 1, "b": 2}?',
-        timeout=30,
+        tool_call_id=tool_call.id,
+        tool_name="calculator",
     )
 
 
@@ -82,8 +95,7 @@ async def test_custom_timeout(tool_call: ToolCallEvent) -> None:
 
     await hook(call_next, tool_call, context)
 
-    _, kwargs = context.input.await_args
-    assert kwargs["timeout"] == 60
+    assert asked(context).timeout == 60
 
 
 @pytest.mark.asyncio()
@@ -108,12 +120,11 @@ async def test_always_sets_bypass_flag(tool_call: ToolCallEvent) -> None:
 
     # first execution should prompt
     await hook(call_next, tool_call, context)
-    context.input.assert_awaited_once()
-    assert context.variables[BYPASS_KEY]["calculator"] is True
+    context.ask.assert_awaited_once()
 
     # second execution should not prompt
     await hook(call_next, tool_call, context)
-    context.input.assert_awaited_once()
+    context.ask.assert_awaited_once()
 
 
 @pytest.mark.asyncio()
@@ -128,7 +139,7 @@ async def test_always_is_per_tool(tool_call: ToolCallEvent) -> None:
 
     assert result == expected
     # Should still prompt since "calculator" is not in the bypass dict
-    context.input.assert_awaited_once()
+    context.ask.assert_awaited_once()
 
 
 @pytest.mark.asyncio()
@@ -142,3 +153,141 @@ async def test_always_ignored_when_disabled(tool_call: ToolCallEvent) -> None:
 
     call_next.assert_not_awaited()
     assert result == ToolResultEvent.from_call(tool_call, result="User denied the tool call request")
+
+
+@pytest.mark.asyncio()
+async def test_always_replaces_the_bypass_dict(tool_call: ToolCallEvent) -> None:
+    hook = approval_required(allow_always=True)
+    shared = {"other_tool": True}
+    context = make_context("always", variables={BYPASS_KEY: shared})
+
+    await hook(AsyncMock(), tool_call, context)
+
+    assert context.variables[BYPASS_KEY] is not shared
+    assert context.variables[BYPASS_KEY] == IsPartialDict({"other_tool": True})
+    assert shared == {"other_tool": True}
+
+
+@pytest.mark.asyncio()
+async def test_always_does_not_approve_another_tool_of_the_same_name() -> None:
+    runs: list[str] = []
+
+    @tool(name="deploy", middleware=[approval_required()])
+    def deploy_local() -> str:
+        runs.append("local")
+        return "deployed"
+
+    @tool(name="deploy", middleware=[approval_required()])
+    def deploy_other() -> str:
+        runs.append("other")
+        return "deployed"
+
+    agent = Agent(
+        "",
+        tools=[deploy_other],
+        config=TestConfig(
+            ToolCallEvent(name="deploy", arguments="{}"),
+            "done",
+            ToolCallEvent(name="deploy", arguments="{}"),
+            "done",
+        ),
+    )
+    human = ScriptedHuman("always")
+
+    reply = await agent.ask("Deploy", tools=[deploy_local], hitl_hook=human)
+    human.answer = "n"
+    await reply.ask("Deploy again", hitl_hook=human)
+
+    assert runs == ["local"]
+    assert human.questions == 2
+
+
+@pytest.mark.asyncio()
+async def test_always_through_a_shared_hook_does_not_approve_another_tool_of_the_same_name() -> None:
+    runs: list[str] = []
+    gate = approval_required()
+
+    @tool(name="deploy", middleware=[gate])
+    def deploy_local() -> str:
+        runs.append("local")
+        return "deployed"
+
+    @tool(name="deploy", middleware=[gate])
+    def deploy_other() -> str:
+        runs.append("other")
+        return "deployed"
+
+    agent = Agent(
+        "",
+        tools=[deploy_other],
+        config=TestConfig(
+            ToolCallEvent(name="deploy", arguments="{}"),
+            "done",
+            ToolCallEvent(name="deploy", arguments="{}"),
+            "done",
+        ),
+    )
+    human = ScriptedHuman("always")
+
+    reply = await agent.ask("Deploy", tools=[deploy_local], hitl_hook=human)
+    human.answer = "n"
+    await reply.ask("Deploy again", hitl_hook=human)
+
+    assert runs == ["local"]
+    assert human.questions == 2
+
+
+@pytest.mark.asyncio()
+async def test_always_keeps_approving_the_same_tool_on_later_turns() -> None:
+    runs: list[str] = []
+
+    @tool(middleware=[approval_required()])
+    def deploy() -> str:
+        runs.append("deploy")
+        return "deployed"
+
+    agent = Agent(
+        "",
+        tools=[deploy],
+        config=TestConfig(
+            ToolCallEvent(name="deploy", arguments="{}"),
+            "done",
+            ToolCallEvent(name="deploy", arguments="{}"),
+            "done",
+        ),
+    )
+    human = ScriptedHuman("always")
+
+    reply = await agent.ask("Deploy", hitl_hook=human)
+    human.answer = "n"
+    await reply.ask("Deploy again", hitl_hook=human)
+
+    assert runs == ["deploy", "deploy"]
+    assert human.questions == 1
+
+
+def deploy() -> str:
+    return "deployed"
+
+
+@pytest.mark.asyncio()
+async def test_always_survives_rebuilding_the_tool_from_stored_variables() -> None:
+    """A restarted process builds the tool and its hook anew; the grant still applies."""
+    human = ScriptedHuman("always")
+    first = Agent(
+        "",
+        tools=[tool(deploy, middleware=[approval_required()])],
+        config=TestConfig(ToolCallEvent(name="deploy", arguments="{}"), "done"),
+    )
+    reply = await first.ask("Deploy", hitl_hook=human)
+    stored = json.loads(json.dumps(reply.context.variables))
+
+    human.answer = "n"
+    rebuilt = Agent(
+        "",
+        tools=[tool(deploy, middleware=[approval_required()])],
+        config=TestConfig(ToolCallEvent(name="deploy", arguments="{}"), "done"),
+    )
+    await rebuilt.ask("Deploy again", variables=stored, hitl_hook=human)
+
+    assert human.questions == 1

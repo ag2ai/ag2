@@ -68,6 +68,30 @@ A2A push notifications let the server POST task updates to a webhook the client 
 !!! note
     The server must be constructed with a `#!python push_config_store` for push CRUD to work. The default `#!python A2AServer(agent)` does not enable push. See [Server → What `A2AServer` Holds](/docs/user-guide/a2a/server#what-a2aserver-holds).
 
+!!! warning
+    Push configs live in the push store, not the task store. With several server replicas the default in-memory push store is per-replica, so a webhook registered on one replica is not seen by another. See [Server → Running on Several Replicas](/docs/user-guide/a2a/server#running-on-several-replicas).
+
+### Webhooks Across Server Replicas
+
+The push config store decides where registered webhooks live. The default `#!python InMemoryPushNotificationConfigStore` keeps them in one process, so with several replicas a task that finishes on a replica that never saw the registration sends nothing and raises no error. To share them, pass the SDK's database store (built on the same engine as the task store) and a sender that reads it:
+
+```python linenums="1"
+from a2a.server.tasks import BasePushNotificationSender, DatabasePushNotificationConfigStore
+
+push_store = DatabasePushNotificationConfigStore(engine)
+await push_store.initialize()
+
+server = A2AServer(
+    agent,
+    task_store=task_store,
+    event_stream=event_stream,
+    push_config_store=push_store,
+    push_sender=BasePushNotificationSender(http_client, push_store),
+)
+```
+
+`#!python task_store` and `#!python event_stream` come from [Server → Running on Several Replicas](/docs/user-guide/a2a/server#running-on-several-replicas).
+
 ### Registering a Webhook
 
 ```python linenums="1"

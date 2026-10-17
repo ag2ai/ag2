@@ -11,6 +11,7 @@ Covers the three responsibilities the decorator owns:
 * exception capture (a raising scorer never fails the run)
 """
 
+from collections.abc import Awaitable
 from typing import Any
 
 import pytest
@@ -258,14 +259,34 @@ class TestExceptionCapture:
         assert "KeyError" in fb.comment
 
 
+@pytest.mark.asyncio
 class TestAsyncScorers:
-    @pytest.mark.asyncio
     async def test_async_scorer_awaited(self) -> None:
         @scorer
         async def async_pass(trace: Trace) -> bool:
             return len(trace.events) == 0
 
         assert await _run(async_pass) == [Feedback(key="async_pass", score=True)]
+
+    async def test_async_callable_object_awaited(self) -> None:
+        class AsyncCallable:
+            async def __call__(self, trace: Trace) -> bool:
+                return len(trace.events) == 0
+
+        s = Scorer(AsyncCallable(), key="async_callable")
+
+        assert await _run(s) == [Feedback(key="async_callable", score=True)]
+
+    async def test_sync_callable_returning_awaitable_awaited(self) -> None:
+        async def judge(trace: Trace) -> bool:
+            return len(trace.events) == 0
+
+        def wrapper(trace: Trace) -> Awaitable[bool]:
+            return judge(trace)
+
+        s = Scorer(wrapper, key="sync_wrapper")
+
+        assert await _run(s) == [Feedback(key="sync_wrapper", score=True)]
 
 
 class TestScorerConstruction:
@@ -285,3 +306,11 @@ class TestScorerConstruction:
             return True
 
         assert my_check.key == "my_check"
+
+    def test_wrapping_a_scorer_is_rejected(self) -> None:
+        @scorer
+        async def inner(trace: Trace) -> bool:
+            return True
+
+        with pytest.raises(TypeError, match="cannot wrap a Scorer"):
+            Scorer(inner, key="outer")

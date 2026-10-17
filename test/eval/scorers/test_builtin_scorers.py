@@ -17,10 +17,10 @@ from ag2.eval.scorers import (
 )
 from ag2.events import (
     BaseEvent,
-    ModelResponse,
     ToolCallEvent,
     ToolErrorEvent,
     Usage,
+    UsageEvent,
 )
 
 
@@ -195,7 +195,7 @@ class TestFinalAnswerMatches:
 class TestTokenBudget:
     @pytest.mark.asyncio
     async def test_passes_when_under_budget(self) -> None:
-        trace = _trace(ModelResponse(usage=Usage(prompt_tokens=100, completion_tokens=50)))
+        trace = _trace(UsageEvent(Usage(prompt_tokens=100, completion_tokens=50)))
 
         feedback = await _run(token_budget(1_000), trace=trace)
 
@@ -203,7 +203,7 @@ class TestTokenBudget:
 
     @pytest.mark.asyncio
     async def test_fails_when_over_budget(self) -> None:
-        trace = _trace(ModelResponse(usage=Usage(prompt_tokens=1_500, completion_tokens=600)))
+        trace = _trace(UsageEvent(Usage(prompt_tokens=1_500, completion_tokens=600)))
 
         feedback = await _run(token_budget(1_000), trace=trace)
 
@@ -211,7 +211,7 @@ class TestTokenBudget:
 
     @pytest.mark.asyncio
     async def test_passes_at_exact_budget(self) -> None:
-        trace = _trace(ModelResponse(usage=Usage(prompt_tokens=600, completion_tokens=400)))
+        trace = _trace(UsageEvent(Usage(prompt_tokens=600, completion_tokens=400)))
 
         feedback = await _run(token_budget(1_000), trace=trace)
 

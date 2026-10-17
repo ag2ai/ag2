@@ -23,6 +23,7 @@ from ag2.events import (
     ToolCallEvent,
     Usage,
 )
+from ag2.exceptions import HumanInputFailedError
 from ag2.middleware import MetricsMiddleware, RetryMiddleware
 from ag2.testing import TestConfig
 
@@ -352,8 +353,12 @@ async def test_records_human_input_error_metrics(registry: CollectorRegistry) ->
         middleware=[MetricsMiddleware(registry=registry)],
     )
 
-    with pytest.raises(TimeoutError):
+    # The middleware sits inside the hook chain, so it still sees — and labels —
+    # the hook's own exception; ``Context.input`` wraps it only on the way out.
+    with pytest.raises(HumanInputFailedError) as caught:
         await agent.ask("Ask for input")
+
+    assert isinstance(caught.value.cause, TimeoutError)
 
     human_input_error_labels = {
         "agent": "human-input-error-agent",

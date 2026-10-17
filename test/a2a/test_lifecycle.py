@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 from uuid import uuid4
 
@@ -13,17 +13,21 @@ from a2a.server.agent_execution import RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import InMemoryPushNotificationConfigStore, TaskUpdater
 from a2a.types import Task, TaskState, TaskStatus
+from fast_depends.pydantic import PydanticSerializer
 from typing_extensions import Self
 
-from ag2 import Agent, Context
+from ag2 import Agent, Context, MemoryStream
 from ag2.a2a import A2AConfig, A2AServer, build_card
 from ag2.a2a.client import A2AClient
 from ag2.a2a.errors import A2ATaskFailedError
 from ag2.a2a.testing import make_test_client_factory
 from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig
-from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelResponse
+from ag2.events import BaseEvent, ModelMessage, ModelMessageChunk, ModelRequest, ModelResponse, TextInput
 from ag2.testing import TestConfig
+
+# What an ``Agent`` hands its ``LLMClient``, built the same way.
+_SERIALIZER = PydanticSerializer(pydantic_config={"arbitrary_types_allowed": True}, use_fastdepends_errors=False)
 
 
 class _SpyAsyncClient(httpx.AsyncClient):
@@ -34,7 +38,7 @@ class _SpyAsyncClient(httpx.AsyncClient):
         await super().aclose()
 
 
-def _make_spy_factory(server: A2AServer, url: str):
+def _make_spy_factory(server: A2AServer, url: str) -> Callable[[], httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=server.build_jsonrpc(url=url))
 
     def factory() -> httpx.AsyncClient:
@@ -70,7 +74,7 @@ class TestHttpxLifecycle:
 
         await client.ask("ping")
 
-        assert _SpyAsyncClient.aclose_count >= 1
+        assert _SpyAsyncClient.aclose_count == 1
 
     async def test_client_closes_httpx_when_task_fails(self) -> None:
         _SpyAsyncClient.aclose_count = 0
@@ -87,14 +91,48 @@ class TestHttpxLifecycle:
         with pytest.raises(A2ATaskFailedError):
             await client.ask("ping")
 
-        assert _SpyAsyncClient.aclose_count >= 1
+        assert _SpyAsyncClient.aclose_count == 1
 
-    async def test_aclose_is_idempotent(self) -> None:
+    async def test_closing_leaves_the_client_reusable_for_the_next_turn(self) -> None:
+        # ``A2AClient`` is reused across ``reply.ask(...)`` follow-ups and
+        # closes its httpx client at the end of every turn, so each turn has
+        # to reconnect from scratch rather than reach for a closed client.
         _SpyAsyncClient.aclose_count = 0
-        client = A2AClient(card_url="http://test")
-        client._httpx_client = _SpyAsyncClient(base_url="http://test")
+        server = A2AServer(Agent("server", config=TestConfig("hi")))
+        url = "http://test"
+        client = Agent("client", config=A2AConfig(card_url=url, httpx_client_factory=_make_spy_factory(server, url)))
+
+        first = await client.ask("ping")
+        second = await first.ask("ping again")
+
+        assert second.body == "hi"
+        assert _SpyAsyncClient.aclose_count == 2
+
+    async def test_aclose_on_a_client_that_never_connected_is_a_no_op(self) -> None:
+        _SpyAsyncClient.aclose_count = 0
+        client = A2AClient(card_url="http://test", httpx_client_factory=_SpyAsyncClient)
 
         await client.aclose()
+        await client.aclose()
+
+        assert _SpyAsyncClient.aclose_count == 0
+
+    async def test_aclose_after_a_turn_does_not_close_the_same_connection_twice(self) -> None:
+        # The turn closes in its own ``finally``; an explicit ``aclose()``
+        # on top must not reach the httpx client again. Driven directly
+        # because ``Agent`` never hands the client back to the caller.
+        _SpyAsyncClient.aclose_count = 0
+        server = A2AServer(Agent("server", config=TestConfig("hi")))
+        url = "http://test"
+        client = A2AClient(card_url=url, httpx_client_factory=_make_spy_factory(server, url))
+
+        await client(
+            [ModelRequest([TextInput("ping")])],
+            Context(stream=MemoryStream()),
+            tools=[],
+            response_schema=None,
+            serializer=_SERIALIZER,
+        )
         await client.aclose()
 
         assert _SpyAsyncClient.aclose_count == 1

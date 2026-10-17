@@ -10,6 +10,8 @@ from ag2 import Agent, Context
 from ag2.agent import KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact, TailWindowCompact
 from ag2.events import (
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     CompactionCompleted,
     CompactionFailed,
     CompactionStarted,
@@ -25,9 +27,11 @@ from ag2.events import (
     Usage,
     UsageEvent,
 )
+from ag2.events.base import is_conversational
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
+from test._helpers import DurableReasoning, lookup
 
 
 class TestTailWindowCompact:
@@ -129,6 +133,41 @@ class TestTailWindowToolCycleBoundary:
 
 
 @pytest.mark.asyncio
+class TestTailWindowBuiltinToolBoundary:
+    """A builtin (server-side) call satisfies its own result and needs a reasoning
+    anchor. Reading only ``ModelResponse.tool_calls`` sees neither."""
+
+    async def test_intact_builtin_cycle_does_not_block_compaction(self) -> None:
+        # The retained window ends with a builtin result whose call is right there.
+        # A boundary check that cannot see builtin calls calls this unsafe forever,
+        # runs the cut off the end, and silently gives up on compacting at all.
+        events = [
+            ModelRequest([TextInput("u0")]),
+            ModelRequest([TextInput("u1")]),
+            DurableReasoning("plan"),
+            BuiltinToolCallEvent(id="ws_1", name="web_search", arguments="{}"),
+            BuiltinToolResultEvent(parent_id="ws_1", name="web_search", result=ToolResult("ok")),
+        ]
+
+        result = await TailWindowCompact(target=3).compact(events, Context(stream=MemoryStream()), None)
+
+        assert result == events[2:]
+
+    async def test_split_builtin_group_compacts_whole(self) -> None:
+        events = [
+            ModelRequest([TextInput("u0")]),
+            DurableReasoning("plan"),
+            BuiltinToolCallEvent(id="ws_1", name="web_search", arguments="{}"),
+            BuiltinToolResultEvent(parent_id="ws_1", name="web_search", result=ToolResult("ok")),
+            ModelRequest([TextInput("u1")]),
+        ]
+
+        result = await TailWindowCompact(target=3).compact(events, Context(stream=MemoryStream()), None)
+
+        assert result == [events[-1]]
+
+
+@pytest.mark.asyncio
 class TestTelemetryNotConversational:
     """UsageEvent is persisted telemetry, not conversation — it must not consume
     the retention window, leak into the summary, or trigger compaction."""
@@ -183,6 +222,127 @@ class TestTelemetryNotConversational:
         )
         await agent.ask("once", stream=stream)
         assert completions == []
+
+
+@pytest.mark.asyncio
+class TestTelemetrySurvivesCompaction:
+    """Compaction rewrites history; the run's token records must outlive it.
+
+    ``UsageEvent`` is the only thing ``UsageReport`` reads (`ADR 0014`), so a
+    record the rewrite drops is spend the run can never report again — on
+    ``AgentReply.usage()`` and on every transport built over it.
+    """
+
+    @staticmethod
+    def _agent() -> Agent:
+        """A tool loop of 110 then 44 tokens, with a 525-token summarization call.
+
+        The tool call is what makes this a two-call turn, so the first call's
+        record is already outside the window compaction retains by the time the
+        turn ends. Stub usage throughout, so the arithmetic is exact.
+        """
+        summarizer = TestConfig(
+            ModelResponse(
+                ModelMessage("summary"),
+                usage=Usage(prompt_tokens=500, completion_tokens=25, total_tokens=525),
+                model="stub-summarizer",
+                provider="stub",
+            )
+        )
+        return Agent(
+            "compactor",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="lookup", arguments="{}")]),
+                    usage=Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),
+                    model="stub-main",
+                    provider="stub",
+                ),
+                ModelResponse(
+                    ModelMessage("done"),
+                    usage=Usage(prompt_tokens=40, completion_tokens=4, total_tokens=44),
+                    model="stub-main",
+                    provider="stub",
+                ),
+            ),
+            tools=[lookup],
+            knowledge=KnowledgeConfig(
+                store=MemoryKnowledgeStore(),
+                compact=SummarizeCompact(target=6, config=summarizer),
+                compact_trigger=CompactTrigger(max_events=2),
+                expose_tool=False,
+                write_event_log=False,
+            ),
+        )
+
+    async def test_spend_from_before_the_retained_window_survives(self) -> None:
+        stream = MemoryStream()
+        emitted: list[UsageEvent] = []
+        stream.where(UsageEvent).subscribe(lambda e: emitted.append(e))
+
+        report = await (await self._agent().ask("go", stream=stream)).usage()
+
+        # Every token the run emitted is still accounted for after the rewrite.
+        assert sum(e.usage.total_tokens or 0 for e in emitted) == 679
+        assert report.total.total_tokens == 679
+
+    async def test_the_summarization_call_s_own_spend_survives_and_trails(self) -> None:
+        # This record is not merely outside the retained window: it is emitted
+        # *while* the strategy runs, so it is absent from the snapshot the
+        # strategy returns and cannot be recovered from it. It ran last, so it
+        # is recorded last — consumers grouping by first appearance stay stable.
+        stream = MemoryStream()
+
+        report = await (await self._agent().ask("go", stream=stream)).usage()
+
+        assert [(r.kind, r.usage.total_tokens) for r in report.records] == [
+            ("model_call", 110),
+            ("model_call", 44),
+            ("compaction", 525),
+        ]
+
+    async def test_carried_records_do_not_advance_the_compaction_trigger(self) -> None:
+        # The records ride along in history but are not conversational (`ADR
+        # 0010`), so they must not count toward max_events — otherwise every
+        # compaction would bring the next one closer.
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        await self._agent().ask("go", stream=stream)
+
+        history = list(await stream.history.get_events())
+        assert len(completions) == 1
+        assert len([e for e in history if isinstance(e, UsageEvent)]) == 3
+        # The retained window is the summary plus target conversational events;
+        # the three carried records are not among them.
+        assert len([e for e in history if is_conversational(e)]) <= 7
+
+    async def test_a_second_compaction_carries_the_first_s_records_once(self) -> None:
+        # Each compaction rebuilds the kept records from the history it is
+        # replacing, so records already carried through one compaction are
+        # carried through the next — once each. Double counting here would
+        # inflate every subsequent report on a long conversation, and dropping
+        # would silently re-introduce the bug this class exists for.
+        agent = self._agent()
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        await agent.ask("go", stream=stream)
+        report = await (await agent.ask("again", stream=stream)).usage()
+
+        assert len(completions) == 2
+        # Two turns of 110 + 44, and one summarization call per compaction.
+        assert [(r.kind, r.usage.total_tokens) for r in report.records] == [
+            ("model_call", 110),
+            ("model_call", 44),
+            ("compaction", 525),
+            ("model_call", 110),
+            ("model_call", 44),
+            ("compaction", 525),
+        ]
+        assert report.total.total_tokens == 1358
 
 
 class TestCompactionSummary:

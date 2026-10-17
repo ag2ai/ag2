@@ -34,6 +34,7 @@ from ag2.middleware.base import (
     ToolExecution,
     ToolResultType,
 )
+from ag2.middleware.describe import MiddlewareDescription
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 try:
@@ -130,6 +131,10 @@ class MetricsMiddleware(MiddlewareFactory):
                 "MetricsMiddleware cannot be created more than once for the same CollectorRegistry. "
                 "Create one MetricsMiddleware per CollectorRegistry and reuse that middleware instance across agents."
             ) from exc
+
+    def describe(self) -> MiddlewareDescription:
+        # Registry is a live collector; report presence only.
+        return MiddlewareDescription(kind=type(self).__qualname__, config={"registry": self._metrics is not None})
 
     def __call__(self, event: "BaseEvent", context: "Context") -> BaseMiddleware:
         return _MetricsMiddleware(event, context, self._metrics)

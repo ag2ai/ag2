@@ -63,6 +63,15 @@ class TestFactoryFromExecutableCode:
     def test_returns_none_for_non_code_part(self) -> None:
         assert GeminiServerToolCallEvent.from_executable_code(types.Part(text="hello")) is None
 
+    def test_reports_an_empty_language_when_the_part_omits_one(self) -> None:
+        """`ExecutableCode.language` is optional, and a part that omits it used to crash."""
+        part = types.Part(executable_code=types.ExecutableCode(code="print(1)"))
+
+        event = GeminiServerToolCallEvent.from_executable_code(part)
+
+        assert event is not None
+        assert event.arguments == '{"code": "print(1)", "language": ""}'
+
 
 class TestFactoryFromCodeExecutionResult:
     def test_returns_event_for_result_part(self) -> None:

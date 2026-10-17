@@ -4,7 +4,7 @@
 
 import os
 import threading
-from collections.abc import AsyncIterator, Hashable
+from collections.abc import AsyncGenerator, Hashable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
@@ -75,7 +75,7 @@ class DockerEnvironment:
     async def open(
         self,
         context: "ConversationContext | None" = None,
-    ) -> AsyncIterator[DockerSandbox]:
+    ) -> AsyncGenerator[DockerSandbox]:
         image = resolve_variable(self._image, context, param_name="image") if context else self._image
         env_vars = (
             resolve_variable(self._env_vars, context, param_name="env_vars") if context else self._env_vars

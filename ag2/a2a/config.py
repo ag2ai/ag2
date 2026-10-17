@@ -13,7 +13,7 @@ from typing_extensions import Self, Unpack
 
 from ag2.config.config import ModelConfig
 
-from .client import A2AClient
+from .client import A2AClient, CardVerifier
 from .errors import A2AInvalidCardError
 from .transports import TransportName
 
@@ -33,14 +33,16 @@ class A2AConfigOverrides(TypedDict, total=False):
     input_required_timeout: float | None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None
     interceptors: Sequence[ClientCallInterceptor]
-    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None
+    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None  # type: ignore[no-any-unimported]
     preset_card: AgentCard | None
+    card_signature_verifier: CardVerifier | None
     tenant: str | None
     history_length: int | None
+    extensions: Sequence[str]
 
 
 @dataclass(slots=True)
-class A2AConfig(ModelConfig):
+class A2AConfig(ModelConfig):  # type: ignore[no-any-unimported]
     """Connection config for an A2A agent acting as an LLM provider.
 
     ``card_url`` is the HTTP(S) URL where the agent card is published
@@ -76,6 +78,24 @@ class A2AConfig(ModelConfig):
     ``history_length`` truncates the server-side ``Task.history`` echoed
     back on ``get_task`` / list operations to the most recent N messages.
     Pure server-side hint — does not change what the client uploads.
+
+    ``extensions`` lists A2A extension URIs to activate on the connection.
+    URIs must be advertised in the server card's
+    ``capabilities.extensions``; cards that *require* an extension the
+    client doesn't activate are rejected
+    (``A2AExtensionNotSupportedError``). Activated URIs ride on
+    ``Message.extensions`` and the ``A2A-Extensions`` header/metadata,
+    on every request this config makes — conversational and ``tasks`` /
+    ``push`` alike.
+
+    ``card_signature_verifier`` (from
+    :func:`a2a.utils.signing.create_signature_verifier`)
+    verifies the JWS signatures on every card the client consumes —
+    fetched, ``preset_card``, and extended. Setting a verifier makes
+    signatures mandatory: the SDK verifier raises on unsigned cards.
+    Anything the verifier raises — including an error from your own key
+    provider — is a rejection, surfaced as ``A2ACardSignatureError``.
+    ``None`` (default) disables verification.
     """
 
     card_url: str
@@ -89,10 +109,14 @@ class A2AConfig(ModelConfig):
     input_required_timeout: float | None = None
     httpx_client_factory: Callable[[], httpx.AsyncClient] | None = field(default=None, repr=False)
     interceptors: Sequence[ClientCallInterceptor] = ()
-    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = field(default=None, repr=False)
+    grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = field(  # type: ignore[no-any-unimported]
+        default=None, repr=False
+    )
     preset_card: AgentCard | None = field(default=None, repr=False)
+    card_signature_verifier: CardVerifier | None = field(default=None, repr=False)
     tenant: str | None = None
     history_length: int | None = None
+    extensions: Sequence[str] = ()
 
     def copy(self, /, **overrides: Unpack[A2AConfigOverrides]) -> Self:
         return replace(self, **overrides)
@@ -135,8 +159,10 @@ class A2AConfig(ModelConfig):
             interceptors=tuple(self.interceptors),
             grpc_channel_factory=self.grpc_channel_factory,
             preset_card=self.preset_card,
+            card_signature_verifier=self.card_signature_verifier,
             tenant=self.tenant,
             history_length=self.history_length,
+            extensions=tuple(self.extensions),
         )
 
 

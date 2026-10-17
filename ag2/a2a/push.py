@@ -42,9 +42,10 @@ async def create_push_notification_config(
     tenant: str | None = None,
 ) -> A2APushConfig:
     """Register a push-notification webhook for a task."""
-    async with open_session(config) as sdk:
+    async with open_session(config) as (sdk, call_context):
         response = await sdk.create_task_push_notification_config(
             _to_proto(config, tenant, task_id=task_id, push=push_config),
+            context=call_context,
         )
         return _from_proto(response)
 
@@ -57,10 +58,11 @@ async def get_push_notification_config(
     tenant: str | None = None,
 ) -> A2APushConfig:
     """Fetch a previously-registered push config by id."""
-    async with open_session(config) as sdk:
+    async with open_session(config) as (sdk, call_context):
         kwargs = with_tenant(config, tenant, task_id=task_id, id=config_id)
         response = await sdk.get_task_push_notification_config(
             GetTaskPushNotificationConfigRequest(**kwargs),
+            context=call_context,
         )
         return _from_proto(response)
 
@@ -74,12 +76,13 @@ async def list_push_notification_configs(
     page_token: str | None = None,
 ) -> list[A2APushConfig]:
     """List push-notification configs for ``task_id``; caller passes ``page_token`` for next page."""
-    async with open_session(config) as sdk:
+    async with open_session(config) as (sdk, call_context):
         kwargs = with_tenant(config, tenant, task_id=task_id)
         optional = {"page_size": page_size, "page_token": page_token}
         kwargs.update({k: v for k, v in optional.items() if v is not None})
         response = await sdk.list_task_push_notification_configs(
             ListTaskPushNotificationConfigsRequest(**kwargs),
+            context=call_context,
         )
         return [_from_proto(cfg) for cfg in response.configs]
 
@@ -92,10 +95,11 @@ async def delete_push_notification_config(
     tenant: str | None = None,
 ) -> None:
     """Delete a registered push-notification config."""
-    async with open_session(config) as sdk:
+    async with open_session(config) as (sdk, call_context):
         kwargs = with_tenant(config, tenant, task_id=task_id, id=config_id)
         await sdk.delete_task_push_notification_config(
             DeleteTaskPushNotificationConfigRequest(**kwargs),
+            context=call_context,
         )
 
 

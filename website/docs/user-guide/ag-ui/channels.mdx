@@ -1,0 +1,99 @@
+---
+sidebarTitle: Channels
+title: "Channels: AG2 Agents in Messaging Platforms"
+description: "Connect an AG2 AG-UI endpoint to a managed CopilotKit Channel."
+---
+
+A CopilotKit Channel can run the same AG2 agent that serves your web UI in a messaging platform. The channel process connects to CopilotKit Intelligence, then calls your agent's AG-UI endpoint for each incoming message.
+
+Before starting, [configure the Channel in Intelligence](https://docs.copilotkit.ai/slack/ag2/intelligence){.external-link target="_blank"} and obtain its Code and a project API key. Intelligence holds the platform credentials; your AG2 server holds the model credentials and tools.
+
+## Run the AG2 endpoint
+
+Start the server from the [basic AG-UI example](/docs/user-guide/ag-ui/overview#basic-server-example). The channel below points at `http://localhost:8000/chat`; change `AGENT_URL` if your server uses another path or host. If the channel and AG2 run on different machines, the channel needs an address it can reach.
+
+A web UI and a Channel can use the same AG-UI endpoint. Each channel thread gets a separate `HttpAgent` instance with its own `threadId`.
+
+## Build the channel process
+
+Use Node.js 22 or newer and a long-running host. The Channels and Runtime versions below are the pair in the current [Channels SDK reference](https://docs.copilotkit.ai/reference/channels){.external-link target="_blank"}; `@ag-ui/client` is the AG-UI 1.0 client.
+
+```bash
+mkdir my-ag2-channel
+cd my-ag2-channel
+npm init -y
+npm install --save-exact @copilotkit/channels@0.11.0 @copilotkit/runtime@1.73.3 @ag-ui/client@1.0.1
+npm install -D tsx typescript @types/node
+```
+
+The first two commands create an empty project directory. `npm init -y` creates
+`package.json`; the first install adds the three runtime libraries, and
+`--save-exact` records those exact versions. The second install adds the
+TypeScript runner, compiler, and Node.js types as development dependencies.
+
+Save this as `channel.mts`. The Code must match the Channel configured in Intelligence. The current message is passed as `prompt` because it is not yet in the channel thread's history when the handler runs.
+
+```typescript title="channel.mts" linenums="1"
+import { createServer } from "node:http";
+import { createChannel } from "@copilotkit/channels";
+import { CopilotKitIntelligence, CopilotRuntime } from "@copilotkit/runtime/v2";
+import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
+import { HttpAgent } from "@ag-ui/client";
+
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing ${name}`);
+  return value;
+}
+
+const channel = createChannel({
+  name: required("CHANNEL_CODE"),
+  identifyUser: "platform",
+  agent: (threadId: string) => {
+    const agent = new HttpAgent({ url: required("AGENT_URL") });
+    agent.threadId = threadId;
+    return agent;
+  },
+});
+
+channel.onMessage(async ({ thread, message }) => {
+  await thread.runAgent({
+    prompt: message.contentParts?.length
+      ? [
+          ...(message.text ? [{ type: "text" as const, text: message.text }] : []),
+          ...message.contentParts,
+        ]
+      : message.text,
+    context: [{ description: "Originating platform", value: message.platform }],
+  });
+});
+
+const runtime = new CopilotRuntime({
+  agents: {},
+  intelligence: new CopilotKitIntelligence({
+    apiKey: required("CPK_INTELLIGENCE_API_KEY"),
+  }),
+  channels: [channel],
+});
+
+const listener = createCopilotNodeListener({ runtime, basePath: "/api/copilotkit" });
+createServer(listener).listen(Number(process.env.PORT ?? 8300));
+await listener.channels.ready({ timeoutMs: 30_000 });
+```
+
+Start the AG2 server in one terminal and the channel process in another. Use the actual Code and API key from your Intelligence project:
+
+```bash
+export AGENT_URL="http://localhost:8000/chat"
+export CHANNEL_CODE="support-bot"
+export CPK_INTELLIGENCE_API_KEY="your-project-api-key"
+npx tsx channel.mts
+```
+
+Creating the listener starts the Channel connection; the HTTP server keeps the process running. `ready()` waits for activation to settle. If the dashboard still says **Waiting for runtime**, check that the Code and API key belong to the same Intelligence project. For shutdown and health checks in a deployed service, follow the [CopilotKit Channels guide](https://docs.copilotkit.ai/slack/ag2/connect){.external-link target="_blank"}.
+
+## Verify delivery
+
+Invite the app to a Slack channel and mention it, or send a direct message. The channel passes that message to AG2 as the prompt for a new AG-UI run and streams the reply back to the platform thread. For provider setup and troubleshooting, follow [Connect and run your agent](https://docs.copilotkit.ai/slack/ag2/connect){.external-link target="_blank"}.
+
+The channel process needs a persistent connection to Intelligence, so keep it on a long-running host. The AG2 server must also remain available to answer its AG-UI requests. For supported platforms and persistence options, see the [CopilotKit Channels documentation](https://docs.copilotkit.ai/slack/ag2){.external-link target="_blank"}.

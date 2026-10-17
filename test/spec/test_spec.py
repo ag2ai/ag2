@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from pydantic import BaseModel
 from ag2 import Agent, AgentSpec
 from ag2.exceptions import ToolResolutionError
 from ag2.response import ResponseSchema
-from ag2.spec import ResponseSchemaSpec
+from ag2.spec import ResponseSchemaSpec, UnknownSpecFieldWarning
 from ag2.tools import FilesystemToolkit, WebSearchTool
 
 from .helpers import add, greet, make_agent, multiply
@@ -196,3 +197,74 @@ class TestToolkit:
         agent = spec.to_agent(available_tools=[add, multiply, ws, fs])
 
         assert [t.name for t in agent.tools] == ["add", "web_search", "read_file"]
+
+
+class TestUnknownFields:
+    def test_unknown_field_warns_without_failing(self) -> None:
+        with pytest.warns(UnknownSpecFieldWarning):
+            spec = AgentSpec.model_validate({"name": "x", "tool_nammes": ["add"]})
+
+        # Loading still succeeds; the key is ignored, as Pydantic would anyway.
+        assert spec == AgentSpec(name="x")
+
+    def test_warning_names_key_and_suggests_nearest_field(self) -> None:
+        with pytest.warns(UnknownSpecFieldWarning) as caught:
+            AgentSpec.model_validate({"name": "x", "tool_nammes": ["add"]})
+
+        message = str(caught[0].message)
+        assert "tool_nammes" in message
+        assert "did you mean 'tool_names'?" in message
+
+    def test_warning_reports_every_unknown_key(self) -> None:
+        with pytest.warns(UnknownSpecFieldWarning) as caught:
+            AgentSpec.model_validate({"name": "x", "prompts": [], "tool_nammes": []})
+
+        message = str(caught[0].message)
+        assert "prompts" in message
+        assert "tool_nammes" in message
+
+    def test_unrecognisable_key_reported_without_suggestion(self) -> None:
+        with pytest.warns(UnknownSpecFieldWarning) as caught:
+            AgentSpec.model_validate({"name": "x", "zzzzzz": 1})
+
+        message = str(caught[0].message)
+        assert "zzzzzz" in message
+        assert "did you mean" not in message
+
+    def test_nested_spec_warns_on_unknown_field(self) -> None:
+        with pytest.warns(UnknownSpecFieldWarning) as caught:
+            AgentSpec.model_validate({
+                "name": "x",
+                "response_schema": {"name": "Answer", "json_schema": {}, "json_schemaa": {}},
+            })
+
+        assert "json_schemaa" in str(caught[0].message)
+
+    def test_response_schema_spec_warns_on_unknown_field_directly(self) -> None:
+        with pytest.warns(UnknownSpecFieldWarning):
+            ResponseSchemaSpec.model_validate({"name": "A", "json_schema": {}, "extra": 1})
+
+    def test_can_be_promoted_to_an_error(self) -> None:
+        # No new API for strict mode: the standard warning filters do it.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UnknownSpecFieldWarning)
+
+            with pytest.raises(UnknownSpecFieldWarning):
+                AgentSpec.model_validate({"name": "x", "tool_nammes": ["add"]})
+
+    def test_valid_spec_does_not_warn(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UnknownSpecFieldWarning)
+
+            spec = AgentSpec.model_validate({"name": "x", "tool_names": ["add"], "prompt": ["p"]})
+
+        assert spec == AgentSpec(name="x", tool_names=["add"], prompt=["p"])
+
+    def test_round_trip_does_not_warn(self) -> None:
+        agent = make_agent()
+        spec = AgentSpec.from_agent(agent)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UnknownSpecFieldWarning)
+
+            assert AgentSpec.model_validate(spec.model_dump()) == spec

@@ -4,7 +4,7 @@
 
 import json
 
-import httpx
+import httpx2
 import pytest
 from fast_depends.use import SerializerCls
 
@@ -22,15 +22,16 @@ NULLABLE_OPTIONS = (
     "max_tool_calls",
     "top_logprobs",
     "metadata",
+    "reasoning",
     "service_tier",
     "truncation",
 )
 
 
 def _capturing_config(captured: dict[str, object], **overrides: object) -> OpenAIResponsesConfig:
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         captured["body"] = json.loads(request.content)
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "id": "resp_1",
@@ -53,7 +54,7 @@ def _capturing_config(captured: dict[str, object], **overrides: object) -> OpenA
         model="m",
         api_key="test",
         base_url="http://test/v1",
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
         **overrides,
     )
 
@@ -95,3 +96,11 @@ async def test_set_options_serialized() -> None:
     assert body["top_p"] == 0.95
     assert body["service_tier"] == "auto"
     assert body["truncation"] == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_reasoning_serialized() -> None:
+    captured: dict[str, object] = {}
+    body = await _request_body(captured, reasoning={"effort": "low", "summary": "auto"})
+
+    assert body["reasoning"] == {"effort": "low", "summary": "auto"}

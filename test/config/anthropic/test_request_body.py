@@ -1,0 +1,676 @@
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+"""What actually goes out on the wire, pinned through an ``httpx2`` mock transport.
+
+The `anthropic` 1.x floor moved two things AG2 depends on: the sampling
+parameters left the method signature, and header names started matching
+case-insensitively. Both are only observable in the request the SDK builds, so
+they are asserted there rather than against AG2's own kwargs.
+"""
+
+import json
+
+import httpx2
+import pytest
+from dirty_equals import IsPartialDict
+from fast_depends.use import SerializerCls
+
+from ag2 import Context, MemoryStream
+from ag2.config.anthropic import AnthropicClient, AnthropicConfig
+from ag2.events import ImageInput, ModelRequest, ModelResponse, TextInput
+from ag2.exceptions import WebFetchOptionUnsupportedError, WebFetchUrlSourceToolNotFoundError
+from ag2.tools.builtin.mcp_server import MCPServerTool
+from ag2.tools.builtin.web_fetch import ExceptTools, OnlyTools, UrlSources, WebFetchTool
+from ag2.tools.builtin.web_search import WebSearchTool
+
+_MESSAGE = {
+    "id": "msg_1",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-haiku-4-5",
+    "content": [{"type": "text", "text": "ok"}],
+    "stop_reason": "end_turn",
+    "stop_sequence": None,
+    "usage": {"input_tokens": 1, "output_tokens": 1},
+}
+
+_STREAM_EVENTS = (
+    {"type": "message_start", "message": {**_MESSAGE, "content": [], "stop_reason": None}},
+    {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+    {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "ok"}},
+    {"type": "content_block_stop", "index": 0},
+    {
+        "type": "message_delta",
+        "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+        "usage": {"output_tokens": 1},
+    },
+    {"type": "message_stop"},
+)
+
+
+def _capturing_client(captured: dict[str, object], *, stream: bool = False) -> httpx2.AsyncClient:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        captured["body"] = json.loads(request.content)
+        captured["headers"] = request.headers
+        if not stream:
+            return httpx2.Response(200, json=_MESSAGE)
+        body = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in _STREAM_EVENTS)
+        return httpx2.Response(200, text=body, headers={"content-type": "text/event-stream"})
+
+    return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+
+
+async def _ask(config: AnthropicConfig, **kwargs: object) -> None:
+    await config.create()(
+        messages=[ModelRequest([TextInput("hi")])],
+        context=Context(stream=MemoryStream()),
+        response_schema=None,
+        serializer=SerializerCls,
+        **{"tools": [], **kwargs},  # type: ignore[arg-type]
+    )
+
+
+@pytest.mark.asyncio
+async def test_sampling_fields_still_reach_the_api() -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        temperature=0.2,
+        top_p=0.9,
+        top_k=5,
+        http_client=_capturing_client(captured),
+    )
+
+    await _ask(config)
+
+    assert captured["body"] == IsPartialDict({"temperature": 0.2, "top_p": 0.9, "top_k": 5})
+
+
+@pytest.mark.asyncio
+async def test_a_zero_sampling_field_is_sent_not_dropped() -> None:
+    """Zero is the value determinism is asked for with, and it is falsy."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        temperature=0,
+        top_p=0,
+        top_k=0,
+        http_client=_capturing_client(captured),
+    )
+
+    await _ask(config)
+
+    assert captured["body"] == IsPartialDict({"temperature": 0, "top_p": 0, "top_k": 0})
+
+
+@pytest.mark.asyncio
+async def test_sampling_fields_reach_the_api_when_streaming() -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        temperature=0.2,
+        streaming=True,
+        http_client=_capturing_client(captured, stream=True),
+    )
+
+    await _ask(config)
+
+    assert captured["body"] == IsPartialDict({"temperature": 0.2, "stream": True})
+
+
+@pytest.mark.asyncio
+async def test_user_extra_body_wins_over_a_sampling_field() -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        temperature=0.2,
+        extra_body={"temperature": 0.9},
+        http_client=_capturing_client(captured),
+    )
+
+    await _ask(config)
+
+    assert captured["body"] == IsPartialDict({"temperature": 0.9})
+
+
+@pytest.mark.asyncio
+async def test_sampling_fields_join_the_mcp_servers_in_the_extra_body(context: Context) -> None:
+    """Both are folded into the one ``extra_body`` the client sends; neither displaces the other."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        temperature=0.2,
+        http_client=_capturing_client(captured),
+    )
+    schemas = await MCPServerTool(server_url="https://mcp.example.com/x", server_label="x").schemas(context)
+
+    await _ask(config, tools=schemas)
+
+    assert captured["body"] == IsPartialDict({
+        "temperature": 0.2,
+        "mcp_servers": [{"type": "url", "url": "https://mcp.example.com/x", "name": "x"}],
+    })
+
+
+@pytest.mark.asyncio
+async def test_no_sampling_fields_leaves_the_body_alone() -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+
+    await _ask(config)
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert not {"temperature", "top_p", "top_k"} & body.keys()
+
+
+@pytest.mark.asyncio
+async def test_a_users_default_beta_survives_the_per_request_pin() -> None:
+    """1.x matches header names case-insensitively, so only one line goes out.
+
+    AG2 sets the MCP pin per request while the user may set betas as defaults on
+    the config. On the 0.x floor both lines were sent; now the per-request value
+    replaces the default outright, so AG2 folds the user's betas into the value it
+    writes rather than dropping them.
+    """
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        default_headers={"Anthropic-Beta": "user-beta-2026-01-01"},
+        http_client=_capturing_client(captured),
+    )
+    [mcp_schema] = await MCPServerTool(
+        server_url="https://mcp.example.com/sse",
+        server_label="example-mcp",
+    ).schemas(Context(stream=MemoryStream()))
+
+    await _ask(config, tools=[mcp_schema])
+
+    headers = captured["headers"]
+    assert isinstance(headers, httpx2.Headers)
+    assert headers.get_list("anthropic-beta") == ["mcp-client-2025-11-20,user-beta-2026-01-01"]
+
+
+@pytest.mark.asyncio
+async def test_a_beta_the_user_already_set_is_not_repeated() -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        default_headers={"anthropic-beta": "mcp-client-2025-11-20"},
+        http_client=_capturing_client(captured),
+    )
+    [mcp_schema] = await MCPServerTool(
+        server_url="https://mcp.example.com/sse",
+        server_label="example-mcp",
+    ).schemas(Context(stream=MemoryStream()))
+
+    await _ask(config, tools=[mcp_schema])
+
+    headers = captured["headers"]
+    assert isinstance(headers, httpx2.Headers)
+    assert headers.get_list("anthropic-beta") == ["mcp-client-2025-11-20"]
+
+
+@pytest.mark.asyncio
+async def test_default_beta_header_survives_when_nothing_is_set_per_request() -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        default_headers={"Anthropic-Beta": "user-beta-2026-01-01"},
+        http_client=_capturing_client(captured),
+    )
+
+    await _ask(config)
+
+    headers = captured["headers"]
+    assert isinstance(headers, httpx2.Headers)
+    assert headers.get_list("anthropic-beta") == ["user-beta-2026-01-01"]
+
+
+async def _ask_client(client: AnthropicClient) -> None:
+    await client(
+        messages=[ModelRequest([TextInput("hi")])],
+        context=Context(stream=MemoryStream()),
+        tools=[],
+        response_schema=None,
+        serializer=SerializerCls,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_direct_client_caller_gets_the_extra_body_route_not_a_type_error() -> None:
+    """`AnthropicClient` is public and `CreateOptions` used to type these keys.
+
+    Without its own handling the keys would reach `messages.create()`, which raises
+    a bare `TypeError` on the 1.x floor — at request time, with nothing said about
+    what to do instead.
+    """
+    captured: dict[str, object] = {}
+    client = AnthropicClient(
+        api_key="test",
+        prompt_caching=False,
+        http_client=_capturing_client(captured),
+        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "temperature": 0.2},  # type: ignore[typeddict-unknown-key]
+    )
+
+    await _ask_client(client)
+
+    assert captured["body"] == IsPartialDict({"temperature": 0.2})
+
+
+@pytest.mark.asyncio
+async def test_a_direct_caller_may_still_spell_a_sampling_field_none() -> None:
+    """The pre-1.x ``CreateOptions`` typed these ``float | None``.
+
+    A key left behind because its value happened to be ``None`` would reach
+    ``messages.create()`` all the same, and the argument is what 1.x removed.
+    """
+    captured: dict[str, object] = {}
+    client = AnthropicClient(
+        api_key="test",
+        prompt_caching=False,
+        http_client=_capturing_client(captured),
+        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "temperature": None},  # type: ignore[typeddict-unknown-key]
+    )
+
+    await _ask_client(client)
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert "temperature" not in body
+
+
+@pytest.mark.asyncio
+async def test_a_direct_callers_extra_body_still_wins() -> None:
+    captured: dict[str, object] = {}
+    client = AnthropicClient(
+        api_key="test",
+        prompt_caching=False,
+        http_client=_capturing_client(captured),
+        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "top_k": 5},  # type: ignore[typeddict-unknown-key]
+        extra_body={"top_k": 9},
+    )
+
+    await _ask_client(client)
+
+    assert captured["body"] == IsPartialDict({"top_k": 9})
+
+
+@pytest.mark.asyncio
+async def test_a_direct_client_caller_without_sampling_leaves_the_body_alone() -> None:
+    captured: dict[str, object] = {}
+    client = AnthropicClient(
+        api_key="test",
+        prompt_caching=False,
+        http_client=_capturing_client(captured),
+        create_options={"model": "claude-haiku-4-5", "max_tokens": 16},
+    )
+
+    await _ask_client(client)
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert not {"temperature", "top_p", "top_k"} & body.keys()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool", "expected"),
+    [
+        (
+            WebFetchTool(strict=True, version="web_fetch_20250910"),
+            {"type": "web_fetch_20250910", "name": "web_fetch", "strict": True},
+        ),
+        (
+            WebFetchTool(use_cache=False, version="web_fetch_20260309"),
+            {"type": "web_fetch_20260309", "name": "web_fetch", "use_cache": False},
+        ),
+        (
+            WebFetchTool(
+                strict=True,
+                use_cache=False,
+                response_inclusion="excluded",
+                version="web_fetch_20260318",
+            ),
+            {
+                "type": "web_fetch_20260318",
+                "name": "web_fetch",
+                "strict": True,
+                "use_cache": False,
+                "response_inclusion": "excluded",
+            },
+        ),
+    ],
+)
+async def test_web_fetch_options_reach_the_wire(
+    context: Context, tool: WebFetchTool, expected: dict[str, object]
+) -> None:
+    """The SDK types the tool entry, so an option only counts once it survives serialization."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+
+    await _ask(config, tools=await tool.schemas(context))
+
+    assert captured["body"] == IsPartialDict({"tools": [expected]})
+
+
+@pytest.mark.asyncio
+async def test_an_accepted_configuration_sends_what_it_sent_before_the_gate(context: Context) -> None:
+    """The refusal costs a caller who does not trip it nothing: same entry, no extra keys."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    schemas = await WebFetchTool(max_uses=3, citations=True, version="web_fetch_20260318").schemas(context)
+
+    await _ask(config, tools=schemas)
+
+    assert captured["body"] == IsPartialDict({
+        "tools": [
+            {
+                "type": "web_fetch_20260318",
+                "name": "web_fetch",
+                "max_uses": 3,
+                "citations": {"enabled": True},
+            }
+        ]
+    })
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool", "option"),
+    [
+        (WebFetchTool(use_cache=True, version="web_fetch_20250910"), "use_cache"),
+        (WebFetchTool(response_inclusion="full", version="web_fetch_20260309"), "response_inclusion"),
+    ],
+)
+async def test_an_option_the_version_cannot_carry_is_refused_before_anything_is_sent(
+    context: Context, tool: WebFetchTool, option: str
+) -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    schemas = await tool.schemas(context)
+
+    with pytest.raises(WebFetchOptionUnsupportedError, match=option):
+        await _ask(config, tools=schemas)
+
+    assert captured == {}
+
+
+@pytest.mark.asyncio
+async def test_url_sources_reaches_the_wire_inside_its_own_tool_entry(context: Context) -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    schemas = await WebFetchTool(url_sources=UrlSources(user_input="none")).schemas(context)
+
+    await _ask(config, tools=schemas)
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert body["tools"] == [
+        {
+            "type": "web_fetch_20250910",
+            "name": "web_fetch",
+            "url_sources": {"user_input": {"type": "none"}},
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_url_source_naming_an_undeclared_tool_is_refused_before_the_request(context: Context) -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    schemas = await WebFetchTool(url_sources=UrlSources(client_tool_results=OnlyTools(["search_docs"]))).schemas(
+        context
+    )
+
+    with pytest.raises(WebFetchUrlSourceToolNotFoundError, match="search_docs"):
+        await _ask(config, tools=schemas)
+
+    assert "body" not in captured
+
+
+@pytest.mark.asyncio
+async def test_a_url_source_naming_a_declared_tool_is_sent(context: Context) -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    fetch = await WebFetchTool(url_sources=UrlSources(server_tool_results=OnlyTools(["web_search"]))).schemas(context)
+    search = await WebSearchTool().schemas(context)
+
+    await _ask(config, tools=[*fetch, *search])
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert body["tools"] == [
+        IsPartialDict({
+            "name": "web_fetch",
+            "url_sources": {
+                "server_tool_results": {
+                    "type": "only",
+                    "tools": [{"type": "tool_reference", "name": "web_search"}],
+                }
+            },
+        }),
+        IsPartialDict({"name": "web_search"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_an_except_filter_naming_an_undeclared_tool_is_refused(context: Context) -> None:
+    """The `except` form resolves its names the same way `only` does."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    schemas = await WebFetchTool(url_sources=UrlSources(server_tool_results=ExceptTools(["web_search"]))).schemas(
+        context
+    )
+
+    with pytest.raises(WebFetchUrlSourceToolNotFoundError, match="web_search"):
+        await _ask(config, tools=schemas)
+
+    assert "body" not in captured
+
+
+@pytest.mark.asyncio
+async def test_a_filter_may_name_a_tool_an_mcp_toolset_enables(context: Context) -> None:
+    """An allowed MCP tool is named in the body, so a policy may name it rather than be refused."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    fetch = await WebFetchTool(url_sources=UrlSources(client_tool_results=OnlyTools(["read_page"]))).schemas(context)
+    mcp = await MCPServerTool(
+        server_url="https://mcp.example.com/x",
+        server_label="x",
+        allowed_tools=["read_page"],
+    ).schemas(context)
+
+    await _ask(config, tools=[*fetch, *mcp])
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert body["tools"] == [
+        IsPartialDict({
+            "name": "web_fetch",
+            "url_sources": {
+                "client_tool_results": {
+                    "type": "only",
+                    "tools": [{"type": "tool_reference", "name": "read_page"}],
+                }
+            },
+        }),
+        IsPartialDict({"type": "mcp_toolset", "configs": {"read_page": {"enabled": True}}}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_filter_naming_a_tool_an_mcp_toolset_blocks_is_refused(context: Context) -> None:
+    """A blocked tool is switched off in the body, so naming it is naming nothing."""
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    fetch = await WebFetchTool(url_sources=UrlSources(client_tool_results=OnlyTools(["read_page"]))).schemas(context)
+    mcp = await MCPServerTool(
+        server_url="https://mcp.example.com/x",
+        server_label="x",
+        blocked_tools=["read_page"],
+    ).schemas(context)
+
+    with pytest.raises(WebFetchUrlSourceToolNotFoundError, match="read_page"):
+        await _ask(config, tools=[*fetch, *mcp])
+
+    assert "body" not in captured
+
+
+@pytest.mark.asyncio
+async def test_every_web_fetch_option_together_pins_the_whole_tool_entry(context: Context) -> None:
+    """Every option ag2 exposes, set at once, compared by exact equality.
+
+    Typing the mapper through the SDK's ``TypedDict``s must not move the wire, and only a whole
+    entry asserted whole can show that. The search and MCP tools are here solely so the two
+    filters have declared names to resolve against.
+    """
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    fetch = await WebFetchTool(
+        max_uses=3,
+        allowed_domains=["example.com"],
+        blocked_domains=["evil.example"],
+        citations=True,
+        max_content_tokens=1024,
+        strict=True,
+        use_cache=False,
+        response_inclusion="excluded",
+        url_sources=UrlSources(
+            user_input="none",
+            client_tool_results=ExceptTools(["read_page"]),
+            server_tool_results=OnlyTools(["web_search"]),
+        ),
+        version="web_fetch_20260318",
+    ).schemas(context)
+    search = await WebSearchTool().schemas(context)
+    mcp = await MCPServerTool(
+        server_url="https://mcp.example.com/x",
+        server_label="x",
+        allowed_tools=["read_page"],
+    ).schemas(context)
+
+    await _ask(config, tools=[*fetch, *search, *mcp])
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert body["tools"][0] == {
+        "type": "web_fetch_20260318",
+        "name": "web_fetch",
+        "max_uses": 3,
+        "allowed_domains": ["example.com"],
+        "blocked_domains": ["evil.example"],
+        "citations": {"enabled": True},
+        "max_content_tokens": 1024,
+        "strict": True,
+        "use_cache": False,
+        "response_inclusion": "excluded",
+        "url_sources": {
+            "user_input": {"type": "none"},
+            "client_tool_results": {
+                "type": "except",
+                "tools": [{"type": "tool_reference", "name": "read_page"}],
+            },
+            "server_tool_results": {
+                "type": "only",
+                "tools": [{"type": "tool_reference", "name": "web_search"}],
+            },
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_source_outside_the_pair_is_sent_as_written(context: Context) -> None:
+    """``UrlSources`` validates nothing, so the mapper must not quietly read a typo as a policy.
+
+    Matching the value against ``all`` and falling through to ``none`` would send the closed
+    policy under a name the caller never wrote. Sending it verbatim buys a 400 that names it.
+    """
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+    schemas = await WebFetchTool(url_sources=UrlSources(user_input="All")).schemas(context)  # type: ignore[arg-type]
+
+    await _ask(config, tools=schemas)
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert body["tools"][0]["url_sources"] == {"user_input": {"type": "All"}}
+
+
+async def _send(config: AnthropicConfig, *messages: ModelRequest | ModelResponse) -> None:
+    await config.create()(
+        messages=list(messages),
+        context=Context(stream=MemoryStream(), prompt=["Be brief."]),
+        response_schema=None,
+        serializer=SerializerCls,
+        tools=[],
+    )
+
+
+@pytest.mark.asyncio
+class TestPromptCacheBreakpoint:
+    PNG = b"\x89PNG\r\n"
+
+    async def test_a_plain_text_last_turn_becomes_a_marked_text_block(self) -> None:
+        captured: dict[str, object] = {}
+        config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+
+        await _send(
+            config,
+            ModelRequest([TextInput("first")]),
+            ModelResponse(TextInput("ok")),
+            ModelRequest([TextInput("second")]),
+        )
+
+        assert captured["body"] == IsPartialDict({
+            "system": [{"type": "text", "text": "Be brief.", "cache_control": {"type": "ephemeral"}}],
+            "messages": [
+                {"role": "user", "content": "first"},
+                {"role": "assistant", "content": [{"type": "text", "text": "ok"}]},
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "second", "cache_control": {"type": "ephemeral"}}],
+                },
+            ],
+        })
+
+    async def test_only_the_last_block_of_a_multi_part_turn_is_marked(self) -> None:
+        captured: dict[str, object] = {}
+        config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
+
+        await _send(config, ModelRequest([TextInput("look"), ImageInput(data=self.PNG, media_type="image/png")]))
+
+        body = captured["body"]
+        assert isinstance(body, dict)
+        assert body["messages"] == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "look"},
+                    IsPartialDict({"type": "image", "cache_control": {"type": "ephemeral"}}),
+                ],
+            }
+        ]
+
+    async def test_nothing_is_marked_with_caching_off(self) -> None:
+        captured: dict[str, object] = {}
+        config = AnthropicConfig(
+            model="claude-haiku-4-5", api_key="test", prompt_caching=False, http_client=_capturing_client(captured)
+        )
+
+        await _send(config, ModelRequest([TextInput("hi")]))
+
+        assert captured["body"] == IsPartialDict({
+            "system": "Be brief.",
+            "messages": [{"role": "user", "content": "hi"}],
+        })

@@ -1,0 +1,109 @@
+---
+title: Serply Search
+sidebarTitle: Serply Search
+---
+
+`SerplySearchToolkit` gives an agent three related tools powered by [Serply](https://serply.io){.external-link target="_blank"}: Google web search, Google News search, and Google Scholar search. Use it when an agent needs current web results, recent news coverage, or academic articles with citation counts from a single API key.
+
+!!! note
+    Requires a Serply API key. No extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import SerplySearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[SerplySearchToolkit(api_key=os.environ["SERPLY_API_KEY"])],
+)
+```
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `serply_web_search` | Search Google web results and return ranked results with position, title, snippet, and URL |
+| `serply_news_search` | Search Google News and return recent articles with title, source, publish date, and URL |
+| `serply_scholar_search` | Search Google Scholar and return articles with title, authors, citation count, URL, and an open-access PDF link when one exists |
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default tools:
+
+```python linenums="1"
+toolkit = SerplySearchToolkit(
+    api_key=...,
+    num=5,                # number of results, for all three tools
+    gl="us",              # Google country code, forwarded as a query parameter
+    hl="en",              # Google interface language, forwarded as a query parameter
+    proxy_location="US",  # region Serply searches from (X-Proxy-Location header)
+)
+```
+
+`num` reaches Serply as a query parameter for web and scholar search. Google News ignores it and answers with its whole feed — 49 to 105 articles in practice, whose links are ~284-character Google redirects — so `serply_news_search` truncates the feed itself. When `num` is unset it returns the 10 most recent articles; left uncapped, one news call would put roughly 15k tokens into the model's context.
+
+`proxy_location` is Serply's documented way to target results geographically, and it is best-effort: Serply answers from a proxy pool, so the region it actually used (returned as `device_region` in the raw payload) may be a nearby one rather than the one requested. `gl` and `hl` are separate — they are passed straight through to Google as query parameters and change the result set on their own. Use `proxy_location` for where the search originates and `gl`/`hl` for Google's own country and language selection.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.web()`, `toolkit.news()`, `toolkit.scholar()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = SerplySearchToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.web(num=5), toolkit.scholar(num=10)],
+)
+```
+
+Every factory method also accepts `name` and `description` overrides for the registered tool, plus the same `num` / `gl` / `hl` / `proxy_location` defaults as the constructor. All of those accept a `Variable` for deferred context resolution.
+
+## Connection settings
+
+The toolkit opens one `httpx.AsyncClient` per request. Override how that client connects:
+
+```python linenums="1"
+toolkit = SerplySearchToolkit(
+    api_key=...,
+    base_url="https://api.serply.io",  # override to route through your own gateway
+    timeout=60.0,                      # per-request timeout in seconds
+    proxy="http://proxy.internal:3128",
+    verify=True,                       # set False only to skip TLS verification
+)
+```
+
+A non-2xx response raises `httpx.HTTPStatusError`. A response body that is not a JSON object, or an individual result that does not match the expected shape, is skipped rather than raised on, so a partial payload still yields the results it does contain.
+
+## Result
+
+`serply_web_search` returns a `SerplyWebSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SerplyWebResult` (`title`, `link`, `description`, `position`) |
+
+`serply_news_search` returns a `SerplyNewsSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SerplyNewsResult` (`title`, `link`, `published`, `source`); `link` is a Google News redirect, not the publisher's own URL |
+
+`serply_scholar_search` returns a `SerplyScholarSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SerplyScholarResult` (`title`, `link`, `authors`, `pdf_link`, `citations`) |
+
+`pdf_link` is Serply's open-access link for the article and is empty when it has none. `citations` is sourced from OpenAlex rather than Google Scholar's own count; treat it as an indication of impact rather than an exact figure.
+
+For queries that trigger a Google local pack, `serply_web_search` may return a top-ranked result whose `link` points back into `google.com` instead of the business's own site.
+
+Request parameters and response fields are documented in the [Serply API docs](https://serply.io/docs){.external-link target="_blank"}.

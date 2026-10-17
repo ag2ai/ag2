@@ -20,15 +20,16 @@ class TaskEvent(BaseEvent):
 
 
 class TaskStarted(TaskEvent):
+    parent_tool_call_id: str | None = None
     # Optional ``TaskSpec`` describing what the task is doing. Set by the
     # framework-core ``Task`` primitive (``ag2.task``); legacy
     # ``run_task`` callers leave it ``None``.
-    spec: "TaskSpec | None" = Field(None)
+    spec: "TaskSpec | None" = Field(default=None)
     # Absolute ISO deadline (start + ttl_seconds) if the task was created
     # with a TTL, else ``None``. Carried on the event so the network's
     # ``TaskMirror`` can hand it to the hub, whose TTL sweeper expires
     # tasks past ``expires_at``. ``TaskSpec`` does not hold the TTL.
-    expires_at: str | None = Field(None)
+    expires_at: str | None = Field(default=None)
 
 
 class TaskProgress(TaskEvent):
@@ -55,7 +56,14 @@ class TaskCompleted(TaskEvent):
     # owners can return structured results. ``run_task`` still passes a
     # string, so existing callers are unaffected.
     result: Any = Field(None)
-    task_stream: "StreamId"  # Stream reference for inspection
+    # Stream reference for inspection. Resolves against the parent's storage
+    # only when the sub-task's stream shares it, as `stream=None` builds it to.
+    task_stream: "StreamId"
+    # Cumulative snapshot of the sub-task's stream, for a holder of this one
+    # event to inspect. Never sum these: on a reused stream each snapshot
+    # re-reports everything spent before it. Anything that accumulates reads
+    # the ``UsageEvent`` rollup instead — see
+    # ``docs/adr/0014-token-accounting-reads-usageevent.md``.
     usage: Usage = Field(default_factory=Usage)
 
 

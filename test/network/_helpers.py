@@ -10,6 +10,8 @@
 * :func:`wait_for_text_count` — poll a channel's WAL until ``EV_TEXT``
   count reaches a threshold; conversation/discussion adapters have no
   terminal event to await on.
+* :func:`wait_for_delivery` — poll one recipient's captured envelopes
+  until a given text lands; for per-recipient delivery assertions.
 """
 
 import asyncio
@@ -21,8 +23,17 @@ from ag2 import Context
 from ag2.config import LLMClient, ModelConfig
 from ag2.events import BaseEvent, ModelMessage, ModelResponse
 from ag2.network import EV_TEXT, Envelope, Hub
+from ag2.network.adapters.conversation import ConversationAdapter
+from ag2.network.channel import ChannelMetadata, ChannelState, Participant, ParticipantRole
 
-__all__ = ("ScriptedConfig", "_MockClock", "wait_for_text_count")
+__all__ = (
+    "ScriptedConfig",
+    "_MockClock",
+    "text_envelope",
+    "two_party_metadata",
+    "wait_for_delivery",
+    "wait_for_text_count",
+)
 
 
 class _MockClock:
@@ -39,6 +50,36 @@ class _MockClock:
 
     def advance(self, seconds: float) -> None:
         self._now = self._now + timedelta(seconds=seconds)
+
+
+def two_party_metadata(a_id: str, b_id: str) -> ChannelMetadata:
+    """Synthesize a minimal conversation-style channel for projection tests."""
+    return ChannelMetadata(
+        channel_id="ch-test",
+        manifest=ConversationAdapter().manifest,
+        creator_id=a_id,
+        participants=[
+            Participant(agent_id=a_id, role=ParticipantRole.INITIATOR, order=0, joined_at="now"),
+            Participant(agent_id=b_id, role=ParticipantRole.RESPONDENT, order=1, joined_at="now"),
+        ],
+        state=ChannelState.ACTIVE,
+        created_at="now",
+        expires_at=None,
+        knobs={},
+        labels={},
+        required_acks=None,
+        pending_acks=[],
+    )
+
+
+def text_envelope(sender: str, audience: str, text: str) -> Envelope:
+    return Envelope(
+        channel_id="ch-test",
+        sender_id=sender,
+        audience=[audience],
+        event_type=EV_TEXT,
+        event_data={"text": text},
+    )
 
 
 class ScriptedConfig(ModelConfig):
@@ -113,3 +154,23 @@ async def wait_for_text_count(
             return wal
         await asyncio.sleep(0.02)
     raise asyncio.TimeoutError(f"channel {channel_id!r} never reached {expected} EV_TEXT envelopes")
+
+
+async def wait_for_delivery(
+    received: "Sequence[Envelope]",
+    text: str,
+    *,
+    timeout: float = 5.0,
+) -> None:
+    """Poll a capture list until an ``EV_TEXT`` envelope carrying ``text`` lands.
+
+    The hub fans out to each recipient in turn, so one participant's copy can
+    land several event-loop turns after another's; polling avoids encoding a
+    guess about the slowest recipient.
+    """
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if any(e.event_type == EV_TEXT and e.event_data.get("text") == text for e in received):
+            return
+        await asyncio.sleep(0.02)
+    raise asyncio.TimeoutError(f"no EV_TEXT envelope carrying {text!r} was delivered within {timeout}s")

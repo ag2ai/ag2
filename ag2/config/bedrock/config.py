@@ -5,6 +5,7 @@
 from dataclasses import dataclass, replace
 from typing import Any, TypedDict
 
+from aiobotocore.session import AioSession
 from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
@@ -33,14 +34,14 @@ class BedrockConfigOverrides(TypedDict, total=False):
     timeout: float | None
     max_retries: int | None
     botocore_config: Any | None
-    session: Any | None
+    session: AioSession | None
 
 
 @dataclass(slots=True)
 class BedrockConfig(ModelConfig):
     """Amazon Bedrock model configuration (Converse API).
 
-    Credentials follow boto3's resolution chain: explicit keys, then
+    Credentials follow botocore's resolution chain: explicit keys, then
     ``profile_name``, then environment variables / shared config files /
     instance roles. ``model`` is a Bedrock model id or inference-profile ARN.
     """
@@ -65,7 +66,7 @@ class BedrockConfig(ModelConfig):
     timeout: float | None = None
     max_retries: int | None = None
     botocore_config: Any | None = None
-    session: Any | None = None
+    session: AioSession | None = None
 
     @property
     def provider(self) -> ModelProvider:

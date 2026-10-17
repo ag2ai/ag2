@@ -12,10 +12,11 @@ AG2 exposes two different mechanisms, because the providers expose two different
 | Provider | Mechanism | How to enable |
 | :--- | :--- | :--- |
 | OpenAI | `ImageGenerationTool` (server-side tool, Responses API) | Add the tool to the agent |
+| Mistral | `ImageGenerationTool` (server-side tool, chat completions) | Add the tool to the agent |
 | Gemini | `IMAGE` response modality on an image model | Set `response_modalities=["TEXT", "IMAGE"]` |
 
 !!! note
-    OpenAI's `ImageGenerationTool` is **not** supported on Gemini, and Gemini's image modality is **not** available on OpenAI. Each provider uses its own mechanism below.
+    Gemini's image modality is **not** available on OpenAI or Mistral, and neither of their tools works on Gemini. Each provider uses its own mechanism below.
 
 ## Reading generated images
 
@@ -70,6 +71,32 @@ image = reply.files[0]
 
 !!! warning
     `ImageGenerationTool` requires the Responses API. Using it with the Chat Completions API (`OpenAIConfig`) raises an `UnsupportedToolError`.
+
+## Mistral
+
+Add `ImageGenerationTool` to an agent configured with `MistralConfig`. Unlike OpenAI, this works on the ordinary chat-completions endpoint — no separate API.
+
+```python linenums="1" hl_lines="8"
+from ag2 import Agent
+from ag2.config import MistralConfig
+from ag2.tools import ImageGenerationTool
+
+agent = Agent(
+    "designer",
+    config=MistralConfig(model="mistral-medium-latest"),
+    tools=[ImageGenerationTool()],
+)
+
+reply = await agent.ask("Generate a logo for a coffee shop.")
+image = reply.files[0]
+```
+
+Mistral's tool takes no configuration, so `quality`, `size`, `background`, and `output_format` are accepted on the AG2 tool but ignored. The generated image is returned to AG2 as a short-lived signed URL rather than inline bytes; AG2 downloads it so `#!python reply.files` stays consistent with the other providers. The originating URL is kept on the image's `metadata` under the `url` key.
+
+!!! note
+    Mistral runs the whole exchange server-side and bills every internal turn, so a generated image costs far more tokens than a plain reply. The model often returns the image with no accompanying text, leaving `#!python reply.body` empty — check `#!python reply.files` rather than the body to detect success.
+
+Mistral's other server-side tools (`web_search`, `code_interpreter`, `document_library`) belong to its Agents API and raise `#!python UnsupportedToolError` on chat completions.
 
 ## Gemini
 

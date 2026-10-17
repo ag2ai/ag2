@@ -5,7 +5,7 @@
 from dataclasses import dataclass, replace
 from typing import Any, TypedDict
 
-import httpx
+import httpx2
 from anthropic.types import ModelParam
 from typing_extensions import Unpack
 
@@ -13,6 +13,7 @@ from ag2.config.config import ModelConfig, ModelProvider
 
 from .anthropic_client import AnthropicClient, CreateOptions
 from .files import AnthropicFilesClient
+from .mappers import SAMPLING_FIELDS, merge_sampling_into_extra_body
 
 
 class AnthropicConfigOverrides(TypedDict, total=False):
@@ -28,10 +29,11 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     timeout: float | None
     max_retries: int
     default_headers: dict[str, str] | None
-    http_client: httpx.AsyncClient | None
+    http_client: httpx2.AsyncClient | None
     metadata: dict[str, str] | None
     service_tier: str | None
     prompt_caching: bool
+    cache_diagnostics: bool
     extra_body: dict[str, Any] | None
 
 
@@ -49,10 +51,11 @@ class AnthropicConfig(ModelConfig):
     timeout: float | None = None
     max_retries: int = 2
     default_headers: dict[str, str] | None = None
-    http_client: httpx.AsyncClient | None = None
+    http_client: httpx2.AsyncClient | None = None
     metadata: dict[str, str] | None = None
     service_tier: str | None = None
     prompt_caching: bool = True
+    cache_diagnostics: bool = False
     extra_body: dict[str, Any] | None = None
 
     @property
@@ -69,12 +72,6 @@ class AnthropicConfig(ModelConfig):
             stream=self.streaming,
         )
 
-        if self.temperature is not None:
-            options["temperature"] = self.temperature
-        if self.top_p is not None:
-            options["top_p"] = self.top_p
-        if self.top_k is not None:
-            options["top_k"] = self.top_k
         if self.stop_sequences is not None:
             options["stop_sequences"] = self.stop_sequences
         if self.metadata is not None:
@@ -91,8 +88,20 @@ class AnthropicConfig(ModelConfig):
             http_client=self.http_client,
             create_options=options,
             prompt_caching=self.prompt_caching,
-            extra_body=self.extra_body,
+            cache_diagnostics=self.cache_diagnostics,
+            extra_body=self._request_extra_body(),
         )
 
     def create_files_client(self) -> AnthropicFilesClient:
         return AnthropicFilesClient(self)
+
+    def _request_extra_body(self) -> dict[str, Any] | None:
+        """Fold the sampling fields into the request's extra body.
+
+        ``anthropic`` 1.x dropped ``temperature``/``top_p``/``top_k`` from the
+        generated method signatures — passing one is a ``TypeError`` — but the API
+        still reads them from the request body, so the fields stay settable and
+        keep reaching the model.
+        """
+        sampling = {name: value for name in SAMPLING_FIELDS if (value := getattr(self, name)) is not None}
+        return merge_sampling_into_extra_body(sampling, self.extra_body)

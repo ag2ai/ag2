@@ -6,8 +6,14 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from ag2.tools.sandbox.base import ExecResult, Sandbox
-from ag2.tools.sandbox.factory import SandboxFactory, SingletonFactory
-from ag2.tools.sandbox.filter import READONLY_COMMANDS, check_ignore, contains_shell_operator, matches
+from ag2.tools.sandbox.factory import SandboxFactory, SingletonFactory, WorkdirAware
+from ag2.tools.sandbox.filter import (
+    READONLY_COMMANDS,
+    check_ignore,
+    contains_shell_operator,
+    matches_argv,
+    split_command,
+)
 
 if TYPE_CHECKING:
     from ag2.context import ConversationContext
@@ -29,11 +35,13 @@ class ShellAdapter:
                  :class:`SandboxFactory` (opened per :meth:`run` so
                  :class:`~ag2.annotations.Variable` parameters
                  get resolved against the active Context).
-        allowed / blocked / ignore / readonly: command filter set.
-                 ``blocked`` is best-effort: it only matches the head command's
-                 prefix, so chaining (``;`` / ``|`` / ``&&`` / ``$(...)``) can
-                 bypass it. It is **not** a security boundary — use ``allowed`` /
-                 ``readonly`` or an isolated container for that.
+        allowed / blocked / ignore / readonly: command filter set. Any of them
+                 switches on restricted mode, where the command runs as its
+                 checked argv without a shell, so nothing can expand or chain
+                 after the check. ``blocked`` matches the argv word by word
+                 (the program by its base name), so it cannot stop a program
+                 that runs another one (``sh -c``, ``env``, ``xargs``): use
+                 ``allowed`` / ``readonly`` or an isolated container for that.
         env: Extra environment variables passed into each command.
         timeout: Per-command timeout in seconds. ``None`` lets the
                  backend pick its default.
@@ -66,11 +74,15 @@ class ShellAdapter:
         :class:`SingletonFactory` wrapping one) this is the real host
         :class:`~pathlib.Path` (so ``.exists()`` etc. work); for a remote /
         container backend it is the sandbox-side :class:`PurePosixPath`. A
-        not-yet-opened remote :class:`SandboxFactory` reports the
-        conventional ``/workspace`` since no sandbox is bound yet.
+        not-yet-opened remote :class:`SandboxFactory` has no sandbox bound yet,
+        so it reports what it declares as a
+        :class:`~ag2.tools.sandbox.WorkdirAware` factory, and the conventional
+        ``/workspace`` when it declares nothing.
         """
         factory = self._factory
         if not isinstance(factory, SingletonFactory):
+            if isinstance(factory, WorkdirAware):
+                return factory.workdir
             return PurePosixPath("/workspace")
         sandbox = factory.sandbox
         host = sandbox.host_workdir
@@ -78,17 +90,29 @@ class ShellAdapter:
             return host
         return sandbox.workdir
 
-    def _filter(self, command: str) -> str | None:
-        if self._allowed is not None:
-            if not any(matches(p, command) for p in self._allowed):
-                return f"Command not allowed: {command!r}"
-            # In restricted mode, shell operators (redirection, pipes,
-            # chaining, command substitution) would let an allowed head
-            # command spawn or redirect to disallowed ones — block them.
-            if contains_shell_operator(command):
-                return f"Command not allowed (shell operators are not permitted in restricted mode): {command!r}"
-        if self._blocked is not None and any(matches(p, command) for p in self._blocked):
+    @property
+    def restricted(self) -> bool:
+        """Whether commands run as a checked argv, without a shell."""
+        return self._allowed is not None or self._blocked is not None or self._ignore is not None
+
+    def _argv(self, command: str) -> list[str] | None:
+        # Restricted mode runs exactly the argv it checks: through ``sh -c`` the
+        # shell would expand braces, variables, globs and ``$(...)`` after the check.
+        if not self.restricted:
+            return ["sh", "-c", command]
+        return split_command(command)
+
+    def _filter(self, command: str, argv: list[str]) -> str | None:
+        if self._allowed is not None and not any(matches_argv(p, argv) for p in self._allowed):
             return f"Command not allowed: {command!r}"
+        if self.restricted and contains_shell_operator(command):
+            return f"Command not allowed (shell syntax is not available in restricted mode): {command!r}"
+        if self._blocked is not None and argv:
+            # Preserve path-based prefixes while also matching the program by
+            # its base name, so ``/bin/rm`` is matched by ``rm``.
+            head = [PurePosixPath(argv[0]).name, *argv[1:]]
+            if any(matches_argv(p, argv) or matches_argv(p, head) for p in self._blocked):
+                return f"Command not allowed: {command!r}"
         if self._ignore is not None:
             # self.workdir gives a host Path for local backends and a
             # PurePosixPath for remote/container ones — check_ignore handles
@@ -104,21 +128,17 @@ class ShellAdapter:
         *,
         context: "ConversationContext | None" = None,
     ) -> str:
-        denied = self._filter(command)
+        """Run ``command`` and return its output, or the reason it was refused."""
+        argv = self._argv(command)
+        if argv is None:
+            return f"Command not allowed (unbalanced quotes): {command!r}"
+        denied = self._filter(command, argv)
         if denied is not None:
             return denied
 
-        result = await self._exec_async(command, context)
-        return _format(result)
-
-    async def _exec_async(
-        self,
-        command: str,
-        context: "ConversationContext | None",
-    ) -> ExecResult:
-        argv = ["sh", "-c", command]
         async with self._factory.open(context) as sandbox:
-            return await sandbox.exec(argv, env=self._env, timeout=self._timeout)
+            result = await sandbox.exec(argv, env=self._env, timeout=self._timeout)
+        return _format(result)
 
 
 def _format(result: ExecResult) -> str:

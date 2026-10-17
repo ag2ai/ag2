@@ -2,12 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
 from pathlib import Path
 
 import pytest
 from acp import schema
 
-from ag2.acp.bridge import BridgeState, _confine, make_bridge
+from ag2.acp.bridge import BridgeState, make_bridge
 from ag2.acp.config import ACPConfig
 from ag2.events import BaseEvent, ModelMessageChunk, ModelReasoning
 
@@ -29,21 +30,6 @@ def _state(context: FakeContext, **cfg: object) -> BridgeState:
     st.context = context  # type: ignore[assignment]
     st.begin_turn()
     return st
-
-
-def test_confine_allows_inside_root(tmp_path: Path) -> None:
-    p = _confine(str(tmp_path), str(tmp_path / "a.py"))
-    assert p.startswith(str(tmp_path))
-
-
-def test_confine_allows_relative(tmp_path: Path) -> None:
-    p = _confine(str(tmp_path), "sub/a.py")
-    assert p.startswith(str(tmp_path))
-
-
-def test_confine_rejects_escape(tmp_path: Path) -> None:
-    with pytest.raises(PermissionError):
-        _confine(str(tmp_path), str(tmp_path / ".." / "etc" / "passwd"))
 
 
 @pytest.mark.asyncio
@@ -87,6 +73,8 @@ def test_fs_write_then_read(tmp_path: Path) -> None:
     st.write_text_file("hi\nthere\n", "notes.txt")
     assert (tmp_path / "notes.txt").read_text() == "hi\nthere\n"
     assert st.read_text_file("notes.txt") == "hi\nthere\n"
+    # absolute paths inside the root are equally fine
+    assert st.read_text_file(str(tmp_path / "notes.txt")) == "hi\nthere\n"
 
 
 def test_fs_read_with_line_and_limit(tmp_path: Path) -> None:
@@ -99,6 +87,8 @@ def test_fs_rejects_escape(tmp_path: Path) -> None:
     st = BridgeState(ACPConfig(cwd=str(tmp_path)))
     with pytest.raises(PermissionError):
         st.read_text_file("../../etc/passwd")
+    with pytest.raises(PermissionError):
+        st.read_text_file(str(tmp_path / ".." / "etc" / "passwd"))
 
 
 @pytest.mark.asyncio
@@ -172,5 +162,10 @@ async def test_terminal_kill(tmp_path: Path) -> None:
     tid = await st.terminals.create("sleep", ["30"])
     await st.terminals.kill(tid)
     exit_status = await st.terminals.wait(tid)
-    assert exit_status.signal is not None  # terminated by signal
+    if sys.platform == "win32":
+        # Windows has no signals: TerminateProcess surfaces as a non-zero exit
+        # code, so exit_status() reports exit_code instead.
+        assert exit_status.exit_code is not None
+    else:
+        assert exit_status.signal is not None  # terminated by signal
     await st.terminals.release(tid)

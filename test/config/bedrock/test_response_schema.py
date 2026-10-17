@@ -4,17 +4,12 @@
 
 """Bedrock structured output uses the Converse outputConfig (native) mechanism."""
 
-import json
-
 import pytest
-from fast_depends.use import SerializerCls
+from dirty_equals import IsJson, IsPartialDict
 from pydantic import BaseModel
 
-from ag2.config.bedrock import BedrockClient
-from ag2.config.bedrock.mappers import response_proto_to_output_config
-from ag2.events import ModelRequest, TextInput
 from ag2.response import PromptedSchema, ResponseSchema
-from test.config.bedrock._helpers import FakeBedrockRuntime, StubSession, make_call_context
+from test.config.bedrock._helpers import FakeBedrock, ask
 
 
 class Verdict(BaseModel):
@@ -27,71 +22,73 @@ class Nested(BaseModel):
     tags: list[str]
 
 
-async def _ask(fake: FakeBedrockRuntime, response_schema) -> None:
-    client = BedrockClient(session=StubSession(fake), create_options={"model": "m1"})
-    await client(
-        messages=[ModelRequest([TextInput("hello")])],
-        context=make_call_context(),
-        tools=[],
-        response_schema=response_schema,
-        serializer=SerializerCls,
-    )
+@pytest.mark.asyncio
+async def test_plain_schema_sends_output_config(bedrock: FakeBedrock) -> None:
+    await ask(bedrock.config(), response_schema=ResponseSchema(Verdict))
 
-
-def test_output_config_shape() -> None:
-    config = response_proto_to_output_config(ResponseSchema(Verdict))
-
-    text_format = config["textFormat"]
-    assert text_format["type"] == "json_schema"
-    json_schema = text_format["structure"]["jsonSchema"]
-    assert json_schema["name"] == "Verdict"
-    # Converse expects the schema serialized as a string
-    schema = json.loads(json_schema["schema"])
-    assert schema["additionalProperties"] is False
-    assert set(schema["properties"]) == {"answer", "confidence"}
-
-
-def test_output_config_nested_additional_properties() -> None:
-    config = response_proto_to_output_config(ResponseSchema(Nested))
-
-    schema = json.loads(config["textFormat"]["structure"]["jsonSchema"]["schema"])
-    assert schema["additionalProperties"] is False
-    assert schema["$defs"]["Verdict"]["additionalProperties"] is False
-
-
-def test_output_config_none_without_json_schema() -> None:
-    assert response_proto_to_output_config(None) is None
-    assert response_proto_to_output_config(PromptedSchema(Verdict)) is None
+    assert bedrock.body == {
+        "messages": [{"role": "user", "content": [{"text": "hello"}]}],
+        "outputConfig": {
+            "textFormat": {
+                "type": "json_schema",
+                "structure": {
+                    "jsonSchema": {
+                        "name": "Verdict",
+                        # Converse expects the schema serialized as a string
+                        "schema": IsJson({
+                            "type": "object",
+                            "properties": {
+                                "answer": {"title": "Answer", "type": "string"},
+                                "confidence": {"title": "Confidence", "type": "number"},
+                            },
+                            "required": ["answer", "confidence"],
+                            "additionalProperties": False,
+                        }),
+                    },
+                },
+            },
+        },
+    }
 
 
 @pytest.mark.asyncio
-async def test_plain_schema_sends_output_config() -> None:
-    fake = FakeBedrockRuntime()
+async def test_nested_schema_closes_every_object(bedrock: FakeBedrock) -> None:
+    await ask(bedrock.config(), response_schema=ResponseSchema(Nested))
 
-    await _ask(fake, ResponseSchema(Verdict))
-
-    output_config = fake.converse_kwargs["outputConfig"]
-    assert output_config["textFormat"]["structure"]["jsonSchema"]["name"] == "Verdict"
-    assert "system" not in fake.converse_kwargs
+    assert bedrock.body == IsPartialDict({
+        "outputConfig": {
+            "textFormat": {
+                "type": "json_schema",
+                "structure": {
+                    "jsonSchema": {
+                        "name": "Nested",
+                        "schema": IsJson(
+                            IsPartialDict({
+                                "additionalProperties": False,
+                                "$defs": {"Verdict": IsPartialDict({"additionalProperties": False})},
+                            })
+                        ),
+                    },
+                },
+            },
+        },
+    })
 
 
 @pytest.mark.asyncio
-async def test_prompted_schema_goes_to_system_prompt() -> None:
-    fake = FakeBedrockRuntime()
+async def test_prompted_schema_goes_to_system_prompt(bedrock: FakeBedrock) -> None:
     schema = PromptedSchema(Verdict)
 
-    await _ask(fake, schema)
+    await ask(bedrock.config(), response_schema=schema)
 
-    [system] = fake.converse_kwargs["system"]
-    assert system["text"] == schema.system_prompt
-    assert "outputConfig" not in fake.converse_kwargs
+    assert bedrock.body == {
+        "messages": [{"role": "user", "content": [{"text": "hello"}]}],
+        "system": [{"text": schema.system_prompt}],
+    }
 
 
 @pytest.mark.asyncio
-async def test_no_schema_sends_neither() -> None:
-    fake = FakeBedrockRuntime()
+async def test_no_schema_sends_neither(bedrock: FakeBedrock) -> None:
+    await ask(bedrock.config())
 
-    await _ask(fake, None)
-
-    assert "outputConfig" not in fake.converse_kwargs
-    assert "system" not in fake.converse_kwargs
+    assert bedrock.body == {"messages": [{"role": "user", "content": [{"text": "hello"}]}]}

@@ -4,7 +4,7 @@
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -191,7 +191,7 @@ class RealTimeConfig(RealtimeConfig):
         instructions: Iterable[str] = (),
         tools: Iterable[ToolSchema] = (),
         serializer: SerializerProto,
-    ) -> AsyncIterator[None]:
+    ) -> AsyncGenerator[None]:
         final_config = self._build_session(instructions=instructions, tools=tools)
 
         async with self.client.aio.live.connect(model=self.model, config=final_config) as session:
@@ -224,7 +224,7 @@ def _tool_schema_to_function_declaration(t: ToolSchema) -> gtypes.FunctionDeclar
         return {
             "name": t.function.name,
             "description": t.function.description,
-            "parameters": _ensure_object_schema(t.function.parameters),
+            "parameters_json_schema": _ensure_object_schema(t.function.parameters),
         }
     raise NotImplementedError(f"Gemini Live does not support tool type {t.type!r}")
 

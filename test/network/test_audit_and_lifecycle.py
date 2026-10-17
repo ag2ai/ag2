@@ -40,6 +40,7 @@ from ag2.network.hub.audit import (
     AUDIT_KIND_TASK_TERMINATED,
 )
 from ag2.network.rule import LimitsBlock
+from ag2.task import TaskMetadata, TaskSpec, TaskState
 from ag2.testing import TestConfig
 
 from ._helpers import _MockClock
@@ -300,7 +301,6 @@ async def test_audit_log_records_channel_expired_on_ttl_sweep() -> None:
 async def test_audit_log_records_task_terminated_on_channel_cascade() -> None:
     """Tasks under a closing channel cascade to ``EXPIRED`` and emit
     ``task_terminated`` audit records carrying ``capability``."""
-    from ag2.task import TaskMetadata, TaskSpec, TaskState
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)

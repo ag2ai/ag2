@@ -5,7 +5,8 @@
 import asyncio
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
-from typing import Any
+from copy import copy
+from typing import Any, cast
 
 from fast_depends.library.serializer import SerializerProto
 
@@ -23,7 +24,7 @@ from ag2.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from ag2.exceptions import ToolNotFoundError
+from ag2.exceptions import HumanInputError, ToolNotFoundError
 from ag2.middleware import BaseMiddleware
 
 from .tool import Tool
@@ -57,8 +58,35 @@ class ToolExecutor:
         client_calls: list[ClientToolCallEvent] = []
 
         # Execute called tools in parallel
-        for event in await asyncio.gather(*(_execute_call(context, call) for call in event.calls)):
-            match event:
+        tasks = [asyncio.ensure_future(_execute_call(context, call)) for call in event.calls]
+        try:
+            outcomes = await asyncio.gather(*tasks)
+        except HumanInputError:
+            # ``gather`` propagates the first failure but leaves the rest of the
+            # batch running detached, so a sibling would carry on — side effects
+            # included — after the caller has been told the turn failed. Stop
+            # them and settle the batch before the exception leaves, which is
+            # also what makes the history repair at the turn boundary
+            # deterministic.
+            #
+            # Cancellation reaches a sibling's tool coroutine as an ordinary
+            # ``CancelledError``, which is not an ``Exception``, so nothing
+            # downstream turns it into a ``ToolErrorEvent``.
+            #
+            # A *sync* tool is the limit of this: it runs in a worker thread via
+            # ``sync_to_thread``, and a thread cannot be cancelled. Its await
+            # point goes away immediately, so nothing it returns is ever sent or
+            # recorded — but a side effect already under way still lands, after
+            # the caller has been told. Do not read the settling below as a
+            # guarantee that every side effect was stopped; it guarantees that
+            # none of them is still owed a result.
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+
+        for outcome in outcomes:
+            match outcome:
                 case ClientToolCallEvent() as ev:
                     client_calls.append(ev)
 
@@ -94,15 +122,29 @@ class ToolExecutor:
                     results.append(ev)
 
         if client_calls:
+            # Preserve provider fields from the model's calls while dispatching
+            # the names and arguments that tool middleware actually approved.
+            pending = {call.id: call for call in client_calls}
             await context.send(
                 ModelResponse(
-                    tool_calls=ToolCallsEvent(client_calls),
+                    tool_calls=ToolCallsEvent([
+                        _client_call_for_response(call, pending[call.id]) for call in event.calls if call.id in pending
+                    ]),
                     response_force=True,
                 )
             )
 
         else:
             await context.send(ToolResultsEvent(results))
+
+
+def _client_call_for_response(call: ToolCallEvent, outcome: ClientToolCallEvent) -> ToolCallEvent:
+    response_call = copy(call)
+    response_call.name = outcome.name
+    response_call.arguments = outcome.arguments
+    # A mapper or middleware may already have decoded the original arguments.
+    response_call._serialized_arguments = None
+    return response_call
 
 
 async def _execute_call(
@@ -113,8 +155,22 @@ async def _execute_call(
         | (ToolResultEvent.parent_id == call.id)
         | (ClientToolCallEvent.id == call.id)
     ) as result:
-        await context.send(call)
-        return await result
+        try:
+            await context.send(call)
+            # The condition above names the three types this can settle as;
+            # `Stream.get` is typed for any event, since its filter is a runtime
+            # object the checker cannot read.
+            return cast("ToolErrorEvent | ToolResultEvent | ClientToolCallEvent", await result)
+
+        # Same reasoning as in FunctionTool: a middleware that asked for human
+        # input and got nowhere has not produced a tool failure, and an approval
+        # that was never asked for must not read as one.
+        except HumanInputError:
+            raise
+
+        # tool-level middleware could leads to execution exceptions
+        except Exception as e:
+            return ToolErrorEvent.from_call(call, e)
 
 
 def _tool_not_found(known_tools: Iterable[str]) -> Callable[..., Any]:

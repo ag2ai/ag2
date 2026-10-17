@@ -14,6 +14,7 @@ import asyncio
 
 import pytest
 
+from ag2 import Agent
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_CHANNEL_INVITE,
@@ -29,6 +30,8 @@ from ag2.network import (
     Resume,
     parse_hub_urn,
 )
+
+from ._helpers import ScriptedConfig
 
 
 class _RecordingProxy:
@@ -202,10 +205,6 @@ class TestDispatchRouting:
         link = LocalLink(hub)
         alice_hc = HubClient(link, hub=hub)
 
-        from ag2 import Agent
-
-        from ._helpers import ScriptedConfig
-
         alice = await alice_hc.register(
             Agent(name="alice", config=ScriptedConfig()),
             Passport(name="alice"),
@@ -255,10 +254,6 @@ class TestDispatchRouting:
         hub.register_listener(listener)
         link = LocalLink(hub)
         alice_hc = HubClient(link, hub=hub)
-
-        from ag2 import Agent
-
-        from ._helpers import ScriptedConfig
 
         alice = await alice_hc.register(
             Agent(name="alice", config=ScriptedConfig()),
@@ -313,10 +308,6 @@ class TestDispatchRouting:
         hub.register_listener(listener)
         link = LocalLink(hub)
         alice_hc = HubClient(link, hub=hub)
-
-        from ag2 import Agent
-
-        from ._helpers import ScriptedConfig
 
         alice = await alice_hc.register(
             Agent(name="alice", config=ScriptedConfig()),
@@ -373,10 +364,6 @@ class TestDispatchRouting:
         link = LocalLink(hub)
         alice_hc = HubClient(link, hub=hub)
         carol_hc = HubClient(link, hub=hub)
-
-        from ag2 import Agent
-
-        from ._helpers import ScriptedConfig
 
         alice = await alice_hc.register(
             Agent(name="alice", config=ScriptedConfig()),

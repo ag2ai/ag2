@@ -158,7 +158,7 @@ from ag2.testing import TestConfig
 load_dotenv()
 
 async def main() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-6")
+    config = AnthropicConfig(model="claude-sonnet-5")
 
     hub_obj = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 

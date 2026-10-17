@@ -4,6 +4,9 @@
 
 import pytest
 
+pytest.importorskip("anthropic")
+pytest.importorskip("openai")
+
 from ag2.config.anthropic.mappers import tool_to_api as anthropic_tool_to_api
 from ag2.config.openai.mappers import tool_to_responses_api
 from ag2.tools import tool

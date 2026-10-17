@@ -29,7 +29,10 @@ from ag2.network import (
     Resume,
 )
 
-from ._helpers import ScriptedConfig
+from ._helpers import ScriptedConfig, wait_for_delivery
+
+# Window for a forbidden delivery to show up before a negative assertion runs.
+SETTLE = 0.05
 
 
 def _agent(name: str) -> Agent:
@@ -104,7 +107,8 @@ async def test_targeted_envelope_delivered_to_only_named_recipient() -> None:
 
     # Targeted to bob only.
     await channel.send("private to bob", audience=[bob.agent_id])
-    await asyncio.sleep(0.05)
+    await wait_for_delivery(received_bob, "private to bob")
+    await asyncio.sleep(SETTLE)  # let carol/alice deliveries land, if any
 
     bob_text = [e for e in received_bob if e.event_type == EV_TEXT and e.event_data.get("text") == "private to bob"]
     carol_text = [e for e in received_carol if e.event_type == EV_TEXT and e.event_data.get("text") == "private to bob"]
@@ -157,7 +161,10 @@ async def test_broadcast_envelope_delivered_to_all_non_sender() -> None:
     channel = await alice.open(type="discussion", target=["bob", "carol"])
 
     await channel.send("hello everyone", audience=None)
-    await asyncio.sleep(0.05)
+    # Each recipient awaited separately: carol's copy lands after bob's.
+    await wait_for_delivery(received_bob, "hello everyone")
+    await wait_for_delivery(received_carol, "hello everyone")
+    await asyncio.sleep(SETTLE)  # let an alice delivery land, if any
 
     # Both non-sender participants see it; alice (sender) does not.
     assert any(e.event_data.get("text") == "hello everyone" for e in received_bob)
@@ -224,7 +231,7 @@ async def test_two_hub_clients_share_one_hub_isolated_endpoints() -> None:
 
     channel = await alice.open(type="conversation", target="bob")
     await channel.send("cross-tenant", audience=[bob.agent_id])
-    await asyncio.sleep(0.05)
+    await wait_for_delivery(received_bob, "cross-tenant")
 
     assert any(e.event_data.get("text") == "cross-tenant" for e in received_bob)
 

@@ -43,6 +43,7 @@ from ag2.network.hub.layout import (
     rule_path,
     skill_path,
 )
+from ag2.task import TaskMetadata, TaskSpec, TaskState
 
 from ._helpers import ScriptedConfig
 
@@ -262,7 +263,6 @@ async def test_hydrate_channel_metadata_with_no_adapter_state_not_active(tmp_pat
 @pytest.mark.asyncio
 async def test_hydrate_resume_observed_stats_survive(tmp_path) -> None:
     """Resume.observed (capability stats from record_observation) round-trip."""
-    from ag2.task import TaskMetadata, TaskSpec, TaskState
 
     store = DiskKnowledgeStore(str(tmp_path))
     hub1 = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)

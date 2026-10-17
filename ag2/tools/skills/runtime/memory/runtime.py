@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ag2.context import ConversationContext
-from ag2.exceptions import SkillNotFoundError
+from ag2.exceptions import SkillError, SkillNotFoundError
 from ag2.tools.final.function_tool import FunctionTool
 from ag2.tools.skills.skill_types import Skill
 from ag2.utils import CONTEXT_OPTION_NAME
@@ -27,8 +27,9 @@ class MemoryRuntime(SkillRuntime):
     """RAM-backed runtime owning code-defined :class:`MemorySkill` instances.
 
     Reads instructions and Resources straight from memory and runs Scripts as
-    in-process callables. Read-only: it owns no installable storage, so
-    ``install`` / ``remove`` / ``lock_dir`` raise.
+    in-process callables. A skill with a callable body has it rendered on every
+    read, so the instructions can reflect the live conversation. Read-only: it
+    owns no installable storage, so ``install`` / ``remove`` / ``lock_dir`` raise.
 
     Holds one or more skills::
 
@@ -57,16 +58,16 @@ class MemoryRuntime(SkillRuntime):
     def skills(self) -> list[Skill]:
         return [s.descriptor for s in self._skills.values()]
 
-    def read(self, name: str) -> str:
+    async def read(self, name: str, context: "ConversationContext") -> str:
         skill = self._get(name)
-        return _wrap_memory_content(skill)
+        return _wrap_memory_content(skill, await _render_instructions(skill, context))
 
     async def read_resource(self, name: str, resource: str, context: "ConversationContext") -> str:
         skill = self._get(name)
         entry = skill.get_resource(resource)
         if entry is None:
             raise FileNotFoundError(f"resource {resource!r} not found in memory skill {name!r}")
-        text = _to_text(await _run_tool(entry.tool, {}, context))
+        text = _to_text(await _run_tool(entry.tool, {}, context, skill=name, part=f"resource {resource!r}"))
         if len(text) > _RESOURCE_READ_CAP:
             return text[:_RESOURCE_READ_CAP] + "\n<!-- resource truncated -->"
         return text
@@ -87,7 +88,7 @@ class MemoryRuntime(SkillRuntime):
                 f"in-process script {script!r} requires named arguments (an object); "
                 "positional arguments (an array) are only supported for file-based scripts"
             )
-        return _to_text(await _run_tool(entry.tool, args or {}, context))
+        return _to_text(await _run_tool(entry.tool, args or {}, context, skill=name, part=f"script {script!r}"))
 
     def invalidate(self) -> None:
         # Nothing is cached — discovery reads the in-memory dict directly.
@@ -110,34 +111,59 @@ class MemoryRuntime(SkillRuntime):
         return skill
 
 
-async def _run_tool(ft: FunctionTool, args: dict[str, Any], context: "ConversationContext") -> Any:
-    """Invoke a script/resource ``FunctionTool`` through its FastDepends model.
+async def _run_tool(
+    ft: FunctionTool,
+    args: dict[str, Any],
+    context: "ConversationContext",
+    *,
+    skill: str,
+    part: str,
+) -> Any:
+    """Invoke a body/resource/script ``FunctionTool`` through its FastDepends model.
 
     Threads the live *context* as ``__ctx__`` so the callable's ``Context`` /
     ``Variable`` / ``Inject`` parameters resolve exactly as a regular tool's do
     (including the agent's dependency provider, carried on the context), and sync
-    callables run in a worker thread.
+    callables run in a worker thread. A ``SkillNotFoundError`` from the callable is
+    re-raised as a plain ``SkillError`` naming *skill* and *part*: that type is the
+    toolkit chain's "this runtime does not own the skill" signal, so leaving it
+    would report a routing miss instead of the failure the callable hit.
     """
     call_kwargs: dict[str, Any] = {**args, CONTEXT_OPTION_NAME: context}
-    async with AsyncExitStack() as stack:
-        return await ft.model.asolve(
-            **call_kwargs,
-            stack=stack,
-            cache_dependencies={},
-            dependency_provider=context.dependency_provider,
-        )
+    try:
+        async with AsyncExitStack() as stack:
+            return await ft.model.asolve(
+                **call_kwargs,
+                stack=stack,
+                cache_dependencies={},
+                dependency_provider=context.dependency_provider,
+            )
+    except SkillNotFoundError as exc:
+        raise SkillError(f"{part} of skill {skill!r} raised SkillNotFoundError: {exc}") from exc
 
 
 def _to_text(value: Any) -> str:
     return value if isinstance(value, str) else str(value)
 
 
-def _wrap_memory_content(skill: MemorySkill) -> str:
+async def _render_instructions(skill: MemorySkill, context: "ConversationContext") -> str:
+    """Return the skill body — static text, or the result of its callable.
+
+    A callable body runs on every read through the same ``FunctionTool`` path as a
+    resource, so it sees the live conversation and can use dependency injection.
+    """
+    body = skill.get_instructions()
+    if isinstance(body, str):
+        return body
+    return _to_text(await _run_tool(body, {}, context, skill=skill.name, part="the body"))
+
+
+def _wrap_memory_content(skill: MemorySkill, instructions: str) -> str:
     """Wrap a MemorySkill's instructions with its resource list and script schemas."""
     descriptor = skill.descriptor
     lines = [
         f'<skill_content name="{skill.name}">',
-        skill.instructions.strip(),
+        instructions.strip(),
     ]
     if descriptor.resources:
         lines.append("<skill_resources>")

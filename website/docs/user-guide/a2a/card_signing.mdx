@@ -1,0 +1,264 @@
+---
+title: Signing and Verifying Agent Cards
+sidebarTitle: Card Signing
+---
+
+A client fetches an `#!python AgentCard` before any trust has been established, so A2A lets the server attach [JWS](https://datatracker.ietf.org/doc/html/rfc7515){.external-link target="_blank"} signatures to the card it publishes and lets the client verify them. Both halves are opt-in and independent: `#!python A2AServer(card_signer=...)` signs what you serve, `#!python A2AConfig(card_signature_verifier=...)` verifies what you consume.
+
+## Why Sign a Card
+
+The card is the client's only source of truth about a remote agent — which transports it speaks, which URLs to call, which auth schemes to present, which extensions it supports. Anyone who can tamper with the card in flight, or serve a substituted one, can point calls at another host, drop an auth requirement, or advertise capabilities the real agent doesn't have. A signature binds the card's contents to a key the client already trusts, so tampering is caught before the first request goes out.
+
+This complements transport security rather than replacing it. TLS authenticates a connection; the signature travels with the card, so it still holds after the card has been cached, stored on disk, or handed through a registry.
+
+## Installing the Signing Dependency
+
+Signing and verification are implemented in the A2A SDK on top of [PyJWT](https://pyjwt.readthedocs.io/){.external-link target="_blank"}, which the SDK ships behind its own `signing` extra. Installing AG2's `a2a` extra alone does **not** pull it in:
+
+```bash
+pip install "ag2[a2a]" "a2a-sdk[signing]"
+```
+
+The examples below also use [cryptography](https://cryptography.io/){.external-link target="_blank"} to generate a key pair. That is only needed to *make* a key — it is not required to sign or verify with a key you already have.
+
+## Creating a Signer and a Verifier
+
+AG2 does not wrap key management: it accepts the callables the SDK's factories return. A signer takes an `#!python AgentCard` and returns it with a signature attached; a verifier takes an `#!python AgentCard` and raises if it doesn't check out.
+
+```python linenums="1" hl_lines="16-20"
+from a2a.utils.signing import create_agent_card_signer, create_signature_verifier
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+
+private_key = ec.generate_private_key(ec.SECP256R1())
+private_pem = private_key.private_bytes(
+    serialization.Encoding.PEM,
+    serialization.PrivateFormat.PKCS8,
+    serialization.NoEncryption(),
+)
+public_pem = private_key.public_key().public_bytes(
+    serialization.Encoding.PEM,
+    serialization.PublicFormat.SubjectPublicKeyInfo,
+)
+
+signer = create_agent_card_signer(
+    private_pem,
+    {"kid": "agent-card-2026", "alg": "ES256", "jku": None, "typ": "JOSE"},
+)
+verifier = create_signature_verifier(lambda kid, jku: public_pem, ["ES256"])
+```
+
+The second argument to `#!python create_agent_card_signer` is the JWS protected header:
+
+| Key | Purpose |
+|---|---|
+| `#!python kid` | Key identifier published with the signature. Verifiers use it to pick the right key |
+| `#!python alg` | Signing algorithm (`#!python "ES256"` for the P-256 key above) |
+| `#!python jku` | Optional URL of a JWK Set where the public key can be fetched |
+| `#!python typ` | Token type. `#!python "JOSE"` per JWS best practice |
+
+`#!python create_signature_verifier` takes a key provider and an algorithm allow-list. The provider receives `#!python (kid, jku)` and returns the key to verify against, which is the hook for per-key lookup or fetching a JWK Set. The allow-list is what prevents algorithm-confusion attacks — keep it to the algorithms you actually issue, never widen it to accept whatever the card claims.
+
+!!! note
+    Keep the signing key out of the serving process where you can — load it from a secret store, or sign through a KMS by passing a callable that delegates to it. The verifier only ever needs the public half.
+
+## Signing the Served Card
+
+Pass the signer once at construction; it covers every transport the server exposes.
+
+```python linenums="1" hl_lines="6"
+from ag2 import Agent
+from ag2.a2a import A2AServer
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="weather", config=AnthropicConfig(model="claude-sonnet-5"))
+server = A2AServer(agent, card_signer=signer)
+asgi = server.build_jsonrpc(url="http://127.0.0.1:8000")
+```
+
+JSON-RPC, REST and gRPC all sign the card they publish, and the extended card too when one is configured. Signing runs *after* AG2 derives capability flags onto the card, so `#!python capabilities.extended_agent_card` and `#!python capabilities.push_notifications` are inside the signed payload rather than mutations that would invalidate it.
+
+### Per-request Modifiers Are Re-signed
+
+A `#!python card_modifier` rewrites the card per request, which would ordinarily void a signature computed at startup. AG2 re-signs whatever the modifier returns, so a modified card is served with exactly one signature and it matches the card's final contents — no extra wiring on your side.
+
+Two SDK details make that non-trivial, and AG2 absorbs both so you don't have to:
+
+- `#!python create_agent_card_signer` **appends** to `#!python card.signatures` rather than replacing them. AG2 signs a copy with any prior signatures dropped, so the signature computed before the modifier ran never ships alongside the fresh one.
+- The SDK hands the modifier the one long-lived card object shared by every request. AG2 hands it a scratch copy instead, so a modifier that mutates in place and returns what it was given cannot make the served card drift request over request.
+
+Both styles below are safe:
+
+```python linenums="1"
+from a2a.types import AgentCard
+
+async def copying_modifier(card: AgentCard) -> AgentCard:
+    out = AgentCard()
+    out.CopyFrom(card)
+    out.description = "per-request description"
+    return out
+
+async def in_place_modifier(card: AgentCard) -> AgentCard:
+    card.description = "per-request description"
+    return card
+```
+
+The same applies to `#!python extended_card_modifier`, which receives a `#!python ServerCallContext` alongside the card.
+
+### Bringing Your Own Signature
+
+If you sign the card yourself and pass it as `#!python build_jsonrpc(card=...)` instead of configuring `#!python card_signer=`, set the capability flags the server derives **before** signing. AG2 sets `#!python capabilities.extended_agent_card` when an extended card is configured and `#!python capabilities.push_notifications` when a push store is — flipping either after you signed would put a signature on the wire that no longer matches its payload, and with no signer configured there is no key to redo it. AG2 refuses to build in that case, raising `#!python A2AStaleCardSignatureError`:
+
+```python linenums="1" hl_lines="5"
+from ag2.a2a import A2AServer, build_card
+
+extended_card = build_card(agent, url="http://127.0.0.1:8000")  # your richer card
+card = build_card(agent, url="http://127.0.0.1:8000")
+card.capabilities.extended_agent_card = True  # set it BEFORE signing
+app = A2AServer(agent, extended_card=extended_card).build_jsonrpc(
+    url="http://127.0.0.1:8000",
+    card=signer(card),
+)
+```
+
+Passing `#!python card_signer=` avoids the issue entirely: AG2 then signs the final card itself, after the flags are on it.
+
+## Verifying on the Client
+
+```python linenums="1" hl_lines="6"
+from ag2 import Agent
+from ag2.a2a import A2AConfig
+
+config = A2AConfig(
+    card_url="http://127.0.0.1:8000",
+    card_signature_verifier=verifier,
+)
+client = Agent("client", config=config)
+reply = await client.ask("ping")
+```
+
+Every card the client takes in is checked, not only the one it fetches:
+
+| Card | Verified |
+|---|---|
+| Fetched card | After the `#!python /.well-known/agent-card.json` round-trip, before a transport is selected |
+| `#!python preset_card` | On connect. A card supplied from a registry or an on-disk cache is not trusted implicitly |
+| Extended card | After `#!python GetExtendedAgentCard`, before it replaces the base card |
+
+`#!python A2AConfig.from_card(...)` accepts `#!python card_signature_verifier=` as well, so a pre-fetched card can be verified at the point it is adopted:
+
+```python linenums="1" hl_lines="4"
+config = A2AConfig.from_card(
+    card,
+    card_url="http://127.0.0.1:8000",
+    card_signature_verifier=verifier,
+)
+```
+
+Verification passes when **at least one** signature on the card validates. A server can therefore publish signatures from an old and a new key during rotation, and clients trusting either key keep working. Compose the two signers to publish both:
+
+```python linenums="1" hl_lines="9"
+from a2a.types import AgentCard
+
+rotated_signer = create_agent_card_signer(
+    new_private_pem,  # the new key, generated exactly as above
+    {"kid": "agent-card-2027", "alg": "ES256", "jku": None, "typ": "JOSE"},
+)
+
+def rotating_signer(card: AgentCard) -> AgentCard:
+    return rotated_signer(signer(card))
+
+server = A2AServer(agent, card_signer=rotating_signer)
+```
+
+AG2's "drop prior signatures, then sign" step runs once, before your callable — signatures a composed signer adds are all computed over the same served payload, so both land on the card.
+
+!!! warning "Setting a verifier makes signatures mandatory"
+
+    The verifier rejects a card that carries **no** signatures — this is not best-effort validation. Once `#!python card_signature_verifier=` is set, every server that config points at has to sign its card or the connection fails. That is deliberate: if an unsigned card were accepted, an attacker could defeat the check simply by stripping the signature.
+
+## Failure Modes
+
+Any failed check raises `#!python A2ACardSignatureError` from `#!python ag2.a2a.errors`, whatever the underlying SDK error was. It inherits from `#!python A2AError`, so existing `#!python except A2AError` handlers already cover it.
+
+Every rejection surfaces as the same exception type; the message tail tells the two categories apart:
+
+| Situation | Message ends with |
+|---|---|
+| Card carries no signature at all | `AgentCard has no signatures to verify.` |
+| Payload altered after signing | `No valid signature found` |
+| Signed with a key the provider doesn't resolve to | `No valid signature found` |
+| Algorithm outside the verifier's allow-list | `No valid signature found` |
+| Your key provider itself raised (unknown `kid`, JWKS fetch failed) | `<ErrorType>: <its message>` |
+
+Note that the middle three are indistinguishable by message — a wrong key, a tampered payload and a rejected algorithm all reduce to "no signature on this card validated". If you need to tell them apart while debugging, narrow the verifier's key provider and algorithm list one at a time.
+
+The last row is the case where the key provider *raises* rather than returning a wrong key. The SDK only guards its key lookup against `#!python PyJWTError`, so a `#!python KeyError` from a registry miss would otherwise escape past a caller catching `#!python A2AError`. AG2 treats anything the verifier raises as a rejection and wraps it, with the original preserved on `#!python err.__cause__`.
+
+The exception also carries *which* card failed, which matters when a server publishes both a base and an extended card:
+
+| Attribute | Value |
+|---|---|
+| `#!python err.url` | The configured `#!python card_url` |
+| `#!python err.source` | `#!python "fetched agent card"`, `#!python "preset agent card"` or `#!python "extended agent card"` |
+
+```python linenums="1" hl_lines="9-11"
+import logging
+
+from ag2.a2a.errors import A2ACardSignatureError
+
+logger = logging.getLogger(__name__)
+
+try:
+    reply = await client.ask("ping")
+except A2ACardSignatureError as err:
+    logger.error("card from %s failed verification (%s)", err.url, err.source)
+    raise
+```
+
+Treat this as a hard stop rather than something to retry — a card that fails verification is either misconfigured or forged, and neither improves on a second attempt.
+
+## Typing the Callables
+
+The two hooks are plain callables, so any object with the right shape works:
+
+| Hook | Signature | Alias |
+|---|---|---|
+| `#!python card_signer` | `#!python Callable[[AgentCard], AgentCard]` | `#!python ag2.a2a.server.CardSigner` |
+| `#!python card_signature_verifier` | `#!python Callable[[AgentCard], None]` — raises on failure, returns `#!python None` on success | `#!python ag2.a2a.client.CardVerifier` |
+
+The aliases are exported from the module that owns the parameter — `#!python A2AServer` takes the signer, `#!python A2AConfig` / `#!python A2AClient` take the verifier — and are there purely as a shorthand for your own annotations.
+
+## Testing Signed Cards
+
+Signing composes with the in-process helpers from [Advanced](/docs/user-guide/a2a/advanced#testing-helpers) — no socket, no port binding:
+
+```python linenums="1" hl_lines="6 11"
+from ag2 import Agent
+from ag2.a2a import A2AConfig, A2AServer
+from ag2.a2a.testing import make_test_client_factory
+from ag2.testing import TestConfig
+
+server = A2AServer(Agent("remote", config=TestConfig("pong")), card_signer=signer)
+factory = make_test_client_factory(server, url="http://test")
+config = A2AConfig(
+    card_url="http://test",
+    httpx_client_factory=factory,
+    card_signature_verifier=verifier,
+)
+
+reply = await Agent("client", config=config).ask("ping")
+assert reply.body == "pong"
+```
+
+To assert the wire format directly, fetch the card through the same ASGI transport and check the `#!python signatures` array is populated:
+
+```python linenums="1" hl_lines="7"
+import httpx
+
+app = server.build_jsonrpc(url="http://test")
+async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+    payload = (await http.get("/.well-known/agent-card.json")).json()
+
+assert payload["signatures"]
+```

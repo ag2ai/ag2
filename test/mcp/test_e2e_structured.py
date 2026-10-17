@@ -3,17 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from pydantic import BaseModel
 
 from ag2 import Agent
 from ag2.mcp import MCPServer
 from ag2.mcp.testing import connect
 from ag2.testing import TestConfig
 
-
-class Weather(BaseModel):
-    city: str
-    temp_c: float
+from ._helpers import Weather, tool_named
 
 
 @pytest.mark.asyncio
@@ -27,12 +23,12 @@ class TestE2EStructured:
         server = MCPServer(agent)
 
         async with connect(server) as session:
-            tool = next(t for t in (await session.list_tools()).tools if t.name == "ask")
+            tool = tool_named(await session.list_tools(), "ask")
             result = await session.call_tool("ask", {"message": "weather in SF?"})
 
-        assert tool.outputSchema is not None
-        assert result.isError is False
-        assert result.structuredContent == {"city": "SF", "temp_c": 18.5}
+        assert tool.output_schema is not None
+        assert result.is_error is False
+        assert result.structured_content == {"city": "SF", "temp_c": 18.5}
         # Raw JSON body is still present as text content.
         assert any(c.type == "text" for c in result.content)
 
@@ -47,4 +43,4 @@ class TestE2EStructured:
         async with connect(server) as session:
             result = await session.call_tool("ask", {"message": "weather?"})
 
-        assert result.isError is True
+        assert result.is_error is True

@@ -28,6 +28,17 @@ class MCPServerToolSchema(ToolSchema):
     blocked_tools: list[str] | None = None
     headers: dict[str, str] | None = None
 
+    def http_headers(self) -> dict[str, str]:
+        """Headers to send to the server, with ``authorization_token`` as a bearer ``Authorization`` header.
+
+        An ``Authorization`` entry already in ``headers`` (matched case-insensitively) takes precedence
+        over ``authorization_token``, so a request never carries two credentials.
+        """
+        headers = dict(self.headers or {})
+        if self.authorization_token and not any(key.lower() == "authorization" for key in headers):
+            headers["Authorization"] = f"Bearer {self.authorization_token}"
+        return headers
+
 
 class MCPServerTool(Tool):
     __slots__ = (

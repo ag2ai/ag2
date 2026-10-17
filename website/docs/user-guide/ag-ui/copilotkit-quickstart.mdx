@@ -1,291 +1,122 @@
 ---
 sidebarTitle: CopilotKit Quickstart
 title: "CopilotKit UI Quickstart for AG-UI"
-description: "Connect a React/Next.js CopilotKit UI to an AG2 AG-UI runtime endpoint."
+description: "Connect a CopilotKit UI to an AG2 agent served over AG-UI 1.0."
 ---
 
-This quickstart shows how to connect a CopilotKit React/Next.js UI to an AG2 backend endpoint that speaks the AG-UI protocol.
-
-## What you'll build
-
-- A Python backend that serves an AG-UI endpoint for an AG2 agent
-- A React/Next.js UI powered by CopilotKit
+Run an AG2 agent behind an AG-UI 1.0 endpoint and connect a CopilotKit UI to it. The [AG2 weather sample](https://github.com/ag2ai/ag2-samples){.external-link target="_blank"} contains the Python server and the Next.js app used below, and shows sub-agents, human approval and shared state next to a plain chat.
 
 ## Prerequisites
 
-- Python 3.10+
-- Node.js 18.18+
-- An LLM API key for your AG2 agent (for example `OPENAI_API_KEY`)
+- Python 3.10–3.14 and `uv`
+- Node.js 20.9 or newer and `pnpm`
+- An OpenAI API key for the sample agent
 
-## Quickstart
+The backend depends on `ag2[ag-ui,openai]>=1.1.2,<2`; the UI on `@copilotkit/react-core` and `@copilotkit/runtime` 1.76.0 and `@ag-ui/client` 1.0.1.
 
-You can either bootstrap a template project, or follow the same structure as the AG2 + CopilotKit starter.
+## Run the sample
 
-<Tabs>
-  <Tab title="Bootstrap with CopilotKit">
+The sample serves the agent only to a signed-in user, so both processes share a secret that signs and verifies the user's access token. Generate any long random string and use the same value for both.
 
-CopilotKit can bootstrap a template project:
+Clone the sample and start its AG2 backend from the repository root:
 
-```sh
-npx copilotkit@latest create -f ag2
+```bash
+git clone https://github.com/ag2ai/ag2-samples.git
+cd ag2-samples
+uv sync
+export OPENAI_API_KEY="your-openai-api-key"
+export AUTH_SECRET="a-long-random-string"
+uv run python -m backend
 ```
 
-After initialization, run the backend and UI that were generated for you.
+The server listens on port `8000`. Its AG-UI endpoint is `/weather/` in this sample. The [basic server example](/docs/user-guide/ag-ui/overview#basic-server-example) uses `/chat` instead; use the URL configured by the server you actually start.
 
-  </Tab>
+In another terminal, from the repository root, start the UI with the same secret:
 
-  <Tab title="Clone the reference starter">
-
-Runnable reference implementation: [AG2 + CopilotKit starter](https://github.com/ag2ai/ag2-copilotkit-starter){.external-link target="_blank"}.
-
-The updated template structure used by the starter looks like:
-
-```text
-ag2-copilotkit-starter/
-├── agent-py/     # Python backend (AG2 agent + AG-UI endpoint)
-├── ui-react/     # React + CopilotKit frontend
+```bash
+cd ui
+pnpm install
+AUTH_SECRET="a-long-random-string" pnpm dev
 ```
 
-  </Tab>
-</Tabs>
+Open `http://localhost:3000`, enter a name to sign in, and ask for the weather in a city. The UI sends the run to the Python endpoint and renders its streamed AG-UI events. You can also ask about your location if you allow browser location access.
 
-## 1) Start the AG-UI backend
+!!! warning "The sign-in is a demonstration"
 
-The starter backend mounts the AG-UI endpoint at `/chat` and runs on port `8008`.
+    The sample accepts any name and keeps the token in `localStorage`. Replace `verify_access_token` in `backend/auth.py` and the token route in the UI before reusing the pattern. See [Authentication](/docs/user-guide/ag-ui/backend-deepdive#authentication) for protecting the AG2 endpoint.
 
-```sh
-cd agent-py
-pip install -r requirements.txt
-export OPENAI_API_KEY="your_openai_api_key"
-python backend.py
-```
+!!! note "Starting from a generated project"
 
-Your AG-UI endpoint will be available at `http://localhost:8008/chat`.
+    Run `npx copilotkit@latest init`, select AG2 in the prompts, then use the install and start commands it prints. The generated project's layout and endpoint may differ from the weather sample.
 
-## 2) Start the React + CopilotKit UI
+## What the sample shows
 
-In a new terminal:
+| AG-UI 1.0 feature | Backend | Frontend | Try it |
+| --- | --- | --- | --- |
+| [Delegations](/docs/user-guide/ag-ui/overview#delegations) (`SUBAGENT_*` events) | `ClothingAdvisor` and `TripPlanner`, wrapped with `Agent.as_tool()` | `agent.subscribe(...)` in a side panel | "What should I wear in Oslo?" |
+| [Interrupts](/docs/user-guide/ag-ui/overview#gating-a-tool-call-instead-of-asking-a-question) | `save_favorite_city` is held by `ApprovalRequired` | `useInterrupt` renders Approve and Reject, and `resolve(true)` or `resolve(false)` answers | "Save Lisbon to my favorites" |
+| [Shared state](/docs/user-guide/ag-ui/overview#shared-state) (`STATE_SNAPSHOT`) | `context.variables` | `useAgent` reads `agent.state` | Save a city, then watch the panel |
+| [Capabilities](/docs/user-guide/ag-ui/overview#capabilities) | `GET /weather/` returns `stream.capabilities()` | | `curl localhost:8000/weather/` |
+| [Frontend tools](/docs/user-guide/ag-ui/backend-deepdive#frontend-tools-ui-driven-actions) | | `useFrontendTool` registers `getUserLocation` | "What's the weather here?" |
 
-```sh
-cd ui-react
-npm install
-npm run dev
-```
+## Connect your own AG2 agent
 
-Then open `http://localhost:3000`.
+Serve the agent with `AGUIStream`, as shown in the [AG-UI overview](/docs/user-guide/ag-ui/overview#basic-server-example). Then register an `HttpAgent` pointed at that endpoint in your CopilotKit runtime. The sample's runtime route (`ui/app/api/copilotkit/route.ts`) is the whole wiring:
 
-## 3) Connect CopilotKit runtime to the AG-UI endpoint
-
-CopilotKit uses a Next.js route (typically `/api/copilotkit`) that bridges the UI to your agent runtime. In the template, that route registers an AG-UI HTTP agent client with `CopilotRuntime`.
-
-```tsx title="ui-react/app/api/copilotkit/route.ts"
+```typescript title="ui/app/api/copilotkit/route.ts" linenums="1"
 import { HttpAgent } from "@ag-ui/client";
+import { NextRequest } from "next/server";
 import {
   CopilotRuntime,
-  ExperimentalEmptyAdapter,
-  copilotRuntimeNextJSAppRouterEndpoint,
-} from "@copilotkit/runtime";
-import { NextRequest } from "next/server";
+  createCopilotRuntimeHandler,
+} from "@copilotkit/runtime/v2";
 
-const agent = new HttpAgent({ url: "http://localhost:8008/chat" });
-
-const runtime = new CopilotRuntime({
-  agents: {
-    weather_agent: agent,
-  },
-});
-
-export async function POST(req: NextRequest) {
-  const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
-    runtime,
-    serviceAdapter: new ExperimentalEmptyAdapter(),
-    endpoint: "/api/copilotkit",
-  });
-  return handleRequest(req);
-}
-```
-
-## 4) Add the `CopilotKit` provider
-
-Wrap your app with `<CopilotKit>` and point it at the runtime route.
-
-```tsx title="ui-react/app/layout.tsx"
-import { CopilotKit } from "@copilotkit/react-core";
-import "@copilotkit/react-ui/styles.css";
-import "./globals.css";
-
-export const metadata = {
-  title: "AG2 Weather Agent",
-  description: "Weather agent powered by AG2 and CopilotKit",
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>
-        <CopilotKit agent="weather_agent" runtimeUrl="/api/copilotkit">
-          {children}
-        </CopilotKit>
-      </body>
-    </html>
-  );
-}
-```
-
-If your backend enforces CORS/auth, configure those before starting the UI (see Production notes).
-
-## 5) Render a chat UI
-
-```tsx title="ui-react/app/page.tsx"
-"use client";
-
-import { CopilotChat } from "@copilotkit/react-ui";
-import { useCopilotAction } from "@copilotkit/react-core";
-
-function WeatherCard({
-  location,
-  temperature,
-  feelsLike,
-  humidity,
-  windSpeed,
-  windGust,
-  conditions,
-  isLoading,
-}: {
-  location?: string;
-  temperature?: number;
-  feelsLike?: number;
-  humidity?: number;
-  windSpeed?: number;
-  windGust?: number;
-  conditions?: string;
-  isLoading: boolean;
-}) {
-  const tempF = temperature != null ? (temperature * 9 / 5 + 32).toFixed(1) : null;
-
-  return (
-    <div
-      className={`rounded-lg border border-sky-300 bg-gradient-to-br from-sky-100 to-blue-100 p-4 max-w-xs shadow-md ${isLoading ? "animate-pulse" : ""}`}
-    >
-      <h3 className="text-lg font-semibold text-sky-700">
-        {location || "Loading..."}
-      </h3>
-      <p className="text-xs text-sky-500 uppercase tracking-wide mb-3">
-        {isLoading ? "Fetching weather..." : "Current Weather"}
-      </p>
-
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="text-4xl font-bold text-gray-800">
-            {temperature != null ? temperature : "--"}
-            <span className="text-lg text-sky-600">&deg;C</span>
-          </div>
-          {tempF && <div className="text-sm text-gray-500">{tempF}&deg;F</div>}
-        </div>
-        <div className="text-sm text-gray-500 text-right max-w-[120px]">
-          {conditions || "--"}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 pt-3 border-t border-sky-200">
-        <div className="text-center">
-          <div className="text-[10px] text-gray-500 uppercase">Humidity</div>
-          <div className="text-sm font-mono text-gray-800">
-            {humidity != null ? `${humidity}%` : "--%"}
-          </div>
-        </div>
-        <div className="text-center">
-          <div className="text-[10px] text-gray-500 uppercase">Wind</div>
-          <div className="text-sm font-mono text-gray-800">
-            {windSpeed != null ? `${windSpeed} km/h` : "-- km/h"}
-          </div>
-        </div>
-        <div className="text-center">
-          <div className="text-[10px] text-gray-500 uppercase">Feels Like</div>
-          <div className="text-sm font-mono text-gray-800">
-            {feelsLike != null ? `${feelsLike}\u00B0` : "--\u00B0"}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function Home() {
-  useCopilotAction({
-    name: "get_weather",
-    description: "Get the weather for a given location.",
-    available: "disabled",
-    parameters: [{ name: "location", type: "string", required: true }],
-    render: ({ args, status, result }) => {
-      if (status === "complete" && result) {
-        let data = result;
-        if (typeof result === "string") {
-          try {
-            data = JSON.parse(result.replace(/'/g, '"'));
-          } catch {
-            return <div>{result}</div>;
-          }
-        }
-        return (
-          <WeatherCard
-            location={data.location}
-            temperature={data.temperature}
-            feelsLike={data.feelsLike}
-            humidity={data.humidity}
-            windSpeed={data.windSpeed}
-            windGust={data.windGust}
-            conditions={data.conditions}
-            isLoading={false}
-          />
-        );
-      }
-      return <WeatherCard location={args.location} isLoading={true} />;
+export const POST = async (req: NextRequest) => {
+  const runtime = new CopilotRuntime({
+    agents: {
+      agenticChatAgent: new HttpAgent({
+        url: "http://localhost:8000/weather/",
+        headers: { Authorization: req.headers.get("authorization") ?? "" },
+      }),
     },
   });
 
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-sky-100 to-blue-200">
-      <div className="w-full max-w-2xl h-[80vh] rounded-xl overflow-hidden shadow-2xl border border-sky-300">
-        <CopilotChat
-          labels={{
-            title: "AG2 Weather Agent",
-            initial: "Hi! Ask me about the weather in any city.",
-            placeholder: "Ask about the weather...",
-          }}
-          className="h-full"
-        />
-      </div>
-    </div>
-  );
-}
+  return createCopilotRuntimeHandler({
+    runtime,
+    basePath: "/api/copilotkit",
+    mode: "single-route",
+  })(req);
+};
 ```
 
-## Expected output
+The agent is built per request so the caller's `Authorization` header can be forwarded to the AG2 server. If your endpoint needs no credentials, create the runtime once at module level and drop `headers`.
 
-After setup:
+On the page, wrap the chat in the `CopilotKit` provider and name the same agent:
 
-- The Next.js page shows a CopilotKit chat UI
-- Messages stream from the AG2 runtime via the AG-UI endpoint
-- Tool/action calls can be rendered as custom UI (for example, a weather card in the starter)
+```tsx
+import { CopilotKit } from "@copilotkit/react-core/v2";
 
-## Production notes
+<CopilotKit agent="agenticChatAgent" runtimeUrl="/api/copilotkit">
+  {children}
+</CopilotKit>
+```
 
-- CORS: allow your frontend origin on the AG-UI backend (`POST`, `OPTIONS`, auth headers).
-- Auth: protect both `/api/copilotkit` and backend `/chat` (token/header/cookie); do not rely on client-only secrets.
-- Deployment topology: keep frontend runtime route and AG-UI backend on trusted internal network paths where possible.
-- Timeouts/retries: configure conservative client and server timeouts for long-running tool workflows and retry only idempotent requests.
+Hooks such as `useAgent`, `useInterrupt`, `useFrontendTool` and `useRenderTool` come from `@copilotkit/react-core/v2` as well. CopilotKit's route and component APIs differ across major versions; use the [CopilotKit AG2 integration guide](https://docs.copilotkit.ai/ag2){.external-link target="_blank"} for the version you install.
 
-## Troubleshooting
+The backend and CopilotKit runtime are separate processes. Both routes need protecting as appropriate for your deployment.
 
-- CORS errors (`blocked by CORS policy`): check backend `Access-Control-Allow-Origin`, `Access-Control-Allow-Headers`, and preflight handling.
-- No streaming output: verify backend response `Content-Type` is `text/event-stream` and that proxy layers do not buffer SSE.
-- Tool UI not rendering: ensure tool/action names match exactly (for example `get_weather`).
+!!! warning "Interrupts that require resume proof"
 
-## Security considerations
+    `useInterrupt().resolve()` and `.cancel()` send no `metadata` in the resume entry. That is enough for a gated tool call like the sample's `save_favorite_city`, but not for a server running with `require_resume_proof=True`. See [Asking the human a question](/docs/user-guide/ag-ui/overview#asking-the-human-a-question).
 
-Treat tool inputs and shared state as untrusted user-controlled data. Validate and authorize server-side before invoking privileged tools, and log tool execution with request identifiers for auditability.
+## Check the connection
 
-## Version and compatibility notes
+If chat does not stream, check these in order:
 
-- For a complete working example (backend + React UI + HTML UI), see the starter repo referenced above.
+1. The AG2 backend is running and the configured `HttpAgent` URL points to its AG-UI endpoint.
+2. The endpoint responds to a valid `POST` with `Content-Type: text/event-stream`.
+3. The Next.js runtime route can reach the backend; check its server logs for connection errors.
+4. If the backend answers `401`, the access token is missing or was signed with a different `AUTH_SECRET` than the backend's.
+5. If the browser calls AG2 directly, allow the frontend origin and required headers in the backend's CORS settings.
+
+For frontend tools, shared state, and human input, see [Backend deep dive](/docs/user-guide/ag-ui/backend-deepdive), [Shared state](/docs/user-guide/ag-ui/overview#shared-state), and [Asking the human a question](/docs/user-guide/ag-ui/overview#asking-the-human-a-question). A client that resumes an AG2 interrupt on a server with `require_resume_proof=True` must copy the interrupt's `metadata` into its resume entry.

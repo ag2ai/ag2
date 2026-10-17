@@ -11,7 +11,7 @@ async def main() -> None:
     # Launch the stdio server as a subprocess and expose its tools to the agent.
     agent = Agent(
         name="client",
-        config=AnthropicConfig(model="claude-sonnet-4-6"),
+        config=AnthropicConfig(model="claude-sonnet-5"),
         tools=[
             MCPToolkit(
                 MCPStdioServerConfig(

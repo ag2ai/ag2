@@ -235,7 +235,7 @@ The review queue is: `is:open is:pr label:status:needs-review`, ordered by `prio
 
 ### Stage P3 — Review
 
-Reviewers are maintainers (for Extensions, see [§6](#6-extensions)). A review ends in one of:
+The reviewer who moves the PR forward is a maintainer (for Extensions, see [§6](#6-extensions)) - only their approval satisfies P4. A review ends in one of:
 
 | Outcome | Transition |
 |---|---|
@@ -245,13 +245,15 @@ Reviewers are maintainers (for Extensions, see [§6](#6-extensions)). A review e
 
 `status:changes-requested` is a gate: it follows the stale mechanism with a 30-day grace period ([§5](#5-gates-and-the-stale-mechanism)). When the author pushes new commits or replies, the bot flips the PR back to `status:needs-review`.
 
+Reviews from anyone else in the community are welcome and don't gate the PR, but they're still held to the [AI Policy](../AI_POLICY.md#reviews): a review that shows clear signs of unverified AI-generated content (restates the description, generic praise, no specific lines, questions the diff already answers) may be hidden by the Triage Team or maintainers using the [`ai-slop-review`](replies/ai-slop-review.md) reply — no label change, since it doesn't affect the item's status.
+
 ### Stage P4 — Merge
 
 Merge conditions (all must hold):
 
 1. CI is green.
 2. CLA signed.
-3. Approval from a core maintainer — who thereby agrees the change will be supported (per the [Contribution Policy](../../website/docs/user-guide/contribution_policy.mdx)).
+3. Approval from a core maintainer — who thereby agrees the change will be supported (per the [Contribution Policy](../../website/docs/contributor-guide/contribution_policy.mdx)).
 4. For `type:feature`: documentation updated in the same PR where applicable.
 5. For `area:extensions`: the Extension has a named maintainer (see [§6](#6-extensions)).
 
@@ -280,7 +282,7 @@ Exempt from stale: everything that is not gated — `status:needs-triage` (a slo
 
 ## 6. Extensions
 
-Extensions (`ag2/extensions/`, labeled `area:extensions` by path) follow the [Contribution Policy](../../website/docs/user-guide/contribution_policy.mdx): they are first-class components held to Core's quality bar, but **maintained by a named maintainer rather than by AG2**.
+Extensions (`ag2/extensions/`, labeled `area:extensions` by path) follow the [Contribution Policy](../../website/docs/contributor-guide/contribution_policy.mdx): they are first-class components held to Core's quality bar, but **maintained by a named maintainer rather than by AG2**.
 
 Differences from the standard flow:
 
@@ -308,6 +310,7 @@ Suspected vulnerabilities must not be triaged in public. Per [SECURITY.md](../SE
 | Propose `resolution:duplicate` (label + comment, item stays open) | ✅ | ✅ | ✅ |
 | Close with `resolution:*` | ❌ | ✅ | ✅ |
 | Close stale gated items | `actions/stale` only | ✅ | ✅ |
+| Hide/minimize a review with signs of unverified AI content ([AI Policy](../AI_POLICY.md#reviews)) | ❌ | ✅ | ✅ |
 | Merge | ❌ | ❌ | ✅ |
 
 ---

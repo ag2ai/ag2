@@ -16,11 +16,19 @@ from ag2.middleware.base import (
     ToolExecution,
     ToolResultType,
 )
+from ag2.middleware.describe import MiddlewareDescription
 
 
 class LoggingMiddleware(MiddlewareFactory):
     def __init__(self, logger: logging.Logger | None = None) -> None:
         self._logger = logger or logging.getLogger("ag2")
+
+    def describe(self) -> MiddlewareDescription:
+        # Logger name, not the object.
+        return MiddlewareDescription(
+            kind=type(self).__qualname__,
+            config={"logger": self._logger.name},
+        )
 
     def __call__(self, event: "BaseEvent", context: "Context") -> BaseMiddleware:
         return _LoggingMiddleware(event, context, self._logger)

@@ -39,7 +39,7 @@ from .mappers import (
     tool_to_api,
 )
 
-__all__ = ["CreateOptions", "IncludeOption", "ReasoningEffort", "XAIClient"]
+__all__ = ["CreateOptions", "IncludeOption", "ReasoningEffort", "ToolMode", "XAIClient"]
 
 
 class CreateOptions(TypedDict, total=False):
@@ -102,21 +102,19 @@ class XAIClient(LLMClient):
         else:
             prompt = context.prompt
 
-        xai_messages, replay_responses = convert_messages(prompt, messages, serializer)
+        xai_messages = convert_messages(prompt, messages, serializer)
         xai_tools = [tool_to_api(t) for t in tools]
         response_format = response_proto_to_format(response_schema)
 
         create_kwargs: dict[str, Any] = dict(self._create_options)
-        if xai_messages:
-            create_kwargs["messages"] = xai_messages
         if xai_tools:
             create_kwargs["tools"] = xai_tools
         if response_format is not None:
             create_kwargs["response_format"] = response_format
 
         chat = self._client.chat.create(**create_kwargs)
-        for resp in replay_responses:
-            chat.append(resp)
+        for message in xai_messages:
+            chat.append(message)
 
         if self._streaming:
             return await self._call_streaming(chat, context)
@@ -172,7 +170,7 @@ class XAIClient(LLMClient):
     ) -> ModelResponse:
         full_content: str = ""
         usage: Usage = Usage()
-        finish_reason_raw: str | int | sample_pb2.FinishReason.ValueType | None = None
+        finish_reason_raw: str | int | None = None
         resolved_model: str | None = None
         last_response: XAIResponse | None = None
         # tool_calls accumulate by id; the SDK delivers whole calls per chunk.

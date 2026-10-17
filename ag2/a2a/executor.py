@@ -14,7 +14,7 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import Part, Task, TaskState, TaskStatus
 
 from ag2.agent import Agent
-from ag2.context import ConversationContext
+from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.events import (
     BaseEvent,
     ClientToolCallEvent,
@@ -123,24 +123,24 @@ class AgentExecutor(A2AAgentExecutorBase):
                 # a2a-sdk rejects append=True before the artifact exists, so the first chunk creates it.
                 is_first_chunk = not text_pieces
                 text_pieces.append(event.content)
-                a2a_event = chunk_to_text_artifact(
+                chunk_artifact = chunk_to_text_artifact(
                     event,
                     artifact_id=text_artifact_id,
                     task_id=task_id,
                     context_id=context_id,
                     append=not is_first_chunk,
                 )
-                await event_queue.enqueue_event(a2a_event_to_sdk(a2a_event))
+                await event_queue.enqueue_event(a2a_event_to_sdk(chunk_artifact))
                 return
 
             if isinstance(event, ClientToolCallEvent):
                 pending_client_calls.append(event)
-                a2a_event = client_call_to_artifact(
+                call_artifact = client_call_to_artifact(
                     event,
                     task_id=task_id,
                     context_id=context_id,
                 )
-                await event_queue.enqueue_event(a2a_event_to_sdk(a2a_event))
+                await event_queue.enqueue_event(a2a_event_to_sdk(call_artifact))
                 return
 
             # Lifecycle status updates are already on the wire via
@@ -290,11 +290,12 @@ class AgentExecutor(A2AAgentExecutorBase):
         final_text: str,
         final_variables: dict[str, Any],
     ) -> "Any | None":
-        if not final_text and not final_variables:
+        outgoing = strip_reserved_variables(final_variables, source="an outgoing A2A response", warn=False)
+        if not final_text and not outgoing:
             return None
         metadata: dict[str, Any] | None = None
-        if final_variables:
-            metadata = {CONTEXT_UPDATE_METADATA_KEY: final_variables}
+        if outgoing:
+            metadata = {CONTEXT_UPDATE_METADATA_KEY: outgoing}
         parts = [Part(text=final_text)] if final_text else []
         return updater.new_agent_message(parts=parts, metadata=metadata)
 
@@ -335,7 +336,10 @@ class AgentExecutor(A2AAgentExecutorBase):
             raise RuntimeError("Agent.config is not set; cannot serve via A2A")
         client = agent.config.create()
 
-        merged_variables = {**dict(agent._agent_variables), **incoming_variables}
+        merged_variables = {
+            **dict(agent._agent_variables),
+            **strip_reserved_variables(incoming_variables, source="an inbound A2A request"),
+        }
         ctx = ConversationContext(
             stream,
             prompt=[*agent._system_prompt, *extra_prompt],
