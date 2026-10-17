@@ -21,6 +21,7 @@ import socket
 from pathlib import Path
 from typing import Any
 
+import httpx2
 from acp import schema
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
@@ -367,7 +368,7 @@ class TestLifecycle:
         try:
             async with Agent("acp", config=cfg).run("hang") as run:
                 reply = await run.result()
-            assert reply.body == ""
+            assert reply.body is None
             assert cfg.sessions  # the cancel was honoured, so the session survives
         finally:
             await cfg.aclose()
@@ -391,12 +392,32 @@ class TestLifecycle:
         )
         try:
             reply = await Agent("acp", config=cfg).ask("hang")
-            assert reply.body == ""
+            assert reply.body is None
         finally:
             await cfg.aclose()
 
         (conn,) = opened
         assert conn.closed  # the connection hook was exited — no process was involved
+
+    async def test_an_http_client_failure_mid_turn_is_a_transport_failure(self) -> None:
+        # The SDK's HTTP transport raises its own `httpx2` errors, which are not
+        # `ConnectionError`s; they must still fail the turn as a transport failure.
+        def drop_the_connection() -> Any:
+            raise httpx2.ReadError("peer closed")
+
+        cfg = fake_remote_acp_config(
+            ACPTurn(on_prompt=drop_the_connection),  # type: ignore[arg-type]
+            url="http://box.internal/acp",
+            permission_policy="auto",
+            expose_tools=False,
+        )
+        try:
+            with pytest.raises(ACPTransportError) as raised:
+                await Agent("acp", config=cfg).ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert raised.value.transport == "http"
 
     @pytest.mark.parametrize(
         ("url", "override", "transport"),
