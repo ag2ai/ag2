@@ -6,6 +6,7 @@ import base64
 
 import pytest
 from fast_depends.use import SerializerCls
+from xai_sdk.chat import Response as XAIResponse
 from xai_sdk.chat import chat_pb2
 
 from ag2 import Context, ToolResult
@@ -46,17 +47,15 @@ def _content_kinds(msg: chat_pb2.Message) -> list[str]:
 
 class TestSystemPrompt:
     def test_no_system_messages_when_prompt_empty(self) -> None:
-        result, replays = convert_messages([], [], SerializerCls)
+        result = convert_messages([], [], SerializerCls)
         assert result == []
-        assert replays == []
 
     def test_system_prompts_joined_with_newline(self) -> None:
-        result, replays = convert_messages(["be helpful", "be terse"], [], SerializerCls)
+        result = convert_messages(["be helpful", "be terse"], [], SerializerCls)
 
         assert len(result) == 1
         assert result[0].role == chat_pb2.ROLE_SYSTEM
         assert _content_texts(result[0]) == ["be helpful\nbe terse"]
-        assert replays == []
 
 
 class TestUserContent:
@@ -64,23 +63,23 @@ class TestUserContent:
     PNG = b"\x89PNG\r\n"
 
     def test_text_only_request(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([TextInput("hello")])], SerializerCls)
+        [msg] = convert_messages([], [ModelRequest([TextInput("hello")])], SerializerCls)
 
         assert msg.role == chat_pb2.ROLE_USER
         assert _content_texts(msg) == ["hello"]
 
     def test_multiple_text_parts(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([TextInput("hi"), TextInput("there")])], SerializerCls)
+        [msg] = convert_messages([], [ModelRequest([TextInput("hi"), TextInput("there")])], SerializerCls)
 
         assert _content_texts(msg) == ["hi", "there"]
 
     def test_data_input_serialized_via_serializer(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([DataInput({"key": "value"})])], SerializerCls)
+        [msg] = convert_messages([], [ModelRequest([DataInput({"key": "value"})])], SerializerCls)
 
         assert _content_texts(msg) == ['{"key":"value"}']
 
     def test_image_url(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([ImageInput(url=self.IMG_URL)])], SerializerCls)
+        [msg] = convert_messages([], [ModelRequest([ImageInput(url=self.IMG_URL)])], SerializerCls)
 
         assert msg.role == chat_pb2.ROLE_USER
         # Image is a Content oneof — not text
@@ -88,9 +87,7 @@ class TestUserContent:
         assert "image_url" in kinds
 
     def test_image_binary_base64(self) -> None:
-        [msg], _ = convert_messages(
-            [], [ModelRequest([ImageInput(data=self.PNG, media_type="image/png")])], SerializerCls
-        )
+        [msg] = convert_messages([], [ModelRequest([ImageInput(data=self.PNG, media_type="image/png")])], SerializerCls)
 
         kinds = _content_kinds(msg)
         assert "image_url" in kinds
@@ -101,7 +98,7 @@ class TestUserContent:
         assert f"data:image/png;base64,{b64}" in image_block.image_url.image_url
 
     def test_pdf_binary_becomes_file(self) -> None:
-        [msg], _ = convert_messages(
+        [msg] = convert_messages(
             [], [ModelRequest([DocumentInput(data=b"%PDF", media_type="application/pdf")])], SerializerCls
         )
 
@@ -112,7 +109,7 @@ class TestUserContent:
         assert file_block.file.mime_type == "application/pdf"
 
     def test_text_plus_image_interleaved(self) -> None:
-        [msg], _ = convert_messages(
+        [msg] = convert_messages(
             [],
             [ModelRequest([TextInput("describe"), ImageInput(url=self.IMG_URL)])],
             SerializerCls,
@@ -150,7 +147,7 @@ class TestUserContent:
             )
 
     def test_file_id_input_passes_through(self) -> None:
-        [msg], _ = convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc")])], SerializerCls)
+        [msg] = convert_messages([], [ModelRequest([FileIdInput(file_id="file-abc")])], SerializerCls)
 
         kinds = _content_kinds(msg)
         assert "file" in kinds
@@ -162,7 +159,7 @@ class TestToolResult:
     def test_text_only_tool_result(self) -> None:
         event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("ok"))])
 
-        [msg], _ = convert_messages([], [event], SerializerCls)
+        [msg] = convert_messages([], [event], SerializerCls)
 
         assert msg.role == chat_pb2.ROLE_TOOL
         assert msg.tool_call_id == "tc_1"
@@ -179,7 +176,7 @@ class TestToolResult:
             ]
         )
 
-        [msg], _ = convert_messages([], [event], SerializerCls)
+        [msg] = convert_messages([], [event], SerializerCls)
 
         assert _content_texts(msg) == ['["first", "second"]']
 
@@ -202,7 +199,7 @@ class TestToolResult:
         call = ToolCallEvent(id="tc_1", name="ghost_tool")
         event = ToolResultsEvent(results=[ToolNotFoundEvent.from_call(call, ToolNotFoundError("ghost_tool"))])
 
-        [msg], _ = convert_messages([], [event], SerializerCls)
+        [msg] = convert_messages([], [event], SerializerCls)
 
         assert msg.role == chat_pb2.ROLE_TOOL
         assert msg.tool_call_id == "tc_1"
@@ -210,7 +207,7 @@ class TestToolResult:
 
 
 class TestAssistantRoundTrip:
-    def test_xai_assistant_event_round_trips_via_replay_list(self) -> None:
+    def test_xai_assistant_event_round_trips_as_response(self) -> None:
         proto = chat_pb2.GetChatCompletionResponse()
         event = XAIAssistantEvent(
             proto_bytes=proto.SerializeToString(),
@@ -218,12 +215,10 @@ class TestAssistantRoundTrip:
             finish_reason="stop",
         )
 
-        messages, replays = convert_messages([], [event], SerializerCls)
+        [replay] = convert_messages([], [event], SerializerCls)
 
-        assert messages == []
-        assert len(replays) == 1
-        # The replay is an xai-sdk Response wrapping the proto
-        assert replays[0].proto.SerializeToString() == proto.SerializeToString()
+        assert isinstance(replay, XAIResponse)
+        assert replay.proto.SerializeToString() == proto.SerializeToString()
 
     def test_companion_model_response_after_assistant_event_is_skipped(self) -> None:
         """An ``XAIAssistantEvent`` shadows the next ``ModelResponse`` for the same turn."""
@@ -231,20 +226,19 @@ class TestAssistantRoundTrip:
         event = XAIAssistantEvent(proto_bytes=proto.SerializeToString())
         mr = ModelResponse(message=ModelMessage("Hello"))
 
-        messages, replays = convert_messages([], [event, mr], SerializerCls)
+        [replay] = convert_messages([], [event, mr], SerializerCls)
 
-        assert messages == []  # neither the proto nor the synthesized assistant
-        assert len(replays) == 1
+        assert isinstance(replay, XAIResponse)
+        assert replay.proto.SerializeToString() == proto.SerializeToString()
 
     def test_orphan_model_response_falls_back_to_assistant_text(self) -> None:
         """When no XAIAssistantEvent precedes it, ModelResponse becomes ``assistant(text)``."""
         mr = ModelResponse(message=ModelMessage("Hi"))
 
-        [msg], replays = convert_messages([], [mr], SerializerCls)
+        [msg] = convert_messages([], [mr], SerializerCls)
 
         assert msg.role == chat_pb2.ROLE_ASSISTANT
         assert _content_texts(msg) == ["Hi"]
-        assert replays == []
 
     @pytest.mark.asyncio
     async def test_survives_conversation_policy(self) -> None:
@@ -254,10 +248,10 @@ class TestAssistantRoundTrip:
 
         _, filtered = await ConversationPolicy().apply([], events, Context(stream=MemoryStream()))
 
-        messages, replays = convert_messages([], filtered, SerializerCls)
+        [replay] = convert_messages([], filtered, SerializerCls)
 
-        assert messages == []  # the companion ModelResponse stays shadowed
-        assert [r.proto.SerializeToString() for r in replays] == [proto.SerializeToString()]
+        assert isinstance(replay, XAIResponse)
+        assert replay.proto.SerializeToString() == proto.SerializeToString()
 
     @pytest.mark.asyncio
     async def test_window_trim_never_orphans_tool_results(self) -> None:
@@ -274,17 +268,14 @@ class TestAssistantRoundTrip:
 
         _, trimmed = await SlidingWindowPolicy(max_events=3).apply([], events, Context(stream=MemoryStream()))
 
-        messages, replays = convert_messages([], trimmed, SerializerCls)
-
-        assert replays == []
+        messages = convert_messages([], trimmed, SerializerCls)
         assert [msg.role for msg in messages] == [chat_pb2.ROLE_USER]
 
 
 def test_compaction_summary_renders_as_user_turn() -> None:
     summary = CompactionSummary(summary="Looked up Paris and Tokyo.", event_count=6)
 
-    [msg], replays = convert_messages([], [summary], SerializerCls)
+    [msg] = convert_messages([], [summary], SerializerCls)
 
     assert msg.role == chat_pb2.ROLE_USER
     assert _content_texts(msg) == ["[Summary of earlier conversation]\nLooked up Paris and Tokyo."]
-    assert replays == []
