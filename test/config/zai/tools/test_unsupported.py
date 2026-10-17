@@ -16,6 +16,7 @@ from ag2.tools.builtin.mcp_server import MCPServerTool
 from ag2.tools.builtin.memory import MemoryTool
 from ag2.tools.builtin.shell import ShellTool
 from ag2.tools.builtin.skills import SkillsTool
+from ag2.tools.builtin.tool_search import ToolSearchToolSchema
 from ag2.tools.builtin.web_fetch import WebFetchTool
 from ag2.tools.builtin.x_search import XSearchTool
 
@@ -128,3 +129,8 @@ async def test_anthropic_bash(context: Context) -> None:
 
     with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)
+
+
+def test_tool_search() -> None:
+    with pytest.raises(UnsupportedToolError, match="zai"):
+        tool_to_api(ToolSearchToolSchema())
