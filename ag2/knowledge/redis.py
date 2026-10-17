@@ -126,16 +126,24 @@ class RedisKnowledgeStore:
         normalized = _normalize(path)
         payload = content.encode("utf-8")
         async with self._lock:
-            existing = await self._client.get(self._key(path))
-            existing_bytes = (
-                existing if isinstance(existing, bytes) else b"" if existing is None else str(existing).encode("utf-8")
+            # A local lock cannot serialize independent store connections.
+            # Update the content, version and index together on the server.
+            offset = await self._client.eval(
+                """
+                local offset = redis.call('STRLEN', KEYS[1])
+                redis.call('APPEND', KEYS[1], ARGV[1])
+                local version = redis.call('INCR', KEYS[3])
+                redis.call('ZADD', KEYS[2], version, ARGV[2])
+                return offset
+                """,
+                3,
+                self._key(path),
+                self._index_key,
+                f"{self._key_prefix}:__version_counter",
+                payload,
+                normalized,
             )
-            offset = len(existing_bytes)
-            combined = existing_bytes + payload
-            version = int(await self._client.incr(f"{self._key_prefix}:__version_counter"))
-            await self._client.set(self._key(path), combined)
-            await self._index_add(normalized, version)
-        return offset
+        return int(offset)
 
     async def read_range(self, path: str, start: int, end: int | None = None) -> str:
         existing = await self._client.get(self._key(path))
