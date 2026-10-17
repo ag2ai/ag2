@@ -714,13 +714,13 @@ Image inputs are sent inline as base64 data URLs, the only image form the endpoi
 
 `safety_identifier`, `extra_body` and the usual client options (`base_url`, `organization`, `project`, `timeout`, `max_retries`, `default_headers`, `http_client`) are forwarded to the OpenAI SDK. Usage lands on `ModelResponse.usage`. Decisions bill input tokens only.
 
-For recipes covering classification, routing, detection, scoring, ranking, verification, feature extraction and image inspection, see [Decision Models](/docs/user-guide/decision_models).
+For recipes covering classification, routing, detection, scoring, ranking, verification, feature extraction and image inspection, see [Decision Models](/docs/user-guide/decision_models). For examples connecting decisions to agent execution, see [Decision models in agent workflows](/docs/user-guide/decision_model_workflows).
 
 ### TypeSafe (Jev) Configuration
 
 `TypeSafeConfig` connects to [TypeSafe AI's](https://docs.typesafe.ai){.external-link target="_blank"} Jev decision model through the official `typesafe-sdk`. Install the optional dependency with `pip install "ag2[typesafe]"`.
 
-For task recipes with Jev, see [Decision Models](/docs/user-guide/decision_models).
+For task recipes with Jev, see [Decision Models](/docs/user-guide/decision_models). For examples connecting decisions to agent execution, see [Decision models in agent workflows](/docs/user-guide/decision_model_workflows).
 
 Jev is not a text generator. It answers **one typed question** about the conversation so far — yes or no, one label out of several, or a level on a rubric — and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
 
