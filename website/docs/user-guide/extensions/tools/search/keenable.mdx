@@ -1,0 +1,102 @@
+---
+title: Keenable Search
+sidebarTitle: Keenable Search
+---
+
+`KeenableSearchToolkit` gives an agent two related tools powered by [Keenable](https://keenable.ai){.external-link target="_blank"}, an independent web index: web search and page fetch. Use it when an agent needs current search results and then needs to read the full content of selected pages as markdown.
+
+!!! note
+    Works without an API key, and no extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on. Setting `KEENABLE_API_KEY` raises the rate limits.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import KeenableSearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[KeenableSearchToolkit()],
+)
+```
+
+Without a key, the toolkit calls Keenable's keyless endpoints, which allow 10 requests per second and 1,000 per hour per IP address. To raise those limits, pass `api_key=...` or set the `KEENABLE_API_KEY` environment variable, which is read at call time when `api_key` is omitted.
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `keenable_search` | Search the web and return ranked results with title, URL, page text snippet, and the time the page was indexed |
+| `keenable_fetch` | Fetch one URL and return the page's main content as markdown, with title, author, and publication date when known |
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default `keenable_search` tool:
+
+```python linenums="1"
+toolkit = KeenableSearchToolkit(
+    max_results=5,                 # 1-50, the API default is 10
+    site="docs.python.org",        # restrict results to one domain
+    published_after="2026-01-01",  # only pages published after this date (YYYY-MM-DD)
+    snippet_max_length=2000,       # approximate snippet length in characters (default 1000)
+)
+```
+
+`snippet_max_length` defaults to 1000 characters. Without a cap, Keenable returns several thousand characters of page text per result, so ten results would put roughly 15k tokens into the model's context; use `keenable_fetch` to read a whole page instead. The value is a hint rather than a hard cap, so a snippet can run slightly over it.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.fetch()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = KeenableSearchToolkit()
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search(site="github.com", max_results=10)],
+)
+```
+
+Every factory method also accepts `name` and `description` overrides for the registered tool. The `toolkit.search()` defaults (`max_results`, `site`, `published_after`, `snippet_max_length`) also accept a `Variable` for deferred context resolution.
+
+## Connection settings
+
+The toolkit opens one `httpx.AsyncClient` per request. Override how that client connects:
+
+```python linenums="1"
+toolkit = KeenableSearchToolkit(
+    base_url="https://api.keenable.ai",  # override to route through your own gateway
+    timeout=60.0,                        # per-request timeout in seconds
+    proxy="http://proxy.internal:3128",
+    verify=True,                         # set False only to skip TLS verification
+)
+```
+
+A non-2xx response raises `httpx.HTTPStatusError` with Keenable's own error message, for example when a fetched page does not exist. A rate-limited response also reports its `Retry-After` value.
+
+## Result
+
+`keenable_search` returns a `KeenableSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `KeenableSearchResult` (`title`, `url`, `snippet`, `acquired_at`) |
+
+`snippet` holds text extracted from the page, and `acquired_at` is when Keenable last indexed it.
+
+`keenable_fetch` returns a `KeenableFetchResult`:
+
+| Field | Description |
+| :--- | :--- |
+| `url` | The page URL, as normalized by Keenable |
+| `title` | The page title |
+| `content` | The page's main content as markdown |
+| `author` | The page author, empty when unknown |
+| `published_at` | The publication time as an ISO 8601 UTC timestamp, empty when unknown |
+
+!!! tip
+    Use `keenable_search` first to discover candidate pages, then `keenable_fetch` to read the ones that look relevant.
+
+Request parameters and response fields are documented in the [Keenable API docs](https://docs.keenable.ai){.external-link target="_blank"}.
