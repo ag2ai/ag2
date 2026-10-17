@@ -3,3 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Tool extensions for AG2."""
+
+from .cohesivity import CohesivityToolkit
+
+__all__ = ("CohesivityToolkit",)
