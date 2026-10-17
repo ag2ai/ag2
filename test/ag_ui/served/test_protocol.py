@@ -110,7 +110,8 @@ async def test_a_client_call_made_before_the_question_is_not_pending_on_the_resu
     @agent.tool
     async def ask_human(context: Context) -> str:
         """Ask the human."""
-        # Parallel calls can start in either order; arrange the scenario this test asserts.
+        # Sibling calls run concurrently: without this the question can pause the
+        # run before the client call is made, and the call lands in the resumed run.
         await made.wait()
         return await context.input(QUESTION)
 

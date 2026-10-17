@@ -20,6 +20,7 @@ from .base import (
     AdapterState,
     ChannelAdapter,
     ExpectedTurn,
+    Rendered,
     default_build_packet_envelope,
     default_build_round_envelope,
     default_build_text_envelope,
@@ -27,6 +28,7 @@ from .base import (
     default_extract_turn_input,
     default_render_envelope,
     default_tools_for,
+    ensure_parts,
 )
 from .consulting import CONSULTING_TYPE, ConsultingAdapter, ConsultingState
 from .conversation import CONVERSATION_TYPE, ConversationAdapter, ConversationState
@@ -54,6 +56,7 @@ __all__ = (
     "DiscussionAdapter",
     "DiscussionState",
     "ExpectedTurn",
+    "Rendered",
     "WorkflowAdapter",
     "WorkflowState",
     "default_build_packet_envelope",
@@ -63,4 +66,5 @@ __all__ = (
     "default_extract_turn_input",
     "default_render_envelope",
     "default_tools_for",
+    "ensure_parts",
 )

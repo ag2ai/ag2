@@ -13,9 +13,9 @@ from ag2.files.types import FileContent, FileProvider, UploadedFile
 
 
 class _StreamingResponse:
-    """The unconsumed httpx.Response ``download_async`` returns.
+    """The unconsumed httpx2.Response ``download_async`` returns.
 
-    ``.content`` before ``aread()`` raises, as httpx does.
+    ``.content`` before ``aread()`` raises, as httpx2 does.
     """
 
     def __init__(self, data: bytes) -> None:
