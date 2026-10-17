@@ -156,7 +156,7 @@ class SkillLoader:
                     continue
                 try:
                     skill = self._load_skill(skill_dir, skill_md)
-                except (InvalidSkillError, OSError, yaml.YAMLError) as exc:
+                except (InvalidSkillError, OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
                     if self._strict:
                         raise
                     logger.warning("Skipping skill %r: %s", skill_dir.name, exc)
