@@ -176,16 +176,9 @@ class DiskKnowledgeStore:
         return children
 
     def _prune_empty_parents(self, start: Path, root: Path) -> None:
+        """Remove empty directories from ``start`` up to, but never including, ``root``."""
         current = start
         while current != root and current.is_relative_to(root):
-            if not current.is_dir():
-                break
-            try:
-                is_empty = next(current.iterdir(), None) is None
-            except OSError:
-                break
-            if not is_empty:
-                break
             try:
                 current.rmdir()
             except OSError:
@@ -194,13 +187,13 @@ class DiskKnowledgeStore:
 
     async def delete(self, path: str) -> None:
         target = self._resolve(path)
-        root = self._root.resolve()
         if target.is_file():
             target.unlink()
-            self._prune_empty_parents(target.parent, root)
         elif target.is_dir():
             shutil.rmtree(target)
-            self._prune_empty_parents(target.parent, root)
+        else:
+            return
+        self._prune_empty_parents(target.parent, self._root.resolve())
 
     async def exists(self, path: str) -> bool:
         return self._resolve(path).exists()
