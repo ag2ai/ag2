@@ -128,14 +128,29 @@ class OpCondition(Condition):
 
 
 def check_eq(x: Any, y: Any) -> Any:
-    if not isinstance(x, type(y)):
+    # ``bool`` subclasses ``int``, so ``isinstance(True, int)`` is true and
+    # ``True == 1``. A condition that rejects ``1`` for ``== True`` has to
+    # reject ``True`` for ``== 1`` as well.
+    if isinstance(x, bool) or isinstance(y, bool):
+        if type(x) is not type(y):
+            return False
+    elif not isinstance(x, type(y)):
         return False
     return x == y
 
 
+def check_ne(x: Any, y: Any) -> bool:
+    """Complement of :func:`check_eq`.
+
+    ``operator.ne`` follows Python's ``!=``, which is false for ``1`` and
+    ``True``. The same event would then match neither ``==`` nor ``!=``.
+    """
+    return not check_eq(x, y)
+
+
 op_names = {
     check_eq: "==",
-    operator.ne: "!=",
+    check_ne: "!=",
     operator.lt: "<",
     operator.le: "<=",
     operator.gt: ">",

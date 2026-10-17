@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, get_args
 from typing_extensions import dataclass_transform
 
 from ._serialization import deserialize_payload, event_to_dict
-from .conditions import Condition, NotCondition, OpCondition, OrCondition, TypeCondition, check_eq
+from .conditions import Condition, NotCondition, OpCondition, OrCondition, TypeCondition, check_eq, check_ne
 
 try:
     import annotationlib as _annotationlib
@@ -137,7 +137,7 @@ class FieldInfo:
 
     # On the class a field compares into a condition (the DSL); `object` promises a `bool`.
     def __ne__(self, other: Any) -> Condition:  # type: ignore[override]
-        return OpCondition(operator.ne, self.name, other, self.event_class)
+        return OpCondition(check_ne, self.name, other, self.event_class)
 
     def __lt__(self, other: Any) -> Condition:
         return OpCondition(operator.lt, self.name, other, self.event_class)

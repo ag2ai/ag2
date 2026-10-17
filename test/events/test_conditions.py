@@ -191,6 +191,40 @@ class TestEventConditions:
         assert not condition(TestEvent(field=False))
         assert not condition(TestEvent(field=1))
 
+    def test_bool_is_distinct_from_int(self):
+        """`True == 1` in Python, but a field condition keeps them apart both ways.
+
+        `!=` is the complement of that check. Python's `1 != True` is false, so
+        following it made `value != True` miss the same event `value == True` misses.
+        """
+        equals_true = TestEvent.field == True  # noqa: E712
+        not_true = TestEvent.field != True  # noqa: E712
+        equals_one = TestEvent.field == 1
+        not_one = TestEvent.field != 1
+        equals_false = TestEvent.field == False  # noqa: E712
+        not_false = TestEvent.field != False  # noqa: E712
+
+        one = TestEvent(field=1)
+        truth = TestEvent(field=True)
+        zero = TestEvent(field=0)
+        false = TestEvent(field=False)
+
+        assert equals_true(truth)
+        assert not equals_true(one)
+        assert not_true(one)
+        assert not not_true(truth)
+        assert (~equals_true)(one)
+
+        assert equals_one(one)
+        assert not equals_one(truth)
+        assert not_one(truth)
+        assert not not_one(one)
+
+        assert equals_false(false)
+        assert not equals_false(zero)
+        assert not_false(zero)
+        assert not not_false(false)
+
     def test_chained_conditions(self):
         condition = (TestEvent.field > 0) & (TestEvent.field < 100) & (TestEvent.field != 50)
 
