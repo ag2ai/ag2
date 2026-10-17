@@ -79,7 +79,7 @@ class GeminiFilesClient:
                 purpose=None,
                 created_at=_created_at_to_float(f.create_time),
             )
-            for f in pager.page
+            async for f in pager
         ]
 
     async def delete(self, file_id: str) -> None:
