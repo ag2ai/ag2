@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from collections.abc import AsyncIterator, Sequence
+from contextlib import suppress
 from typing import Any, Literal
 
 from mistralai.client import Mistral
@@ -74,13 +76,10 @@ class STTConfig(STTConfigProtocol):
 class RealtimeSTTConfig(STTConfigProtocol):
     """Voxtral realtime transcription over a websocket: text arrives while the clip is still being read.
 
-    Fits the existing `STTConfig` contract — one finished clip in, the full text out —
-    and sends a `TranscriptionChunkEvent` per delta before the closing
-    `TranscriptionCompletedEvent`, so a subscriber sees the words as the model
-    produces them instead of after the upload. `CascadeConfig` hands STT a whole
-    utterance cut by its turn detector, so the audio is streamed from that clip; a
-    protocol that accepts audio while the user is still speaking is a separate,
-    larger change to the cascade.
+    One finished clip in, the full text out. A `TranscriptionChunkEvent` is sent per delta,
+    then a closing `TranscriptionCompletedEvent` carrying the model's final transcript.
+    Raises `RuntimeError` if the stream closes before that transcript arrives. Cancelling
+    `transcribe` cancels the transcription and sends no `TranscriptionCompletedEvent`.
 
     The clip must be mono. Needs an api key in MISTRAL_API_KEY env var, or pass
     `api_key` / a preconfigured `client`.
@@ -95,37 +94,56 @@ class RealtimeSTTConfig(STTConfigProtocol):
         api_key: str | None = None,
     ) -> None:
         self._model = model
-        self._target_streaming_delay_ms = target_streaming_delay_ms
+        self._delay_ms = target_streaming_delay_ms
         self._client = client or (Mistral(api_key=api_key) if api_key else Mistral())
 
     async def transcribe(self, voice: VoiceInput, context: Context) -> str:
         if voice.channels != 1:
             raise ValueError(f"Mistral realtime transcription takes mono audio, got {voice.channels} channels")
 
-        deltas: list[str] = []
-        text: str | None = None
+        # The SDK swallows `CancelledError` while it waits for the next event, so a cancelled
+        # stream ends like a finished one; `shield` keeps the cancellation on this task.
+        pump = asyncio.create_task(_pump_transcript(self._client, voice, context, self._model, self._delay_ms))
 
-        async for event in self._client.audio.realtime.transcribe_stream(
-            _frames(voice),
-            model=self._model,
-            audio_format=AudioFormat(encoding="pcm_s16le", sample_rate=voice.frame_rate),
-            target_streaming_delay_ms=self._target_streaming_delay_ms,
-        ):
-            if isinstance(event, TextDelta):
-                deltas.append(event.text)
-                await context.send(events.TranscriptionChunkEvent(event.text))
+        try:
+            text = await asyncio.shield(pump)
 
-            elif isinstance(event, TranscriptionStreamDone):
-                text = event.text
+        finally:
+            pump.cancel()
+            with suppress(asyncio.CancelledError):
+                await pump
 
-            elif isinstance(event, RealtimeTranscriptionError):
-                raise RuntimeError(f"Mistral realtime transcription failed: {event.error.message}")
+        # No final transcript means the connection dropped: the deltas alone are a partial sentence.
+        if text is None:
+            raise RuntimeError("Mistral realtime stream closed before the final transcript")
 
-        # The final event carries the authoritative text; the deltas are the fallback
-        # for a stream that closed without one.
-        text = "".join(deltas) if text is None else text
         await context.send(events.TranscriptionCompletedEvent(text))
         return text
+
+
+async def _pump_transcript(
+    client: Mistral,
+    voice: VoiceInput,
+    context: Context,
+    model: str,
+    target_streaming_delay_ms: int | None,
+) -> str | None:
+    async for event in client.audio.realtime.transcribe_stream(
+        _frames(voice),
+        model=model,
+        audio_format=AudioFormat(encoding="pcm_s16le", sample_rate=voice.frame_rate),
+        target_streaming_delay_ms=target_streaming_delay_ms,
+    ):
+        if isinstance(event, TextDelta):
+            await context.send(events.TranscriptionChunkEvent(event.text))
+
+        elif isinstance(event, TranscriptionStreamDone):
+            return event.text
+
+        elif isinstance(event, RealtimeTranscriptionError):
+            raise RuntimeError(f"Mistral realtime transcription failed: {event.error.message}")
+
+    return None
 
 
 async def _frames(voice: VoiceInput) -> AsyncIterator[bytes]:
