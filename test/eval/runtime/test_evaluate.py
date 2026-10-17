@@ -63,7 +63,7 @@ class _FailOnLoadSource:
     materialize a particular trace — a network error, a corrupt file. This is
     the public path into ``_evaluate_ref``'s failure handling: a raising
     *scorer* would be swallowed into ``Feedback(score=None)`` by the Scorer
-    wrapper, but a raising ``source.load`` propagates to the gather guard.
+    wrapper. A raising ``source.load`` becomes an empty failed trace to grade.
     """
 
     def __init__(self, traces: Sequence[tuple[TraceRef, Trace]], *, fail_trace_id: str) -> None:
