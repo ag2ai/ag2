@@ -69,6 +69,9 @@ dependencies = [
 # === Agent protocols ===
 a2a = ["a2a-sdk>=1.2.0,<2"]
 a2ui = ["jsonschema>=4.18.0,<5", "starlette>=0.40,<2"]
+# ag2.a2ui.beta: built on the official A2UI core. It is 0.x and breaks about every two
+# weeks, so the range is narrow and bumped deliberately (docs/adr/0025).
+a2ui-beta = ["a2ui-core>=0.3,<0.4", "starlette>=0.40,<2"]
 acp = [
     "agent-client-protocol>=0.12.1,<0.13",
     # Tool exposure to CLI agents runs an in-process HTTP MCP server, also requiring starlette and uvicorn
@@ -163,6 +166,7 @@ optionals = [
     "ag2[ag-ui]",
     "ag2[a2a]", # ag2.a2a — without it `test/a2a` importorskips itself out of the run
     "ag2[a2ui]", # provides starlette/jsonschema for AG-UI / a2ui serving tests
+    "ag2[a2ui-beta]", # ag2.a2ui.beta — without it `test/a2ui/beta` importorskips itself out of the run
     "ag2[mcp]", # ag2.mcp — serve an Agent as an MCP server
     "ag2[mcp-ui]", # ag2.mcp_ui — MCP-UI resource & action builders
     "ag2[acp]",
@@ -244,7 +248,7 @@ types = [
     # `disallow_any_unimported`. Type-check only — never a published constraint.
     "types-aiobotocore[bedrock-runtime]",
     { include-group = "test" },
-    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, typesafe, elevenlabs, a2a, ag-ui, acp]",
+    "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, typesafe, elevenlabs, a2a, a2ui-beta, ag-ui, acp]",
     # search tools in `ag2/tools/search`, checked under `disallow_any_unimported`
     "ag2[ddgs, perplexity]",
 ]
@@ -519,6 +523,30 @@ files = [
     "ag2/a2ui/transports/ag_ui.py",
     "ag2/a2ui/transports/base.py",
     "ag2/a2ui/transports/rest.py",
+    "ag2/a2ui/beta/__init__.py",
+    "ag2/a2ui/beta/_runtime.py",
+    "ag2/a2ui/beta/_types.py",
+    "ag2/a2ui/beta/a2a/__init__.py",
+    "ag2/a2ui/beta/a2a/executor.py",
+    "ag2/a2ui/beta/a2a/extension.py",
+    "ag2/a2ui/beta/a2a/parts.py",
+    "ag2/a2ui/beta/actions.py",
+    "ag2/a2ui/beta/capabilities.py",
+    "ag2/a2ui/beta/constants.py",
+    "ag2/a2ui/beta/dispatch.py",
+    "ag2/a2ui/beta/events.py",
+    "ag2/a2ui/beta/incoming.py",
+    "ag2/a2ui/beta/middleware.py",
+    "ag2/a2ui/beta/parser.py",
+    "ag2/a2ui/beta/request.py",
+    "ag2/a2ui/beta/schema_manager.py",
+    "ag2/a2ui/beta/serialize.py",
+    "ag2/a2ui/beta/server.py",
+    "ag2/a2ui/beta/server_action.py",
+    "ag2/a2ui/beta/transports/__init__.py",
+    "ag2/a2ui/beta/transports/ag_ui.py",
+    "ag2/a2ui/beta/transports/base.py",
+    "ag2/a2ui/beta/transports/rest.py",
     "ag2/a2a/transports/jsonrpc.py",
     "ag2/a2a/transports/rest.py",
     "ag2/tools/__init__.py",

@@ -1,0 +1,71 @@
+---
+title: A2UI Beta (a2ui-core)
+sidebarTitle: Beta
+---
+
+`#!python ag2.a2ui.beta` is the same A2UI integration as `#!python ag2.a2ui`, built on the official [`a2ui-core`](https://pypi.org/project/a2ui-core/){.external-link target="_blank"} library instead of vendored schemas. It has the same public names and is a self-contained copy: it imports nothing from `#!python ag2.a2ui`, and `#!python ag2.a2ui` is unchanged.
+
+!!! warning
+    `a2ui-core` is a 0.x library that ships breaking changes about every two weeks, and the v1.0 spec is still a release candidate. Beta pins `a2ui-core>=0.3,<0.4` and may change between AG2 releases.
+
+## Install
+
+```bash
+pip install "ag2[a2ui-beta]"
+```
+
+## Use
+
+Swap the import; everything else in this guide applies.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.a2ui.beta import A2UIServer
+from ag2.a2ui.beta.transports import RestTransport
+
+server = A2UIServer(Agent(name="ui"), transport=RestTransport(), protocol_version="v0.9.1")
+```
+
+Supported versions are `#!python "v0.9"`, `#!python "v0.9.1"` and `#!python "v1.0"` (experimental). v0.8 is not supported.
+
+## What differs from `ag2.a2ui`
+
+### Stricter validation
+
+`validate_responses=True` now replays every response through `a2ui-core`'s `MessageProcessor` in strict mode. Besides the schema, it rejects what the hand-rolled validator accepted:
+
+- components that are not reachable from `root` (orphans);
+- child ids that point at no component (dangling references);
+- cycles;
+- a missing `root`.
+
+The error text comes from `a2ui-core` and is fed back to the model on the retry, so the model sees which component and property is wrong. `updateComponents` messages for one surface are validated as one tree, so a response may split a surface across messages. An update for a surface the response does not create is validated against the active catalog.
+
+`A2UIValidationFailedEvent` has the same shape as before.
+
+### Custom catalogs are standalone
+
+`custom_catalog` is passed to `a2ui-core` as a self-contained catalog. It is **not** merged into the basic catalog, so a surface that uses a custom catalog can only contain the components that catalog defines. To use `Column` next to your own `Badge`, define both in your catalog.
+
+Consequences:
+
+- The basic catalog rules are left out of the prompt when a custom catalog is set; `custom_catalog_rules` still works.
+- The catalog must carry its id as `$id` (or `catalogId`).
+- `$ref`s inside a catalog resolve as follows: `common_types.json#/$defs/...` (shared types), `#/$defs/...` and `catalog.json#/$defs/...` (the catalog's own definitions). Other forms fail when the first message is validated.
+
+### v1.0 follows `a2ui-core` (experimental)
+
+`a2ui-core`'s v1.0 is a later release candidate than the one `ag2.a2ui` vendors. Upstream is replacing the action response flow ([a2ui#2104](https://github.com/a2ui-project/a2ui/issues/2104){.external-link target="_blank"}), so the v1.0 shapes can change again.
+
+| `ag2.a2ui` v1.0 | `ag2.a2ui.beta` v1.0 |
+|---|---|
+| server `#!python callFunction` | server `#!python callRendererFunction` (`functionCallId`, `callFunction` with `@call` and `catalogId`) |
+| client `#!python functionResponse` | client `#!python rendererFunctionResponse` |
+| client action with `wantResponse` and `actionId`, answered by server `#!python actionResponse` | removed: actions are fire-and-forget |
+| none | client `#!python callAgentFunction`, answered by server `#!python agentFunctionResponse` |
+
+In beta a server action returns A2UI messages or nothing. A handler return value that is not an A2UI message is dropped on every version, including v1.0. The A2A executor pauses a task on any `#!python callRendererFunction` until the client sends its `#!python rendererFunctionResponse`.
+
+### Unchanged
+
+The server, transports (REST/SSE and AG-UI), A2A executor, actions, middleware, prompt section, `<a2ui-json>` parsing, prompt sanitising and client-capability decoding behave as in `ag2.a2ui`. The incoming message and capability decoders stay lenient on purpose, while `a2ui-core`'s own models are strict.
