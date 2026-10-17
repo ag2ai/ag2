@@ -92,8 +92,9 @@ class SqliteKnowledgeStore:
             return None
         return row[0].decode("utf-8")
 
-    def _sync_write(self, normalized: str, payload: bytes, version: int) -> None:
+    def _sync_write(self, normalized: str, payload: bytes) -> None:
         conn = self._ensure_connected()
+        version = self._next_version()
         conn.execute(
             "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
             (normalized, payload, version),
@@ -135,8 +136,9 @@ class SqliteKnowledgeStore:
         )
         return cur.fetchone() is not None
 
-    def _sync_append(self, normalized: str, payload: bytes, version: int) -> int:
+    def _sync_append(self, normalized: str, payload: bytes) -> int:
         conn = self._ensure_connected()
+        version = self._next_version()
         cur = conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
         row = cur.fetchone()
         existing = row[0] if row else b""
@@ -182,8 +184,7 @@ class SqliteKnowledgeStore:
         normalized = _normalize(path)
         payload = content.encode("utf-8")
         async with self._lock:
-            version = self._next_version()
-            await self._run(functools.partial(self._sync_write, normalized, payload, version))
+            await self._run(functools.partial(self._sync_write, normalized, payload))
 
     async def list(self, path: str = "/") -> list[str]:
         prefix = _normalize(path).rstrip("/") + "/"
@@ -206,8 +207,7 @@ class SqliteKnowledgeStore:
         normalized = _normalize(path)
         payload = content.encode("utf-8")
         async with self._lock:
-            version = self._next_version()
-            return await self._run(functools.partial(self._sync_append, normalized, payload, version))
+            return await self._run(functools.partial(self._sync_append, normalized, payload))
 
     async def read_range(self, path: str, start: int, end: int | None = None) -> str:
         normalized = _normalize(path)
