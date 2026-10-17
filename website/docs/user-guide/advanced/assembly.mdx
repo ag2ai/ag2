@@ -132,7 +132,7 @@ Set `transparent=True` to append a prompt note like `"[sliding_window] Showing l
 
 ### TokenBudgetPolicy
 
-Keeps the newest events that fit in an estimated token budget. Estimation is `#!python len(str(event)) / chars_per_token` — cheap, not perfectly accurate. Use it as a safety net, not an exact meter.
+Keeps the newest events that fit in an estimated token budget. Uses the full text content divided by `chars_per_token`, plus a fixed per-modality budget for non-text parts such as images. Display truncation does not affect the estimate. Use it as a safety net, not an exact meter. `chars_per_token` must be greater than zero.
 
 ```python linenums="1"
 from ag2.policies import TokenBudgetPolicy

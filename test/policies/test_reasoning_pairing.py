@@ -24,6 +24,7 @@ from ag2.events import (
     ToolResultEvent,
     ToolResultsEvent,
     UsageEvent,
+    estimated_tokens,
 )
 from ag2.policies.sliding_window import SlidingWindowPolicy
 from ag2.policies.token_budget import TokenBudgetPolicy
@@ -38,14 +39,9 @@ def _result(parent_id: str) -> BuiltinToolResultEvent:
     return BuiltinToolResultEvent(parent_id=parent_id, name="web_search", result=ToolResult("ok"))
 
 
-def _chars(events: list[BaseEvent]) -> int:
-    """Size of the given events in the characters the policy counts."""
-    return sum(len(str(e)) for e in events)
-
-
 def _budget_for(events: list[BaseEvent]) -> int:
     """Token budget that fits exactly the given events."""
-    return _chars(events) // 4 + 1
+    return sum(estimated_tokens(event) for event in events)
 
 
 @pytest.mark.asyncio
@@ -345,7 +341,7 @@ class TestTokenBudget:
 
         _, result = await policy.apply([], events, context)
 
-        assert _chars(result) <= budget * 4
+        assert _budget_for(result) <= budget
 
     async def test_intact_group_is_kept(self, context: Context) -> None:
         events = [
@@ -375,4 +371,4 @@ class TestTokenBudget:
         _, result = await policy.apply([], events, context)
 
         assert result == events
-        assert _chars(result) > budget * 4
+        assert _budget_for(result) > budget
