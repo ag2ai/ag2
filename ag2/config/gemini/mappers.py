@@ -397,9 +397,14 @@ def normalize_usage(metadata: types.GenerateContentResponseUsageMetadata) -> Usa
     tool_use_prompt = _to_float(getattr(metadata, "tool_use_prompt_token_count", None))
     if tool_use_prompt is not None:
         prompt = (prompt or 0.0) + tool_use_prompt
+    completion = _to_float(metadata.candidates_token_count)
+    # Gemini reports thoughts beside candidates; completion includes both,
+    # with thinking_tokens retained as the reasoning breakdown.
+    if thinking is not None:
+        completion = (completion or 0.0) + thinking
     return Usage(
         prompt_tokens=prompt,
-        completion_tokens=_to_float(metadata.candidates_token_count),
+        completion_tokens=completion,
         total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,
         thinking_tokens=thinking,
