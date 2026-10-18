@@ -65,7 +65,7 @@ class OpenAIFilesClient:
                 purpose=f.purpose,
                 created_at=_created_at_to_float(f.created_at),
             )
-            for f in result.data
+            async for f in result
         ]
 
     async def delete(self, file_id: str) -> None:
