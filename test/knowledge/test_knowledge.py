@@ -830,6 +830,27 @@ class TestLockedKnowledgeStore:
         assert lock.released == []
         assert await inner.read("/test.txt") is None
 
+    async def test_lock_uses_normalized_aliases_for_equivalent_paths(self) -> None:
+        inner = MemoryKnowledgeStore()
+        lock = _FakeLock()
+        locked = LockedKnowledgeStore(inner, lock)
+
+        await locked.write("/log/events.jsonl", "one")
+        await locked.delete("log//events.jsonl/")
+        await locked.append("log//events.jsonl/", "two\n")
+
+        assert lock.acquired == [
+            ("store:write:/log/events.jsonl", 30.0),
+            ("store:write:/log/events.jsonl", 30.0),
+            ("store:write:/log/events.jsonl", 30.0),
+        ]
+        assert lock.released == [
+            "store:write:/log/events.jsonl",
+            "store:write:/log/events.jsonl",
+            "store:write:/log/events.jsonl",
+        ]
+        assert await inner.read("/log/events.jsonl") == "two\n"
+
     async def test_write_releases_on_inner_exception(self) -> None:
         class ExplodingStore:
             async def write(self, path: str, content: str) -> None:
