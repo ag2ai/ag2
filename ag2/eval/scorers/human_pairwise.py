@@ -120,7 +120,7 @@ class _HumanLabels:
     def _labels(self) -> dict[str, tuple[str, Any]]:
         if self._by_task is None:
             by_task: dict[str, tuple[str, Any]] = {}
-            for raw in self._path.read_text(encoding="utf-8").splitlines():
+            for raw in self._path.read_text(encoding="utf-8-sig").splitlines():
                 if not raw.strip():
                     continue
                 record = json.loads(raw)

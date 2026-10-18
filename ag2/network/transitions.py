@@ -307,13 +307,13 @@ class TransitionRegistry:
         cls = self._targets.get(data["name"])
         if cls is None:
             raise WorkflowGraphError(f"no transition target registered for {data['name']!r}")
-        return cls(**data.get("args", {}))
+        return cls(**(data.get("args") or {}))
 
     def condition_from_dict(self, data: dict[str, Any]) -> TransitionCondition:
         cls = self._conditions.get(data["name"])
         if cls is None:
             raise WorkflowGraphError(f"no transition condition registered for {data['name']!r}")
-        return cls(**data.get("args", {}))
+        return cls(**(data.get("args") or {}))
 
 
 def register_target(target_cls: type[TransitionTarget]) -> None:
@@ -378,7 +378,7 @@ class TransitionGraph:
         reg = registry if registry is not None else TransitionRegistry.default()
         return cls(
             initial_speaker=data["initial_speaker"],
-            transitions=[_transition_from_dict(t, reg) for t in data.get("transitions", [])],
+            transitions=[_transition_from_dict(t, reg) for t in (data.get("transitions") or [])],
             default_target=reg.target_from_dict(data.get("default_target")),
             max_turns=data.get("max_turns"),
         )

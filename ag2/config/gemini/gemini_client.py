@@ -231,7 +231,7 @@ class GeminiClient(LLMClient):
         if response.candidates:
             fr = response.candidates[0].finish_reason
             if fr is not None:
-                finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+                finish_reason = fr.name.lower()
 
         return ModelResponse(
             message=model_msg,
@@ -303,7 +303,7 @@ class GeminiClient(LLMClient):
             if chunk.candidates:
                 fr = chunk.candidates[0].finish_reason
                 if fr is not None:
-                    finish_reason = fr.name.lower() if hasattr(fr, "name") else str(fr)
+                    finish_reason = fr.name.lower()
 
         if last_grounding_metadata is not None:
             name = grounding_tool_name(last_grounding_metadata)

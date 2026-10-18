@@ -47,12 +47,12 @@ def sign_card(card: AgentCard, signer: CardSigner | None) -> AgentCard:
 
 
 def wrap_card_modifier(modifier: CardModifier | None, signer: CardSigner | None) -> CardModifier | None:
-    """Re-sign the modifier's per-request output so mutation doesn't void the JWS."""
-    # The modifier gets a scratch copy because the SDK hands it the one
-    # long-lived card shared by every request — mutate-and-return must not
-    # make the served card drift.
-    if modifier is None or signer is None:
-        return modifier
+    """Hand the modifier a scratch copy and re-sign its per-request output."""
+    # The SDK hands the modifier the one long-lived card shared by every
+    # request and by the request handler's input-mode validation —
+    # mutate-and-return must not make either drift, signed or not.
+    if modifier is None:
+        return None
 
     async def signed_modifier(card: AgentCard) -> AgentCard:
         return sign_card(await modifier(copy_card(card)), signer)
@@ -64,8 +64,8 @@ def wrap_extended_card_modifier(
     modifier: ExtendedCardModifier | None, signer: CardSigner | None
 ) -> ExtendedCardModifier | None:
     """Extended-card twin of :func:`wrap_card_modifier` (modifier also takes ``ServerCallContext``)."""
-    if modifier is None or signer is None:
-        return modifier
+    if modifier is None:
+        return None
 
     async def signed_modifier(card: AgentCard, context: ServerCallContext) -> AgentCard:
         return sign_card(await modifier(copy_card(card), context), signer)
@@ -123,6 +123,7 @@ def build_default_handler(
     push_config_store: PushNotificationConfigStore | None,
     push_sender: PushNotificationSender | None,
     push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
+    validate_input_modes: bool = False,
 ) -> DefaultRequestHandlerV2:
     """Build the SDK request handler shared by all transports."""
     return DefaultRequestHandlerV2(
@@ -135,4 +136,5 @@ def build_default_handler(
         push_config_store=push_config_store,
         push_sender=push_sender,
         push_url_validator=push_url_validator,
+        validate_input_modes=validate_input_modes,
     )
