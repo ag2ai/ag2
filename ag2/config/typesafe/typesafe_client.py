@@ -22,6 +22,7 @@ from .mappers import (
     answer_to_content,
     convert_state,
     normalize_usage,
+    require_image_for_box,
     response_proto_to_question,
     tool_to_api,
 )
@@ -85,8 +86,11 @@ class TypeSafeClient(LLMClient):
             criteria=self._criteria,
         )
 
+        state = convert_state(messages, serializer)
+        require_image_for_box(question, state)
+
         response = await self._get_client().system_one(
-            state=convert_state(messages, serializer),
+            state=state,
             questions={ANSWER_KEY: question},
         )
 
