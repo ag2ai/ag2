@@ -217,6 +217,38 @@ def prompt_to_inputs(blocks: "Sequence[ContentBlock]") -> list[Input]:
     return inputs
 
 
+def input_to_prompt_block(part: Input, capabilities: "schema.PromptCapabilities | None") -> ContentBlock:
+    """Translate one AG2 input into the ACP block a ``session/prompt`` carries.
+
+    ACP lets a Client send only the content the Agent advertised in
+    ``initialize``: text and resource links always, image, audio and embedded
+    resources only when the matching capability is on (``capabilities`` is
+    ``None`` when the Agent advertised none). A part the Agent cannot take is
+    *named* rather than dropped, the way :func:`tool_result_text` names binary
+    parts, so the model still learns it was sent something.
+
+    A URL travels as a resource link, which every Agent accepts, and is not
+    fetched here. A pre-uploaded file id has no ACP form and is named.
+    """
+    caps = capabilities or schema.PromptCapabilities()
+    if isinstance(part, BinaryInput):
+        data = base64.b64encode(part.data).decode()
+        if part.kind is BinaryType.IMAGE and caps.image:
+            return acp.image_block(data, str(part.media_type))
+        if part.kind is BinaryType.AUDIO and caps.audio:
+            return acp.audio_block(data, str(part.media_type))
+        if part.kind is BinaryType.DOCUMENT and caps.embedded_context:
+            name = str(part.vendor_metadata.get("filename") or "document")
+            return acp.resource_block(
+                schema.BlobResourceContents(blob=data, mime_type=str(part.media_type), uri=f"attachment:{name}")
+            )
+        logger.warning("ACP agent did not advertise %s prompts; sent a placeholder", part.kind.value)
+        return acp.text_block(f"[{part.kind.value}]")
+    if isinstance(part, UrlInput):
+        return acp.resource_link_block(name=part.url, uri=part.url)
+    return input_to_block(part)
+
+
 def event_to_session_update(event: BaseEvent, *, stream_thoughts: bool = False) -> SessionUpdate | None:
     """Translate one AG2 event into an ACP ``session/update``.
 

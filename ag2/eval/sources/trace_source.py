@@ -102,7 +102,7 @@ class DirectoryTraceSource:
 
     async def list(self) -> AsyncIterator[TraceRef]:
         for file in sorted(self._path.glob("*.json")):
-            doc = json.loads(file.read_text(encoding="utf-8"))
+            doc = json.loads(file.read_text(encoding="utf-8-sig"))
             yield TraceRef(
                 trace_id=doc.get("trace_id", file.stem),
                 task_id=doc.get("task_id"),
@@ -110,7 +110,7 @@ class DirectoryTraceSource:
             )
 
     async def load(self, ref: TraceRef) -> Trace:
-        doc = json.loads((self._path / f"{ref.trace_id}.json").read_text(encoding="utf-8"))
+        doc = json.loads((self._path / f"{ref.trace_id}.json").read_text(encoding="utf-8-sig"))
         spans = [span_data_from_dict(s) for s in doc.get("spans", [])]
         return spans_to_trace(spans, conventions=self._conventions)
 
