@@ -140,6 +140,14 @@ class TestFileIdInput:
                 SerializerCls,
             )
 
+    def test_completions_foreign_provider_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="'anthropic'.*openai"):
+            convert_messages(
+                [],
+                [ModelRequest([UploadedFile(file_id="file_011CNha8", provider=FileProvider.ANTHROPIC)])],
+                SerializerCls,
+            )
+
     def test_responses_matching_provider_passes(self) -> None:
         result = events_to_responses_input(
             [ModelRequest([UploadedFile(file_id=self.FILE_ID, provider=FileProvider.OPENAI)])],
