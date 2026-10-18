@@ -64,6 +64,10 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install Redis server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends redis-server
       - name: Install packages and dependencies
         run: |
           uv pip install --system --group=test --group=optionals -e .

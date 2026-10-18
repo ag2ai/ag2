@@ -722,7 +722,7 @@ For recipes covering classification, routing, detection, scoring, ranking, verif
 
 For task recipes with Jev, see [Decision Models](/docs/user-guide/decision_models).
 
-Jev is not a text generator. It answers **one typed question** about the conversation so far — yes or no, one label out of several, or a level on a rubric — and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
+Jev is not a text generator. It answers **one typed question** about the conversation so far — yes or no, one label out of several, a level on a rubric, or where something is in an image — and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
 
 If `api_key` and `base_url` are not passed explicitly, the SDK resolves them from the `TYPESAFE_API_KEY` and `TYPESAFE_BASE_URL` environment variables. `model` defaults to `jev-latest`.
 
@@ -755,7 +755,7 @@ reply.response.metadata["probabilities"]  # {"billing": 0.07, "technical": 0.93}
 
 #### The response schema is the question
 
-There is no free-text path, so an agent on `TypeSafeConfig` **must** set `response_schema`, and the schema picks which of Jev's three primitives is asked:
+There is no free-text path, so an agent on `TypeSafeConfig` **must** set `response_schema`, and the schema picks which of Jev's primitives is asked:
 
 | `response_schema` | Jev asks | `#!python await reply.content()` returns |
 | :--- | :--- | :--- |
@@ -763,14 +763,53 @@ There is no free-text path, so an agent on `TypeSafeConfig` **must** set `respon
 | a number schema bounded to `0..1`, e.g. `#!python ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | a yes/no question | the yes-probability as JSON text, unparsed (`from_schema` schemas are not validated); `reply.response.metadata["noul"]` has it as a `float` |
 | an `Enum` of strings | a choice between its members | the selected member |
 | an `IntEnum` numbered `0..n-1` with 2–10 levels | a score on that rubric | the member nearest Jev's expected score |
+| `BoundingBox` | where something is in an image (see [Locating things in an image](#locating-things-in-an-image)) | the `BoundingBox`: each edge as a `0..1` fraction of the image |
 
-Anything else — `str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema` — raises `UnsupportedResponseSchemaError` before any request is sent.
+Anything else — `str`, `int`, a dataclass, another Pydantic model, a `PromptedSchema` — raises `UnsupportedResponseSchemaError` before any request is sent.
 
 The agent `prompt` frames the question; the schema's own description asks it. That is an explicit `ResponseSchema(..., description=...)`, an `Annotated[..., Question("...")]` marker, or an `Enum`'s class docstring, in that order of precedence. The prompt and the question are joined, so the router above asks *"You triage customer support tickets. Which team should handle this ticket?"*.
 
 !!! warning "A yes/no question has to be asked"
 
     `response_schema=bool` with no prompt, no description and no `criteria` raises `ValueError` locally. The API rejects a bare yes/no question, and failing before the request keeps the error actionable.
+
+#### Locating things in an image
+
+`BoundingBox` asks Jev **where** something is in an image. The agent `prompt` says what to find, the image goes in with the question, and the answer is the box around it.
+
+Images and box questions are experimental on TypeSafe's side, so two settings are required: the `jev-preview` model and the opt-in header `TypeSafe-Danger-Zone-Images: true`, sent through `headers`. Without the header the API answers `400 Images are experimental`.
+
+```python linenums="1" hl_lines="7-9 12"
+from ag2 import Agent, ImageInput, ResponseSchema
+from ag2.config import TypeSafeConfig
+from ag2.config.typesafe import BoundingBox
+
+finder = Agent(
+    "finder",
+    prompt="The dog",
+    config=TypeSafeConfig(model="jev-preview", headers={"TypeSafe-Danger-Zone-Images": "true"}),
+    response_schema=ResponseSchema(BoundingBox),
+)
+
+reply = await finder.ask("Where is it?", ImageInput(path="photo.png"))
+box = await reply.content()            # BoundingBox(top=0.2, bottom=0.66, left=0.19, right=0.68)
+reply.response.metadata["confidence"]  # e.g. 0.89, or None when the model gives none
+
+width, height = 1280, 720  # the size of photo.png in pixels
+rectangle = (box.left * width, box.top * height, box.right * width, box.bottom * height)
+```
+
+The edges are fractions of the image, measured from its top-left corner: `top` and `bottom` of its height, `left` and `right` of its width. Multiply them by the image size to get pixels, as in the last line above.
+
+Send the image as `ImageInput(path=...)` or `ImageInput(data=..., media_type=...)`. A URL, an uploaded `file_id` and non-image media raise `UnsupportedInputError`.
+
+!!! warning "A box needs an image"
+
+    `response_schema=ResponseSchema(BoundingBox)` with no image in the request raises `ValueError` locally. Without the check the API would not fail; it would answer with an invented box and a confidence near zero.
+
+!!! note "Treat the box as an estimate"
+
+    `jev-preview` finds the right region, but its edges can be off by 0.1–0.2 of the image, and `confidence` is often low (around 0.3 in our checks). Read `reply.response.metadata["confidence"]` before acting on a box, and leave a margin when you crop or draw it.
 
 #### Describing the options
 
@@ -814,7 +853,7 @@ The SDK answer, minus its `type`, is kept on `reply.response.metadata`. A yes/no
 
 - **Tools.** Passing any tool raises `UnsupportedToolError`; keep tools on the generative agent Jev routes to.
 - **Streaming.** Requests are non-streaming; there is no `streaming` field, and the answer arrives as one `ModelMessage`.
-- **Files and media.** `create_files_client()` raises `NotImplementedError`, and only text and structured `DataInput` parts are sent — anything else raises `UnsupportedInputError`.
+- **Files and media.** `create_files_client()` raises `NotImplementedError`, and only text, structured `DataInput` and image parts (experimental, see [Locating things in an image](#locating-things-in-an-image)) are sent — anything else raises `UnsupportedInputError`.
 - **Free text.** `reply.body` is the answer as JSON, not prose.
 
 `retry` takes a `typesafe_sdk.RetryPolicy` and `http_client` an `#!python httpx2.AsyncClient`; both are forwarded to the SDK untouched. Token counts land on `ModelResponse.usage` as `prompt_tokens` / `completion_tokens` when the API reports them.
