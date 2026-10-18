@@ -985,3 +985,29 @@ class TestLockedKnowledgeStore:
             assert lock.acquired == []
         finally:
             await sub.close()
+
+    @pytest.mark.parametrize("alias", ["log/events.jsonl", "//log//events.jsonl/", "/log/events.jsonl/"])
+    async def test_aliased_path_takes_the_canonical_lock(self, alias: str) -> None:
+        lock = _FakeLock()
+        locked = LockedKnowledgeStore(MemoryKnowledgeStore(), lock)
+
+        await locked.write(alias, "hello")
+        await locked.append(alias, " world")
+        await locked.delete(alias)
+
+        canonical = "store:write:/log/events.jsonl"
+        assert lock.acquired == [(canonical, 30.0)] * 3
+        assert lock.released == [canonical] * 3
+
+    @pytest.mark.parametrize("alias", ["log/events.jsonl", "//log//events.jsonl/", "/log/events.jsonl/"])
+    async def test_aliased_path_releases_the_canonical_lock_on_inner_exception(self, alias: str) -> None:
+        class ExplodingStore:
+            async def write(self, path: str, content: str) -> None:
+                raise ValueError("boom")
+
+        lock = _FakeLock()
+        locked = LockedKnowledgeStore(ExplodingStore(), lock)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="boom"):
+            await locked.write(alias, "hello")
+        assert lock.released == ["store:write:/log/events.jsonl"]

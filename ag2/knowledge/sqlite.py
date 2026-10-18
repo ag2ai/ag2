@@ -139,16 +139,19 @@ class SqliteKnowledgeStore:
     def _sync_append(self, normalized: str, payload: bytes) -> int:
         conn = self._ensure_connected()
         version = self._next_version()
-        cur = conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
-        row = cur.fetchone()
-        existing = row[0] if row else b""
-        offset = len(existing)
-        combined = existing + payload
-        conn.execute(
-            "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
-            (normalized, combined, version),
-        )
-        conn.commit()
+        # Reserve the writer before reading: other store instances have their own
+        # asyncio locks and must not append from the same stale content snapshot.
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            cur = conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
+            row = cur.fetchone()
+            existing = row[0] if row else b""
+            offset = len(existing)
+            combined = existing + payload
+            conn.execute(
+                "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
+                (normalized, combined, version),
+            )
         return offset
 
     def _sync_read_range(self, normalized: str, start: int, end: int | None) -> str:
