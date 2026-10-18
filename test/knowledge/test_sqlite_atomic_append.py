@@ -4,9 +4,7 @@
 
 import asyncio
 import sqlite3
-import threading
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -14,58 +12,37 @@ pytest.importorskip("watchdog")
 
 from ag2.knowledge import SqliteKnowledgeStore
 
+# How long the contending appends get to reach their read before the writer lock is released.
+_CONTENTION_WINDOW_S = 0.2
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("initial", ["", "existing\n"])
-async def test_append_is_atomic_across_store_instances(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, initial: str
-) -> None:
+async def test_append_is_atomic_across_store_instances(tmp_path: Path, initial: str) -> None:
     database = tmp_path / "knowledge.sqlite"
-    seed = SqliteKnowledgeStore(database)
-    await seed.write("/log.jsonl", initial)
-    seed.close()
-
-    # Hold the database's writer lock while two independent clients try to append.
-    # If they read before acquiring that lock, both prepare a write from stale data.
-    blocker = sqlite3.connect(database)
-    blocker.execute("BEGIN IMMEDIATE")
-    both_writing = threading.Event()
-    counter_lock = threading.Lock()
-    writers = 0
-    original_connect = sqlite3.connect
-
-    def trace(statement: str) -> None:
-        nonlocal writers
-        if statement.startswith("INSERT OR REPLACE INTO entries"):
-            with counter_lock:
-                writers += 1
-                if writers == 2:
-                    both_writing.set()
-
-    def connect(path: str, **kwargs: Any) -> sqlite3.Connection:
-        connection: sqlite3.Connection = original_connect(path, **kwargs)
-        connection.set_trace_callback(trace)
-        return connection
-
-    monkeypatch.setattr(sqlite3, "connect", connect)
     first = SqliteKnowledgeStore(database)
     second = SqliteKnowledgeStore(database)
-    # Finish schema setup before the competing appends so only the writes under test contend.
-    blocker.rollback()
-    await first.read("/log.jsonl")
+    await first.write("/log.jsonl", initial)
+    # Open both connections (and finish schema setup) before contention starts.
     await second.read("/log.jsonl")
+
+    # Hold the database's writer lock while both stores try to append. An append that
+    # reads before taking that lock sees the same stale content in both stores.
+    blocker = sqlite3.connect(database)
     blocker.execute("BEGIN IMMEDIATE")
     payloads = ["alpha\n", "\u4e2d\u6587\n"]
     appends = [asyncio.create_task(store.append("/log.jsonl", text)) for store, text in zip((first, second), payloads)]
 
     try:
-        # A serialized implementation waits before reading, so this wait can time out.
-        # Release the real SQLite lock in either case; no store internals are patched.
-        await asyncio.to_thread(both_writing.wait, 0.25)
+        # Give both appends time to reach the point where they would have read.
+        await asyncio.sleep(_CONTENTION_WINDOW_S)
         blocker.rollback()
         offsets = await asyncio.gather(*appends)
-        actual = await first.read("/log.jsonl")
-        assert actual in (initial + payloads[0] + payloads[1], initial + payloads[1] + payloads[0])
+        assert await first.read("/log.jsonl") in (
+            initial + payloads[0] + payloads[1],
+            initial + payloads[1] + payloads[0],
+        )
+        assert len(set(offsets)) == len(offsets)
         for offset, text in zip(offsets, payloads):
             assert await first.read_range("/log.jsonl", offset, offset + len(text.encode("utf-8"))) == text
     finally:
@@ -74,6 +51,24 @@ async def test_append_is_atomic_across_store_instances(
         first.close()
         second.close()
         blocker.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_appends_from_many_stores_are_all_kept(tmp_path: Path) -> None:
+    database = tmp_path / "knowledge.sqlite"
+    stores = [SqliteKnowledgeStore(database) for _ in range(8)]
+    lines = [f"line-{i}\n" for i in range(len(stores))]
+    try:
+        await stores[0].write("/log.jsonl", "")
+        offsets = await asyncio.gather(*(store.append("/log.jsonl", line) for store, line in zip(stores, lines)))
+
+        content = await stores[0].read("/log.jsonl")
+        assert content is not None
+        assert sorted(content.splitlines(keepends=True)) == lines
+        assert sorted(offsets) == [i * len(lines[0]) for i in range(len(lines))]
+    finally:
+        for store in stores:
+            store.close()
 
 
 @pytest.mark.asyncio
