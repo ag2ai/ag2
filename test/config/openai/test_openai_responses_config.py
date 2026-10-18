@@ -46,3 +46,12 @@ def test_store_defaults_to_true() -> None:
 def test_store_can_be_disabled() -> None:
     config = OpenAIResponsesConfig(model="gpt-5", store=False)
     assert config.store is False
+
+
+def test_copy_overrides_reasoning() -> None:
+    config = OpenAIResponsesConfig(model="gpt-5", reasoning={"effort": "low"})
+
+    copied = config.copy(reasoning={"effort": "high", "summary": "auto"})
+
+    assert copied.reasoning == {"effort": "high", "summary": "auto"}
+    assert config.reasoning == {"effort": "low"}

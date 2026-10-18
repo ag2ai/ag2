@@ -139,7 +139,7 @@ stars = await reply.content()
 
 !!! tip "Decision models"
 
-    On `TypeSafeConfig` the response schema is not a format hint but the question itself: `bool`, an `Enum` or an `IntEnum` rubric is put to the Jev decision model, which answers with a confidence and per-option probabilities instead of text. See [TypeSafe (Jev) Configuration](/docs/user-guide/model_configuration#typesafe-jev-configuration).
+    On decision-only providers (`OpenAIDecisionsConfig` and `TypeSafeConfig`) the response schema is not a format hint but the question itself: `bool`, an `Enum` or an `IntEnum` rubric is put to the decision model, which answers with probabilities (and, for choices and scores, a confidence) instead of text. See [Decision Models](/docs/user-guide/decision_models) for recipes, and the [OpenAI Decisions](/docs/user-guide/model_configuration#openai-decisions-configuration) and [TypeSafe (Jev)](/docs/user-guide/model_configuration#typesafe-jev-configuration) configuration sections for provider settings.
 
 ---
 

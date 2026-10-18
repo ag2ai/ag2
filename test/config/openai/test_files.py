@@ -5,11 +5,66 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx2
 import pytest
 from dirty_equals import IsFloat
 
+from ag2.config import OpenAIConfig
 from ag2.config.openai.files import OpenAIFilesClient
+from ag2.files import FilesAPI
 from ag2.files.types import FileContent, FileProvider, UploadedFile
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("page_count", [0, 1, 3])
+async def test_list_follows_sdk_pages(page_count: int) -> None:
+    requests: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        page = len(requests)
+        data = (
+            [
+                {
+                    "id": f"file-{page}",
+                    "object": "file",
+                    "filename": f"{page}.txt",
+                    "bytes": page,
+                    "purpose": "assistants",
+                    "created_at": 1700000000,
+                }
+            ]
+            if page_count
+            else []
+        )
+        return httpx2.Response(
+            200,
+            json={
+                "object": "list",
+                "data": data,
+                "has_more": page < page_count,
+                "last_id": f"file-{page}" if data else None,
+            },
+        )
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as http_client:
+        files = await FilesAPI(OpenAIConfig(model="test", api_key="test", http_client=http_client)).list()
+
+    assert files == [
+        UploadedFile(
+            file_id=f"file-{page}",
+            filename=f"{page}.txt",
+            provider=FileProvider.OPENAI,
+            bytes_count=page,
+            purpose="assistants",
+            created_at=1700000000.0,
+        )
+        for page in range(1, page_count + 1)
+    ]
+    assert [dict(request.url.params) for request in requests] == [
+        {},
+        *[{"after": f"file-{page}"} for page in range(1, page_count)],
+    ]
 
 
 @pytest.mark.asyncio
@@ -53,25 +108,10 @@ class TestOpenAIFilesClient:
     async def test_list(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_openai_cls.return_value = mock_client
-        mock_client.files.list.return_value = SimpleNamespace(
-            data=[
-                SimpleNamespace(
-                    id="file-1",
-                    filename="a.txt",
-                    bytes=100,
-                    purpose="assistants",
-                    created_at=None,
-                ),
-                SimpleNamespace(
-                    id="file-2",
-                    filename="b.csv",
-                    bytes=200,
-                    purpose="fine-tune",
-                    created_at=1700000000,
-                ),
-            ]
-        )
-
+        mock_client.files.list.return_value.__aiter__.return_value = [
+            SimpleNamespace(id="file-1", filename="a.txt", bytes=100, purpose="assistants", created_at=None),
+            SimpleNamespace(id="file-2", filename="b.csv", bytes=200, purpose="fine-tune", created_at=1700000000),
+        ]
         result = await OpenAIFilesClient(openai_config).list()
 
         assert result == [
