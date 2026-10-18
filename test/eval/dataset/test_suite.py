@@ -191,6 +191,32 @@ class TestFromJsonl:
         assert task.tags == ()
         assert task.metadata == {}
 
+    def test_leading_bom_is_stripped(self, tmp_path: Path) -> None:
+        path = tmp_path / "bom.jsonl"
+        path.write_text(
+            "\ufeff"
+            + "\n".join([
+                json.dumps({"task_id": "a", "inputs": {"input": "1"}}),
+                json.dumps({"task_id": "b", "inputs": {"input": "2"}}),
+            ])
+            + "\n",
+            encoding="utf-8",
+        )
+
+        suite = Suite.from_jsonl(path)
+
+        assert [(t.task_id, t.inputs) for t in suite] == [("a", {"input": "1"}), ("b", {"input": "2"})]
+
+    def test_bom_after_the_first_line_is_still_invalid(self, tmp_path: Path) -> None:
+        path = tmp_path / "dataset.jsonl"
+        path.write_text(
+            json.dumps({"inputs": {"input": "1"}}) + "\n\ufeff" + json.dumps({"inputs": {"input": "2"}}) + "\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="line 2"):
+            Suite.from_jsonl(path)
+
 
 def test_suite_iterates_in_dataset_order() -> None:
     suite = Suite.from_list([{"inputs": {"input": str(i)}} for i in range(3)])

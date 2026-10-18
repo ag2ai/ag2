@@ -27,7 +27,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-version = "1.1.2"
+version = "1.2.0"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -79,7 +79,7 @@ acp = [
 ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
-openai = ["openai>=3.9.0,<4"]
+openai = ["openai>=3.27.0,<4"]
 anthropic = ["anthropic>=1.9.0,<2"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
@@ -91,15 +91,15 @@ gemini = [
     "google-auth",
 ]
 # === Voice / TTS providers (ag2.live) ===
-elevenlabs = ["elevenlabs>=1.50.0,<3"]
+elevenlabs = ["elevenlabs>=2.73.0,<3"]
 
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
-mistral = ["mistralai>=2.8.0,<3"]
-ollama = ["ollama>=0.4.7"]
+mistral = ["mistralai>=3.2.0,<4"]
+ollama = ["ollama>=0.5.2,<1"]
 bedrock = ["aiobotocore>=3.9.1,<4"]
 dashscope = ["dashscope>=1.25.13"]
-typesafe = ["typesafe-sdk>=0.7.1,<0.8"]
+typesafe = ["typesafe-sdk>=0.7.5,<0.8"]
 
 redis = ["redis>=5.0,<9"]
 # SDK only: ag2 builds spans and hands them to whatever SpanProcessor the caller
@@ -180,6 +180,7 @@ optionals = [
     "tenki>=1.4.0,<2",
     "tinyfish>=0.5,<0.6; python_version>='3.11'",
     "exa-py>=2.12.1,<3",
+    "firecrawl-py>=4.46,<5",
     # providers
     "ag2[openai]",
     "ag2[anthropic]",
@@ -204,6 +205,7 @@ docs = [
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",
     "exa-py>=2.12.1,<3",
+    "firecrawl-py>=4.46,<5",
     "docker>=6.0.0,<8",                # Code execution tools are exposed in the public API by the optional `ag2.tools` module
     "nlip-sdk>=0.1.0,<1",              # NLIP is exposed in the public API by the optional `autogen.extensions.nlip` module
     "nlip-server>=0.1.3,<1",
@@ -235,7 +237,7 @@ docs = [
 ]
 
 types = [
-    "mypy==2.3.1",
+    "mypy==2.4.0",
     "types-PyYAML",
     # aiobotocore is data-driven and ships no runtime param classes. The extra pulls
     # `botocore-stubs` in, which `ag2/config/bedrock/bedrock_client.py` needs under
@@ -247,14 +249,14 @@ types = [
     "ag2[ddgs, perplexity]",
 ]
 
-lint = ["ruff==0.16.9", "codespell==2.4.3", "zizmor==1.30.1"]
+lint = ["ruff==0.16.10", "codespell==2.4.3", "zizmor==1.30.1"]
 
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "types" },
     { include-group = "docs" },
-    "prek==0.5.3",
+    "prek==0.5.4",
 ]
 
 [tool.pytest.ini_options]
@@ -427,11 +429,13 @@ files = [
     "ag2/network/client/checkpoint.py",
     "ag2/network/transport/frames.py",
     "ag2/policies/conversation.py",
+    "ag2/response/decision.py",
     "ag2/config",
     "ag2/live/__init__.py",
     "ag2/live/cascade.py",
     "ag2/live/elevenlabs.py",
     "ag2/live/gemini.py",
+    "ag2/live/mistral.py",
     "ag2/live/observer.py",
     "ag2/live/openai.py",
     "ag2/live/protocols.py",
