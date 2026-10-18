@@ -168,6 +168,8 @@ def ImageInput(  # noqa: N802
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating image input events.
 
+    For local paths, ``media_type`` takes precedence over the filename extension.
+
     Usage:
         ImageInput("https://example.com/img.png")           # URL
         ImageInput(file_id="file-abc123")                   # pre-uploaded file
@@ -183,15 +185,12 @@ def ImageInput(  # noqa: N802
     if path is not None:
         p = Path(path)
         suffix = p.suffix.lower()
-        resolved_type = _EXTENSION_TO_MEDIA_TYPE.get(suffix)
+        resolved_type = media_type or _EXTENSION_TO_MEDIA_TYPE.get(suffix)
 
         if resolved_type is None:
-            if media_type is None:
-                raise ValueError(
-                    f"Cannot infer image media type from extension '{suffix}'. Provide 'media_type' explicitly."
-                )
-
-            resolved_type = media_type
+            raise ValueError(
+                f"Cannot infer image media type from extension '{suffix}'. Provide 'media_type' explicitly."
+            )
 
         return BinaryInput(
             p.read_bytes(),
@@ -239,6 +238,8 @@ def DocumentInput(  # noqa: N802
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating document input events.
 
+    For local paths, ``media_type`` takes precedence over the filename extension.
+
     Usage:
         DocumentInput("https://example.com/doc.pdf")               # URL
         DocumentInput(file_id="file-abc123")                       # pre-uploaded file
@@ -254,15 +255,12 @@ def DocumentInput(  # noqa: N802
     if path is not None:
         p = Path(path)
         suffix = p.suffix.lower()
-        resolved_type = _DOC_EXTENSION_TO_MEDIA_TYPE.get(suffix)
+        resolved_type = media_type or _DOC_EXTENSION_TO_MEDIA_TYPE.get(suffix)
 
         if resolved_type is None:
-            if media_type is None:
-                raise ValueError(
-                    f"Cannot infer document media type from extension '{suffix}'. Provide 'media_type' explicitly."
-                )
-
-            resolved_type = media_type
+            raise ValueError(
+                f"Cannot infer document media type from extension '{suffix}'. Provide 'media_type' explicitly."
+            )
 
         return BinaryInput(
             p.read_bytes(),
@@ -310,6 +308,8 @@ def AudioInput(  # noqa: N802
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating audio input events.
 
+    For local paths, ``media_type`` takes precedence over the filename extension.
+
     Usage:
         AudioInput("https://example.com/audio.wav")            # URL
         AudioInput(file_id="file-abc123")                      # pre-uploaded file
@@ -325,15 +325,12 @@ def AudioInput(  # noqa: N802
     if path is not None:
         p = Path(path)
         suffix = p.suffix.lower()
-        resolved_type = _AUDIO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
+        resolved_type = media_type or _AUDIO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
 
         if resolved_type is None:
-            if media_type is None:
-                raise ValueError(
-                    f"Cannot infer audio media type from extension '{suffix}'. Provide 'media_type' explicitly."
-                )
-
-            resolved_type = media_type
+            raise ValueError(
+                f"Cannot infer audio media type from extension '{suffix}'. Provide 'media_type' explicitly."
+            )
 
         return BinaryInput(
             p.read_bytes(),
@@ -381,6 +378,8 @@ def VideoInput(  # noqa: N802
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating video input events.
 
+    For local paths, ``media_type`` takes precedence over the filename extension.
+
     Usage:
         VideoInput("https://example.com/video.mp4")            # URL
         VideoInput(file_id="file-abc123")                      # pre-uploaded file
@@ -396,15 +395,12 @@ def VideoInput(  # noqa: N802
     if path is not None:
         p = Path(path)
         suffix = p.suffix.lower()
-        resolved_type = _VIDEO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
+        resolved_type = media_type or _VIDEO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
 
         if resolved_type is None:
-            if media_type is None:
-                raise ValueError(
-                    f"Cannot infer video media type from extension '{suffix}'. Provide 'media_type' explicitly."
-                )
-
-            resolved_type = media_type
+            raise ValueError(
+                f"Cannot infer video media type from extension '{suffix}'. Provide 'media_type' explicitly."
+            )
 
         return BinaryInput(
             p.read_bytes(),
