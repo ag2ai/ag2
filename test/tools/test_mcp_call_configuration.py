@@ -31,6 +31,7 @@ async def test_default_factory_is_not_resolved_again_for_tool_execution(field: s
         values = [tmp_path / "first", tmp_path / "second"]
         for directory in values:
             directory.mkdir()
+    # Each resolution of the Variable yields the next value, so a second resolve changes the server.
     options: dict[str, Any] = {
         "args": [script],
         field: Variable("launch", default_factory=partial(next, iter(values), values[-1])),
