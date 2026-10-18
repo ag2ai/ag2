@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import AsyncGenerator, Iterable, Sequence
+from contextlib import aclosing
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 import httpx
 from fast_depends.library.serializer import SerializerProto
-from ollama import AsyncClient
+from ollama import AsyncClient, ChatResponse
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
@@ -177,31 +178,34 @@ class OllamaClient(LLMClient):
         finish_reason: str | None = None
         resolved_model: str | None = None
 
-        async for chunk in response_stream:
-            msg = chunk.message
+        # The SDK returns an async generator, annotated as AsyncIterator. Close it
+        # even when publishing a chunk fails or is cancelled between yields.
+        async with aclosing(cast(AsyncGenerator[ChatResponse], response_stream)):
+            async for chunk in response_stream:
+                msg = chunk.message
 
-            if msg.thinking:
-                await context.send(ModelReasoning(msg.thinking))
+                if msg.thinking:
+                    await context.send(ModelReasoning(msg.thinking))
 
-            if msg.content:
-                full_content += msg.content
-                await context.send(ModelMessageChunk(msg.content))
+                if msg.content:
+                    full_content += msg.content
+                    await context.send(ModelMessageChunk(msg.content))
 
-            for tc in msg.tool_calls or []:
-                calls.append(
-                    ToolCallEvent(
-                        id=f"call_{len(calls)}",
-                        name=tc.function.name,
-                        arguments=json.dumps(tc.function.arguments),
+                for tc in msg.tool_calls or []:
+                    calls.append(
+                        ToolCallEvent(
+                            id=f"call_{len(calls)}",
+                            name=tc.function.name,
+                            arguments=json.dumps(tc.function.arguments),
+                        )
                     )
-                )
 
-            if chunk.done:
-                p_n = float(chunk.prompt_eval_count or 0)
-                c_n = float(chunk.eval_count or 0)
-                usage = Usage(prompt_tokens=p_n, completion_tokens=c_n, total_tokens=p_n + c_n)
-                finish_reason = chunk.done_reason
-                resolved_model = chunk.model
+                if chunk.done:
+                    p_n = float(chunk.prompt_eval_count or 0)
+                    c_n = float(chunk.eval_count or 0)
+                    usage = Usage(prompt_tokens=p_n, completion_tokens=c_n, total_tokens=p_n + c_n)
+                    finish_reason = chunk.done_reason
+                    resolved_model = chunk.model
 
         message: ModelMessage | None = None
         if full_content:
