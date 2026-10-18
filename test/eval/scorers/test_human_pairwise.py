@@ -37,7 +37,7 @@ async def test_offline_export_label_import_roundtrip(tmp_path) -> None:
         out_lines.append(json.dumps(rec))
     labeled.write_text("\n".join(out_lines) + "\n")
 
-    comp = human_labels(str(labeled), criterion="correctness", key="correctness@human")
+    comp = human_labels(labeled, criterion="correctness", key="correctness@human")
     result = await evaluate_pairwise(src_a, src_b, comparators=[comp], variant_a="A", variant_b="B", store_dir=tmp_path)
 
     assert result.tally("correctness@human") == (2, 0, 0)  # A wins both
@@ -58,6 +58,18 @@ async def test_inline_human_prefers_response_one(tmp_path) -> None:
     a, b, t = result.tally("h")
     assert (a + b, t) == (1, 0)  # one decisive winner (which variant depends on the blinded order), no tie
     assert {seen["r1"], seen["r2"]} == {"A", "B"}
+
+
+@pytest.mark.asyncio()
+async def test_human_labels_file_saved_with_a_bom(tmp_path) -> None:
+    labeled = tmp_path / "labeled.jsonl"
+    record = {"task_id": "t1", "criterion": "c", "first_variant": "a", "preferred": "1"}
+    labeled.write_text("\ufeff" + json.dumps(record) + "\n", encoding="utf-8")
+    comp = human_labels(str(labeled), criterion="c", key="c")
+
+    result = await evaluate_pairwise(_src("A", ("t1",)), _src("B", ("t1",)), comparators=[comp], store_dir=tmp_path)
+
+    assert result.tally("c") == (1, 0, 0)  # A wins
 
 
 @pytest.mark.asyncio()

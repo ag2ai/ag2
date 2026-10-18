@@ -32,8 +32,8 @@ _Piece = tuple[str, str]
 _LABELS = ((ModelRequest, "User: "), (ModelResponse, "Assistant: "), (ToolResultsEvent, "Tool: "))
 
 
-def _modality(kind: BinaryType | None, media_type: str | None) -> str:
-    if kind is not None and kind != BinaryType.BINARY:
+def _modality(kind: BinaryType | str | None, media_type: str | None) -> str:
+    if isinstance(kind, BinaryType) and kind != BinaryType.BINARY:
         return kind.value
     if media_type:
         return media_type.split("/", 1)[0]

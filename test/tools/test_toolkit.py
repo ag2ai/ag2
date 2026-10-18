@@ -376,27 +376,15 @@ def test_tool_name_conflict() -> None:
         toolkit.tool(add)
 
 
-def test_unsafe_override() -> None:
-    def add(a: int, b: int) -> int:
-        pass
-
-    toolkit = Toolkit(add)
-    toolkit._add_tool(add, unsafe=True)
-
-    assert len(toolkit.tools) == 1
-
-
 class TestMerger:
     def test_merge_toolkits(self) -> None:
-        def add1(a: int, b: int) -> int:
-            pass
+        left = Toolkit(first_tool)
+        right = Toolkit(second_tool)
+        members = (*left.tools, *right.tools)
 
-        def add2(a: int, b: int) -> int:
-            pass
+        merged = left | right
 
-        toolkit = Toolkit(add1) | Toolkit(add2)
-
-        assert [t.name for t in toolkit.tools] == ["add1", "add2"]
+        assert merged.tools == members
 
     def test_merge_toolkit_and_tool(self) -> None:
         def add1(a: int, b: int) -> int:
@@ -409,10 +397,101 @@ class TestMerger:
 
         assert [t.name for t in toolkit.tools] == ["add1", "add2"]
 
-    def test_merged_toolkit_overrides_tool(self) -> None:
-        def add1(a: int, b: int) -> int:
-            pass
 
-        toolkit = Toolkit(add1) | add1
+async def first_tool(context: Context) -> str:
+    context.dependencies["calls"].append("body:first")
+    return "first"
 
-        assert [t.name for t in toolkit.tools] == ["add1"]
+
+async def second_tool(context: Context) -> str:
+    context.dependencies["calls"].append("body:second")
+    return "second"
+
+
+async def third_tool(context: Context) -> str:
+    context.dependencies["calls"].append("body:third")
+    return "third"
+
+
+async def left_middleware(call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
+    context.dependencies["calls"].append(f"left:{event.name}")
+    return await call_next(event, context)
+
+
+async def right_middleware(call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
+    context.dependencies["calls"].append(f"right:{event.name}")
+    return await call_next(event, context)
+
+
+async def tool_middleware(call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
+    context.dependencies["calls"].append(f"tool:{event.name}")
+    return await call_next(event, context)
+
+
+async def old_tool_middleware(call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
+    context.dependencies["calls"].append(f"old:{event.name}")
+    return await call_next(event, context)
+
+
+async def run_toolkit(toolkit: Toolkit, tool_name: str) -> list[str]:
+    calls: list[str] = []
+    agent = Agent(
+        "test",
+        tools=[toolkit],
+        dependencies={"calls": calls},
+        config=TestConfig(ToolCallEvent(name=tool_name), "done"),
+    )
+    await agent.ask("Run the tools")
+    return calls
+
+
+@pytest.mark.asyncio
+class TestMergeMiddleware:
+    async def test_repeated_merges_do_not_repeat_retained_middleware(self) -> None:
+        left = Toolkit(first_tool, middleware=[left_middleware])
+        right = Toolkit(second_tool, middleware=[right_middleware])
+
+        merged = (left | right) | third_tool
+
+        assert await run_toolkit(merged, "first_tool") == ["left:first_tool", "body:first"]
+
+    async def test_incoming_tool_keeps_its_own_middleware(self) -> None:
+        left = Toolkit(middleware=[left_middleware])
+        right = Toolkit(tool(second_tool, middleware=[tool_middleware]), middleware=[right_middleware])
+
+        merged = left | right
+
+        assert await run_toolkit(merged, "second_tool") == [
+            "right:second_tool",
+            "tool:second_tool",
+            "body:second",
+        ]
+
+    async def test_merge_leaves_source_toolkits_unchanged(self) -> None:
+        left = Toolkit(first_tool, middleware=[left_middleware])
+        right = Toolkit(second_tool, middleware=[right_middleware])
+
+        merged = left | right
+        merged.tool(third_tool)
+
+        assert [t.name for t in left.tools] == ["first_tool"]
+        assert [t.name for t in right.tools] == ["second_tool"]
+        assert await run_toolkit(left, "first_tool") == ["left:first_tool", "body:first"]
+        assert await run_toolkit(right, "second_tool") == ["right:second_tool", "body:second"]
+
+    async def test_tool_added_after_merge_does_not_inherit_source_middleware(self) -> None:
+        left = Toolkit(middleware=[left_middleware])
+        merged = left | second_tool
+
+        merged.tool()(third_tool)
+
+        assert await run_toolkit(merged, "third_tool") == ["body:third"]
+
+    async def test_tool_replaces_same_named_tool_and_its_hooks(self) -> None:
+        old = tool(first_tool, name="shared", middleware=[old_tool_middleware])
+        left = Toolkit(old)
+        right = tool(second_tool, name="shared", middleware=[tool_middleware])
+
+        merged = left | right
+
+        assert await run_toolkit(merged, "shared") == ["tool:shared", "body:second"]

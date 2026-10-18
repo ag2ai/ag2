@@ -24,8 +24,11 @@ from ag2.events import ImageInput, AudioInput, VideoInput, DocumentInput
 # From a URL
 image = ImageInput("https://example.com/photo.jpg")
 
-# From a local file path
+# From a local file path (the type is inferred from the extension)
 image = ImageInput(path="photo.jpg")
+
+# An explicit media_type takes precedence over the extension
+image = ImageInput(path="download.jpg", media_type="image/png")
 
 # From raw bytes
 image = ImageInput(data=raw_bytes, media_type="image/png")

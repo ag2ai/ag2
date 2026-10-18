@@ -494,6 +494,15 @@ class TestStripMarkdownFences:
     def test_fence_no_newline(self) -> None:
         assert strip_markdown_fences('```{"key": "value"}```') == '{"key": "value"}'
 
+    def test_single_line_fence_with_language_tag(self) -> None:
+        assert strip_markdown_fences('```json {"key": "value"}```') == '{"key": "value"}'
+
+    def test_single_line_fence_with_language_tag_before_array(self) -> None:
+        assert strip_markdown_fences("```json[1, 2]```") == "[1, 2]"
+
+    def test_single_line_fence_with_uppercase_language_tag(self) -> None:
+        assert strip_markdown_fences('```JSON {"a": 1}```') == '{"a": 1}'
+
     def test_whitespace_around_fences(self) -> None:
         assert strip_markdown_fences("  ```json\n[1, 2]\n```  ") == "[1, 2]"
 
@@ -520,6 +529,17 @@ class TestParseWithMarkdownFences:
         parser = A2UIResponseParser(version_string="v0.9")
         response = (
             'Text\n<a2ui-json>\n```\n{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}\n```\n</a2ui-json>'
+        )
+        result = parser.parse(response)
+        assert result.has_a2ui is True
+        assert len(result.operations) == 1
+        assert result.parse_error is None
+
+    def test_parse_single_line_json_fence(self) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        response = (
+            "Here is your UI.\n<a2ui-json>\n```json "
+            '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]```\n</a2ui-json>'
         )
         result = parser.parse(response)
         assert result.has_a2ui is True

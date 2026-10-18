@@ -5,6 +5,7 @@
 from dataclasses import dataclass, replace
 from typing import TypedDict
 
+import httpx
 from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
@@ -15,6 +16,8 @@ from .ollama_client import OLLAMA_DEFAULT_HOST, CreateOptions, OllamaClient
 class OllamaConfigOverrides(TypedDict, total=False):
     model: str
     host: str
+    api_key: str | None
+    http_client: httpx.AsyncClient | None
     temperature: float | None
     top_p: float | None
     streaming: bool
@@ -27,8 +30,18 @@ class OllamaConfigOverrides(TypedDict, total=False):
 
 @dataclass(slots=True)
 class OllamaConfig(ModelConfig):
+    """Configuration for an Ollama model.
+
+    `api_key` is sent as a bearer token (Ollama Cloud); without it the SDK reads `OLLAMA_API_KEY`
+    unless `http_client` is given. `http_client` is a ready-made `httpx.AsyncClient`, e.g.
+    `httpx.AsyncClient(proxy="http://proxy:8080")`; it is left unmodified and open, and `host` and
+    `api_key` apply to each request on top of it.
+    """
+
     model: str
     host: str = OLLAMA_DEFAULT_HOST
+    api_key: str | None = None
+    http_client: httpx.AsyncClient | None = None
     temperature: float | None = None
     top_p: float | None = None
     streaming: bool = False
@@ -55,6 +68,8 @@ class OllamaConfig(ModelConfig):
         return OllamaClient(
             model=self.model,
             host=self.host,
+            api_key=self.api_key,
+            http_client=self.http_client,
             streaming=self.streaming,
             create_options=options,
         )
