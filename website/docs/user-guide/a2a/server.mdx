@@ -32,7 +32,6 @@ async def main() -> None:
     asgi = server.build_jsonrpc(url="http://127.0.0.1:8000", card=card)
 
     await uvicorn.Server(uvicorn.Config(asgi, host="127.0.0.1", port=8000)).serve()
-
 ```
 
 After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.well-known/agent-card.json`. A client connects by passing that base URL to `#!python A2AConfig(card_url=...)` — see the [Client](/docs/user-guide/a2a/client) page.
@@ -51,6 +50,7 @@ After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.we
 | `#!python push_url_validator` | Optional async callback receiving a URL and returning `bool`. Rejects disallowed push-notification URLs before storing them |
 | `#!python extended_card` | Auth-aware extra metadata returned via `#!python GetExtendedAgentCard` |
 | `#!python card_modifier` / `#!python extended_card_modifier` | Per-request hooks that mutate the card before it's served |
+| `#!python validate_input_modes` | Rejects a message part whose media type the card does not declare, with the A2A content-type error. Off by default; see [Validating input media types](#validating-input-media-types) |
 | `#!python card_signer` | Attaches a JWS signature to every card served, on all transports (see [Card Signing](/docs/user-guide/a2a/card_signing)). Optional |
 | `#!python executor` | Escape hatch — drop in a custom `#!python AgentExecutor` (see [Advanced](/docs/user-guide/a2a/advanced#custom-agentexecutor)) |
 
@@ -158,7 +158,6 @@ from ag2.config import OpenAIConfig
 
 agent = Agent("assistant", config=OpenAIConfig("gpt-5"))
 
-
 async def main() -> None:
     engine = create_async_engine("postgresql+asyncpg://user:password@db/a2a")
     task_store = VersionedDatabaseTaskStore(engine)
@@ -176,7 +175,6 @@ async def main() -> None:
 
     port = int(os.environ["PORT"])
     await uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=port)).serve()
-
 
 asyncio.run(main())
 ```
@@ -354,6 +352,61 @@ await asyncio.gather(
 )
 ```
 
+## Caching the Agent Card
+
+`#!python build_jsonrpc` and `#!python build_rest` take `#!python card_cache_control`, the value of the `#!python Cache-Control` header on the card endpoint and its legacy `#!python /.well-known/agent.json` alias. It is unset by default, because the right `#!python max-age` depends on how often your card changes. The `#!python ETag` and `#!python 304` revalidation are sent either way. gRPC has no HTTP card route, so it has no such option.
+
+```python linenums="1" hl_lines="7"
+from ag2 import Agent
+from ag2.a2a import A2AServer
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="claude", config=AnthropicConfig(model="claude-sonnet-5"))
+server = A2AServer(agent)
+app = server.build_jsonrpc(url="https://agents.example.com", card_cache_control="public, max-age=3600")
+```
+
+!!! warning
+    A `#!python card_modifier` that returns a different card per request makes a `#!python public` cache entry wrong for some callers. Use `#!python private` or leave the header unset.
+
+## Validating Input Media Types
+
+With `#!python A2AServer(agent, validate_input_modes=True)` the server rejects a message part whose `#!python media_type` is declared neither in the card's `#!python default_input_modes` nor in any skill's `#!python input_modes`. The client gets the A2A `#!python ContentTypeNotSupportedError`. A card that declares no input modes accepts everything, and so does a part with no media type. Matching is exact: `#!python image/*` is not understood.
+
+`#!python build_card` derives `#!python default_input_modes` from the agent, so the card says what the agent can take:
+
+- `#!python text/plain`, `#!python application/json` and the four `#!python application/vnd.ag2.*+json` types AG2 clients use for history and client-side tools.
+- Every media type that `#!python agent.config` accepts as inline data (images, documents, audio, video). A config AG2 has no table for is taken to accept all of them.
+
+```python linenums="1" hl_lines="6 13-22"
+from ag2 import Agent
+from ag2.a2a import A2AServer, build_card
+from ag2.config import AnthropicConfig
+
+agent = Agent(name="claude", config=AnthropicConfig(model="claude-sonnet-5"))
+server = A2AServer(agent, validate_input_modes=True)
+url = "https://agents.example.com"
+
+# An explicit list replaces the one derived from the model.
+card = build_card(
+    agent,
+    url=url,
+    input_modes=[
+        "text/plain",
+        "application/json",
+        "application/vnd.ag2.history+json",
+        "application/vnd.ag2.tool-call+json",
+        "application/vnd.ag2.tool-result+json",
+        "application/vnd.ag2.tool-schemas+json",
+        "image/png",
+        "image/svg+xml",
+    ],
+)
+app = server.build_jsonrpc(url=url, card=card)
+```
+
+`#!python input_modes=[...]` replaces the derived list entirely, so keep the `#!python vnd.ag2` types in it when validation is on. A card you pass to `#!python build_jsonrpc`, `#!python build_rest` or `#!python build_grpc` that declares input modes but omits them raises `#!python ValueError` rather than failing at request time. Validation checks the card the server was built with, so a `#!python card_modifier` does not widen what is accepted.
+
 ## Customising the `AgentCard`
 
 `#!python build_card(agent, url=...)` accepts a handful of optional kwargs to enrich the published card with discovery metadata and auth declarations.
@@ -368,6 +421,7 @@ await asyncio.gather(
 | `#!python documentation_url` / `#!python icon_url` | Discovery metadata |
 | `#!python security` | Auth declarations — see below |
 | `#!python extensions` | `#!python Sequence[AgentExtension]` — protocol extensions to declare alongside AG2's own; see below |
+| `#!python input_modes` | Replaces the derived `#!python default_input_modes` — see [Validating input media types](#validating-input-media-types) |
 | `#!python tenants` | `#!python Mapping[TransportName, str]` — surface a per-transport tenant on the corresponding `#!python AgentInterface.tenant` |
 | `#!python rest_url` / `#!python rest_path_prefix` / `#!python grpc_url` | Per-transport URL overrides for multi-transport cards |
 

@@ -12,6 +12,7 @@ from typing import Any
 from a2a.types import Part
 from google.protobuf import json_format, struct_pb2
 
+from ag2.config.input_acceptance import binary_kind_of
 from ag2.events import (
     BinaryInput,
     BinaryType,
@@ -73,7 +74,7 @@ def part_to_input(part: Part) -> Input:
     is one of our extension MIME types, the caller (mappers.tools) is
     expected to handle the part *before* falling through to this function.
     """
-    if part.text:
+    if part.HasField("text"):
         return TextInput(part.text)
 
     metadata = struct_to_dict(part.metadata)
@@ -81,9 +82,9 @@ def part_to_input(part: Part) -> Input:
     if file_id:
         return FileIdInput(str(file_id), filename=part.filename or None)
 
-    kind = _binary_kind(metadata)
+    kind = _binary_kind(metadata, part.media_type)
 
-    if part.raw:
+    if part.HasField("raw"):
         return BinaryInput(
             part.raw,
             media_type=part.media_type or "application/octet-stream",
@@ -91,7 +92,7 @@ def part_to_input(part: Part) -> Input:
             kind=kind,
         )
 
-    if part.url:
+    if part.HasField("url"):
         return UrlInput(part.url, kind=kind)
 
     if part.HasField("data"):
@@ -154,8 +155,10 @@ def struct_to_dict(s: struct_pb2.Struct) -> dict[str, Any]:  # type: ignore[no-a
     return result
 
 
-def _binary_kind(metadata: dict[str, Any]) -> BinaryType:
-    raw = metadata.get(_BINARY_KIND_METADATA_KEY, BinaryType.BINARY.value)
+def _binary_kind(metadata: dict[str, Any], media_type: str) -> BinaryType:
+    if _BINARY_KIND_METADATA_KEY not in metadata:
+        return binary_kind_of(media_type) or BinaryType.BINARY
+    raw = metadata[_BINARY_KIND_METADATA_KEY]
     try:
         return BinaryType(raw)
     except ValueError:

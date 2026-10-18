@@ -52,10 +52,10 @@ logger = logging.getLogger(__name__)
 def _tool_use_vendor_metadata(block: ToolUseBlock) -> dict[str, Any]:
     """Provider fields ``ToolCallEvent`` has no column for but must replay."""
     meta: dict[str, Any] = {}
-    if (caller := getattr(block, "caller", None)) is not None:
-        meta["caller"] = caller.model_dump(mode="json") if hasattr(caller, "model_dump") else caller
-    if (toolset := getattr(block, "toolset_name", None)) is not None:
-        meta["toolset_name"] = toolset
+    if block.caller is not None:
+        meta["caller"] = block.caller.model_dump(mode="json")
+    if block.toolset_name is not None:
+        meta["toolset_name"] = block.toolset_name
     return meta
 
 
@@ -327,7 +327,7 @@ class AnthropicClient(LLMClient):
                 # no event, no warning and no trace in history.
                 logger.warning(
                     "Dropping unhandled Anthropic content block type=%r (%s)",
-                    getattr(block, "type", None),
+                    block.type,
                     type(block).__name__,
                 )
 
@@ -355,11 +355,11 @@ class AnthropicClient(LLMClient):
         current_server: dict[str, Any] | None = None
 
         async for event in stream:
-            event_type = getattr(event, "type", None)
+            event_type = event.type
 
             if event_type == "content_block_start":
                 block = event.content_block
-                block_type = getattr(block, "type", None)
+                block_type = block.type
                 if block_type == "tool_use":
                     current_tool = {
                         "id": block.id,
@@ -388,7 +388,7 @@ class AnthropicClient(LLMClient):
 
             elif event_type == "content_block_delta":
                 delta = event.delta
-                delta_type = getattr(delta, "type", None)
+                delta_type = delta.type
 
                 if delta_type == "text_delta":
                     full_content += delta.text

@@ -90,6 +90,7 @@ def build_grpc_server(  # type: ignore[no-any-unimported]
     push_config_store: PushNotificationConfigStore | None = None,
     push_sender: PushNotificationSender | None = None,
     push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
+    validate_input_modes: bool = False,
     options: Sequence[tuple[str, Any]] = (),
     server_credentials: grpc.ServerCredentials | None = None,
 ) -> grpc.aio.Server:
@@ -117,6 +118,7 @@ def build_grpc_server(  # type: ignore[no-any-unimported]
         push_config_store=push_config_store,
         push_sender=push_sender,
         push_url_validator=push_url_validator,
+        validate_input_modes=validate_input_modes,
     )
     server = grpc.aio.server(options=list(options) if options else None)
     a2a_pb2_grpc.add_A2AServiceServicer_to_server(GrpcHandler(handler), server)  # type: ignore[no-untyped-call]

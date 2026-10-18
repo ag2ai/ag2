@@ -19,6 +19,7 @@ from ag2.agent import Agent
 
 from .card import build_card
 from .executor import AgentExecutor
+from .extension import AG2_INPUT_MODES
 from .transports import build_grpc_server, build_jsonrpc_asgi, build_rest_asgi
 from .transports._common import (
     DEFAULT_AGENT_CARD_PATH,
@@ -68,6 +69,14 @@ class A2AServer:
     ``build_*`` method without a ``card_signer`` raises
     ``A2AStaleCardSignatureError`` if AG2 would have to flip a capability
     flag on it, since that would invalidate the signature already there.
+
+    ``validate_input_modes`` makes the SDK reject a message part whose media
+    type is not in the card's ``default_input_modes`` or a skill's
+    ``input_modes``. The default card declares the ``vnd.ag2`` types and the
+    media types the agent's model accepts, so AG2 clients keep working; a custom
+    ``card`` must declare the ``vnd.ag2`` types too.
+    ``build_jsonrpc`` / ``build_rest`` take ``card_cache_control`` to set
+    ``Cache-Control`` on the card route.
     """
 
     __slots__ = (
@@ -82,6 +91,7 @@ class A2AServer:
         "_push_sender",
         "_push_url_validator",
         "_task_store",
+        "_validate_input_modes",
     )
 
     def __init__(
@@ -98,6 +108,7 @@ class A2AServer:
         push_sender: PushNotificationSender | None = None,
         push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
         executor: A2AAgentExecutorBase | None = None,
+        validate_input_modes: bool = False,
     ) -> None:
         if push_url_validator is not None and push_config_store is None:
             raise ValueError(
@@ -128,6 +139,7 @@ class A2AServer:
         self._push_config_store = push_config_store
         self._push_sender = push_sender
         self._push_url_validator = push_url_validator
+        self._validate_input_modes = validate_input_modes
         # ``executor`` is escape-hatch for tests / advanced use cases that
         # need a custom ``AgentExecutor``. Default wraps the supplied agent.
         self._executor = executor if executor is not None else AgentExecutor(agent)
@@ -165,10 +177,27 @@ class A2AServer:
             "push_config_store": self._push_config_store,
             "push_sender": self._push_sender,
             "push_url_validator": self._push_url_validator,
+            "validate_input_modes": self._validate_input_modes,
         }
         if include_card_modifier:
             kwargs["card_modifier"] = self._card_modifier
         return kwargs
+
+    def _check_input_modes(self, card: AgentCard | None) -> None:
+        """Reject a caller-supplied card that would make validation turn AG2 clients away."""
+        if card is None or not self._validate_input_modes:
+            return
+        declared = set(card.default_input_modes)
+        for skill in card.skills:
+            declared.update(skill.input_modes)
+        # An empty declaration is an absent one: the SDK accepts everything.
+        missing = set(AG2_INPUT_MODES) - declared
+        if declared and missing:
+            raise ValueError(
+                "validate_input_modes=True would reject AG2 clients: the card does not declare "
+                f"{sorted(missing)} as input modes. Build the card with build_card(), or add them to "
+                "default_input_modes."
+            )
 
     def build_jsonrpc(
         self,
@@ -178,8 +207,10 @@ class A2AServer:
         rpc_url: str = "/",
         card_url: str = DEFAULT_AGENT_CARD_PATH,
         legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
+        card_cache_control: str | None = None,
     ) -> "Starlette":
         """Starlette ASGI app exposing JSON-RPC routes + agent card."""
+        self._check_input_modes(card)
         resolved_card = card or build_card(
             self._agent,
             url=url,
@@ -191,6 +222,7 @@ class A2AServer:
             rpc_url=rpc_url,
             card_url=card_url,
             legacy_card_url=legacy_card_url,
+            card_cache_control=card_cache_control,
             **self._shared_kwargs(include_card_modifier=True),
         )
 
@@ -202,12 +234,14 @@ class A2AServer:
         path_prefix: str = "",
         card_url: str = DEFAULT_AGENT_CARD_PATH,
         legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
+        card_cache_control: str | None = None,
     ) -> "Starlette":
         """Starlette ASGI app exposing REST routes + agent card.
 
         ``path_prefix`` mounts REST under a sub-path (e.g. ``"/v1"``); both
         the AgentCard interface URL and the dispatcher respect it.
         """
+        self._check_input_modes(card)
         resolved_card = card or build_card(
             self._agent,
             url=url,
@@ -220,6 +254,7 @@ class A2AServer:
             path_prefix=path_prefix,
             card_url=card_url,
             legacy_card_url=legacy_card_url,
+            card_cache_control=card_cache_control,
             **self._shared_kwargs(include_card_modifier=True),
         )
 
@@ -245,6 +280,7 @@ class A2AServer:
         gRPC method — the public card is served over HTTP only.
         ``extended_card_modifier`` does apply (gRPC has ``GetExtendedAgentCard``).
         """
+        self._check_input_modes(card)
         resolved_card = card or build_card(
             self._agent,
             url=grpc_url,
