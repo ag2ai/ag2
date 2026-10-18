@@ -34,7 +34,7 @@ class XAIFilesClient:
             provider=FileProvider.XAI,
             bytes_count=result.size,
             purpose=purpose,
-            created_at=_created_at_to_float(result.created_at),
+            created_at=_created_at_to_float(result.created_at.ToDatetime()),
         )
 
     async def read(self, file_id: str) -> FileContent:
@@ -55,7 +55,7 @@ class XAIFilesClient:
                     filename=f.filename,
                     provider=FileProvider.XAI,
                     bytes_count=f.size,
-                    created_at=_created_at_to_float(f.created_at),
+                    created_at=_created_at_to_float(f.created_at.ToDatetime()),
                 )
                 for f in result.data
             )

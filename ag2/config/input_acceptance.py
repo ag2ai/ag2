@@ -100,7 +100,7 @@ _MEDIA: dict[type[object], set[tuple[str, str, BinaryType | None]]] = {
         ("user", "file", None),
     },
     ZAIConfig: set(),
-    TypeSafeConfig: set(),
+    TypeSafeConfig: {(position, "data", BinaryType.IMAGE) for position in ("user", "tool")},
 }
 
 

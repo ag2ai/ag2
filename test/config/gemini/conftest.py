@@ -11,4 +11,5 @@ import pytest
 def gemini_config() -> MagicMock:
     config = MagicMock()
     config.api_key = "test-key"
+    config.http_client = None
     return config
