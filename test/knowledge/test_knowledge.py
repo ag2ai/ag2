@@ -6,6 +6,7 @@
 
 import asyncio
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from uuid import uuid4
@@ -596,9 +597,12 @@ class TestSqliteKnowledgeStore:
         store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
         try:
             first = await store.append("/log.jsonl", "line1\n")
+            first_version = (await store.list_versions_under("/log.jsonl"))["/log.jsonl"]
             second = await store.append("/log.jsonl", "line2\n")
+            second_version = (await store.list_versions_under("/log.jsonl"))["/log.jsonl"]
             assert first == 0
             assert second == len(b"line1\n")
+            assert second_version > first_version
             assert await store.read("/log.jsonl") == "line1\nline2\n"
         finally:
             store.close()
@@ -629,6 +633,84 @@ class TestSqliteKnowledgeStore:
 
             scoped = await store.list_versions_under("/dir")
             assert set(scoped.keys()) == {"/dir/b.txt"}
+        finally:
+            store.close()
+
+    async def test_on_change_detects_rewrite_after_initial_write(self, tmp_path: Path) -> None:
+        path = "/watched.txt"
+        store = SqliteKnowledgeStore(str(tmp_path / "store.db"), poll_interval_s=0.05)
+        await store.write(path, "initial")
+        received: list[str] = []
+        changed = asyncio.Event()
+
+        async def callback(changed_path: str) -> None:
+            received.append(changed_path)
+            changed.set()
+
+        subscription = await store.on_change(path, callback)
+        try:
+            await store.write(path, "updated")
+            await asyncio.wait_for(changed.wait(), timeout=2.0)
+            assert received == [path]
+        finally:
+            await subscription.close()
+            store.close()
+
+    async def test_list_versions_under_increments_across_store_instances(self, tmp_path: Path) -> None:
+        database = str(tmp_path / "store.db")
+        first = SqliteKnowledgeStore(database)
+        second = SqliteKnowledgeStore(database)
+        path = "/shared.txt"
+        try:
+            await first.write(path, "initial")
+            await second.read(path)
+            await first.write(path, "first update")
+            await first.write(path, "second update")
+            before = (await first.list_versions_under(path))[path]
+
+            await second.write(path, "third update")
+
+            after = (await first.list_versions_under(path))[path]
+            assert after > before
+        finally:
+            first.close()
+            second.close()
+
+    async def test_list_versions_under_keeps_increasing_after_delete_and_reopen(self, tmp_path: Path) -> None:
+        database = str(tmp_path / "store.db")
+        store = SqliteKnowledgeStore(database)
+        path = "/recreated.txt"
+        try:
+            await store.write(path, "initial")
+            before = (await store.list_versions_under(path))[path]
+
+            await store.delete(path)
+            store.close()
+            store = SqliteKnowledgeStore(database)
+            await store.write(path, "recreated")
+
+            after = (await store.list_versions_under(path))[path]
+            assert after > before
+        finally:
+            store.close()
+
+    async def test_initializes_version_counter_from_existing_database(self, tmp_path: Path) -> None:
+        database = tmp_path / "store.db"
+        with sqlite3.connect(database) as connection:
+            connection.execute(
+                "CREATE TABLE entries ("
+                "path TEXT PRIMARY KEY, content BLOB NOT NULL, version INTEGER NOT NULL DEFAULT 0)"
+            )
+            connection.execute(
+                "INSERT INTO entries (path, content, version) VALUES (?, ?, ?)",
+                ("/existing.txt", b"existing", 41),
+            )
+
+        store = SqliteKnowledgeStore(database)
+        try:
+            await store.write("/existing.txt", "updated")
+            versions = await store.list_versions_under("/")
+            assert versions["/existing.txt"] == 42
         finally:
             store.close()
 
