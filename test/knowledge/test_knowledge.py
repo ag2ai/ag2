@@ -375,6 +375,41 @@ class TestDiskKnowledgeStore:
         assert not (tmp_path / "test.txt").exists()
         assert await store.read("/test.txt") is None
 
+    async def test_delete_file_prunes_empty_parent_directories(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/dir/a.txt", "a")
+        await store.delete("/dir/a.txt")
+        assert await store.list("/") == []
+        assert await store.exists("/dir") is False
+
+        await store.write("/a/b/c/deep.txt", "x")
+        await store.delete("/a/b/c/deep.txt")
+        assert await store.list("/") == []
+        assert await store.exists("/a") is False
+        assert await store.exists("/a/b") is False
+
+    async def test_delete_file_keeps_non_empty_parent_directories(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/dir/sub/a.txt", "a")
+        await store.write("/dir/b.txt", "b")
+        await store.delete("/dir/sub/a.txt")
+        assert await store.exists("/dir/sub") is False
+        assert await store.read("/dir/b.txt") == "b"
+
+    async def test_delete_directory_prunes_empty_parent_directories(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/a/b/c/x.txt", "x")
+        await store.delete("/a/b/c")
+        assert await store.list("/") == []
+
+    async def test_delete_never_removes_store_root(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/a.txt", "a")
+        await store.delete("/a.txt")
+        assert await store.exists("/") is True
+        await store.write("/b.txt", "b")
+        assert await store.list("/") == ["b.txt"]
+
     async def test_delete_directory_recursively(self, tmp_path: Path) -> None:
         store = DiskKnowledgeStore(str(tmp_path))
         await store.write("/dir/a.txt", "a")
@@ -882,3 +917,29 @@ class TestLockedKnowledgeStore:
             assert lock.acquired == []
         finally:
             await sub.close()
+
+    @pytest.mark.parametrize("alias", ["log/events.jsonl", "//log//events.jsonl/", "/log/events.jsonl/"])
+    async def test_aliased_path_takes_the_canonical_lock(self, alias: str) -> None:
+        lock = _FakeLock()
+        locked = LockedKnowledgeStore(MemoryKnowledgeStore(), lock)
+
+        await locked.write(alias, "hello")
+        await locked.append(alias, " world")
+        await locked.delete(alias)
+
+        canonical = "store:write:/log/events.jsonl"
+        assert lock.acquired == [(canonical, 30.0)] * 3
+        assert lock.released == [canonical] * 3
+
+    @pytest.mark.parametrize("alias", ["log/events.jsonl", "//log//events.jsonl/", "/log/events.jsonl/"])
+    async def test_aliased_path_releases_the_canonical_lock_on_inner_exception(self, alias: str) -> None:
+        class ExplodingStore:
+            async def write(self, path: str, content: str) -> None:
+                raise ValueError("boom")
+
+        lock = _FakeLock()
+        locked = LockedKnowledgeStore(ExplodingStore(), lock)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="boom"):
+            await locked.write(alias, "hello")
+        assert lock.released == ["store:write:/log/events.jsonl"]
