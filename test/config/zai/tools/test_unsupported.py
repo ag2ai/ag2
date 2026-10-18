@@ -18,6 +18,7 @@ from ag2.tools.builtin.shell import ShellTool
 from ag2.tools.builtin.skills import SkillsTool
 from ag2.tools.builtin.web_fetch import WebFetchTool
 from ag2.tools.builtin.x_search import XSearchTool
+from ag2.tools.schemas import ToolSchema
 
 
 @pytest.mark.asyncio
@@ -128,3 +129,9 @@ async def test_anthropic_bash(context: Context) -> None:
 
     with pytest.raises(UnsupportedToolError, match="zai"):
         tool_to_api(schema)
+
+
+@pytest.mark.asyncio
+async def test_tool_search(tool_search_schema: ToolSchema) -> None:
+    with pytest.raises(UnsupportedToolError, match="zai"):
+        tool_to_api(tool_search_schema)
