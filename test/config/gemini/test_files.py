@@ -18,6 +18,54 @@ from ag2.files.types import FileContent, FileProvider, UploadedFile
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["list", "read", "delete"])
+async def test_file_operations_use_configured_http_client(operation: str) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            return httpx.Response(200, json={})
+        if request.url.path.endswith("/files/output"):
+            return httpx.Response(
+                200,
+                json={
+                    "name": "files/output",
+                    "displayName": "output.txt",
+                    "mimeType": "text/plain",
+                    "downloadUri": "https://files.example/output",
+                },
+            )
+        if request.url.path.endswith(":download"):
+            return httpx.Response(200, content=b"generated text")
+        return httpx.Response(200, json={"files": []})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), headers={"x-custom": "present"}
+    ) as http_client:
+        with patch("ag2.config.gemini.files.genai.Client", wraps=genai.Client) as constructor:
+            api = FilesAPI(GeminiConfig(model="test", api_key="test", http_client=http_client))
+        # Check the public SDK option before making a request: the broken version must not contact Google.
+        options = constructor.call_args.kwargs.get("http_options")
+        assert isinstance(options, types.HttpOptions)
+        assert options.httpx_async_client is http_client
+        assert constructor.call_args.kwargs.get("vertexai") is False
+
+        if operation == "list":
+            assert await api.list() == []
+        elif operation == "read":
+            assert await api.read("files/output") == FileContent(
+                name="output.txt", data=b"generated text", media_type="text/plain"
+            )
+        else:
+            await api.delete("files/output")
+        assert not http_client.is_closed
+
+    assert len(requests) == (2 if operation == "read" else 1)
+    assert all(request.headers["x-custom"] == "present" for request in requests)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("page_count", [0, 1, 3])
 async def test_list_follows_sdk_pages(page_count: int) -> None:
     requests: list[httpx.Request] = []
