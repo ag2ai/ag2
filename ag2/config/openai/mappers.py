@@ -440,6 +440,15 @@ def convert_messages(
                         raise UnsupportedInputError(f"UrlInput({_kind_label(inp.kind)})", "openai-completions")
 
                 elif isinstance(inp, FileIdInput):
+                    if (
+                        isinstance(inp, UploadedFile)
+                        and inp.provider is not None
+                        and inp.provider is not FileProvider.OPENAI
+                    ):
+                        raise UnsupportedInputError(
+                            f"file uploaded via '{inp.provider.value}' cannot be used with '{FileProvider.OPENAI.value}'",
+                            "openai-completions",
+                        )
                     file_ref: File = {"type": "file", "file": {"file_id": inp.file_id}}
                     parts.append(file_ref)
 

@@ -51,7 +51,7 @@ class TestConvertMessagesEmptyArguments:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "model",
-            "parts": [{"function_call": {"name": "list_items", "args": {}}}],
+            "parts": [{"function_call": {"id": "tc_1", "name": "list_items", "args": {}}}],
         }
 
     def test_valid_arguments_are_preserved(self) -> None:
@@ -59,7 +59,7 @@ class TestConvertMessagesEmptyArguments:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "model",
-            "parts": [{"function_call": {"name": "list_items", "args": {"category": "books"}}}],
+            "parts": [{"function_call": {"id": "tc_1", "name": "list_items", "args": {"category": "books"}}}],
         }
 
     def test_truncated_arguments_produce_empty_dict(self) -> None:
@@ -71,7 +71,7 @@ class TestConvertMessagesEmptyArguments:
 
         assert contents[0].model_dump(exclude_none=True) == {
             "role": "model",
-            "parts": [{"function_call": {"name": "list_items", "args": {}}}],
+            "parts": [{"function_call": {"id": "tc_1", "name": "list_items", "args": {}}}],
         }
 
 
@@ -321,7 +321,7 @@ class TestToolResult:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
-            "parts": [{"function_response": {"name": "t", "response": {"result": "hello"}}}],
+            "parts": [{"function_response": {"id": "tc_1", "name": "t", "response": {"result": "hello"}}}],
         }
 
     def test_multiple_text_chunks_become_list(self) -> None:
@@ -330,7 +330,7 @@ class TestToolResult:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
-            "parts": [{"function_response": {"name": "t", "response": {"result": ["a", "b"]}}}],
+            "parts": [{"function_response": {"id": "tc_1", "name": "t", "response": {"result": ["a", "b"]}}}],
         }
 
     def test_url_image(self) -> None:
@@ -344,6 +344,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {},
                         "parts": [{"file_data": {"file_uri": self.IMG_URL, "mime_type": "image/png"}}],
@@ -369,6 +370,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {},
                         "parts": [{"inline_data": {"data": self.PNG, "mime_type": "image/png"}}],
@@ -388,6 +390,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {},
                         "parts": [{"file_data": {"file_uri": self.PDF_URL, "mime_type": "application/pdf"}}],
@@ -413,6 +416,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {},
                         "parts": [{"inline_data": {"data": self.PDF, "mime_type": "application/pdf"}}],
@@ -438,6 +442,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {"result": "caption"},
                         "parts": [{"file_data": {"file_uri": self.IMG_URL, "mime_type": "image/png"}}],
@@ -535,6 +540,7 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
         "parts": [
             {
                 "function_response": {
+                    "id": "tc_1",
                     "name": "ghost_tool",
                     "response": {"result": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"},
                 }

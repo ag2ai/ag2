@@ -272,9 +272,12 @@ def convert_messages(
             if message.message:
                 parts.append(types.Part.from_text(text=message.message.content))
             for call in message.tool_calls.calls:
-                fc_part = types.Part.from_function_call(
-                    name=call.name,
-                    args=call.safe_serialized_arguments,
+                fc_part = types.Part(
+                    function_call=types.FunctionCall(
+                        id=call.id,
+                        name=call.name,
+                        args=call.safe_serialized_arguments,
+                    ),
                 )
                 if isinstance(call, GeminiToolCallEvent) and call.thought_signature is not None:
                     fc_part.thought_signature = call.thought_signature
@@ -319,10 +322,13 @@ def convert_messages(
                     response_dict = {}
 
                 parts_list.append(
-                    types.Part.from_function_response(
-                        name=r.name or "",
-                        response=response_dict,
-                        parts=media_parts or None,
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            id=r.parent_id,
+                            name=r.name or "",
+                            response=response_dict,
+                            parts=media_parts or None,
+                        ),
                     )
                 )
             result.append(types.Content(role="user", parts=parts_list))

@@ -74,7 +74,7 @@ def part_to_input(part: Part) -> Input:
     is one of our extension MIME types, the caller (mappers.tools) is
     expected to handle the part *before* falling through to this function.
     """
-    if part.text:
+    if part.HasField("text"):
         return TextInput(part.text)
 
     metadata = struct_to_dict(part.metadata)
@@ -84,7 +84,7 @@ def part_to_input(part: Part) -> Input:
 
     kind = _binary_kind(metadata, part.media_type)
 
-    if part.raw:
+    if part.HasField("raw"):
         return BinaryInput(
             part.raw,
             media_type=part.media_type or "application/octet-stream",
@@ -92,7 +92,7 @@ def part_to_input(part: Part) -> Input:
             kind=kind,
         )
 
-    if part.url:
+    if part.HasField("url"):
         return UrlInput(part.url, kind=kind)
 
     if part.HasField("data"):
