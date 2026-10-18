@@ -14,7 +14,6 @@ from typesafe_sdk import (
     BoxCoordinates,
     Choice,
     ChoiceAnswer,
-    Image,
     Noul,
     NoulAnswer,
     Score,
@@ -33,8 +32,6 @@ from ag2.config.typesafe.mappers import (
     response_proto_to_question,
 )
 from ag2.events import (
-    BinaryInput,
-    BinaryType,
     DataInput,
     FileIdInput,
     ModelMessage,
@@ -282,30 +279,6 @@ def test_bounding_box_answer_is_the_schema_json() -> None:
 
     assert BoundingBox.model_validate_json(content) == BoundingBox(top=0.2, bottom=0.66, left=0.19, right=0.68)
     assert answer_metadata(answer)["confidence"] == 0.9
-
-
-def test_convert_state_sends_images() -> None:
-    state = convert_state(
-        [
-            ModelRequest([
-                TextInput("Where is the dog?"),
-                BinaryInput(b"\x89PNG", media_type="image/png", kind=BinaryType.IMAGE),
-            ])
-        ],
-        PydanticSerializer(),
-    )
-
-    [message] = state
-    text, image = message["content"]
-    assert text == "Where is the dog?"
-    assert isinstance(image, Image)
-
-
-def test_convert_state_rejects_non_image_binary() -> None:
-    with pytest.raises(UnsupportedInputError, match="BinaryInput"):
-        convert_state(
-            [ModelRequest([BinaryInput(b"x", media_type="audio/wav", kind=BinaryType.AUDIO)])], PydanticSerializer()
-        )
 
 
 def test_convert_state_rejects_files() -> None:

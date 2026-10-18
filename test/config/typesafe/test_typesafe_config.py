@@ -8,14 +8,14 @@ from typing import Any
 
 import httpx2
 import pytest
-from dirty_equals import IsPartialDict
+from dirty_equals import IsPartialDict, IsStr
 from typesafe_sdk import RetryPolicy, TypeSafeAuthenticationError
 
-from ag2 import Agent, ResponseSchema
+from ag2 import Agent, AudioInput, ImageInput, ResponseSchema
 from ag2.config import TypeSafeConfig
 from ag2.config.typesafe import BoundingBox, TypeSafeClient
 from ag2.events import Usage
-from ag2.exceptions import UnsupportedToolError
+from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.tools import tool
 
 
@@ -36,6 +36,16 @@ def lookup(order_id: str) -> str:
     return order_id
 
 
+def _request_json(request: httpx2.Request) -> dict[str, Any]:
+    """The JSON body of a request; images make the SDK send it as the `request` part of a multipart form."""
+    content_type = request.headers["content-type"]
+    if not content_type.startswith("multipart/form-data"):
+        return json.loads(request.content)
+    boundary = content_type.split("boundary=")[1].encode()
+    [part] = [p for p in request.content.split(b"--" + boundary) if b'name="request"' in p]
+    return json.loads(part.split(b"\r\n\r\n", 1)[1])
+
+
 def _fake_api(
     requests: list[dict[str, Any]],
     answers: dict[str, Any],
@@ -43,7 +53,7 @@ def _fake_api(
     status: int = 200,
 ) -> httpx2.AsyncClient:
     def handler(request: httpx2.Request) -> httpx2.Response:
-        requests.append(json.loads(request.content))
+        requests.append(_request_json(request))
         if status != 200:
             return httpx2.Response(status, json={"detail": "Invalid API key"})
         return httpx2.Response(
@@ -189,13 +199,67 @@ async def test_agent_locates_with_bounding_box_schema() -> None:
         response_schema=ResponseSchema(BoundingBox),
     )
 
-    reply = await finder.ask("Where is it?")
+    reply = await finder.ask("Where is it?", ImageInput(data=b"\x89PNG", media_type="image/png"))
 
     assert await reply.content() == BoundingBox(top=0.1, bottom=0.4, left=0.6, right=0.85)
     assert reply.response.metadata["confidence"] == 0.9
     assert requests == [
         IsPartialDict({"questions": {"answer": IsPartialDict({"type": "box", "instructions": "The red square"})}})
     ]
+
+
+@pytest.mark.asyncio
+async def test_agent_sends_the_image_and_clamps_a_box_just_outside_it() -> None:
+    requests: list[dict[str, Any]] = []
+    answer = {"type": "box", "box": {"top": -0.01, "bottom": 0.4, "left": 0.6, "right": 1.02}, "confidence": None}
+    finder = Agent(
+        "finder",
+        prompt="The red square",
+        config=TypeSafeConfig(api_key="test-key", http_client=_fake_api(requests, {"answer": answer})),
+        response_schema=ResponseSchema(BoundingBox),
+    )
+
+    reply = await finder.ask("Where is it?", ImageInput(data=b"\x89PNG", media_type="image/png"))
+
+    assert await reply.content() == BoundingBox(top=0, bottom=0.4, left=0.6, right=1)
+    [request] = requests
+    assert request == IsPartialDict({
+        "state": [{"role": "user", "content": ["Where is it?", IsStr()]}],
+        "questions": {"answer": {"type": "box", "instructions": "The red square"}},
+    })
+    assert [asset["type"] for asset in request["assets"].values()] == ["image"]
+
+
+@pytest.mark.asyncio
+async def test_bounding_box_without_an_image_is_rejected_before_any_request() -> None:
+    requests: list[dict[str, Any]] = []
+    finder = Agent(
+        "finder",
+        prompt="The red square",
+        config=TypeSafeConfig(api_key="test-key", http_client=_fake_api(requests, {})),
+        response_schema=ResponseSchema(BoundingBox),
+    )
+
+    with pytest.raises(ValueError, match="needs an image"):
+        await finder.ask("Where is it?")
+
+    assert requests == []
+
+
+@pytest.mark.asyncio
+async def test_agent_rejects_non_image_media_before_any_request() -> None:
+    requests: list[dict[str, Any]] = []
+    finder = Agent(
+        "finder",
+        prompt="The red square",
+        config=TypeSafeConfig(api_key="test-key", http_client=_fake_api(requests, {})),
+        response_schema=ResponseSchema(BoundingBox),
+    )
+
+    with pytest.raises(UnsupportedInputError):
+        await finder.ask("Where is it?", AudioInput(data=b"abc", media_type="audio/wav"))
+
+    assert requests == []
 
 
 @pytest.mark.asyncio

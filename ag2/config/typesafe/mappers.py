@@ -167,6 +167,17 @@ def response_proto_to_question(
     return Score(instructions=instructions, criteria=levels)
 
 
+def require_image_for_box(question: Question, state: Iterable[Mapping[str, ContentValue | None]]) -> None:
+    """Refuse a box question with nothing to look at: the API would answer with an invented box."""
+    if not isinstance(question, Box):
+        return
+    for message in state:
+        content = message["content"]
+        if any(isinstance(part, Image) for part in (content if isinstance(content, list) else [content])):
+            return
+    raise ValueError("A BoundingBox needs an image in the request: send one with `ImageInput`.")
+
+
 def _is_box(response: ResponseProto[Any] | None) -> bool:
     return isinstance(response, ResponseSchema) and strip_annotated(response.types) is BoundingBox
 
@@ -176,7 +187,9 @@ def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, bo
     if _is_box(response):
         if not isinstance(answer, BoxAnswer):  # pragma: no cover - the API answers the question it was asked
             raise UnsupportedResponseSchemaError(f"TypeSafe answered a box question with a {answer.type!r} answer.")
-        return BoundingBox(**answer.box.model_dump()).model_dump_json()
+        # The model's estimate may land just outside the image; the box is clamped rather than the answer lost.
+        edges = {edge: min(max(value, 0.0), 1.0) for edge, value in answer.box.model_dump().items()}
+        return BoundingBox(**edges).model_dump_json()
 
     spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
 

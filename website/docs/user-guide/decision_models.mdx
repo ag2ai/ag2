@@ -557,7 +557,7 @@ features = {d.name: r.response.metadata["noul"] for d, r in zip(detectors, repli
 
 ## Image inspection
 
-Damage checks, content moderation, document triage. OpenAI's Decisions API evaluates images together with text and answers a yes/no question about them. Jev takes images only for locating things: its `BoundingBox` answer is described under [TypeSafe (Jev) Configuration](/docs/user-guide/model_configuration#locating-things-in-an-image).
+Damage checks, content moderation, document triage. OpenAI's Decisions API evaluates images together with text and answers a yes/no question about them. Jev also takes images (experimental) and is built for locating things: its `BoundingBox` answer is described under [TypeSafe (Jev) Configuration](/docs/user-guide/model_configuration#locating-things-in-an-image).
 
 ```python linenums="1" hl_lines="7-8 11"
 from ag2 import Agent, ImageInput, ResponseSchema

@@ -92,6 +92,10 @@ async def test_int_enum_is_a_score(typesafe_config: TypeSafeConfig) -> None:
     assert set(reply.response.metadata["probabilities"]) == {0, 1, 2}
 
 
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+
 def _red_square_png() -> bytes:
     """A 400x400 white PNG with a red square over x, y in [100, 300)."""
     white, red = b"\xff\xff\xff", b"\xff\x00\x00"
@@ -99,11 +103,13 @@ def _red_square_png() -> bytes:
     striped = b"\x00" + white * 100 + red * 200 + white * 100
     rows = plain * 100 + striped * 200 + plain * 100
 
-    def chunk(kind: bytes, data: bytes) -> bytes:
-        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
-
     header = struct.pack(">IIBBBBB", 400, 400, 8, 2, 0, 0, 0)
-    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", header)
+        + _png_chunk(b"IDAT", zlib.compress(rows))
+        + _png_chunk(b"IEND", b"")
+    )
 
 
 async def test_bounding_box_locates_in_an_image(typesafe_config: TypeSafeConfig) -> None:
