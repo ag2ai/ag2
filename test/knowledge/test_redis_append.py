@@ -5,9 +5,10 @@
 import asyncio
 import shutil
 import subprocess
+import tempfile
 import time
 from collections.abc import Iterator
-from typing import Any
+from pathlib import Path
 
 import pytest
 
@@ -17,106 +18,81 @@ from redis.asyncio import Redis
 
 from ag2.knowledge.redis import RedisKnowledgeStore
 
+pytestmark = [
+    pytest.mark.redis,
+    pytest.mark.asyncio,
+]
+
+_CONNECTIONS = 20
+
 
 @pytest.fixture(scope="module")
-def redis_socket(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+def redis_socket() -> Iterator[str]:
     executable = shutil.which("redis-server")
     if executable is None:
         pytest.skip("redis-server is required for the knowledge-store integration tests")
-    socket = str(tmp_path_factory.mktemp("redis") / "server.sock")
-    process = subprocess.Popen(
-        [executable, "--port", "0", "--unixsocket", socket, "--save", "", "--appendonly", "no"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    try:
-        with redis.Redis(unix_socket_path=socket) as client:
-            deadline = time.monotonic() + 5
-            while True:
-                try:
-                    client.ping()
-                    break
-                except redis.ConnectionError:
-                    if process.poll() is not None or time.monotonic() >= deadline:
-                        pytest.fail("the owned Redis server did not start")
-                    time.sleep(0.01)
-        yield socket
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-
-
-class ReadBarrier:
-    def __init__(self) -> None:
-        self.reads = 0
-        self.ready = asyncio.Event()
-
-    async def wait(self) -> None:
-        self.reads += 1
-        if self.reads == 2:
-            self.ready.set()
-        await self.ready.wait()
-
-
-class CoordinatedRedis:
-    """Keep two real GET replies in flight to exercise a lost-update interleaving."""
-
-    def __init__(self, client: Any, barrier: ReadBarrier) -> None:
-        self.client = client
-        self.barrier = barrier
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.client, name)
-
-    async def get(self, name: Any) -> Any:
-        value = await self.client.get(name)
-        if str(name).endswith("/log.jsonl"):
-            await self.barrier.wait()
-        return value
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("initial", ["", "snow\u2603\n"])
-async def test_independent_connections_append_without_losing_entries(redis_socket: str, initial: str) -> None:
-    barrier = ReadBarrier()
-    async with (
-        Redis(unix_socket_path=redis_socket) as reader,
-        Redis(unix_socket_path=redis_socket) as first_client,
-        Redis(unix_socket_path=redis_socket) as second_client,
-    ):
-        await reader.flushdb()
-        reader_store = RedisKnowledgeStore(reader)
-        if initial:
-            await reader_store.write("/log.jsonl", initial)
-        first = RedisKnowledgeStore(CoordinatedRedis(first_client, barrier))
-        second = RedisKnowledgeStore(CoordinatedRedis(second_client, barrier))
-        payloads = ["first\n", "\u96ea\n"]
-        offsets = await asyncio.wait_for(
-            asyncio.gather(first.append("log.jsonl", payloads[0]), second.append("/log.jsonl", payloads[1])),
-            timeout=5,
+    # A short directory: unix socket paths are limited to ~100 characters on macOS.
+    with tempfile.TemporaryDirectory(dir="/tmp", prefix="ag2-redis-") as directory:
+        socket = str(Path(directory) / "server.sock")
+        process = subprocess.Popen(
+            [executable, "--port", "0", "--unixsocket", socket, "--save", "", "--appendonly", "no"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
-        content = await reader_store.read("/log.jsonl")
+        try:
+            with redis.Redis(unix_socket_path=socket) as client:
+                deadline = time.monotonic() + 5
+                while True:
+                    try:
+                        client.ping()
+                        break
+                    except redis.ConnectionError:
+                        if process.poll() is not None or time.monotonic() >= deadline:
+                            pytest.fail("the owned Redis server did not start")
+                        time.sleep(0.01)
+            yield socket
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+
+
+@pytest.mark.parametrize("initial", ["", "snow☃\n"])
+async def test_independent_connections_append_without_losing_entries(redis_socket: str, initial: str) -> None:
+    clients = [Redis(unix_socket_path=redis_socket) for _ in range(_CONNECTIONS)]
+    try:
+        await clients[0].flushdb()
+        stores = [RedisKnowledgeStore(client) for client in clients]
+        if initial:
+            await stores[0].write("/log.jsonl", initial)
+        payloads = [f"entry-{i}-雪\n" for i in range(_CONNECTIONS)]
+
+        offsets = await asyncio.gather(*(store.append("log.jsonl", text) for store, text in zip(stores, payloads)))
+
+        for offset, text in zip(offsets, payloads):
+            assert await stores[0].read_range("/log.jsonl", offset, offset + len(text.encode("utf-8"))) == text
+        content = await stores[0].read("/log.jsonl")
         assert content is not None
-        data = content.encode("utf-8")
-        assert len(data) == len(initial.encode("utf-8")) + sum(len(p.encode("utf-8")) for p in payloads)
-        assert data.startswith(initial.encode("utf-8"))
-        for offset, payload in zip(offsets, payloads):
-            assert await reader_store.read_range("/log.jsonl", offset, offset + len(payload.encode("utf-8"))) == payload
-        assert offsets[0] != offsets[1]
-        assert await reader_store.list("/") == ["log.jsonl"]
-        assert (await reader_store.list_versions_under("/"))["/log.jsonl"] == 2 + bool(initial)
+        assert content.startswith(initial)
+        assert sorted(content[len(initial) :].splitlines(keepends=True)) == sorted(payloads)
+        assert (await stores[0].list_versions_under("/"))["/log.jsonl"] == _CONNECTIONS + bool(initial)
+    finally:
+        for client in clients:
+            await client.aclose()
 
 
-@pytest.mark.asyncio
 async def test_append_keeps_empty_and_utf8_byte_offset_semantics(redis_socket: str) -> None:
     async with Redis(unix_socket_path=redis_socket) as client:
         await client.flushdb()
         store = RedisKnowledgeStore(client)
         assert await store.append("/log.jsonl", "") == 0
         assert await store.exists("/log.jsonl")
-        assert await store.append("/log.jsonl", "\u96ea") == 0
-        assert await store.append("/log.jsonl", "snow\u2603") == len("\u96ea".encode("utf-8"))
-        assert await store.read("/log.jsonl") == "\u96easnow\u2603"
+        assert await store.append("/log.jsonl", "雪") == 0
+        assert await store.append("/log.jsonl", "snow☃") == len("雪".encode())
+        assert await store.read("/log.jsonl") == "雪snow☃"
         assert (await store.list_versions_under("/"))["/log.jsonl"] == 3
         await store.delete("/log.jsonl")
         assert not await store.exists("/log.jsonl")

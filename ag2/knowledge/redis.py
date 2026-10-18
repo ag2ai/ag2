@@ -14,6 +14,16 @@ try:
 except ImportError:
     _aioredis = None  # type: ignore[assignment]
 
+# Appends the payload and bumps the version/index in one server-side step, so independent
+# connections cannot interleave. KEYS: content, index, version counter. ARGV: payload, path.
+# Returns the content size after the append.
+_APPEND_SCRIPT = """
+local size = redis.call('APPEND', KEYS[1], ARGV[1])
+local version = redis.call('INCR', KEYS[3])
+redis.call('ZADD', KEYS[2], version, ARGV[2])
+return size
+"""
+
 
 class RedisKnowledgeStore:
     """Redis-backed :class:`KnowledgeStore`.
@@ -23,6 +33,10 @@ class RedisKnowledgeStore:
     ``{prefix}__index`` keeps a (path, version) ranking so
     :meth:`list_versions_under` returns a snapshot in one round trip
     and the polling watcher can diff without per-key ``GET``s.
+
+    :meth:`append` runs as one server-side script over the content, index and
+    version-counter keys, so it is atomic across connections but needs a
+    single Redis node (those keys do not share a Cluster slot).
 
     ``on_change`` uses :class:`PollingChangeWatcher` (no Redis
     keyspace notifications — see §14 Phase 3b "Deferred"). The default
@@ -51,6 +65,8 @@ class RedisKnowledgeStore:
             self._owns_client = False
         self._key_prefix = key_prefix.rstrip(":")
         self._index_key = f"{self._key_prefix}:__index"
+        self._version_key = f"{self._key_prefix}:__version_counter"
+        self._append_script = self._client.register_script(_APPEND_SCRIPT)
         self._poll_interval_s = poll_interval_s
         self._lock = asyncio.Lock()
 
@@ -83,7 +99,7 @@ class RedisKnowledgeStore:
     async def write(self, path: str, content: str) -> None:
         normalized = _normalize(path)
         async with self._lock:
-            version = int(await self._client.incr(f"{self._key_prefix}:__version_counter"))
+            version = int(await self._client.incr(self._version_key))
             await self._client.set(self._key(path), content.encode("utf-8"))
             await self._index_add(normalized, version)
 
@@ -123,27 +139,14 @@ class RedisKnowledgeStore:
         return any(p.startswith(prefix) for p in snapshot)
 
     async def append(self, path: str, content: str) -> int:
-        normalized = _normalize(path)
         payload = content.encode("utf-8")
-        async with self._lock:
-            # A local lock cannot serialize independent store connections.
-            # Update the content, version and index together on the server.
-            offset = await self._client.eval(
-                """
-                local offset = redis.call('STRLEN', KEYS[1])
-                redis.call('APPEND', KEYS[1], ARGV[1])
-                local version = redis.call('INCR', KEYS[3])
-                redis.call('ZADD', KEYS[2], version, ARGV[2])
-                return offset
-                """,
-                3,
-                self._key(path),
-                self._index_key,
-                f"{self._key_prefix}:__version_counter",
-                payload,
-                normalized,
+        size = int(
+            await self._append_script(
+                keys=[self._key(path), self._index_key, self._version_key],
+                args=[payload, _normalize(path)],
             )
-        return int(offset)
+        )
+        return size - len(payload)
 
     async def read_range(self, path: str, start: int, end: int | None = None) -> str:
         existing = await self._client.get(self._key(path))
