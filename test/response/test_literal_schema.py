@@ -17,33 +17,51 @@ from ag2.types import ClassInfo
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("type_", "value", "invalid", "schema_type"),
+    ("type_", "value", "invalid", "expected"),
     [
-        (Literal["accept", "reject"], "accept", "other", "string"),
-        (Literal[1, 2], 1, 3, "integer"),
-        (Annotated[Literal["accept", "reject"], "decision"], "reject", "other", "string"),
+        (Literal["accept", "reject"], "accept", "other", {"type": "string", "enum": ["accept", "reject"]}),
+        (Literal[1, 2], 1, 3, {"type": "integer", "enum": [1, 2]}),
+        (
+            Annotated[Literal["accept", "reject"], "decision"],
+            "reject",
+            "other",
+            {"type": "string", "enum": ["accept", "reject"]},
+        ),
     ],
 )
-@pytest.mark.parametrize("embed", [True, False])
-async def test_literal_validation(
-    type_: ClassInfo, value: str | int, invalid: str | int, schema_type: str, embed: bool
+async def test_literal_validation_embedded(
+    type_: ClassInfo, value: str | int, invalid: str | int, expected: dict[str, object]
 ) -> None:
     context = Context(stream=MemoryStream())
-    schema = ResponseSchema(type_, embed=embed)
-    expected = IsPartialDict({"type": schema_type, "enum": ["accept", "reject"] if schema_type == "string" else [1, 2]})
-    assert schema.json_schema == (
-        IsPartialDict({"type": "object", "properties": {"data": expected}, "required": ["data"]}) if embed else expected
-    )
-    assert await schema.validate(json.dumps({"data": value} if embed else value), context) == value
+    schema = ResponseSchema(type_)
+
+    assert schema.json_schema == IsPartialDict({
+        "type": "object",
+        "properties": {"data": IsPartialDict(expected)},
+        "required": ["data"],
+    })
+    assert await schema.validate(json.dumps({"data": value}), context) == value
     with pytest.raises(ValidationError):
-        await schema.validate(json.dumps({"data": invalid} if embed else invalid), context)
+        await schema.validate(json.dumps({"data": invalid}), context)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("type_", [Literal["accept", "reject"]])
+async def test_literal_validation_unembedded() -> None:
+    # Local validation only: the root schema is a bare enum, which OpenAI rejects
+    # for structured output (its root must be an object), so keep the default ``embed=True``.
+    context = Context(stream=MemoryStream())
+    schema = ResponseSchema(Literal["accept", "reject"], embed=False)
+
+    assert schema.json_schema == IsPartialDict({"type": "string", "enum": ["accept", "reject"]})
+    assert await schema.validate(json.dumps("accept"), context) == "accept"
+    with pytest.raises(ValidationError):
+        await schema.validate(json.dumps("other"), context)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("prompted", [True, False])
-async def test_agent_literal_response(prompted: bool, type_: ClassInfo) -> None:
-    schema = ResponseSchema(type_)
+async def test_agent_literal_response(prompted: bool) -> None:
+    schema = ResponseSchema(Literal["accept", "reject"])
     agent = Agent(
         "decision",
         config=TestConfig('{"data": "accept"}'),
