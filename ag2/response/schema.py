@@ -175,7 +175,7 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
 
     elif any((
         is_dataclass(bare),
-        origin and issubclass(origin, dict),
+        origin and _is_safe_subclass(origin, dict),
         _is_safe_subclass(bare, BaseModel),
         _is_safe_subclass(bare, dict),
     )):
