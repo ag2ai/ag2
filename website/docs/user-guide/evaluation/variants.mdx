@@ -51,7 +51,7 @@ variants = Variants({
 
 Need a per-task model override *within* a variant? Pass `model_config=` to `run_variants` exactly as with `run_agent` — it reaches each variant's `run_agent` call.
 
-Each variant runs via `run_agent()` (so `repeats`, persistence, everything applies) and is saved as its own `<run_id>-<variant>.json`. `VariantRunResult.leaderboard(key)` ranks variants by a scorer — pass-rate for boolean scorers, mean for numeric — best first; **tied scores share a rank**, and `best(key)` returns `None` when there's no unique winner. (A 3-way 100% tie usually means the eval isn't *discriminating* — make the task harder, or score quality with a judge — not that there's a true winner.)
+Each variant runs via `run_agent()` (so `repeats`, persistence, everything applies) and is saved as its own `<run_id>-<index>-<variant>.json`, using a one-based index and a filesystem-safe variant name. The index keeps results separate even when names such as `model/a` and `model:a` normalize to the same filename. `VariantRunResult.leaderboard(key)` ranks variants by a scorer — pass-rate for boolean scorers, mean for numeric — best first; **tied scores share a rank**, and `best(key)` returns `None` when there's no unique winner. (A 3-way 100% tie usually means the eval isn't *discriminating* — make the task harder, or score quality with a judge — not that there's a true winner.)
 
 ## Where to next
 
