@@ -354,7 +354,7 @@ dev = [
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
-    { name = "firecrawl-py", specifier = ">=4.46,<5" },
+    { name = "firecrawl-py", specifier = ">=4.53,<5" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
@@ -409,7 +409,7 @@ docs = [
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
-    { name = "firecrawl-py", specifier = ">=4.46,<5" },
+    { name = "firecrawl-py", specifier = ">=4.53,<5" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
     { name = "mdx-include", specifier = "==1.4.2" },
@@ -465,7 +465,7 @@ optionals = [
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
-    { name = "firecrawl-py", specifier = ">=4.46,<5" },
+    { name = "firecrawl-py", specifier = ">=4.53,<5" },
     { name = "safetensors", specifier = ">=0.4.3,<1" },
     { name = "tenki", specifier = ">=1.4.0,<2" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
@@ -2080,7 +2080,7 @@ wheels = [
 
 [[package]]
 name = "firecrawl-py"
-version = "4.46.2"
+version = "4.53.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -2091,9 +2091,9 @@ dependencies = [
     { name = "requests" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/52/92/1ff1de286a7e98ddfa21fbdf6b6dd80db908ffb6e619444c1e3f6a4e02f8/firecrawl_py-4.46.2.tar.gz", hash = "sha256:9d504036139b86ca5cd28acdc5cb958e956de1684c371d02a26f85273e509554", size = 259717, upload-time = "2026-10-02T15:00:44.195Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e3/ff/1f93bfb38ca0336f0a104bd4cabd8262495d6eaa91fba42182373f40020c/firecrawl_py-4.53.2.tar.gz", hash = "sha256:61ba929d20fa9ade80b56041eb0b30a2d52c0d72c6aec8b4b5d588174cb7776b", size = 274728, upload-time = "2026-10-19T18:07:16.927Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/a5/384b4501a8f4c3ad8d4f5651d3ceafb1e235995b629771ddb466bbef45af/firecrawl_py-4.46.2-py3-none-any.whl", hash = "sha256:fba90cb07878cb466380623dfafc10ef8f158740cdca1206205c88f0bebbfbac", size = 318324, upload-time = "2026-10-02T15:00:42.858Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/32/0f3755b1adb97bc9400f3e7bbfccca31013769c947de38f1440ef1707717/firecrawl_py-4.53.2-py3-none-any.whl", hash = "sha256:7619d29408c17da45fae4a2d6b96dbc0d34304f6df37e22258e0d91f9059f9e9", size = 336815, upload-time = "2026-10-19T18:07:15.353Z" },
 ]
 
 [[package]]
@@ -6002,11 +6002,11 @@ wheels = [
 
 [[package]]
 name = "setuptools"
-version = "84.0.0"
+version = "84.2.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/6d/44/f5da03a8ef95d369145c5bb53050e7877c9f3d312e128605fd9504829143/setuptools-84.0.0.tar.gz", hash = "sha256:f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73", size = 1168449, upload-time = "2026-08-08T18:27:58.365Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/63/40/e2c41d00a4bfea5548c31420a74c6cf149cc0e7c36b45c4c82202ce867aa/setuptools-84.2.0.tar.gz", hash = "sha256:6f445ca2ce864605f81e223f262b4c94ffcb9a4a63473bae0ed7be5aab0291da", size = 1227656, upload-time = "2026-10-19T20:38:03.407Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/9c/c510029fc6ef33a6275cd2c5d3cecd6613dfd6aa401d57c54f1c18852ccf/setuptools-84.0.0-py3-none-any.whl", hash = "sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670", size = 818216, upload-time = "2026-08-08T18:27:56.719Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/a2/2e1af99d56c8145aa69496026c7e5fd7b6ec759b500c3ad697e2062832dc/setuptools-84.2.0-py3-none-any.whl", hash = "sha256:8cc107ac7a403105dc8d6477664171f36135fab26adf8b5e0edaebc313f39b21", size = 875816, upload-time = "2026-10-19T20:38:01.629Z" },
 ]
 
 [[package]]
