@@ -57,8 +57,11 @@ class ActionBudget:
     ``ToolNotFoundEvent`` AG2 sends without running any tool middleware. Once
     ``limit`` results are in, the model is not called again: the turn ends with
     a synthetic final message instead, the same way AG2's halt check ends a
-    turn. Independently, the model is called at most ``limit`` times per turn,
-    so a turn ends even if its calls never produce a result.
+    turn. Independently, the model answers at most ``limit`` times per turn,
+    so a turn ends even if its calls never produce a result. A model call that
+    raises is not counted: the agent's own middleware (``RetryMiddleware``,
+    say) wraps this one, so a retried provider error must not end a rollout
+    early, where it would read as the agent stopping.
 
     Calls the model issued in one response all execute, so a rollout can
     overshoot ``limit`` by the width of its last response; scoring reads only
@@ -92,8 +95,11 @@ class _ActionBudgetMiddleware(BaseMiddleware):
             self._results_before = results
         if results - self._results_before >= self._limit or self._model_calls >= self._limit:
             return ModelResponse(ModelMessage(content=BUDGET_REACHED))
+        response = await call_next(events, context)
+        # Counted once answered: an attempt that raised, and that a retry
+        # middleware wrapping this one repeats, used none of the budget.
         self._model_calls += 1
-        return await call_next(events, context)
+        return response
 
 
 def _completed_results(events: Sequence[BaseEvent]) -> int:

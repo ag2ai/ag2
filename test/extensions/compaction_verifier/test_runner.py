@@ -4,11 +4,14 @@
 
 import json
 from collections.abc import Sequence
+from typing import Any
 
 import pytest
+from typing_extensions import Self
 
-from ag2 import Agent, MemoryStream, tool
+from ag2 import Agent, Context, MemoryStream, tool
 from ag2.compact import CompactionSummary, SummarizeCompact, TailWindowCompact
+from ag2.config import LLMClient, ModelConfig, ModelProvider
 from ag2.context import ConversationContext
 from ag2.eval import Trace, run_agent, scorer
 from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, Usage
@@ -23,6 +26,7 @@ from ag2.extensions.compaction_verifier import (
     run_rollout,
 )
 from ag2.extensions.compaction_verifier.runner import BUDGET_REACHED
+from ag2.middleware import RetryMiddleware
 from ag2.testing import TestConfig
 
 from .conftest import TOKEN, ContextAwareConfig, record_answer, record_trajectory, world_environment, world_tools
@@ -44,6 +48,20 @@ class TestActionBudget:
 
         assert model.calls == 2
         assert [r.content for r in responses] == ["next", "next", BUDGET_REACHED, BUDGET_REACHED]
+
+    @pytest.mark.asyncio
+    async def test_a_model_call_that_raises_uses_no_budget(self) -> None:
+        events = await record_trajectory(fetches=2)
+        middleware = ActionBudget(2)(events[0], ConversationContext(MemoryStream()))
+        model = _FlakyModel(failures=2)
+
+        for _ in range(2):
+            with pytest.raises(ConnectionError):
+                await middleware.on_llm_call(model, events, middleware.context)
+        responses = [await middleware.on_llm_call(model, events, middleware.context) for _ in range(3)]
+
+        assert model.calls == 4
+        assert [r.content for r in responses] == ["next", "next", BUDGET_REACHED]
 
 
 class TestRunRollout:
@@ -109,6 +127,26 @@ class TestRunRollout:
             ("fetch", False),
             ("nonexistent", True),
         ]
+
+    @pytest.mark.asyncio
+    async def test_retried_provider_errors_do_not_end_the_rollout_early(self) -> None:
+        events = await record_trajectory(fetches=1)
+        boundary = make_boundary(events, resumable_cuts(events)[-1])  # after login + fetch a
+        turns = [
+            ToolCallEvent("fetch", arguments=json.dumps({"token": TOKEN, "item": item}), id=f"ok-{item}")
+            for item in ("b", "c", "d")
+        ]
+        # every model call fails once before it succeeds; the agent's own retry middleware wraps the budget
+        agent = Agent(
+            "worker",
+            config=_FlakyConfig(TestConfig(*turns, "done")),
+            middleware=[RetryMiddleware(retry_on=(ConnectionError,))],
+        )
+
+        rollout = await run_rollout(agent, boundary.context, world_environment(), boundary.prefix, horizon=3, arm="pre")
+
+        assert rollout.ending == "budget"
+        assert [a.name for a in rollout.actions] == ["fetch", "fetch", "fetch"]
 
     @pytest.mark.asyncio
     async def test_parallel_calls_in_one_response_all_execute_and_end_the_turn(self) -> None:
@@ -571,3 +609,55 @@ class _CountingModel:
     async def __call__(self, events: Sequence[BaseEvent], context: ConversationContext) -> ModelResponse:
         self.calls += 1
         return ModelResponse(ModelMessage("next"))
+
+
+class _FlakyModel(_CountingModel):
+    """A ``_CountingModel`` whose first ``failures`` calls raise, as a transient provider error does."""
+
+    def __init__(self, failures: int) -> None:
+        super().__init__()
+        self._failures = failures
+
+    async def __call__(self, events: Sequence[BaseEvent], context: ConversationContext) -> ModelResponse:
+        if self._failures:
+            self._failures -= 1
+            self.calls += 1
+            raise ConnectionError("transient")
+        return await super().__call__(events, context)
+
+
+class _FlakyConfig(ModelConfig):
+    """Wraps a config so that every model call fails once, publishing nothing, before it succeeds."""
+
+    def __init__(self, inner: TestConfig) -> None:
+        self._inner = inner
+
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError
+
+    @property
+    def model(self) -> str:
+        return "flaky-fake"
+
+    def copy(self) -> Self:
+        return self
+
+    def create(self) -> LLMClient:
+        return _FlakyClient(self._inner.create())
+
+    def create_files_client(self) -> Any:
+        raise NotImplementedError
+
+
+class _FlakyClient(LLMClient):
+    def __init__(self, inner: LLMClient) -> None:
+        self._inner = inner
+        self._fail_next = True
+
+    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+        if self._fail_next:
+            self._fail_next = False
+            raise ConnectionError("transient")
+        self._fail_next = True
+        return await self._inner(messages, context, **kwargs)
