@@ -49,6 +49,20 @@ class TestFromList:
         [task] = list(suite)
         assert task.task_id == "weather-001"
 
+    def test_generated_task_id_cannot_collide_with_an_explicit_id(self) -> None:
+        with pytest.raises(ValueError, match=r"duplicate task_id 'task-0000'.*index 0"):
+            Suite.from_list([
+                {"inputs": {"input": "Capital of Japan?"}},
+                {"task_id": "task-0000", "inputs": {"input": "Capital of France?"}},
+            ])
+
+    def test_duplicate_explicit_task_ids_are_rejected(self) -> None:
+        with pytest.raises(ValueError, match=r"duplicate task_id 'weather-001'.*index 0"):
+            Suite.from_list([
+                {"task_id": "weather-001", "inputs": {"input": "Tokyo?"}},
+                {"task_id": "weather-001", "inputs": {"input": "Kyoto?"}},
+            ])
+
     def test_full_payload_round_trips(self) -> None:
         suite = Suite.from_list([
             {

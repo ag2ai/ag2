@@ -40,7 +40,18 @@ class Suite:
         source: str = "inline",
     ) -> None:
         """Direct constructor — most callers should use :meth:`from_jsonl` or :meth:`from_list`."""
-        self._tasks: tuple[Task, ...] = tuple(tasks)
+        task_items = tuple(tasks)
+        seen_task_ids: dict[str, int] = {}
+        for index, task in enumerate(task_items):
+            if task.task_id in seen_task_ids:
+                first_index = seen_task_ids[task.task_id]
+                raise ValueError(
+                    f"{source}: duplicate task_id {task.task_id!r} at task index {index} "
+                    f"(first used at index {first_index})"
+                )
+            seen_task_ids[task.task_id] = index
+
+        self._tasks: tuple[Task, ...] = task_items
         self._name = name
         self._source = source
 
