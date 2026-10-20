@@ -7,6 +7,7 @@
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Sequence
+from pathlib import Path
 
 import pytest
 
@@ -227,6 +228,21 @@ async def test_evaluate_propagates_cancellation(tmp_path) -> None:
 
     with pytest.raises(asyncio.CancelledError):
         await evaluate_traces(source, scorers=[cancels], suite=suite, store_dir=tmp_path)
+
+
+@pytest.mark.asyncio()
+async def test_evaluate_propagates_source_load_cancellation(tmp_path: Path) -> None:
+    class CancellingSource(InMemoryTraceSource):
+        async def load(self, ref: TraceRef) -> Trace:
+            raise asyncio.CancelledError
+
+    source = CancellingSource([(TraceRef("t1", task_id="task-1"), _trace("Paris"))])
+    suite = Suite.from_list([{"task_id": "task-1", "inputs": {"input": "capital of France?"}}])
+
+    with pytest.raises(asyncio.CancelledError):
+        await evaluate_traces(source, scorers=[has_one_response], suite=suite, store_dir=tmp_path)
+
+    assert list(tmp_path.iterdir()) == []
 
 
 def _two_of_three() -> tuple[InMemoryTraceSource, Suite]:
