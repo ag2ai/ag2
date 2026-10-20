@@ -1,0 +1,122 @@
+---
+title: Glasser
+sidebarTitle: Glasser
+---
+
+`GlasserToolkit` gives an agent six paid-data tools through [Glasser](https://glasser.ai){.external-link target="_blank"}, with one API key and pay-per-call billing. Use it for web research, company and people lookups, SEO, public social data, US property data and stock quotes.
+
+!!! note
+    Requires a Glasser API key and sufficient balance. No additional package is needed: the extension calls the REST API with `httpx`, which AG2 already depends on. Set `GLASSER_API_KEY` in your environment; the toolkit does not read environment variables itself.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import GlasserToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+    tools=[GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"])],
+)
+```
+
+## Tools
+
+Each tool maps to `POST /v1/solutions/gtm/<capability>`. The model chooses the action and its input fields. Provider selection and shared defaults are configured by your application.
+
+| Tool / factory | Input and available actions |
+| :--- | :--- |
+| `glasser_web_research` / `web_research()` | `query` for `search` (default), `news`, `places`, `scholar`, `shopping`, `images`, `videos` or `answer`; `url` for `scrape` or `similar` |
+| `glasser_company_intelligence` / `company_intelligence()` | Required `domain`; `enrich` (default), `tech_stack`, `traffic`, `competitors`, `funding` or `news` |
+| `glasser_people_search` / `people_search()` | `search` (default) by job titles, seniorities, locations, company domain or keywords; `enrich` by LinkedIn URL, email or name and company; `find_email` by name and company |
+| `glasser_seo_research` / `seo_research()` | Keywords for `keyword_overview` (default), `keyword_ideas` or `serp`; a domain for rankings, competitors, backlinks, audits and AI visibility; competitor domains for gap analysis; a URL for `page_audit` |
+| `glasser_social_research` / `social_research()` | Required `platform`: `reddit`, `x`, `youtube`, `tiktok`, `instagram` or `linkedin`; `mode`: `search` (default), `profile`, `feed`, `post` or `find`; a query, handle or URL for that mode |
+| `glasser_market_data` / `market_data()` | Required `action`: `property_value`, `property_rent`, `property_search`, `listings_sale`, `listings_rental`, `market_stats` or `stock_quote`; supply the address, city and state, ZIP or symbol it requires |
+
+Glasser validates action-specific requirements and Provider support. The toolkit does not choose another Provider or translate the response into a different data schema.
+
+## Select tools and set defaults
+
+Pass the toolkit to register all six tools. For a smaller tool set, use the factory methods:
+
+```python linenums="1"
+toolkit = GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"], limit=5)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[
+        toolkit.web_research(country="us", provider="serper"),
+        toolkit.company_intelligence(),
+    ],
+)
+```
+
+The constructor accepts `provider`, `limit`, `country`, `task_id` and `metadata`. Only fields supported by the selected capability are sent:
+
+- `provider` and `metadata` apply to all six tools.
+- `limit` and `task_id` apply to all tools except social research.
+- `country` applies to web, company and SEO research.
+
+These options can also be supplied to each applicable factory. A factory value of `None` inherits the constructor value. When both are `None`, the field is omitted and Glasser applies its own default. Omitted `provider` means automatic selection on the server; a named Provider does not fall back.
+
+Every factory supports `name`, `description` and `middleware`. Constructor middleware applies to the toolkit's default tools; pass middleware to a factory when registering that tool separately.
+
+### Runtime defaults
+
+Defaults support AG2 `Variable` values:
+
+```python linenums="1"
+from ag2 import Variable
+
+toolkit = GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"])
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.web_research(limit=Variable("result_limit"), country=Variable("country"))],
+    variables={"result_limit": 5, "country": "gb"},
+)
+```
+
+A missing variable without a default raises `KeyError` before an HTTP request is sent. Glasser validates the resolved values.
+
+## Results and charges
+
+The tool returns the complete decoded API object in `ToolResult`, including output, errors, status, charges and Run references. It does not truncate content or convert missing values into estimates.
+
+Web, company, SEO, social and market data return normalized Solution results:
+
+- `result_status` reports delivery: `success`, `partial` (where supported), `no_result`, `error` or `pending`.
+- `status` is the final Run's lifecycle. `COMPLETED` means a Provider response is available; it does not guarantee useful output.
+- `output` contains the capability's data. It is null on delivery failure or while pending.
+- `charge_usd` is an exact USD decimal string, or null until every listed Run settles. `runs[]` contains the individual Run references and charges. An empty result or failure can still incur a charge.
+- `result_url` reads the same normalized result without creating a new Run. Provider-native output remains available from `GET /v1/runs/<id>`.
+
+People search returns a native Run instead: check `provider`, `status`, `failure`, `provider_response`, `output` and `charge_usd`. Its output shape depends on the answering Provider.
+
+`limit` can affect the charge. For web `scrape`, the model can supply `max_charge_usd` as an exact decimal string, such as `"0.05"`, and `timeout_ms` as the server execution budget. Those controls apply to scrape only. The toolkit does not impose a spending cap on other actions.
+
+## Async execution and retries
+
+For a pending result, the toolkit polls with authenticated GET requests: the returned `result_url` for normalized results, or `GET /v1/runs/<id>` for people search. Result URLs must refer to the same capability on the configured API origin. Redirects are not followed.
+
+The default polling budget is 120 seconds, with a one-second interval. If it expires, the tool returns the latest pending result, including its retrieval information. `wait_timeout=0` disables polling. To continue after the budget expires, use an authenticated GET to the result URL or Run endpoint. Starting another tool call creates a new intended execution and can incur a new charge.
+
+Each POST has an `Idempotency-Key` derived from the stream ID, tool-call ID and capability. Replaying the same tool call in the same stream uses the same key. A different tool-call ID or stream produces a new key, even with identical arguments. HTTP and transport errors are raised without automatic POST retries. If a response is lost, replay the original tool call with its original stream and call ID to retrieve the admitted execution. Changed execution parameters with the same key are rejected by Glasser.
+
+## Connection settings
+
+```python linenums="1"
+toolkit = GlasserToolkit(
+    api_key=os.environ["GLASSER_API_KEY"],
+    base_url="https://api.glasser.ai",
+    timeout=60.0,       # HTTP timeout per request
+    wait_timeout=120.0, # total polling budget after the POST
+    poll_interval=1.0,  # delay between result reads
+)
+```
+
+Each execution opens an `httpx.AsyncClient` and closes it after its result is returned. A custom `base_url` can include a gateway path; the gateway must return result URLs on that same origin and path. The polling budget does not include the initial POST. HTTP errors raise `httpx.HTTPStatusError`, transport failures raise an `httpx` exception, and malformed JSON or a non-object response raises `ValueError`.
+
+See the [Solutions reference](https://glasser.ai/docs/api-reference/solutions/overview){.external-link target="_blank"} for action fields, Provider support, output contracts and billing behavior.

@@ -19,6 +19,7 @@ try:
 except ImportError as e:
     TinyFishSearchToolkit = missing_additional_dependency("TinyFishSearchToolkit", "tinyfish>=0.2.3", e)  # type: ignore[misc]
 
+from .glasser import GlasserToolkit
 from .keenable import KeenableSearchToolkit
 from .serply import SerplySearchToolkit
 from .xquik import XquikSearchToolkit
@@ -26,6 +27,7 @@ from .xquik import XquikSearchToolkit
 __all__ = (
     "ExaToolkit",
     "FirecrawlToolkit",
+    "GlasserToolkit",
     "KeenableSearchToolkit",
     "SerplySearchToolkit",
     "TinyFishSearchToolkit",
