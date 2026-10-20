@@ -217,8 +217,12 @@ class TestSearch:
         agent = Agent(
             "a",
             config=_tool_call_config({"query": "AG2"}),
-            tools=[toolkit.search(site=Variable(), max_results=Variable("limit"))],
-            variables={"site": "github.com", "limit": 3},
+            tools=[
+                toolkit.search(
+                    site=Variable(), max_results=Variable("limit"), snippet_max_length=Variable("snippet_len")
+                )
+            ],
+            variables={"site": "github.com", "limit": 3, "snippet_len": 250},
         )
 
         await agent.ask("search")
@@ -227,7 +231,7 @@ class TestSearch:
             "query": "AG2",
             "site": "github.com",
             "max_results": 3,
-            "snippet_max_length": 1000,
+            "snippet_max_length": 250,
         }
 
     async def test_missing_variable_raises(self) -> None:
@@ -251,6 +255,27 @@ class TestSearch:
 
         tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         assert tool_results_event.results[0].result.parts[0] == DataInput(KeenableSearchResponse(query="AG2"))
+
+    @respx.mock
+    async def test_description_is_the_snippet_fallback(self) -> None:
+        respx.post(f"{KEENABLE_BASE_URL}/v1/search/public").mock(
+            return_value=httpx.Response(
+                200,
+                json={"results": [{"title": "T", "url": "https://example.com", "description": "from description"}]},
+            )
+        )
+        config = TrackingConfig(_tool_call_config({"query": "AG2"}))
+        agent = Agent("a", config=config, tools=[KeenableSearchToolkit()])
+
+        await agent.ask("search")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            KeenableSearchResponse(
+                query="AG2",
+                results=[KeenableSearchResult(title="T", url="https://example.com", snippet="from description")],
+            )
+        )
 
 
 @pytest.mark.asyncio
@@ -309,6 +334,30 @@ class TestFetch:
             KeenableFetchResult(url="https://example.com", title="Example", content="# Example")
         )
 
+    @pytest.mark.parametrize(
+        ("published_at", "expected"),
+        [
+            pytest.param("2026-09-25", "2026-09-25", id="string-passes-through"),
+            pytest.param(True, "", id="bool-is-not-a-timestamp"),
+            pytest.param(10**20, "", id="out-of-range-int"),
+            pytest.param(None, "", id="missing"),
+        ],
+    )
+    @respx.mock
+    async def test_published_at(self, published_at: object, expected: str) -> None:
+        respx.get(f"{KEENABLE_BASE_URL}/v1/fetch/public").mock(
+            return_value=httpx.Response(200, json={"content": "# Example", "published_at": published_at})
+        )
+        config = TrackingConfig(_fetch_config("https://example.com"))
+        agent = Agent("a", config=config, tools=[KeenableSearchToolkit()])
+
+        await agent.ask("fetch")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert tool_results_event.results[0].result.parts[0] == DataInput(
+            KeenableFetchResult(url="https://example.com", content="# Example", published_at=expected)
+        )
+
 
 @pytest.mark.asyncio
 class TestErrors:
@@ -338,6 +387,22 @@ class TestErrors:
 
         with pytest.raises(httpx.HTTPStatusError, match=r"Retry-After: 30.*KEENABLE_API_KEY"):
             await agent.ask("search")
+
+    @respx.mock
+    async def test_keyed_rate_limit_omits_api_key_hint(self) -> None:
+        respx.post(f"{KEENABLE_BASE_URL}/v1/search").mock(
+            return_value=httpx.Response(429, headers={"Retry-After": "30"}, json={"message": "Rate limit exceeded."})
+        )
+        agent = Agent(
+            "a",
+            config=_tool_call_config({"query": "AG2"}),
+            tools=[KeenableSearchToolkit(api_key="secret-key")],
+        )
+
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            await agent.ask("search")
+
+        assert str(exc_info.value) == "Keenable API returned HTTP 429: Rate limit exceeded. (Retry-After: 30)"
 
     @respx.mock
     async def test_error_does_not_echo_api_key(self) -> None:

@@ -20,7 +20,7 @@ agent = Agent(
 )
 ```
 
-Without a key, the toolkit calls Keenable's keyless endpoints, which allow 10 requests per second and 1,000 per hour per IP address. To raise those limits, pass `api_key=...` or set the `KEENABLE_API_KEY` environment variable, which is read at call time when `api_key` is omitted.
+Without a key, the toolkit calls Keenable's keyless endpoints, which have lower rate limits than keyed access (see [Keenable rate limits](https://docs.keenable.ai/rate-limits){.external-link target="_blank"} for the current numbers). To raise those limits, pass `api_key=...` or set the `KEENABLE_API_KEY` environment variable, which is read at call time when `api_key` is omitted.
 
 ## Tools
 
@@ -42,7 +42,7 @@ toolkit = KeenableSearchToolkit(
 )
 ```
 
-`snippet_max_length` defaults to 1000 characters. Without a cap, Keenable returns several thousand characters of page text per result, so ten results would put roughly 15k tokens into the model's context; use `keenable_fetch` to read a whole page instead. The value is a hint rather than a hard cap, so a snippet can run slightly over it.
+`snippet_max_length` defaults to 1000 characters. Without a cap, Keenable returns several thousand characters of page text per result, so ten results can put tens of thousands of characters into the model's context; use `keenable_fetch` to read a whole page instead. The value is a hint rather than a hard cap, so a snippet can run slightly over it.
 
 ## Picking a subset of tools
 
@@ -99,4 +99,4 @@ A non-2xx response raises `httpx.HTTPStatusError` with Keenable's own error mess
 !!! tip
     Use `keenable_search` first to discover candidate pages, then `keenable_fetch` to read the ones that look relevant.
 
-Request parameters and response fields are documented in the [Keenable API docs](https://docs.keenable.ai){.external-link target="_blank"}.
+Request parameters and response fields are documented in the [Keenable rate limits](https://docs.keenable.ai/rate-limits){.external-link target="_blank"}.

@@ -265,7 +265,7 @@ class KeenableSearchToolkit(Toolkit):
         """
         api_key = self._api_key
         client_kwargs = self._client_kwargs()
-        _snippet_max_length = _DEFAULT_SNIPPET_MAX_LENGTH if snippet_max_length is None else snippet_max_length
+        default_snippet_max_length = _DEFAULT_SNIPPET_MAX_LENGTH if snippet_max_length is None else snippet_max_length
 
         @tool(name=name, description=description, middleware=middleware)
         async def keenable_search(
@@ -283,7 +283,9 @@ class KeenableSearchToolkit(Toolkit):
                     "max_results": resolve_variable(max_results, ctx, param_name="max_results"),
                     "site": resolve_variable(site, ctx, param_name="site"),
                     "published_after": resolve_variable(published_after, ctx, param_name="published_after"),
-                    "snippet_max_length": resolve_variable(_snippet_max_length, ctx, param_name="snippet_max_length"),
+                    "snippet_max_length": resolve_variable(
+                        default_snippet_max_length, ctx, param_name="snippet_max_length"
+                    ),
                 },
             )
             return ToolResult(
