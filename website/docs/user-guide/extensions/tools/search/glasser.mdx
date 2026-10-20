@@ -41,6 +41,12 @@ Glasser validates action-specific requirements and Provider support. The toolkit
 Pass the toolkit to register all six tools. For a smaller tool set, use the factory methods:
 
 ```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import GlasserToolkit
+
+config = AnthropicConfig(model="claude-haiku-4-5-20251001")
 toolkit = GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"], limit=5)
 
 agent = Agent(
@@ -68,8 +74,12 @@ Every factory supports `name`, `description` and `middleware`. Constructor middl
 Defaults support AG2 `Variable` values:
 
 ```python linenums="1"
-from ag2 import Variable
+import os
+from ag2 import Agent, Variable
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import GlasserToolkit
 
+config = AnthropicConfig(model="claude-haiku-4-5-20251001")
 toolkit = GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"])
 agent = Agent(
     "researcher",
@@ -101,13 +111,16 @@ People search returns a native Run instead: check `provider`, `status`, `failure
 
 For a pending result, the toolkit polls with authenticated GET requests: the returned `result_url` for normalized results, or `GET /v1/runs/<id>` for people search. Result URLs must refer to the same capability on the configured API origin. Redirects are not followed.
 
-The default polling budget is 120 seconds, with a one-second interval. If it expires, the tool returns the latest pending result, including its retrieval information. `wait_timeout=0` disables polling. To continue after the budget expires, use an authenticated GET to the result URL or Run endpoint. Starting another tool call creates a new intended execution and can incur a new charge.
+The default polling budget is 120 seconds, with a one-second interval. If it expires or a polling GET fails, the tool returns the latest pending result, including its retrieval information. `wait_timeout=0` disables polling. To continue, use an authenticated GET to the result URL or Run endpoint. Starting another tool call creates a new intended execution and can incur a new charge.
 
 Each POST has an `Idempotency-Key` derived from the stream ID, tool-call ID and capability. Replaying the same tool call in the same stream uses the same key. A different tool-call ID or stream produces a new key, even with identical arguments. HTTP and transport errors are raised without automatic POST retries. If a response is lost, replay the original tool call with its original stream and call ID to retrieve the admitted execution. Changed execution parameters with the same key are rejected by Glasser.
 
 ## Connection settings
 
 ```python linenums="1"
+import os
+from ag2.extensions.tools.search import GlasserToolkit
+
 toolkit = GlasserToolkit(
     api_key=os.environ["GLASSER_API_KEY"],
     base_url="https://api.glasser.ai",

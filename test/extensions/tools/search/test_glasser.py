@@ -42,9 +42,10 @@ class TestSchema:
             "glasser_market_data",
         ]
         for schema in schemas:
-            assert "provider" not in schema.function.parameters["properties"]
-            assert "api_key" not in schema.function.parameters["properties"]
-            assert "ctx" not in schema.function.parameters["properties"]
+            properties = schema.function.parameters["properties"]
+            assert "provider" not in properties
+            assert "api_key" not in properties
+            assert "ctx" not in properties
         assert schemas[1].function.parameters == IsPartialDict({"required": ["domain"]})
         assert schemas[4].function.parameters == IsPartialDict({"required": ["platform"]})
         assert schemas[5].function.parameters == IsPartialDict({"required": ["action"]})
@@ -59,11 +60,13 @@ class TestSchema:
 
     async def test_action_and_platform_enums(self, context: Context) -> None:
         [schema] = await GlasserToolkit("test").social_research().schemas(context)
-        assert schema.function.parameters["properties"]["platform"] == IsPartialDict({
+        properties = schema.function.parameters["properties"]
+        assert properties["platform"] == IsPartialDict({
             "enum": ["reddit", "x", "youtube", "tiktok", "instagram", "linkedin"],
         })
         [schema] = await GlasserToolkit("test").market_data().schemas(context)
-        assert schema.function.parameters["properties"]["action"] == IsPartialDict({
+        properties = schema.function.parameters["properties"]
+        assert properties["action"] == IsPartialDict({
             "enum": [
                 "property_value",
                 "property_rent",
@@ -139,7 +142,8 @@ class TestExecution:
         assert request.headers["User-Agent"] == "ag2-glasser-extension"
         assert request.headers["Idempotency-Key"]
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert event.results[0].result.parts == [DataInput(result)]
+        tool_result = event.results[0].result
+        assert tool_result.parts == [DataInput(result)]
 
     @respx.mock
     async def test_defaults_and_variables(self) -> None:
@@ -255,7 +259,8 @@ class TestExecution:
         config = TrackingConfig(_config("web_research", {"query": "AG2"}))
         await Agent("a", config=config, tools=[GlasserToolkit("test")]).ask("research")
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert event.results[0].result.parts == [DataInput(result)]
+        tool_result = event.results[0].result
+        assert tool_result.parts == [DataInput(result)]
 
 
 @pytest.mark.asyncio
@@ -332,7 +337,8 @@ class TestPolling:
         assert get.call_count == 2
         assert get.calls.last.request.headers["Authorization"] == "Bearer test"
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert event.results[0].result.parts == [DataInput(final)]
+        tool_result = event.results[0].result
+        assert tool_result.parts == [DataInput(final)]
 
     @respx.mock
     async def test_people_search_polls_native_run(self) -> None:
@@ -354,7 +360,40 @@ class TestPolling:
         await Agent("a", config=config, tools=[GlasserToolkit("test", poll_interval=0.001)]).ask("research")
         assert post.call_count == get.call_count == 1
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert event.results[0].result.parts == [DataInput(final)]
+        tool_result = event.results[0].result
+        assert tool_result.parts == [DataInput(final)]
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            httpx.ReadTimeout("poll response lost"),
+            httpx.Response(503, json={"error": "try later"}),
+            httpx.Response(200, json=["unexpected"]),
+        ],
+    )
+    @respx.mock
+    async def test_failed_poll_preserves_admitted_result(self, failure: Any) -> None:
+        url = "https://api.glasser.ai/v1/solutions/gtm/web_research/result?token=opaque"
+        pending = {
+            "id": "run-1",
+            "status": "RUNNING",
+            "result_status": "pending",
+            "result_url": url,
+            "charge_usd": None,
+        }
+        post = respx.post("https://api.glasser.ai/v1/solutions/gtm/web_research").mock(
+            return_value=httpx.Response(202, json=pending),
+        )
+        get = respx.get(url).mock(
+            side_effect=failure if isinstance(failure, Exception) else None,
+            return_value=failure if isinstance(failure, httpx.Response) else None,
+        )
+        config = TrackingConfig(_config("web_research", {"query": "AG2"}))
+        await Agent("a", config=config, tools=[GlasserToolkit("test", poll_interval=0.001)]).ask("research")
+        assert post.call_count == get.call_count == 1
+        event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        tool_result = event.results[0].result
+        assert tool_result.parts == [DataInput(pending)]
 
     @pytest.mark.parametrize("wait_timeout", [0.0, 0.001])
     @respx.mock
@@ -370,7 +409,8 @@ class TestPolling:
         )
         assert post.call_count == 1
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
-        assert event.results[0].result.parts == [DataInput(pending)]
+        tool_result = event.results[0].result
+        assert tool_result.parts == [DataInput(pending)]
 
     @pytest.mark.parametrize(
         "result_url",

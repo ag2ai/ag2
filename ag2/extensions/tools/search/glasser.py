@@ -93,7 +93,12 @@ class _GlasserClient:
             with anyio.move_on_after(self.wait_timeout):
                 while _pending(result):
                     await anyio.sleep(self.poll_interval)
-                    result = _object(await client.get(poll_url))
+                    try:
+                        result = _object(await client.get(poll_url))
+                    except (httpx.HTTPError, ValueError):
+                        # The POST was admitted. Keep its retrieval reference so the
+                        # caller can resume the same Run instead of paying again.
+                        return ToolResult(result)
             return ToolResult(result)
 
 
