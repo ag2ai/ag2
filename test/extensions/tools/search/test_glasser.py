@@ -410,7 +410,9 @@ class TestExecution:
         await Agent("a", config=config, tools=[GlasserToolkit("test")]).ask("research")
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(GlasserResult.from_api(result, 10000))]
+        assert tool_result.parts == [
+            DataInput(GlasserResult(status="COMPLETED", result_status=result_status, charge_usd="0.01"))
+        ]
 
 
 @pytest.mark.asyncio
@@ -488,7 +490,17 @@ class TestPolling:
         assert get.calls.last.request.headers["Authorization"] == "Bearer test"
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(GlasserResult.from_api(final, 10000))]
+        assert tool_result.parts == [
+            DataInput(
+                GlasserResult(
+                    id="run-1",
+                    status="COMPLETED",
+                    result_status="success",
+                    charge_usd="0.02",
+                    output={"items": []},
+                )
+            )
+        ]
 
     @respx.mock
     async def test_people_search_polls_native_run(self) -> None:
@@ -511,7 +523,18 @@ class TestPolling:
         assert post.call_count == get.call_count == 1
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(GlasserResult.from_api(final, 10000))]
+        assert tool_result.parts == [
+            DataInput(
+                GlasserResult(
+                    id=run_id,
+                    status="COMPLETED",
+                    provider="pdl",
+                    charge_usd="0.02",
+                    output={"data": []},
+                    provider_response={"http_status": 200},
+                )
+            )
+        ]
 
     @pytest.mark.parametrize(
         "failure",
@@ -543,7 +566,16 @@ class TestPolling:
         assert post.call_count == get.call_count == 1
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(GlasserResult.from_api(pending, 10000))]
+        assert tool_result.parts == [
+            DataInput(
+                GlasserResult(
+                    id="run-1",
+                    status="RUNNING",
+                    result_status="pending",
+                    result_url=url,
+                )
+            )
+        ]
 
     @pytest.mark.parametrize("wait_timeout", [0.0, 0.001])
     @respx.mock
@@ -560,7 +592,9 @@ class TestPolling:
         assert post.call_count == 1
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(GlasserResult.from_api(pending, 10000))]
+        assert tool_result.parts == [
+            DataInput(GlasserResult(status="RUNNING", result_status="pending", result_url=url))
+        ]
 
     @pytest.mark.parametrize(
         "result_url",
