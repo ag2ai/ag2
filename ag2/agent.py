@@ -696,6 +696,10 @@ class Agent(PluginTarget, Generic[TResult]):
       / ``run_subtasks`` tools, and override the LLM config / prompt /
       tool-inheritance rules for sub-task Agents. Defaults to ``False``
       (sub-task tools disabled).
+    * ``max_concurrent_tool_calls=`` — bound how many of the tool calls in one
+      model response run at once. Defaults to ``None`` (all of them, as before).
+      A call that has not started yet waits for a slot, so a burst aimed at one
+      rate-limited API or MCP server is throttled without giving up parallelism.
     """
 
     @overload
@@ -716,6 +720,7 @@ class Agent(PluginTarget, Generic[TResult]):
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
+        max_concurrent_tool_calls: int | None = ...,
     ) -> None: ...
 
     @overload
@@ -736,6 +741,7 @@ class Agent(PluginTarget, Generic[TResult]):
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
+        max_concurrent_tool_calls: int | None = ...,
     ) -> None: ...
 
     @overload
@@ -756,6 +762,7 @@ class Agent(PluginTarget, Generic[TResult]):
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
+        max_concurrent_tool_calls: int | None = ...,
     ) -> None: ...
 
     @overload
@@ -776,6 +783,7 @@ class Agent(PluginTarget, Generic[TResult]):
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
         assembly: Iterable[AssemblyPolicy] = ...,
+        max_concurrent_tool_calls: int | None = ...,
     ) -> None: ...
 
     def __init__(
@@ -795,6 +803,7 @@ class Agent(PluginTarget, Generic[TResult]):
         knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | Literal[False] = False,
         assembly: Iterable[AssemblyPolicy] = (),
+        max_concurrent_tool_calls: int | None = None,
     ) -> None:
         self._init_target(
             name,
@@ -806,6 +815,7 @@ class Agent(PluginTarget, Generic[TResult]):
             dependencies=dependencies,
             variables=variables,
             plugins=plugins,
+            max_concurrent_tool_calls=max_concurrent_tool_calls,
         )
         self.config = config
         self._response_schema = ResponseSchema.ensure_schema(response_schema)
