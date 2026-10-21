@@ -7,6 +7,7 @@ import logging
 from ag2.a2ui import A2UIClientCapabilities
 from ag2.a2ui.capabilities import (
     A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
+    A2UI_RENDERER_CAPABILITIES_METADATA_KEY,
     capabilities_to_prompt,
     parse_client_capabilities,
 )
@@ -65,6 +66,23 @@ class TestParseClientCapabilitiesVersionKey:
         metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["x"]}}}
         caps = parse_client_capabilities(metadata, version_key="v1.0")
         assert caps == A2UIClientCapabilities(supported_catalog_ids=["x"], inline_catalogs=[])
+
+    def test_v1_0_reads_the_renderer_named_key(self) -> None:
+        metadata = {A2UI_RENDERER_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["x"]}}}
+        caps = parse_client_capabilities(metadata, version_key="v1.0")
+        assert caps == A2UIClientCapabilities(supported_catalog_ids=["x"], inline_catalogs=[])
+
+    def test_v1_0_prefers_the_renderer_key_over_the_client_key(self) -> None:
+        metadata = {
+            A2UI_RENDERER_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["renderer"]}},
+            A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["client"]}},
+        }
+        caps = parse_client_capabilities(metadata, version_key="v1.0")
+        assert caps == A2UIClientCapabilities(supported_catalog_ids=["renderer"], inline_catalogs=[])
+
+    def test_earlier_versions_ignore_the_renderer_key(self) -> None:
+        metadata = {A2UI_RENDERER_CAPABILITIES_METADATA_KEY: {"v0.9": {"supportedCatalogIds": ["x"]}}}
+        assert parse_client_capabilities(metadata) is None
 
     def test_default_version_misses_v1_payload(self) -> None:
         metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["x"]}}}

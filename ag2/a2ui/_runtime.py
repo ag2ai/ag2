@@ -14,6 +14,7 @@ from ag2.middleware.base import MiddlewareFactory
 
 from ._types import A2UIVersion, JsonSchema
 from .actions import A2UIEventAction
+from .calls import RendererCallLedger
 from .capabilities import A2UIClientCapabilities, capabilities_to_prompt
 from .middleware import A2UIExtractionMiddleware, A2UIValidationMiddleware
 from .parser import A2UIResponseParser
@@ -60,8 +61,7 @@ class _A2UIRuntime:
             version_string=self.schema_manager.version_string,
             server_to_client_schema=(self.schema_manager.server_to_client_schema if validate_responses else None),
             schema_registry=(self.schema_manager.build_schema_registry() if validate_responses else None),
-            component_schemas=(self.schema_manager.get_component_schemas() if validate_responses else None),
-            catalog_id=(self.schema_manager.catalog_id if validate_responses else None),
+            function_callers=(self.schema_manager.get_function_callers() if validate_responses else None),
         )
         # Clickable buttons are declared on ``A2UIServer(actions=[...])``; the
         # server passes their action declarations here for prompt + click routing.
@@ -79,10 +79,11 @@ class _A2UIRuntime:
         # always runs so the wire stays spec-compliant: prose and UI messages
         # travel as separate channels, never raw JSON in the text. Validation
         # (schema check + corrective retry) is the optional layer on top.
+        self._renderer_calls = RendererCallLedger()
         self._middleware: MiddlewareFactory = (
-            A2UIValidationMiddleware(self.parser, validation_retries)
+            A2UIValidationMiddleware(self.parser, validation_retries, self._renderer_calls)
             if validate_responses
-            else A2UIExtractionMiddleware(self.parser)
+            else A2UIExtractionMiddleware(self.parser, self._renderer_calls)
         )
 
     @property
@@ -106,6 +107,10 @@ class _A2UIRuntime:
             if action.name == name:
                 return action
         return None
+
+    def get_renderer_function_name(self, function_call_id: str) -> str | None:
+        """The function name of a ``callRendererFunction`` this runtime issued, if remembered."""
+        return self._renderer_calls.name_for(function_call_id)
 
     def middleware_factories(self) -> list[MiddlewareFactory]:
         """A2UI middleware to inject for the turn.

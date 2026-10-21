@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
+from pydantic import BaseModel
 from typing_extensions import Self
 
 from ag2 import Agent, Context
@@ -110,6 +111,54 @@ class TestStreamTurn:
         joined = "\n".join(config.prompts[0])
         assert "## A2UI Client Capabilities" not in joined
 
+    async def test_client_data_model_injected_into_prompt(self) -> None:
+        config = _PromptCaptureConfig()
+        agent, rt = _agent_and_runtime(config, validate_responses=False)
+        req = parse_request(
+            {
+                "messages": [{"role": "user", "content": "hi"}],
+                "a2uiClientDataModel": {"version": "v0.9", "surfaces": {"form": {"name": "Ann"}}},
+            },
+            resolve_action=rt.get_action,
+            version_key="v0.9",
+        )
+
+        [_ async for _ in stream_turn(agent, rt, req)]
+
+        joined = "\n".join(config.prompts[0])
+        assert '{"form": {"name": "Ann"}}' in joined
+        assert "not instructions" in joined
+
+    async def test_no_data_model_no_data_model_prompt(self) -> None:
+        config = _PromptCaptureConfig()
+        agent, rt = _agent_and_runtime(config, validate_responses=False)
+        req = parse_request({"messages": [{"role": "user", "content": "hi"}]}, resolve_action=rt.get_action)
+
+        [_ async for _ in stream_turn(agent, rt, req)]
+
+        assert "not instructions" not in "\n".join(config.prompts[0])
+
+    async def test_renderer_function_response_names_the_issued_function(self) -> None:
+        call_block = (
+            '<a2ui-json>\n[{"version": "v1.0", "callRendererFunction": {"surfaceId": "s1", '
+            '"functionCallId": "fc-7", "callFunction": {"@call": "getLocation"}}}]\n</a2ui-json>'
+        )
+        agent = Agent(name="t", config=TestConfig(call_block))
+        rt = _A2UIRuntime(protocol_version="v1.0", validate_responses=False)
+        first = parse_request({"messages": [{"role": "user", "content": "where am I"}]}, resolve_action=rt.get_action)
+        [_ async for _ in stream_turn(agent, rt, first)]
+
+        follow_up = parse_request(
+            {"a2ui": [{"version": "v1.0", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}]},
+            resolve_action=rt.get_action,
+            resolve_function=rt.get_renderer_function_name,
+            version_key="v1.0",
+        )
+
+        [prompt] = follow_up.current_inputs
+        assert "function=getLocation" in prompt.content
+        assert "Berlin" in prompt.content
+
     async def test_history_is_stateless_per_turn(self) -> None:
         # A fresh stream per call: prior history sent in the body, not retained.
         agent, rt = _agent_and_runtime(TestConfig("ok"), validate_responses=False)
@@ -170,7 +219,7 @@ class TestServerActions:
             }),
         ]
 
-    async def test_server_action_with_want_response_emits_action_response(self) -> None:
+    async def test_server_action_value_is_dropped_because_a_click_has_no_response(self) -> None:
         @a2ui_action
         def typeahead(prefix: str) -> list[str]:
             return ["apple", "application"]
@@ -182,26 +231,14 @@ class TestServerActions:
             validate_responses=False,
         )
         req = parse_request(
-            {
-                "a2ui": [
-                    _server_action_envelope(
-                        "typeahead", {"prefix": "app"}, version="v1.0", wantResponse=True, actionId="a-1"
-                    )
-                ]
-            },
+            {"a2ui": [_server_action_envelope("typeahead", {"prefix": "app"}, version="v1.0")]},
             resolve_action=rt.get_action,
             version_key="v1.0",
         )
 
         frames = [f async for f in stream_turn(agent, rt, req, server_actions=collect_server_actions([typeahead]))]
 
-        assert frames == [
-            A2UIMessageFrame({
-                "version": "v1.0",
-                "actionId": "a-1",
-                "actionResponse": {"value": ["apple", "application"]},
-            }),
-        ]
+        assert frames == []
 
     async def test_server_action_alongside_user_message_also_runs_agent(self) -> None:
         @a2ui_action
@@ -226,5 +263,175 @@ class TestServerActions:
                 "version": "v0.9",
                 "updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 2},
             }),
+            A2UIProseFrame("ok"),
+        ]
+
+
+def _call_envelope(name: str, args: dict[str, Any], *, version: str = "v1.0", call_id: str = "fc-1") -> dict[str, Any]:
+    return {
+        "version": version,
+        "callAgentFunction": {
+            "surfaceId": "s",
+            "functionCallId": call_id,
+            "callFunction": {"@call": name, "args": args},
+        },
+    }
+
+
+async def _turn_frames(
+    envelope: dict[str, Any],
+    actions: Sequence[Any] = (),
+    *,
+    version: str = "v1.0",
+    config: Any = None,
+) -> list[Any]:
+    agent = Agent(name="t", config=config or TestConfig("AGENT SHOULD NOT RUN"))
+    rt = _A2UIRuntime(actions=collect_action_declarations(actions), protocol_version=version, validate_responses=False)
+    req = parse_request({"a2ui": [envelope]}, resolve_action=rt.get_action, version_key=version)
+    return [f async for f in stream_turn(agent, rt, req, server_actions=collect_server_actions(actions))]
+
+
+@pytest.mark.asyncio
+class TestCallAgentFunction:
+    async def test_registered_function_answers_with_its_value_and_skips_agent(self) -> None:
+        @a2ui_action
+        def typeahead(prefix: str) -> list[str]:
+            return ["apple", "application"]
+
+        frames = await _turn_frames(_call_envelope("typeahead", {"prefix": "app"}), [typeahead])
+
+        assert frames == [
+            A2UIMessageFrame({
+                "version": "v1.0",
+                "agentFunctionResponse": {"functionCallId": "fc-1", "value": ["apple", "application"]},
+            }),
+        ]
+
+    async def test_none_result_is_answered_with_a_null_value(self) -> None:
+        @a2ui_action
+        def noop() -> None:
+            return None
+
+        frames = await _turn_frames(_call_envelope("noop", {}), [noop])
+
+        assert frames == [
+            A2UIMessageFrame({"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": None}}),
+        ]
+
+    async def test_models_are_serialized_to_json(self) -> None:
+        class Provider(BaseModel):
+            id: str
+
+        @a2ui_action
+        def lookup(provider_id: str) -> Provider:
+            return Provider(id=provider_id)
+
+        frames = await _turn_frames(_call_envelope("lookup", {"provider_id": "PRV-1"}), [lookup])
+
+        assert frames == [
+            A2UIMessageFrame({
+                "version": "v1.0",
+                "agentFunctionResponse": {"functionCallId": "fc-1", "value": {"id": "PRV-1"}},
+            }),
+        ]
+
+    async def test_unknown_function_is_answered_with_an_error(self) -> None:
+        frames = await _turn_frames(_call_envelope("missing", {}))
+
+        assert frames == [
+            A2UIMessageFrame({
+                "version": "v1.0",
+                "agentFunctionResponse": {
+                    "functionCallId": "fc-1",
+                    "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function 'missing'."},
+                },
+            }),
+        ]
+
+    async def test_invalid_arguments_are_answered_with_an_error(self) -> None:
+        @a2ui_action
+        def typeahead(prefix: str) -> str:
+            return prefix
+
+        frames = await _turn_frames(_call_envelope("typeahead", {}), [typeahead])
+
+        assert frames == [
+            A2UIMessageFrame({
+                "version": "v1.0",
+                "agentFunctionResponse": {
+                    "functionCallId": "fc-1",
+                    "error": {
+                        "code": "INVALID_FUNCTION_CALL",
+                        "message": "Invalid arguments for function 'typeahead'.",
+                    },
+                },
+            }),
+        ]
+
+    async def test_failing_handler_does_not_leak_its_message(self) -> None:
+        @a2ui_action
+        def boom() -> str:
+            raise RuntimeError("backend down")
+
+        frames = await _turn_frames(_call_envelope("boom", {}), [boom])
+
+        assert frames == [
+            A2UIMessageFrame({
+                "version": "v1.0",
+                "agentFunctionResponse": {
+                    "functionCallId": "fc-1",
+                    "error": {"code": "FUNCTION_FAILED", "message": "Function 'boom' failed."},
+                },
+            }),
+        ]
+
+    async def test_returned_messages_precede_the_response(self) -> None:
+        @a2ui_action
+        def refresh() -> dict:
+            return {"updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 3}}
+
+        frames = await _turn_frames(_call_envelope("refresh", {}), [refresh])
+
+        assert frames == [
+            A2UIMessageFrame({
+                "version": "v1.0",
+                "updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 3},
+            }),
+            A2UIMessageFrame({"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": None}}),
+        ]
+
+    async def test_call_before_v1_0_is_left_to_the_agent_unanswered(self) -> None:
+        @a2ui_action
+        def typeahead(prefix: str) -> str:
+            return prefix
+
+        frames = await _turn_frames(
+            _call_envelope("typeahead", {"prefix": "a"}, version="v0.9"), [typeahead], version="v0.9"
+        )
+
+        assert not any(isinstance(f, A2UIMessageFrame) for f in frames)
+
+    async def test_call_alongside_a_user_message_also_runs_the_agent(self) -> None:
+        @a2ui_action
+        def typeahead(prefix: str) -> str:
+            return prefix
+
+        agent = Agent(name="t", config=TestConfig("ok"))
+        rt = _A2UIRuntime(
+            actions=collect_action_declarations([typeahead]), protocol_version="v1.0", validate_responses=False
+        )
+        req = parse_request(
+            {
+                "messages": [{"role": "user", "content": "and then?"}],
+                "a2ui": [_call_envelope("typeahead", {"prefix": "a"})],
+            },
+            resolve_action=rt.get_action,
+            version_key="v1.0",
+        )
+
+        frames = [f async for f in stream_turn(agent, rt, req, server_actions=collect_server_actions([typeahead]))]
+
+        assert frames == [
+            A2UIMessageFrame({"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": "a"}}),
             A2UIProseFrame("ok"),
         ]

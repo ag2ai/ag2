@@ -236,8 +236,6 @@ class TestA2UIResponseParserV091Validation:
             version_string=manager.version_string,
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
-            component_schemas=manager.get_component_schemas(),
-            catalog_id=manager.catalog_id,
         )
 
     def test_accepts_v0_9_1_version_string(self, parser_v091: A2UIResponseParser) -> None:
@@ -258,55 +256,168 @@ class TestA2UIResponseParserV1Validation:
             version_string=manager.version_string,
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
-            component_schemas=manager.get_component_schemas(),
-            catalog_id=manager.catalog_id,
+            function_callers=manager.get_function_callers(),
         )
 
-    def test_validate_call_function(self, parser_v1: A2UIResponseParser) -> None:
-        # 'openUrl' is a function defined in the v1.0 basic catalog.
+    @pytest.fixture()
+    def parser_v1_agent_function(self) -> A2UIResponseParser:
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://mycompany.com/cat.json",
+                "functions": {
+                    "lookup": {
+                        "type": "object",
+                        "returnType": "string",
+                        "allowedCallers": "agentOnly",
+                        "properties": {"@call": {"const": "lookup"}},
+                        "required": ["@call"],
+                    },
+                },
+            },
+        )
+        return A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+            function_callers=manager.get_function_callers(),
+        )
+
+    def test_call_renderer_function_accepts_a_function_the_agent_may_call(
+        self, parser_v1_agent_function: A2UIResponseParser
+    ) -> None:
         ops = [
             {
                 "version": "v1.0",
-                "functionCallId": "fc-1",
-                "callFunction": {"call": "openUrl", "args": {"url": "https://example.com"}},
+                "callRendererFunction": {
+                    "functionCallId": "fc-1",
+                    "callFunction": {"@call": "lookup", "catalogId": "https://mycompany.com/cat.json"},
+                },
+            }
+        ]
+        assert parser_v1_agent_function.validate(ops).is_valid is True
+
+    @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
+    def test_unknown_component_property_is_reported_on_its_component(
+        self, parser_v1: A2UIResponseParser, message_key: str
+    ) -> None:
+        # The envelope's ``oneOf`` alone only says "no branch matched"; the LLM needs the property.
+        slider = {"id": "root", "component": "Slider", "min": 1, "max": 3, "step": 1, "value": {"@path": "/n"}}
+        ops = [{"version": "v1.0", message_key: {"surfaceId": "s", "components": [slider]}}]
+
+        result = parser_v1.validate(ops)
+
+        assert result.errors == [
+            "Operation 0: Component 'root' (Slider): Unevaluated properties are not allowed ('step' was unexpected)"
+        ]
+
+    def test_call_renderer_function_rejects_a_renderer_only_function(self, parser_v1: A2UIResponseParser) -> None:
+        # 'openUrl' is in the v1.0 basic catalog, which leaves allowedCallers at its
+        # default (rendererOnly): the renderer would reject the agent's call.
+        ops = [
+            {
+                "version": "v1.0",
+                "callRendererFunction": {
+                    "functionCallId": "fc-1",
+                    "callFunction": {
+                        "@call": "openUrl",
+                        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                        "args": {"url": "https://example.com"},
+                    },
+                },
             }
         ]
         result = parser_v1.validate(ops)
-        assert result.is_valid is True
-        assert result.errors == []
+        assert result.is_valid is False
+        assert len(result.errors) == 1
+        assert "rendererOnly" in result.errors[0]
 
-    def test_validate_action_response_value(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "actionId": "act-1", "actionResponse": {"value": 42}}]
+    def test_agent_function_response_is_not_generated_by_the_llm(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": 42}}]
         result = parser_v1.validate(ops)
-        assert result.is_valid is True
+        assert result.is_valid is False
+        assert "do not emit it" in result.errors[0]
 
-    def test_validate_action_response_error(self, parser_v1: A2UIResponseParser) -> None:
+    def test_function_response_rejects_value_and_error_together(self, parser_v1: A2UIResponseParser) -> None:
+        # Spec: a FunctionResponse carries exactly one of value | error (oneOf).
         ops = [
             {
                 "version": "v1.0",
-                "actionId": "act-1",
-                "actionResponse": {"error": {"code": "NOT_FOUND", "message": "missing"}},
-            }
-        ]
-        result = parser_v1.validate(ops)
-        assert result.is_valid is True
-
-    def test_action_response_rejects_value_and_error_together(self, parser_v1: A2UIResponseParser) -> None:
-        # Spec: actionResponse carries exactly one of value | error (oneOf).
-        ops = [
-            {
-                "version": "v1.0",
-                "actionId": "act-1",
-                "actionResponse": {"value": 1, "error": {"code": "c", "message": "m"}},
+                "agentFunctionResponse": {
+                    "functionCallId": "fc-1",
+                    "value": 1,
+                    "error": {"code": "c", "message": "m"},
+                },
             }
         ]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
 
-    def test_call_function_requires_function_call_id(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "callFunction": {"call": "openUrl"}}]
+    def test_call_renderer_function_requires_function_call_id(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "callRendererFunction": {"callFunction": {"@call": "openUrl"}}}]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
+
+    @pytest.mark.parametrize(
+        "legacy",
+        [
+            {"functionCallId": "fc-1", "callFunction": {"call": "openUrl"}},
+            {"actionId": "act-1", "actionResponse": {"value": 42}},
+        ],
+    )
+    def test_pre_rc_function_messages_are_rejected(self, parser_v1: A2UIResponseParser, legacy: dict) -> None:
+        # ``callFunction`` / ``actionResponse`` were replaced by the RC's role-based messages.
+        assert parser_v1.validate([{"version": "v1.0", **legacy}]).is_valid is False
+
+    def test_create_surface_carries_initial_components_and_data_model(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [
+            {
+                "version": "v1.0",
+                "createSurface": {
+                    "surfaceId": "s1",
+                    "components": [{"id": "root", "component": "Text", "text": {"@path": "/greeting"}}],
+                    "dataModel": {"greeting": "hi"},
+                    "metadata": {"extensions": {"a2ui_trace": "t-1"}},
+                },
+            }
+        ]
+        assert parser_v1.validate(ops).is_valid is True
+
+    def test_create_surface_inline_components_need_a_root(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [
+            {
+                "version": "v1.0",
+                "createSurface": {"surfaceId": "s1", "components": [{"id": "a", "component": "Text", "text": "hi"}]},
+            }
+        ]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is False
+        assert "root" in result.errors[0]
+
+    def test_create_surface_inline_component_errors_are_drilled_into(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [
+            {
+                "version": "v1.0",
+                "createSurface": {"surfaceId": "s1", "components": [{"id": "root", "component": "Text", "text": 5}]},
+            }
+        ]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is False
+        assert result.errors[0].startswith("Operation 0: Component 'root' (Text)")
+
+    def test_create_surface_rejects_the_removed_theme(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "createSurface": {"surfaceId": "s1", "theme": {"primaryColor": "#fff"}}}]
+        assert parser_v1.validate(ops).is_valid is False
+
+    def test_create_surface_rejects_malformed_extension_keys(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "createSurface": {"surfaceId": "s1", "metadata": {"extensions": {"@x": 1}}}}]
+        assert parser_v1.validate(ops).is_valid is False
+
+    def test_update_data_model_requires_value(self, parser_v1: A2UIResponseParser) -> None:
+        missing = [{"version": "v1.0", "updateDataModel": {"surfaceId": "s1", "path": "/a"}}]
+        deleting = [{"version": "v1.0", "updateDataModel": {"surfaceId": "s1", "path": "/a", "value": None}}]
+        assert parser_v1.validate(missing).is_valid is False
+        assert parser_v1.validate(deleting).is_valid is True
 
     def test_create_surface_valid_in_v1(self, parser_v1: A2UIResponseParser) -> None:
         # createSurface is shared across versions; the v1.0 parser accepts it
@@ -332,8 +443,6 @@ class TestPerComponentValidation:
             version_string="v0.9",
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
-            component_schemas=manager.get_component_schemas(),
-            catalog_id=manager.catalog_id,
         )
 
     def test_button_missing_child_gives_actionable_error(self, parser_with_components: A2UIResponseParser) -> None:
@@ -426,7 +535,6 @@ def test_per_component_validation_works_without_catalog_id() -> None:
         version_string="v0.9",
         server_to_client_schema=manager.server_to_client_schema,
         schema_registry=manager.build_schema_registry(),
-        component_schemas=manager.get_component_schemas(),
         # catalog_id intentionally omitted — should still drill into components.
     )
     ops = [
@@ -479,6 +587,13 @@ class TestFormatValidationError:
         validation_result = A2UIValidationResult(is_valid=False, errors=["missing version"])
         feedback = parser.format_validation_error(parse_result, validation_result)
         assert "v0.9" in feedback
+
+    def test_tells_the_llm_not_to_address_the_correction_to_the_user(self) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        parse_result = A2UIParseResult(text="", operations=[], has_a2ui=True)
+        validation_result = A2UIValidationResult(is_valid=False, errors=["missing version"])
+        feedback = parser.format_validation_error(parse_result, validation_result)
+        assert "do not mention the errors" in feedback
 
 
 class TestStripMarkdownFences:

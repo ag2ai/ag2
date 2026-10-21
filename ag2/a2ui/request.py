@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Parse the transport-neutral A2UI server request body — a minimal JSON
-contract (``messages``, ``variables``, ``a2ui``, ``a2uiClientCapabilities``).
+contract (``messages``, ``variables``, ``a2ui``, ``a2uiClientCapabilities``, ``a2uiRendererDataModel``).
 The server is stateless: the client sends the full conversation each turn.
 """
 
@@ -18,6 +18,7 @@ from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, ModelRespon
 from ._types import A2UIVersion, JsonObject, JsonValue
 from .actions import A2UIEventAction
 from .capabilities import A2UIClientCapabilities, parse_client_capabilities
+from .data_model import parse_client_data_model
 from .incoming import A2UIIncomingParseResult, iter_incoming_prompts, parse_incoming_interactions
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ class A2UIServerRequest:
     messages; ``history`` carries the prior conversation turns.
     ``client_capabilities`` carries the decoded ``a2uiClientCapabilities``, if
     present, so the dispatcher can fold catalog negotiation into the prompt.
+    ``client_data_model`` carries the decoded ``a2uiRendererDataModel`` (per-surface
+    data models a ``sendDataModel`` surface attaches), if present.
     ``client_interactions`` carries the typed client→server envelopes so the
     dispatcher can surface each as an ``A2UIClientEvent`` on the turn's stream.
     """
@@ -48,12 +51,14 @@ class A2UIServerRequest:
     variables: dict[str, Any] = field(default_factory=dict)
     client_capabilities: A2UIClientCapabilities | None = None
     client_interactions: list[A2UIIncomingParseResult] = field(default_factory=list)
+    client_data_model: dict[str, JsonObject] | None = None
 
 
 def parse_request(
     body: bytes | str | JsonObject,
     *,
     resolve_action: Callable[[str], A2UIEventAction | None],
+    resolve_function: Callable[[str], str | None] | None = None,
     version_key: A2UIVersion = "v0.9",
 ) -> A2UIServerRequest:
     """Parse a raw request body into an :class:`A2UIServerRequest`.
@@ -64,9 +69,12 @@ def parse_request(
             ``runtime.get_action``). A matched action's click runs on the server
             (handled in the turn core, kept out of the prompt); an unmatched click
             is rewritten generically so the LLM can react to the button it rendered.
+        resolve_function: Looks up the name of an issued ``callRendererFunction`` by
+            its ``functionCallId`` (e.g. ``runtime.get_renderer_function_name``), so
+            a ``rendererFunctionResponse`` prompt can name the function.
         version_key: The protocol version under which to read
             ``a2uiClientCapabilities`` (the client nests it under its version,
-            e.g. ``"v1.0"``). Defaults to ``"v0.9"``; callers serving a non-v0.9
+            e.g. ``"v1.0"``; for v1.0 ``a2uiRendererCapabilities`` is read first). Defaults to ``"v0.9"``; callers serving a non-v0.9
             agent should pass ``agent.schema_manager.version_string`` (the ASGI
             adapter does), else a newer client's capabilities are silently
             dropped.
@@ -96,7 +104,7 @@ def parse_request(
         raise ValueError("'a2ui' must be a list")
 
     prompt, history, current_inputs = _map_messages(raw_messages)
-    current_inputs.extend(_map_a2ui_envelopes(raw_a2ui, resolve_action))
+    current_inputs.extend(_map_a2ui_envelopes(raw_a2ui, resolve_action, resolve_function))
 
     return A2UIServerRequest(
         current_inputs=current_inputs,
@@ -105,6 +113,7 @@ def parse_request(
         variables=dict(raw_variables),
         client_capabilities=parse_client_capabilities(data, version_key=version_key),
         client_interactions=parse_incoming_interactions(raw_a2ui),
+        client_data_model=parse_client_data_model(data, version_key=version_key),
     )
 
 
@@ -162,15 +171,17 @@ def _map_messages(raw_messages: list[JsonValue]) -> tuple[list[str], list[BaseEv
 def _map_a2ui_envelopes(
     raw_a2ui: list[JsonValue],
     resolve_action: Callable[[str], A2UIEventAction | None],
+    resolve_function: Callable[[str], str | None] | None,
 ) -> list[Input]:
-    """Rewrite client→server ``action`` / ``functionResponse`` / ``error`` envelopes as prompt inputs.
+    """Rewrite client→server ``action`` / ``rendererFunctionResponse`` / ``error`` envelopes as prompt inputs.
 
-    The server is stateless, so a v1.0 ``functionResponse`` (the client's reply
-    to a prior server ``callFunction``) simply arrives as another envelope in
-    the next request and is rewritten to a continuation prompt — no pause/resume
-    bookkeeping is needed on this transport.
+    The server is stateless, so a v1.0 ``rendererFunctionResponse`` (the client's
+    reply to a prior server ``callRendererFunction``) simply arrives as another
+    envelope in the next request and is rewritten to a continuation prompt — no
+    pause/resume bookkeeping is needed on this transport. A ``callAgentFunction``
+    yields no prompt: the server answers it itself.
     """
-    return [TextInput(prompt) for prompt in iter_incoming_prompts(raw_a2ui, resolve_action)]
+    return [TextInput(prompt) for prompt in iter_incoming_prompts(raw_a2ui, resolve_action, resolve_function)]
 
 
 __all__ = ("A2UIServerRequest", "parse_request")

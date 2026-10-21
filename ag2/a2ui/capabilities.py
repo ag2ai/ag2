@@ -18,6 +18,9 @@ from .incoming import sanitize_for_prompt
 logger = logging.getLogger(__name__)
 
 A2UI_CLIENT_CAPABILITIES_METADATA_KEY = "a2uiClientCapabilities"
+# v1.0 renamed the client "renderer" (A2A extension spec); the REST / AG-UI body
+# keeps accepting the client-named key there too.
+A2UI_RENDERER_CAPABILITIES_METADATA_KEY = "a2uiRendererCapabilities"
 
 # Default wire-shape version key for the nested capability/data-model objects
 # (the client wraps them under their protocol version, e.g. ``{"v0.9": {...}}``).
@@ -47,14 +50,21 @@ def parse_client_capabilities(
 
     ``version_key`` selects the nested version object (defaults to ``"v0.9"``;
     pass the agent's version, e.g. ``"v1.0"``, when serving a newer client).
+    For ``"v1.0"`` the spec's ``a2uiRendererCapabilities`` key is read first,
+    then ``a2uiClientCapabilities``.
     Returns ``None`` if the metadata is missing, malformed, or does not declare
     the requested version. ``supportedCatalogIds`` entries are coerced to ``str``
     and non-dict ``inlineCatalogs`` entries are dropped.
     """
     if not metadata:
         return None
-    caps = metadata.get(A2UI_CLIENT_CAPABILITIES_METADATA_KEY)
-    if not isinstance(caps, dict):
+    keys = (
+        (A2UI_RENDERER_CAPABILITIES_METADATA_KEY, A2UI_CLIENT_CAPABILITIES_METADATA_KEY)
+        if version_key == "v1.0"
+        else (A2UI_CLIENT_CAPABILITIES_METADATA_KEY,)
+    )
+    caps = next((value for key in keys if isinstance(value := metadata.get(key), dict)), None)
+    if caps is None:
         return None
     v = caps.get(version_key)
     if not isinstance(v, dict):
@@ -145,6 +155,7 @@ def capabilities_to_prompt(caps: A2UIClientCapabilities | None, *, catalog_id: s
 
 __all__ = (
     "A2UI_CLIENT_CAPABILITIES_METADATA_KEY",
+    "A2UI_RENDERER_CAPABILITIES_METADATA_KEY",
     "A2UIClientCapabilities",
     "capabilities_to_prompt",
     "parse_client_capabilities",

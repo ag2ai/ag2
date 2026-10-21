@@ -200,11 +200,7 @@ class TestParseRequestActions:
                 "a2ui": [
                     {
                         "version": "v1.0",
-                        "functionResponse": {
-                            "functionCallId": "fc-1",
-                            "call": "getScreenResolution",
-                            "value": [1920, 1080],
-                        },
+                        "rendererFunctionResponse": {"functionCallId": "fc-1", "value": [1920, 1080]},
                     }
                 ],
             },
@@ -212,14 +208,35 @@ class TestParseRequestActions:
         )
         assert len(req.current_inputs) == 1
         content = req.current_inputs[0].content
-        assert "getScreenResolution" in content
+        assert "[1920, 1080]" in content
         assert "fc-1" in content
+
+    def test_function_call_envelope_yields_no_prompt_but_is_kept_as_an_interaction(self) -> None:
+        req = parse_request(
+            {
+                "messages": [],
+                "a2ui": [
+                    {
+                        "version": "v1.0",
+                        "callAgentFunction": {
+                            "surfaceId": "s1",
+                            "functionCallId": "fc-1",
+                            "callFunction": {"@call": "verifyProvider", "args": {"providerId": "PRV-102"}},
+                        },
+                    }
+                ],
+            },
+            resolve_action=_no_actions,
+            version_key="v1.0",
+        )
+        assert req.current_inputs == []
+        assert len(req.client_interactions) == 1
 
     def test_function_response_without_call_id_is_dropped(self) -> None:
         req = parse_request(
             {
                 "messages": [],
-                "a2ui": [{"version": "v1.0", "functionResponse": {"call": "openUrl", "value": True}}],
+                "a2ui": [{"version": "v1.0", "rendererFunctionResponse": {"value": True}}],
             },
             resolve_action=_no_actions,
         )

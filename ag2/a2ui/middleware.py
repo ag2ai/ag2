@@ -15,6 +15,7 @@ from ag2.events import (
 )
 from ag2.middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
 
+from .calls import RendererCallLedger
 from .events import A2UIClientEvent, A2UIMessageEvent, A2UIValidationFailedEvent
 from .incoming import A2UIIncomingParseResult
 from .parser import A2UIParseResult, A2UIResponseParser, A2UIValidationResult
@@ -28,7 +29,12 @@ def _to_prose_message(original: ModelMessage | None, text: str) -> ModelMessage:
     return ModelMessage(text, metadata=metadata)
 
 
-async def _publish_a2ui(parse_result: A2UIParseResult, response: ModelResponse, context: Context) -> None:
+async def _publish_a2ui(
+    parse_result: A2UIParseResult,
+    response: ModelResponse,
+    context: Context,
+    ledger: RendererCallLedger | None,
+) -> None:
     """Publish a parsed A2UI block and strip it from the durable response.
 
     Emits one :class:`A2UIMessageEvent` per parsed message onto the stream and
@@ -44,6 +50,8 @@ async def _publish_a2ui(parse_result: A2UIParseResult, response: ModelResponse, 
     if not parse_result.has_a2ui:
         return
     for op in parse_result.operations:
+        if ledger is not None:
+            ledger.record(op)
         await context.send(A2UIMessageEvent(op))
     response.message = _to_prose_message(response.message, parse_result.text)
 
@@ -62,19 +70,28 @@ class A2UIExtractionMiddleware(MiddlewareFactory):
     (clean prose + structured UI messages, never raw JSON in the text).
     """
 
-    def __init__(self, parser: A2UIResponseParser) -> None:
+    def __init__(self, parser: A2UIResponseParser, ledger: RendererCallLedger | None = None) -> None:
         self._parser = parser
+        self._ledger = ledger
 
     def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
-        return _A2UIExtractionMiddleware(event, context, parser=self._parser)
+        return _A2UIExtractionMiddleware(event, context, parser=self._parser, ledger=self._ledger)
 
 
 class _A2UIExtractionMiddleware(BaseMiddleware):
     """The per-turn instance used by :class:`A2UIExtractionMiddleware`."""
 
-    def __init__(self, event: BaseEvent, context: Context, *, parser: A2UIResponseParser) -> None:
+    def __init__(
+        self,
+        event: BaseEvent,
+        context: Context,
+        *,
+        parser: A2UIResponseParser,
+        ledger: RendererCallLedger | None,
+    ) -> None:
         super().__init__(event, context)
         self._parser = parser
+        self._ledger = ledger
 
     async def on_llm_call(
         self,
@@ -88,7 +105,7 @@ class _A2UIExtractionMiddleware(BaseMiddleware):
         text = response.content
         if not text:
             return response
-        await _publish_a2ui(self._parser.parse(text), response, context)
+        await _publish_a2ui(self._parser.parse(text), response, context, self._ledger)
         return response
 
 
@@ -96,7 +113,7 @@ class A2UIInboundMiddleware(MiddlewareFactory):
     """Factory that emits one :class:`A2UIClientEvent` per incoming interaction.
 
     Built per-request with the client→server interactions parsed from the
-    request (button clicks, v1.0 ``functionResponse``s, client errors). The
+    request (button clicks, v1.0 function calls and responses, client errors). The
     per-turn instance emits them on the stream at the start of the turn — inside
     the turn, where the agent's observers are subscribed — so server-side code
     can react to client interactions, mirroring how :class:`A2UIMessageEvent`
@@ -140,11 +157,17 @@ class A2UIValidationMiddleware(MiddlewareFactory):
     (graceful degradation to text-only).
     """
 
-    def __init__(self, parser: A2UIResponseParser, max_retries: int = 1) -> None:
+    def __init__(
+        self,
+        parser: A2UIResponseParser,
+        max_retries: int = 1,
+        ledger: RendererCallLedger | None = None,
+    ) -> None:
         if max_retries < 0:
             raise ValueError(f"max_retries must be >= 0, got {max_retries}")
         self._parser = parser
         self._max_retries = max_retries
+        self._ledger = ledger
 
     def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
         return _A2UIValidationMiddleware(
@@ -152,6 +175,7 @@ class A2UIValidationMiddleware(MiddlewareFactory):
             context,
             parser=self._parser,
             max_retries=self._max_retries,
+            ledger=self._ledger,
         )
 
 
@@ -165,10 +189,12 @@ class _A2UIValidationMiddleware(BaseMiddleware):
         *,
         parser: A2UIResponseParser,
         max_retries: int,
+        ledger: RendererCallLedger | None,
     ) -> None:
         super().__init__(event, context)
         self._parser = parser
         self._max_retries = max_retries
+        self._ledger = ledger
 
     async def on_llm_call(
         self,
@@ -188,7 +214,7 @@ class _A2UIValidationMiddleware(BaseMiddleware):
                 if text:
                     parse_result, validation_errors = self._validate(text)
                     if validation_errors is None:
-                        await _publish_a2ui(parse_result, response, context)
+                        await _publish_a2ui(parse_result, response, context, self._ledger)
                     else:
                         await context.send(A2UIValidationFailedEvent(validation_errors, attempt + 1))
                         response.message = _to_prose_message(response.message, parse_result.text)
@@ -202,7 +228,7 @@ class _A2UIValidationMiddleware(BaseMiddleware):
                 # Valid (or no A2UI at all). Publish the validated block out-of-band
                 # and keep the durable response prose-only — transports consume the
                 # events. Same publication path as the extraction middleware.
-                await _publish_a2ui(parse_result, response, context)
+                await _publish_a2ui(parse_result, response, context, self._ledger)
                 return response
 
             if attempt >= self._max_retries:

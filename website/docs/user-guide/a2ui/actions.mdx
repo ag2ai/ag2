@@ -32,9 +32,9 @@ When the LLM renders a button whose `#!python action.event.name` is `#!python "s
 What the handler returns is mapped to the client per the A2UI spec:
 
 - one A2UI server→client message — or a list of them (e.g. `#!python updateComponents` / `#!python updateDataModel`) — is sent to the renderer as a **surface update** (works on every protocol version);
-- any other JSON value becomes an `#!python actionResponse` **only** when the client asked for one (`#!python wantResponse` + `#!python actionId`, v1.0); otherwise it is fire-and-forget.
+- any other JSON value is dropped: a click is fire-and-forget. To get a value back, the renderer [calls the action as a function](#calling-an-action-as-a-function-v10) instead.
 
-A turn whose only input is registered server-action clicks **skips the agent entirely** — the handlers' messages are the whole response.
+A turn whose only input is registered server-action interactions **skips the agent entirely** — the handlers' messages are the whole response.
 
 Declaring the button on the transport — not on the agent — keeps the `#!python Agent` plain and reusable across deployments. The same `#!python actions=[...]` is accepted by `#!python A2UIAgentExecutor` for the [A2A transport](/docs/user-guide/a2ui/a2a), so a button is declared the same way wherever the agent is served.
 
@@ -77,11 +77,44 @@ async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
 When the action name matches a registered `#!python @a2ui_action`, the click runs that handler on the server (the agent is not invoked); otherwise the click is rewritten into a plain instruction so the LLM continues the conversation.
 
 !!! note "v1.0 round-trip"
-    With `#!python protocol_version="v1.0"`, a client's reply to a server `#!python callFunction` arrives as a `#!python functionResponse` envelope in the next request and is rewritten to a continuation prompt — the stateless transport needs no pause/resume bookkeeping. The same applies to `#!python actionResponse`.
+    With `#!python protocol_version="v1.0"`, a renderer's reply to a `#!python callRendererFunction` the LLM emitted arrives as a `#!python rendererFunctionResponse` envelope in the next request and is rewritten to a continuation prompt — the stateless transport needs no pause/resume bookkeeping. The prompt names the function when this process issued the call (a bounded in-memory record); after a restart, or on another worker, it carries the call id only.
+
+## Calling an Action as a Function (v1.0)
+
+A v1.0 renderer that needs a *value* back — verifying an id, a typeahead, an inventory check — sends a `#!python callAgentFunction` envelope instead of a click. The function name (`#!python callFunction["@call"]`) selects a registered `#!python @a2ui_action`, and `#!python args` become its keyword arguments. The server answers with an `#!python agentFunctionResponse` that echoes the call's `#!python functionCallId`; the agent is not invoked:
+
+```json
+{
+  "a2ui": [
+    {
+      "version": "v1.0",
+      "callAgentFunction": {
+        "surfaceId": "s1",
+        "functionCallId": "verify-1",
+        "callFunction": {"@call": "verify_provider", "args": {"provider_id": "PRV-102"}}
+      }
+    }
+  ]
+}
+```
+
+```json
+{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "verify-1", "value": {"valid": true}}}
+```
+
+The reply is always exactly one of `#!python value` or `#!python error`. Any messages the handler returns (an `#!python updateDataModel`, say) are sent first, and then the response carries `#!python null`. A failure is reported rather than raised:
+
+| `#!python error.code` | When |
+|---|---|
+| `#!python UNKNOWN_FUNCTION` | No action is registered under that name. |
+| `#!python INVALID_FUNCTION_CALL` | `#!python args` do not fit the handler's parameters. |
+| `#!python FUNCTION_FAILED` | The handler raised (the error text is logged, not sent to the renderer). |
+
+`#!python callAgentFunction` does not exist before v1.0; on an earlier protocol version it is logged and left unanswered, and the turn is handed to the agent as usual.
 
 ## Observing Client Interactions
 
-Each client→server interaction the server receives — a button `#!python action`, a v1.0 `#!python functionResponse`, or an `#!python error` — is surfaced on the turn's stream as an `#!python A2UIClientEvent`, the inbound mirror of `#!python A2UIMessageEvent`. Subscribe to react to or log client interactions (beyond what the LLM sees in its prompt):
+Each client→server interaction the server receives — a button `#!python action`, a v1.0 `#!python callAgentFunction` or `#!python rendererFunctionResponse`, or an `#!python error` — is surfaced on the turn's stream as an `#!python A2UIClientEvent`, the inbound mirror of `#!python A2UIMessageEvent`. Subscribe to react to or log client interactions (beyond what the LLM sees in its prompt):
 
 ```python linenums="1"
 from ag2.a2ui import A2UIClientEvent

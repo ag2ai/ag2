@@ -82,6 +82,7 @@ async def _read_request(core: "_A2UITurnCore", request: Request) -> "A2UIServerR
         return parse_request(
             body,
             resolve_action=core.runtime.get_action,
+            resolve_function=core.runtime.get_renderer_function_name,
             version_key=core.runtime.version_string,
         )
     except ValueError as e:

@@ -18,8 +18,9 @@ from ag2.testing import TestConfig
 
 from ._helpers import (
     FUNCTION_RESULT_MARK,
-    CallFunctionThenComplete,
+    CallRendererFunctionThenComplete,
     CapturingConfig,
+    DropEmptyTextInterceptor,
     MetadataInterceptor,
     client_for,
     subscribe_task_stream,
@@ -55,14 +56,24 @@ ERROR_ENVELOPE = {
 
 FUNCTION_RESPONSE_ENVELOPE = {
     "version": "v1.0",
-    "functionResponse": {"functionCallId": "fc-1", "call": "openUrl", "value": True},
+    "rendererFunctionResponse": {"functionCallId": "fc-1", "value": True},
 }
 
-# A server→client callFunction the LLM may emit inside <a2ui-json>. ``openUrl``
-# is a basic-catalog function, so this validates under v1.0.
-_CALL_FUNCTION_BLOCK = (
-    '[{"version":"v1.0","functionCallId":"fc-1","wantResponse":true,'
-    '"callFunction":{"call":"openUrl","args":{"url":"https://example.com"}}}]'
+CALL_AGENT_FUNCTION_ENVELOPE = {
+    "version": "v1.0",
+    "callAgentFunction": {
+        "surfaceId": "s1",
+        "functionCallId": "fc-7",
+        "callFunction": {"@call": "verify_provider", "args": {"provider_id": "PRV-102"}},
+    },
+}
+
+# A server→client callRendererFunction the LLM may emit inside <a2ui-json>. ``openUrl`` is
+# ``rendererOnly`` in the basic catalog, so tests using this block turn validation off.
+_CALL_RENDERER_FUNCTION_BLOCK = (
+    '[{"version":"v1.0","callRendererFunction":{"functionCallId":"fc-1",'
+    '"callFunction":{"@call":"openUrl","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",'
+    '"args":{"url":"https://example.com"}}}}]'
 )
 
 
@@ -80,7 +91,7 @@ class TestExtractA2UIEnvelopes:
         [part] = create_a2ui_parts(ACTION_ENVELOPE, legacy_split=True)
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
-    def test_filters_entries_without_action_or_error(self) -> None:
+    def test_filters_entries_the_renderer_does_not_send(self) -> None:
         [part] = create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
@@ -91,6 +102,10 @@ class TestExtractA2UIEnvelopes:
     def test_decodes_function_response_envelope(self) -> None:
         [part] = create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [FUNCTION_RESPONSE_ENVELOPE]
+
+    def test_decodes_function_call_envelope(self) -> None:
+        [part] = create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])
+        assert _extract_a2ui_envelopes(part) == [CALL_AGENT_FUNCTION_ENVELOPE]
 
 
 @pytest.mark.asyncio
@@ -241,25 +256,27 @@ async def test_incoming_function_response_becomes_continuation_prompt() -> None:
     )
 
     synthesized = synthesized_text(config.messages[-1])
-    assert "openUrl" in synthesized
     assert "fc-1" in synthesized
+    assert "returned: true" in synthesized
 
 
 @pytest.mark.asyncio
-class TestCallFunctionPause:
-    """A v1.0 ``callFunction(wantResponse=true)`` pauses the task awaiting the
-    client's ``functionResponse`` instead of completing it, delivering the
-    ``callFunction`` DataPart on the input-required transition."""
+class TestCallRendererFunctionPause:
+    """A v1.0 ``callRendererFunction`` pauses the task awaiting the renderer's
+    ``rendererFunctionResponse`` instead of completing it, delivering the
+    ``callRendererFunction`` DataPart on the input-required transition."""
 
-    async def test_call_function_with_want_response_pauses(self) -> None:
+    async def test_call_renderer_function_pauses(self) -> None:
         hitl_prompts: list[str] = []
 
         async def hitl_hook() -> str:
             hitl_prompts.append("called")
             return FUNCTION_RESULT_MARK
 
-        agent = Agent(name="ui_agent", config=CallFunctionThenComplete(_CALL_FUNCTION_BLOCK))
-        client = client_for(agent, streaming=True, hitl_hook=hitl_hook, protocol_version="v1.0")
+        agent = Agent(name="ui_agent", config=CallRendererFunctionThenComplete(_CALL_RENDERER_FUNCTION_BLOCK))
+        client = client_for(
+            agent, streaming=True, hitl_hook=hitl_hook, protocol_version="v1.0", validate_responses=False
+        )
         stream = MemoryStream()
         payloads, states = subscribe_task_stream(stream)
 
@@ -269,10 +286,10 @@ class TestCallFunctionPause:
         # that pause surfaced to the client as an input request.
         assert TaskState.TASK_STATE_INPUT_REQUIRED in states
         assert hitl_prompts == ["called"]
-        # The callFunction DataPart rode the input-required transition.
-        assert any(payload and "callFunction" in payload[0] for payload in payloads)
+        # The callRendererFunction DataPart rode the input-required transition.
+        assert any(payload and "callRendererFunction" in payload[0] for payload in payloads)
 
-    async def test_no_call_function_completes_normally(self) -> None:
+    async def test_no_renderer_function_call_completes_normally(self) -> None:
         agent = Agent(name="ui_agent", config=TestConfig("Just a plain reply."))
         client = client_for(agent, streaming=True, protocol_version="v1.0")
         stream = MemoryStream()
@@ -283,6 +300,100 @@ class TestCallFunctionPause:
         assert reply.response.content == "Just a plain reply."
         assert TaskState.TASK_STATE_COMPLETED in states
         assert TaskState.TASK_STATE_INPUT_REQUIRED not in states
+
+
+@pytest.mark.asyncio
+class TestCallAgentFunction:
+    """A v1.0 ``callAgentFunction`` is answered on the server with an ``agentFunctionResponse``."""
+
+    async def test_registered_function_returns_its_value(self) -> None:
+        config = CapturingConfig()
+
+        @a2ui_action(description="Check a provider")
+        def verify_provider(provider_id: str) -> dict[str, object]:
+            return {"valid": True, "id": provider_id}
+
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, streaming=True, actions=[verify_provider], protocol_version="v1.0")
+        stream = MemoryStream()
+        payloads, states = subscribe_task_stream(stream)
+
+        await client.ask(
+            "check",
+            stream=stream,
+            dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])},
+        )
+
+        assert payloads == [
+            [
+                {
+                    "version": "v1.0",
+                    "agentFunctionResponse": {"functionCallId": "fc-7", "value": {"valid": True, "id": "PRV-102"}},
+                }
+            ]
+        ]
+        assert TaskState.TASK_STATE_COMPLETED in states
+        # The call is answered on the server: it never reaches the model's prompt.
+        assert "verify_provider" not in synthesized_text(config.messages[-1])
+
+    async def test_envelope_only_turn_skips_the_agent(self) -> None:
+        config = CapturingConfig()
+
+        @a2ui_action(description="Check a provider")
+        def verify_provider(provider_id: str) -> dict[str, object]:
+            return {"valid": True, "id": provider_id}
+
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(
+            agent,
+            streaming=True,
+            interceptors=[DropEmptyTextInterceptor()],
+            actions=[verify_provider],
+            protocol_version="v1.0",
+        )
+        stream = MemoryStream()
+        payloads, states = subscribe_task_stream(stream)
+
+        await client.ask(
+            "",
+            stream=stream,
+            dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])},
+        )
+
+        assert payloads == [
+            [
+                {
+                    "version": "v1.0",
+                    "agentFunctionResponse": {"functionCallId": "fc-7", "value": {"valid": True, "id": "PRV-102"}},
+                }
+            ]
+        ]
+        assert TaskState.TASK_STATE_COMPLETED in states
+        assert config.messages == []
+
+    async def test_unregistered_function_is_answered_unknown(self) -> None:
+        agent = Agent(name="ui_agent", config=TestConfig("never used"))
+        client = client_for(agent, streaming=True, protocol_version="v1.0")
+        stream = MemoryStream()
+        payloads, _states = subscribe_task_stream(stream)
+
+        await client.ask(
+            "check",
+            stream=stream,
+            dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])},
+        )
+
+        assert payloads == [
+            [
+                {
+                    "version": "v1.0",
+                    "agentFunctionResponse": {
+                        "functionCallId": "fc-7",
+                        "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function 'verify_provider'."},
+                    },
+                }
+            ]
+        ]
 
 
 @pytest.mark.asyncio
@@ -300,6 +411,39 @@ class TestCapabilitiesNegotiation:
         prompt = "\n".join(config.prompts[-1])
         assert "## A2UI Client Capabilities" in prompt
         assert "did NOT list" in prompt  # agent catalog absent from client's advertised list
+
+    async def test_v1_0_renderer_caps_injected_into_prompt(self) -> None:
+        config = CapturingConfig()
+        agent = Agent(name="ui_agent", config=config)
+        caps = {"a2uiRendererCapabilities": {"v1.0": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
+        client = client_for(
+            agent, interceptors=[MetadataInterceptor(caps)], protocol_version="v1.0", validate_responses=False
+        )
+
+        await client.ask("hi")
+
+        assert "did NOT list" in "\n".join(config.prompts[-1])
+
+    async def test_v1_0_renderer_data_model_injected_into_prompt(self) -> None:
+        config = CapturingConfig()
+        agent = Agent(name="ui_agent", config=config)
+        data_model = {"a2uiRendererDataModel": {"version": "v1.0", "surfaces": {"form": {"name": "Ann"}}}}
+        client = client_for(
+            agent, interceptors=[MetadataInterceptor(data_model)], protocol_version="v1.0", validate_responses=False
+        )
+
+        await client.ask("hi")
+
+        assert '{"form": {"name": "Ann"}}' in "\n".join(config.prompts[-1])
+
+    async def test_no_data_model_no_data_model_prompt(self) -> None:
+        config = CapturingConfig()
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, protocol_version="v1.0", validate_responses=False)
+
+        await client.ask("hi")
+
+        assert "not instructions" not in "\n".join(config.prompts[-1])
 
     async def test_no_caps_no_negotiation_prompt(self) -> None:
         config = CapturingConfig()

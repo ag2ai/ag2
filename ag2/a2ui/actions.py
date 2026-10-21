@@ -37,7 +37,7 @@ from ._types import JsonValue
 if TYPE_CHECKING:
     from ag2.context import ConversationContext
 
-    from .incoming import A2UIIncomingAction
+    from .incoming import A2UIIncomingAction, A2UIIncomingFunctionCall
 
 # JSON-schema ``type`` → placeholder shown to the LLM as the expected
 # ``event.context`` value. Used only when no explicit ``example_context`` is given.
@@ -134,19 +134,25 @@ class A2UIAction:
     action: A2UIEventAction
     model: CallModel
 
-    async def run(self, click: "A2UIIncomingAction", *, context: "ConversationContext") -> Any:
+    async def run(
+        self,
+        click: "A2UIIncomingAction | A2UIIncomingFunctionCall",
+        *,
+        context: "ConversationContext",
+    ) -> Any:
         """Execute this action's handler with dependency injection resolved.
 
         Mirrors :meth:`~ag2.tools.final.function_tool.FunctionTool.__call__`:
         the action is provider-agnostic, so the ``dependency_provider`` is taken
         from the live ``context`` at call time rather than baked into the action.
-        The click's ``context`` supplies the handler's keyword arguments (coerced
-        by the serializer), and generator dependencies are torn down with the
-        ``AsyncExitStack`` after the handler returns.
+        The click's ``context`` (or a ``callAgentFunction``'s ``args``, both exposed as ``arguments``) supplies the
+        handler's keyword arguments (coerced by the serializer), and generator
+        dependencies are torn down with the ``AsyncExitStack`` after the handler
+        returns.
 
         Args:
-            click: The parsed incoming click; its ``context`` becomes the
-                handler's keyword arguments.
+            click: The parsed incoming click or function call; its ``context`` /
+                ``args`` become the handler's keyword arguments.
             context: The conversation context supplying ``Depends``/``Inject``
                 dependencies, variables, and the ``dependency_provider``.
 
@@ -155,7 +161,7 @@ class A2UIAction:
             onto the wire).
         """
         # `asolve` annotates each keyword as a `dict[str, Any]`; the values really are arbitrary.
-        options: dict[str, Any] = click.context | {CONTEXT_OPTION_NAME: context}
+        options: dict[str, Any] = click.arguments | {CONTEXT_OPTION_NAME: context}
         async with AsyncExitStack() as stack:
             return await self.model.asolve(
                 **options,
@@ -227,9 +233,10 @@ def a2ui_action(
     - one A2UI server→client message, or a list of them (e.g. ``updateComponents``
       / ``updateDataModel``) → sent to the renderer as a surface update (works on
       every protocol version);
-    - any other JSON value → returned as an ``actionResponse`` **only** when the
-      client requested one (``wantResponse`` + ``actionId``, v1.0); otherwise it
-      is fire-and-forget.
+    - any other JSON value → dropped: a click is fire-and-forget. A renderer that
+      wants the value back calls the action as a function instead (a v1.0
+      ``callAgentFunction`` named like the action, its ``args`` as the keyword
+      arguments), and gets it in an ``agentFunctionResponse``.
 
     Register the result with ``A2UIServer(actions=[...])``. A button the LLM draws
     with no registered action still works — its click is rewritten into a generic

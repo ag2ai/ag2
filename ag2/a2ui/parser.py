@@ -7,16 +7,14 @@ import logging
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, TypeGuard
+from typing import TypeGuard
 
-import jsonschema
+from referencing import Registry
 from referencing.exceptions import Unresolvable
 
 from ._types import A2UIVersion, JsonSchema, JsonValue, ServerToClientMessage, server_to_client_payload_keys
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
-
-if TYPE_CHECKING:
-    from referencing import Registry
+from .diagnostics import MessageChecker
 
 logger = logging.getLogger(__name__)
 
@@ -143,15 +141,14 @@ class A2UIResponseParser:
         self,
         version_string: A2UIVersion,
         server_to_client_schema: JsonSchema | None = None,
-        schema_registry: "Registry | None" = None,
-        component_schemas: dict[str, JsonSchema] | None = None,
-        catalog_id: str | None = None,
+        schema_registry: Registry | None = None,
+        function_callers: Mapping[str, str] | None = None,
     ) -> None:
-        self._schema = server_to_client_schema
-        self._registry = schema_registry
+        self._checker = (
+            MessageChecker(server_to_client_schema, schema_registry) if server_to_client_schema is not None else None
+        )
         self._version_string = version_string
-        self._component_schemas = component_schemas or {}
-        self._catalog_id = catalog_id
+        self._function_callers = function_callers
 
     @property
     def version_string(self) -> A2UIVersion:
@@ -225,36 +222,20 @@ class A2UIResponseParser:
         lines.append("")
         lines.append(
             "Please fix these errors and regenerate the A2UI JSON. "
-            f'Make sure each message includes "version": "{self._version_string}" and all required properties.'
+            f'Make sure each message includes "version": "{self._version_string}" and all required properties. '
+            "The user never sees this exchange: do not mention the errors or the correction in your reply."
         )
         return "\n".join(lines)
 
     def validate(self, operations: Sequence[ServerToClientMessage]) -> A2UIValidationResult:
         """Validate A2UI operations against the server_to_client schema."""
-        if self._schema is None:
+        if self._checker is None:
             return A2UIValidationResult(is_valid=True)
 
         errors: list[str] = []
-
-        if self._registry is not None:
-            validator_cls = jsonschema.validators.validator_for(self._schema)
-            validator = validator_cls(self._schema, registry=self._registry)
-        else:
-            validator = None
-
         for i, op in enumerate(operations):
             try:
-                if validator is not None:
-                    instance: Mapping[str, Any] = op
-                    validator.validate(instance)
-                else:
-                    jsonschema.validate(instance=op, schema=self._schema)
-            except jsonschema.ValidationError as e:
-                comp_errors = self._drill_into_components(op)
-                if comp_errors:
-                    errors.extend(f"Operation {i}: {ce}" for ce in comp_errors)
-                else:
-                    errors.append(f"Operation {i}: {e.message}")
+                errors.extend(f"Operation {i}: {issue.render(op)}" for issue in self._checker.issues(op))
             except Unresolvable as re:
                 # A ref we cannot resolve means we could not validate this op —
                 # surface it instead of letting it escape as an unhandled crash.
@@ -266,18 +247,23 @@ class A2UIResponseParser:
                 logger.warning("Unexpected error validating operation %d: %s", i, exc)
                 errors.append(f"Operation {i}: unexpected validation error ({exc})")
 
-        # Spec rule (server_to_client.json + a2ui.org):
-        # across all updateComponents ops, at least one component must have id 'root'.
-        update_components_ops = [op for op in operations if isinstance(op, dict) and "updateComponents" in op]
-        if update_components_ops:
-            has_root = any(
-                isinstance(c, dict) and c.get("id") == "root"
-                for op in update_components_ops
-                for c in _components_of(op.get("updateComponents"))
-            )
+        errors.extend(self._check_function_messages(operations))
+
+        # Spec rule (server_to_client.json + a2ui.org): across all component-carrying
+        # ops, at least one component must have id 'root'. v1.0's createSurface can
+        # carry the initial components itself, so those count alongside updateComponents.
+        update_ops = [op for op in operations if isinstance(op, dict) and "updateComponents" in op]
+        create_lists = [
+            _components_of(op.get("createSurface"))
+            for op in operations
+            if isinstance(op, dict) and "createSurface" in op
+        ]
+        component_lists = [_components_of(op.get("updateComponents")) for op in update_ops] + create_lists
+        if update_ops or any(create_lists):
+            has_root = any(isinstance(c, dict) and c.get("id") == "root" for lst in component_lists for c in lst)
             if not has_root:
                 errors.append(
-                    "No component with id 'root' found across updateComponents — "
+                    "No component with id 'root' found across the surface's components — "
                     "the A2UI spec requires the component tree to have a 'root' node."
                 )
 
@@ -286,51 +272,27 @@ class A2UIResponseParser:
             errors=errors,
         )
 
-    def _drill_into_components(self, op: ServerToClientMessage) -> list[str]:
-        """Validate individual components in an updateComponents operation."""
-        if not isinstance(op, dict):
-            return [f"Expected operation to be an object, got {type(op).__name__}"]
-        if "updateComponents" not in op or not self._component_schemas:
-            return []
-
-        components = _components_of(op.get("updateComponents"))
-        if not components:
-            return []
-
-        comp_errors: list[str] = []
-        for comp in components:
-            if not isinstance(comp, dict):
-                comp_errors.append(f"Expected component to be an object, got {type(comp).__name__}")
+    def _check_function_messages(self, operations: Sequence[ServerToClientMessage]) -> list[str]:
+        """v1.0 rules the JSON schema cannot express: who may send or be called."""
+        errors: list[str] = []
+        for i, op in enumerate(operations):
+            if not isinstance(op, dict):
                 continue
-            comp_type = comp.get("component", "unknown")
-            comp_id = comp.get("id", "?")
-            schema = self._component_schemas.get(comp_type)
-            if schema is None:
-                comp_errors.append(f"Component '{comp_id}': unknown component type '{comp_type}'")
-                continue
-            # Prefer a ref via catalog_id (resolves via registry against the merged
-            # catalog) but fall back to validating against the inlined component
-            # schema directly when no catalog_id is configured.
-            ref_or_schema: JsonSchema = (
-                {"$ref": f"{self._catalog_id}#/components/{comp_type}"} if self._catalog_id else schema
-            )
-            try:
-                if self._registry is not None:
-                    validator_cls = jsonschema.validators.validator_for(ref_or_schema)
-                    comp_validator = validator_cls(ref_or_schema, registry=self._registry)
-                    comp_validator.validate(comp)
-                else:
-                    jsonschema.validate(instance=comp, schema=ref_or_schema)
-            except jsonschema.ValidationError as ce:
-                comp_errors.append(f"Component '{comp_id}' ({comp_type}): {ce.message}")
-            except Unresolvable as re:
-                # Do not swallow: a ref we cannot resolve means we could not
-                # validate the component, so surface it as an error instead of
-                # silently treating an unvalidated component as valid.
-                # (``Unresolvable`` replaces deprecated ``jsonschema.RefResolutionError``.)
-                logger.warning("Schema ref resolution failed for component '%s' (%s): %s", comp_id, comp_type, re)
-                comp_errors.append(f"Component '{comp_id}' ({comp_type}): could not resolve schema reference ({re})")
-            except Exception as exc:
-                logger.warning("Unexpected error validating component '%s' (%s): %s", comp_id, comp_type, exc)
-                comp_errors.append(f"Component '{comp_id}' ({comp_type}): unexpected validation error ({exc})")
-        return comp_errors
+            if "agentFunctionResponse" in op:
+                errors.append(
+                    f"Operation {i}: 'agentFunctionResponse' is sent by the server in reply to a "
+                    "'callAgentFunction'; do not emit it."
+                )
+            call = op.get("callRendererFunction")
+            call_function = call.get("callFunction") if isinstance(call, dict) else None
+            name = call_function.get("@call") if isinstance(call_function, dict) else None
+            if (
+                isinstance(name, str)
+                and self._function_callers is not None
+                and self._function_callers.get(name, "rendererOnly") == "rendererOnly"
+            ):
+                errors.append(
+                    f"Operation {i}: function '{name}' is 'rendererOnly' in the catalog (allowedCallers), "
+                    "so the agent cannot call it with 'callRendererFunction'."
+                )
+        return errors

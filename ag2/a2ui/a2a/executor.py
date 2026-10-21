@@ -31,15 +31,15 @@ from ..capabilities import (
     A2UIClientCapabilities,
     parse_client_capabilities,
 )
+from ..data_model import data_model_to_prompt, parse_client_data_model
 from ..events import A2UIMessageEvent
 from ..incoming import (
-    A2UIIncomingActionResult,
     A2UIIncomingParseResult,
     iter_incoming_prompts,
     parse_incoming_interactions,
 )
 from ..middleware import A2UIInboundMiddleware
-from ..server_action import build_server_action_context, run_server_action
+from ..server_action import run_client_interactions
 from .extension import try_activate_a2ui_extension
 from .parts import create_a2ui_parts, get_a2ui_data
 
@@ -61,7 +61,7 @@ class A2UIAgentExecutor(AgentExecutor):
     Extends :class:`ag2.a2a.AgentExecutor` to:
 
     1. Negotiate the A2UI extension when the client requests it.
-    2. Read ``a2uiClientCapabilities`` from the request message metadata and
+    2. Read ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) from the request message metadata and
        fold catalog negotiation into the turn's system prompt
        (:meth:`_extra_system_prompt`).
     3. Detect incoming A2UI DataParts on the request message:
@@ -71,8 +71,11 @@ class A2UIAgentExecutor(AgentExecutor):
        - an ``action`` envelope with no registered action is rewritten as a
          generic ``TextInput`` prompt so the agent can react to the button it
          itself rendered.
-       - ``error`` envelopes (e.g. ``VALIDATION_FAILED``) are rewritten as
-         a corrective ``TextInput`` so the agent can regenerate.
+       - a v1.0 ``callAgentFunction`` envelope is answered on the server with an
+         ``agentFunctionResponse`` (the agent is not invoked).
+       - a v1.0 ``rendererFunctionResponse`` (the reply to a ``callRendererFunction``)
+         and ``error`` envelopes (e.g. ``VALIDATION_FAILED``) are rewritten as
+         a ``TextInput`` so the agent can continue or regenerate.
     4. Collect the :class:`A2UIMessageEvent`s the validation middleware emits
        during the turn and split the completed task into a text ``Part`` (the
        conversational prose, already stripped from ``ModelResponse.content``)
@@ -164,7 +167,9 @@ class A2UIAgentExecutor(AgentExecutor):
             # registered action simply produces no replacement prompt.
             consumed_a2ui = True
             all_envelopes.extend(envelopes)
-            for prompt in iter_incoming_prompts(envelopes, self._runtime.get_action):
+            for prompt in iter_incoming_prompts(
+                envelopes, self._runtime.get_action, self._runtime.get_renderer_function_name
+            ):
                 new_parts.append(Part(text=prompt))
 
         if consumed_a2ui:
@@ -178,9 +183,9 @@ class A2UIAgentExecutor(AgentExecutor):
 
         The agent is a plain ``Agent`` with no A2UI prompt baked in, so the
         runtime's system-prompt section is prepended here. Negotiated
-        ``a2uiClientCapabilities`` (read off the incoming message metadata) are
+        ``a2uiClientCapabilities`` / ``a2uiRendererCapabilities`` (read off the incoming message metadata) are
         appended as a per-turn fragment so the LLM only targets components the
-        client can render.
+        client can render; so is the renderer's data model (``a2uiRendererDataModel``).
         """
         prompts: list[str] = [self._runtime.system_prompt_section]
         caps = self._client_capabilities(request_context)
@@ -188,10 +193,15 @@ class A2UIAgentExecutor(AgentExecutor):
             fragment = self._runtime.capabilities_prompt(caps)
             if fragment:
                 prompts.append(fragment)
+        msg = request_context.message
+        if msg is not None and msg.metadata:
+            surfaces = parse_client_data_model(struct_to_dict(msg.metadata), version_key=self._runtime.version_string)
+            if data_model_fragment := data_model_to_prompt(surfaces):
+                prompts.append(data_model_fragment)
         return tuple(prompts)
 
     def _client_capabilities(self, request_context: RequestContext) -> "A2UIClientCapabilities | None":
-        """Decode ``a2uiClientCapabilities`` from the request message metadata.
+        """Decode ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) from the request message metadata.
 
         ``RequestContext.metadata`` is a read-only copy, so the capabilities are
         read from their source — ``message.metadata`` — converting the protobuf
@@ -238,30 +248,21 @@ class A2UIAgentExecutor(AgentExecutor):
         if interactions:
             extra_middleware.append(A2UIInboundMiddleware(interactions))
 
-        # Run server-side action handlers for any registered click (the prompt
-        # rewriter already skipped these, so the agent never sees them). Their
-        # messages lead the finalization DataPart, ahead of the agent's own.
-        handled_server = False
-        if interactions:
-            # Server actions resolve their dependencies against the agent's DI
-            # surface, exactly like the agent's own tools (and the REST path).
-            action_context = build_server_action_context(self._agent, variables=parsed.context_update)
-            for interaction in interactions:
-                if not isinstance(interaction, A2UIIncomingActionResult):
-                    continue
-                server_action = self._server_actions.get(interaction.action.name)
-                if server_action is not None:
-                    handled_server = True
-                    a2ui_messages.extend(
-                        await run_server_action(
-                            server_action,
-                            interaction.action,
-                            version=self._runtime.version_string,
-                            context=action_context,
-                        )
-                    )
+        # Answer the interactions the server handles itself — registered clicks and
+        # callAgentFunction calls (the prompt rewriter already skipped these, so the
+        # agent never sees them). Their messages lead the finalization DataPart,
+        # ahead of the agent's own. Handlers resolve their dependencies against the
+        # agent's DI surface, exactly like the agent's own tools (and the REST path).
+        server_messages, handled_server = await run_client_interactions(
+            interactions,
+            self._server_actions,
+            self._agent,
+            variables=parsed.context_update,
+            version=self._runtime.version_string,
+        )
+        a2ui_messages.extend(server_messages)
 
-        # A turn carrying only server-action clicks (no user text, no tool
+        # A turn carrying only server-handled interactions (no user text, no tool
         # results) is complete already — finalize with the handlers' messages and
         # skip the agent, mirroring the REST path (``stream_turn``). Otherwise the
         # agent would run on an empty prompt and may emit spurious prose.
@@ -291,22 +292,20 @@ class A2UIAgentExecutor(AgentExecutor):
         prose_text = response.message.content if response.message else ""
         agent_msg = self._build_a2ui_message(updater, prose_text or "", a2ui_messages, final_variables)
 
-        # v1.0: a server-initiated callFunction(wantResponse=true) pauses the
-        # task awaiting the client's functionResponse. Unlike client tool calls
-        # (streamed as artifacts during the turn), the callFunction DataPart only
-        # lives in the finalization message — so it must ride the input-required
+        # v1.0: a callRendererFunction pauses the task awaiting the renderer's
+        # rendererFunctionResponse. Unlike client tool calls (streamed as
+        # artifacts during the turn), the callRendererFunction DataPart only lives
+        # in the finalization message — so it must ride the input-required
         # transition, otherwise the client never learns what function to run.
-        wants_client_response = any(
-            isinstance(m, dict) and "callFunction" in m and m.get("wantResponse") for m in a2ui_messages
-        )
+        calls_renderer_function = any(isinstance(m, dict) and "callRendererFunction" in m for m in a2ui_messages)
         has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
-        if wants_client_response:
+        if calls_renderer_function:
             if has_pending or pending_client_calls:
-                # A callFunction(wantResponse) and pending tool calls can co-occur in
-                # a turn; give the callFunction precedence and defer the tool calls.
+                # A callRendererFunction and pending tool calls can co-occur in
+                # a turn; give the callRendererFunction precedence and defer the tool calls.
                 logger.warning(
-                    "callFunction(wantResponse) emitted alongside pending tool calls; "
-                    "pausing for the client function and deferring the pending tool calls this turn.",
+                    "callRendererFunction emitted alongside pending tool calls; "
+                    "pausing for the renderer function and deferring the pending tool calls this turn.",
                 )
             await updater.requires_input(message=agent_msg)
             await lifecycle_ctx.send(
@@ -376,8 +375,14 @@ class A2UIAgentExecutor(AgentExecutor):
         return updater.new_agent_message(parts=parts, metadata=metadata)
 
 
+_RENDERER_ENVELOPE_KEYS = ("action", "callAgentFunction", "rendererFunctionResponse", "error")
+
+
 def _extract_a2ui_envelopes(part: Part) -> list[JsonObject]:
-    """Return the A2UI envelope dicts (carrying ``action``/``functionResponse``/``error``) from an A2A ``Part``."""
+    """Return the A2UI envelope dicts the renderer sends the agent from an A2A ``Part``.
+
+    Those carry ``action``, ``callAgentFunction``, ``rendererFunctionResponse`` or ``error``.
+    """
     data = get_a2ui_data(part)
     if data is None:
         return []
@@ -392,13 +397,7 @@ def _extract_a2ui_envelopes(part: Part) -> list[JsonObject]:
         else:
             raw_entries.append(data)
 
-    return [
-        e
-        for e in raw_entries
-        if isinstance(e.get("action"), dict)
-        or isinstance(e.get("functionResponse"), dict)
-        or isinstance(e.get("error"), dict)
-    ]
+    return [e for e in raw_entries if any(isinstance(e.get(key), dict) for key in _RENDERER_ENVELOPE_KEYS)]
 
 
 __all__ = ("A2UIAgentExecutor",)

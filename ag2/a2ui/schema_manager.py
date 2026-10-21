@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 from typing import TypedDict
+from urllib.parse import urljoin
 
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
@@ -29,10 +30,46 @@ def _as_object(value: "JsonValue | None") -> JsonObject:
     return value if isinstance(value, dict) else {}
 
 
+# v1.0 constrains extension keys with Unicode property escapes, which Python's ``re``
+# (what ``jsonschema`` matches patterns with) rejects. Swap the two UAX #31 classes for
+# their closest ``re`` equivalents at load time, leaving the vendored files byte-faithful.
+_RE_UNSUPPORTED_CLASSES = {r"[\p{XID_Start}_]": r"[^\W\d]", r"[\p{XID_Continue}]": r"\w"}
+
+
+def _python_regex(schema: JsonValue) -> JsonValue:
+    """Rewrite ``patternProperties`` keys of a schema so Python's ``re`` can compile them."""
+    if isinstance(schema, list):
+        return [_python_regex(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out: JsonObject = {}
+    for key, value in schema.items():
+        if key == "patternProperties" and isinstance(value, dict):
+            patterns: JsonObject = {}
+            for pattern, sub_schema in value.items():
+                for unsupported, supported in _RE_UNSUPPORTED_CLASSES.items():
+                    pattern = pattern.replace(unsupported, supported)
+                patterns[pattern] = _python_regex(sub_schema)
+            out[key] = patterns
+        else:
+            out[key] = _python_regex(value)
+    return out
+
+
+def _instructions_of(catalog: JsonSchema) -> str:
+    """Return a catalog's embedded ``instructions`` text (v1.0), or ``""``."""
+    instructions = catalog.get("instructions")
+    return instructions.strip() if isinstance(instructions, str) else ""
+
+
 class _VersionConfigEntry(TypedDict):
     default_catalog_id: str
     schema_base_uri: str
     version_string: A2UIVersion
+    # Vendored file names of the two message schemas. Upstream renamed
+    # server/client to agent/renderer in v1.0; the wire direction is the same.
+    server_to_client_file: str
+    client_to_server_file: str
 
 
 # Catalog ids / schema base uris are the canonical A2UI identifiers (they
@@ -45,16 +82,22 @@ _VERSION_CONFIG: dict[A2UIVersion, _VersionConfigEntry] = {
         "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9"],
         "schema_base_uri": "https://a2ui.org/specification/v0_9/",
         "version_string": "v0.9",
+        "server_to_client_file": "server_to_client.json",
+        "client_to_server_file": "client_to_server.json",
     },
     "v0.9.1": {
         "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9.1"],
         "schema_base_uri": "https://a2ui.org/specification/v0_9/",
         "version_string": "v0.9.1",
+        "server_to_client_file": "server_to_client.json",
+        "client_to_server_file": "client_to_server.json",
     },
     "v1.0": {
         "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v1.0"],
         "schema_base_uri": "https://a2ui.org/specification/v1_0/",
         "version_string": "v1.0",
+        "server_to_client_file": "agent_to_renderer.json",
+        "client_to_server_file": "renderer_to_agent.json",
     },
 }
 
@@ -114,11 +157,14 @@ class A2UISchemaManager:
         if self._loaded:
             return
 
-        self._server_to_client = self._load_spec_json("server_to_client.json")
-        self._client_to_server = self._load_spec_json("client_to_server.json")
-        self._common_types = self._load_spec_json("common_types.json")
+        config = _VERSION_CONFIG[self._protocol_version]
+        self._server_to_client = self._load_spec_json(config["server_to_client_file"])
+        self._client_to_server = self._load_spec_json(config["client_to_server_file"])
+        self._common_types = _as_object(_python_regex(self._load_spec_json("common_types.json")))
         self._basic_catalog = self._load_spec_json("basic_catalog.json")
-        self._catalog_rules = self._load_spec_text("basic_catalog_rules.txt")
+        # v0.9.x ships the catalog guidance as a separate rules file; v1.0 embeds
+        # it in the catalog's own ``instructions`` field.
+        self._catalog_rules = self._load_spec_text("basic_catalog_rules.txt") or _instructions_of(self._basic_catalog)
 
         self._prompt_example = self._load_version_json("prompt_example.json")
         self._prompt_message_types = self._load_version_text("prompt_message_types.md")
@@ -254,6 +300,17 @@ class A2UISchemaManager:
                         schemas[name] = defn
         return schemas
 
+    def get_function_callers(self) -> dict[str, str]:
+        """Map each catalog function name to its ``allowedCallers`` (default ``rendererOnly``, as in v1.0)."""
+        self._ensure_loaded()
+        callers: dict[str, str] = {}
+        for catalog in [self._basic_catalog, self._custom_catalog]:
+            if catalog is not None:
+                for name, defn in _as_object(catalog.get("functions")).items():
+                    allowed = defn.get("allowedCallers") if isinstance(defn, dict) else None
+                    callers[name] = allowed if isinstance(allowed, str) else "rendererOnly"
+        return callers
+
     def build_schema_registry(self) -> "Registry":
         """Build a jsonschema referencing Registry for cross-file $ref resolution."""
         self._ensure_loaded()
@@ -274,6 +331,15 @@ class A2UISchemaManager:
             schema_id = schema.get("$id")
             if isinstance(schema_id, str):
                 resources.append((schema_id, Resource.from_contents(schema, default_specification=DRAFT202012)))
+        # v1.0 catalogs reference the shared types by a bare ``common_types.json``,
+        # which resolves next to the catalog's own ``$id``.
+        for catalog in [self._basic_catalog, active_catalog]:
+            catalog_uri = catalog.get("$id")
+            if isinstance(catalog_uri, str):
+                resources.append((
+                    urljoin(catalog_uri, "common_types.json"),
+                    Resource.from_contents(self._common_types, default_specification=DRAFT202012),
+                ))
         if self._custom_catalog is not None:
             custom_id = self._custom_catalog.get("$id")
             if isinstance(custom_id, str):
@@ -398,6 +464,8 @@ class A2UISchemaManager:
                 rules_parts.append(self._catalog_rules)
             if self._custom_catalog_rules:
                 rules_parts.append(self._custom_catalog_rules)
+            elif self._custom_catalog is not None and (custom_instructions := _instructions_of(self._custom_catalog)):
+                rules_parts.append(custom_instructions)
             if rules_parts:
                 sections.append("\n\n## Component Rules\n\n" + "\n\n".join(rules_parts))
 

@@ -46,18 +46,33 @@ class TestA2UISchemaManager:
         assert manager.server_to_client_schema is not None
         assert manager.basic_catalog_schema is not None
         assert manager.common_types_schema is not None
-        # v1.0 adds two server->client message types beyond v0.9's four.
+        # v1.0 adds two agent->renderer message types beyond v0.9's four.
         defs = manager.server_to_client_schema.get("$defs", {})
         assert isinstance(defs, dict)
-        assert "CallFunctionMessage" in defs
-        assert "ActionResponseMessage" in defs
+        assert "CallRendererFunctionMessage" in defs
+        assert "AgentFunctionResponseMessage" in defs
+        assert manager.client_to_server_schema["$id"].endswith("/v1_0/renderer_to_agent.json")
 
     def test_v1_0_prompt_mentions_new_message_types(self) -> None:
         manager = A2UISchemaManager(protocol_version="v1.0")
         prompt = manager.generate_prompt_section(include_schema=False)
         assert "v1.0" in prompt
-        assert "callFunction" in prompt
-        assert "actionResponse" in prompt
+        assert "callRendererFunction" in prompt
+        assert "agentFunctionResponse" in prompt
+
+    def test_v1_0_prompt_teaches_reserved_binding_keys(self) -> None:
+        prompt = A2UISchemaManager(protocol_version="v1.0").generate_prompt_section(include_schema=False)
+        assert '{"@path": "/customTime"}' in prompt
+        assert '"@call"' in prompt
+
+    def test_v1_0_prompt_includes_the_catalog_instructions(self) -> None:
+        manager = A2UISchemaManager(protocol_version="v1.0")
+        instructions = manager.basic_catalog_schema["instructions"]
+        assert isinstance(instructions, str)
+        assert instructions.strip() in manager.generate_prompt_section(include_schema=False)
+
+    def test_v0_9_prompt_has_no_catalog_instructions(self) -> None:
+        assert "instructions" not in A2UISchemaManager(protocol_version="v0.9").basic_catalog_schema
 
     def test_custom_catalog_id_from_catalog(self) -> None:
         manager = A2UISchemaManager(custom_catalog={"$id": "https://mycompany.com/custom.json", "components": {}})
@@ -144,8 +159,6 @@ class TestMergedCatalog:
             version_string="v0.9",
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
-            component_schemas=manager.get_component_schemas(),
-            catalog_id=manager.catalog_id,
         )
         ops = [
             {
@@ -233,3 +246,18 @@ class TestPromptSection:
         assert "book_table" in prompt
         assert '"event"' in prompt
         assert "Client Functions" not in prompt
+
+
+def test_function_callers_default_to_renderer_only_and_follow_the_catalog() -> None:
+    manager = A2UISchemaManager(
+        protocol_version="v1.0",
+        custom_catalog={
+            "$id": "https://mycompany.com/cat.json",
+            "functions": {"lookup": {"returnType": "string", "allowedCallers": "agentOnly"}},
+        },
+    )
+
+    callers = manager.get_function_callers()
+
+    assert callers["lookup"] == "agentOnly"
+    assert callers["openUrl"] == "rendererOnly"
