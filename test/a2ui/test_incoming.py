@@ -170,10 +170,9 @@ class TestParseIncomingFunctionResponse:
         result = parse_incoming_message({"rendererFunctionResponse": payload})
         assert isinstance(result, A2UIIncomingUnknownResult)
 
-    def test_the_old_function_response_key_is_unknown_with_a_hint(self) -> None:
+    def test_the_pre_release_function_response_key_is_unknown(self) -> None:
         result = parse_incoming_message({"functionResponse": {"functionCallId": "fc-1", "call": "x"}})
         assert isinstance(result, A2UIIncomingUnknownResult)
-        assert "rendererFunctionResponse" in result.parse_error
 
 
 class TestFunctionResponsePrompt:

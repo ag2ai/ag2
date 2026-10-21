@@ -22,7 +22,7 @@ class TestParseRequestCapabilities:
     def test_capabilities_parsed_for_version(self) -> None:
         body = {
             "messages": [],
-            "a2uiClientCapabilities": {"v1.0": {"supportedCatalogIds": ["https://x.example/c.json"]}},
+            "a2uiRendererCapabilities": {"v1.0": {"supportedCatalogIds": ["https://x.example/c.json"]}},
         }
         req = parse_request(body, resolve_action=_no_actions, version_key="v1.0")
         assert req.client_capabilities == A2UIClientCapabilities(

@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Parse the transport-neutral A2UI server request body — a minimal JSON
-contract (``messages``, ``variables``, ``a2ui``, ``a2uiClientCapabilities``, ``a2uiRendererDataModel``).
+contract (``messages``, ``variables``, ``a2ui``, ``a2uiClientCapabilities`` / ``a2uiRendererCapabilities``,
+``a2uiClientDataModel`` / ``a2uiRendererDataModel``).
 The server is stateless: the client sends the full conversation each turn.
 """
 
@@ -37,7 +38,7 @@ class A2UIServerRequest:
     trailing user message(s) plus any prompts synthesized from client→server
     ``a2ui`` action/error envelopes. ``prompt`` carries system/developer
     messages; ``history`` carries the prior conversation turns.
-    ``client_capabilities`` carries the decoded ``a2uiClientCapabilities``, if
+    ``client_capabilities`` carries the decoded ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0), if
     present, so the dispatcher can fold catalog negotiation into the prompt.
     ``client_data_model`` carries the decoded ``a2uiRendererDataModel`` (per-surface
     data models a ``sendDataModel`` surface attaches), if present.
@@ -74,7 +75,7 @@ def parse_request(
             a ``rendererFunctionResponse`` prompt can name the function.
         version_key: The protocol version under which to read
             ``a2uiClientCapabilities`` (the client nests it under its version,
-            e.g. ``"v1.0"``; for v1.0 ``a2uiRendererCapabilities`` is read first). Defaults to ``"v0.9"``; callers serving a non-v0.9
+            e.g. ``"v1.0"``, whose key is ``a2uiRendererCapabilities``). Defaults to ``"v0.9"``; callers serving a non-v0.9
             agent should pass ``agent.schema_manager.version_string`` (the ASGI
             adapter does), else a newer client's capabilities are silently
             dropped.

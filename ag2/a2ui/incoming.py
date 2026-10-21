@@ -167,10 +167,6 @@ A2UIIncomingParseResult = (
 )
 
 
-# Envelope keys of the pre-release v1.0 candidate, mapped to their replacements.
-_LEGACY_KEYS = {"functionResponse": "rendererFunctionResponse"}
-
-
 def _optional_str(value: JsonValue) -> str | None:
     return value if isinstance(value, str) else None
 
@@ -286,12 +282,6 @@ def parse_incoming_message(data: JsonValue) -> A2UIIncomingParseResult:
             )
         return A2UIIncomingErrorResult(error=error)
 
-    legacy = sorted(_LEGACY_KEYS.keys() & data.keys())
-    if legacy:
-        return A2UIIncomingUnknownResult(
-            parse_error=f"envelope uses the pre-release v1.0 key {legacy[0]!r}; "
-            f"send {_LEGACY_KEYS[legacy[0]]!r} instead",
-        )
     return A2UIIncomingUnknownResult(
         parse_error="envelope has none of 'action', 'callAgentFunction', 'rendererFunctionResponse', or 'error' keys",
     )

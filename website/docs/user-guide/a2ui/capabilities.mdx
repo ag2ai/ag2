@@ -60,7 +60,7 @@ How capabilities reach the agent depends on the transport:
 
 <Tabs>
   <Tab title="REST">
-Send them in the request body under `#!python a2uiClientCapabilities`, nested by protocol version (see the [Server](/docs/user-guide/a2ui/server) request contract):
+Send them in the request body under `#!python a2uiClientCapabilities` (`#!python a2uiRendererCapabilities` for v1.0), nested by protocol version (see the [Server](/docs/user-guide/a2ui/server) request contract):
 
 ```json
 {
@@ -75,7 +75,7 @@ Send them in the request body under `#!python a2uiClientCapabilities`, nested by
   </Tab>
 
   <Tab title="A2A">
-The client puts the same shape on the A2A message `#!python metadata` — under `#!python a2uiClientCapabilities`, or `#!python a2uiRendererCapabilities` for v1.0 (the key the upstream v1.0 extension specification uses; it is read first, with `#!python a2uiClientCapabilities` as the fallback). The [A2A executor](/docs/user-guide/a2ui/a2a) reads it off the incoming message and folds it into the turn's system prompt automatically.
+The client puts the same shape on the A2A message `#!python metadata` — under `#!python a2uiClientCapabilities`, or `#!python a2uiRendererCapabilities` for v1.0 (the key the upstream v1.0 extension specification uses). The [A2A executor](/docs/user-guide/a2ui/a2a) reads it off the incoming message and folds it into the turn's system prompt automatically.
   </Tab>
 </Tabs>
 

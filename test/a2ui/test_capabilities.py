@@ -63,8 +63,8 @@ class TestCapabilitiesToPrompt:
 
 class TestParseClientCapabilitiesVersionKey:
     def test_reads_requested_version(self) -> None:
-        metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["x"]}}}
-        caps = parse_client_capabilities(metadata, version_key="v1.0")
+        metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v0.9.1": {"supportedCatalogIds": ["x"]}}}
+        caps = parse_client_capabilities(metadata, version_key="v0.9.1")
         assert caps == A2UIClientCapabilities(supported_catalog_ids=["x"], inline_catalogs=[])
 
     def test_v1_0_reads_the_renderer_named_key(self) -> None:
@@ -72,13 +72,9 @@ class TestParseClientCapabilitiesVersionKey:
         caps = parse_client_capabilities(metadata, version_key="v1.0")
         assert caps == A2UIClientCapabilities(supported_catalog_ids=["x"], inline_catalogs=[])
 
-    def test_v1_0_prefers_the_renderer_key_over_the_client_key(self) -> None:
-        metadata = {
-            A2UI_RENDERER_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["renderer"]}},
-            A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["client"]}},
-        }
-        caps = parse_client_capabilities(metadata, version_key="v1.0")
-        assert caps == A2UIClientCapabilities(supported_catalog_ids=["renderer"], inline_catalogs=[])
+    def test_v1_0_ignores_the_client_named_key(self) -> None:
+        metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v1.0": {"supportedCatalogIds": ["x"]}}}
+        assert parse_client_capabilities(metadata, version_key="v1.0") is None
 
     def test_earlier_versions_ignore_the_renderer_key(self) -> None:
         metadata = {A2UI_RENDERER_CAPABILITIES_METADATA_KEY: {"v0.9": {"supportedCatalogIds": ["x"]}}}
