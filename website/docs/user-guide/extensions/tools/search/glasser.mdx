@@ -3,10 +3,10 @@ title: Glasser
 sidebarTitle: Glasser
 ---
 
-`GlasserToolkit` gives an agent six paid-data tools through [Glasser](https://glasser.ai){.external-link target="_blank"}, with one API key and pay-per-call billing. Use it for web research, company and people lookups, SEO, public social data, US property data and stock quotes.
+`#!python GlasserToolkit` gives AG2 agents six focused paid-data tools through [Glasser](https://glasser.ai){.external-link target="_blank"}. An application supplies one Glasser API key and selects which tools the agent may call.
 
 !!! note
-    Requires a Glasser API key and sufficient balance. No additional package is needed: the extension calls the REST API with `httpx`, which AG2 already depends on. Set `GLASSER_API_KEY` in your environment; the toolkit does not read environment variables itself.
+    Each call can incur a charge. The toolkit uses AG2's existing `#!python httpx` dependency. Set `GLASSER_API_KEY` in your environment; the toolkit does not read environment variables itself.
 
 ```python linenums="1"
 import os
@@ -17,119 +17,99 @@ from ag2.extensions.tools.search import GlasserToolkit
 agent = Agent(
     "researcher",
     config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
-    tools=[GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"])],
+    tools=[GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"], limit=5)],
 )
 ```
 
 ## Tools
 
-Each tool maps to `POST /v1/solutions/gtm/<capability>`. The model chooses the action and its input fields. Provider selection and shared defaults are configured by your application.
+Each tool uses one fixed action in a Glasser Solution endpoint. The model supplies only the inputs shown below. The application controls Provider choice, result limits, country, Task ID, metadata, and returned text length.
 
-| Tool / factory | Input and available actions |
-| :--- | :--- |
-| `glasser_web_research` / `web_research()` | `query` for `search` (default), `news`, `places`, `scholar`, `shopping`, `images`, `videos` or `answer`; `url` for `scrape` or `similar` |
-| `glasser_company_intelligence` / `company_intelligence()` | Required `domain`; `enrich` (default), `tech_stack`, `traffic`, `competitors`, `funding` or `news` |
-| `glasser_people_search` / `people_search()` | `search` (default) by job titles, seniorities, locations, company domain or keywords; `enrich` by LinkedIn URL, email or name and company; `find_email` by name and company |
-| `glasser_seo_research` / `seo_research()` | Keywords for `keyword_overview` (default), `keyword_ideas` or `serp`; a domain for rankings, competitors, backlinks, audits and AI visibility; competitor domains for gap analysis; a URL for `page_audit` |
-| `glasser_social_research` / `social_research()` | Required `platform`: `reddit`, `x`, `youtube`, `tiktok`, `instagram` or `linkedin`; `mode`: `search` (default), `profile`, `feed`, `post` or `find`; a query, handle or URL for that mode |
-| `glasser_market_data` / `market_data()` | Required `action`: `property_value`, `property_rent`, `property_search`, `listings_sale`, `listings_rental`, `market_stats` or `stock_quote`; supply the address, city and state, ZIP or symbol it requires |
+| Tool / factory | Model inputs | Glasser action |
+| :--- | :--- | :--- |
+| `#!python glasser_web_search` / `#!python web_search()` | `#!python query` | `web_research.search` |
+| `#!python glasser_company_profile` / `#!python company_profile()` | `#!python domain` | `company_intelligence.enrich` |
+| `#!python glasser_find_people` / `#!python find_people()` | At least one of `#!python job_titles`, `#!python locations`, `#!python company_domain`, `#!python keywords` | `people_search.search` |
+| `#!python glasser_keyword_overview` / `#!python keyword_overview()` | Non-empty `#!python keywords` list | `seo_research.keyword_overview` |
+| `#!python glasser_social_search` / `#!python social_search()` | `#!python platform`, `#!python query` | `social_research.search` |
+| `#!python glasser_stock_quote` / `#!python stock_quote()` | `#!python symbol` | `market_data.stock_quote` |
 
-Glasser validates action-specific requirements and Provider support. The toolkit does not choose another Provider or translate the response into a different data schema.
+The toolkit rejects empty required inputs before making a paid request. Glasser validates Provider support and the remaining request fields. Other Solution actions can be added as separate tools.
 
-## Select tools and set defaults
+## Select tools and set application options
 
-Pass the toolkit to register all six tools. For a smaller tool set, use the factory methods:
+Passing the toolkit to an agent registers all six tools. Use factory methods to register a subset:
 
 ```python linenums="1"
-import os
 from ag2 import Agent
 from ag2.config import AnthropicConfig
 from ag2.extensions.tools.search import GlasserToolkit
 
 config = AnthropicConfig(model="claude-haiku-4-5-20251001")
-toolkit = GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"], limit=5)
-
+toolkit = GlasserToolkit(api_key="YOUR_GLASSER_API_KEY")
 agent = Agent(
     "researcher",
     config=config,
     tools=[
-        toolkit.web_research(country="us", provider="serper"),
-        toolkit.company_intelligence(),
+        toolkit.web_search(provider="serper", limit=5, country="us"),
+        toolkit.company_profile(),
     ],
 )
 ```
 
-The constructor accepts `provider`, `limit`, `country`, `task_id` and `metadata`. Only fields supported by the selected capability are sent:
+`#!python provider` and `#!python metadata` apply to all six tools. `#!python limit` applies to web search, company profiles, people search, and keyword overviews. `#!python country` applies to web search, company profiles, and keyword overviews. `#!python task_id` applies to all except social search. The constructor passes its options to its six default tools. A factory called separately uses only its own options; omitted values let Glasser use its server defaults. Every factory also accepts `#!python name`, `#!python description`, and `#!python middleware`.
 
-- `provider` and `metadata` apply to all six tools.
-- `limit` and `task_id` apply to all tools except social research.
-- `country` applies to web, company and SEO research.
+`#!python limit` is the application-controlled lever for result count and, where the Provider charges per result, cost. There is no universal per-call spending ceiling on these six actions. The model cannot change `#!python limit` or select a more expensive action. Applications should register only the tools they intend to fund and set their own Glasser Workspace budget.
 
-These options can also be supplied to each applicable factory. A factory value of `None` inherits the constructor value. When both are `None`, the field is omitted and Glasser applies its own default. Omitted `provider` means automatic selection on the server; a named Provider does not fall back.
-
-Every factory supports `name`, `description` and `middleware`. Constructor middleware applies to the toolkit's default tools; pass middleware to a factory when registering that tool separately.
-
-### Runtime defaults
-
-Defaults support AG2 `Variable` values:
+Options support AG2 `#!python Variable` values:
 
 ```python linenums="1"
-import os
 from ag2 import Agent, Variable
 from ag2.config import AnthropicConfig
 from ag2.extensions.tools.search import GlasserToolkit
 
 config = AnthropicConfig(model="claude-haiku-4-5-20251001")
-toolkit = GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"])
+toolkit = GlasserToolkit(api_key="YOUR_GLASSER_API_KEY")
 agent = Agent(
     "researcher",
     config=config,
-    tools=[toolkit.web_research(limit=Variable("result_limit"), country=Variable("country"))],
+    tools=[toolkit.web_search(limit=Variable("result_limit"), country=Variable("country"))],
     variables={"result_limit": 5, "country": "gb"},
 )
 ```
 
-A missing variable without a default raises `KeyError` before an HTTP request is sent. Glasser validates the resolved values.
+A missing variable without a default raises `#!python KeyError` before an HTTP request is sent.
 
 ## Results and charges
 
-The tool returns the complete decoded API object in `ToolResult`, including output, errors, status, charges and Run references. It does not truncate content or convert missing values into estimates.
+Tools return a typed `#!python GlasserResult` with `#!python id`, `#!python status`, `#!python result_status`, `#!python provider`, `#!python charge_usd`, `#!python output`, `#!python error`, `#!python failure`, `#!python provider_response`, `#!python runs`, `#!python run_url`, `#!python result_url`, and `#!python truncated`. An invalid input instead returns `#!python {"error": "..."}` without a paid call.
 
-Web, company, SEO, social and market data return normalized Solution results:
+`#!python status` describes the Run lifecycle. `#!python result_status` describes the Solution delivery outcome and can be `success`, `partial`, `no_result`, `#!python error`, or `pending`. `#!python charge_usd` is the exact USD decimal string returned by Glasser, or null until the listed Runs settle. A failed or empty result can still incur a charge. People search returns a native Run; its `#!python provider_response` and `#!python output` depend on the Provider.
 
-- `result_status` reports delivery: `success`, `partial` (where supported), `no_result`, `error` or `pending`.
-- `status` is the final Run's lifecycle. `COMPLETED` means a Provider response is available; it does not guarantee useful output.
-- `output` contains the capability's data. It is null on delivery failure or while pending.
-- `charge_usd` is an exact USD decimal string, or null until every listed Run settles. `runs[]` contains the individual Run references and charges. An empty result or failure can still incur a charge.
-- `result_url` reads the same normalized result without creating a new Run. Provider-native output remains available from `GET /v1/runs/<id>`.
-
-People search returns a native Run instead: check `provider`, `status`, `failure`, `provider_response`, `output` and `charge_usd`. Its output shape depends on the answering Provider.
-
-`limit` can affect the charge. For web `scrape`, the model can supply `max_charge_usd` as an exact decimal string, such as `"0.05"`, and `timeout_ms` as the server execution budget. Those controls apply to scrape only. The toolkit does not impose a spending cap on other actions.
+`#!python max_characters` limits the combined text in `#!python output`, `#!python error`, `#!python failure`, and `#!python provider_response` to 10,000 characters by default. A cut object is returned as a text excerpt, and `#!python truncated` becomes true. The limit never cuts status, IDs, URLs, charges, or Run references. Set `#!python max_characters=None` to keep all content. A pending result retains its retrieval URL or Run ID.
 
 ## Async execution and retries
 
-For a pending result, the toolkit polls with authenticated GET requests: the returned `result_url` for normalized results, or `GET /v1/runs/<id>` for people search. Result URLs must refer to the same capability on the configured API origin. Redirects are not followed.
+For a pending result, the toolkit polls with authenticated GET requests: the returned `#!python result_url` for normalized results, or `GET /v1/runs/<id>` for people search. Result URLs must refer to the same capability on the configured API origin. Redirects are not followed.
 
-The default polling budget is 120 seconds, with a one-second interval. If it expires or a polling GET fails, the tool returns the latest pending result, including its retrieval information. `wait_timeout=0` disables polling. To continue, use an authenticated GET to the result URL or Run endpoint. Starting another tool call creates a new intended execution and can incur a new charge.
+The default polling budget is 120 seconds, with a one-second interval. If it expires or a polling GET fails, the tool returns the latest pending result. `#!python wait_timeout=0` disables polling. To continue, use an authenticated GET to the result URL or Run endpoint. A new tool call can incur a new charge.
 
-Each POST has an `Idempotency-Key` derived from the stream ID, tool-call ID and capability. Replaying the same tool call in the same stream uses the same key. A different tool-call ID or stream produces a new key, even with identical arguments. HTTP and transport errors are raised without automatic POST retries. If a response is lost, replay the original tool call with its original stream and call ID to retrieve the admitted execution. Changed execution parameters with the same key are rejected by Glasser.
+Each POST has an `Idempotency-Key` derived from the stream ID, tool-call ID, and capability. Replaying the same call in the same stream uses the same key. A different call or stream produces a new key. The toolkit does not retry POST requests automatically.
 
 ## Connection settings
 
 ```python linenums="1"
-import os
 from ag2.extensions.tools.search import GlasserToolkit
 
 toolkit = GlasserToolkit(
-    api_key=os.environ["GLASSER_API_KEY"],
+    api_key="YOUR_GLASSER_API_KEY",
     base_url="https://api.glasser.ai",
-    timeout=60.0,       # HTTP timeout per request
-    wait_timeout=120.0, # total polling budget after the POST
-    poll_interval=1.0,  # delay between result reads
+    timeout=60.0,
+    wait_timeout=120.0,
+    poll_interval=1.0,
 )
 ```
 
-Each execution opens an `httpx.AsyncClient` and closes it after its result is returned. A custom `base_url` can include a gateway path; the gateway must return result URLs on that same origin and path. The polling budget does not include the initial POST. HTTP errors raise `httpx.HTTPStatusError`, transport failures raise an `httpx` exception, and malformed JSON or a non-object response raises `ValueError`.
+Each execution opens an `#!python httpx.AsyncClient` and closes it after its result is returned. A custom `#!python base_url` can include a gateway path; the gateway must return result URLs on that same origin and path. The polling budget does not include the initial POST. HTTP errors raise `#!python httpx.HTTPStatusError`, transport failures raise an `#!python httpx` exception, and malformed JSON or a non-object response raises `#!python ValueError`.
 
-See the [Solutions reference](https://glasser.ai/docs/api-reference/solutions/overview){.external-link target="_blank"} for action fields, Provider support, output contracts and billing behavior.
+See the [Solutions reference](https://glasser.ai/docs/api-reference/solutions/overview){.external-link target="_blank"} for Provider support, output contracts, and billing behavior.

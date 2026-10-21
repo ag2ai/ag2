@@ -8,11 +8,12 @@ from typing import Any
 import httpx
 import pytest
 import respx
-from dirty_equals import IsPartialDict
+from dirty_equals import IsPartialDict, IsStr
 
 from ag2 import Agent, Context, DataInput, Variable
 from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolErrorEvent, ToolResultsEvent
 from ag2.extensions.tools.search import GlasserToolkit
+from ag2.extensions.tools.search.glasser import GlasserResult
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.final.function_tool import FunctionTool
@@ -22,7 +23,18 @@ def _config(capability: str, arguments: dict[str, Any], *, call_id: str = "call-
     return TestConfig(
         ModelResponse(
             tool_calls=ToolCallsEvent([
-                ToolCallEvent(id=call_id, name=f"glasser_{capability}", arguments=json.dumps(arguments)),
+                ToolCallEvent(
+                    id=call_id,
+                    name={
+                        "web_research": "glasser_web_search",
+                        "company_intelligence": "glasser_company_profile",
+                        "people_search": "glasser_find_people",
+                        "seo_research": "glasser_keyword_overview",
+                        "social_research": "glasser_social_search",
+                        "market_data": "glasser_stock_quote",
+                    }[capability],
+                    arguments=json.dumps(arguments),
+                ),
             ])
         ),
         "done",
@@ -34,12 +46,12 @@ class TestSchema:
     async def test_six_default_tools(self, context: Context) -> None:
         schemas = list(await GlasserToolkit("test").schemas(context))
         assert [s.function.name for s in schemas] == [
-            "glasser_web_research",
-            "glasser_company_intelligence",
-            "glasser_people_search",
-            "glasser_seo_research",
-            "glasser_social_research",
-            "glasser_market_data",
+            "glasser_web_search",
+            "glasser_company_profile",
+            "glasser_find_people",
+            "glasser_keyword_overview",
+            "glasser_social_search",
+            "glasser_stock_quote",
         ]
         for schema in schemas:
             properties = schema.function.parameters["properties"]
@@ -47,36 +59,29 @@ class TestSchema:
             assert "api_key" not in properties
             assert "ctx" not in properties
         assert schemas[1].function.parameters == IsPartialDict({"required": ["domain"]})
-        assert schemas[4].function.parameters == IsPartialDict({"required": ["platform"]})
-        assert schemas[5].function.parameters == IsPartialDict({"required": ["action"]})
+        assert schemas[4].function.parameters == IsPartialDict({"required": ["platform", "query"]})
+        assert schemas[5].function.parameters == IsPartialDict({"required": ["symbol"]})
+        assert all("action" not in schema.function.parameters["properties"] for schema in schemas)
 
     async def test_factory_can_select_and_rename_one_tool(self, context: Context) -> None:
         toolkit = GlasserToolkit("test")
-        selected = toolkit.web_research(name="research", description="Find evidence.")
+        selected = toolkit.web_search(name="research", description="Find evidence.")
         assert isinstance(selected, FunctionTool)
         [schema] = await selected.schemas(context)
         assert schema.function.name == "research"
         assert schema.function.description == "Find evidence."
 
-    async def test_action_and_platform_enums(self, context: Context) -> None:
-        [schema] = await GlasserToolkit("test").social_research().schemas(context)
+    async def test_platform_enum_and_small_schemas(self, context: Context) -> None:
+        [schema] = await GlasserToolkit("test").social_search().schemas(context)
         properties = schema.function.parameters["properties"]
         assert properties["platform"] == IsPartialDict({
             "enum": ["reddit", "x", "youtube", "tiktok", "instagram", "linkedin"],
         })
-        [schema] = await GlasserToolkit("test").market_data().schemas(context)
-        properties = schema.function.parameters["properties"]
-        assert properties["action"] == IsPartialDict({
-            "enum": [
-                "property_value",
-                "property_rent",
-                "property_search",
-                "listings_sale",
-                "listings_rental",
-                "market_stats",
-                "stock_quote",
-            ],
-        })
+        schemas = list(await GlasserToolkit("test").schemas(context))
+        schema_size = sum(
+            len(json.dumps(schema.function.parameters)) + len(schema.function.description) for schema in schemas
+        )
+        assert schema_size < 3000
 
 
 @pytest.mark.parametrize(
@@ -106,12 +111,12 @@ class TestExecution:
     @pytest.mark.parametrize(
         ("capability", "arguments"),
         [
-            ("web_research", {"query": "AG2", "action": "search", "time_range": "week"}),
-            ("company_intelligence", {"domain": "example.com", "action": "tech_stack"}),
-            ("people_search", {"job_titles": ["CTO"], "seniorities": ["c_suite"], "locations": ["London"]}),
-            ("seo_research", {"action": "keyword_gap", "domain": "example.com", "competitors": ["example.org"]}),
+            ("web_research", {"query": "AG2"}),
+            ("company_intelligence", {"domain": "example.com"}),
+            ("people_search", {"job_titles": ["CTO"], "locations": ["London"]}),
+            ("seo_research", {"keywords": ["agent framework"]}),
             ("social_research", {"platform": "x", "mode": "search", "query": "AG2"}),
-            ("market_data", {"action": "stock_quote", "symbol": "MSFT"}),
+            ("market_data", {"symbol": "MSFT"}),
         ],
     )
     @respx.mock
@@ -137,13 +142,39 @@ class TestExecution:
         await agent.ask("research")
 
         request = route.calls.last.request
-        assert json.loads(request.content) == arguments
-        assert request.headers["Authorization"] == "Bearer test-key"
-        assert request.headers["User-Agent"] == "ag2-glasser-extension"
-        assert request.headers["Idempotency-Key"]
+        actions = {
+            "web_research": "search",
+            "company_intelligence": "enrich",
+            "people_search": "search",
+            "seo_research": "keyword_overview",
+            "social_research": None,
+            "market_data": "stock_quote",
+        }
+        expected = arguments | (
+            {"mode": "search"} if capability == "social_research" else {"action": actions[capability]}
+        )
+        assert json.loads(request.content) == expected
+        assert dict(request.headers) == IsPartialDict({
+            "authorization": "Bearer test-key",
+            "user-agent": "ag2-glasser-extension",
+            "idempotency-key": IsStr(min_length=1),
+        })
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(result)]
+        assert tool_result.parts == [
+            DataInput(
+                GlasserResult(
+                    id="run-1",
+                    status="COMPLETED",
+                    result_status="success",
+                    provider="example",
+                    charge_usd="0.001234",
+                    output={"items": [{"name": "Example", "missing": None}]},
+                    runs=[{"id": "run-1", "charge_usd": "0.001234"}],
+                    run_url="https://glasser.ai/runs/run-1",
+                )
+            )
+        ]
 
     @respx.mock
     async def test_defaults_and_variables(self) -> None:
@@ -154,29 +185,155 @@ class TestExecution:
         agent = Agent(
             "a",
             config=_config("web_research", {"query": "AG2"}),
-            tools=[
-                toolkit.web_research(provider=Variable("provider"), limit=Variable("cap"), task_id=Variable("task"))
-            ],
+            tools=[toolkit.web_search(provider=Variable("provider"), limit=Variable("cap"), task_id=Variable("task"))],
             variables={"provider": "serper", "cap": 5, "task": "research-1"},
         )
 
         await agent.ask("research")
 
         assert json.loads(route.calls.last.request.content) == {
+            "action": "search",
+            "query": "AG2",
+            "provider": "serper",
+            "limit": 5,
+            "task_id": "research-1",
+        }
+
+    @respx.mock
+    async def test_every_factory_setting_resolves_a_variable(self) -> None:
+        route = respx.post("https://api.glasser.ai/v1/solutions/gtm/web_research").mock(
+            return_value=httpx.Response(200, json={"status": "COMPLETED", "output": "abcdef"}),
+        )
+        toolkit = GlasserToolkit("test")
+        config = TrackingConfig(_config("web_research", {"query": "AG2"}))
+        agent = Agent(
+            "a",
+            config=config,
+            tools=[
+                toolkit.web_search(
+                    provider=Variable("provider"),
+                    limit=Variable("limit"),
+                    country=Variable("country"),
+                    task_id=Variable("task_id"),
+                    metadata=Variable("metadata"),
+                    max_characters=Variable("max_characters"),
+                )
+            ],
+            variables={
+                "provider": "serper",
+                "limit": 5,
+                "country": "us",
+                "task_id": "task-1",
+                "metadata": {"user_id": "u1"},
+                "max_characters": 3,
+            },
+        )
+        await agent.ask("search")
+        assert json.loads(route.calls.last.request.content) == {
+            "action": "search",
             "query": "AG2",
             "provider": "serper",
             "limit": 5,
             "country": "us",
-            "task_id": "research-1",
-            "metadata": {"user_id": "opaque-42"},
+            "task_id": "task-1",
+            "metadata": {"user_id": "u1"},
         }
+        event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert event.results[0].result.parts == [
+            DataInput(GlasserResult(status="COMPLETED", output="abc", truncated=True))
+        ]
+
+    @respx.mock
+    async def test_constructor_settings_reach_default_tool(self) -> None:
+        route = respx.post("https://api.glasser.ai/v1/solutions/gtm/web_research").mock(
+            return_value=httpx.Response(200, json={"status": "COMPLETED"}),
+        )
+        await Agent(
+            "a",
+            config=_config("web_research", {"query": "AG2"}),
+            tools=[
+                GlasserToolkit(
+                    "test", provider="serper", limit=2, country="gb", task_id="task-1", metadata={"user_id": "u1"}
+                )
+            ],
+        ).ask("search")
+        assert json.loads(route.calls.last.request.content) == {
+            "action": "search",
+            "query": "AG2",
+            "provider": "serper",
+            "limit": 2,
+            "country": "gb",
+            "task_id": "task-1",
+            "metadata": {"user_id": "u1"},
+        }
+
+    @pytest.mark.parametrize(
+        ("capability", "arguments", "error"),
+        [
+            ("web_research", {"query": "  "}, "query must not be empty"),
+            ("company_intelligence", {"domain": ""}, "domain must not be empty"),
+            ("people_search", {}, "supply job_titles, locations, company_domain or keywords"),
+            ("people_search", {"job_titles": ["  "]}, "supply job_titles, locations, company_domain or keywords"),
+            ("seo_research", {"keywords": []}, "keywords must contain a non-empty value"),
+            ("social_research", {"platform": "x", "query": ""}, "query must not be empty"),
+            ("market_data", {"symbol": "  "}, "symbol must not be empty"),
+        ],
+    )
+    @respx.mock
+    async def test_invalid_input_returns_error_without_paid_call(
+        self, capability: str, arguments: dict[str, Any], error: str
+    ) -> None:
+        route = respx.post(f"https://api.glasser.ai/v1/solutions/gtm/{capability}").mock(
+            return_value=httpx.Response(200, json={"status": "COMPLETED"}),
+        )
+        config = TrackingConfig(_config(capability, arguments))
+        await Agent("a", config=config, tools=[GlasserToolkit("test")]).ask("search")
+        assert not route.called
+        event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert event.results[0].result.parts == [DataInput({"error": error})]
+
+    @respx.mock
+    async def test_truncation_never_cuts_status_ids_urls_or_charge(self) -> None:
+        result = {
+            "id": "run-123",
+            "status": "COMPLETED",
+            "result_status": "success",
+            "provider": "serper",
+            "charge_usd": "0.001100",
+            "output": "abcdef",
+            "error": "failed",
+            "result_url": "https://api.glasser.ai/v1/solutions/gtm/web_research/result?token=opaque",
+            "runs": [{"id": "run-123"}],
+        }
+        respx.post("https://api.glasser.ai/v1/solutions/gtm/web_research").mock(
+            return_value=httpx.Response(200, json=result),
+        )
+        config = TrackingConfig(_config("web_research", {"query": "AG2"}))
+        await Agent("a", config=config, tools=[GlasserToolkit("test", max_characters=3)]).ask("search")
+        event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        assert event.results[0].result.parts == [
+            DataInput(
+                GlasserResult(
+                    id="run-123",
+                    status="COMPLETED",
+                    result_status="success",
+                    provider="serper",
+                    charge_usd="0.001100",
+                    output="abc",
+                    error="",
+                    result_url=result["result_url"],
+                    runs=[{"id": "run-123"}],
+                    truncated=True,
+                )
+            )
+        ]
 
     async def test_missing_variable_fails_before_http(self) -> None:
         toolkit = GlasserToolkit("test")
         agent = Agent(
             "a",
             config=_config("web_research", {"query": "AG2"}),
-            tools=[toolkit.web_research(limit=Variable("missing"))],
+            tools=[toolkit.web_search(limit=Variable("missing"))],
         )
         with pytest.raises(KeyError, match="missing"):
             await agent.ask("research")
@@ -193,27 +350,20 @@ class TestExecution:
         )
         await agent.ask("research")
         assert json.loads(route.calls.last.request.content) == {
+            "mode": "search",
             "platform": "reddit",
             "query": "AG2",
             "metadata": {"user_id": "u1"},
         }
 
     @respx.mock
-    async def test_scrape_budget_is_an_exact_decimal_string(self) -> None:
+    async def test_factory_does_not_inherit_constructor_settings(self) -> None:
         route = respx.post("https://api.glasser.ai/v1/solutions/gtm/web_research").mock(
             return_value=httpx.Response(200, json={"status": "COMPLETED"}),
         )
-        arguments = {
-            "action": "scrape",
-            "url": "https://example.com",
-            "formats": ["markdown"],
-            "max_charge_usd": "0.005001",
-            "timeout_ms": 30000,
-            "cache_max_age_seconds": 0,
-        }
-        agent = Agent("a", config=_config("web_research", arguments), tools=[GlasserToolkit("test")])
-        await agent.ask("fetch")
-        assert json.loads(route.calls.last.request.content) == arguments
+        toolkit = GlasserToolkit("test", provider="serper", limit=2)
+        await Agent("a", config=_config("web_research", {"query": "AG2"}), tools=[toolkit.web_search()]).ask("search")
+        assert json.loads(route.calls.last.request.content) == {"action": "search", "query": "AG2"}
 
     @respx.mock
     async def test_custom_gateway_path(self) -> None:
@@ -260,7 +410,7 @@ class TestExecution:
         await Agent("a", config=config, tools=[GlasserToolkit("test")]).ask("research")
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(result)]
+        assert tool_result.parts == [DataInput(GlasserResult.from_api(result, 10000))]
 
 
 @pytest.mark.asyncio
@@ -270,8 +420,8 @@ class TestIdempotency:
         route = respx.post("https://api.glasser.ai/v1/solutions/gtm/web_research").mock(
             return_value=httpx.Response(200, json={"status": "COMPLETED"}),
         )
-        selected = GlasserToolkit("test").web_research()
-        call = ToolCallEvent(id="same-call", name="glasser_web_research", arguments='{"query":"AG2"}')
+        selected = GlasserToolkit("test").web_search()
+        call = ToolCallEvent(id="same-call", name="glasser_web_search", arguments='{"query":"AG2"}')
         await selected(call, context)
         await selected(call, context)
         await selected(ToolCallEvent(id="another-call", name=call.name, arguments=call.arguments), context)
@@ -288,8 +438,8 @@ class TestIdempotency:
                 httpx.Response(200, json={"status": "COMPLETED"}),
             ]
         )
-        selected = GlasserToolkit("test").web_research()
-        call = ToolCallEvent(id="retry", name="glasser_web_research", arguments='{"query":"AG2"}')
+        selected = GlasserToolkit("test").web_search()
+        call = ToolCallEvent(id="retry", name="glasser_web_search", arguments='{"query":"AG2"}')
         error = await selected(call, context)
         assert isinstance(error, ToolErrorEvent)
         assert isinstance(error.error, httpx.ReadTimeout)
@@ -305,9 +455,9 @@ class TestPolling:
         [
             ("web_research", {"query": "AG2"}),
             ("company_intelligence", {"domain": "example.com"}),
-            ("seo_research", {"action": "site_audit", "domain": "example.com"}),
+            ("seo_research", {"keywords": ["agent framework"]}),
             ("social_research", {"platform": "x", "query": "AG2"}),
-            ("market_data", {"action": "stock_quote", "symbol": "MSFT"}),
+            ("market_data", {"symbol": "MSFT"}),
         ],
     )
     @respx.mock
@@ -338,7 +488,7 @@ class TestPolling:
         assert get.calls.last.request.headers["Authorization"] == "Bearer test"
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(final)]
+        assert tool_result.parts == [DataInput(GlasserResult.from_api(final, 10000))]
 
     @respx.mock
     async def test_people_search_polls_native_run(self) -> None:
@@ -361,7 +511,7 @@ class TestPolling:
         assert post.call_count == get.call_count == 1
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(final)]
+        assert tool_result.parts == [DataInput(GlasserResult.from_api(final, 10000))]
 
     @pytest.mark.parametrize(
         "failure",
@@ -393,7 +543,7 @@ class TestPolling:
         assert post.call_count == get.call_count == 1
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(pending)]
+        assert tool_result.parts == [DataInput(GlasserResult.from_api(pending, 10000))]
 
     @pytest.mark.parametrize("wait_timeout", [0.0, 0.001])
     @respx.mock
@@ -410,7 +560,7 @@ class TestPolling:
         assert post.call_count == 1
         event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
         tool_result = event.results[0].result
-        assert tool_result.parts == [DataInput(pending)]
+        assert tool_result.parts == [DataInput(GlasserResult.from_api(pending, 10000))]
 
     @pytest.mark.parametrize(
         "result_url",
