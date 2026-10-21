@@ -210,6 +210,7 @@ class OpenAIResponsesClient(LLMClient):
             includes.append("reasoning.encrypted_content")
 
         options = self._request_options(self._create_options)
+        choice = context.tool_choice
         response = await self._client.responses.create(
             **options,
             text=response_proto_to_text_config(response_schema) or omit,
@@ -220,6 +221,7 @@ class OpenAIResponsesClient(LLMClient):
             # branches carry a field the SDK's `ToolParam` does not declare, and the
             # skills path mutates a finished entry. This is where they meet the SDK.
             tools=cast(list[ToolParam], openai_tools) or omit,
+            tool_choice=choice.mode if openai_tools and choice is not None else omit,
         )
 
         comparison_id = self._comparison_id(options)

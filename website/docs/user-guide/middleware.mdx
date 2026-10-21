@@ -90,6 +90,30 @@ Use `on_llm_call()` when you want to:
 
 This is the hook used by built-in history and token limiting middleware.
 
+#### Changing the tools of one call
+
+To restrict which tools a single LLM call may use, pass a copy of the context made with `with_tool_choice()` to `call_next`. The inner middlewares still run, and the choice applies to that call only:
+
+```python linenums="1"
+from ag2.middleware import BaseMiddleware, LLMCall, ToolChoice
+
+class FinalAnswerMiddleware(BaseMiddleware):
+    async def on_llm_call(
+        self,
+        call_next: LLMCall,
+        events: Sequence[BaseEvent],
+        context: Context,
+    ) -> ModelResponse:
+        # no tool calls on this call
+        return await call_next(events, context.with_tool_choice("none"))
+        # or only these tools:
+        # return await call_next(events, context.with_tool_choice(ToolChoice.only("finish")))
+```
+
+`ToolChoice` takes a mode, `"auto"`, `"none"` or `"required"`, and an optional allow-list of tool names. A function tool is matched by its name and a builtin tool by its schema type, for example `"web_search"`. Each model client maps the mode to its provider's own setting. With `"none"`, the schemas stay in the request where the provider supports that, because Anthropic and Bedrock reject a tool history sent without tools. A provider that cannot honour a mode, such as Bedrock with `"none"` or Ollama with `"required"`, raises `UnsupportedToolChoiceError`. For an OpenAI-compatible gateway that rejects `tool_choice: "none"`, set `OpenAIConfig(drop_tools_for_none=True)`, and `"none"` is then sent as a request without tools.
+
+When several middlewares set a choice, the result only ever narrows: allow-lists intersect, and `"none"` wins over `"required"`, which wins over `"auto"`.
+
 ### `on_tool_execution()`
 
 ```python linenums="1"

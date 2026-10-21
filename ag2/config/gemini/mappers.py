@@ -27,6 +27,7 @@ from ag2.events import (
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.files.types import FileProvider, UploadedFile
 from ag2.response import ResponseProto
+from ag2.tool_choice import ToolChoiceMode
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME, FileSearchToolSchema
 from ag2.tools.builtin.google_maps import GOOGLE_MAPS_TOOL_NAME, GoogleMapsToolSchema
@@ -152,6 +153,23 @@ SERVER_SIDE_SCHEMAS: tuple[type[ToolSchema], ...] = (
     FileSearchToolSchema,
     GoogleMapsToolSchema,
 )
+
+
+_FUNCTION_CALLING_MODES: dict[ToolChoiceMode, types.FunctionCallingConfigMode] = {
+    "auto": types.FunctionCallingConfigMode.AUTO,
+    "none": types.FunctionCallingConfigMode.NONE,
+    "required": types.FunctionCallingConfigMode.ANY,
+}
+
+
+def with_tool_choice(config: types.ToolConfig | None, mode: ToolChoiceMode) -> types.ToolConfig:
+    """``config`` with its function calling mode set to ``mode``, keeping the rest of it."""
+    config = config.model_copy() if config is not None else types.ToolConfig()
+    calling = config.function_calling_config.model_copy() if config.function_calling_config else None
+    calling = calling or types.FunctionCallingConfig()
+    calling.mode = _FUNCTION_CALLING_MODES[mode]
+    config.function_calling_config = calling
+    return config
 
 
 def build_tool_config(schemas: list[ToolSchema], *, vertexai: bool = False) -> types.ToolConfig | None:

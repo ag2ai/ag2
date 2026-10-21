@@ -20,6 +20,7 @@ from ag2.events import (
     ToolCallsEvent,
     ToolErrorEvent,
 )
+from ag2.tool_choice import ToolChoice
 from ag2.tools.schemas import ToolSchema
 
 if TYPE_CHECKING:
@@ -105,6 +106,7 @@ class ModelCall:
     tools: tuple[ToolSchema, ...]
     dependencies: Mapping[Any, Any]
     variables: Mapping[Any, Any]
+    tool_choice: ToolChoice | None = None
 
 
 class TrackingClient(LLMClient):
@@ -129,6 +131,7 @@ class TrackingClient(LLMClient):
                 tools=tools,
                 dependencies=dict(context.dependencies),
                 variables=dict(context.variables),
+                tool_choice=context.tool_choice,
             )
         )
         return await self.client(messages, context=context, **kwargs)

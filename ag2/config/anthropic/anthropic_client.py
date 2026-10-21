@@ -69,6 +69,7 @@ from .mappers import (
     normalize_usage,
     response_proto_to_output_config,
     take_sampling_fields,
+    tool_choice_to_api,
     tools_to_api,
 )
 
@@ -169,6 +170,8 @@ class AnthropicClient(LLMClient):
             "messages": anthropic_messages,
             "tools": tools_list if tools_list else NOT_GIVEN,
         }
+        if tools_list and context.tool_choice is not None:
+            create_kwargs["tool_choice"] = tool_choice_to_api(context.tool_choice.mode)
 
         betas: set[str] = set()
 

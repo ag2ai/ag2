@@ -40,6 +40,7 @@ from .mappers import (
     grounding_tool_name,
     normalize_usage,
     response_proto_to_config,
+    with_tool_choice,
 )
 
 ThinkingLevel = Literal["low", "medium", "high"]
@@ -150,6 +151,8 @@ class GeminiClient(LLMClient):
             **self._create_config,
             **cache_kwargs,
         })
+        if gemini_tools and context.tool_choice is not None:
+            config.tool_config = with_tool_choice(config.tool_config, context.tool_choice.mode)
 
         if self._streaming:
             stream = await self._client.aio.models.generate_content_stream(

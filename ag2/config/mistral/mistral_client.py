@@ -48,6 +48,7 @@ from .mappers import (
     server_tool_name,
     server_tool_result,
     split_content,
+    tool_choice_to_api,
     tool_to_api,
 )
 
@@ -165,6 +166,8 @@ class MistralClient(LLMClient):
 
         if tools_list:
             kwargs["tools"] = tools_list
+            if context.tool_choice is not None:
+                kwargs["tool_choice"] = tool_choice_to_api(context.tool_choice.mode)
         if response_format := response_proto_to_format(response_schema):
             kwargs["response_format"] = response_format
 

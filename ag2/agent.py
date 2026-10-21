@@ -85,7 +85,7 @@ from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, Toolkit, tool
+from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
 from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
@@ -1533,6 +1533,7 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware_instances: list[BaseMiddleware] = []
             agent_turn: AgentTurn = _execute_turn
             llm_call: LLMCall = partial(
+                _call_llm,
                 client,
                 tools=all_schemas,
                 response_schema=final_schema,
@@ -1844,6 +1845,43 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
             continue
 
         return message
+
+
+async def _call_llm(
+    client: LLMClient,
+    messages: Sequence[BaseEvent],
+    context: Context,
+    *,
+    tools: Sequence[ToolSchema],
+    response_schema: ResponseProto | None,
+    serializer: SerializerProto,
+) -> ModelResponse:
+    """The innermost ``LLMCall``: applies the call's tool choice, then calls the client.
+
+    An allow-list is applied here, for every client. The mode is left to the
+    client, which maps it to its provider: "none" keeps the schemas so a
+    provider that requires them alongside a tool history still accepts the call.
+    """
+    choice = context.tool_choice
+    if choice is not None and choice.mode == "required" and not tools:
+        raise ValueError("Tool choice 'required' needs a tool, but this call has none.")
+    if choice is not None and choice.tools is not None:
+        allowed = [t for t in tools if choice.allows(_tool_choice_name(t))]
+        if allowed:
+            tools = allowed
+        elif choice.mode == "required":
+            raise ValueError(f"Tool choice requires one of {sorted(choice.tools)}, but none of them is available.")
+        else:
+            # None of the allowed tools is on this agent, so nothing is callable.
+            context = context.with_tool_choice("none")
+
+    return await client(messages, context, tools=tools, response_schema=response_schema, serializer=serializer)
+
+
+def _tool_choice_name(schema: ToolSchema) -> str:
+    if isinstance(schema, FunctionToolSchema):
+        return schema.function.name
+    return schema.type
 
 
 def _drain_pending(context: Context) -> ModelRequest | None:

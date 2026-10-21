@@ -27,7 +27,13 @@ from ag2.events import (
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, normalize_usage, response_proto_to_output_config, tool_to_api
+from .mappers import (
+    convert_messages,
+    normalize_usage,
+    response_proto_to_output_config,
+    tool_choice_to_api,
+    tool_to_api,
+)
 
 if TYPE_CHECKING:
     from types_aiobotocore_bedrock_runtime.client import BedrockRuntimeClient
@@ -39,6 +45,7 @@ if TYPE_CHECKING:
         MessageTypeDef,
         OutputConfigTypeDef,
         PerformanceConfigurationTypeDef,
+        ToolChoiceTypeDef,
         ToolTypeDef,
     )
 
@@ -146,6 +153,10 @@ class BedrockClient(LLMClient):
         # Converse rejects an empty tools list
         if tools_list:
             kwargs["toolConfig"] = {"tools": cast("list[ToolTypeDef]", tools_list)}
+            if context.tool_choice is not None:
+                kwargs["toolConfig"]["toolChoice"] = cast(
+                    "ToolChoiceTypeDef", tool_choice_to_api(context.tool_choice.mode)
+                )
 
         if output_config := response_proto_to_output_config(response_schema):
             kwargs["outputConfig"] = cast("OutputConfigTypeDef", output_config)

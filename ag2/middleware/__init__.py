@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from ..tool_choice import ToolChoice, ToolChoiceMode
 from .base import (
     AgentTurn,
     BaseMiddleware,
@@ -42,6 +43,8 @@ __all__ = (
     "RetryMiddleware",
     "TelemetryMiddleware",
     "TokenLimiter",
+    "ToolChoice",
+    "ToolChoiceMode",
     "ToolExecution",
     "ToolMiddleware",
     "ToolResultType",

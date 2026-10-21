@@ -42,6 +42,15 @@ class UnsupportedToolError(ToolExecutionError):
         super().__init__(f"Unsupported tool type `{tool_type}` for provider `{provider}`")
 
 
+class UnsupportedToolChoiceError(AG2Error):
+    """Raised when a provider has no way to honour a per-call tool choice."""
+
+    def __init__(self, mode: str, provider: str):
+        super().__init__(f"Tool choice `{mode}` is not supported by provider `{provider}`")
+        self.mode = mode
+        self.provider = provider
+
+
 class BlockedToolsUnsupportedError(ToolExecutionError):
     """Raised when a provider's remote-MCP tool takes an allow-list only, so a block cannot be enforced."""
 

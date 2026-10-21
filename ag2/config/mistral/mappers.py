@@ -48,6 +48,7 @@ from ag2.events import (
 )
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
 from ag2.response import ResponseProto
+from ag2.tool_choice import ToolChoiceMode
 from ag2.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME, ImageGenerationToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
@@ -118,6 +119,10 @@ def response_proto_to_format(response: ResponseProto | None) -> ResponseFormat |
             strict=True,
         ),
     )
+
+
+def tool_choice_to_api(mode: ToolChoiceMode) -> str:
+    return "any" if mode == "required" else mode
 
 
 def tool_to_api(t: ToolSchema) -> ChatCompletionRequestTool:

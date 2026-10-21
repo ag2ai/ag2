@@ -28,6 +28,7 @@ from ag2.events import (
     ToolCallsEvent,
     Usage,
 )
+from ag2.exceptions import UnsupportedToolChoiceError
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
@@ -155,6 +156,14 @@ class ZAIClient(LLMClient):
             "messages": zai_messages,
             **_merge_extra_body(self._create_options),
         }
+        if tools_list and context.tool_choice is not None:
+            # Z.ai's tool_choice takes only "auto": leaving the tools out is its
+            # "none", and there is no way to require one.
+            if context.tool_choice.mode == "required":
+                raise UnsupportedToolChoiceError("required", "zai")
+            if context.tool_choice.mode == "none":
+                tools_list = []
+                kwargs.pop("tool_choice", None)
 
         if tools_list:
             kwargs["tools"] = tools_list

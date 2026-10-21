@@ -23,6 +23,7 @@ from ag2.events import (
     ToolCallsEvent,
     Usage,
 )
+from ag2.exceptions import UnsupportedToolChoiceError
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
@@ -95,6 +96,13 @@ class OllamaClient(LLMClient):
 
         ollama_messages = convert_messages(prompt, messages, serializer)
         tools_list = [tool_to_api(t) for t in tools]
+        if tools_list and context.tool_choice is not None:
+            # Ollama has no tool choice: leaving the tools out is its "none",
+            # and there is no way to require one.
+            if context.tool_choice.mode == "required":
+                raise UnsupportedToolChoiceError("required", "ollama")
+            if context.tool_choice.mode == "none":
+                tools_list = []
 
         kwargs: dict[str, Any] = {}
         if self._create_options:

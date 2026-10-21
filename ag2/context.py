@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable, Coroutine, Mapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
 from uuid import UUID
 
@@ -18,6 +18,7 @@ from ag2.types import ClassInfo, SendableMessage
 from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, MessageEnqueued, ModelRequest
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
+from .tool_choice import ToolChoice, ToolChoiceMode
 
 if TYPE_CHECKING:
     # `history` imports this module, so the declaration below is type-time only.
@@ -138,6 +139,25 @@ class ConversationContext:
 
     tool_call_id: str | None = field(default=None, repr=False)
     """The tool call this context was handed to, when it is a tool's; `None` for the agent's own."""
+
+    tool_choice: ToolChoice | None = field(default=None, repr=False)
+    """The tool choice for the LLM call this context is passed to; `None` leaves it to the client's config.
+
+    Set it with :meth:`with_tool_choice`, which narrows any choice already made.
+    """
+
+    def with_tool_choice(self, choice: ToolChoice | ToolChoiceMode) -> "ConversationContext":
+        """A copy of this context whose LLM call uses *choice*.
+
+        Pass the copy to ``call_next`` in ``BaseMiddleware.on_llm_call`` to
+        change the tools of that one call. The copy shares everything else with
+        this context. A choice already set further out is narrowed, never
+        widened: see :meth:`ToolChoice.narrow`.
+        """
+        choice = ToolChoice.ensure(choice)
+        if self.tool_choice is not None:
+            choice = self.tool_choice.narrow(choice)
+        return replace(self, tool_choice=choice)
 
     @property
     def pending_messages(self) -> list[ModelRequest]:

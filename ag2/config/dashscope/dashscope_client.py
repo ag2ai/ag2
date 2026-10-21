@@ -26,7 +26,7 @@ from ag2.events import (
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, response_proto_to_format, tool_to_api
+from .mappers import convert_messages, response_proto_to_format, tool_choice_to_api, tool_to_api
 
 if TYPE_CHECKING:
     from dashscope import MultiModalConversationResponse
@@ -83,6 +83,8 @@ class DashScopeClient(LLMClient):
 
         if tools_list:
             kwargs["tools"] = tools_list
+            if context.tool_choice is not None:
+                kwargs["tool_choice"] = tool_choice_to_api(context.tool_choice.mode)
 
         if r := response_proto_to_format(response_schema):
             kwargs["response_format"] = r

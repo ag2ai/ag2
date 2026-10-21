@@ -94,6 +94,7 @@ class OpenAIClient(LLMClient):
         default_query: dict[str, object] | None = None,
         http_client: httpx2.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
+        drop_tools_for_none: bool = False,
     ) -> None:
         self._client = AsyncOpenAI(
             api_key=api_key,
@@ -111,6 +112,7 @@ class OpenAIClient(LLMClient):
         # Left as ``None`` rather than widened to an empty mapping: ``model`` is
         # required, so there is no such thing as an empty set of create options.
         self._create_options = create_options
+        self._drop_tools_for_none = drop_tools_for_none
 
     async def __call__(
         self,
@@ -133,8 +135,19 @@ class OpenAIClient(LLMClient):
 
         openai_tools: list[ChatCompletionToolUnionParam] = [tool_to_api(t) for t in tools]
 
+        options: dict[str, Any] = dict(self._create_options)
+        if openai_tools and (choice := context.tool_choice) is not None:
+            if choice.mode == "none" and self._drop_tools_for_none:
+                # For gateways that reject `tool_choice: "none"`; the request then
+                # carries no tools at all, and these two are rejected without them.
+                openai_tools = []
+                options.pop("tool_choice", None)
+                options.pop("parallel_tool_calls", None)
+            else:
+                options["tool_choice"] = choice.mode
+
         response = await self._client.chat.completions.create(
-            **self._create_options,
+            **options,
             response_format=response_proto_to_schema(response_schema) or omit,
             messages=openai_messages,
             tools=openai_tools or omit,

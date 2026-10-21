@@ -25,8 +25,9 @@ from ag2.events import (
     ToolResultsEvent,
     Usage,
 )
-from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.exceptions import UnsupportedInputError, UnsupportedToolChoiceError, UnsupportedToolError
 from ag2.response import ResponseProto
+from ag2.tool_choice import ToolChoiceMode
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
@@ -153,6 +154,14 @@ def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
     schema["type"] = "object"
     schema.setdefault("properties", {})
     return schema
+
+
+def tool_choice_to_api(mode: ToolChoiceMode) -> dict[str, Any]:
+    if mode == "none":
+        # Converse has no "none", and a tool history sent without toolConfig is
+        # rejected, so there is no way to send the tools and forbid them.
+        raise UnsupportedToolChoiceError(mode, "bedrock")
+    return {"any": {}} if mode == "required" else {"auto": {}}
 
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:

@@ -20,8 +20,9 @@ from ag2.events import (
     ToolResultsEvent,
     UrlInput,
 )
-from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.exceptions import UnsupportedInputError, UnsupportedToolChoiceError, UnsupportedToolError
 from ag2.response import ResponseProto
+from ag2.tool_choice import ToolChoiceMode
 from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
@@ -40,6 +41,13 @@ def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] |
         schema["description"] = response.description
 
     return {"type": "json_schema", "json_schema": schema}
+
+
+def tool_choice_to_api(mode: ToolChoiceMode) -> str:
+    # DashScope takes "auto", "none" or one named function, so it has no "required".
+    if mode == "required":
+        raise UnsupportedToolChoiceError(mode, "dashscope")
+    return mode
 
 
 def tool_to_api(t: ToolSchema) -> dict[str, Any]:

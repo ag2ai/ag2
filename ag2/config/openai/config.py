@@ -71,6 +71,7 @@ class OpenAIConfigOverrides(TypedDict, total=False):
     verbosity: Verbosity | None | Omit
     web_search_options: WebSearchOptions | Omit
     extra_body: dict[str, Any] | None
+    drop_tools_for_none: bool
 
 
 @dataclass(slots=True)
@@ -121,6 +122,9 @@ class OpenAIConfig(ModelConfig):
     verbosity: Verbosity | None | Omit = omit
     web_search_options: WebSearchOptions | Omit = omit
     extra_body: dict[str, Any] | None = None
+    # How a per-call `ToolChoice("none")` is sent: as `tool_choice: "none"`, or,
+    # for a gateway that ignores or rejects that, by leaving the tools out.
+    drop_tools_for_none: bool = False
 
     @property
     def provider(self) -> ModelProvider:
@@ -176,6 +180,7 @@ class OpenAIConfig(ModelConfig):
             default_query=self.default_query,
             http_client=self.http_client,
             create_options=options,
+            drop_tools_for_none=self.drop_tools_for_none,
         )
 
     def create_files_client(self) -> OpenAIFilesClient:

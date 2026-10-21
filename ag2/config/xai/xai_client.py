@@ -109,6 +109,8 @@ class XAIClient(LLMClient):
         create_kwargs: dict[str, Any] = dict(self._create_options)
         if xai_tools:
             create_kwargs["tools"] = xai_tools
+            if context.tool_choice is not None:
+                create_kwargs["tool_choice"] = context.tool_choice.mode
         if response_format is not None:
             create_kwargs["response_format"] = response_format
 

@@ -74,6 +74,7 @@ from ag2.exceptions import (
 )
 from ag2.files import FileProvider, UploadedFile
 from ag2.response import ResponseProto
+from ag2.tool_choice import ToolChoiceMode
 from ag2.tools.builtin.anthropic_bash import ANTHROPIC_BASH_TOOL_NAME, AnthropicBashToolSchema
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.mcp_server import MCPServerToolSchema
@@ -433,6 +434,12 @@ def _reject_unknown_url_source_tools(tools: Sequence[ToolSchema], mapped: Sequen
             for tool_name in _url_source_tool_names(source):
                 if tool_name not in declared:
                     raise WebFetchUrlSourceToolNotFoundError(tool_name, sorted(declared))
+
+
+def tool_choice_to_api(mode: ToolChoiceMode) -> dict[str, str]:
+    # "none" keeps the tools in the request: Anthropic rejects a tool history
+    # sent without them.
+    return {"type": "any" if mode == "required" else mode}
 
 
 def tools_to_api(tools: Sequence[ToolSchema]) -> list[dict[str, Any]]:
