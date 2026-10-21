@@ -437,8 +437,8 @@ def _reject_unknown_url_source_tools(tools: Sequence[ToolSchema], mapped: Sequen
 
 
 def tool_choice_to_api(mode: ToolChoiceMode) -> dict[str, str]:
-    # "none" keeps the tools in the request: Anthropic rejects a tool history
-    # sent without them.
+    # "none" keeps the tools in the request, so the model still reads its tool
+    # history as tool use; `drop_tools_for_none` sends no tools instead.
     return {"type": "any" if mode == "required" else mode}
 
 

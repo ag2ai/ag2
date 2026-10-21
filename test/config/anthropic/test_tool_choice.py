@@ -34,7 +34,7 @@ def get_weather(city: str) -> str:
     return city
 
 
-async def _body(choice: str, *, with_tools: bool = True) -> dict[str, Any]:
+async def _body(choice: str, *, with_tools: bool = True, drop_tools_for_none: bool = False) -> dict[str, Any]:
     bodies: list[dict[str, Any]] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
@@ -45,6 +45,7 @@ async def _body(choice: str, *, with_tools: bool = True) -> dict[str, Any]:
         model="claude-haiku-4-5",
         api_key="test",
         http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+        drop_tools_for_none=drop_tools_for_none,
     )
     context = Context(stream=MemoryStream()).with_tool_choice(choice)
     tools: list[ToolSchema] = await get_weather.schemas(context) if with_tools else []
@@ -76,3 +77,19 @@ async def test_no_tools_sends_no_tool_choice() -> None:
 
     assert "tool_choice" not in body
     assert "tools" not in body
+
+
+@pytest.mark.asyncio
+async def test_drop_tools_for_none_sends_no_tools() -> None:
+    body = await _body("none", drop_tools_for_none=True)
+
+    assert "tool_choice" not in body
+    assert "tools" not in body
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("mode", "expected"), [("auto", "auto"), ("required", "any")])
+async def test_drop_tools_for_none_keeps_other_modes(mode: str, expected: str) -> None:
+    body = await _body(mode, drop_tools_for_none=True)
+
+    assert body == IsPartialDict({"tool_choice": {"type": expected}, "tools": [IsPartialDict({"name": "get_weather"})]})

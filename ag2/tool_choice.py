@@ -36,8 +36,8 @@ class ToolChoice:
 
         tools = None if self.tools is None else frozenset(self.tools)
         if self.mode == "none" or tools == frozenset():
-            # Nothing is callable either way, and "none" keeps the schemas in the
-            # request: some providers reject a tool history sent without them.
+            # Nothing is callable either way. "none" lets the client keep the
+            # schemas, which Bedrock requires alongside a tool history.
             object.__setattr__(self, "mode", "none")
             tools = None
         object.__setattr__(self, "tools", tools)

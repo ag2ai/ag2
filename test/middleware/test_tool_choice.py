@@ -154,6 +154,48 @@ class TestToolChoiceOnLLMCall:
         (call,) = config.calls
         assert call.tool_choice == ToolChoice("none")
 
+    @pytest.mark.parametrize("choice", ["none", ToolChoice.only("finish")])
+    async def test_call_outside_choice_is_not_executed(
+        self, choice: ToolChoice | ToolChoiceMode, mock: MagicMock
+    ) -> None:
+        # The model names a tool the call did not offer, as a model or a gateway can.
+        agent = Agent(
+            "agent",
+            config=TestConfig(ToolCallEvent(name="search"), "answer"),
+            middleware=[Middleware(ChoosingMiddleware, choice=choice)],
+        )
+
+        @agent.tool
+        def search() -> str:
+            mock()
+            return "found"
+
+        @agent.tool
+        def finish() -> str:
+            return "finished"
+
+        reply = await agent.ask("Hi!")
+
+        mock.assert_not_called()
+        assert reply.body is None
+
+    async def test_allowed_call_is_executed(self, mock: MagicMock) -> None:
+        agent = Agent(
+            "agent",
+            config=TestConfig(ToolCallEvent(name="finish"), "answer"),
+            middleware=[Middleware(ChoosingMiddleware, choice=ToolChoice.only("finish"), first_call_only=True)],
+        )
+
+        @agent.tool
+        def finish() -> str:
+            mock()
+            return "finished"
+
+        reply = await agent.ask("Hi!")
+
+        mock.assert_called_once()
+        assert reply.body == "answer"
+
     async def test_required_without_tools_raises(self) -> None:
         agent = Agent(
             "agent",

@@ -35,6 +35,7 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     prompt_caching: bool
     cache_diagnostics: bool
     extra_body: dict[str, Any] | None
+    drop_tools_for_none: bool
 
 
 @dataclass(slots=True)
@@ -57,6 +58,10 @@ class AnthropicConfig(ModelConfig):
     prompt_caching: bool = True
     cache_diagnostics: bool = False
     extra_body: dict[str, Any] | None = None
+    # How a per-call `ToolChoice("none")` is sent: as `tool_choice: {"type": "none"}`,
+    # or by leaving the tools out. A model that wanted a tool can answer the first
+    # with no content at all.
+    drop_tools_for_none: bool = False
 
     @property
     def provider(self) -> ModelProvider:
@@ -90,6 +95,7 @@ class AnthropicConfig(ModelConfig):
             prompt_caching=self.prompt_caching,
             cache_diagnostics=self.cache_diagnostics,
             extra_body=self._request_extra_body(),
+            drop_tools_for_none=self.drop_tools_for_none,
         )
 
     def create_files_client(self) -> AnthropicFilesClient:

@@ -20,9 +20,14 @@ The obvious shape is extra keyword arguments on `call_next`. But `call_next` is
 including built-ins like `TelemetryMiddleware`, would raise `TypeError`, and widening
 `LLMCall` breaks every third-party middleware.
 
-Dropping the tool schemas is also not a portable "none". Anthropic and Bedrock reject
-a request whose history holds tool-use blocks when no tools are defined, and dropping
-them changes Anthropic's prompt-cache prefix.
+Dropping the tool schemas is also not a portable "none". Bedrock's Converse API
+requires `toolConfig` when the messages hold tool-use blocks. Elsewhere, dropping the
+schemas changes the request's cached prefix and the model's view of its own tool
+history. Keeping them is not free either: measured on Claude (2026-10-22), a model that
+wanted a tool can answer `tool_choice: "none"` with no content at all. Claude Haiku 4.5
+in a "stop and answer now" synthesis call gave 0 of 6 text replies with the tools kept,
+and 2 of 6 with them dropped (5 of 6 when the instruction shared the tool-result
+message). Claude Sonnet 4.6 and gpt-5.4-nano answered 8 of 8 either way in the same flow.
 
 ## Decision
 
@@ -41,13 +46,21 @@ them changes Anthropic's prompt-cache prefix.
   schemas and send their native setting. Ollama and Z.ai, which have none, express
   `"none"` by leaving the tools out. A mode a provider cannot honour (Bedrock `"none"`,
   `"required"` on Ollama, Z.ai and DashScope) raises `UnsupportedToolChoiceError` instead
-  of being dropped silently. `OpenAIConfig(drop_tools_for_none=True)` sends `"none"` as no
-  tools, for gateways that reject `tool_choice: "none"`.
+  of being dropped silently. `OpenAIConfig(drop_tools_for_none=True)` and
+  `AnthropicConfig(drop_tools_for_none=True)` send `"none"` as no tools instead: for a
+  gateway that rejects `tool_choice: "none"`, and for a model that goes silent under it.
+- The choice is enforced on the reply too. A tool call that the call's choice did not
+  allow is dropped with a warning rather than executed: the agent's tools all stay
+  registered, and a model can name a tool it was not offered (seen on Claude with an
+  allow-list), or a gateway can ignore `"none"`.
 
 ## Consequences
 
 - No middleware or `LLMClient` signature changes. A third-party client that does not
-  read `context.tool_choice` still gets the filtered tools, but it ignores the mode.
+  read `context.tool_choice` still gets the filtered tools, but it ignores the mode;
+  the reply-side check still keeps a forbidden call from executing.
+- `"none"` guarantees no tool runs, not that the model answers. A reply can come back
+  empty, so a caller that needs an answer still has to handle that case.
 - A per-call choice overrides a config-level `tool_choice` for that call.
 - `replace(context, tool_choice=...)` would bypass narrowing. `with_tool_choice` is the
   documented way to set it.

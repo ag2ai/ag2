@@ -35,7 +35,7 @@ from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
-from ag2.events import BinaryResult
+from ag2.events import BinaryResult, BuiltinToolCallEvent
 
 from .aggregate import AggregateStrategy, AggregateTrigger
 from .annotations import Context
@@ -1861,6 +1861,10 @@ async def _call_llm(
     An allow-list is applied here, for every client. The mode is left to the
     client, which maps it to its provider: "none" keeps the schemas so a
     provider that requires them alongside a tool history still accepts the call.
+
+    The choice is also enforced on the reply. A model can name a tool it was not
+    offered, and a gateway can ignore "none"; such calls are dropped rather than
+    executed, since every tool of the agent is still registered for execution.
     """
     choice = context.tool_choice
     if choice is not None and choice.mode == "required" and not tools:
@@ -1875,7 +1879,18 @@ async def _call_llm(
             # None of the allowed tools is on this agent, so nothing is callable.
             context = context.with_tool_choice("none")
 
-    return await client(messages, context, tools=tools, response_schema=response_schema, serializer=serializer)
+    response = await client(messages, context, tools=tools, response_schema=response_schema, serializer=serializer)
+
+    choice = context.tool_choice
+    if choice is not None and response.tool_calls:
+        offered = {_tool_choice_name(t) for t in tools} if choice.mode != "none" else set()
+        kept = [c for c in response.tool_calls.calls if isinstance(c, BuiltinToolCallEvent) or c.name in offered]
+        if len(kept) != len(response.tool_calls):
+            dropped = sorted({c.name for c in response.tool_calls.calls} - {c.name for c in kept})
+            logger.warning("Dropped tool calls %s the tool choice %r did not allow on this call", dropped, choice)
+            response.tool_calls = ToolCallsEvent(kept)
+
+    return response
 
 
 def _tool_choice_name(schema: ToolSchema) -> str:

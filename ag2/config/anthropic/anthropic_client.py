@@ -100,6 +100,7 @@ class AnthropicClient(LLMClient):
         prompt_caching: bool = True,
         cache_diagnostics: bool = False,
         extra_body: dict[str, Any] | None = None,
+        drop_tools_for_none: bool = False,
     ) -> None:
         self._client = AsyncAnthropic(
             api_key=api_key,
@@ -114,6 +115,7 @@ class AnthropicClient(LLMClient):
         self._streaming = (create_options or {}).get("stream", False)
         self._prompt_caching = prompt_caching
         self._cache_diagnostics = cache_diagnostics
+        self._drop_tools_for_none = drop_tools_for_none
         self._last_message_id: str | None = None
 
         # A caller reaching this class directly (rather than through
@@ -157,6 +159,9 @@ class AnthropicClient(LLMClient):
             tools_without_skills.append(CodeExecutionToolSchema())
 
         tools_list = tools_to_api(tools_without_skills)
+        choice = context.tool_choice
+        if choice is not None and choice.mode == "none" and self._drop_tools_for_none:
+            tools_list = []
         mcp_servers = extract_mcp_servers(tools_without_skills)
 
         kwargs: dict[str, Any] = {}
@@ -170,8 +175,8 @@ class AnthropicClient(LLMClient):
             "messages": anthropic_messages,
             "tools": tools_list if tools_list else NOT_GIVEN,
         }
-        if tools_list and context.tool_choice is not None:
-            create_kwargs["tool_choice"] = tool_choice_to_api(context.tool_choice.mode)
+        if tools_list and choice is not None:
+            create_kwargs["tool_choice"] = tool_choice_to_api(choice.mode)
 
         betas: set[str] = set()
 
