@@ -26,10 +26,11 @@ Agent(
     assembly: Iterable[AssemblyPolicy] = (),
     knowledge: KnowledgeConfig | None = None,
     tasks: TaskConfig | Literal[False] | None = None,
+    max_concurrent_tool_calls: int | None = None,
 )
 ```
 
-The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. The harness hooks are `assembly=`, `knowledge=`, and `tasks=`, each documented below.
+The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. The harness hooks are `assembly=`, `knowledge=`, and `tasks=`, each documented below. [`max_concurrent_tool_calls=`](#max_concurrent_tool_calls-tool-call-fan-out) is not a harness hook — it configures the tool executor — but it is documented here because this page is the construction reference.
 
 ## `assembly=` — context policies
 
@@ -187,6 +188,27 @@ bypass one another.
 For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agentas_tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
 
 See [Subagents](/docs/user-guide/subagents) for the full sub-task delegation guide — context flow and custom streams for self-delegation via `as_tool()`.
+
+## `max_concurrent_tool_calls=` — tool-call fan-out
+
+When the LLM returns several tool calls in one response, the executor starts all of them at once. That is the right default for independent tools, but a batch aimed at one rate-limited API, a shared connection pool or a single MCP server can exceed what the downstream will accept.
+
+Pass `#!python max_concurrent_tool_calls=N` to keep calls running in parallel while bounding how many are in flight. A call that has not started yet waits for a slot. Everything else about the batch is unchanged: each result still pairs with its own call, tool errors are still handed back to the model as ordinary results, and client-executed tools still dispatch to the caller.
+
+```python linenums="1" hl_lines="5"
+agent = Agent(
+    "researcher",
+    config=main_config,
+    tools=[search, fetch_url, fetch_pdf],
+    max_concurrent_tool_calls=3,   # at most three calls in flight per response
+)
+```
+
+The cap governs a single batch, not the whole turn, and defaults to `None`, which leaves concurrency unbounded — the behaviour before this option existed.
+
+It is separate from `#!python TaskConfig(max_concurrency=...)`, which bounds sub-task Agents ([above](#tasks-taskconfig)): this one bounds the tool calls the Agent makes itself. Setting both is valid, and each governs its own fan-out.
+
+A queued call that has not started is cancelled when the batch is abandoned — for example when a human-input request cannot be answered — so it never runs. A *synchronous* tool already executing in a worker thread cannot be interrupted, the same limitation [Agent Tools](/docs/user-guide/tools/tools#synchronous-and-asynchronous-tools) describes for synchronous execution.
 
 ## Agent.as_tool()
 
