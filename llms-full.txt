@@ -638,6 +638,35 @@ from ag2.config import OpenAIConfig
 config = OpenAIConfig(model="gpt-5")
 ```
 
+### Controlling OpenAI Reasoning
+
+OpenAI reasoning models spend extra tokens thinking before they answer. Both OpenAI configs let you bound that effort, and the Responses config can also request a summary of the thinking. See the [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) for which values each model accepts.
+
+`OpenAIConfig` (Chat Completions) takes `reasoning_effort`. `OpenAIResponsesConfig` takes the Responses API `reasoning` object:
+
+=== "OpenAI Responses"
+    ```python linenums="1"
+    from ag2.config import OpenAIResponsesConfig
+
+    # Auth resolved from OPENAI_API_KEY when omitted
+    config = OpenAIResponsesConfig(
+        model="gpt-5-mini",
+        reasoning={"effort": "low", "summary": "auto"},
+    )
+    ```
+
+=== "OpenAI"
+    ```python linenums="1"
+    from ag2.config import OpenAIConfig
+
+    # Auth resolved from OPENAI_API_KEY when omitted
+    config = OpenAIConfig(model="gpt-5-mini", reasoning_effort="low")
+    ```
+
+`effort` is one of `none`, `minimal`, `low`, `medium`, `high` or `xhigh`; the models that accept each value differ. `summary` is one of `auto`, `concise` or `detailed`.
+
+The model only returns its thinking when you set `summary`; without it the model still reasons, but no thinking text reaches the stream. The summary is emitted as `ModelReasoning` events (`OpenAIReasoningEvent`, a subclass), and reasoning tokens are reported on `ModelResponse.usage.thinking_tokens`.
+
 ### Anthropic Configuration
 
 `AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview) through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.6.0,<2`.
@@ -1104,7 +1133,7 @@ For recipes covering classification, routing, detection, scoring, ranking, verif
 
 For task recipes with Jev, see [Decision Models](decision_models.md).
 
-Jev is not a text generator. It answers **one typed question** about the conversation so far - yes or no, one label out of several, or a level on a rubric - and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
+Jev is not a text generator. It answers **one typed question** about the conversation so far - yes or no, one label out of several, a level on a rubric, or where something is in an image - and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
 
 If `api_key` and `base_url` are not passed explicitly, the SDK resolves them from the `TYPESAFE_API_KEY` and `TYPESAFE_BASE_URL` environment variables. `model` defaults to `jev-latest`.
 
@@ -1137,7 +1166,7 @@ reply.response.metadata["probabilities"]  # {"billing": 0.07, "technical": 0.93}
 
 #### The response schema is the question
 
-There is no free-text path, so an agent on `TypeSafeConfig` **must** set `response_schema`, and the schema picks which of Jev's three primitives is asked:
+There is no free-text path, so an agent on `TypeSafeConfig` **must** set `response_schema`, and the schema picks which of Jev's primitives is asked:
 
 | `response_schema` | Jev asks | `await reply.content()` returns |
 | :--- | :--- | :--- |
@@ -1145,14 +1174,53 @@ There is no free-text path, so an agent on `TypeSafeConfig` **must** set `respon
 | a number schema bounded to `0..1`, e.g. `ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | a yes/no question | the yes-probability as JSON text, unparsed (`from_schema` schemas are not validated); `reply.response.metadata["noul"]` has it as a `float` |
 | an `Enum` of strings | a choice between its members | the selected member |
 | an `IntEnum` numbered `0..n-1` with 2-10 levels | a score on that rubric | the member nearest Jev's expected score |
+| `BoundingBox` | where something is in an image (see [Locating things in an image](#locating-things-in-an-image)) | the `BoundingBox`: each edge as a `0..1` fraction of the image |
 
-Anything else - `str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema` - raises `UnsupportedResponseSchemaError` before any request is sent.
+Anything else - `str`, `int`, a dataclass, another Pydantic model, a `PromptedSchema` - raises `UnsupportedResponseSchemaError` before any request is sent.
 
 The agent `prompt` frames the question; the schema's own description asks it. That is an explicit `ResponseSchema(..., description=...)`, an `Annotated[..., Question("...")]` marker, or an `Enum`'s class docstring, in that order of precedence. The prompt and the question are joined, so the router above asks *"You triage customer support tickets. Which team should handle this ticket?"*.
 
 !!! warning "A yes/no question has to be asked"
 
     `response_schema=bool` with no prompt, no description and no `criteria` raises `ValueError` locally. The API rejects a bare yes/no question, and failing before the request keeps the error actionable.
+
+#### Locating things in an image
+
+`BoundingBox` asks Jev **where** something is in an image. The agent `prompt` says what to find, the image goes in with the question, and the answer is the box around it.
+
+Images and box questions are experimental on TypeSafe's side, so two settings are required: the `jev-preview` model and the opt-in header `TypeSafe-Danger-Zone-Images: true`, sent through `headers`. Without the header the API answers `400 Images are experimental`.
+
+```python
+from ag2 import Agent, ImageInput, ResponseSchema
+from ag2.config import TypeSafeConfig
+from ag2.config.typesafe import BoundingBox
+
+finder = Agent(
+    "finder",
+    prompt="The dog",
+    config=TypeSafeConfig(model="jev-preview", headers={"TypeSafe-Danger-Zone-Images": "true"}),
+    response_schema=ResponseSchema(BoundingBox),
+)
+
+reply = await finder.ask("Where is it?", ImageInput(path="photo.png"))
+box = await reply.content()            # BoundingBox(top=0.2, bottom=0.66, left=0.19, right=0.68)
+reply.response.metadata["confidence"]  # e.g. 0.89, or None when the model gives none
+
+width, height = 1280, 720  # the size of photo.png in pixels
+rectangle = (box.left * width, box.top * height, box.right * width, box.bottom * height)
+```
+
+The edges are fractions of the image, measured from its top-left corner: `top` and `bottom` of its height, `left` and `right` of its width. Multiply them by the image size to get pixels, as in the last line above.
+
+Send the image as `ImageInput(path=...)` or `ImageInput(data=..., media_type=...)`. A URL, an uploaded `file_id` and non-image media raise `UnsupportedInputError`.
+
+!!! warning "A box needs an image"
+
+    `response_schema=ResponseSchema(BoundingBox)` with no image in the request raises `ValueError` locally. Without the check the API would not fail; it would answer with an invented box and a confidence near zero.
+
+!!! note "Treat the box as an estimate"
+
+    `jev-preview` finds the right region, but its edges can be off by 0.1-0.2 of the image, and `confidence` is often low (around 0.3 in our checks). Read `reply.response.metadata["confidence"]` before acting on a box, and leave a margin when you crop or draw it.
 
 #### Describing the options
 
@@ -1196,7 +1264,7 @@ The SDK answer, minus its `type`, is kept on `reply.response.metadata`. A yes/no
 
 - **Tools.** Passing any tool raises `UnsupportedToolError`; keep tools on the generative agent Jev routes to.
 - **Streaming.** Requests are non-streaming; there is no `streaming` field, and the answer arrives as one `ModelMessage`.
-- **Files and media.** `create_files_client()` raises `NotImplementedError`, and only text and structured `DataInput` parts are sent - anything else raises `UnsupportedInputError`.
+- **Files and media.** `create_files_client()` raises `NotImplementedError`, and only text, structured `DataInput` and image parts (experimental, see [Locating things in an image](#locating-things-in-an-image)) are sent - anything else raises `UnsupportedInputError`.
 - **Free text.** `reply.body` is the answer as JSON, not prose.
 
 `retry` takes a `typesafe_sdk.RetryPolicy` and `http_client` an `httpx2.AsyncClient`; both are forwarded to the SDK untouched. Token counts land on `ModelResponse.usage` as `prompt_tokens` / `completion_tokens` when the API reports them.
@@ -2080,9 +2148,9 @@ On a decision model the agent's `response_schema` is not a format hint, it **is*
 | [Ranking](#ranking): order candidates by relevance | `bool`, asked once per candidate | the probabilities, sorted |
 | [Verification](#verification): check an artifact against a source | `bool`, one per failure mode | `True` / `False` per check |
 | [Feature extraction](#feature-extraction): signals for a downstream model | `bool`, one per signal | the probabilities as features |
-| [Image inspection](#image-inspection): a question about a photo | `bool` (OpenAI only) | `True` / `False`, plus the raw probability |
+| [Image inspection](#image-inspection): a question about a photo | `bool` (OpenAI), `BoundingBox` (TypeSafe) | `True` / `False` plus the raw probability, or the box |
 
-Anything else (`str`, a dataclass, a Pydantic model) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
+Anything else (`str`, a dataclass, another Pydantic model) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
 
 ## Set up
 
@@ -2585,7 +2653,7 @@ Purchase intent, churn signals, competitive pressure. Each signal is a yes/no qu
 
 ## Image inspection
 
-Damage checks, content moderation, document triage. OpenAI's Decisions API evaluates images together with text; Jev takes text and structured data only.
+Damage checks, content moderation, document triage. OpenAI's Decisions API evaluates images together with text and answers a yes/no question about them. Jev also takes images (experimental) and is built for locating things: its `BoundingBox` answer is described under [TypeSafe (Jev) Configuration](model_configuration.md#locating-things-in-an-image).
 
 ```python
 from ag2 import Agent, ImageInput, ResponseSchema
@@ -5313,8 +5381,11 @@ from ag2.events import ImageInput, AudioInput, VideoInput, DocumentInput
 # From a URL
 image = ImageInput("https://example.com/photo.jpg")
 
-# From a local file path
+# From a local file path (the type is inferred from the extension)
 image = ImageInput(path="photo.jpg")
+
+# An explicit media_type takes precedence over the extension
+image = ImageInput(path="download.jpg", media_type="image/png")
 
 # From raw bytes
 image = ImageInput(data=raw_bytes, media_type="image/png")
@@ -7020,7 +7091,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 
 Every field of both configs except `connection_timeout`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime - handy for injecting per-conversation tokens or workspace paths.
 
-`MCPToolkit` reuses tool discovery while the resolved configuration is unchanged. Changing the server address, credentials, stdio launch settings, filters or prefix triggers discovery again. Concurrent agent turns keep separate snapshots of the tools they discovered. Only the most recent configuration is cached, so alternating configurations can require another discovery request, and turns that resolve different configurations discover one after another rather than in parallel. Changes to a server's tool list alone do not invalidate this cache.
+`MCPToolkit` reuses tool discovery while the resolved configuration is unchanged. Changing the server address, credentials, stdio launch settings, filters or prefix triggers discovery again. Concurrent agent turns keep separate snapshots of the tools they discovered. Each discovered tool is pinned to the resolved configuration that discovered it, so a call always reaches the server that advertised the tool even when a `Variable` would now resolve differently. A value that changes mid-turn, such as a rotated token, applies from the next discovery. Only the most recent configuration is cached, so alternating configurations can require another discovery request, and turns that resolve different configurations discover one after another rather than in parallel. Changes to a server's tool list alone do not invalidate this cache.
 
 ### `MCPAnswerPolicy`
 
@@ -11052,6 +11123,8 @@ Out of the box it runs **deterministic detectors** (a crash/exception, no final 
 failure_attribution(OpenAIConfig(model="gpt-4o-mini"), key="failure_mode")
 ```
 
+To locate the decisive step of multi-agent failures without an LLM judge, the [mi4afa extension](../extensions/mi4afa.md) reads it from an open-weight model's activations with a trained probe.
+
 ## Exception handling
 
 A scorer that raises does NOT fail the run. The framework catches the exception, records a `Feedback` with `score=None` and a comment explaining what blew up, logs a warning, and moves on:
@@ -11996,6 +12069,7 @@ The STT -> Agent -> TTS flow turns any existing `Agent` into a voice agent witho
 |---|---|---|---|---|---|
 | OpenAI | ✅ | ✅ | ✅ | - | ✅ |
 | ElevenLabs | ✅ | - | ✅ | ✅ | - |
+| Mistral | ✅ | - | ✅ | ✅ | - |
 | Gemini | - | - | - | - | ✅ |
 
 Mixing providers across the two halves is supported and often the best setup: transcribe with OpenAI for live captions, speak with ElevenLabs for low time-to-first-byte.
@@ -12007,6 +12081,18 @@ ElevenLabs classes need the optional dependency and `ELEVENLABS_API_KEY` in the 
 
 ```bash
 pip install "ag2[elevenlabs] sounddevice[numpy]"
+```
+
+Mistral classes need the `mistral` extra and `MISTRAL_API_KEY` in the environment (or pass `api_key`):
+
+```bash
+pip install "ag2[mistral]"
+```
+
+`MistralRealtimeTranscriber` also needs the SDK's websocket client:
+
+```bash
+pip install "mistralai[realtime]"
 ```
 
 ## OpenAI credentials
@@ -12097,7 +12183,45 @@ from ag2.live import ElevenLabsTranscriber
 pipeline = ElevenLabsTranscriber("scribe_v2").pipe(agent)
 ```
 
-`language_code` is only sent when you set it - leave it unset and Scribe auto-detects. `diarize=True` asks for speaker labels.
+Optional settings are only sent when you set them - leave `language_code` unset and Scribe auto-detects. `diarize=True` asks for speaker labels, and `num_speakers` caps how many.
+
+Scribe tags non-speech sounds in the transcript by default (for example `(laughter)`), and the agent sees that text. Pass `tag_audio_events=False` to drop the tags, and `keyterms=[...]` to bias recognition toward names and jargon:
+
+```python
+from ag2.live import ElevenLabsTranscriber
+
+transcriber = ElevenLabsTranscriber(
+    "scribe_v2",
+    tag_audio_events=False,
+    keyterms=["AG2"],
+)
+pipeline = transcriber.pipe(agent)
+```
+
+### Mistral (Voxtral)
+
+`MistralTranscriber` uploads the clip as WAV to Mistral's offline transcription endpoint and sends a single `TranscriptionCompletedEvent`:
+
+```python
+from ag2.live import MistralTranscriber
+
+pipeline = MistralTranscriber("voxtral-mini-latest").pipe(agent)
+```
+
+`language` and `context_bias` (up to 100 words or phrases to favour) are only sent when you set them - leave `language` unset and the model auto-detects. `diarize=True` requests speaker diarization (segment timestamps are sent automatically, as the API requires); `transcribe()` still returns plain text. Pass `api_key` or a preconfigured `client` to override the `MISTRAL_API_KEY` default.
+
+`MistralRealtimeTranscriber` streams the clip to Voxtral Realtime over a websocket, so the words arrive as they are recognised: a `TranscriptionChunkEvent` per delta, then a closing `TranscriptionCompletedEvent`. It keeps the same `transcribe(voice, context) -> str` contract, so it drops into `.pipe()` and [`CascadeConfig`](live_agent.md#cascadeconfig-a-cascade-that-looks-realtime) unchanged:
+
+```python
+from ag2.live import MistralRealtimeTranscriber
+
+pipeline = MistralRealtimeTranscriber(target_streaming_delay_ms=480).pipe(agent)
+```
+
+The audio is the finished utterance (the turn detector decides where it ends), sent as `pcm_s16le` at the clip's sample rate, and it must be mono. `target_streaming_delay_ms` trades latency for accuracy; leave it unset for the model default.
+
+!!! note
+    `TranscriptionCompletedEvent` is sent only with the final transcript Mistral returns once the clip is processed. If the connection drops first, `transcribe()` raises `RuntimeError` instead of completing on the partial text. Cancelling it (for example, a `CascadeConfig(barge_in=True)` interruption) cancels the stream and sends no completed event, so the agent never runs on a half-heard utterance.
 
 ## Text-to-Speech
 
@@ -12159,17 +12283,43 @@ Any config implementing the `TTSConfig` protocol works with `TTSObserver`:
     )
     ```
 
+=== "Mistral"
+    ```python linenums="1"
+    from ag2.live import MistralTTSConfig
+
+    config = MistralTTSConfig(
+        "voxtral-mini-tts-2603",
+        voice_id="my-saved-voice",  # or ref_audio="<base64 clip>" for one-off cloning
+    )
+    ```
+
 `ElevenLabsTTSConfig` is the buffered mode - required by `eleven_v3`, which cannot stream. For the flash and turbo families, prefer streaming (below).
 
+Both ElevenLabs TTS configs also take `voice_settings`, `language_code` and `seed`; each is sent only when set. `voice_settings` is the SDK's `VoiceSettings` (stability, speed, and so on):
+
+```python
+from elevenlabs.types import VoiceSettings
+from ag2.live import ElevenLabsTTSConfig
+
+config = ElevenLabsTTSConfig(
+    "eleven_v3",
+    voice_settings=VoiceSettings(stability=0.5, speed=1.1),
+    language_code="en",
+)
+```
+
 !!! note
-    `output_format` defaults to `pcm_24000`, matching what `SoundDevicePlayer` and `SoundDeviceRecorder` expect. If you change it, change the player to match.
+    Mistral needs exactly one of `voice_id` (a saved voice) or `ref_audio` (a base64 reference clip); there is no default voice. It needs `MISTRAL_API_KEY` (or `api_key=`) and `pip install "ag2[mistral]"`. Mistral returns float32 PCM; the configs convert it to the int16 PCM that `SoundDevicePlayer` plays.
+
+!!! note
+    `output_format` defaults to `pcm_24000`, matching what `SoundDevicePlayer` and `SoundDeviceRecorder` expect. Use a raw PCM format only - the player does not decode mp3 or other containers - and if you change the sample rate, change the player to match.
 
 ## Streaming TTS
 
 With a buffered config, `TTSObserver` waits for each *sentence* to be fully synthesized before any of it plays. A streaming config removes that wait: audio chunks are forwarded as they are generated, so playback starts at time-to-first-byte.
 
 !!! note
-    **ElevenLabs is currently the only provider with a streaming TTS config.** `OpenAITTSConfig` performs a single buffered read and has no streaming equivalent.
+    **ElevenLabs and Mistral (`MistralStreamingTTSConfig`) have streaming TTS configs.** `OpenAITTSConfig` performs a single buffered read and has no streaming equivalent.
 
 Only the config changes - `TTSObserver` detects that the config can stream and uses that path automatically:
 
@@ -12195,6 +12345,8 @@ async def main() -> None:
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+The same works with Mistral - swap in `MistralStreamingTTSConfig("voxtral-mini-tts-2603", voice_id="my-saved-voice")`. It converts Mistral's float32 PCM to the int16 PCM `SoundDevicePlayer` expects.
 
 ### Streaming directly to the speaker
 
@@ -14413,6 +14565,10 @@ class DropOldToolEvents:
         drop_set = set(tool_indices[: -self._k])
         return [e for i, e in enumerate(events) if i not in drop_set]
 ```
+
+## Measuring a strategy
+
+Every strategy trades context for something the agent may still need. To measure whether a strategy makes your agent's next tool calls fail, repeat work, or stop, see the [Compaction Verifier](../extensions/compaction_verifier.md) extension.
 
 ---
 
@@ -18433,6 +18589,33 @@ the host; pass an API key in `env` to bill against the provider's API instead.
     follows the subscription, not per-token API pricing. Exact plan names, quotas,
     and whether a plan permits programmatic use are set by each provider, not by
     AG2 - check the provider's terms.
+
+## Sending more than text
+
+Every part of your message reaches the agent as its own ACP content block, so an image or a document travels beside the text instead of being dropped:
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.events import ImageInput
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+
+reply = await agent.ask("What is wrong in this screenshot?", ImageInput(path="screenshot.png"))
+```
+
+What the agent accepts is decided by the capabilities it advertises when the session starts:
+
+| Input | Sent as | Needs |
+|---|---|---|
+| text, structured data | text block | always available |
+| URL (image, document, ...) | resource link, not fetched | always available |
+| image bytes | image block | agent advertises `image` |
+| audio bytes | audio block | agent advertises `audio` |
+| document bytes | embedded resource | agent advertises `embedded_context` |
+| pre-uploaded file id | text naming the file | ACP has no equivalent |
+
+A part the agent did not advertise support for is replaced by a placeholder such as `[image]`, and a warning is logged, so the model learns something was sent rather than the part vanishing.
 
 ## Observing the agent's work
 
@@ -24951,7 +25134,7 @@ It takes the WAL up to the current envelope and returns a list of `BaseEvent`s t
 
 Two callables are supplied per call so view policies stay adapter-neutral and identity-aware without depending on hub internals:
 
-- `render_envelope: Callable[[Envelope], str | None]` - comes from the channel's `ChannelAdapter.render_envelope`. Lets a view ask "what's the LLM-visible text for this envelope?" without knowing the channel type's envelope shape.
+- `render_envelope: Callable[[Envelope], Sequence[Input] | None]` - comes from the channel's `ChannelAdapter.render_envelope`. Lets a view ask "what does the LLM see for this envelope?" without knowing the channel type's envelope shape. The answer is a list of `Input` parts (`TextInput`, images, and so on), or `None` (or no parts) to skip the envelope. An envelope can carry several parts - a workflow packet gives its handoff signal and its body as separate ones - and a view should keep them apart rather than join them into one string. The adapter itself may return a plain string, an `Input` or a sequence of either; the handler converts it with `Input.ensure_input`, the same conversion `Agent.ask` applies, before a view sees it. A custom adapter can annotate what it returns as `Rendered`, and `ensure_parts` is the conversion itself - both import from `ag2.network`.
 - `name_for: Callable[[str], str]` - comes from `Hub.name_for`. Lets a view resolve an `agent_id` to its registered `Passport.name` for projection lines that need a speaker label. Falls back to the raw id when the sender is unknown so projection never fails.
 
 ## Built-in Views
@@ -25028,13 +25211,15 @@ class FromOneOnly(ViewPolicy):
         for env in wal:
             if env.event_type != EV_TEXT or env.sender_id != self.sender_id:
                 continue
-            text = render_envelope(env) or ""
+            parts = render_envelope(env)
+            if not parts:
+                continue
             if env.sender_id == participant_id:
-                out.append(ModelMessage(text))
+                out.extend(ModelMessage(part.content) for part in parts if isinstance(part, TextInput))
             else:
                 # Use name_for to label so the LLM knows who said it.
                 label = name_for(env.sender_id)
-                out.append(ModelRequest([TextInput(f"[{label}]: {text}")]))
+                out.append(ModelRequest([TextInput(f"[{label}]:"), *parts]))
         return out
 ```
 
@@ -26313,6 +26498,272 @@ All runtime parameters accept `Variable` for deferred context resolution.
 
 ---
 
+# Firecrawl
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/firecrawl/
+
+`FirecrawlToolkit` gives an agent two related tools powered by [Firecrawl](https://www.firecrawl.dev/?utm_source=ag2&utm_medium=integration): web search and single-page scrape. Search can also return each result page's markdown in the same call, so an agent finds and reads sources in one step.
+
+!!! note
+    Requires the `firecrawl-py` package and an API key: `pip install "firecrawl-py>=4.46,<5"`. You can create a key in the [Firecrawl dashboard](https://www.firecrawl.dev/app/api-keys?utm_source=ag2&utm_medium=integration).
+
+```python
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import FirecrawlToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[FirecrawlToolkit(api_key=os.environ["FIRECRAWL_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the Firecrawl SDK reads the `FIRECRAWL_API_KEY` environment variable when a tool runs.
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `firecrawl_search` | Search the web or news and return ranked results with URL, title, and description, optionally with each page's markdown |
+| `firecrawl_scrape` | Read one `http` or `https` URL and return its markdown, plus HTML and links when requested |
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default tools:
+
+```python
+toolkit = FirecrawlToolkit(
+    api_key=...,
+    limit=5,                  # max results for firecrawl_search
+    scrape_results=True,      # include page markdown in firecrawl_search results
+    formats=["markdown"],     # output formats for firecrawl_scrape
+    only_main_content=True,   # drop navigation, headers, and footers in firecrawl_scrape
+    max_characters=20_000,    # cap the page content each tool returns
+)
+```
+
+The constructor also accepts `api_url` (for a self-hosted Firecrawl), `http_timeout` (seconds, for each HTTP request) and `max_retries`.
+
+!!! warning
+    `firecrawl_scrape` only checks that the URL is `http` or `https`; the model chooses the URL. Firecrawl's cloud API cannot reach your private network, but a self-hosted Firecrawl set through `api_url` fetches from wherever it runs, so the model could ask it for internal addresses. Restrict that deployment's network access if this matters.
+
+## Limiting result size
+
+A scraped page can be very long, and `firecrawl_search` with `scrape_results=True` returns one page per result. Set `max_characters` to cut each page's markdown (and HTML for `firecrawl_scrape`) to that many characters. For `firecrawl_scrape`, links are kept only while their combined length fits. Results that were cut have `truncated=True`, so the model knows the text is incomplete:
+
+```python
+toolkit = FirecrawlToolkit(api_key=...)
+
+search_tool = toolkit.search(limit=3, scrape_results=True, max_characters=10_000)
+scrape_tool = toolkit.scrape(max_characters=20_000)
+```
+
+`max_characters` is off by default.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.scrape()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python
+toolkit = FirecrawlToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search(limit=3, scrape_results=True)],
+)
+```
+
+## Search configuration
+
+`firecrawl_search` accepts a required `query` at execution time. Configure the other options on `toolkit.search()`:
+
+```python
+toolkit = FirecrawlToolkit(api_key=...)
+
+search_tool = toolkit.search(
+    limit=5,                       # results per source; Firecrawl returns 5 when omitted
+    sources=["web", "news"],       # "web" | "news"; defaults to web
+    categories=["pdf"],            # "github" | "pdf"
+    include_domains=["ag2.ai"],    # or exclude_domains=[...]
+    tbs="qdr:w",                   # time filter for web results, here the past week
+    location="Germany",
+    country="DE",
+    timeout=30000,                 # Firecrawl API timeout in milliseconds
+    scrape_results=True,           # add each result page's markdown
+)
+
+agent = Agent("researcher", config=config, tools=[search_tool])
+```
+
+With `scrape_results=True`, every result also carries the main content of its page as markdown, so the agent does not need a separate scrape call for each result. Each result is then a full page, so keep `limit` low. `scrape_only_main_content` and `scrape_max_age` tune how those pages are read. Leave `scrape_results` off when titles and descriptions are enough.
+
+## Scrape configuration
+
+`firecrawl_scrape` accepts a single URL at execution time. Configure the output on `toolkit.scrape()`:
+
+```python
+toolkit = FirecrawlToolkit(api_key=...)
+
+scrape_tool = toolkit.scrape(
+    formats=["markdown", "links"],  # "markdown" | "html" | "links"; defaults to markdown
+    only_main_content=True,
+    exclude_tags=["nav", "footer"],
+    wait_for=1000,                  # milliseconds to wait for the page to render
+    max_age=0,                      # 0 always fetches a fresh copy
+    timeout=30000,                  # Firecrawl API timeout in milliseconds
+)
+
+agent = Agent("researcher", config=config, tools=[scrape_tool])
+```
+
+`toolkit.scrape()` also accepts `include_tags`, `headers`, `mobile`, `proxy`, `block_ads` and `store_in_cache`.
+
+The search and scrape options (everything except `api_key`, `api_url`, `http_timeout` and `max_retries`) accept a `Variable` for deferred context resolution.
+
+## Errors
+
+`firecrawl_scrape` returns `{"error": ...}` for a URL that is not `http` or `https`, so the model can try again with a valid one. Everything else is raised:
+
+- invalid options, such as setting both `include_domains` and `exclude_domains` (raised by `toolkit.search()` itself, or at call time when the values come from `Variable`s);
+- a missing or invalid API key;
+- Firecrawl API errors, raised as `firecrawl` SDK exceptions.
+
+Errors raised while a tool runs reach the model as tool errors.
+
+## Result
+
+`firecrawl_search` returns a `FirecrawlSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query |
+| `web` | List of `FirecrawlSearchResult` (`url`, `title`, `description`, `position`, `markdown`, `truncated`) |
+| `news` | List of `FirecrawlNewsResult` (`url`, `title`, `snippet`, `date`, `position`, `markdown`, `truncated`) |
+
+`markdown` is set only when `scrape_results=True`. In that mode `description` and `snippet` come from the page metadata, and news results have no `date`.
+
+`firecrawl_scrape` returns a `FirecrawlScrapeResult`:
+
+| Field | Description |
+| :--- | :--- |
+| `url` | Final URL of the page |
+| `title`, `description`, `language` | Page metadata |
+| `status_code` | HTTP status code of the page |
+| `markdown`, `html`, `links` | Page content in the requested formats |
+| `truncated` | `True` when `max_characters` cut the markdown, the HTML or the links |
+
+!!! tip
+    Use `firecrawl_search` with `scrape_results=True` when the agent needs to read several sources for one question. Use `firecrawl_scrape` when the agent already knows the URL it wants to read.
+
+---
+
+# Keenable Search
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/keenable/
+
+`KeenableSearchToolkit` gives an agent two related tools powered by [Keenable](https://keenable.ai), an independent web index: web search and page fetch. Use it when an agent needs current search results and then needs to read the full content of selected pages as markdown.
+
+!!! note
+    Works without an API key, and no extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on. Setting `KEENABLE_API_KEY` raises the rate limits.
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import KeenableSearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[KeenableSearchToolkit()],
+)
+```
+
+Without a key, the toolkit calls Keenable's keyless endpoints, which have lower rate limits than keyed access (see [Keenable rate limits](https://docs.keenable.ai/rate-limits) for the current numbers). To raise those limits, pass `api_key=...` or set the `KEENABLE_API_KEY` environment variable, which is read at call time when `api_key` is omitted.
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `keenable_search` | Search the web and return ranked results with title, URL, page text snippet, and the time the page was indexed |
+| `keenable_fetch` | Fetch one URL and return the page's main content as markdown, with title, author, and publication date when known |
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default `keenable_search` tool:
+
+```python
+toolkit = KeenableSearchToolkit(
+    max_results=5,                 # 1-50, the API default is 10
+    site="docs.python.org",        # restrict results to one domain
+    published_after="2026-01-01",  # only pages published after this date (YYYY-MM-DD)
+    snippet_max_length=2000,       # approximate snippet length in characters (default 1000)
+)
+```
+
+`snippet_max_length` defaults to 1000 characters. Without a cap, Keenable returns several thousand characters of page text per result, so ten results can put tens of thousands of characters into the model's context; use `keenable_fetch` to read a whole page instead. The value is a hint rather than a hard cap, so a snippet can run slightly over it.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.fetch()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python
+toolkit = KeenableSearchToolkit()
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search(site="github.com", max_results=10)],
+)
+```
+
+Every factory method also accepts `name` and `description` overrides for the registered tool. The `toolkit.search()` defaults (`max_results`, `site`, `published_after`, `snippet_max_length`) also accept a `Variable` for deferred context resolution.
+
+## Connection settings
+
+The toolkit opens one `httpx.AsyncClient` per request. Override how that client connects:
+
+```python
+toolkit = KeenableSearchToolkit(
+    base_url="https://api.keenable.ai",  # override to route through your own gateway
+    timeout=60.0,                        # per-request timeout in seconds
+    proxy="http://proxy.internal:3128",
+    verify=True,                         # set False only to skip TLS verification
+)
+```
+
+A non-2xx response raises `httpx.HTTPStatusError` with Keenable's own error message, for example when a fetched page does not exist. A rate-limited response also reports its `Retry-After` value.
+
+## Result
+
+`keenable_search` returns a `KeenableSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `KeenableSearchResult` (`title`, `url`, `snippet`, `acquired_at`) |
+
+`snippet` holds text extracted from the page, and `acquired_at` is when Keenable last indexed it.
+
+`keenable_fetch` returns a `KeenableFetchResult`:
+
+| Field | Description |
+| :--- | :--- |
+| `url` | The page URL, as normalized by Keenable |
+| `title` | The page title |
+| `content` | The page's main content as markdown |
+| `author` | The page author, empty when unknown |
+| `published_at` | The publication time as an ISO 8601 UTC timestamp, empty when unknown |
+
+!!! tip
+    Use `keenable_search` first to discover candidate pages, then `keenable_fetch` to read the ones that look relevant.
+
+Request parameters and response fields are documented in the [Keenable API docs](https://docs.keenable.ai).
+
+---
+
 # Serply Search
 
 Source: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/serply/
@@ -26610,6 +27061,353 @@ Use `cursor` with the `next_cursor` from a previous response to request another 
 | `next_cursor` | Cursor for the next page, or an empty string |
 
 Check the [Xquik OpenAPI schema](https://xquik.com/openapi.json) for current search syntax, limits, and response fields.
+
+---
+
+# Compaction Verifier
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/compaction_verifier/
+
+The `ag2.extensions.compaction_verifier` module measures whether a [compaction strategy](../advanced/compaction.md) makes an agent's next actions worse. It answers one question about a `CompactStrategy`: **when the agent's raw history is replaced by what the strategy keeps, do its next tool calls fail or repeat work more often?**
+
+A strategy that summarizes well and one that silently drops the session token look the same from the outside - both shrink the context. The difference only shows in what the agent does next, so that is what the verifier measures, from real execution.
+
+This is the TRACE method (Trajectory-Relative Agent Context comprEssion), expressed in AG2's events.
+
+## Installation
+
+!!! note
+    The extension ships with AG2 and uses only the standard library. No additional package or API key is required beyond what your agent itself needs.
+
+```python
+from ag2.extensions.compaction_verifier import (
+    CompactionVerifier,
+    IdentityCompact,
+    Recording,
+    ReplayEnvironment,
+)
+```
+
+## How it works
+
+The verifier takes runs you have already recorded and picks **boundaries** in them: points right after a tool result, where the agent is about to decide its next action. At each boundary it builds two contexts for the **same** execution state:
+
+- **PRE** - the raw history up to the boundary (the control);
+- **POST** - what the strategy returns for that history (the treatment).
+
+For each context it resumes the agent with [`Agent.resume`](../resume.md) several times, in an environment rebuilt to the state at the boundary, and lets it run until `horizon` tool calls have completed or it finishes. Every completed call counts, including one that failed and one to a tool that does not exist, and the model answers at most `horizon` times, so a rollout always ends. A model call that raises is not counted, so a provider error that the agent's own middleware retries (`RetryMiddleware`, say) does not end a rollout early. Calls the model issues in one response all execute, so the last response can take a rollout past `horizon`; only the first `horizon` calls are scored. Nothing is teacher-forced: what the recorded run did next is never shown to the agent.
+
+Each tool call is then read for two regressions:
+
+| | An action is... | Read from |
+|---|---|---|
+| **blocked** | a call whose execution failed | a `ToolErrorEvent` (or `ToolNotFoundEvent`) |
+| **refetch** | a call repeating one already executed, before the boundary or earlier in the same rollout | the tool name plus its arguments as canonical JSON |
+
+An action that is either is **wasted**, and counts once. A strategy's score at a boundary is **POST minus PRE**: the mean wasted actions over the first `k` calls after compaction, minus the same without it. The agent is unstable on its own, so a rollout merely *behaving differently* is not evidence of harm; subtracting PRE differences that variance out rather than assuming it away. A positive delta means compaction added burden.
+
+Burden only counts actions the agent took, so an agent that gives up wastes nothing. A separate signal covers that: a rollout is **stopped** when the agent ended its turn before `k` calls, and its delta is reported the same way. A strategy that drops the original task request can make the agent stop - harmless on burden, but it finished nothing - so always read `stopped` next to `wasted`.
+
+## Quick start
+
+```python
+import asyncio
+
+from ag2 import Agent, MemoryStream, tool
+from ag2.compact import SummarizeCompact, TailWindowCompact
+from ag2.config import OpenAIConfig
+from ag2.extensions.compaction_verifier import (
+    CompactionVerifier,
+    IdentityCompact,
+    Recording,
+    ReplayEnvironment,
+)
+
+config = OpenAIConfig(model="gpt-4.1-mini", temperature=0.7)
+
+class Shop:
+    """Deterministic state: the same calls always leave it the same way."""
+
+    def __init__(self) -> None:
+        self.pages = [["widget", "gadget"], ["gizmo", "sprocket"], ["flange", "bolt"], ["hinge", "valve"]]
+        self.stock = {
+            "widget": 3, "gadget": 0, "gizmo": 0, "sprocket": 5,
+            "flange": 0, "bolt": 2, "hinge": 1, "valve": 0,
+        }
+        self.session = ""
+
+    def login(self) -> str:
+        """Start a session. Returns the session id every other tool needs."""
+        self.session = "s-4821"
+        return self.session
+
+    def list_items(self, session: str, page: int) -> str:
+        """List one page of items; pages start at 1."""
+        self._authorize(session)
+        return f"page {page} of {len(self.pages)}: {', '.join(self.pages[page - 1])}"
+
+    def check(self, session: str, item: str) -> str:
+        """Units of an item in stock."""
+        self._authorize(session)
+        return str(self.stock[item])
+
+    def reorder(self, session: str, item: str, quantity: int) -> str:
+        """Order more units of an item."""
+        self._authorize(session)
+        self.stock[item] += quantity
+        return "ok"
+
+    def _authorize(self, session: str) -> None:
+        if not self.session or session != self.session:
+            raise PermissionError("invalid session; call login first")
+
+def fresh_tools() -> dict:
+    shop = Shop()
+    return {"login": shop.login, "list_items": shop.list_items, "check": shop.check, "reorder": shop.reorder}
+
+async def main() -> None:
+    # 1. Record a few runs, uncompacted.
+    agent = Agent("stock-keeper", "Keep every item in stock.", config=config)
+    task = "Check every item on every page and reorder what is out of stock."
+    recordings = []
+    for _ in range(3):
+        stream = MemoryStream()
+        tools = [tool(f, name=n) for n, f in fresh_tools().items()]
+        await agent.ask(task, stream=stream, tools=tools)
+        events = list(await stream.history.get_events())
+        recordings.append(Recording(events, ReplayEnvironment(fresh_tools)))
+
+    # 2. Verify strategies against them.
+    verifier = CompactionVerifier(agent, horizon=5, samples=3)
+    report = await verifier.verify(
+        recordings,
+        {
+            "control": IdentityCompact(),
+            "tail": TailWindowCompact(target=15),
+            "summary": SummarizeCompact(target=15, config=config),
+        },
+        every=3,
+        min_prefix=3,
+    )
+    print(report.summary())
+
+asyncio.run(main())
+```
+
+With gpt-4.1-mini, each recorded run logs in, lists the four pages one at a time, and checks and restocks the items on each: 17 tool calls in 13 rounds. `every=3, min_prefix=3` takes four boundaries from each run, 12 in all, and the script finishes in about three minutes. One run printed:
+
+```text
+compaction verifier: POST minus PRE over the first 5 actions (3 samples per arm; * = 95% CI excludes 0)
+PRE rollouts failed: 0 of 36 (shared by every strategy)
+12 boundaries from 3 recordings; intervals and p treat boundaries as independent, but boundaries from one recording are correlated, so both are optimistic
+strategy                  n                  wasted                 blocked                 refetch                 stopped   kept  noop     failed       p
+control                  12  +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]    100%    12       0/36   1.000
+tail                     12  +1.139 [+0.333,+2.056]*  +0.000 [+0.000,+0.000]   +1.139 [+0.333,+2.056]*  +0.028 [+0.000,+0.083]     31%     0       0/36   0.062
+summary                  12  +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]   +0.000 [+0.000,+0.000]   +0.056 [+0.000,+0.167]     40%     0       0/36   1.000
+n = boundaries scored / tested; stopped = share of rollouts that ended before the horizon; kept = median share of context tokens kept; noop = boundaries left unchanged; failed = POST rollouts that failed, not scored; p = exact sign-flip permutation test on per-boundary wasted delta
+```
+
+The control scored exactly zero on every channel. `tail` kept 31% of the context and cost about one repeated call in five: resumed from a window that no longer showed which pages were done, the agent started again from page 1. Its interval excludes zero, but the harm came from 5 of the 12 boundaries, and with five boundaries showing any difference the exact test cannot go below p = 0.06; record more runs before relying on it. `summary` kept 40% at no measurable cost. Your numbers will differ from run to run.
+
+`report.summary()` prints one row per strategy: the boundaries scored out of those tested, the mean POST-minus-PRE delta at the full horizon for wasted, blocked and refetch actions and for stopped rollouts, each with a 95% bootstrap interval (`*` when it excludes zero), the median share of context tokens the strategy kept, how many boundaries it left unchanged, how many POST rollouts failed, and an exact sign-flip permutation p-value on the wasted delta. The p-value is computed from each arm's counts and number of rollouts, so it is exact whatever the arm sizes. It reads `n/a`, with a note under the table, only when an exact test would take too long: many boundaries whose arms kept different numbers of rollouts at a large `samples`. Everything else in the report is unaffected. A line above the table gives the PRE failures, which every strategy shares. With fewer than 10 boundaries no interval is marked: a percentile bootstrap over so few units is not reliable.
+
+Build the agent **without** the environment's tools: each rollout passes tools bound to its own rebuilt environment.
+
+## Reading the report
+
+- **Always include `IdentityCompact`.** It returns the history unchanged, so PRE and POST see the same context and its delta is the agent's own run-to-run noise at your sample size. A strategy's delta is evidence only when it clears the control's.
+- **`kept`** is how much of the context a strategy kept, and **`noop`** how many boundaries it left untouched. A strategy that keeps 100% of the context is not compacting at all, and its delta is noise. `kept` can also exceed 100%: a summary can come out longer than the history it replaced, and the summary then says at how many boundaries that happened. A `TailWindowCompact` window narrower than one tool round (five conversational events) keeps everything, because the window's start would split a call from its result.
+- **`TailWindowCompact` drops the original request** along with everything else outside the window. Between turns the next `ask()` brings a new request; resumed mid-task, an agent can lose track of what it was asked to do and stop, which shows up in `stopped`.
+- **Check `failed` before reading a delta.** A rollout that raises (a provider error, say) is recorded but not scored, and a boundary where every rollout of one arm failed is left out of the averages, which `n` shows as boundaries scored / tested. A `!` marks a strategy whose arms failed at different rates, which biases its delta. More failures after compaction, for instance a provider rejecting the compacted context, leave only the POST samples that ran and can understate the harm. More failures without compaction, for instance the raw history overflowing the context window, can understate what compaction saves. The most common error is printed under the table, and every error is in `to_dict()`.
+- **Failures never stop a verification.** A strategy that raises instead of returning a context (a summarization call that is rate-limited, say) is recorded for that boundary: no POST rollout runs there, the boundary is left out of that strategy's averages, and the summary marks the strategy with `!` and prints the error. The other strategies and boundaries carry on, and so does everything already finished.
+- **Intervals and p-values treat boundaries as independent.** Each boundary is one unit in the bootstrap interval and in the sign and permutation tests. Boundaries cut from the same recording share one agent run and are correlated. So with several boundaries per recording (a small `every` on long runs), the intervals come out narrower and the p-values smaller than they should. The summary's header says how many recordings the boundaries come from. Spread boundaries over more recordings rather than packing many into a few, and treat a borderline result with caution.
+- **Every horizon is available.** `report.strategies[name].at(k)` gives the summary at `k = 1 ... horizon`; `report.to_dict()` holds every boundary and every rollout's actions for your own analysis.
+- **Sampling.** Variance only averages out if the agent's model samples with a non-zero temperature; with temperature 0 use `samples=1`. Some models accept only their default temperature (OpenAI's gpt-5 family rejects `temperature=0.7`, for example). For those, leave `temperature` unset: their default of 1 is non-zero, which is what the verifier needs.
+
+## Recording a run
+
+A `Recording` holds the history the agent's own stream kept. Run the agent on a `MemoryStream` and pass what it holds, as the quick start does: `await agent.ask(task, stream=stream, tools=tools)`, then `list(await stream.history.get_events())`. That history has the user request, every model response with the calls it issued, and the `ToolResultsEvent` that closes each round of calls, which is where a boundary can be cut and the agent resumed.
+
+An `ag2.eval` `Trace` cannot be used. The traces `run_agent` and `evaluate_traces` hand to scorers are rebuilt from telemetry spans. They keep each tool call and its result (cut at 8,192 characters by default), but not the user request, the calls on each model response, or the `ToolResultsEvent` that closes each round, so there is no point the agent could resume from. `Recording` rejects a `Trace` with a `TypeError`. `verify()` rejects a history that has tool results but no `ToolResultsEvent` with a `ValueError`, so passing a trace's events fails with the reason instead of finding no boundary. To verify an agent you also evaluate, record its runs separately on a stream.
+
+## Environments
+
+Both arms of a boundary must start from the state the environment was in at that point, or a difference between them measures the environment, not the context. AG2 cannot snapshot what arbitrary tools did to the world, so each `Recording` carries an `Environment`: an object with one method, `async def restore(prefix)`, that returns tools bound to a fresh environment into which the recorded calls `prefix` have been applied.
+
+`ReplayEnvironment(factory)` does this by re-executing the recorded calls. `factory` returns a fresh `{tool name: function}` mapping on every call; each function is wrapped as a tool and each recorded call replayed through it, with the same argument validation and coercion the agent's executor applied. This is correct when the functions are deterministic given their arguments and their state. Replay checks that as far as it can: if a call that succeeded when recorded fails on replay, or the reverse, it raises `ReplayMismatchError`. The verifier records that as a failed rollout at that boundary, so no rollout starts from the wrong state, and the error appears in the summary. For tools with external side effects, implement `Environment` yourself, for example by restoring a snapshot.
+
+## Choosing boundaries
+
+By default a boundary is taken after the first `min_prefix` actions and then every `every` actions (`verify(..., every=5, min_prefix=3)`). Boundaries fall between tool rounds, and only where the recorded run went on to call another tool. Calls the model issues in one response are one round, so a run that makes all its calls at once has no boundary, whatever `every` and `min_prefix` are. When no recording has a boundary, `verify()` raises a `ValueError` that says how many actions and tool rounds each recording has. Pass `Recording(events, environment, cuts=[...])` to choose them yourself; `resumable_cuts(events)` lists every valid point.
+
+AG2's compaction middleware fires between turns, so a long single-turn tool loop is not compacted in production. The verifier does not depend on where a strategy happens to fire: it asks what the strategy would cost *if* the history were compacted at each boundary.
+
+## Cost
+
+Each boundary costs `samples × (1 + number of strategies)` rollouts of up to `horizon` answered model calls (plus any retries the agent's own middleware makes), plus one compaction per strategy (an LLM call for `SummarizeCompact`). PRE rollouts are shared by every strategy compared at a boundary. `concurrency=` bounds how many run at once.
+
+## Scoring recorded rollouts
+
+The arithmetic is available on its own for rollouts you collected elsewhere: `actions_from_events` reads executed calls off any event sequence, `score_boundary(pre, post, history, horizons)` returns the POST-minus-PRE deltas, and `bootstrap_mean`, `exact_sign_test` and `exact_permutation_test` aggregate them across boundaries. Pass `exact_permutation_test` each delta as a `Fraction` (`BoundaryDelta.exact_wasted` gives one) to keep it exact for any arm sizes; a float is accepted when it is a difference of means over arms of up to 1,000 rollouts. When no exact computation fits, it raises `PermutationTestTooLargeError`.
+
+---
+
+# mi4afa Probing Failure Attribution
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/mi4afa/
+
+The `ag2.extensions.mi4afa` module attributes failed multi-agent runs to their **decisive step** and **responsible agent** by reading an open-weight model's internal activations. It is the white-box counterpart of the core [`failure_attribution`](../evaluation/scorers.md#failure-attribution-failure_attribution) scorer: instead of asking a judge model which step went wrong, it trains a small linear probe on labelled failures and reads the answer out of the model's hidden states.
+
+It targets the setting of the [Who&When](https://arxiv.org/abs/2505.00212) benchmark, where judge models asked to name the failing step usually answer wrongly, yet the correct step is often linearly decodable from a model's activations while it reads the transcript.
+
+## Installation
+
+The extension needs PyTorch, Hugging Face Transformers and safetensors, plus an open-weight chat model (for example `Qwen/Qwen2.5-0.5B-Instruct`). A GPU is recommended for anything beyond small models.
+
+```bash
+pip install ag2 "torch>=2.5,<3" "transformers>=4.57,<6" "safetensors>=0.4.3,<1"
+```
+
+```python
+from ag2.extensions.mi4afa import Conversation, ProbeAttributor, probe_failure_attribution
+```
+
+Without PyTorch installed, the data types (`Conversation`, `Turn`, `PromptTemplate`, `conversation_from_trace`, `subagent_names`) still import; the probing classes raise an `ImportError` with the install command.
+
+## Quick start
+
+Train on labelled failures, select a layer on a validation split, and score held-out data. Records in the [Who&When](https://huggingface.co/datasets/Kevin355/Who_and_When) format - `question`, `ground_truth`, a `history` of `{"name", "content"}` steps, `mistake_step` and `mistake_agent` - load directly:
+
+```python
+import json
+import random
+
+from ag2.extensions.mi4afa import Conversation, ProbeAttributor
+
+records = json.load(open("who_and_when.json"))  # a list of Who&When records
+conversations = [Conversation.from_who_and_when(record) for record in records]
+random.Random(0).shuffle(conversations)
+train, test = conversations[: len(conversations) // 2], conversations[len(conversations) // 2 :]
+
+attributor = ProbeAttributor.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct", device="cuda")
+
+report = attributor.fit(train)  # holds out 20% of `train` to choose the site
+print("selected site:", report.site)
+
+score = attributor.evaluate(test)
+print(f"step accuracy {score.step_accuracy:.2%}, agent accuracy {score.agent_accuracy:.2%}")
+
+attribution = attributor.attribute(test[0])
+print(attribution.decisive_step, attribution.responsible_agent)
+```
+
+`attribute` returns the core [`Attribution`](../evaluation/scorers.md#failure-attribution-failure_attribution) model. The probe localizes a failure but does not classify it, so `error_mode` is `"other"`.
+
+## Use it as an eval scorer
+
+`probe_failure_attribution` wraps a fitted attributor as an `ag2.eval` scorer. Each run's trace is converted into a conversation, the probe blames one turn, and the scorer emits a `Feedback` whose `value` is the responsible agent - so `value_counts` gives the blame distribution - and whose `detail` is the `Attribution` with `decisive_step` pointing into `trace.events`, as in the core scorer:
+
+```python
+from ag2.eval import evaluate_traces
+from ag2.extensions.mi4afa import probe_failure_attribution, subagent_names
+
+blame = probe_failure_attribution(
+    attributor,
+    key="blame",
+    agent_name="planner",
+    subagents=subagent_names(planner),  # {"task_researcher": "researcher"}: delegated results are the researcher's
+)
+result = await evaluate_traces(
+    failed_runs,  # a TraceSource of runs already known to have failed
+    scorers=[blame],
+    store_dir="./runs",
+)
+print(result.value_counts("blame"))  # {"planner": 12, "tool:search": 5, "researcher": 3}
+```
+
+The model forward pass runs in a worker thread, so the event loop stays responsive.
+
+!!! warning "A run that succeeded is blamed too"
+    The probe ranks the turns of every conversation it reads, so it names a decisive step and a responsible agent even for a run that succeeded. Each successful run you score adds an agent to `value_counts` as if that agent had failed. Score only runs that failed, or read the blame next to a correctness scorer and keep the runs it marks as wrong.
+
+!!! note "Trace conversion is best effort"
+    A trace records one agent's stream and its events carry no speaker. `conversation_from_trace` turns the traced agent's text responses and tool calls into turns by `agent_name`, and tool results and errors into turns by `tool:<name>`.
+
+    Sub-agents need a mapping. A trace rebuilt from spans - what `run_agent` and the OpenTelemetry trace sources produce - holds no sub-task events, so a sub-agent's work appears only as its delegation tool's result. Pass `subagents={tool name: agent name}` to make those results turns by the sub-agent; `subagent_names(planner)` builds the mapping from the delegation tools in `planner.tools`, including custom tool names. Without it, a delegated result is blamed on `tool:task_<agent>` and the sub-agent is never named. A trace you build yourself from an agent's stream also holds `TaskCompleted` / `TaskFailed` events, which become turns by the sub-agent that ran them.
+
+    Only results are mapped. A delegation tool returns a result after running its sub-agent, and a sub-agent that fails comes back as a `Sub-task '<name>' failed: ...` result, which is the sub-agent's turn. A delegation tool's error is raised outside the sub-agent - for example, when the caller's arguments fail validation and the sub-agent never starts - so it stays a `tool:<name>` turn, next to the caller's call that caused it. `subagent_names` also leaves out delegation tools with their own middleware, because middleware such as `approval_required` can return a result, like a denial, without starting the sub-agent.
+
+    The sub-agent's own steps are not in its parent's trace, so its result stands for its whole sub-task. `subagent_names` does not see tools passed to `ask(...)` rather than set on the agent; map those yourself. A `background_agent_tool` returns a task id, not the sub-agent's answer, so it is not mapped. For full control, build `Conversation` objects yourself and call `attributor.attribute(...)`.
+
+## How it works
+
+1. **Prompt.** Each conversation is rendered as a judge prompt (task, expected answer, then one numbered line per turn) with the model's chat template. `PromptTemplate` holds the wording.
+2. **Activations.** `ActivationExtractor` runs the model's decoder once per conversation and reads, at the token holding each turn's last character, every **site**:
+    - `resid_pre` at layer *l* - the residual stream entering layer *l*,
+    - `mlp_in` at layer *l* - the normalized post-attention residual entering layer *l*'s MLP,
+    - `resid_final` - the final hidden state after the last norm.
+3. **Probe.** A standardized, class-weighted `LogisticProbe` scores each turn as "is this the mistake?". The highest-scoring turn is the decisive step, and its speaker the responsible agent.
+4. **Site selection.** `fit` trains one probe per site on part of the training data and keeps the site with the best **validation** step accuracy, then refits on all of it. Test data never influences the choice.
+
+A probe needs at least two training turns, and at least one that is not the mistake, so training on one-turn conversations alone raises a `ValueError`, as do activations that are not finite. A probe whose score for some turn is NaN or infinite raises instead of naming a step, so the scorer reports an error rather than blaming an agent.
+
+A conversation whose prompt is longer than the model's context, as declared by its `max_position_embeddings`, is refused with a `ValueError` instead of being read at positions the model was not trained on. Leave such conversations out before calling `fit`.
+
+Turn tokens are located from the tokenizer's character offsets, so a fast tokenizer is required. Chat templates that embed the current date (Llama 3) change the prompt from day to day; pin them for reproducible activations:
+
+```python
+attributor = ProbeAttributor.from_pretrained(
+    "meta-llama/Llama-3.2-1B-Instruct",
+    device="cuda",
+    chat_template_kwargs={"date_string": "26 Jul 2024"},
+)
+```
+
+### Reuse activations
+
+Extraction dominates the cost. Extract once and pass the activations to `fit`, `evaluate` and `sweep_sites`, which accept them in place of conversations:
+
+```python
+train_acts = attributor.extract(train)
+test_acts = attributor.extract(test)
+
+attributor.fit(train_acts)
+print(attributor.evaluate(test_acts))
+
+for score in attributor.sweep_sites(train_acts, test_acts):  # per-site test accuracy, for analysis
+    print(score.site, score.step_accuracy)
+```
+
+`sweep_sites` scores every site on the test set, which shows where the information lives but is optimistic if used to pick a site - use `fit` + `evaluate` for an unbiased number.
+
+### Save and load
+
+```python
+attributor.save("probes/qwen0.5-algo")
+
+restored = ProbeAttributor.load("probes/qwen0.5-algo", model, tokenizer)
+```
+
+The probe is stored as `probe.safetensors` (no pickle) next to `probe.json`, which records the model id and architecture, site, prompt and chat-template variables. `load` restores the same prompt settings. It refuses a model whose architecture differs from the probe's model, and warns when the same architecture was loaded from another name or path, such as a local copy of the Hub model for an offline machine. The check reads the model's config, so two models that share an architecture but not their weights are not told apart.
+
+## Reference
+
+| Name | Purpose |
+| :--- | :--- |
+| `Conversation`, `Turn` | A multi-agent conversation, optionally labelled with `mistake_step` / `mistake_agent`; `Conversation.from_who_and_when(record)` |
+| `PromptTemplate`, `build_prompt` | Judge-prompt wording and tokenization with per-turn token positions |
+| `ActivationExtractor`, `ActivationSite` | Read per-turn activations at chosen sites of a Hugging Face causal LM |
+| `LogisticProbe` | The standardized logistic probe |
+| `ProbeAttributor` | `fit` / `evaluate` / `sweep_sites` / `attribute` / `save` / `load` |
+| `conversation_from_trace` | Convert an `ag2.eval` `Trace` into a `Conversation` |
+| `subagent_names` | Map an agent's delegation tools to the sub-agents they run, for `subagents=` |
+| `probe_failure_attribution` | The `ag2.eval` scorer |
+
+## Testing
+
+The bundled unit tests build a tiny random Llama and an in-memory tokenizer, so they run offline on CPU without downloading any model.
+
+Maintainer: [@wuliang211](https://github.com/wuliang211) (Liang Wu). Based on research by Wendy Zheng.
 
 ---
 
