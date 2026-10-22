@@ -106,6 +106,11 @@ def test_invalid_connection_settings(settings: dict[str, Any]) -> None:
         GlasserToolkit(**({"api_key": "test"} | settings))
 
 
+def test_result_rejects_negative_content_limit() -> None:
+    with pytest.raises(ValueError, match="max_characters must be non-negative"):
+        GlasserResult.from_api({"status": "COMPLETED"}, -1)
+
+
 @pytest.mark.asyncio
 class TestExecution:
     @pytest.mark.parametrize(
@@ -328,6 +333,20 @@ class TestExecution:
             )
         ]
 
+    @respx.mock
+    async def test_negative_content_limit_fails_before_paid_call(self) -> None:
+        route = respx.post("https://api.glasser.ai/v1/solutions/gtm/web_research").mock(
+            return_value=httpx.Response(200, json={"status": "COMPLETED"}),
+        )
+        agent = Agent(
+            "a",
+            config=_config("web_research", {"query": "AG2"}),
+            tools=[GlasserToolkit("test", max_characters=-1)],
+        )
+        with pytest.raises(ValueError, match="max_characters must be non-negative"):
+            await agent.ask("search")
+        assert not route.called
+
     async def test_missing_variable_fails_before_http(self) -> None:
         toolkit = GlasserToolkit("test")
         agent = Agent(
@@ -452,6 +471,30 @@ class TestIdempotency:
 
 @pytest.mark.asyncio
 class TestPolling:
+    @pytest.mark.parametrize(
+        ("capability", "arguments", "pending", "message"),
+        [
+            (
+                "people_search",
+                {"keywords": "engineer"},
+                {"id": "bad/id", "status": "RUNNING"},
+                "invalid pending Run id",
+            ),
+            ("web_research", {"query": "AG2"}, {"status": "RUNNING"}, "no result_url"),
+        ],
+    )
+    @respx.mock
+    async def test_pending_result_requires_safe_retrieval_reference(
+        self, capability: str, arguments: dict[str, Any], pending: dict[str, Any], message: str
+    ) -> None:
+        route = respx.post(f"https://api.glasser.ai/v1/solutions/gtm/{capability}").mock(
+            return_value=httpx.Response(202, json=pending),
+        )
+        agent = Agent("a", config=_config(capability, arguments), tools=[GlasserToolkit("test")])
+        with pytest.raises(ValueError, match=message):
+            await agent.ask("research")
+        assert route.call_count == 1
+
     @pytest.mark.parametrize(
         ("capability", "arguments"),
         [
