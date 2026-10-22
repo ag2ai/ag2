@@ -14,6 +14,7 @@ from referencing.jsonschema import DRAFT202012
 from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue
 from .actions import A2UIEventAction
 from .constants import A2UI_DEFAULT_CATALOG_ID_BY_VERSION, A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
+from .diagnostics import XID_FORMAT
 
 _VERSIONS_DIR = Path(__file__).parent
 
@@ -31,29 +32,21 @@ def _as_object(value: "JsonValue | None") -> JsonObject:
 
 
 # v1.0 constrains extension keys with Unicode property escapes, which Python's ``re``
-# (what ``jsonschema`` matches patterns with) rejects. Swap the two UAX #31 classes for
-# their closest ``re`` equivalents at load time, leaving the vendored files byte-faithful.
-_RE_UNSUPPORTED_CLASSES = {r"[\p{XID_Start}_]": r"[^\W\d]", r"[\p{XID_Continue}]": r"\w"}
+# (what ``jsonschema`` matches patterns with) rejects. Check those keys with a format
+# instead, at load time, leaving the vendored files byte-faithful.
+_XID_KEYS = r"^[\p{XID_Start}_][\p{XID_Continue}]*$"
 
 
-def _python_regex(schema: JsonValue) -> JsonValue:
-    """Rewrite ``patternProperties`` keys of a schema so Python's ``re`` can compile them."""
+def _xid_property_names(schema: JsonValue) -> JsonValue:
+    """Rewrite objects whose keys must be UAX #31 identifiers to a ``propertyNames`` format check."""
     if isinstance(schema, list):
-        return [_python_regex(item) for item in schema]
+        return [_xid_property_names(item) for item in schema]
     if not isinstance(schema, dict):
         return schema
-    out: JsonObject = {}
-    for key, value in schema.items():
-        if key == "patternProperties" and isinstance(value, dict):
-            patterns: JsonObject = {}
-            for pattern, sub_schema in value.items():
-                for unsupported, supported in _RE_UNSUPPORTED_CLASSES.items():
-                    pattern = pattern.replace(unsupported, supported)
-                patterns[pattern] = _python_regex(sub_schema)
-            out[key] = patterns
-        else:
-            out[key] = _python_regex(value)
-    return out
+    if schema.get("patternProperties") == {_XID_KEYS: {}}:
+        rest = {key: value for key, value in schema.items() if key not in ("patternProperties", "additionalProperties")}
+        return {**rest, "propertyNames": {"format": XID_FORMAT}}
+    return {key: _xid_property_names(value) for key, value in schema.items()}
 
 
 def _instructions_of(catalog: JsonSchema) -> str:
@@ -160,7 +153,7 @@ class A2UISchemaManager:
         config = _VERSION_CONFIG[self._protocol_version]
         self._server_to_client = self._load_spec_json(config["server_to_client_file"])
         self._client_to_server = self._load_spec_json(config["client_to_server_file"])
-        self._common_types = _as_object(_python_regex(self._load_spec_json("common_types.json")))
+        self._common_types = _as_object(_xid_property_names(self._load_spec_json("common_types.json")))
         self._basic_catalog = self._load_spec_json("basic_catalog.json")
         # v0.9.x ships the catalog guidance as a separate rules file; v1.0 embeds
         # it in the catalog's own ``instructions`` field.

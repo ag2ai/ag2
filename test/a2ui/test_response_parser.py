@@ -13,6 +13,17 @@ from ag2.a2ui.parser import (
 from ag2.a2ui.schema_manager import A2UISchemaManager
 
 
+def _create_surface_with_extension(key: str) -> dict[str, object]:
+    return {
+        "version": "v1.0",
+        "createSurface": {
+            "surfaceId": "s",
+            "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "metadata": {"extensions": {key: {}}},
+        },
+    }
+
+
 class TestA2UIResponseParser:
     def test_parse_no_a2ui(self) -> None:
         parser = A2UIResponseParser(version_string="v0.9")
@@ -337,6 +348,16 @@ class TestA2UIResponseParserV1Validation:
         result = parser_v1.validate(ops)
         assert result.is_valid is False
         assert "do not emit it" in result.errors[0]
+
+    @pytest.mark.parametrize("key", ["a\u0301", "_private", "x2", "дом"])
+    def test_extension_keys_follow_uax31_identifiers(self, parser_v1: A2UIResponseParser, key: str) -> None:
+        # A letter plus a combining mark is a valid identifier (XID_Continue covers marks).
+        assert parser_v1.validate([_create_surface_with_extension(key)]).is_valid is True
+
+    @pytest.mark.parametrize("key", ["\u00b2", "1x", "a-b", ""])
+    def test_extension_keys_reject_non_identifiers(self, parser_v1: A2UIResponseParser, key: str) -> None:
+        # "²" is \w-class but cannot start an identifier; digits and dashes never can.
+        assert parser_v1.validate([_create_surface_with_extension(key)]).is_valid is False
 
     def test_function_response_rejects_value_and_error_together(self, parser_v1: A2UIResponseParser) -> None:
         # Spec: a FunctionResponse carries exactly one of value | error (oneOf).

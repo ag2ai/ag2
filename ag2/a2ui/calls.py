@@ -11,7 +11,7 @@ only drops the name from the prompt.
 from collections import OrderedDict
 from typing import cast
 
-from ._types import CallRendererFunctionMessage, ServerToClientMessage
+from ._types import JsonObject, ServerToClientMessage
 
 _DEFAULT_CAPACITY = 256
 
@@ -26,14 +26,17 @@ class RendererCallLedger:
         self._names: OrderedDict[str, str] = OrderedDict()
 
     def record(self, message: ServerToClientMessage) -> None:
-        """Remember the call carried by *message*; a no-op for any other message."""
+        """Remember the call carried by *message*; a no-op for any other message or an unusable payload."""
         if "callRendererFunction" not in message:
             return
-        content = cast(CallRendererFunctionMessage, message)["callRendererFunction"]
+        # Typed as the schema says, but with response validation off the model can send anything.
+        content = cast(JsonObject, message)["callRendererFunction"]
+        if not isinstance(content, dict):
+            return
         call = content.get("callFunction")
         function_call_id = content.get("functionCallId")
-        name = call.get("@call") if call else None
-        if not function_call_id or not name:
+        name = call.get("@call") if isinstance(call, dict) else None
+        if not isinstance(function_call_id, str) or not isinstance(name, str) or not function_call_id or not name:
             return
         self._names[function_call_id] = name
         self._names.move_to_end(function_call_id)

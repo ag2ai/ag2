@@ -173,6 +173,79 @@ async def test_button_click_in_forwarded_props_executes_server_action() -> None:
     }
 
 
+def _forwarded_input(forwarded_props: dict[str, Any]) -> RunAgentInput:
+    return RunAgentInput.model_validate({
+        "thread_id": "t1",
+        "run_id": "r2",
+        "state": {},
+        "messages": [],
+        "tools": [],
+        "context": [],
+        "forwarded_props": forwarded_props,
+    })
+
+
+_CALL_AGENT_FUNCTION = {
+    "version": "v1.0",
+    "callAgentFunction": {
+        "surfaceId": "s1",
+        "functionCallId": "fc-1",
+        "callFunction": {"@call": "verify_provider", "args": {"provider_id": "PRV-102"}},
+    },
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("carrier", ["a2uiAction", "a2ui"])
+async def test_call_agent_function_in_forwarded_props_is_answered_by_the_server(carrier: str) -> None:
+    called: list[str] = []
+
+    @a2ui_action(description="Check a provider")
+    def verify_provider(provider_id: str) -> dict:
+        called.append(provider_id)
+        return {"valid": True}
+
+    agent = Agent(name="ui", config=TestConfig("AGENT SHOULD NOT RUN"))
+    server = A2UIServer(
+        agent,
+        actions=[verify_provider],
+        transport=AgUiTransport(),
+        protocol_version="v1.0",
+        validate_responses=False,
+    )
+    envelope: Any = _CALL_AGENT_FUNCTION if carrier == "a2uiAction" else [_CALL_AGENT_FUNCTION]
+
+    events = await _dispatch_events(server, _forwarded_input({carrier: envelope}))
+
+    assert called == ["PRV-102"]
+    assert [e for e in events if e["type"] == "TEXT_MESSAGE_CHUNK"] == []
+    [activity] = [e for e in events if e["type"] == "ACTIVITY_SNAPSHOT"]
+    assert activity["content"] == {
+        "a2ui_operations": [
+            IsPartialDict({
+                "agentFunctionResponse": IsPartialDict({"functionCallId": "fc-1", "value": {"valid": True}})
+            }),
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_renderer_function_response_in_forwarded_props_reaches_the_agent() -> None:
+    config = TrackingConfig(TestConfig("Got it."))
+    server = A2UIServer(
+        Agent(name="ui", config=config),
+        transport=AgUiTransport(),
+        protocol_version="v1.0",
+        validate_responses=False,
+    )
+    response = {"version": "v1.0", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}
+
+    events = await _dispatch_events(server, _forwarded_input({"a2uiAction": response}))
+
+    assert "RUN_ERROR" not in [e["type"] for e in events]
+    assert "Berlin" in str(config.mock.call_args_list)
+
+
 @pytest.mark.asyncio
 async def test_button_click_resolves_injected_dependency() -> None:
     # DI is not transport-specific: the AG-UI transport shares the same turn

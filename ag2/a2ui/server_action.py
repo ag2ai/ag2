@@ -29,7 +29,7 @@ plain JSON — the same way the sibling AG-UI transport renders agent state.
 
 import logging
 from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any, TypeGuard, cast
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 from pydantic import ValidationError
 from pydantic_core import to_jsonable_python
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _is_message(value: object) -> TypeGuard[JsonObject]:
+def _is_message(value: JsonValue) -> TypeGuard[JsonObject]:
     """True if ``value`` looks like an A2UI server→client message envelope.
 
     A :class:`~typing.TypeGuard` so a ``True`` result narrows the (otherwise
@@ -62,7 +62,7 @@ def _is_message(value: object) -> TypeGuard[JsonObject]:
     return isinstance(value, dict) and not server_to_client_payload_keys().isdisjoint(value)
 
 
-def _stamp(message: dict[str, Any], version: A2UIVersion) -> ServerToClientMessage:
+def _stamp(message: JsonObject, version: A2UIVersion) -> ServerToClientMessage:
     """Ensure a handler-returned message carries the wire ``version``."""
     if "version" not in message:
         message = {"version": version, **message}
@@ -213,7 +213,7 @@ async def run_agent_function(
 
     messages = _messages_of(result, version)
     # Messages are the handler's surface updates; there is no separate value to return.
-    value = None if messages else cast(JsonValue, result)
+    value = None if messages else result
     return [*messages, _function_response(call.function_call_id, version, value=value)]
 
 
@@ -262,7 +262,7 @@ async def _run_handler(
     action: A2UIAction,
     invocation: A2UIIncomingAction | A2UIIncomingFunctionCall,
     context: ConversationContext,
-) -> object:
+) -> JsonValue:
     """Run the handler and coerce its (opaque) return into an embeddable JSON value.
 
     So a Pydantic model / datetime / Enum / dataclass becomes JSON-native before
@@ -273,15 +273,18 @@ async def _run_handler(
     with the handler call so a serialization failure is treated like any other
     handler failure by the callers, never tearing the turn down.
     """
-    return to_jsonable_python(await action.run(invocation, context=context))
+    result: JsonValue = to_jsonable_python(await action.run(invocation, context=context))
+    return result
 
 
-def _messages_of(result: object, version: A2UIVersion) -> list[ServerToClientMessage]:
+def _messages_of(result: JsonValue, version: A2UIVersion) -> list[ServerToClientMessage]:
     """The handler return as A2UI message(s) to emit verbatim, or ``[]`` when it is a plain value."""
     if _is_message(result):
         return [_stamp(result, version)]
-    if isinstance(result, list) and result and all(_is_message(item) for item in result):
-        return [_stamp(item, version) for item in result]
+    if isinstance(result, list) and result:
+        items = [item for item in result if _is_message(item)]
+        if len(items) == len(result):
+            return [_stamp(item, version) for item in items]
     return []
 
 

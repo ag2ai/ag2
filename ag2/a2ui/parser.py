@@ -7,12 +7,12 @@ import logging
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TypeGuard
+from typing import TypeGuard, cast
 
 from referencing import Registry
 from referencing.exceptions import Unresolvable
 
-from ._types import A2UIVersion, JsonSchema, JsonValue, ServerToClientMessage, server_to_client_payload_keys
+from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue, ServerToClientMessage, server_to_client_payload_keys
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 from .diagnostics import MessageChecker
 
@@ -120,7 +120,7 @@ def _as_messages(values: list[JsonValue]) -> "tuple[list[ServerToClientMessage],
     return messages, None
 
 
-def _components_of(update_components: object) -> list[object]:
+def _components_of(update_components: JsonValue) -> list[JsonValue]:
     """Return the ``components`` list of an ``updateComponents`` value, or ``[]`` if malformed."""
     if not isinstance(update_components, dict):
         return []
@@ -232,8 +232,10 @@ class A2UIResponseParser:
         if self._checker is None:
             return A2UIValidationResult(is_valid=True)
 
+        # Message TypedDicts are JSON objects on the wire; the checker reads them as such.
+        objects = cast(Sequence[JsonObject], operations)
         errors: list[str] = []
-        for i, op in enumerate(operations):
+        for i, op in enumerate(objects):
             try:
                 errors.extend(f"Operation {i}: {issue.render(op)}" for issue in self._checker.issues(op))
             except Unresolvable as re:
@@ -252,11 +254,9 @@ class A2UIResponseParser:
         # Spec rule (server_to_client.json + a2ui.org): across all component-carrying
         # ops, at least one component must have id 'root'. v1.0's createSurface can
         # carry the initial components itself, so those count alongside updateComponents.
-        update_ops = [op for op in operations if isinstance(op, dict) and "updateComponents" in op]
+        update_ops = [op for op in objects if isinstance(op, dict) and "updateComponents" in op]
         create_lists = [
-            _components_of(op.get("createSurface"))
-            for op in operations
-            if isinstance(op, dict) and "createSurface" in op
+            _components_of(op.get("createSurface")) for op in objects if isinstance(op, dict) and "createSurface" in op
         ]
         component_lists = [_components_of(op.get("updateComponents")) for op in update_ops] + create_lists
         if update_ops or any(create_lists):

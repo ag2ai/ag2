@@ -63,7 +63,7 @@ from ag2.ag_ui.stream import (
 from ag2.ag_ui.thought_signature import encrypted_signature_of, signature_event
 from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
 
-from .._types import JsonObject, ServerToClientMessage
+from .._types import JsonObject, JsonValue, ServerToClientMessage
 from ..dispatch import A2UIMessageFrame, A2UIProseFrame, TaskEvent
 from ..incoming import iter_incoming_prompts, parse_incoming_interactions
 from ..request import A2UIServerRequest
@@ -153,47 +153,62 @@ async def _endpoint(turns: ServedTurns, core: "_A2UITurnCore", request: Request)
     )
 
 
-def _click_envelopes(forwarded_props: object) -> list[JsonObject]:
-    """Extract A2UI client→server ``action`` envelopes from a run's ``forwardedProps``.
+_A2UI_ENVELOPE_KEYS = ("action", "callAgentFunction", "rendererFunctionResponse", "error")
 
-    CopilotKit's ``@copilotkit/a2ui-renderer`` relays a button click by setting
-    ``forwardedProps.a2uiAction = {"userAction": {name, surfaceId, sourceComponentId?,
-    context?, timestamp?, dataContextPath?}}`` and re-running the agent (verified
-    against CopilotKit ``react-core`` ``A2UIMessageRenderer`` and their server
-    examples). Map that to the ``{"action": {...}}`` envelope the A2UI incoming
-    pipeline already parses; returns ``[]`` when no usable click is present.
+
+def _client_envelopes(forwarded_props: JsonValue) -> list[JsonObject]:
+    """Extract A2UI client→server envelopes from a run's ``forwardedProps``.
+
+    Three shapes are read, in this order:
+
+    - ``forwardedProps.a2uiAction = {"userAction": {name, surfaceId,
+      sourceComponentId?, context?, timestamp?, dataContextPath?}}`` — how
+      CopilotKit's ``@copilotkit/a2ui-renderer`` relays a button click and re-runs
+      the agent (verified against CopilotKit ``react-core`` ``A2UIMessageRenderer``
+      and their server examples), mapped to the ``{"action": {...}}`` envelope the
+      A2UI incoming pipeline already parses;
+    - ``forwardedProps.a2uiAction`` carrying an envelope itself (``callAgentFunction``,
+      ``rendererFunctionResponse``, ``action`` or ``error``), passed through as is;
+    - ``forwardedProps.a2ui``, a list of such envelopes — the same array REST reads
+      from the ``a2ui`` body field.
+
+    Returns ``[]`` when none is present.
     """
     if not isinstance(forwarded_props, dict):
         return []
+    envelopes: list[JsonObject] = []
     a2ui_action = forwarded_props.get("a2uiAction")
-    if not isinstance(a2ui_action, dict):
-        return []
-    user_action = a2ui_action.get("userAction")
-    if not isinstance(user_action, dict) or not user_action.get("name"):
-        return []
-    context = user_action.get("context")
-    return [
-        {
-            "action": {
-                "name": user_action["name"],
-                "surfaceId": user_action.get("surfaceId", ""),
-                "sourceComponentId": user_action.get("sourceComponentId", ""),
-                "timestamp": user_action.get("timestamp", ""),
-                "context": context if isinstance(context, dict) else {},
-            },
-        },
-    ]
+    if isinstance(a2ui_action, dict):
+        user_action = a2ui_action.get("userAction")
+        if isinstance(user_action, dict) and user_action.get("name"):
+            context = user_action.get("context")
+            envelopes.append({
+                "action": {
+                    "name": user_action["name"],
+                    "surfaceId": user_action.get("surfaceId", ""),
+                    "sourceComponentId": user_action.get("sourceComponentId", ""),
+                    "timestamp": user_action.get("timestamp", ""),
+                    "context": context if isinstance(context, dict) else {},
+                },
+            })
+        elif any(key in a2ui_action for key in _A2UI_ENVELOPE_KEYS):
+            envelopes.append(a2ui_action)
+    a2ui = forwarded_props.get("a2ui")
+    if isinstance(a2ui, list):
+        envelopes.extend(item for item in a2ui if isinstance(item, dict))
+    return envelopes
 
 
 def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UIServerRequest:
     """Map an AG-UI ``RunAgentInput`` to a transport-neutral A2UI turn.
 
     Reuses ``ag2.ag_ui``'s history mapping (system/developer prompt,
-    prior turns, trailing user turn) unchanged, then folds in any button click:
-    CopilotKit relays a click as ``forwardedProps.a2uiAction`` and re-runs the
-    agent (no new chat message), so the click is rewritten into the current turn
-    and surfaced as a client interaction — mirroring the REST transport's
-    handling of inbound ``a2ui`` envelopes.
+    prior turns, trailing user turn) unchanged, then folds in any client envelope
+    (see :func:`_client_envelopes`): CopilotKit relays a click as
+    ``forwardedProps.a2uiAction`` and re-runs the agent (no new chat message), so
+    the click is rewritten into the current turn and surfaced as a client
+    interaction — mirroring the REST transport's handling of inbound ``a2ui``
+    envelopes.
     """
     variables = incoming.state if isinstance(incoming.state, dict) else {}
     prompt, history, current_inputs = map_agui_messages_to_events(
@@ -203,7 +218,7 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     )
     if shared := client_context_prompt(incoming.context or []):
         prompt.append(shared)
-    envelopes = _click_envelopes(incoming.forwarded_props)
+    envelopes = _client_envelopes(incoming.forwarded_props)
     current_inputs.extend(
         TextInput(p)
         for p in iter_incoming_prompts(envelopes, core.runtime.get_action, core.runtime.get_renderer_function_name)

@@ -78,7 +78,7 @@ class A2UIEventAction:
     action_type: Literal["event"] = field(default="event", init=False)
 
 
-def _placeholder_for(prop_schema: object) -> JsonValue:
+def _placeholder_for(prop_schema: JsonValue) -> JsonValue:
     """Map one JSON-schema property to an illustrative ``event.context`` value.
 
     Handles plain ``"type"`` schemas, ``array``/``object`` (fresh container each

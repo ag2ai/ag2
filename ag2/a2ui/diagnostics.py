@@ -18,9 +18,10 @@ from dataclasses import dataclass
 from typing import Any, TypeAlias
 
 import jsonschema
+from jsonschema import FormatChecker
 from referencing import Registry
 
-from ._types import JsonSchema, server_to_client_payload_keys
+from ._types import JsonObject, JsonSchema, JsonValue, server_to_client_payload_keys
 
 # ``jsonschema`` ships no type information, so its error objects are opaque to mypy.
 _SchemaError: TypeAlias = Any
@@ -36,10 +37,10 @@ class A2UIIssue:
     """Where in the message the problem is, as object keys and list indices."""
     message: str
 
-    def render(self, message: object) -> str:
+    def render(self, message: JsonValue) -> str:
         """The issue as a sentence for the LLM, naming the component it sits in when there is one."""
         node = message
-        component: dict[str, object] | None = None
+        component: JsonObject | None = None
         for part in self.path:
             if isinstance(node, dict) and isinstance(part, str):
                 node = node.get(part)
@@ -63,6 +64,14 @@ class _Leaf:
     keyword: str
 
 
+XID_FORMAT = "xid-identifier"
+
+
+def _is_identifier(value: JsonValue) -> bool:
+    # ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
+    return not isinstance(value, str) or value.isidentifier()
+
+
 class MessageChecker:
     """Check A2UI messages against a message schema and report where they are wrong.
 
@@ -73,6 +82,8 @@ class MessageChecker:
 
     def __init__(self, schema: JsonSchema, registry: Registry | None = None) -> None:
         validator_cls = jsonschema.validators.validator_for(schema)
+        formats = FormatChecker(formats=())
+        formats.checks(XID_FORMAT)(_is_identifier)
         self._validators: dict[str, Any] = {}
         defs = schema.get("$defs")
         branches = schema.get("oneOf")
@@ -85,10 +96,12 @@ class MessageChecker:
             for key in payload_keys.intersection(required if isinstance(required, list) else ()):
                 branch_schema = {**base, "$ref": ref}
                 self._validators[key] = (
-                    validator_cls(branch_schema, registry=registry) if registry else validator_cls(branch_schema)
+                    validator_cls(branch_schema, registry=registry, format_checker=formats)
+                    if registry
+                    else validator_cls(branch_schema, format_checker=formats)
                 )
 
-    def issues(self, message: object) -> list[A2UIIssue]:
+    def issues(self, message: JsonValue) -> list[A2UIIssue]:
         """Every way ``message`` violates the schema; empty when it is valid.
 
         Raises:

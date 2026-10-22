@@ -159,6 +159,20 @@ class TestStreamTurn:
         assert "function=getLocation" in prompt.content
         assert "Berlin" in prompt.content
 
+    @pytest.mark.parametrize(
+        "payload",
+        ["null", '"text"', '{"functionCallId": "fc-1", "callFunction": "getLocation"}', '{"functionCallId": 7}'],
+    )
+    async def test_malformed_renderer_call_does_not_fail_the_turn(self, payload: str) -> None:
+        response = f'Checking.\n<a2ui-json>\n[{{"version": "v1.0", "callRendererFunction": {payload}}}]\n</a2ui-json>'
+        agent = Agent(name="t", config=TestConfig(response))
+        rt = _A2UIRuntime(protocol_version="v1.0", validate_responses=False)
+        req = parse_request({"messages": [{"role": "user", "content": "where am I"}]}, resolve_action=rt.get_action)
+
+        frames = [f async for f in stream_turn(agent, rt, req)]
+
+        assert [f.text for f in frames if isinstance(f, A2UIProseFrame)] == ["Checking."]
+
     async def test_history_is_stateless_per_turn(self) -> None:
         # A fresh stream per call: prior history sent in the body, not retained.
         agent, rt = _agent_and_runtime(TestConfig("ok"), validate_responses=False)
