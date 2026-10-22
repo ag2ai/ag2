@@ -31,6 +31,7 @@ from ag2.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
@@ -197,6 +198,7 @@ class AnthropicClient(LLMClient):
             create_kwargs["extra_body"] = {**existing, **self._extra_body}
 
         max_continuations = 5
+        continuation_usage = Usage()
 
         if self._streaming:
             if self._cache_diagnostics:
@@ -209,6 +211,7 @@ class AnthropicClient(LLMClient):
             for _ in range(max_continuations):
                 if result.finish_reason != "pause_turn":
                     break
+                continuation_usage += result.usage
                 anthropic_messages.append({"role": "assistant", "content": final_msg.content})
                 create_kwargs["messages"] = anthropic_messages
                 if self._cache_diagnostics:
@@ -218,6 +221,7 @@ class AnthropicClient(LLMClient):
                     final_msg = await stream.get_final_message()
                 await self._report_cache_diagnostics(final_msg, create_kwargs, context)
 
+            result.usage += continuation_usage
             return result
         else:
             if self._cache_diagnostics:
@@ -228,6 +232,7 @@ class AnthropicClient(LLMClient):
             for _ in range(max_continuations):
                 if response.stop_reason != "pause_turn":
                     break
+                continuation_usage += normalize_usage(response.usage.model_dump() if response.usage else {})
                 await self._emit_builtin_tool_events(response.content, context)
                 anthropic_messages.append({"role": "assistant", "content": response.content})
                 create_kwargs["messages"] = anthropic_messages
@@ -236,7 +241,9 @@ class AnthropicClient(LLMClient):
                 response = await self._client.messages.create(**create_kwargs)
                 await self._report_cache_diagnostics(response, create_kwargs, context)
 
-            return await self._process_response(response, context)
+            result = await self._process_response(response, context)
+            result.usage += continuation_usage
+            return result
 
     async def _report_cache_diagnostics(
         self,
