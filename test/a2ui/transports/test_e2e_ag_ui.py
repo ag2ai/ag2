@@ -230,10 +230,67 @@ async def test_call_agent_function_in_forwarded_props_is_answered_by_the_server(
 
 
 @pytest.mark.asyncio
-async def test_renderer_function_response_in_forwarded_props_reaches_the_agent() -> None:
-    config = TrackingConfig(TestConfig("Got it."))
+@pytest.mark.parametrize(
+    "forwarded_props",
+    [
+        {"a2ui": "junk"},
+        {"a2ui": [1, "x", None, []]},
+        {"a2uiAction": None},
+        {"a2uiAction": {"unrelated": 1}},
+        {"a2uiAction": {"callAgentFunction": None}},
+    ],
+)
+async def test_unusable_forwarded_envelopes_are_ignored(forwarded_props: dict[str, Any]) -> None:
+    called: list[str] = []
+
+    @a2ui_action(description="Check a provider")
+    def verify_provider(provider_id: str) -> dict:
+        called.append(provider_id)
+        return {"valid": True}
+
     server = A2UIServer(
-        Agent(name="ui", config=config),
+        Agent(name="ui", config=TestConfig("Hello.")),
+        actions=[verify_provider],
+        transport=AgUiTransport(),
+        protocol_version="v1.0",
+        validate_responses=False,
+    )
+
+    events = await _dispatch_events(server, _forwarded_input(forwarded_props))
+
+    assert called == []
+    assert [e["type"] for e in events] == ["RUN_STARTED", "TEXT_MESSAGE_CHUNK", "RUN_FINISHED"]
+
+
+@pytest.mark.asyncio
+async def test_call_agent_function_is_unanswered_before_v1_0() -> None:
+    called: list[str] = []
+
+    @a2ui_action(description="Check a provider")
+    def verify_provider(provider_id: str) -> dict:
+        called.append(provider_id)
+        return {"valid": True}
+
+    server = A2UIServer(
+        Agent(name="ui", config=TestConfig("Hello.")),
+        actions=[verify_provider],
+        transport=AgUiTransport(),
+        validate_responses=False,
+    )
+
+    events = await _dispatch_events(
+        server, _forwarded_input({"a2uiAction": {**_CALL_AGENT_FUNCTION, "version": "v0.9"}})
+    )
+
+    assert called == []
+    assert "agentFunctionResponse" not in json.dumps(events)
+
+
+@pytest.mark.asyncio
+async def test_renderer_function_response_in_forwarded_props_reaches_the_agent() -> None:
+    tracking = TrackingConfig(TestConfig("Got it."))
+    server = A2UIServer(
+        Agent(name="ui", config=tracking),
         transport=AgUiTransport(),
         protocol_version="v1.0",
         validate_responses=False,
@@ -243,7 +300,10 @@ async def test_renderer_function_response_in_forwarded_props_reaches_the_agent()
     events = await _dispatch_events(server, _forwarded_input({"a2uiAction": response}))
 
     assert "RUN_ERROR" not in [e["type"] for e in events]
-    assert "Berlin" in str(config.mock.call_args_list)
+    sent = tracking.mock.call_args_list[0].args[0]
+    assert isinstance(sent, ModelRequest)
+    turn_text = " ".join(p.content for p in sent.parts if isinstance(p, TextInput))
+    assert "Berlin" in turn_text
 
 
 @pytest.mark.asyncio

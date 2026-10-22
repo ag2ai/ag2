@@ -43,7 +43,7 @@ def _xid_property_names(schema: JsonValue) -> JsonValue:
         return [_xid_property_names(item) for item in schema]
     if not isinstance(schema, dict):
         return schema
-    if schema.get("patternProperties") == {_XID_KEYS: {}}:
+    if schema.get("patternProperties") == {_XID_KEYS: {}} and schema.get("additionalProperties") is False:
         rest = {key: value for key, value in schema.items() if key not in ("patternProperties", "additionalProperties")}
         return {**rest, "propertyNames": {"format": XID_FORMAT}}
     return {key: _xid_property_names(value) for key, value in schema.items()}

@@ -4,6 +4,7 @@
 
 import pytest
 
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.parser import (
     A2UIParseResult,
     A2UIResponseParser,
@@ -13,7 +14,7 @@ from ag2.a2ui.parser import (
 from ag2.a2ui.schema_manager import A2UISchemaManager
 
 
-def _create_surface_with_extension(key: str) -> dict[str, object]:
+def _create_surface_with_extension(key: str) -> JsonObject:
     return {
         "version": "v1.0",
         "createSurface": {

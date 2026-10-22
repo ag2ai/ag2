@@ -102,6 +102,8 @@ A v1.0 renderer that needs a *value* back — verifying an id, a typeahead, an i
 {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "verify-1", "value": {"valid": true}}}
 ```
 
+Over [AG-UI](/docs/user-guide/a2ui/server#serving-over-ag-ui-copilotkit) the same envelope rides `#!python forwardedProps.a2uiAction` (or in a list under `#!python forwardedProps.a2ui`), and the `#!python agentFunctionResponse` comes back in the run's `#!python ACTIVITY_SNAPSHOT`.
+
 The reply is always exactly one of `#!python value` or `#!python error`. Any messages the handler returns (an `#!python updateDataModel`, say) are sent first, and then the response carries `#!python null`. A failure is reported rather than raised:
 
 | `#!python error.code` | When |
