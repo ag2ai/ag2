@@ -118,6 +118,23 @@ class AggregationFailed(BaseEvent):
     error: str
 
 
+class CallLimitReached(BaseEvent):
+    """Emitted on the agent's stream when ``CallLimiter`` ends a turn on a used-up limit.
+
+    ``ending`` says how the reply was written: ``"synthesis"`` when the model
+    answered the limiter's final call, ``"empty"`` or ``"last_text"`` when no
+    model call was left to write it. A final call that raised is reported here
+    by ``error_type`` and ``error``, and the turn still ends.
+    """
+
+    __transient__ = True
+
+    reason: str
+    ending: str
+    error_type: str | None = None
+    error: str | None = None
+
+
 class EventLogFailed(BaseEvent):
     """Emitted when the post-``ask`` event-log writer raises.
 

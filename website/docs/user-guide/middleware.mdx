@@ -402,6 +402,81 @@ It uses a character-based estimate controlled by `chars_per_token`.
 
 Use it when you need lightweight context budgeting without depending on a model-specific tokenizer.
 
+### `CallLimiter`
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.middleware import CallLimiter
+
+agent = Agent(
+    ...,
+    middleware=[
+        CallLimiter(
+            max_tool_calls=10,
+            max_tool_calls_per_tool={"search": 3},
+            max_llm_calls=8,
+            exempt={"finish"},
+        )
+    ],
+)
+```
+
+Caps the tool calls and model calls of a turn, and then has the model answer from what it already has.
+
+A capped tool call is refused rather than run. The model gets a structured result instead, with `"type": "call_limit_exceeded"` and `"retryable": false`. The tools and their schemas never change, so the provider's prompt cache stays intact.
+
+There are two kinds of limit:
+
+- **One tool's cap** (`max_tool_calls_per_tool`) refuses only that tool. The model is told that its other tools remain available, and the turn goes on.
+- **A total** (`max_tool_calls`, `max_llm_calls` or `max_seconds`) exhausts the turn. A call that would break both a total and its tool's cap counts against the total.
+
+Model calls are checked before they are sent. When the turn is exhausted, `on_exhausted` decides what happens:
+
+- `"synthesise"` (the default) makes one final model call, with a prompt asking the model to answer now. The prompt goes with that call only and is never stored in the history. Tool calls in the reply are dropped and its text is kept, except calls to `exempt` tools, which run. If the reply was nothing but dropped calls, or exempt calls that have now run, the model gets one more call to answer in text. That's two final calls at most, after which the turn ends without another model call.
+- `"stop"` ends the turn without another model call.
+
+Tools in `exempt` are never counted or refused, including during the final call. Use it for the calls a turn ends with, such as routing, `finish` or recording a result. Otherwise a turn that spent its budget investigating can't deliver its answer.
+
+`max_seconds` is a soft clock, checked between calls. It never interrupts a call that is already running.
+
+`show_remaining=True` adds a note to each model call saying what is left. Like the final prompt, the note is never stored in the history.
+
+Refusals are configurable. `tool_limit_result` and `exhausted_result` each take a string, a dict, or a callable that receives the refused `ToolCallEvent` and returns either.
+
+#### Telling a limit ending apart
+
+A reply that no model call wrote has `finish_reason="call_limit"`. Whenever the limiter ends a turn, it also sends a `CallLimitReached` event on the agent's stream, with the `reason` and the `ending`:
+
+- `"synthesis"`: the model answered the final call.
+- `"empty"` (the default): no model call was left, and the reply has no message.
+- `"last_text"`: no model call was left, and the reply is the model's last text in this turn. Opt in with `ending="last_text"`. That text is often a half-finished line like "Let me search…", so check it before showing it as an answer.
+
+A reply with a message also carries the reason and the ending in `metadata["ag2:call_limit"]`. If the final call raises, the turn still ends, and the event carries `error_type` and `error`.
+
+```python linenums="1"
+reply = await agent.ask("...")
+if reply.response.finish_reason == "call_limit":
+    ...  # answer from what you have, or report that the budget ran out
+```
+
+#### Sharing a counter
+
+Counts are kept per agent and per turn: each `ask()` and each delegated sub-agent turn starts from zero. To cap a whole run across several agents, share one `CallCounter`, for example through `context.dependencies`, which delegated sub-agents share:
+
+```python linenums="1"
+from ag2.middleware import CallCounter, CallLimiter
+
+limiter = CallLimiter(max_tool_calls=30, counter=lambda ctx: ctx.dependencies["calls"])
+
+reply = await agent.ask("...", dependencies={"calls": CallCounter()})
+```
+
+A shared counter's `max_seconds` runs from the counter's `started` time. That defaults to when the counter was created, and you can pass `started` to line it up with your own run clock. The counter also records what was spent and refused, in total and per tool, so it serves as the usage report.
+
+Two `CallLimiter`s can be stacked, for example one for the whole run outside one per agent. The inner limiter lets the outer one's final call through without counting it. Don't stack `CallLimiter` with a different middleware that also counts or refuses calls, or a call can be refused twice.
+
+Each refused call costs a model call, because the model has to read the refusal. Set a total one call below what you can afford, so the final answer still fits.
+
 ## Conditional Middleware
 
 `ConditionalMiddleware` lets you gate any middleware so each hook only activates when a condition matches the hook's own event. When the condition is not met, that hook passes through to the next middleware in the chain.
