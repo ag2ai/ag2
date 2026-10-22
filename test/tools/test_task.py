@@ -1062,9 +1062,11 @@ def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
     A fresh Agent per round, because the cap can only go missing while its
     semaphore is first provisioned, and a tightened switch interval so CPython
     interleaves the two threads inside that window.
+
+    The interval is tightened only once both workers are in their target:
+    during thread startup it can break coverage's tracing on Python 3.11.
     """
     old_interval = sys.getswitchinterval()
-    sys.setswitchinterval(0.00001)
 
     def make_parent() -> Agent:
         return Agent(
@@ -1101,8 +1103,10 @@ def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
 
     peaks: list[int | BaseException] = [0, 0]
 
-    def worker(parent: Agent, index: int) -> None:
+    def worker(parent: Agent, index: int, ready: threading.Barrier, release: threading.Event) -> None:
         try:
+            ready.wait(timeout=10)
+            release.wait(timeout=10)
             peaks[index] = asyncio.run(turn(parent))
         except BaseException as exc:  # surfaced by the assertions below
             peaks[index] = exc
@@ -1114,11 +1118,16 @@ def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
             # assertion below reports, and a non-daemon one would then keep
             # `threading._shutdown` — and so the whole pytest process — waiting
             # on it forever after the session ends.
-            threads = [threading.Thread(target=worker, args=(parent, i), daemon=True) for i in range(2)]
+            ready, release = threading.Barrier(3), threading.Event()
+            threads = [threading.Thread(target=worker, args=(parent, i, ready, release), daemon=True) for i in range(2)]
             for thread in threads:
                 thread.start()
+            ready.wait(timeout=10)
+            sys.setswitchinterval(0.00001)
+            release.set()
             for thread in threads:
                 thread.join(timeout=10)
+            sys.setswitchinterval(old_interval)
             hung = [thread for thread in threads if thread.is_alive()]
             if hung:
                 # Seen on Windows CI only. Dump every thread's stack so the next
