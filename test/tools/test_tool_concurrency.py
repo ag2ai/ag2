@@ -299,32 +299,42 @@ class TestAgentConcurrencyGate:
         assert peak.peak <= 2
         assert len(peak.started) == 12
 
-    async def test_agent_with_limit_is_reusable_across_event_loops(self) -> None:
-        """A capped Agent survives being driven from more than one event loop.
 
-        ``asyncio.Semaphore`` binds to the first loop that awaits it while
-        contended. Provisioning one per batch — not caching it on the executor —
-        is what keeps the Agent reusable.
-        """
+def test_agent_with_limit_is_reusable_across_event_loops() -> None:
+    """A capped Agent survives being driven from more than one event loop.
 
-        @tool
-        async def work(tag: str) -> str:
-            """Do some work."""
-            await asyncio.sleep(0)
-            return tag
+    ``asyncio.Semaphore`` binds to the first loop that awaits it *while
+    contended*, so a semaphore cached on the executor would raise
+    ``RuntimeError`` on the second loop. This is deliberately sync — one
+    ``asyncio.run`` per turn — and the cap is smaller than the fan-out, so the
+    gate is guaranteed to block and the binding is actually exercised.
+    """
+    peak = _Peak()
 
-        agent = Agent(
-            "reused",
-            config=TestConfig(ModelResponse(tool_calls=ToolCallsEvent(calls=_numbered_calls(4))), "done"),
-            tools=[work],
-            max_concurrent_tool_calls=1,
-        )
+    @tool
+    async def work(tag: str) -> str:
+        """Hold a slot so the peak is observable."""
+        peak.enter(tag)
+        await asyncio.sleep(0)
+        peak.leave()
+        return tag
 
-        async def turn() -> str | None:
-            return (await agent.ask("go", stream=MemoryStream())).body
+    agent = Agent(
+        "reused",
+        config=TestConfig(ModelResponse(tool_calls=ToolCallsEvent(calls=_numbered_calls(4))), "done"),
+        tools=[work],
+        max_concurrent_tool_calls=1,
+    )
 
-        bodies = [await turn() for _ in range(3)]
-        assert bodies == ["done", "done", "done"]
+    async def turn() -> tuple[str | None, int]:
+        reply = await agent.ask("go", stream=MemoryStream())
+        return reply.body, peak.peak
+
+    for _ in range(3):
+        peak.peak = 0
+        body, observed = asyncio.run(turn())
+        assert body == "done"
+        assert observed == 1
 
 
 @pytest.mark.asyncio
