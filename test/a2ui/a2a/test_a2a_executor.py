@@ -10,6 +10,7 @@ import pytest
 from a2a.client import ClientCallInterceptor
 from a2a.client.interceptors import BeforeArgs
 from a2a.types import Message, Part, Task, TaskState
+from dirty_equals import IsPartialDict
 from google.protobuf.json_format import MessageToDict, ParseDict
 
 from ag2 import Agent, Depends
@@ -19,7 +20,7 @@ from ag2.a2a.mappers import data_part
 from ag2.a2a.mappers.messages import build_tool_result_message, build_user_message
 from ag2.a2a.testing import make_test_client_factory
 from ag2.a2ui import a2ui_action
-from ag2.a2ui.a2a import A2UIAgentExecutor, create_a2ui_parts, get_a2ui_data
+from ag2.a2ui.a2a import A2UIAgentExecutor, create_a2ui_parts
 from ag2.a2ui.a2a.executor import _extract_a2ui_envelopes
 from ag2.a2ui.constants import A2UI_MIME_TYPE
 from ag2.events import TextInput, ToolCallEvent, ToolResultEvent, ToolResultsEvent
@@ -393,7 +394,8 @@ class TestCallAgentFunction:
         ]
         assert TaskState.TASK_STATE_COMPLETED in states
         # The call is answered on the server: it never reaches the model's prompt.
-        assert "verify_provider" not in synthesized_text([config.mock.call_args.args[0]])
+        [sent] = config.mock.call_args.args
+        assert "verify_provider" not in synthesized_text([sent])
 
     async def test_envelope_only_turn_skips_the_agent(self) -> None:
         config = TrackingConfig(TestConfig("ok"))
@@ -487,10 +489,10 @@ class TestCallAgentFunction:
 
         assert TaskState.TASK_STATE_INPUT_REQUIRED in states
         assert states[-1] == TaskState.TASK_STATE_COMPLETED
-        assert reply.response.content == "All done."
+        assert reply.body == "All done."
         assert calls == ["called"]
         assert len(tracking.calls) == 1
-        sent = tracking.mock.call_args.args[0]
+        [sent] = tracking.mock.call_args.args
         assert "Berlin" in synthesized_text([sent])
         assert payloads == [
             [
@@ -527,7 +529,9 @@ class TestCallAgentFunction:
             first = await _send_a2a_message(
                 http, build_user_message([TextInput("Look it up")], tool_schemas=tool_schemas)
             )
-            assert first.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
+            assert MessageToDict(first) == IsPartialDict({
+                "status": IsPartialDict({"state": "TASK_STATE_INPUT_REQUIRED"}),
+            })
 
             tracking = TrackingConfig(TestConfig("Resumed."))
             agent.config = tracking
@@ -541,10 +545,24 @@ class TestCallAgentFunction:
                 ),
             )
 
-            assert intermediate.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
-            assert get_a2ui_data(intermediate.status.message.parts[0]) == [
-                {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-7", "value": True}}
-            ]
+            assert MessageToDict(intermediate) == IsPartialDict({
+                "status": IsPartialDict({
+                    "state": "TASK_STATE_INPUT_REQUIRED",
+                    "message": IsPartialDict({
+                        "parts": [
+                            IsPartialDict({
+                                "data": [
+                                    {
+                                        "version": "v1.0",
+                                        "agentFunctionResponse": {"functionCallId": "fc-7", "value": True},
+                                    },
+                                ],
+                                "mediaType": A2UI_MIME_TYPE,
+                            }),
+                        ],
+                    }),
+                }),
+            })
             assert tracking.calls == []
 
             if pending == "renderer_function":
@@ -562,12 +580,17 @@ class TestCallAgentFunction:
                 )
             final = await _send_a2a_message(http, continuation)
 
-        assert final.id == first.id
-        assert final.status.state == TaskState.TASK_STATE_COMPLETED
-        assert final.status.message.parts[0].text == "Resumed."
+        assert MessageToDict(final) == IsPartialDict({
+            "id": first.id,
+            "status": IsPartialDict({
+                "state": "TASK_STATE_COMPLETED",
+                "message": IsPartialDict({"parts": [{"text": "Resumed."}]}),
+            }),
+        })
         assert len(tracking.calls) == 1
         if pending == "client_tool":
-            assert isinstance(tracking.mock.call_args.args[0], ToolResultsEvent)
+            [sent] = tracking.mock.call_args.args
+            assert isinstance(sent, ToolResultsEvent)
 
 
 @pytest.mark.asyncio
@@ -596,7 +619,8 @@ class TestCapabilitiesNegotiation:
 
         await client.ask("hi")
 
-        assert "did NOT list" in "\n".join(config.calls[-1].prompt)
+        [record] = config.calls
+        assert "did NOT list" in "\n".join(record.prompt)
 
     async def test_v1_0_renderer_data_model_injected_into_prompt(self) -> None:
         config = TrackingConfig(TestConfig("ok"))
@@ -608,7 +632,8 @@ class TestCapabilitiesNegotiation:
 
         await client.ask("hi")
 
-        assert '{"form": {"name": "Ann"}}' in "\n".join(config.calls[-1].prompt)
+        [record] = config.calls
+        assert '{"form": {"name": "Ann"}}' in "\n".join(record.prompt)
 
     async def test_no_data_model_no_data_model_prompt(self) -> None:
         config = TrackingConfig(TestConfig("ok"))
@@ -617,7 +642,8 @@ class TestCapabilitiesNegotiation:
 
         await client.ask("hi")
 
-        assert "not instructions" not in "\n".join(config.calls[-1].prompt)
+        [record] = config.calls
+        assert "not instructions" not in "\n".join(record.prompt)
 
     async def test_no_caps_no_negotiation_prompt(self) -> None:
         config = CapturingConfig()

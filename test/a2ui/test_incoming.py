@@ -66,19 +66,32 @@ class TestParseIncomingAction:
             },
         })
         assert isinstance(result, A2UIIncomingActionResult)
-        assert result.action.user_message == "Submitted the form"
-        assert result.action.metadata == {"extensions": {"a2ui_trace": "t-1"}}
+        assert result.action == A2UIIncomingAction(
+            name="submit",
+            surface_id="",
+            source_component_id="",
+            timestamp="",
+            context={},
+            user_message="Submitted the form",
+            metadata={"extensions": {"a2ui_trace": "t-1"}},
+        )
 
     def test_v0_9_action_has_no_user_message_or_metadata(self) -> None:
         result = parse_incoming_message({"action": {"name": "click"}})
         assert isinstance(result, A2UIIncomingActionResult)
-        assert result.action.user_message is None
-        assert result.action.metadata is None
+        assert result.action == A2UIIncomingAction(
+            name="click",
+            surface_id="",
+            source_component_id="",
+            timestamp="",
+            context={},
+        )
 
     def test_arguments_are_the_event_context(self) -> None:
         result = parse_incoming_message({"action": {"name": "click", "context": {"a": 1}}})
         assert isinstance(result, A2UIIncomingActionResult)
-        assert result.action.arguments == {"a": 1}
+        action = result.action
+        assert action.arguments == {"a": 1}
 
 
 class TestParseIncomingFunctionCall:
@@ -99,7 +112,8 @@ class TestParseIncomingFunctionCall:
             args={"providerId": "PRV-102"},
             catalog_id="cat",
         )
-        assert result.function_call.arguments == {"providerId": "PRV-102"}
+        call = result.function_call
+        assert call.arguments == {"providerId": "PRV-102"}
 
     def test_args_and_catalog_default(self) -> None:
         result = parse_incoming_message({
@@ -146,8 +160,10 @@ class TestParseIncomingFunctionResponse:
             },
         })
         assert isinstance(result, A2UIIncomingFunctionResponseResult)
-        assert result.function_response.error == A2UIFunctionError(code="INVALID_FUNCTION_CALL", message="rendererOnly")
-        assert result.function_response.value is None
+        assert result.function_response == A2UIIncomingFunctionResponse(
+            function_call_id="fc-2",
+            error=A2UIFunctionError(code="INVALID_FUNCTION_CALL", message="rendererOnly"),
+        )
 
     def test_null_value_is_a_value(self) -> None:
         result = parse_incoming_message({"rendererFunctionResponse": {"functionCallId": "fc-2", "value": None}})

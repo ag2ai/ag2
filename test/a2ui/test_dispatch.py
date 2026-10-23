@@ -146,7 +146,8 @@ class TestStreamTurn:
         messages = await _post_turn(app, {"messages": [{"role": "user", "content": "hi"}]})
 
         assert messages == [{"text": "ok"}]
-        assert "not instructions" not in "\n".join(config.calls[0].prompt)
+        [call] = config.calls
+        assert "not instructions" not in "\n".join(call.prompt)
 
     async def test_renderer_function_response_keeps_its_correlation_id(self) -> None:
         call_block = (

@@ -340,13 +340,14 @@ class TestA2UIResponseParserV1Validation:
         result = parser_v1.validate(ops)
         assert result.is_valid is False
         assert len(result.errors) == 1
-        assert "openUrl" in result.errors[0]
+        [error] = result.errors
+        assert "openUrl" in error
 
     def test_agent_function_response_is_not_generated_by_the_llm(self, parser_v1: A2UIResponseParser) -> None:
         ops = [{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": 42}}]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
-        assert "do not emit it" in result.errors[0]
+        assert any("do not emit it" in error for error in result.errors)
 
     @pytest.mark.parametrize("key", ["a\u0301", "_private", "x2", "дом"])
     def test_extension_keys_follow_uax31_identifiers(self, parser_v1: A2UIResponseParser, key: str) -> None:
@@ -412,7 +413,7 @@ class TestA2UIResponseParserV1Validation:
         ]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
-        assert "root" in result.errors[0]
+        assert any("root" in error for error in result.errors)
 
     def test_create_surface_inline_component_errors_are_drilled_into(self, parser_v1: A2UIResponseParser) -> None:
         ops = [
@@ -423,7 +424,7 @@ class TestA2UIResponseParserV1Validation:
         ]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
-        assert result.errors[0].startswith("Operation 0: Component 'root' (Text)")
+        assert any(error.startswith("Operation 0: Component 'root' (Text)") for error in result.errors)
 
     def test_create_surface_rejects_the_removed_theme(self, parser_v1: A2UIResponseParser) -> None:
         ops = [{"version": "v1.0", "createSurface": {"surfaceId": "s1", "theme": {"primaryColor": "#fff"}}}]
@@ -838,7 +839,8 @@ class TestCatalogFunctionDefinitions:
 
         assert not result.is_valid
         assert len(result.errors) == 1
-        assert expected_error in result.errors[0]
+        [error] = result.errors
+        assert expected_error in error
 
 
 class TestPerComponentValidation:

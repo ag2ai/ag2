@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from dirty_equals import IsPartialDict
 from jsonschema import Draft202012Validator
 
 from ag2.a2ui._types import A2UIVersion
@@ -53,7 +54,9 @@ class TestA2UISchemaManager:
         assert isinstance(defs, dict)
         assert "CallRendererFunctionMessage" in defs
         assert "AgentFunctionResponseMessage" in defs
-        assert manager.client_to_server_schema["$id"].endswith("/v1_0/renderer_to_agent.json")
+        assert manager.client_to_server_schema == IsPartialDict({
+            "$id": "https://a2ui.org/specification/v1_0/renderer_to_agent.json",
+        })
 
     def test_v1_0_prompt_mentions_new_message_types(self) -> None:
         manager = A2UISchemaManager(protocol_version="v1.0")
