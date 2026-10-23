@@ -259,38 +259,28 @@ class A2UIAgentExecutor(AgentExecutor):
             self._agent,
             variables=parsed.context_update,
             version=self._runtime.version_string,
+            catalog_id=self._runtime.catalog_id,
         )
         a2ui_messages.extend(server_messages)
 
-        # A turn carrying only server-handled interactions (no user text, no tool
-        # results) is complete already — finalize with the handlers' messages and
-        # skip the agent, mirroring the REST path (``stream_turn``). Otherwise the
-        # agent would run on an empty prompt and may emit spurious prose.
+        # Pure server interactions skip the agent, but their messages still go
+        # through the shared finalization below: a handler can itself request a
+        # renderer function and must leave the task open for its response.
         if handled_server and not parsed.inputs and not parsed.tool_results:
             agent_msg = self._build_a2ui_message(updater, "", a2ui_messages, {})
-            await updater.complete(message=agent_msg)
-            await lifecycle_ctx.send(
-                task_state_to_status_update(
-                    TaskState.TASK_STATE_COMPLETED,
-                    task_id=task_id,
-                    context_id=context_id,
-                    message=agent_msg,
-                    timestamp=datetime.now(tz=timezone.utc),
-                ),
+            has_pending = False
+        else:
+            response, final_variables = await self._dispatch_to_agent(
+                initial_event,
+                stream,
+                client_tools,
+                incoming_variables=parsed.context_update,
+                extra_prompt=extra_prompt,
+                additional_middleware=extra_middleware,
             )
-            return
-
-        response, final_variables = await self._dispatch_to_agent(
-            initial_event,
-            stream,
-            client_tools,
-            incoming_variables=parsed.context_update,
-            extra_prompt=extra_prompt,
-            additional_middleware=extra_middleware,
-        )
-
-        prose_text = response.message.content if response.message else ""
-        agent_msg = self._build_a2ui_message(updater, prose_text or "", a2ui_messages, final_variables)
+            prose_text = response.message.content if response.message else ""
+            agent_msg = self._build_a2ui_message(updater, prose_text or "", a2ui_messages, final_variables)
+            has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
 
         # v1.0: a callRendererFunction pauses the task awaiting the renderer's
         # rendererFunctionResponse. Unlike client tool calls (streamed as
@@ -298,7 +288,6 @@ class A2UIAgentExecutor(AgentExecutor):
         # in the finalization message — so it must ride the input-required
         # transition, otherwise the client never learns what function to run.
         calls_renderer_function = any(isinstance(m, dict) and "callRendererFunction" in m for m in a2ui_messages)
-        has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
         if calls_renderer_function:
             if has_pending or pending_client_calls:
                 # A callRendererFunction and pending tool calls can co-occur in

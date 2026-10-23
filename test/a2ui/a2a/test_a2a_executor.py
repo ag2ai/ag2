@@ -6,6 +6,8 @@ import json
 from typing import Annotated
 
 import pytest
+from a2a.client import ClientCallInterceptor
+from a2a.client.interceptors import BeforeArgs
 from a2a.types import Part, TaskState
 
 from ag2 import Agent, Depends
@@ -14,7 +16,7 @@ from ag2.a2ui import a2ui_action
 from ag2.a2ui.a2a import create_a2ui_parts
 from ag2.a2ui.a2a.executor import _extract_a2ui_envelopes
 from ag2.stream import MemoryStream
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 
 from ._helpers import (
     FUNCTION_RESULT_MARK,
@@ -75,6 +77,39 @@ _CALL_RENDERER_FUNCTION_BLOCK = (
     '"callFunction":{"@call":"openUrl","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",'
     '"args":{"url":"https://example.com"}}}}]'
 )
+
+
+class _FunctionRoundTrip(ClientCallInterceptor):
+    """Send a server RPC, then answer its renderer RPC on the same task."""
+
+    def __init__(self) -> None:
+        self._sent_call = False
+
+    async def before(self, args: BeforeArgs) -> None:
+        try:
+            message = args.input.message
+        except AttributeError:
+            return
+        if not self._sent_call:
+            envelope = {
+                "version": "v1.0",
+                "callAgentFunction": {
+                    "surfaceId": "s",
+                    "functionCallId": "agent-1",
+                    "callFunction": {"@call": "obtain_location", "args": {}},
+                },
+            }
+            self._sent_call = True
+        else:
+            envelope = {
+                "version": "v1.0",
+                "rendererFunctionResponse": {"functionCallId": "renderer-1", "value": "Berlin"},
+            }
+        del message.parts[:]
+        message.parts.extend(create_a2ui_parts([envelope]))
+
+    async def after(self, args: object) -> None:
+        return None
 
 
 class TestExtractA2UIEnvelopes:
@@ -392,6 +427,57 @@ class TestCallAgentFunction:
                         "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function 'verify_provider'."},
                     },
                 }
+            ]
+        ]
+
+    async def test_server_function_can_pause_for_a_renderer_response(self) -> None:
+        calls: list[str] = []
+
+        @a2ui_action
+        def obtain_location() -> dict:
+            calls.append("called")
+            return {
+                "version": "v1.0",
+                "callRendererFunction": {
+                    "functionCallId": "renderer-1",
+                    "callFunction": {"@call": "getLocation", "catalogId": "https://example.com/device"},
+                },
+            }
+
+        async def hitl_hook() -> str:
+            return "Continue with the renderer response"
+
+        tracking = TrackingConfig(TestConfig("All done."))
+        client = client_for(
+            Agent("ui", config=tracking),
+            streaming=True,
+            interceptors=[_FunctionRoundTrip()],
+            actions=[obtain_location],
+            protocol_version="v1.0",
+            hitl_hook=hitl_hook,
+        )
+        stream = MemoryStream()
+        payloads, states = subscribe_task_stream(stream)
+
+        reply = await client.ask("", stream=stream)
+
+        assert TaskState.TASK_STATE_INPUT_REQUIRED in states
+        assert states[-1] == TaskState.TASK_STATE_COMPLETED
+        assert reply.response.content == "All done."
+        assert calls == ["called"]
+        assert len(tracking.calls) == 1
+        sent = tracking.mock.call_args.args[0]
+        assert "Berlin" in synthesized_text([sent])
+        assert payloads == [
+            [
+                {
+                    "version": "v1.0",
+                    "callRendererFunction": {
+                        "functionCallId": "renderer-1",
+                        "callFunction": {"@call": "getLocation", "catalogId": "https://example.com/device"},
+                    },
+                },
+                {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "agent-1", "value": None}},
             ]
         ]
 

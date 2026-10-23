@@ -164,6 +164,7 @@ async def run_agent_function(
     call: A2UIIncomingFunctionCall,
     *,
     version: A2UIVersion,
+    catalog_id: str,
     context: ConversationContext,
 ) -> list[ServerToClientMessage]:
     """Answer a renderer's ``callAgentFunction`` (v1.0) with an ``agentFunctionResponse``.
@@ -174,6 +175,8 @@ async def run_agent_function(
         call: The parsed incoming call; its ``args`` become the handler's keyword arguments.
         version: The wire ``version`` to stamp on emitted messages. ``callAgentFunction``
             only exists in v1.0, so any other version is logged and answered with nothing.
+        catalog_id: The active catalog. An explicit different catalog must not
+            select a local action merely because its function name matches.
         context: The conversation context supplying dependencies, variables, and
             the ``dependency_provider`` (see :func:`build_server_action_context`).
 
@@ -189,7 +192,7 @@ async def run_agent_function(
         )
         return []
 
-    if action is None:
+    if action is None or call.catalog_id not in (None, catalog_id):
         return [
             _function_response(
                 call.function_call_id,
@@ -229,6 +232,7 @@ async def run_client_interactions(
     *,
     variables: dict[str, Any] | None,
     version: A2UIVersion,
+    catalog_id: str,
 ) -> tuple[list[ServerToClientMessage], bool]:
     """Run the interactions the server answers itself, without invoking the agent.
 
@@ -256,7 +260,9 @@ async def run_client_interactions(
             call = interaction.function_call
             if context is None:
                 context = build_server_action_context(agent, variables=variables)
-            answer = await run_agent_function(server_actions.get(call.call), call, version=version, context=context)
+            answer = await run_agent_function(
+                server_actions.get(call.call), call, version=version, catalog_id=catalog_id, context=context
+            )
             # Before v1.0 there is no reply to send: leave the turn to the agent.
             handled = handled or bool(answer)
             messages.extend(answer)

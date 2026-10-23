@@ -121,6 +121,55 @@ async def test_omitted_or_empty_function_arguments_use_handler_defaults(include_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "catalog_id", [None, "https://example.com/catalog.json", "https://unrelated.example/catalog.json"]
+)
+async def test_function_calls_resolve_only_in_the_active_catalog(catalog_id: str | None) -> None:
+    calls: list[str] = []
+
+    @a2ui_action
+    def lookup(choice: str = "default") -> str:
+        calls.append(choice)
+        return choice
+
+    call: dict[str, Any] = {"@call": "lookup", "args": {}}
+    if catalog_id is not None:
+        call["catalogId"] = catalog_id
+    tracking = TrackingConfig(TestConfig("UNEXPECTED MODEL CALL"))
+    app = A2UIServer(
+        Agent("ui", config=tracking),
+        actions=[lookup],
+        protocol_version="v1.0",
+        custom_catalog=_catalog("rendererOrAgent"),
+        transport=RestTransport(encoding="jsonl"),
+    )
+
+    messages = await _post(
+        app,
+        {
+            "a2ui": [
+                {
+                    "version": "v1.0",
+                    "callAgentFunction": {"surfaceId": "s", "functionCallId": "fc-1", "callFunction": call},
+                }
+            ],
+        },
+    )
+
+    if catalog_id is None or catalog_id == "https://example.com/catalog.json":
+        assert calls == ["default"]
+        expected = {"functionCallId": "fc-1", "value": "default"}
+    else:
+        assert calls == []
+        expected = {
+            "functionCallId": "fc-1",
+            "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function 'lookup'."},
+        }
+    assert messages == [{"version": "v1.0", "agentFunctionResponse": expected}]
+    assert tracking.calls == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
 @pytest.mark.parametrize("binding", ["property", "action", "nested"])
 async def test_agent_only_bindings_trigger_a_corrective_retry(message_key: str, binding: str) -> None:

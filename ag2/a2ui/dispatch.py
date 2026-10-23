@@ -141,6 +141,7 @@ async def stream_turn(
         agent,
         variables=request.variables,
         version=runtime.version_string,
+        catalog_id=runtime.catalog_id,
     )
     for message in server_messages:
         yield A2UIMessageFrame(message)
