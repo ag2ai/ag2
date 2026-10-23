@@ -13,6 +13,7 @@ from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
     CallLimitReached,
+    DrainedModelRequest,
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -20,7 +21,7 @@ from ag2.events import (
     ToolCallsEvent,
     ToolResultEvent,
 )
-from ag2.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory, ToolExecution, ToolResultType
+from ag2.middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory, ToolExecution, ToolResultType
 from ag2.middleware.describe import MiddlewareDescription
 
 logger = logging.getLogger(__name__)
@@ -101,16 +102,19 @@ class _Limits:
 
 
 class _LimitPrompt(ModelRequest):
-    """The prompt of a limiter's final call. Marks that call, so a ``CallLimiter``
-    further in lets it through uncounted instead of refusing it a second time."""
+    """The additional instruction carried by one final model call."""
+
+
+class _RemainingNote(DrainedModelRequest):
+    """Persistent budget context, without starting a new user turn or model call."""
 
 
 class CallLimiter(MiddlewareFactory):
     """Cap the tool and model calls of a turn, then have the model answer.
 
     A capped tool call is refused rather than run: the model gets a structured
-    ``call_limit_exceeded`` result and the tool schemas never change, so the
-    provider's prompt cache stays intact. A ``max_tool_calls_per_tool`` cap
+    ``call_limit_exceeded`` result and the tool schemas stay unchanged for
+    prompt caching. A ``max_tool_calls_per_tool`` cap
     refuses that tool only and the turn goes on. A used-up total, model-call cap
     or ``max_seconds`` exhausts the turn: with ``on_exhausted="synthesise"`` the
     model gets a final call asking it to answer from what it has, and at most one
@@ -182,6 +186,11 @@ class CallLimiter(MiddlewareFactory):
                 "show_remaining": limits.show_remaining,
                 "shared_counter": self._counter is not None,
             },
+            complete=(
+                limits.synthesis_prompt == DEFAULT_SYNTHESIS_PROMPT
+                and limits.tool_limit_result is None
+                and limits.exhausted_result is None
+            ),
         )
 
     def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
@@ -204,6 +213,30 @@ class _CallLimiter(BaseMiddleware):
         self._exhausted: str | None = None
         #: Model calls left to write the answer once the turn is exhausted.
         self._final_calls = _FINAL_CALLS
+        self._group: _CallGroup | None = None
+
+    async def on_turn(self, call_next: AgentTurn, event: BaseEvent, context: Context) -> ModelResponse:
+        previous = context.dependencies.get(_CallGroup)
+        owner = previous is None or not previous.collecting or previous.stream_id != context.stream.id
+        if owner:
+            group = _CallGroup(context)
+        else:
+            assert previous is not None
+            group = previous
+        group.limiters.append(self)
+        self._group = group
+        if owner:
+            context.dependencies[_CallGroup] = group
+        try:
+            response = await call_next(event, context)
+            return await group.finish(response, context) if owner else response
+        finally:
+            if owner:
+                group.collecting = False
+                if previous is None:
+                    context.dependencies.pop(_CallGroup, None)
+                else:
+                    context.dependencies[_CallGroup] = previous
 
     async def on_tool_execution(
         self,
@@ -211,25 +244,10 @@ class _CallLimiter(BaseMiddleware):
         event: ToolCallEvent,
         context: Context,
     ) -> ToolResultType:
-        name = event.name
-        if name in self._limits.exempt:
+        group = self._call_group(context)
+        if group.limiters[0] is not self:
             return await call_next(event, context)
-
-        # Totals first: a call at both a total and its own cap exhausts the turn.
-        reason = self._exhausted or self._tool_total_hit()
-        if reason is not None:
-            self._exhausted = reason
-            self._deny(name)
-            return ToolResultEvent.from_call(event, self._exhausted_result(event, reason))
-
-        cap = self._limits.max_tool_calls_per_tool.get(name)
-        if cap is not None and self._counter.per_tool.get(name, 0) >= cap:
-            self._deny(name)
-            return ToolResultEvent.from_call(event, self._tool_limit_result(event))
-
-        self._counter.tool_calls += 1
-        self._counter.per_tool[name] = self._counter.per_tool.get(name, 0) + 1
-        return await call_next(event, context)
+        return await group.execute_tool(call_next, event, context)
 
     async def on_llm_call(
         self,
@@ -237,23 +255,17 @@ class _CallLimiter(BaseMiddleware):
         events: Sequence[BaseEvent],
         context: Context,
     ) -> ModelResponse:
-        if events and isinstance(events[-1], _LimitPrompt):
-            # An outer limiter's final call: it already counted and shaped it.
+        group = self._call_group(context)
+        if group.limiters[0] is not self:
             return await call_next(events, context)
+        return await group.call_model(call_next, events, context)
 
-        if self._exhausted is None:
-            self._exhausted = self._llm_hit()
-        if self._exhausted is not None:
-            if self._limits.on_exhausted == "synthesise" and self._final_calls:
-                return await self._synthesise(call_next, events, context)
-            self._counter.llm_denied += 1
-            return await self._end(events, context)
-
-        self._counter.llm_calls += 1
-        if self._limits.show_remaining and (note := self._remaining_note()) is not None:
-            # This call only: the note is never part of the history.
-            events = [*events, ModelRequest.ensure_request([note])]
-        return await call_next(events, context)
+    def _call_group(self, context: Context) -> "_CallGroup":
+        if self._group is None:
+            self._group = _CallGroup(context)
+            self._group.limiters.append(self)
+        self._group.collecting = False
+        return self._group
 
     def _tool_total_hit(self) -> str | None:
         limits, counter = self._limits, self._counter
@@ -271,45 +283,6 @@ class _CallLimiter(BaseMiddleware):
             return "max_llm_calls"
         return None
 
-    def _deny(self, name: str) -> None:
-        self._counter.denied += 1
-        self._counter.denied_per_tool[name] = self._counter.denied_per_tool.get(name, 0) + 1
-
-    async def _synthesise(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
-        """A final call, answered as text. At most two are made per turn.
-
-        Exempt calls in the reply stand: they are how a turn hands off or records
-        its result, and once they have run the model gets the second final call to
-        answer. Other tool calls are dropped and the reply's text kept. A reply of
-        nothing but dropped calls is asked once more for text.
-        """
-        assert self._exhausted is not None
-        prompt: list[BaseEvent] = [*events, _LimitPrompt.ensure_request([self._synthesis_prompt()])]
-        while self._final_calls:
-            self._final_calls -= 1
-            self._counter.llm_calls += 1
-            try:
-                response = await call_next(prompt, context)
-            except Exception as e:
-                # The caller answers from what it has; a failed final call does not fail the turn.
-                return await self._end(events, context, error=e)
-
-            calls = response.tool_calls.calls
-            kept = [c for c in calls if isinstance(c, BuiltinToolCallEvent) or c.name in self._limits.exempt]
-            text = response.message.content.strip() if response.message else ""
-            if kept or text or not calls:
-                if len(kept) != len(calls):
-                    logger.warning(
-                        "CallLimiter dropped tool calls %s from the final reply (%s)",
-                        [c.name for c in calls if all(c is not k for k in kept)],
-                        self._exhausted,
-                    )
-                    response.tool_calls = ToolCallsEvent(kept)
-                return await self._answered(response, context)
-            prompt = [*prompt, _LimitPrompt.ensure_request([TEXT_ONLY_PROMPT])]
-
-        return await self._end(events, context)
-
     def _synthesis_prompt(self) -> str:
         prompt = self._limits.synthesis_prompt
         if self._limits.exempt:
@@ -318,33 +291,11 @@ class _CallLimiter(BaseMiddleware):
             prompt += f" These tools are not refused: {', '.join(sorted(self._limits.exempt))}."
         return prompt
 
-    async def _answered(self, response: ModelResponse, context: Context) -> ModelResponse:
-        assert self._exhausted is not None
-        if response.message is not None:
-            response.message.metadata[CALL_LIMIT_KEY] = {"reason": self._exhausted, "ending": "synthesis"}
-        if not response.tool_calls:
-            # Exempt calls still to run mean the turn has not ended yet.
-            await context.send(CallLimitReached(reason=self._exhausted, ending="synthesis"))
-        return response
-
-    async def _end(
-        self,
-        events: Sequence[BaseEvent],
-        context: Context,
-        error: Exception | None = None,
-    ) -> ModelResponse:
+    def _end(self, events: Sequence[BaseEvent]) -> ModelResponse:
         """End the turn without a model call."""
         assert self._exhausted is not None
         text = _last_text(events) if self._limits.ending == "last_text" else None
         ending = "last_text" if text else "empty"
-        await context.send(
-            CallLimitReached(
-                reason=self._exhausted,
-                ending=ending,
-                error_type=type(error).__name__ if error is not None else None,
-                error=str(error) if error is not None else None,
-            )
-        )
         # An empty ending carries no message: an empty text block replayed in a
         # later turn is rejected by some providers.
         message = (
@@ -389,6 +340,140 @@ class _CallLimiter(BaseMiddleware):
         return f"[call limit] Remaining: {'; '.join(parts)}. Plan to answer before these run out."
 
 
+class _CallGroup:
+    """Coordinate the limiters of one turn before reserving or dispatching calls."""
+
+    def __init__(self, context: Context) -> None:
+        self.stream_id = context.stream.id
+        self.limiters: list[_CallLimiter] = []
+        self.collecting = True
+        self.ending: CallLimitReached | None = None
+
+    async def execute_tool(self, call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
+        participating = [limiter for limiter in self.limiters if event.name not in limiter._limits.exempt]
+        refusal: str | dict[str, Any] | None = None
+        for limiter in participating:
+            reason = limiter._exhausted or limiter._tool_total_hit()
+            if reason is not None:
+                limiter._exhausted = reason
+                refusal = limiter._exhausted_result(event, reason)
+                break
+            cap = limiter._limits.max_tool_calls_per_tool.get(event.name)
+            if cap is not None and limiter._counter.per_tool.get(event.name, 0) >= cap:
+                refusal = limiter._tool_limit_result(event)
+                break
+
+        counters = _counters(participating)
+        if refusal is not None:
+            for counter in counters:
+                counter.denied += 1
+                counter.denied_per_tool[event.name] = counter.denied_per_tool.get(event.name, 0) + 1
+            return ToolResultEvent.from_call(event, refusal)
+
+        # Reserve only once every limiter has accepted the call. Reserving before
+        # awaiting execution also bounds parallel siblings using a shared counter.
+        for counter in counters:
+            counter.tool_calls += 1
+            counter.per_tool[event.name] = counter.per_tool.get(event.name, 0) + 1
+        result = await call_next(event, context)
+        if isinstance(result, ToolResultEvent) and result.result.final and self.ending is not None:
+            result.result.metadata[CALL_LIMIT_KEY] = {"reason": self.ending.reason, "ending": self.ending.ending}
+        return result
+
+    async def call_model(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
+        # Storage may hand us its live list; snapshot it before publishing notes.
+        prompt = list(events)
+        retrying: _CallLimiter | None = None
+        while True:
+            exhausted = self._first_exhausted()
+            if exhausted is None:
+                for counter in _counters(self.limiters):
+                    counter.llm_calls += 1
+                for limiter in self.limiters:
+                    if limiter._limits.show_remaining and (text := limiter._remaining_note()) is not None:
+                        note = _RemainingNote.ensure_request([text])
+                        # Persist this append-only input without scheduling a second
+                        # model call. Replaying it preserves the next cached prefix.
+                        await context.send(note)
+                        prompt.append(note)
+                return await call_next(prompt, context)
+
+            index, limiter = exhausted
+            if limiter._limits.on_exhausted == "stop" or not limiter._final_calls:
+                limiter._counter.llm_denied += 1
+                return self._end(limiter, events)
+
+            limiter._final_calls -= 1
+            for counter in _counters(self.limiters[: index + 1]):
+                counter.llm_calls += 1
+            final_prompt = [*prompt, _LimitPrompt.ensure_request([limiter._synthesis_prompt()])]
+            if retrying is limiter:
+                final_prompt.append(_LimitPrompt.ensure_request([TEXT_ONLY_PROMPT]))
+            try:
+                response = await call_next(final_prompt, context)
+            except Exception as error:
+                return self._end(limiter, events, error)
+
+            calls = response.tool_calls.calls
+            kept = [
+                call for call in calls if isinstance(call, BuiltinToolCallEvent) or call.name in limiter._limits.exempt
+            ]
+            text = response.message.content.strip() if response.message else ""
+            if kept or text or not calls:
+                if len(kept) != len(calls):
+                    logger.warning(
+                        "CallLimiter dropped tool calls %s from the final reply (%s)",
+                        [call.name for call in calls if all(call is not other for other in kept)],
+                        limiter._exhausted,
+                    )
+                    response.tool_calls = ToolCallsEvent(kept)
+                assert limiter._exhausted is not None
+                self.ending = CallLimitReached(reason=limiter._exhausted, ending="synthesis")
+                if response.message is not None:
+                    response.message.metadata[CALL_LIMIT_KEY] = {"reason": limiter._exhausted, "ending": "synthesis"}
+                return response
+            # Recheck outer limits before each retry, including its own final-call
+            # allowance. An inner synthesis cannot bypass a run-wide model cap.
+            retrying = limiter
+
+    def _first_exhausted(self) -> tuple[int, _CallLimiter] | None:
+        for index, limiter in enumerate(self.limiters):
+            if limiter._exhausted is None:
+                limiter._exhausted = limiter._llm_hit()
+            if limiter._exhausted is not None:
+                return index, limiter
+        return None
+
+    def _end(self, limiter: _CallLimiter, events: Sequence[BaseEvent], error: Exception | None = None) -> ModelResponse:
+        response = limiter._end(events)
+        assert limiter._exhausted is not None
+        self.ending = CallLimitReached(
+            reason=limiter._exhausted,
+            ending="last_text" if response.message is not None else "empty",
+            error_type=type(error).__name__ if error is not None else None,
+            error=str(error) if error is not None else None,
+        )
+        return response
+
+    async def finish(self, response: ModelResponse, context: Context) -> ModelResponse:
+        if self.ending is not None:
+            if response.message is not None:
+                response.message.metadata[CALL_LIMIT_KEY] = {"reason": self.ending.reason, "ending": self.ending.ending}
+            await context.send(self.ending)
+        return response
+
+
+def _counters(limiters: Sequence[_CallLimiter]) -> list[CallCounter]:
+    """One reservation per counter, even when several policies share it."""
+    counters: list[CallCounter] = []
+    seen: set[int] = set()
+    for limiter in limiters:
+        if id(limiter._counter) not in seen:
+            counters.append(limiter._counter)
+            seen.add(id(limiter._counter))
+    return counters
+
+
 def _resolve(result: LimitResult, event: ToolCallEvent) -> str | dict[str, Any]:
     return result(event) if callable(result) else result
 
@@ -407,7 +492,7 @@ def _error(message: str, recovery: list[str]) -> dict[str, Any]:
 def _last_text(events: Sequence[BaseEvent]) -> str | None:
     """The model's last non-empty text in this turn, back to the request that began it."""
     for event in reversed(events):
-        if isinstance(event, ModelRequest):
+        if isinstance(event, ModelRequest) and not isinstance(event, _RemainingNote):
             return None
         if isinstance(event, ModelResponse) and event.message and event.message.content.strip():
             return event.message.content

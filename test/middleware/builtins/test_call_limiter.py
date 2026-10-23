@@ -21,9 +21,10 @@ from ag2.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolResult,
     ToolResultEvent,
 )
-from ag2.middleware import BaseMiddleware, CallCounter, CallLimiter, Middleware, MiddlewareDescription
+from ag2.middleware import BaseMiddleware, CallCounter, CallLimiter, LLMCall, Middleware, MiddlewareDescription
 from ag2.middleware.builtin.call_limiter import CALL_LIMIT_ERROR_TYPE, CALL_LIMIT_KEY, TEXT_ONLY_PROMPT
 from ag2.testing import TestConfig, TrackingConfig
 
@@ -45,6 +46,28 @@ class Run:
 
     def error_types(self) -> list[str | None]:
         return [_error(r).get("type") for r in self.results]
+
+    async def record_limit(self, event: CallLimitReached) -> None:
+        self.limits.append(event)
+
+    def search(self) -> str:
+        """Search."""
+        self.ran["search"] += 1
+        return "found"
+
+
+def finish() -> ToolResult:
+    return ToolResult("finished", final=True, metadata={"recorded": True})
+
+
+class PromptRecorder(BaseMiddleware):
+    def __init__(self, event: BaseEvent, context: Context, prompts: list[tuple[BaseEvent, ...]]) -> None:
+        super().__init__(event, context)
+        self.prompts = prompts
+
+    async def on_llm_call(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
+        self.prompts.append(tuple(events))
+        return await call_next(events, context)
 
 
 def _error(result: ToolResultEvent) -> dict[str, Any]:
@@ -218,6 +241,26 @@ class TestTotals:
 
 @pytest.mark.asyncio()
 class TestEndings:
+    async def test_an_exempt_final_tool_reports_the_exhausted_ending(self) -> None:
+        run = Run()
+        stream = MemoryStream()
+        stream.where(CallLimitReached).subscribe(run.record_limit)
+        agent = Agent(
+            "limited",
+            config=TestConfig(_call("finish")),
+            tools=[finish],
+            middleware=[CallLimiter(max_llm_calls=0, exempt={"finish"})],
+        )
+
+        reply = await agent.ask("Finish.", stream=stream)
+
+        assert reply.body == "finished"
+        assert reply.response.metadata == {
+            "recorded": True,
+            CALL_LIMIT_KEY: {"reason": "max_llm_calls", "ending": "synthesis"},
+        }
+        assert [(event.reason, event.ending) for event in run.limits] == [("max_llm_calls", "synthesis")]
+
     async def test_a_final_reply_of_only_refused_calls_twice_ends_with_the_signal(self) -> None:
         """The case this middleware exists for: the final call answered with tool calls only."""
         reply, run = await _run(
@@ -387,13 +430,31 @@ class _Ticking(BaseMiddleware):
 
 @pytest.mark.asyncio()
 class TestRemainingNote:
-    async def test_over_a_run_the_note_rides_each_call_and_never_accumulates(self) -> None:
-        reply, run = await _run(
-            CallLimiter(max_tool_calls=3, max_llm_calls=5, show_remaining=True),
+    async def test_remaining_notes_do_not_hide_the_last_text_ending(self) -> None:
+        reply, _ = await _run(
+            CallLimiter(max_llm_calls=2, show_remaining=True, on_exhausted="stop", ending="last_text"),
+            ModelResponse(ModelMessage("Let me search."), tool_calls=ToolCallsEvent([_call("search")])),
             _call("search"),
-            _call("search"),
-            "done",
         )
+
+        assert reply.body == "Let me search."
+        assert reply.response.metadata[CALL_LIMIT_KEY] == {"reason": "max_llm_calls", "ending": "last_text"}
+
+    async def test_remaining_notes_are_replayed_as_part_of_the_cached_prefix(self) -> None:
+        prompts: list[tuple[BaseEvent, ...]] = []
+        run = Run(config=TrackingConfig(TestConfig(_call("search"), _call("search"), "done")))
+        assert run.config is not None
+        agent = Agent(
+            "limited",
+            config=run.config,
+            tools=[run.search],
+            middleware=[
+                CallLimiter(max_tool_calls=3, max_llm_calls=5, show_remaining=True),
+                Middleware(PromptRecorder, prompts=prompts),
+            ],
+        )
+
+        reply = await agent.ask("Investigate.")
 
         notes = [_text(m) for m in run.last_messages()]
         assert notes == [
@@ -402,7 +463,10 @@ class TestRemainingNote:
             "[call limit] Remaining: 1 of 3 tool calls; 2 of 5 model calls. Plan to answer before these run out.",
         ]
         history = await reply.context.stream.history.get_events()
-        assert not any("[call limit]" in _text(e) for e in history if isinstance(e, ModelRequest))
+        saved_notes = [_text(e) for e in history if isinstance(e, ModelRequest) and "[call limit]" in _text(e)]
+        assert saved_notes == notes
+        assert prompts[1][: len(prompts[0])] == prompts[0]
+        assert prompts[2][: len(prompts[1])] == prompts[1]
 
     async def test_the_synthesis_call_spent_past_the_llm_cap_leaves_nothing_remaining(self) -> None:
         counter = CallCounter()
@@ -420,6 +484,92 @@ class TestRemainingNote:
 
 @pytest.mark.asyncio()
 class TestSharing:
+    async def test_stacked_policies_reserve_a_shared_counter_only_once(self) -> None:
+        counter = CallCounter()
+        _, run = await _run(
+            CallLimiter(max_tool_calls_per_tool={"search": 2}, counter=counter),
+            _call("search"),
+            "done",
+            middleware=[CallLimiter(max_tool_calls=5, counter=counter)],
+        )
+
+        assert run.ran == {"search": 1}
+        assert (counter.tool_calls, counter.llm_calls, counter.per_tool) == (1, 2, {"search": 1})
+
+    async def test_parallel_calls_reserve_the_budget_before_execution(self) -> None:
+        counter = CallCounter()
+        _, run = await _run(
+            CallLimiter(max_tool_calls=2, counter=counter),
+            [_call("search"), _call("search"), _call("search")],
+            "done",
+        )
+
+        assert run.ran == {"search": 2}
+        assert (counter.tool_calls, counter.denied) == (2, 1)
+
+    async def test_delegated_agents_have_independent_limiter_groups(self) -> None:
+        run = Run()
+        child_counter, parent_counter = CallCounter(), CallCounter()
+        child = Agent(
+            "child",
+            config=TestConfig(_call("search"), "child done"),
+            tools=[run.search],
+            middleware=[CallLimiter(max_tool_calls=1, counter=child_counter)],
+        )
+        parent = Agent(
+            "parent",
+            config=TestConfig(ToolCallEvent(name="task_child", arguments='{"objective": "search"}'), "done"),
+            tools=[child.as_tool(description="Investigate.")],
+            middleware=[CallLimiter(max_tool_calls_per_tool={"search": 0}, counter=parent_counter)],
+        )
+
+        reply = await parent.ask("Investigate.")
+
+        assert reply.body == "done"
+        assert run.ran == {"search": 1}
+        assert parent_counter.per_tool == {"task_child": 1}
+        assert child_counter.per_tool == {"search": 1}
+
+    async def test_inner_refusals_do_not_spend_the_outer_tool_budget(self) -> None:
+        outer, inner = CallCounter(), CallCounter()
+        reply, run = await _run(
+            CallLimiter(max_tool_calls_per_tool={"search": 0}, counter=inner),
+            _call("search"),
+            _call("search"),
+            "done",
+            middleware=[CallLimiter(max_tool_calls=10, counter=outer)],
+        )
+
+        assert reply.body == "done"
+        assert run.ran == {}
+        assert (outer.tool_calls, outer.denied) == (0, 2)
+        assert (inner.tool_calls, inner.denied) == (0, 2)
+
+    async def test_outer_counter_includes_each_inner_synthesis_call(self) -> None:
+        outer, inner = CallCounter(), CallCounter()
+        _, run = await _run(
+            CallLimiter(max_llm_calls=0, counter=inner),
+            _call("search"),
+            _call("search"),
+            middleware=[CallLimiter(max_llm_calls=10, counter=outer)],
+        )
+
+        assert len(run.last_messages()) == 2
+        assert (outer.llm_calls, inner.llm_calls) == (2, 2)
+
+    async def test_outer_model_cap_is_checked_before_an_inner_synthesis_retry(self) -> None:
+        outer = CallCounter()
+        reply, run = await _run(
+            CallLimiter(max_llm_calls=0),
+            _call("search"),
+            _call("search"),
+            middleware=[CallLimiter(max_llm_calls=1, on_exhausted="stop", counter=outer)],
+        )
+
+        assert len(run.last_messages()) == 1
+        assert outer.llm_calls == 1
+        assert reply.response.finish_reason == "call_limit"
+
     async def test_a_counter_in_dependencies_is_shared_across_turns(self) -> None:
         counter = CallCounter()
         limiter = CallLimiter(max_tool_calls=1, on_exhausted="stop", counter=lambda ctx: ctx.dependencies["calls"])
@@ -478,6 +628,17 @@ class TestSharing:
 
 
 class TestConfiguration:
+    @pytest.mark.parametrize(
+        "options",
+        [
+            {"synthesis_prompt": "Summarise the evidence."},
+            {"tool_limit_result": "This tool is unavailable."},
+            {"exhausted_result": {"error": "Budget exhausted"}},
+        ],
+    )
+    def test_custom_response_settings_are_not_reported_as_complete(self, options: dict[str, Any]) -> None:
+        assert CallLimiter(**options).describe().complete is False
+
     def test_describe(self) -> None:
         assert CallLimiter(max_tool_calls=3, exempt={"b", "a"}).describe() == MiddlewareDescription(
             kind="CallLimiter",
