@@ -694,6 +694,39 @@ class TestRemainingNote:
 
 @pytest.mark.asyncio()
 class TestSharing:
+    @pytest.mark.parametrize("finish_first", [False, True])
+    async def test_inner_total_takes_precedence_over_outer_per_tool_refusal(self, finish_first: bool) -> None:
+        run = Run()
+        outer, inner = CallCounter(), CallCounter()
+        calls = [_call("search"), _call("search")]
+        calls.insert(0 if finish_first else len(calls), _call("immediate_finish"))
+        stream = MemoryStream()
+        stream.where(CallLimitReached).subscribe(run.record_limit)
+        stream.where(ToolResultEvent).subscribe(run.record_result)
+        stream.where(ModelResponse).subscribe(run.record_response)
+        agent = Agent(
+            "limited",
+            config=TestConfig(calls),
+            tools=[run.search, immediate_finish],
+            middleware=[
+                CallLimiter(max_tool_calls_per_tool={"search": 1}, exempt={"immediate_finish"}, counter=outer),
+                CallLimiter(max_tool_calls=1, exempt={"immediate_finish"}, counter=inner),
+            ],
+        )
+
+        reply = await agent.ask("Finish.", stream=stream)
+
+        assert reply.body == "finished"
+        assert (outer.tool_calls, outer.denied, inner.tool_calls, inner.denied) == (1, 1, 1, 1)
+        refused = next(result for result in run.results if _error(result))
+        assert "max_tool_calls)" in _error(refused)["message"]
+        assert reply.response.metadata == {
+            "recorded": True,
+            CALL_LIMIT_KEY: {"reason": "max_tool_calls", "ending": "final_tool"},
+        }
+        assert run.response_metadata[-1] == reply.response.metadata
+        assert [(event.reason, event.ending) for event in run.limits] == [("max_tool_calls", "final_tool")]
+
     async def test_conditional_limiter_is_rejected_in_either_position(self) -> None:
         conditional = ConditionalMiddleware(CallLimiter(max_tool_calls=0), ModelRequest)
         for middleware in ([conditional, CallLimiter()], [CallLimiter(), conditional]):

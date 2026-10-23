@@ -44,6 +44,8 @@ request, had run in production since October 2026.
 - Stacked limiters coordinate their policies for the duration of a turn. They check
   all tool limits before reserving a call, and count each inner synthesis request
   against the outer budget. Multiple policies sharing a counter reserve it once.
+  All total limits are checked before per-tool caps, so a per-tool refusal cannot
+  hide another policy's exhausted total.
 - Optional remaining-budget notes are appended to history and replayed unchanged.
   A temporary note would move Anthropic's message cache breakpoint onto content
   missing from the next request, preventing reuse of that conversation cache.

@@ -375,10 +375,14 @@ class _CallGroup:
                 limiter._exhausted = reason
                 refusal = limiter._exhausted_result(event, reason)
                 break
-            cap = limiter._limits.max_tool_calls_per_tool.get(event.name)
-            if cap is not None and limiter._counter.per_tool.get(event.name, 0) >= cap:
-                refusal = limiter._tool_limit_result(event)
-                break
+        if refusal is None:
+            # Total exhaustion takes precedence across the entire stack. An
+            # earlier per-tool refusal must not hide a later exhausted total.
+            for limiter in participating:
+                cap = limiter._limits.max_tool_calls_per_tool.get(event.name)
+                if cap is not None and limiter._counter.per_tool.get(event.name, 0) >= cap:
+                    refusal = limiter._tool_limit_result(event)
+                    break
 
         counters = _counters(participating)
         if refusal is not None:
