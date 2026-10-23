@@ -56,7 +56,9 @@ def native_turn(text: str, names: list[str]) -> tuple[XAIAssistantEvent, ModelRe
 @pytest.mark.parametrize("mode", ["discard", "exempt", "text"])
 @pytest.mark.parametrize("serialized", [False, True])
 async def test_limited_responses_replay_only_accepted_calls(mode: str, serialized: bool) -> None:
-    first_event, first_response = native_turn("answer" if mode == "text" else "", ["search", "record"] if mode == "exempt" else ["search"])
+    first_event, first_response = native_turn(
+        "answer" if mode == "text" else "", ["search", "record"] if mode == "exempt" else ["search"]
+    )
     final = native_turn("answer", [])
     original = first_event.proto_bytes
     config = TrackingConfig(TestConfig(first_event, first_response, *final))
