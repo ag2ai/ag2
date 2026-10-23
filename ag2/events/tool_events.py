@@ -121,6 +121,28 @@ class ClientToolCallEvent(ToolEvent):
     name: str = Field(kw_only=False)
     arguments: str = "{}"
 
+    _serialized_arguments: dict[str, Any] | None = Field(default=None, init=False, compare=False)
+
+    @property
+    def serialized_arguments(self) -> dict[str, Any]:
+        if self._serialized_arguments is None:
+            self._serialized_arguments = json.loads(self.arguments or "{}")
+        return self._serialized_arguments
+
+    @serialized_arguments.setter
+    def serialized_arguments(self, value: dict[str, Any]) -> None:
+        self._serialized_arguments = value
+
+    def to_api(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": "function",
+            "function": {
+                "arguments": json.dumps(self.serialized_arguments),
+                "name": self.name,
+            },
+        }
+
     @classmethod
     def from_call(cls, call: ToolCallEvent) -> "ClientToolCallEvent":
         return cls(

@@ -26,6 +26,36 @@ class TestClientToolCallEventFromCall:
         assert client_call.name == original.name
         assert client_call.arguments == original.arguments
 
+    def test_serialized_arguments_and_to_api(self) -> None:
+        original = ToolCallEvent(name="ask_question", arguments='{"question": "How are you?", "options": ["good", "bad"]}')
+        client_call = ClientToolCallEvent.from_call(original)
+        assert client_call.serialized_arguments == {"question": "How are you?", "options": ["good", "bad"]}
+        api_dict = client_call.to_api()
+        assert api_dict == {
+            "id": original.id,
+            "type": "function",
+            "function": {
+                "arguments": json.dumps({"question": "How are you?", "options": ["good", "bad"]}),
+                "name": "ask_question",
+            },
+        }
+
+    def test_tool_calls_event_with_client_tool_call_to_api(self) -> None:
+        from ag2.events import ToolCallsEvent
+        client_call = ClientToolCallEvent(id="call_123", name="client_fn", arguments='{"val": 42}')
+        calls_event = ToolCallsEvent([client_call])
+        api_list = calls_event.to_api()
+        assert api_list == [
+            {
+                "id": "call_123",
+                "type": "function",
+                "function": {
+                    "arguments": json.dumps({"val": 42}),
+                    "name": "client_fn",
+                },
+            }
+        ]
+
 
 class TestToolErrorEventContent:
     """Traceback must be stored in result.parts[0] via from_call."""
