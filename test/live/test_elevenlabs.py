@@ -75,7 +75,7 @@ class FakeClient:
 
 @pytest.fixture
 def client() -> FakeClient:
-    return FakeClient([b"one", b"two", b"three"])
+    return FakeClient([b"one", b"", b"two", b"three"])
 
 
 class TestTTSConfig:
