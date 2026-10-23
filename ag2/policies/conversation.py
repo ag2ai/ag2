@@ -10,6 +10,7 @@ from ag2.events import (
     BaseEvent,
     ModelRequest,
     ModelResponse,
+    ModelResponseDiscarded,
     ProviderReplay,
     ToolCallEvent,
     ToolCallsEvent,
@@ -26,6 +27,7 @@ from ag2.events import (
 CONVERSATION_TYPES = (
     ModelRequest,
     ModelResponse,
+    ModelResponseDiscarded,
     ProviderReplay,
     ToolCallEvent,
     ToolCallsEvent,
@@ -42,6 +44,8 @@ class ConversationPolicy:
     Opt-in policy that re-creates plain-loop semantics: only conversation
     and tool events reach the LLM, everything else is filtered out.
     CompactionSummary is included so compacted summaries remain visible.
+    Required replay control is retained even when it does not count toward
+    conversation budgets or summarization input.
     """
 
     name = "conversation"

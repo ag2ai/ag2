@@ -2,16 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
+
 import pytest
 from fast_depends.use import SerializerCls
 from xai_sdk.chat import Response as XAIResponse
 from xai_sdk.proto import chat_pb2
 
-from ag2 import Agent
+from ag2 import Agent, Context
 from ag2.config.xai import XAIAssistantEvent
 from ag2.config.xai.mappers import convert_messages
-from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
-from ag2.middleware import CallLimiter
+from ag2.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
+from ag2.middleware import BaseMiddleware, CallLimiter, LLMCall, Middleware
+from ag2.policies import ConversationPolicy
 from ag2.testing import TestConfig, TrackingConfig
 
 
@@ -23,6 +26,16 @@ def search() -> str:
 def record() -> str:
     """Record the result."""
     return "recorded"
+
+
+class NativePromptRecorder(BaseMiddleware):
+    def __init__(self, event: BaseEvent, context: Context, prompts: list[tuple[BaseEvent, ...]]) -> None:
+        super().__init__(event, context)
+        self.prompts = prompts
+
+    async def on_llm_call(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
+        self.prompts.append(tuple(events))
+        return await call_next(events, context)
 
 
 def native_turn(text: str, names: list[str]) -> tuple[XAIAssistantEvent, ModelResponse]:
@@ -55,22 +68,28 @@ def native_turn(text: str, names: list[str]) -> tuple[XAIAssistantEvent, ModelRe
 @pytest.mark.asyncio()
 @pytest.mark.parametrize("mode", ["discard", "exempt", "text"])
 @pytest.mark.parametrize("serialized", [False, True])
-async def test_limited_responses_replay_only_accepted_calls(mode: str, serialized: bool) -> None:
+@pytest.mark.parametrize("assembled", [False, True])
+async def test_limited_responses_replay_only_accepted_calls(mode: str, serialized: bool, assembled: bool) -> None:
     first_event, first_response = native_turn(
         "answer" if mode == "text" else "", ["search", "record"] if mode == "exempt" else ["search"]
     )
     final = native_turn("answer", [])
     original = first_event.proto_bytes
-    config = TrackingConfig(TestConfig(first_event, first_response, *final))
+    config = TrackingConfig(TestConfig(first_event, first_response, *final, *native_turn("followup", [])))
+    prompts: list[tuple[BaseEvent, ...]] = []
+    recorder = Middleware(NativePromptRecorder, prompts=prompts)
     agent = Agent(
         "limited",
         config=config,
         tools=[search, record],
         middleware=[CallLimiter(max_llm_calls=0, exempt={"record"})],
+        assembly=[ConversationPolicy()] if assembled else (),
     )
 
-    reply = await agent.ask("Investigate.")
-    history = await reply.context.stream.history.get_events()
+    reply = await agent.ask("Investigate.", middleware=[recorder])
+    first_calls = config.mock.call_count
+    followup = await reply.ask("Follow up.", middleware=[recorder])
+    history = list(prompts[first_calls])
     if serialized:
         history = [type(event).from_dict(event.to_dict()) for event in history]
     mapped = convert_messages([], history, SerializerCls)
@@ -86,7 +105,9 @@ async def test_limited_responses_replay_only_accepted_calls(mode: str, serialize
     ]
 
     assert reply.body == "answer"
-    assert config.mock.call_count == (1 if mode == "text" else 2)
+    assert first_calls == (1 if mode == "text" else 2)
+    assert config.mock.call_count == first_calls + 1
+    assert followup.body == ("answer" if mode == "text" else "followup")
     assert calls == results == (["record"] if mode == "exempt" else [])
     assert first_event.proto_bytes == original
     assert all(
