@@ -461,7 +461,7 @@ Tools in `exempt` are never counted or refused, including during the final call.
 
 `max_seconds` is a soft clock, checked between calls. It never interrupts a call that is already running.
 
-`show_remaining=True` appends a note to each model call saying what is left. The note is stored in the conversation history and replayed on later calls, preserving the growing prompt prefix. Notes from failed requests are retained on retries, including with snapshot-based storage such as Redis. These notes add a small amount of conversation history. The final synthesis prompt remains temporary.
+`show_remaining=True` appends a note to each model call before exhaustion saying what is left. The note is stored in the conversation history and replayed on later calls, preserving the growing prompt prefix. Notes from failed requests are retained on retries, including with snapshot-based storage such as Redis. These notes add a small amount of conversation history. The final synthesis prompt remains temporary.
 
 Refusals are configurable. `tool_limit_result` and `exhausted_result` each take a string, a dict, or a callable that receives the refused `ToolCallEvent` and returns either.
 

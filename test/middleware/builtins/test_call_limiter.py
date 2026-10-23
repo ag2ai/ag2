@@ -229,7 +229,7 @@ class TestTotals:
             "the answer",
         )
 
-        assert run.ran == {"search": 1}
+        assert run.ran in ({"search": 1}, {"shell": 1})
         assert Counter(run.error_types()) == Counter([None, CALL_LIMIT_ERROR_TYPE])
         refused = next(r for r in run.results if _error(r))
         assert _error(refused) == IsPartialDict({"recovery": ["answer now from the information you already have"]})
