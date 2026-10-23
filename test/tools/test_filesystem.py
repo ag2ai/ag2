@@ -267,6 +267,76 @@ async def test_delete_directory(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("target_kind", ["file", "directory", "missing"])
+async def test_delete_symlink_preserves_target(tmp_path: Path, target_kind: str) -> None:
+    target = tmp_path / "target"
+    if target_kind == "directory":
+        target.mkdir()
+        (target / "data.txt").write_text("keep me")
+    elif target_kind == "file":
+        target.write_text("keep me")
+    link = tmp_path / "link"
+    try:
+        link.symlink_to(target, target_is_directory=target_kind == "directory")
+    except OSError:
+        pytest.skip("symlinks are not available")
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "link"})),
+            "done",
+        ),
+        tools=[FilesystemToolkit(base_path=tmp_path)],
+    )
+
+    await agent.ask("delete the symlink")
+
+    assert not link.is_symlink()
+    if target_kind == "directory":
+        assert (target / "data.txt").read_text() == "keep me"
+    elif target_kind == "file":
+        assert target.read_text() == "keep me"
+    else:
+        assert not target.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("link_location", ["inside", "outside", "escaped_parent"])
+async def test_delete_symlink_rejects_paths_outside_base(tmp_path: Path, link_location: str) -> None:
+    base = tmp_path / "base"
+    base.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = (base if link_location == "inside" else outside) / "link"
+    target = (outside if link_location == "inside" else base) / "target"
+    target.write_text("keep me")
+    requested_path = link
+    try:
+        link.symlink_to(target)
+        if link_location == "escaped_parent":
+            (base / "escape").symlink_to(outside, target_is_directory=True)
+            requested_path = base / "escape" / "link"
+    except OSError:
+        pytest.skip("symlinks are not available")
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="delete_file", arguments=json.dumps({"path": str(requested_path)})),
+            "done",
+        ),
+        tools=[FilesystemToolkit(base_path=base)],
+    )
+
+    with pytest.raises(PermissionError, match="escapes base directory"):
+        await agent.ask("delete the symlink")
+
+    assert link.is_symlink()
+    assert target.read_text() == "keep me"
+
+
+@pytest.mark.asyncio
 async def test_find_files(tmp_path: Path) -> None:
     (tmp_path / "a.py").write_text("a")
     (tmp_path / "b.txt").write_text("b")

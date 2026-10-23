@@ -225,7 +225,12 @@ class FilesystemToolkit(Toolkit):
             ],
         ) -> str:
             target = _resolve_path(base_dir, path)
-            if target.is_dir():
+            entry = base_dir / path
+            if entry.is_symlink():
+                # Validate the link's location as well as its resolved target.
+                _resolve_path(base_dir, str(entry.parent))
+                entry.unlink()
+            elif target.is_dir():
                 shutil.rmtree(target)
             else:
                 target.unlink()
