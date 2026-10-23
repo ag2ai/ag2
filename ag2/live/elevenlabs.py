@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncIterator
-from typing import Literal
+from collections.abc import AsyncGenerator
+from contextlib import aclosing
+from typing import Literal, cast
 
 from elevenlabs.client import AsyncElevenLabs
 from elevenlabs.speech_to_text.client import OMIT
@@ -162,7 +163,8 @@ class StreamingTTSConfig(TTSConfigProtocol[bytes]):
         self._seed = seed
         self._client = client or AsyncElevenLabs()
 
-    async def stream(self, text: str) -> AsyncIterator[bytes]:
+    async def stream(self, text: str) -> AsyncGenerator[bytes, None]:
+        """Yield audio; use ``contextlib.aclosing`` when stopping before exhaustion."""
         audio = self._client.text_to_speech.stream(
             voice_id=self._voice_id,
             text=text,
@@ -172,9 +174,10 @@ class StreamingTTSConfig(TTSConfigProtocol[bytes]):
             language_code=self._language_code,
             seed=self._seed,
         )
-        async for chunk in audio:
-            if chunk:
-                yield chunk
+        async with aclosing(cast(AsyncGenerator[bytes, None], audio)):
+            async for chunk in audio:
+                if chunk:
+                    yield chunk  # noqa: ASYNC119 -- callers can close the streaming generator
 
     async def synthesize(self, text: str) -> bytes:
         return b"".join([chunk async for chunk in self.stream(text)])
