@@ -235,8 +235,11 @@ class _CallLimiter(BaseMiddleware):
         if owner:
             context.dependencies[_CallGroup] = group
         try:
-            response = await call_next(event, context)
-            return await group.finish(response, context) if owner else response
+            if not owner:
+                return await call_next(event, context)
+            with context.stream.where(ModelResponse).sub_scope(group.record_response, sync_to_thread=False):
+                response = await call_next(event, context)
+            return await group.finish(response, context)
         finally:
             if owner:
                 group.collecting = False
@@ -298,10 +301,10 @@ class _CallLimiter(BaseMiddleware):
             prompt += f" These tools are not refused: {', '.join(sorted(self._limits.exempt))}."
         return prompt
 
-    def _end(self, events: Sequence[BaseEvent]) -> ModelResponse:
+    def _end(self, last_text: str | None) -> ModelResponse:
         """End the turn without a model call."""
         assert self._exhausted is not None
-        text = _last_text(events) if self._limits.ending == "last_text" else None
+        text = last_text if self._limits.ending == "last_text" else None
         ending = "last_text" if text else "empty"
         # An empty ending carries no message: an empty text block replayed in a
         # later turn is rejected by some providers.
@@ -357,6 +360,11 @@ class _CallGroup:
         self.ending: CallLimitReached | None = None
         self.pending_notes: list[_RemainingNote] = []
         self.final_results: list[ToolResult] = []
+        self.last_text: str | None = None
+
+    async def record_response(self, event: ModelResponse) -> None:
+        if event.message is not None and event.message.content.strip():
+            self.last_text = event.message.content
 
     async def execute_tool(self, call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
         participating = [limiter for limiter in self.limiters if event.name not in limiter._limits.exempt]
@@ -433,7 +441,7 @@ class _CallGroup:
             index, limiter = exhausted
             if limiter._limits.on_exhausted == "stop" or not limiter._final_calls:
                 limiter._counter.llm_denied += 1
-                return self._end(limiter, prompt)
+                return self._end(limiter)
 
             limiter._final_calls -= 1
             for counter in _counters(self.limiters[: index + 1]):
@@ -444,7 +452,7 @@ class _CallGroup:
             try:
                 response = await call_next(final_prompt, context)
             except Exception as error:
-                return self._end(limiter, prompt, error)
+                return self._end(limiter, error)
 
             calls = response.tool_calls.calls
             kept = [
@@ -488,8 +496,8 @@ class _CallGroup:
                 return index, limiter
         return None
 
-    def _end(self, limiter: _CallLimiter, events: Sequence[BaseEvent], error: Exception | None = None) -> ModelResponse:
-        response = limiter._end(events)
+    def _end(self, limiter: _CallLimiter, error: Exception | None = None) -> ModelResponse:
+        response = limiter._end(self.last_text)
         assert limiter._exhausted is not None
         self.ending = CallLimitReached(
             reason=limiter._exhausted,
@@ -531,13 +539,3 @@ def _error(message: str, recovery: list[str]) -> dict[str, Any]:
             "retryable": False,
         }
     }
-
-
-def _last_text(events: Sequence[BaseEvent]) -> str | None:
-    """The model's last non-empty text in this turn, back to the request that began it."""
-    for event in reversed(events):
-        if isinstance(event, ModelRequest) and not isinstance(event, DrainedModelRequest):
-            return None
-        if isinstance(event, ModelResponse) and event.message and event.message.content.strip():
-            return event.message.content
-    return None

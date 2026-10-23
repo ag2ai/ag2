@@ -110,6 +110,16 @@ class PromptRecorder(BaseMiddleware):
         return await call_next(events, context)
 
 
+class EnqueueAfterText:
+    def __init__(self) -> None:
+        self.sent = False
+
+    async def __call__(self, event: ModelResponse, context: Context) -> None:
+        if not self.sent and event.message is not None and event.message.content == "partial answer":
+            self.sent = True
+            context.enqueue("More details for this turn.")
+
+
 class SnapshotStorage(MemoryStorage):
     async def get_history(self, stream_id: StreamId) -> list[BaseEvent]:
         return list(await super().get_history(stream_id))
@@ -300,6 +310,36 @@ class TestTotals:
 
 @pytest.mark.asyncio()
 class TestEndings:
+    async def test_input_enqueued_after_text_keeps_the_last_text_in_the_turn(self) -> None:
+        stream = MemoryStream()
+        stream.where(ModelResponse).subscribe(EnqueueAfterText())
+        agent = Agent(
+            "limited",
+            config=TestConfig("partial answer"),
+            middleware=[CallLimiter(max_llm_calls=1, on_exhausted="stop", ending="last_text")],
+        )
+
+        reply = await agent.ask("Investigate.", stream=stream)
+
+        assert reply.body == "partial answer"
+        assert reply.response.finish_reason == "call_limit"
+        assert reply.response.metadata[CALL_LIMIT_KEY] == {"reason": "max_llm_calls", "ending": "last_text"}
+
+    async def test_last_text_is_not_reused_from_an_earlier_ask(self) -> None:
+        stream = MemoryStream()
+        counter = CallCounter()
+        agent = Agent(
+            "limited",
+            config=TestConfig("earlier answer"),
+            middleware=[CallLimiter(max_llm_calls=1, on_exhausted="stop", ending="last_text", counter=counter)],
+        )
+        await agent.ask("First question.", stream=stream)
+
+        reply = await agent.ask("Next question.", stream=stream)
+
+        assert reply.body is None
+        assert reply.response.finish_reason == "call_limit"
+
     async def test_enqueued_input_does_not_hide_the_last_text_in_the_turn(self) -> None:
         agent = Agent(
             "limited",
@@ -581,9 +621,10 @@ class TestRemainingNote:
     async def test_retry_notes_preserve_the_cached_prefix_with_snapshot_storage(self, failures: int) -> None:
         prompts: list[tuple[BaseEvent, ...]] = []
         run = Run()
+        config = TrackingConfig(TestConfig(*[TimeoutError("retry") for _ in range(failures)], _call("search"), "done"))
         agent = Agent(
             "limited",
-            config=TestConfig(*[TimeoutError("retry") for _ in range(failures)], _call("search"), "done"),
+            config=config,
             tools=[run.search],
             middleware=[
                 RetryMiddleware(),
@@ -595,7 +636,7 @@ class TestRemainingNote:
         reply = await agent.ask("Investigate.", stream=MemoryStream(storage=SnapshotStorage()))
 
         assert reply.body == "done"
-        assert len(prompts) == failures + 2
+        assert len(prompts) == config.mock.call_count == failures + 2
         assert all(later[: len(earlier)] == earlier for earlier, later in zip(prompts, prompts[1:]))
 
     async def test_remaining_notes_do_not_hide_the_last_text_ending(self) -> None:

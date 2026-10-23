@@ -474,6 +474,8 @@ A reply that no model call wrote has `finish_reason="call_limit"`. Whenever the 
 - `"last_text"`: no model call was left, and the reply is the model's last text in this turn. Opt in with `ending="last_text"`. That text is often a half-finished line like "Let me search…", so check it before showing it as an answer.
 - `"final_tool"`: a total-limit refusal occurred in a batch that also finished through a final tool result, without a synthesis call.
 
+The `last_text` fallback considers responses published during this `ask()`, including continuations from enqueued input. It never reuses text from an earlier `ask()` on the same stream.
+
 A reply with a message also carries the reason and the ending in `metadata["ag2:call_limit"]`. If the final call raises, the turn still ends, and the event carries `error_type` and `error`.
 
 ```python linenums="1"

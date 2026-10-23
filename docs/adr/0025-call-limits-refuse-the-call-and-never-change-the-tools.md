@@ -58,6 +58,9 @@ request, had run in production since October 2026.
   The reverse order is rejected. Input budget notes do not disarm retries.
 - A limiter cannot be wrapped in `ConditionalMiddleware`: per-hook gates cannot
   preserve the coordinated turn policy. This combination is rejected explicitly.
+- The `last_text` fallback observes responses during the turn. A request drained
+  from enqueued input can continue the same turn, so request types in history
+  cannot reliably identify its boundary.
 
 ## Consequences
 
