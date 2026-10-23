@@ -183,9 +183,9 @@ def _parse_function_call(obj: dict[str, JsonValue]) -> A2UIIncomingParseResult:
     function_call_id = obj.get("functionCallId")
     call_obj = obj.get("callFunction")
     name = call_obj.get("@call") if isinstance(call_obj, dict) else None
-    if not isinstance(function_call_id, str) or not function_call_id:
+    if not isinstance(function_call_id, str):
         return A2UIIncomingUnknownResult(parse_error="'callAgentFunction' has no 'functionCallId' to correlate a reply")
-    if not isinstance(call_obj, dict) or not isinstance(name, str) or not name:
+    if not isinstance(call_obj, dict) or not isinstance(name, str):
         return A2UIIncomingUnknownResult(parse_error="'callAgentFunction' has no 'callFunction' with an '@call' name")
     surface_id = obj.get("surfaceId")
     if not isinstance(surface_id, str):
@@ -206,7 +206,7 @@ def _parse_function_call(obj: dict[str, JsonValue]) -> A2UIIncomingParseResult:
 
 def _parse_function_response(obj: dict[str, JsonValue]) -> A2UIIncomingParseResult:
     function_call_id = obj.get("functionCallId")
-    if not isinstance(function_call_id, str) or not function_call_id:
+    if not isinstance(function_call_id, str):
         return A2UIIncomingUnknownResult(
             parse_error="'rendererFunctionResponse' has no 'functionCallId' to correlate with a call",
         )
@@ -405,7 +405,7 @@ def function_response_to_prompt(fr: A2UIIncomingFunctionResponse, function_name:
     names the function. All client-supplied values pass through
     :func:`sanitize_for_prompt`.
     """
-    fc_id = sanitize_for_prompt(fr.function_call_id) if fr.function_call_id else "(unknown)"
+    fc_id = sanitize_for_prompt(fr.function_call_id)
     if function_name:
         fc_id = f"{fc_id}, function={sanitize_for_prompt(function_name)}"
     if fr.error is not None:

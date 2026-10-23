@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from ag2.a2ui.actions import A2UIEventAction
 from ag2.a2ui.parser import A2UIResponseParser
@@ -184,6 +185,28 @@ class TestMergedCatalog:
         assert "Button" in schemas
         assert "MyWidget" in schemas
 
+    def test_function_definition_references_escape_json_pointer_tokens(self) -> None:
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "functions": {
+                    "lookup/~definition": {
+                        "type": "object",
+                        "returnType": "string",
+                        "requiresUserActivation": False,
+                        "properties": {"@call": {"const": "lookup"}},
+                        "required": ["@call"],
+                    },
+                },
+            },
+        )
+        registry = manager.build_schema_registry()
+        validator = Draft202012Validator({"$ref": f"{manager.catalog_id}#/$defs/anyFunction"}, registry=registry)
+
+        assert validator.is_valid({"@call": "lookup"})
+        assert not validator.is_valid({"@call": "lookup/~definition"})
+
 
 class TestPromptSection:
     def test_includes_format(self) -> None:
@@ -246,18 +269,3 @@ class TestPromptSection:
         assert "book_table" in prompt
         assert '"event"' in prompt
         assert "Client Functions" not in prompt
-
-
-def test_function_callers_default_to_renderer_only_and_follow_the_catalog() -> None:
-    manager = A2UISchemaManager(
-        protocol_version="v1.0",
-        custom_catalog={
-            "$id": "https://mycompany.com/cat.json",
-            "functions": {"lookup": {"returnType": "string", "allowedCallers": "agentOnly"}},
-        },
-    )
-
-    callers = manager.get_function_callers()
-
-    assert callers["lookup"] == "agentOnly"
-    assert callers["openUrl"] == "rendererOnly"

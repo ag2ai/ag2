@@ -161,7 +161,7 @@ class TestParseIncomingFunctionResponse:
             {"functionCallId": "fc-2"},
             {"functionCallId": "fc-2", "value": 1, "error": {"code": "X", "message": "m"}},
             {"value": 1},
-            {"functionCallId": "", "value": 1},
+            {"functionCallId": 7, "value": 1},
             {"functionCallId": "fc-2", "error": {"code": "X"}},
             {"functionCallId": "fc-2", "error": "boom"},
         ],

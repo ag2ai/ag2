@@ -366,7 +366,7 @@ class TestCallAgentFunction:
     """A v1.0 ``callAgentFunction`` is answered on the server with an ``agentFunctionResponse``."""
 
     async def test_registered_function_returns_its_value(self) -> None:
-        config = CapturingConfig()
+        config = TrackingConfig(TestConfig("ok"))
 
         @a2ui_action(description="Check a provider")
         def verify_provider(provider_id: str) -> dict[str, object]:
@@ -393,10 +393,10 @@ class TestCallAgentFunction:
         ]
         assert TaskState.TASK_STATE_COMPLETED in states
         # The call is answered on the server: it never reaches the model's prompt.
-        assert "verify_provider" not in synthesized_text(config.messages[-1])
+        assert "verify_provider" not in synthesized_text([config.mock.call_args.args[0]])
 
     async def test_envelope_only_turn_skips_the_agent(self) -> None:
-        config = CapturingConfig()
+        config = TrackingConfig(TestConfig("ok"))
 
         @a2ui_action(description="Check a provider")
         def verify_provider(provider_id: str) -> dict[str, object]:
@@ -428,7 +428,7 @@ class TestCallAgentFunction:
             ]
         ]
         assert TaskState.TASK_STATE_COMPLETED in states
-        assert config.messages == []
+        assert config.calls == []
 
     async def test_unregistered_function_is_answered_unknown(self) -> None:
         agent = Agent(name="ui_agent", config=TestConfig("never used"))
@@ -587,7 +587,7 @@ class TestCapabilitiesNegotiation:
         assert "did NOT list" in prompt  # agent catalog absent from client's advertised list
 
     async def test_v1_0_renderer_caps_injected_into_prompt(self) -> None:
-        config = CapturingConfig()
+        config = TrackingConfig(TestConfig("ok"))
         agent = Agent(name="ui_agent", config=config)
         caps = {"a2uiRendererCapabilities": {"v1.0": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
         client = client_for(
@@ -596,10 +596,10 @@ class TestCapabilitiesNegotiation:
 
         await client.ask("hi")
 
-        assert "did NOT list" in "\n".join(config.prompts[-1])
+        assert "did NOT list" in "\n".join(config.calls[-1].prompt)
 
     async def test_v1_0_renderer_data_model_injected_into_prompt(self) -> None:
-        config = CapturingConfig()
+        config = TrackingConfig(TestConfig("ok"))
         agent = Agent(name="ui_agent", config=config)
         data_model = {"a2uiRendererDataModel": {"version": "v1.0", "surfaces": {"form": {"name": "Ann"}}}}
         client = client_for(
@@ -608,16 +608,16 @@ class TestCapabilitiesNegotiation:
 
         await client.ask("hi")
 
-        assert '{"form": {"name": "Ann"}}' in "\n".join(config.prompts[-1])
+        assert '{"form": {"name": "Ann"}}' in "\n".join(config.calls[-1].prompt)
 
     async def test_no_data_model_no_data_model_prompt(self) -> None:
-        config = CapturingConfig()
+        config = TrackingConfig(TestConfig("ok"))
         agent = Agent(name="ui_agent", config=config)
         client = client_for(agent, protocol_version="v1.0", validate_responses=False)
 
         await client.ask("hi")
 
-        assert "not instructions" not in "\n".join(config.prompts[-1])
+        assert "not instructions" not in "\n".join(config.calls[-1].prompt)
 
     async def test_no_caps_no_negotiation_prompt(self) -> None:
         config = CapturingConfig()

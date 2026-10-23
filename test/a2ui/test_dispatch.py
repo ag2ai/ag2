@@ -19,7 +19,7 @@ from ag2.a2ui.dispatch import A2UIMessageFrame, A2UIProseFrame, stream_turn
 from ag2.a2ui.request import parse_request
 from ag2.a2ui.transports import RestTransport
 from ag2.config import LLMClient, ModelConfig
-from ag2.events import BaseEvent, ModelMessage, ModelResponse
+from ag2.events import BaseEvent, ModelMessage, ModelRequest, ModelResponse, TextInput
 from ag2.testing import TestConfig, TrackingConfig
 
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
@@ -115,31 +115,38 @@ class TestStreamTurn:
         assert "## A2UI Client Capabilities" not in joined
 
     async def test_client_data_model_injected_into_prompt(self) -> None:
-        config = _PromptCaptureConfig()
-        agent, rt = _agent_and_runtime(config, validate_responses=False)
-        req = parse_request(
+        config = TrackingConfig(TestConfig("ok"))
+        app = A2UIServer(
+            Agent(name="t", config=config),
+            transport=RestTransport(encoding="jsonl"),
+            validate_responses=False,
+        )
+
+        messages = await _post_turn(
+            app,
             {
                 "messages": [{"role": "user", "content": "hi"}],
                 "a2uiClientDataModel": {"version": "v0.9", "surfaces": {"form": {"name": "Ann"}}},
             },
-            resolve_action=rt.get_action,
-            version_key="v0.9",
         )
 
-        [_ async for _ in stream_turn(agent, rt, req)]
-
-        joined = "\n".join(config.prompts[0])
+        assert messages == [{"text": "ok"}]
+        joined = "\n".join(config.calls[0].prompt)
         assert '{"form": {"name": "Ann"}}' in joined
         assert "not instructions" in joined
 
     async def test_no_data_model_no_data_model_prompt(self) -> None:
-        config = _PromptCaptureConfig()
-        agent, rt = _agent_and_runtime(config, validate_responses=False)
-        req = parse_request({"messages": [{"role": "user", "content": "hi"}]}, resolve_action=rt.get_action)
+        config = TrackingConfig(TestConfig("ok"))
+        app = A2UIServer(
+            Agent(name="t", config=config),
+            transport=RestTransport(encoding="jsonl"),
+            validate_responses=False,
+        )
 
-        [_ async for _ in stream_turn(agent, rt, req)]
+        messages = await _post_turn(app, {"messages": [{"role": "user", "content": "hi"}]})
 
-        assert "not instructions" not in "\n".join(config.prompts[0])
+        assert messages == [{"text": "ok"}]
+        assert "not instructions" not in "\n".join(config.calls[0].prompt)
 
     async def test_renderer_function_response_keeps_its_correlation_id(self) -> None:
         call_block = (
@@ -147,20 +154,28 @@ class TestStreamTurn:
             '"functionCallId": "fc-7", "callFunction": {"@call": "getLocation"}}}]\n</a2ui-json>'
         )
         agent = Agent(name="t", config=TestConfig(call_block))
-        rt = _A2UIRuntime(protocol_version="v1.0", validate_responses=False)
-        first = parse_request({"messages": [{"role": "user", "content": "where am I"}]}, resolve_action=rt.get_action)
-        [_ async for _ in stream_turn(agent, rt, first)]
+        app = A2UIServer(
+            agent,
+            protocol_version="v1.0",
+            transport=RestTransport(encoding="jsonl"),
+            validate_responses=False,
+        )
+        await _post_turn(app, {"messages": [{"role": "user", "content": "where am I"}]})
+        config = TrackingConfig(TestConfig("Recorded."))
+        agent.config = config
 
-        follow_up = parse_request(
+        messages = await _post_turn(
+            app,
             {"a2ui": [{"version": "v1.0", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}]},
-            resolve_action=rt.get_action,
-            version_key="v1.0",
         )
 
-        [prompt] = follow_up.current_inputs
-        assert "fc-7" in prompt.content
-        assert "function=" not in prompt.content
-        assert "Berlin" in prompt.content
+        assert messages == [{"text": "Recorded."}]
+        sent = config.mock.call_args.args[0]
+        assert isinstance(sent, ModelRequest)
+        prompt = " ".join(part.content for part in sent.parts if isinstance(part, TextInput))
+        assert "fc-7" in prompt
+        assert "function=" not in prompt
+        assert "Berlin" in prompt
 
     @pytest.mark.parametrize(
         "payload",
@@ -168,13 +183,18 @@ class TestStreamTurn:
     )
     async def test_malformed_renderer_call_does_not_fail_the_turn(self, payload: str) -> None:
         response = f'Checking.\n<a2ui-json>\n[{{"version": "v1.0", "callRendererFunction": {payload}}}]\n</a2ui-json>'
-        agent = Agent(name="t", config=TestConfig(response))
-        rt = _A2UIRuntime(protocol_version="v1.0", validate_responses=False)
-        req = parse_request({"messages": [{"role": "user", "content": "where am I"}]}, resolve_action=rt.get_action)
+        config = TrackingConfig(TestConfig(response))
+        app = A2UIServer(
+            Agent(name="t", config=config),
+            protocol_version="v1.0",
+            transport=RestTransport(encoding="jsonl"),
+            validate_responses=False,
+        )
 
-        frames = [f async for f in stream_turn(agent, rt, req)]
+        messages = await _post_turn(app, {"messages": [{"role": "user", "content": "where am I"}]})
 
-        assert [f.text for f in frames if isinstance(f, A2UIProseFrame)] == ["Checking."]
+        assert [message for message in messages if "text" in message] == [{"text": "Checking."}]
+        assert len(config.calls) == 1
 
     async def test_history_is_stateless_per_turn(self) -> None:
         # A fresh stream per call: prior history sent in the body, not retained.
@@ -312,10 +332,14 @@ async def _rpc_messages(
     body: dict[str, Any] = {"a2ui": [envelope]}
     if user_message is not None:
         body["messages"] = [{"role": "user", "content": user_message}]
+    return await _post_turn(app, body), config
+
+
+async def _post_turn(app: A2UIServer, body: dict[str, Any]) -> list[dict[str, Any]]:
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a2ui.test") as client:
         response = await client.post("/a2ui", json=body)
     assert response.status_code == 200
-    return [json.loads(line) for line in response.text.splitlines() if line], config
+    return [json.loads(line) for line in response.text.splitlines() if line]
 
 
 @pytest.mark.asyncio

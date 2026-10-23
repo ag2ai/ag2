@@ -590,6 +590,105 @@ class TestSurfaceCatalogValidation:
         assert result.is_valid, result.errors
 
 
+class TestCatalogFunctionDefinitions:
+    @pytest.fixture()
+    def function_schema(self) -> JsonObject:
+        return {
+            "type": "object",
+            "returnType": "string",
+            "requiresUserActivation": False,
+            "properties": {
+                "@call": {"const": "lookup"},
+                "args": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}},
+                    "required": ["id"],
+                },
+            },
+            "required": ["@call", "args"],
+        }
+
+    @pytest.mark.parametrize("call_kind", ["rpc", "binding"])
+    @pytest.mark.parametrize("allowed_callers", [None, "rendererOnly", "agentOnly", "rendererOrAgent"])
+    def test_callers_use_function_definitions_independently_of_schema_keys(
+        self, function_schema: JsonObject, call_kind: str, allowed_callers: str | None
+    ) -> None:
+        if allowed_callers is not None:
+            function_schema["allowedCallers"] = allowed_callers
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "functions": {"lookup/~definition": function_schema},
+            },
+        )
+        parser = A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+        )
+        call: JsonObject = {"@call": "lookup", "catalogId": manager.catalog_id, "args": {"id": "x"}}
+        if call_kind == "rpc":
+            operation = {"version": "v1.0", "callRendererFunction": {"functionCallId": "fc", "callFunction": call}}
+        else:
+            operation = {
+                "version": "v1.0",
+                "createSurface": {
+                    "surfaceId": "s",
+                    "components": [
+                        {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
+                        {"id": "label", "component": "Text", "text": "Lookup"},
+                    ],
+                },
+            }
+
+        result = parser.validate([operation])
+
+        expected = (
+            allowed_callers in ("agentOnly", "rendererOrAgent")
+            if call_kind == "rpc"
+            else allowed_callers != "agentOnly"
+        )
+        assert result.is_valid is expected, result.errors
+
+    @pytest.mark.parametrize(
+        ("call", "expected_error"),
+        [
+            ({"@call": "missing", "args": {"id": "x"}}, "unknown @call 'missing'"),
+            ({"@call": "lookup", "args": {}}, "'id' is a required property"),
+        ],
+    )
+    def test_definition_keys_do_not_obscure_function_validation_errors(
+        self, function_schema: JsonObject, call: JsonObject, expected_error: str
+    ) -> None:
+        function_schema["allowedCallers"] = "agentOnly"
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "functions": {"lookupDefinition": function_schema},
+            },
+        )
+        parser = A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+        )
+        result = parser.validate([
+            {
+                "version": "v1.0",
+                "callRendererFunction": {
+                    "functionCallId": "fc",
+                    "callFunction": {**call, "catalogId": manager.catalog_id},
+                },
+            }
+        ])
+
+        assert not result.is_valid
+        assert len(result.errors) == 1
+        assert expected_error in result.errors[0]
+
+
 class TestPerComponentValidation:
     @pytest.fixture()
     def parser_with_components(self) -> A2UIResponseParser:

@@ -56,15 +56,20 @@ def _instructions_of(catalog: JsonSchema) -> str:
     return instructions.strip() if isinstance(instructions, str) else ""
 
 
+def _function_schema_ref(catalog_id: str, key: str) -> str:
+    token = key.replace("~", "~0").replace("/", "~1")
+    return f"{catalog_id}#/functions/{token}"
+
+
 def _catalog_function_variant(catalog: JsonSchema, *, agent_initiated: bool, explicit: bool) -> JsonSchema:
     catalog_id = str(catalog["$id"])
     allowed: list[JsonValue] = []
-    for name, definition in _as_object(catalog.get("functions")).items():
+    for key, definition in _as_object(catalog.get("functions")).items():
         callers = definition.get("allowedCallers", "rendererOnly") if isinstance(definition, dict) else "rendererOnly"
         if (agent_initiated and callers in ("agentOnly", "rendererOrAgent")) or (
             not agent_initiated and callers != "agentOnly"
         ):
-            allowed.append(name)
+            allowed.append({"$ref": _function_schema_ref(catalog_id, key)})
     selection: JsonSchema
     if explicit:
         selection = {
@@ -79,7 +84,7 @@ def _catalog_function_variant(catalog: JsonSchema, *, agent_initiated: bool, exp
             function_schema,
             selection,
             # Report malformed function names/arguments before caller restrictions.
-            {"if": function_schema, "then": {"properties": {"@call": {"enum": allowed}}}},
+            {"if": function_schema, "then": {"anyOf": allowed} if allowed else {"not": {}}},
         ],
     }
 
@@ -346,7 +351,7 @@ class A2UISchemaManager:
             }
         if functions:
             defs["anyFunction"] = {
-                "oneOf": [{"$ref": f"#/functions/{name}"} for name in functions],
+                "oneOf": [{"$ref": _function_schema_ref("", name)} for name in functions],
             }
         merged["$defs"] = defs
 
@@ -372,17 +377,6 @@ class A2UISchemaManager:
                     if isinstance(defn, dict) and name not in schemas:
                         schemas[name] = defn
         return schemas
-
-    def get_function_callers(self) -> dict[str, str]:
-        """Map each catalog function name to its ``allowedCallers`` (default ``rendererOnly``, as in v1.0)."""
-        self._ensure_loaded()
-        callers: dict[str, str] = {}
-        for catalog in [self._basic_catalog, self._custom_catalog]:
-            if catalog is not None:
-                for name, defn in _as_object(catalog.get("functions")).items():
-                    allowed = defn.get("allowedCallers") if isinstance(defn, dict) else None
-                    callers[name] = allowed if isinstance(allowed, str) else "rendererOnly"
-        return callers
 
     def build_schema_registry(self) -> "Registry":
         """Build a jsonschema referencing Registry for cross-file $ref resolution."""

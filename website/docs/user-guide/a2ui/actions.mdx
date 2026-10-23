@@ -79,7 +79,7 @@ async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
 When the action name matches a registered `#!python @a2ui_action`, the click runs that handler on the server (the agent is not invoked); otherwise the click is rewritten into a plain instruction so the LLM continues the conversation.
 
 !!! note "v1.0 round-trip"
-    With `#!python protocol_version="v1.0"`, a renderer's reply to a `#!python callRendererFunction` the LLM emitted arrives as a `#!python rendererFunctionResponse` envelope in the next request and is rewritten to a continuation prompt — the stateless transport needs no pause/resume bookkeeping. The prompt names the function when this process issued the call (a bounded in-memory record); after a restart, or on another worker, it carries the call id only.
+    With `#!python protocol_version="v1.0"`, a renderer's reply to a `#!python callRendererFunction` the LLM emitted arrives as a `#!python rendererFunctionResponse` envelope in the next request and is rewritten to a continuation prompt. On the stateless REST transport, the prompt carries the call ID and its value or error; include conversation history when the model also needs the originating call's context. A2A keeps the task in `#!python input-required` until the renderer responds.
 
 ## Calling an Action as a Function (v1.0)
 

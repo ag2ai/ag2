@@ -38,6 +38,107 @@ async def _post(app: A2UIServer, body: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 @pytest.mark.asyncio
+async def test_empty_function_name_receives_an_unknown_function_reply() -> None:
+    tracking = TrackingConfig(TestConfig("UNEXPECTED MODEL CALL"))
+    app = A2UIServer(
+        Agent("ui", config=tracking),
+        protocol_version="v1.0",
+        transport=RestTransport(encoding="jsonl"),
+    )
+    messages = await _post(
+        app,
+        {
+            "a2ui": [
+                {
+                    "version": "v1.0",
+                    "callAgentFunction": {
+                        "surfaceId": "s",
+                        "functionCallId": "fc-1",
+                        "callFunction": {"@call": "", "args": {}},
+                    },
+                }
+            ]
+        },
+    )
+
+    assert messages == [
+        {
+            "version": "v1.0",
+            "agentFunctionResponse": {
+                "functionCallId": "fc-1",
+                "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function ''."},
+            },
+        }
+    ]
+    assert tracking.calls == []
+
+
+@pytest.mark.asyncio
+async def test_empty_function_call_id_is_preserved_in_the_rpc_reply() -> None:
+    @a2ui_action
+    def lookup() -> str:
+        return "found"
+
+    tracking = TrackingConfig(TestConfig("UNEXPECTED MODEL CALL"))
+    app = A2UIServer(
+        Agent("ui", config=tracking),
+        actions=[lookup],
+        protocol_version="v1.0",
+        transport=RestTransport(encoding="jsonl"),
+    )
+    messages = await _post(
+        app,
+        {
+            "a2ui": [
+                {
+                    "version": "v1.0",
+                    "callAgentFunction": {
+                        "surfaceId": "s",
+                        "functionCallId": "",
+                        "callFunction": {"@call": "lookup", "args": {}},
+                    },
+                }
+            ]
+        },
+    )
+
+    assert messages == [{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "", "value": "found"}}]
+    assert tracking.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "result", [{"value": "Berlin"}, {"error": {"code": "FAILED", "message": "Location unavailable"}}]
+)
+async def test_renderer_result_with_empty_call_id_reaches_the_model(result: dict[str, Any]) -> None:
+    tracking = TrackingConfig(TestConfig("Recorded."))
+    app = A2UIServer(
+        Agent("ui", config=tracking),
+        protocol_version="v1.0",
+        transport=RestTransport(encoding="jsonl"),
+    )
+    messages = await _post(
+        app,
+        {
+            "a2ui": [
+                {
+                    "version": "v1.0",
+                    "rendererFunctionResponse": {"functionCallId": "", **result},
+                }
+            ]
+        },
+    )
+
+    assert messages == [{"text": "Recorded."}]
+    assert len(tracking.calls) == 1
+    sent = tracking.mock.call_args.args[0]
+    assert isinstance(sent, ModelRequest)
+    prompt = " ".join(part.content for part in sent.parts if isinstance(part, TextInput))
+    assert "id=)" in prompt
+    assert "Berlin" in prompt or "Location unavailable" in prompt
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("args", [None, ["cancel"], "cancel", 7, True])
 async def test_non_object_function_arguments_do_not_execute_handler(args: Any) -> None:
     calls: list[str] = []
