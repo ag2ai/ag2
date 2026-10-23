@@ -268,7 +268,6 @@ class TestA2UIResponseParserV1Validation:
             version_string=manager.version_string,
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
-            function_callers=manager.get_function_callers(),
         )
 
     @pytest.fixture()
@@ -292,7 +291,6 @@ class TestA2UIResponseParserV1Validation:
             version_string=manager.version_string,
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
-            function_callers=manager.get_function_callers(),
         )
 
     def test_call_renderer_function_accepts_a_function_the_agent_may_call(
@@ -342,7 +340,7 @@ class TestA2UIResponseParserV1Validation:
         result = parser_v1.validate(ops)
         assert result.is_valid is False
         assert len(result.errors) == 1
-        assert "rendererOnly" in result.errors[0]
+        assert "openUrl" in result.errors[0]
 
     def test_agent_function_response_is_not_generated_by_the_llm(self, parser_v1: A2UIResponseParser) -> None:
         ops = [{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": 42}}]

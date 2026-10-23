@@ -109,7 +109,7 @@ The reply is always exactly one of `#!python value` or `#!python error`. Any mes
 | `#!python error.code` | When |
 |---|---|
 | `#!python UNKNOWN_FUNCTION` | No action is registered under that name, or an explicit `#!python catalogId` differs from the server's active catalog. |
-| `#!python INVALID_FUNCTION_CALL` | `#!python args` is not an object or does not fit the handler's parameters. An omitted `#!python args` uses the handler's defaults. |
+| `#!python INVALID_FUNCTION_CALL` | `#!python args` is not an object or does not fit the handler's parameters, including unknown keyword names when the handler has no `#!python **kwargs`. An omitted `#!python args` uses the handler's defaults. |
 | `#!python FUNCTION_FAILED` | The handler raised (the error text is logged, not sent to the renderer). |
 
 `#!python callAgentFunction` does not exist before v1.0; on an earlier protocol version it is logged and left unanswered, and the turn is handed to the agent as usual.

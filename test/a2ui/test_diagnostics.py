@@ -78,7 +78,10 @@ class TestV1Issues:
             "version": "v1.0",
             "callRendererFunction": {
                 "functionCallId": "f",
-                "callFunction": {"@call": "nope", "catalogId": "https://a2ui.org/c.json"},
+                "callFunction": {
+                    "@call": "nope",
+                    "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                },
             },
         }
 
@@ -89,7 +92,11 @@ class TestV1Issues:
             "version": "v1.0",
             "callRendererFunction": {
                 "functionCallId": "f",
-                "callFunction": {"@call": "openUrl", "catalogId": "https://a2ui.org/c.json", "args": {}},
+                "callFunction": {
+                    "@call": "openUrl",
+                    "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                    "args": {},
+                },
             },
         }
 

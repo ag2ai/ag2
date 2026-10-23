@@ -138,7 +138,7 @@ class TestStreamTurn:
 
         assert "not instructions" not in "\n".join(config.prompts[0])
 
-    async def test_renderer_function_response_names_the_issued_function(self) -> None:
+    async def test_renderer_function_response_keeps_its_correlation_id(self) -> None:
         call_block = (
             '<a2ui-json>\n[{"version": "v1.0", "callRendererFunction": {"surfaceId": "s1", '
             '"functionCallId": "fc-7", "callFunction": {"@call": "getLocation"}}}]\n</a2ui-json>'
@@ -151,12 +151,12 @@ class TestStreamTurn:
         follow_up = parse_request(
             {"a2ui": [{"version": "v1.0", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}]},
             resolve_action=rt.get_action,
-            resolve_function=rt.get_renderer_function_name,
             version_key="v1.0",
         )
 
         [prompt] = follow_up.current_inputs
-        assert "function=getLocation" in prompt.content
+        assert "fc-7" in prompt.content
+        assert "function=" not in prompt.content
         assert "Berlin" in prompt.content
 
     @pytest.mark.parametrize(

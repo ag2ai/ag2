@@ -31,11 +31,13 @@ import logging
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, TypeGuard
 
+from fast_depends.pydantic.schema import get_schema
 from pydantic import ValidationError
 from pydantic_core import to_jsonable_python
 
 from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.stream import MemoryStream
+from ag2.utils import CONTEXT_OPTION_NAME
 
 from ._types import A2UIVersion, JsonObject, JsonValue, ServerToClientMessage, server_to_client_payload_keys
 from .actions import A2UIAction
@@ -88,6 +90,13 @@ def _invalid_function_arguments(call: A2UIIncomingFunctionCall, version: A2UIVer
         version,
         error={"code": "INVALID_FUNCTION_CALL", "message": f"Invalid arguments for function {call.call!r}."},
     )
+
+
+def _has_unknown_arguments(action: A2UIAction, arguments: JsonObject) -> bool:
+    if action.model.kwargs_name is not None:
+        return False
+    properties = get_schema(action.model, exclude=(CONTEXT_OPTION_NAME,)).get("properties", {})
+    return any(name not in properties for name in arguments)
 
 
 def build_server_action_context(
@@ -201,7 +210,7 @@ async def run_agent_function(
             )
         ]
 
-    if not isinstance(call.args, dict):
+    if not isinstance(call.args, dict) or _has_unknown_arguments(action, call.args):
         return [_invalid_function_arguments(call, version)]
 
     try:

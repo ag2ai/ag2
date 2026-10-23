@@ -167,9 +167,7 @@ class A2UIAgentExecutor(AgentExecutor):
             # registered action simply produces no replacement prompt.
             consumed_a2ui = True
             all_envelopes.extend(envelopes)
-            for prompt in iter_incoming_prompts(
-                envelopes, self._runtime.get_action, self._runtime.get_renderer_function_name
-            ):
+            for prompt in iter_incoming_prompts(envelopes, self._runtime.get_action):
                 new_parts.append(Part(text=prompt))
 
         if consumed_a2ui:

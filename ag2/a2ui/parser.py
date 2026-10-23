@@ -5,7 +5,7 @@
 import json
 import logging
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TypeGuard, cast
 
@@ -142,13 +142,11 @@ class A2UIResponseParser:
         version_string: A2UIVersion,
         server_to_client_schema: JsonSchema | None = None,
         schema_registry: Registry | None = None,
-        function_callers: Mapping[str, str] | None = None,
     ) -> None:
         self._checker = (
             MessageChecker(server_to_client_schema, schema_registry) if server_to_client_schema is not None else None
         )
         self._version_string = version_string
-        self._function_callers = function_callers
 
     @property
     def version_string(self) -> A2UIVersion:
@@ -282,17 +280,5 @@ class A2UIResponseParser:
                 errors.append(
                     f"Operation {i}: 'agentFunctionResponse' is sent by the server in reply to a "
                     "'callAgentFunction'; do not emit it."
-                )
-            call = op.get("callRendererFunction")
-            call_function = call.get("callFunction") if isinstance(call, dict) else None
-            name = call_function.get("@call") if isinstance(call_function, dict) else None
-            if (
-                isinstance(name, str)
-                and self._function_callers is not None
-                and self._function_callers.get(name, "rendererOnly") == "rendererOnly"
-            ):
-                errors.append(
-                    f"Operation {i}: function '{name}' is 'rendererOnly' in the catalog (allowedCallers), "
-                    "so the agent cannot call it with 'callRendererFunction'."
                 )
         return errors

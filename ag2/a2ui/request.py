@@ -71,7 +71,7 @@ def parse_request(
             (handled in the turn core, kept out of the prompt); an unmatched click
             is rewritten generically so the LLM can react to the button it rendered.
         resolve_function: Looks up the name of an issued ``callRendererFunction`` by
-            its ``functionCallId`` (e.g. ``runtime.get_renderer_function_name``), so
+            its ``functionCallId`` using caller-scoped state, so
             a ``rendererFunctionResponse`` prompt can name the function.
         version_key: The protocol version under which to read
             ``a2uiClientCapabilities`` (the client nests it under its version,

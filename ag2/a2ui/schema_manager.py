@@ -55,6 +55,34 @@ def _instructions_of(catalog: JsonSchema) -> str:
     return instructions.strip() if isinstance(instructions, str) else ""
 
 
+def _catalog_function_variant(catalog: JsonSchema, *, agent_initiated: bool, explicit: bool) -> JsonSchema:
+    catalog_id = str(catalog["$id"])
+    allowed: list[JsonValue] = []
+    for name, definition in _as_object(catalog.get("functions")).items():
+        callers = definition.get("allowedCallers", "rendererOnly") if isinstance(definition, dict) else "rendererOnly"
+        if (agent_initiated and callers in ("agentOnly", "rendererOrAgent")) or (
+            not agent_initiated and callers != "agentOnly"
+        ):
+            allowed.append(name)
+    selection: JsonSchema
+    if explicit:
+        selection = {
+            "properties": {"catalogId": {"const": catalog_id}},
+            "required": ["catalogId"],
+        }
+    else:
+        selection = {"not": {"required": ["catalogId"]}}
+    function_schema: JsonSchema = {"$ref": f"{catalog_id}#/$defs/anyFunction"}
+    return {
+        "allOf": [
+            function_schema,
+            selection,
+            # Report malformed function names/arguments before caller restrictions.
+            {"if": function_schema, "then": {"properties": {"@call": {"enum": allowed}}}},
+        ],
+    }
+
+
 class _VersionConfigEntry(TypedDict):
     default_catalog_id: str
     schema_base_uri: str
@@ -203,20 +231,25 @@ class A2UISchemaManager:
 
         Restrict schema references rather than walking component JSON: data models,
         extension metadata and custom literal properties can legitimately contain
-        an object with an ``@call`` key. Only the top-level renderer RPC uses the
-        unrestricted definition; its nested dynamic arguments still use FunctionCall.
+        an object with an ``@call`` key. The top-level renderer RPC uses the
+        agent-callable definition; its nested dynamic arguments use FunctionCall.
         """
-        agent_only: list[JsonValue] = [
-            name for name, callers in self.get_function_callers().items() if callers == "agentOnly"
-        ]
-        if not agent_only:
-            return
+        active = self._get_active_catalog()
+        catalogs = {str(self._basic_catalog["$id"]): self._basic_catalog, str(active["$id"]): active}
         definitions = _as_object(self._common_types.get("$defs"))
         function_call = _as_object(definitions.get("FunctionCall"))
-        definitions["AgentFunctionCall"] = function_call
-        definitions["FunctionCall"] = {
-            "allOf": [function_call, {"properties": {"@call": {"not": {"enum": agent_only}}}}],
-        }
+        for name, agent_initiated in (("FunctionCall", False), ("AgentFunctionCall", True)):
+            variants: list[JsonValue] = [
+                _catalog_function_variant(catalog, agent_initiated=agent_initiated, explicit=True)
+                for catalog in catalogs.values()
+            ]
+            variants.append(_catalog_function_variant(active, agent_initiated=agent_initiated, explicit=False))
+            if not agent_initiated:
+                variants.append({"$ref": "#/$defs/IndexSystemFunction"})
+            definitions[name] = {
+                **function_call,
+                "allOf": [{"$ref": "#/$defs/FunctionCommon"}, {"oneOf": variants}],
+            }
 
         message_definitions = _as_object(self._server_to_client.get("$defs"))
         message = _as_object(message_definitions.get("CallRendererFunctionMessage"))

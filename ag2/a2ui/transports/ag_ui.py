@@ -219,10 +219,7 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     if shared := client_context_prompt(incoming.context or []):
         prompt.append(shared)
     envelopes = _client_envelopes(incoming.forwarded_props)
-    current_inputs.extend(
-        TextInput(p)
-        for p in iter_incoming_prompts(envelopes, core.runtime.get_action, core.runtime.get_renderer_function_name)
-    )
+    current_inputs.extend(TextInput(p) for p in iter_incoming_prompts(envelopes, core.runtime.get_action))
     return A2UIServerRequest(
         current_inputs=current_inputs,
         history=history,
