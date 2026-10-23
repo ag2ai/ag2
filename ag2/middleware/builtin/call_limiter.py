@@ -20,6 +20,7 @@ from ag2.events import (
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultEvent,
+    UsageEvent,
 )
 from ag2.middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory, ToolExecution, ToolResultType
 from ag2.middleware.describe import MiddlewareDescription
@@ -205,6 +206,8 @@ class CallLimiter(MiddlewareFactory):
 
 
 class _CallLimiter(BaseMiddleware):
+    _requires_turn_scope = True
+
     def __init__(self, event: BaseEvent, context: Context, limits: _Limits, counter: CallCounter) -> None:
         super().__init__(event, context)
         self._limits = limits
@@ -277,8 +280,8 @@ class _CallLimiter(BaseMiddleware):
 
     def _llm_hit(self) -> str | None:
         limits, counter = self._limits, self._counter
-        if limits.max_seconds is not None and counter.elapsed() >= limits.max_seconds:
-            return "max_seconds"
+        if reason := self._tool_total_hit():
+            return reason
         if limits.max_llm_calls is not None and counter.llm_calls >= limits.max_llm_calls:
             return "max_llm_calls"
         return None
@@ -432,6 +435,17 @@ class _CallGroup:
                 if response.message is not None:
                     response.message.metadata[CALL_LIMIT_KEY] = {"reason": limiter._exhausted, "ending": "synthesis"}
                 return response
+            # The agent emits usage only for the response returned by this hook.
+            # Discarding a tool-only answer must not discard its billable work.
+            if response.usage:
+                await context.send(
+                    UsageEvent(
+                        response.usage,
+                        model=response.model,
+                        provider=response.provider,
+                        finish_reason=response.finish_reason,
+                    )
+                )
             # Recheck outer limits before each retry, including its own final-call
             # allowance. An inner synthesis cannot bypass a run-wide model cap.
             retrying = limiter

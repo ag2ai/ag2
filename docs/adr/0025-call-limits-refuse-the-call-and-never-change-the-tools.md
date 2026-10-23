@@ -36,6 +36,8 @@ request, had run in production since October 2026.
   Exempt tools are never counted or refused.
 - Model-call limits are checked before the call is sent, so a model that ignores the
   refusals cannot spend past the limit.
+- A used-up tool total is also checked before the next model call. Exempt tools
+  remain executable, but cannot keep an exhausted turn alive indefinitely.
 - Counts live in an injectable `CallCounter`. The default is one per agent and per
   turn. A caller shares one, for example through `context.dependencies`, for limits
   across a run.
@@ -47,6 +49,12 @@ request, had run in production since October 2026.
   missing from the next request, preventing reuse of that conversation cache.
 - Exhaustion is announced when the turn actually finishes, including when an
   exempt tool returns a final result without another model call.
+- Discarded synthesis responses emit their own `UsageEvent`; the agent reports
+  usage for the returned response, preserving accounting without duplication.
+- `RetryMiddleware` must wrap all limiters so every provider attempt is charged.
+  The reverse order is rejected. Input budget notes do not disarm retries.
+- A limiter cannot be wrapped in `ConditionalMiddleware`: per-hook gates cannot
+  preserve the coordinated turn policy. This combination is rejected explicitly.
 
 ## Consequences
 

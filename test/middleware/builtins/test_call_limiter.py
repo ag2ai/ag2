@@ -23,8 +23,19 @@ from ag2.events import (
     ToolCallsEvent,
     ToolResult,
     ToolResultEvent,
+    Usage,
+    UsageEvent,
 )
-from ag2.middleware import BaseMiddleware, CallCounter, CallLimiter, LLMCall, Middleware, MiddlewareDescription
+from ag2.middleware import (
+    BaseMiddleware,
+    CallCounter,
+    CallLimiter,
+    ConditionalMiddleware,
+    LLMCall,
+    Middleware,
+    MiddlewareDescription,
+    RetryMiddleware,
+)
 from ag2.middleware.builtin.call_limiter import CALL_LIMIT_ERROR_TYPE, CALL_LIMIT_KEY, TEXT_ONLY_PROMPT
 from ag2.testing import TestConfig, TrackingConfig
 
@@ -54,6 +65,16 @@ class Run:
         """Search."""
         self.ran["search"] += 1
         return "found"
+
+    def shell(self) -> str:
+        """Run a command."""
+        self.ran["shell"] += 1
+        return "ok"
+
+    def record(self) -> str:
+        """Record the result."""
+        self.ran["record"] += 1
+        return "recorded"
 
 
 def finish() -> ToolResult:
@@ -97,22 +118,9 @@ async def _run(
     stream.where(CallLimitReached).subscribe(lambda e: run.limits.append(e))
     stream.where(ToolResultEvent).subscribe(lambda e: run.results.append(e))
 
-    def search() -> str:
-        """Search."""
-        run.ran["search"] += 1
-        return "found"
-
-    def shell() -> str:
-        """Run a command."""
-        run.ran["shell"] += 1
-        return "ok"
-
-    def record() -> str:
-        """Record the result."""
-        run.ran["record"] += 1
-        return "recorded"
-
-    agent = Agent("limited", config=config, tools=[search, shell, record], middleware=[*middleware, limiter])
+    agent = Agent(
+        "limited", config=config, tools=[run.search, run.shell, run.record], middleware=[*middleware, limiter]
+    )
     reply = await agent.ask("Investigate.", stream=stream)
     return reply, run
 
@@ -152,17 +160,31 @@ class TestPerToolCaps:
 
 @pytest.mark.asyncio()
 class TestTotals:
+    async def test_total_exhaustion_starts_synthesis_before_another_tool_is_requested(self) -> None:
+        counter = CallCounter()
+        reply, run = await _run(
+            CallLimiter(max_tool_calls=1, exempt={"record"}, counter=counter),
+            _call("search"),
+            *[_call("record") for _ in range(5)],
+            "done",
+        )
+
+        assert counter.llm_calls == 3
+        assert run.ran == {"search": 1, "record": 2}
+        assert reply.response.finish_reason == "call_limit"
+        assert [e.reason for e in run.limits] == ["max_tool_calls"]
+
     async def test_a_total_cap_still_ends_the_turn(self) -> None:
         reply, run = await _run(
             CallLimiter(max_tool_calls=1),
-            _call("search"),
-            _call("shell"),
+            [_call("search"), _call("shell")],
             "the answer",
         )
 
         assert run.ran == {"search": 1}
-        assert run.error_types() == [None, CALL_LIMIT_ERROR_TYPE]
-        assert "answer now" in _error(run.results[1])["recovery"][0]
+        assert Counter(run.error_types()) == Counter([None, CALL_LIMIT_ERROR_TYPE])
+        refused = next(r for r in run.results if _error(r))
+        assert "answer now" in _error(refused)["recovery"][0]
         assert SYNTHESIS in _text(run.last_messages()[-1])
         assert reply.body == "the answer"
         assert reply.response.metadata[CALL_LIMIT_KEY] == {"reason": "max_tool_calls", "ending": "synthesis"}
@@ -171,12 +193,12 @@ class TestTotals:
     async def test_at_both_caps_the_total_wins(self) -> None:
         _, run = await _run(
             CallLimiter(max_tool_calls=1, max_tool_calls_per_tool={"search": 1}),
-            _call("search"),
-            _call("search"),
+            [_call("search"), _call("search")],
             "the answer",
         )
 
-        assert "max_tool_calls)" in _error(run.results[1])["message"]
+        refused = next(r for r in run.results if _error(r))
+        assert "max_tool_calls)" in _error(refused)["message"]
         assert [e.reason for e in run.limits] == ["max_tool_calls"]
 
     async def test_a_refused_call_spends_neither_total_nor_the_per_tool_count(self) -> None:
@@ -222,7 +244,7 @@ class TestTotals:
 
         assert run.ran == {"record": 3, "search": 1}
         assert counter.tool_calls == 1
-        assert run.limits == []
+        assert [e.reason for e in run.limits] == ["max_tool_calls"]
 
     async def test_a_used_up_model_call_cap_synthesises_before_dispatch(self) -> None:
         counter = CallCounter()
@@ -241,6 +263,34 @@ class TestTotals:
 
 @pytest.mark.asyncio()
 class TestEndings:
+    @pytest.mark.parametrize("ending", ["text", "tools", "error"])
+    async def test_discarded_synthesis_usage_is_reported_once(self, ending: str) -> None:
+        first = ModelResponse(
+            tool_calls=ToolCallsEvent([_call("search")]),
+            usage=Usage(total_tokens=15),
+            model="test-model",
+            provider="test-provider",
+        )
+        second = (
+            TimeoutError("failed")
+            if ending == "error"
+            else ModelResponse(
+                ModelMessage("done") if ending == "text" else None,
+                tool_calls=ToolCallsEvent([_call("search")]) if ending == "tools" else ToolCallsEvent(),
+                usage=Usage(total_tokens=25),
+                model="test-model",
+                provider="test-provider",
+            )
+        )
+        reply, _ = await _run(CallLimiter(max_llm_calls=0), first, second)
+
+        usage = await reply.usage()
+        assert usage.total.total_tokens == (15 if ending == "error" else 40)
+        history = await reply.context.stream.history.get_events()
+        measured = [e for e in history if isinstance(e, UsageEvent)]
+        assert [e.usage.total_tokens for e in measured] == ([15] if ending == "error" else [15, 25])
+        assert all((e.model, e.provider) == ("test-model", "test-provider") for e in measured)
+
     async def test_an_exempt_final_tool_reports_the_exhausted_ending(self) -> None:
         run = Run()
         stream = MemoryStream()
@@ -365,22 +415,35 @@ class TestEndings:
         assert [e.ending for e in run.limits] == ["synthesis"]
 
 
+@dataclass
+class Clock:
+    now: float = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+class _Ticking(BaseMiddleware):
+    def __init__(self, event: BaseEvent, context: Context, clock: Clock) -> None:
+        super().__init__(event, context)
+        self._clock = clock
+
+    async def on_tool_execution(self, call_next: Any, event: ToolCallEvent, context: Context) -> Any:
+        result = await call_next(event, context)
+        self._clock.now += 60
+        return result
+
+
 @pytest.mark.asyncio()
 class TestClock:
     async def test_wall_clock_expiry_allows_exactly_one_synthesis_call(self) -> None:
-        now = [0.0]
-        counter = CallCounter(clock=lambda: now[0])
-
-        async def tick(call_next: Any, event: ToolCallEvent, context: Context) -> Any:
-            result = await call_next(event, context)
-            now[0] += 60
-            return result
-
+        clock = Clock()
+        counter = CallCounter(clock=clock)
         reply, run = await _run(
             CallLimiter(max_seconds=30, counter=counter),
             _call("search"),
             "the answer",
-            middleware=[Middleware(_Ticking, tick=tick)],
+            middleware=[Middleware(_Ticking, clock=clock)],
         )
 
         assert run.ran == {"search": 1}
@@ -390,18 +453,12 @@ class TestClock:
         assert counter.llm_calls == 2
 
     async def test_wall_clock_expiry_under_stop_calls_the_model_no_further(self) -> None:
-        now = [0.0]
-        counter = CallCounter(clock=lambda: now[0])
-
-        async def tick(call_next: Any, event: ToolCallEvent, context: Context) -> Any:
-            result = await call_next(event, context)
-            now[0] += 60
-            return result
-
+        clock = Clock()
+        counter = CallCounter(clock=clock)
         reply, run = await _run(
             CallLimiter(max_seconds=30, on_exhausted="stop", counter=counter),
             _call("search"),
-            middleware=[Middleware(_Ticking, tick=tick)],
+            middleware=[Middleware(_Ticking, clock=clock)],
         )
 
         assert len(run.last_messages()) == 1
@@ -409,23 +466,12 @@ class TestClock:
         assert counter.llm_denied == 1
 
     async def test_a_shared_counter_clock_runs_from_its_start(self) -> None:
-        now = [100.0]
-        counter = CallCounter(clock=lambda: now[0], started=40.0)
-
+        counter = CallCounter(clock=Clock(100.0), started=40.0)
         reply, run = await _run(CallLimiter(max_seconds=30, on_exhausted="stop", counter=counter))
 
         assert run.last_messages() == []
         assert [e.reason for e in run.limits] == ["max_seconds"]
         assert reply.response.finish_reason == "call_limit"
-
-
-class _Ticking(BaseMiddleware):
-    def __init__(self, event: BaseEvent, context: Context, tick: Any) -> None:
-        super().__init__(event, context)
-        self._tick = tick
-
-    async def on_tool_execution(self, call_next: Any, event: ToolCallEvent, context: Context) -> Any:
-        return await self._tick(call_next, event, context)
 
 
 @pytest.mark.asyncio()
@@ -484,6 +530,49 @@ class TestRemainingNote:
 
 @pytest.mark.asyncio()
 class TestSharing:
+    async def test_conditional_limiter_is_rejected_in_either_position(self) -> None:
+        conditional = ConditionalMiddleware(CallLimiter(max_tool_calls=0), ModelRequest)
+        for middleware in ([conditional, CallLimiter()], [CallLimiter(), conditional]):
+            agent = Agent("limited", config=TestConfig("done"), middleware=middleware)
+            with pytest.raises(ValueError, match="requires the full turn"):
+                await agent.ask("Investigate.")
+
+    async def test_retries_are_charged_and_budget_notes_do_not_prevent_retry(self) -> None:
+        counter = CallCounter()
+        reply, run = await _run(
+            CallLimiter(max_llm_calls=2, show_remaining=True, counter=counter),
+            TimeoutError("first"),
+            TimeoutError("second"),
+            "final answer",
+            middleware=[RetryMiddleware()],
+        )
+
+        assert counter.llm_calls == 3
+        assert len(run.last_messages()) == 3
+        assert reply.body == "final answer"
+        assert [e.reason for e in run.limits] == ["max_llm_calls"]
+
+    async def test_retries_respect_stop_without_an_extra_provider_call(self) -> None:
+        counter = CallCounter()
+        reply, run = await _run(
+            CallLimiter(max_llm_calls=1, show_remaining=True, on_exhausted="stop", counter=counter),
+            TimeoutError("first"),
+            "never reached",
+            middleware=[RetryMiddleware()],
+        )
+
+        assert counter.llm_calls == len(run.last_messages()) == 1
+        assert reply.response.finish_reason == "call_limit"
+
+    async def test_retry_inside_limiter_is_rejected(self) -> None:
+        agent = Agent(
+            "limited",
+            config=TestConfig("done"),
+            middleware=[CallLimiter(), RetryMiddleware()],
+        )
+        with pytest.raises(ValueError, match="RetryMiddleware must wrap"):
+            await agent.ask("Investigate.")
+
     async def test_stacked_policies_reserve_a_shared_counter_only_once(self) -> None:
         counter = CallCounter()
         _, run = await _run(
@@ -576,36 +665,24 @@ class TestSharing:
 
         # Each ask replays the script from the start.
         config = TestConfig(_call("search"), "done")
-        ran: list[str] = []
-
-        def search() -> str:
-            """Search."""
-            ran.append("search")
-            return "found"
-
-        agent = Agent("limited", config=config, tools=[search], middleware=[limiter])
+        run = Run()
+        agent = Agent("limited", config=config, tools=[run.search], middleware=[limiter])
         await agent.ask("one", dependencies={"calls": counter})
         reply = await agent.ask("two", dependencies={"calls": counter})
 
-        assert ran == ["search"]
+        assert run.ran == {"search": 1}
         assert counter.tool_calls == 1
-        assert counter.denied == 1
+        assert counter.denied == 0
         assert reply.response.finish_reason == "call_limit"
 
     async def test_a_default_counter_resets_every_turn(self) -> None:
         config = TestConfig(_call("search"), "done")
-        ran: list[str] = []
-
-        def search() -> str:
-            """Search."""
-            ran.append("search")
-            return "found"
-
-        agent = Agent("limited", config=config, tools=[search], middleware=[CallLimiter(max_tool_calls=1)])
+        run = Run()
+        agent = Agent("limited", config=config, tools=[run.search], middleware=[CallLimiter(max_tool_calls=1)])
         await agent.ask("one")
         await agent.ask("two")
 
-        assert ran == ["search", "search"]
+        assert run.ran == {"search": 2}
 
     async def test_an_inner_limiter_lets_the_outer_final_call_through(self) -> None:
         """A run-wide limiter outside a per-agent one: the outer's final call is not refused twice."""
@@ -618,12 +695,12 @@ class TestSharing:
             middleware=[CallLimiter(max_tool_calls=1, counter=outer)],
         )
 
-        # The outer limiter refuses the second tool and synthesises. The inner one is
-        # at its own cap by then, and passes that final call through uncounted.
+        # The outer budget is spent after search. Its two final calls bypass
+        # the inner policy, which counts only the initial model call.
         assert run.ran == {"search": 1}
         assert reply.body == "the answer"
-        assert SYNTHESIS in _text(run.last_messages()[-1])
-        assert (outer.llm_calls, inner.llm_calls, inner.llm_denied) == (3, 2, 0)
+        assert SYNTHESIS in _text(run.last_messages()[1])
+        assert (outer.llm_calls, inner.llm_calls, inner.llm_denied) == (3, 1, 0)
         assert [e.reason for e in run.limits] == ["max_tool_calls"]
 
 
@@ -680,11 +757,10 @@ class TestConfiguration:
                 exhausted_result=lambda call: {"stop": call.name},
             ),
             _call("search"),
-            _call("shell"),
-            _call("shell"),
+            [_call("shell"), _call("shell")],
             "done",
         )
 
         results = [r.result.parts[0] for r in run.results]
         assert isinstance(results[0], TextInput) and results[0].content == "no more searching"
-        assert isinstance(results[2], DataInput) and results[2].data == {"stop": "shell"}
+        assert any(isinstance(result, DataInput) and result.data == {"stop": "shell"} for result in results[1:])

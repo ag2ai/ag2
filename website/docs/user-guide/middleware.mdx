@@ -428,7 +428,7 @@ A capped tool call is refused rather than run. The model gets a structured resul
 There are two kinds of limit:
 
 - **One tool's cap** (`max_tool_calls_per_tool`) refuses only that tool. The model is told that its other tools remain available, and the turn goes on.
-- **A total** (`max_tool_calls`, `max_llm_calls` or `max_seconds`) exhausts the turn. A call that would break both a total and its tool's cap counts against the total.
+- **A total** (`max_tool_calls`, `max_llm_calls` or `max_seconds`) exhausts the turn as soon as it is used up, before the next model request. A call that would break both a total and its tool's cap counts against the total.
 
 Model calls are checked before they are sent. When the turn is exhausted, `on_exhausted` decides what happens:
 
@@ -480,9 +480,13 @@ Two `CallLimiter`s can be stacked, for example one for the whole run outside one
 
 The model needs another call to read a refusal. With `on_exhausted="synthesise"`, reserve up to two additional model calls per turn beyond `max_llm_calls` for the final answer. Use `on_exhausted="stop"` when no additional model calls are affordable.
 
+When combining with `RetryMiddleware`, put retries first: `middleware=[RetryMiddleware(), CallLimiter(max_llm_calls=8)]`. Each provider attempt, including a failed attempt, then counts against the budget. The reverse order raises `ValueError`. Usage from a discarded synthesis response is still included in `reply.usage()`.
+
+`CallLimiter` requires the full turn lifecycle and cannot be wrapped in `ConditionalMiddleware`; that combination raises `ValueError`. Use `max_tool_calls_per_tool` and `exempt` to configure which tools it limits.
+
 ## Conditional Middleware
 
-`ConditionalMiddleware` lets you gate any middleware so each hook only activates when a condition matches the hook's own event. When the condition is not met, that hook passes through to the next middleware in the chain.
+`ConditionalMiddleware` gates individual middleware hooks when a condition matches the hook's own event. When the condition is not met, that hook passes through to the next middleware in the chain. Middleware that requires the full turn lifecycle, such as `CallLimiter`, rejects this wrapper.
 
 This is useful when you have middleware that should only run for certain event types — for example, approval middleware that only fires for a specific tool — without writing condition checks inside every hook method.
 
