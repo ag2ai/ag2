@@ -118,6 +118,15 @@ class AggregationFailed(BaseEvent):
     error: str
 
 
+class ModelResponseDiscarded(BaseEvent):
+    """A middleware discarded the response from the preceding model attempt.
+
+    Durable replay control: provider-native turn state already emitted by that
+    attempt must not resurrect the discarded response on a later request.
+    This does not trigger the agent's response subscribers or complete a turn.
+    """
+
+
 class CallLimitReached(BaseEvent):
     """Emitted on the agent's stream when ``CallLimiter`` ends a turn on a used-up limit.
 

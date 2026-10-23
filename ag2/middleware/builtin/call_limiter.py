@@ -19,6 +19,7 @@ from ag2.events import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
+    ModelResponseDiscarded,
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
@@ -477,6 +478,7 @@ class _CallGroup:
                     response.message.metadata[CALL_LIMIT_KEY] = {"reason": limiter._exhausted, "ending": "synthesis"}
                 self.pending_notes.clear()
                 return response
+            await context.send(ModelResponseDiscarded())
             # The agent emits usage only for the response returned by this hook.
             # Discarding a tool-only answer must not discard its billable work.
             if response.usage:

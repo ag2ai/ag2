@@ -463,6 +463,8 @@ Tools in `exempt` are never counted or refused, including during the final call.
 
 `show_remaining=True` appends a note to each model call before exhaustion saying what is left. The note is stored in the conversation history and replayed on later calls, preserving the growing prompt prefix. Notes from failed requests are retained on retries, including with snapshot-based storage such as Redis. These notes add a small amount of conversation history. The final synthesis prompt remains temporary.
 
+Discarded model attempts emit a durable `ModelResponseDiscarded` event so provider-native replay state cannot restore their tool calls on later requests. For xAI, the native replay also follows the retained calls of a response that keeps text or exempt tools.
+
 Refusals are configurable. `tool_limit_result` and `exhausted_result` each take a string, a dict, or a callable that receives the refused `ToolCallEvent` and returns either.
 
 #### Telling a limit ending apart

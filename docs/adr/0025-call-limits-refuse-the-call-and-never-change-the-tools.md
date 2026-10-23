@@ -56,6 +56,11 @@ request, had run in production since October 2026.
   which parallel tool settles first.
 - Discarded synthesis responses emit their own `UsageEvent`; the agent reports
   usage for the returned response, preserving accounting without duplication.
+- A discarded response also emits a durable `ModelResponseDiscarded` marker.
+  Provider replay must discard its preceding native turn state too. For a kept
+  response, xAI's mapper retains only its accepted client calls in the native
+  turn, preserving server-side calls and opaque state. Otherwise a discarded
+  call would reappear in the next request without a tool result.
 - `RetryMiddleware` must wrap all limiters so every provider attempt is charged.
   The reverse order is rejected. Input budget notes do not disarm retries.
 - A limiter cannot be wrapped in `ConditionalMiddleware`: per-hook gates cannot
