@@ -82,15 +82,23 @@ class Recorder:
     async def __aenter__(self) -> "Recorder":
         self._loop = asyncio.get_running_loop()
         self._queue = asyncio.Queue(maxsize=_AUDIO_BUFFER_CHUNKS)
+        try:
+            self._input = sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=self.channels,
+                dtype="int16",
+                blocksize=self.block_size,
+                callback=self._callback,
+            )
+            self._input.start()
+        except BaseException:
+            if self._input is not None:
+                self._input.close()
+                self._input = None
+            self._queue = None
+            self._loop = None
+            raise
         self._drain_task = self._loop.create_task(self._drain_to_bus())
-        self._input = sd.InputStream(
-            samplerate=self.sample_rate,
-            channels=self.channels,
-            dtype="int16",
-            blocksize=self.block_size,
-            callback=self._callback,
-        )
-        self._input.start()
         return self
 
     async def __aexit__(
