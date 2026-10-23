@@ -31,8 +31,8 @@ import logging
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, TypeGuard
 
+from fast_depends.exceptions import ValidationError
 from fast_depends.pydantic.schema import get_schema
-from pydantic import ValidationError
 from pydantic_core import to_jsonable_python
 
 from ag2.context import ConversationContext, strip_reserved_variables

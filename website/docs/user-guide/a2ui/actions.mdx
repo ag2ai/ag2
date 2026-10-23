@@ -47,7 +47,7 @@ A2UI components support two button shapes the spec distinguishes by what the cli
 
 Client `#!python functionCall` buttons execute entirely in the client, so they are **not registered on the server**. The LLM learns which client functions it may target from the active **catalog** and from the client's advertised [capabilities](/docs/user-guide/a2ui/capabilities) — not from server-side code. You can also render a button whose `#!python event.name` isn't backed by a registered action: a click on it is rewritten generically into the next prompt so the LLM simply continues the conversation.
 
-In v1.0, validation uses a function's explicit `#!python catalogId`, or inherits the surface catalog from a `#!python createSurface` in the same response. For updates to a surface created in an earlier response, the server does not retain its catalog binding: an implicit call is accepted if a configured catalog supports it. Use an explicit function `#!python catalogId` when validation must select a particular catalog across responses. The renderer still resolves implicit calls against its surface's catalog.
+In v1.0, a component's or function's explicit `#!python catalogId` selects its definition. Otherwise, validation inherits the surface catalog from a `#!python createSurface` in the same response. For updates to a surface created in an earlier response, the server does not retain its catalog binding: implicit components and function calls are accepted if a configured catalog supports them. Use explicit `#!python catalogId` values when validation must select particular definitions across responses. The renderer still resolves implicit references against its surface's catalog.
 
 ## The Click Round-Trip
 

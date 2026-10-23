@@ -36,6 +36,7 @@ def _as_object(value: "JsonValue | None") -> JsonObject:
 # instead, at load time, leaving the vendored files byte-faithful.
 _XID_KEYS = r"^[\p{XID_Start}_][\p{XID_Continue}]*$"
 _IMPLICIT_FUNCTION_SCHEMA_URI = "urn:ag2:a2ui:implicit-renderer-function"
+_IMPLICIT_COMPONENT_SCHEMA_URI = "urn:ag2:a2ui:implicit-component"
 
 
 def _xid_property_names(schema: JsonValue) -> JsonValue:
@@ -56,9 +57,20 @@ def _instructions_of(catalog: JsonSchema) -> str:
     return instructions.strip() if isinstance(instructions, str) else ""
 
 
-def _function_schema_ref(catalog_id: str, key: str) -> str:
+def _catalog_definition_ref(catalog_id: str, collection: str, key: str) -> str:
     token = key.replace("~", "~0").replace("/", "~1")
-    return f"{catalog_id}#/functions/{token}"
+    return f"{catalog_id}#/{collection}/{token}"
+
+
+def _catalog_selection(catalog_id: str, *, explicit: bool) -> JsonSchema:
+    if explicit:
+        return {"properties": {"catalogId": {"const": catalog_id}}, "required": ["catalogId"]}
+    return {"not": {"required": ["catalogId"]}}
+
+
+def _catalog_component_variant(catalog: JsonSchema, *, explicit: bool) -> JsonSchema:
+    catalog_id = str(catalog["$id"])
+    return {"allOf": [{"$ref": f"{catalog_id}#/$defs/anyComponent"}, _catalog_selection(catalog_id, explicit=explicit)]}
 
 
 def _catalog_function_variant(catalog: JsonSchema, *, agent_initiated: bool, explicit: bool) -> JsonSchema:
@@ -69,20 +81,12 @@ def _catalog_function_variant(catalog: JsonSchema, *, agent_initiated: bool, exp
         if (agent_initiated and callers in ("agentOnly", "rendererOrAgent")) or (
             not agent_initiated and callers != "agentOnly"
         ):
-            allowed.append({"$ref": _function_schema_ref(catalog_id, key)})
-    selection: JsonSchema
-    if explicit:
-        selection = {
-            "properties": {"catalogId": {"const": catalog_id}},
-            "required": ["catalogId"],
-        }
-    else:
-        selection = {"not": {"required": ["catalogId"]}}
+            allowed.append({"$ref": _catalog_definition_ref(catalog_id, "functions", key)})
     function_schema: JsonSchema = {"$ref": f"{catalog_id}#/$defs/anyFunction"}
     return {
         "allOf": [
             function_schema,
-            selection,
+            _catalog_selection(catalog_id, explicit=explicit),
             # Report malformed function names/arguments before caller restrictions.
             {"if": function_schema, "then": {"anyOf": allowed} if allowed else {"not": {}}},
         ],
@@ -90,7 +94,7 @@ def _catalog_function_variant(catalog: JsonSchema, *, agent_initiated: bool, exp
 
 
 def _registry_for_surface_catalog(registry: Registry, catalog_id: str) -> Registry:
-    """Select the default function catalog without changing the shared registry."""
+    """Select the surface's component and function defaults in a request-local registry."""
     catalog = registry.get(catalog_id)
     schema = (
         _catalog_function_variant(catalog.contents, agent_initiated=False, explicit=False)
@@ -99,6 +103,13 @@ def _registry_for_surface_catalog(registry: Registry, catalog_id: str) -> Regist
     )
     return registry.with_resources([
         (_IMPLICIT_FUNCTION_SCHEMA_URI, Resource.from_contents(schema, default_specification=DRAFT202012)),
+        (
+            _IMPLICIT_COMPONENT_SCHEMA_URI,
+            Resource.from_contents(
+                _catalog_component_variant(catalog.contents, explicit=False) if catalog is not None else {"not": {}},
+                default_specification=DRAFT202012,
+            ),
+        ),
     ])
 
 
@@ -243,15 +254,16 @@ class A2UISchemaManager:
 
         self._loaded = True
         if self._protocol_version == "v1.0":
-            self._restrict_renderer_function_calls()
+            self._restrict_catalog_references()
 
-    def _restrict_renderer_function_calls(self) -> None:
-        """Keep agent-only functions out of renderer-evaluated bindings.
+    def _restrict_catalog_references(self) -> None:
+        """Select component and function definitions from their declared catalogs.
 
         Restrict schema references rather than walking component JSON: data models,
         extension metadata and custom literal properties can legitimately contain
         an object with an ``@call`` key. The top-level renderer RPC uses the
-        agent-callable definition; its nested dynamic arguments use FunctionCall.
+        agent-callable definition; renderer-evaluated bindings exclude agent-only
+        functions. Component overrides leave nested functions' surface defaults intact.
         """
         active = self._get_active_catalog()
         catalogs = {str(self._basic_catalog["$id"]): self._basic_catalog, str(active["$id"]): active}
@@ -273,6 +285,17 @@ class A2UISchemaManager:
             }
 
         message_definitions = _as_object(self._server_to_client.get("$defs"))
+        component = _as_object(message_definitions.get("Component"))
+        component["allOf"] = [
+            {"$ref": "common_types.json#/$defs/ComponentCommon"},
+            {
+                "oneOf": [
+                    *[_catalog_component_variant(catalog, explicit=True) for catalog in catalogs.values()],
+                    {"$ref": _IMPLICIT_COMPONENT_SCHEMA_URI},
+                ],
+            },
+            {"properties": {"component": {"not": {"const": "Surface"}}}},
+        ]
         message = _as_object(message_definitions.get("CallRendererFunctionMessage"))
         payload = _as_object(_as_object(message.get("properties")).get("callRendererFunction"))
         call = _as_object(_as_object(payload.get("properties")).get("callFunction"))
@@ -346,12 +369,12 @@ class A2UISchemaManager:
         defs.update(_as_object(self._custom_catalog.get("$defs")))
         if components:
             defs["anyComponent"] = {
-                "oneOf": [{"$ref": f"#/components/{name}"} for name in components],
+                "oneOf": [{"$ref": _catalog_definition_ref("", "components", name)} for name in components],
                 "discriminator": {"propertyName": "component"},
             }
         if functions:
             defs["anyFunction"] = {
-                "oneOf": [{"$ref": _function_schema_ref("", name)} for name in functions],
+                "oneOf": [{"$ref": _catalog_definition_ref("", "functions", name)} for name in functions],
             }
         merged["$defs"] = defs
 
@@ -432,6 +455,19 @@ class A2UISchemaManager:
                             _catalog_function_variant(catalog, agent_initiated=False, explicit=False)
                             for catalog in catalogs.values()
                         ]
+                    },
+                    default_specification=DRAFT202012,
+                ),
+            ))
+            resources.append((
+                _IMPLICIT_COMPONENT_SCHEMA_URI,
+                Resource.from_contents(
+                    # Prefer the active catalog's diagnostics when both branches fail.
+                    {
+                        "anyOf": [
+                            _catalog_component_variant(catalog, explicit=False)
+                            for catalog in reversed(catalogs.values())
+                        ],
                     },
                     default_specification=DRAFT202012,
                 ),

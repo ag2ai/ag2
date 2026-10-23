@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, overload
 
 from fast_depends.core import CallModel
+from fast_depends.dependencies import Provider
 from fast_depends.pydantic.schema import get_schema
 
 from ag2.tools.final import FunctionParameters
@@ -266,7 +267,16 @@ def a2ui_action(
     def make(f: Callable[..., Any]) -> A2UIAction:
         # build_model derives the parameter schema (and validates the signature),
         # which drives example_context derivation.
-        call_model = build_model(f, sync_to_thread=sync_to_thread, serialize_result=False)
+        # FastDepends distinguishes serializer failures from ValidationError raised
+        # inside a handler or dependency, which is an execution failure instead.
+        # Keep its dependency models separate from tools using another serializer.
+        call_model = build_model(
+            f,
+            sync_to_thread=sync_to_thread,
+            serialize_result=False,
+            use_fastdepends_errors=True,
+            provider=Provider(),
+        )
         action_name = name or f.__name__
         action_description = description or f.__doc__ or ""
         param_schema = get_schema(call_model, exclude=(CONTEXT_OPTION_NAME,))

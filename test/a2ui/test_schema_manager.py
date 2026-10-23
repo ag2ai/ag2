@@ -5,6 +5,7 @@
 import pytest
 from jsonschema import Draft202012Validator
 
+from ag2.a2ui._types import A2UIVersion
 from ag2.a2ui.actions import A2UIEventAction
 from ag2.a2ui.parser import A2UIResponseParser
 from ag2.a2ui.schema_manager import A2UISchemaManager
@@ -206,6 +207,28 @@ class TestMergedCatalog:
 
         assert validator.is_valid({"@call": "lookup"})
         assert not validator.is_valid({"@call": "lookup/~definition"})
+
+    @pytest.mark.parametrize("version", ["v0.9", "v0.9.1", "v1.0"])
+    def test_component_definition_references_escape_json_pointer_tokens(self, version: A2UIVersion) -> None:
+        manager = A2UISchemaManager(
+            protocol_version=version,
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "components": {
+                    "widget/~definition": {
+                        "type": "object",
+                        "properties": {"component": {"const": "Widget"}},
+                        "required": ["component"],
+                    },
+                },
+            },
+        )
+        validator = Draft202012Validator(
+            {"$ref": f"{manager.catalog_id}#/$defs/anyComponent"}, registry=manager.build_schema_registry()
+        )
+
+        assert validator.is_valid({"component": "Widget"})
+        assert not validator.is_valid({"component": "widget/~definition"})
 
 
 class TestPromptSection:

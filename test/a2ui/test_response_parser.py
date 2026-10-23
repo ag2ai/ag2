@@ -589,6 +589,158 @@ class TestSurfaceCatalogValidation:
 
         assert result.is_valid, result.errors
 
+    @pytest.mark.parametrize("surface_catalog", ["basic", "custom"])
+    def test_component_catalog_does_not_override_its_functions_surface_default(
+        self, parser: A2UIResponseParser, surface_catalog: str
+    ) -> None:
+        catalogs = {
+            "basic": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "custom": "https://example.com/catalog.json",
+        }
+        result = parser.validate([
+            {
+                "version": "v1.0",
+                "createSurface": {
+                    "surfaceId": "s",
+                    "catalogId": catalogs[surface_catalog],
+                    "components": [
+                        {
+                            "id": "root",
+                            "component": "Button",
+                            "catalogId": catalogs["custom" if surface_catalog == "basic" else "basic"],
+                            "child": "label",
+                            "action": {"functionCall": {"@call": "openUrl", "args": {"url": "https://example.com"}}},
+                        },
+                        {"id": "label", "component": "Text", "text": "Open"},
+                    ],
+                },
+            },
+        ])
+
+        assert result.is_valid is (surface_catalog == "basic"), result.errors
+
+
+def test_component_can_select_basic_catalog_over_custom_surface() -> None:
+    manager = A2UISchemaManager(
+        protocol_version="v1.0",
+        custom_catalog={
+            "$id": "https://example.com/catalog.json",
+            "components": {
+                "Text": {
+                    "type": "object",
+                    "properties": {"component": {"const": "Text"}, "customText": {"type": "string"}},
+                    "required": ["component", "customText"],
+                },
+            },
+        },
+    )
+    parser = A2UIResponseParser(
+        version_string=manager.version_string,
+        server_to_client_schema=manager.server_to_client_schema,
+        schema_registry=manager.build_schema_registry(),
+    )
+
+    result = parser.validate([
+        {
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "s",
+                "catalogId": manager.catalog_id,
+                "components": [
+                    {
+                        "id": "root",
+                        "component": "Text",
+                        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                        "text": "Hello",
+                    },
+                ],
+            },
+        },
+    ])
+
+    assert result.is_valid, result.errors
+
+
+class TestComponentCatalogValidation:
+    @pytest.fixture()
+    def parser(self) -> A2UIResponseParser:
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "components": {
+                    "Text": {
+                        "type": "object",
+                        "properties": {"component": {"const": "Text"}, "customText": {"type": "string"}},
+                        "required": ["component", "customText"],
+                    },
+                },
+            },
+        )
+        return A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+        )
+
+    @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
+    @pytest.mark.parametrize("surface_catalog", ["basic", "custom"])
+    @pytest.mark.parametrize("component_catalog", [None, "basic", "custom", "unknown"])
+    @pytest.mark.parametrize("text_field", ["text", "customText"])
+    def test_components_use_the_selected_catalog_definition(
+        self,
+        parser: A2UIResponseParser,
+        message_key: str,
+        surface_catalog: str,
+        component_catalog: str | None,
+        text_field: str,
+    ) -> None:
+        catalogs = {
+            "basic": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "custom": "https://example.com/catalog.json",
+            "unknown": "https://unknown.example/catalog.json",
+        }
+        component: JsonObject = {"id": "root", "component": "Text", text_field: "Hello"}
+        if component_catalog is not None:
+            component["catalogId"] = catalogs[component_catalog]
+        create: JsonObject = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
+        if message_key == "createSurface":
+            create["components"] = [component]
+            operations = [{"version": "v1.0", "createSurface": create}]
+        else:
+            operations = [
+                {"version": "v1.0", "createSurface": create},
+                {"version": "v1.0", "updateComponents": {"surfaceId": "s", "components": [component]}},
+            ]
+
+        result = parser.validate(operations)
+
+        selected = component_catalog or surface_catalog
+        expected = (selected == "basic" and text_field == "text") or (
+            selected == "custom" and text_field == "customText"
+        )
+        assert result.is_valid is expected, result.errors
+
+    def test_component_catalog_defaults_are_isolated_between_responses(self, parser: A2UIResponseParser) -> None:
+        assert parser.validate([
+            {
+                "version": "v1.0",
+                "createSurface": {"surfaceId": "s", "catalogId": "https://example.com/catalog.json"},
+            },
+        ]).is_valid
+
+        result = parser.validate([
+            {
+                "version": "v1.0",
+                "updateComponents": {
+                    "surfaceId": "s",
+                    "components": [{"id": "root", "component": "Text", "text": "Hello"}],
+                },
+            },
+        ])
+
+        assert result.is_valid, result.errors
+
 
 class TestCatalogFunctionDefinitions:
     @pytest.fixture()
