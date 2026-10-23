@@ -195,6 +195,37 @@ class A2UISchemaManager:
             self._catalog_id = str(_VERSION_CONFIG[self._protocol_version]["default_catalog_id"])
 
         self._loaded = True
+        if self._protocol_version == "v1.0":
+            self._restrict_renderer_function_calls()
+
+    def _restrict_renderer_function_calls(self) -> None:
+        """Keep agent-only functions out of renderer-evaluated bindings.
+
+        Restrict schema references rather than walking component JSON: data models,
+        extension metadata and custom literal properties can legitimately contain
+        an object with an ``@call`` key. Only the top-level renderer RPC uses the
+        unrestricted definition; its nested dynamic arguments still use FunctionCall.
+        """
+        agent_only: list[JsonValue] = [
+            name for name, callers in self.get_function_callers().items() if callers == "agentOnly"
+        ]
+        if not agent_only:
+            return
+        definitions = _as_object(self._common_types.get("$defs"))
+        function_call = _as_object(definitions.get("FunctionCall"))
+        definitions["AgentFunctionCall"] = function_call
+        definitions["FunctionCall"] = {
+            "allOf": [function_call, {"properties": {"@call": {"not": {"enum": agent_only}}}}],
+        }
+
+        message_definitions = _as_object(self._server_to_client.get("$defs"))
+        message = _as_object(message_definitions.get("CallRendererFunctionMessage"))
+        payload = _as_object(_as_object(message.get("properties")).get("callRendererFunction"))
+        call = _as_object(_as_object(payload.get("properties")).get("callFunction"))
+        call["allOf"] = [
+            {"$ref": "common_types.json#/$defs/AgentFunctionCall"},
+            {"required": ["catalogId"]},
+        ]
 
     @property
     def protocol_version(self) -> A2UIVersion:

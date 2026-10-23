@@ -48,17 +48,21 @@ class A2UIIncomingFunctionCall:
     agent must answer with an ``agentFunctionResponse`` carrying the same
     ``function_call_id`` — so, unlike the other envelopes, a parsed call always has
     a usable id and function name (a malformed one parses as unknown instead).
+    ``args`` preserves the wire value so a non-object can be rejected without
+    invoking the handler; only an omitted ``args`` defaults to an empty object.
     """
 
     function_call_id: str
     surface_id: str
     call: str
-    args: dict[str, JsonValue] = field(default_factory=dict)
+    args: JsonValue = field(default_factory=dict)
     catalog_id: str | None = None
 
     @property
     def arguments(self) -> dict[str, JsonValue]:
         """The keyword arguments a server action handler is run with."""
+        if not isinstance(self.args, dict):
+            raise ValueError("Function arguments must be a JSON object")
         return self.args
 
 
@@ -182,13 +186,14 @@ def _parse_function_call(obj: dict[str, JsonValue]) -> A2UIIncomingParseResult:
     surface_id = obj.get("surfaceId")
     if not isinstance(surface_id, str):
         return A2UIIncomingUnknownResult(parse_error="'callAgentFunction' has no string 'surfaceId'")
-    raw_args = call_obj.get("args")
+    raw_args = call_obj.get("args", {})
     return A2UIIncomingFunctionCallResult(
         function_call=A2UIIncomingFunctionCall(
             function_call_id=function_call_id,
             surface_id=surface_id,
             call=name,
-            args=dict(raw_args) if isinstance(raw_args, dict) else {},
+            # Preserve malformed input so it cannot silently run a handler with defaults.
+            args=dict(raw_args) if isinstance(raw_args, dict) else raw_args,
             catalog_id=_optional_str(call_obj.get("catalogId")),
         ),
     )

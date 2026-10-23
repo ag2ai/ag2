@@ -82,6 +82,14 @@ def _function_response(
     return message  # type: ignore[return-value]
 
 
+def _invalid_function_arguments(call: A2UIIncomingFunctionCall, version: A2UIVersion) -> ServerToClientMessage:
+    return _function_response(
+        call.function_call_id,
+        version,
+        error={"code": "INVALID_FUNCTION_CALL", "message": f"Invalid arguments for function {call.call!r}."},
+    )
+
+
 def build_server_action_context(
     agent: "Agent",
     *,
@@ -190,17 +198,14 @@ async def run_agent_function(
             )
         ]
 
+    if not isinstance(call.args, dict):
+        return [_invalid_function_arguments(call, version)]
+
     try:
         result = await _run_handler(action, call, context)
     except ValidationError as e:
         logger.warning("A2UI function %r called with invalid arguments: %s", call.call, e)
-        return [
-            _function_response(
-                call.function_call_id,
-                version,
-                error={"code": "INVALID_FUNCTION_CALL", "message": f"Invalid arguments for function {call.call!r}."},
-            )
-        ]
+        return [_invalid_function_arguments(call, version)]
     except Exception:  # noqa: BLE001 - a handler failure must not tear down the turn
         logger.exception("A2UI function %r failed", call.call)
         return [
