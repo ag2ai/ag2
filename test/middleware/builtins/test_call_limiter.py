@@ -4,7 +4,7 @@
 
 import asyncio
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -63,6 +63,9 @@ class Run:
     async def record_limit(self, event: CallLimitReached) -> None:
         self.limits.append(event)
 
+    async def record_result(self, event: ToolResultEvent) -> None:
+        self.results.append(event)
+
     def search(self) -> str:
         """Search."""
         self.ran["search"] += 1
@@ -98,6 +101,19 @@ class SnapshotStorage(MemoryStorage):
         return list(await super().get_history(stream_id))
 
 
+class IteratorStorage(MemoryStorage):
+    async def get_history(self, stream_id: StreamId) -> Iterable[BaseEvent]:
+        return iter(list(await super().get_history(stream_id)))
+
+
+def _counter_from_context(context: Context) -> CallCounter:
+    return context.dependencies["calls"]
+
+
+def _stop_result(call: ToolCallEvent) -> dict[str, Any]:
+    return {"stop": call.name}
+
+
 def _error(result: ToolResultEvent) -> dict[str, Any]:
     part = result.result.parts[0]
     return part.data.get("error", {}) if isinstance(part, DataInput) else {}
@@ -122,8 +138,8 @@ async def _run(
     config = TrackingConfig(TestConfig(*script, raise_tool_errors=False))
     run.config = config
     stream = MemoryStream()
-    stream.where(CallLimitReached).subscribe(lambda e: run.limits.append(e))
-    stream.where(ToolResultEvent).subscribe(lambda e: run.results.append(e))
+    stream.where(CallLimitReached).subscribe(run.record_limit)
+    stream.where(ToolResultEvent).subscribe(run.record_result)
 
     agent = Agent(
         "limited", config=config, tools=[run.search, run.shell, run.record], middleware=[*middleware, limiter]
@@ -270,6 +286,25 @@ class TestTotals:
 
 @pytest.mark.asyncio()
 class TestEndings:
+    @pytest.mark.parametrize("on_exhausted", ["stop", "synthesise"])
+    async def test_last_text_ending_accepts_iterator_storage(self, on_exhausted: str) -> None:
+        run = Run()
+        agent = Agent(
+            "limited",
+            config=TestConfig(
+                ModelResponse(ModelMessage("Let me search."), tool_calls=ToolCallsEvent([_call("search")])),
+                TimeoutError("final call failed"),
+            ),
+            tools=[run.search],
+            middleware=[CallLimiter(max_llm_calls=1, on_exhausted=on_exhausted, ending="last_text")],
+        )
+
+        reply = await agent.ask("Investigate.", stream=MemoryStream(storage=IteratorStorage()))
+
+        assert reply.body == "Let me search."
+        assert reply.response.finish_reason == "call_limit"
+        assert reply.response.metadata[CALL_LIMIT_KEY] == {"reason": "max_llm_calls", "ending": "last_text"}
+
     @pytest.mark.parametrize("ending", ["text", "tools", "error"])
     async def test_discarded_synthesis_usage_is_reported_once(self, ending: str) -> None:
         first = ModelResponse(
@@ -689,7 +724,7 @@ class TestSharing:
 
     async def test_a_counter_in_dependencies_is_shared_across_turns(self) -> None:
         counter = CallCounter()
-        limiter = CallLimiter(max_tool_calls=1, on_exhausted="stop", counter=lambda ctx: ctx.dependencies["calls"])
+        limiter = CallLimiter(max_tool_calls=1, on_exhausted="stop", counter=_counter_from_context)
 
         # Each ask replays the script from the start.
         config = TestConfig(_call("search"), "done")
@@ -782,7 +817,7 @@ class TestConfiguration:
                 max_tool_calls=1,
                 max_tool_calls_per_tool={"search": 0},
                 tool_limit_result="no more searching",
-                exhausted_result=lambda call: {"stop": call.name},
+                exhausted_result=_stop_result,
             ),
             _call("search"),
             [_call("shell"), _call("shell")],

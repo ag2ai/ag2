@@ -415,7 +415,7 @@ class _CallGroup:
             index, limiter = exhausted
             if limiter._limits.on_exhausted == "stop" or not limiter._final_calls:
                 limiter._counter.llm_denied += 1
-                return self._end(limiter, events)
+                return self._end(limiter, prompt)
 
             limiter._final_calls -= 1
             for counter in _counters(self.limiters[: index + 1]):
@@ -426,7 +426,7 @@ class _CallGroup:
             try:
                 response = await call_next(final_prompt, context)
             except Exception as error:
-                return self._end(limiter, events, error)
+                return self._end(limiter, prompt, error)
 
             calls = response.tool_calls.calls
             kept = [
