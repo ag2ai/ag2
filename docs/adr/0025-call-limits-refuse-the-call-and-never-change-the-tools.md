@@ -57,6 +57,7 @@ request, had run in production since October 2026.
 - Discarded synthesis responses emit their own `UsageEvent`; the agent reports
   usage for the returned response, preserving accounting without duplication.
 - A discarded response also emits a durable `ModelResponseDiscarded` marker.
+  It is non-conversational control, excluded from retention budgets and summaries.
   Provider replay must discard its preceding native turn state too. For a kept
   response, xAI's mapper retains only its accepted client calls in the native
   turn, preserving server-side calls and opaque state. Otherwise a discarded

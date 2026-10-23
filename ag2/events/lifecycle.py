@@ -126,6 +126,8 @@ class ModelResponseDiscarded(BaseEvent):
     This does not trigger the agent's response subscribers or complete a turn.
     """
 
+    __conversational__ = False
+
 
 class CallLimitReached(BaseEvent):
     """Emitted on the agent's stream when ``CallLimiter`` ends a turn on a used-up limit.
