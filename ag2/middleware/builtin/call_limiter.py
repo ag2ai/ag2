@@ -22,6 +22,7 @@ from ag2.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolResult,
     ToolResultEvent,
     UsageEvent,
 )
@@ -355,6 +356,7 @@ class _CallGroup:
         self.collecting = True
         self.ending: CallLimitReached | None = None
         self.pending_notes: list[_RemainingNote] = []
+        self.final_results: list[ToolResult] = []
 
     async def execute_tool(self, call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
         participating = [limiter for limiter in self.limiters if event.name not in limiter._limits.exempt]
@@ -375,6 +377,7 @@ class _CallGroup:
             for counter in counters:
                 counter.denied += 1
                 counter.denied_per_tool[event.name] = counter.denied_per_tool.get(event.name, 0) + 1
+            self._complete_final_tools()
             return ToolResultEvent.from_call(event, refusal)
 
         # Reserve only once every limiter has accepted the call. Reserving before
@@ -383,9 +386,24 @@ class _CallGroup:
             counter.tool_calls += 1
             counter.per_tool[event.name] = counter.per_tool.get(event.name, 0) + 1
         result = await call_next(event, context)
-        if isinstance(result, ToolResultEvent) and result.result.final and self.ending is not None:
-            result.result.metadata[CALL_LIMIT_KEY] = {"reason": self.ending.reason, "ending": self.ending.ending}
+        if isinstance(result, ToolResultEvent) and result.result.final:
+            self.final_results.append(result.result)
+            self._complete_final_tools()
         return result
+
+    def _complete_final_tools(self) -> None:
+        if not self.final_results:
+            return
+        if self.ending is None:
+            for limiter in self.limiters:
+                if limiter._exhausted is not None:
+                    self.ending = CallLimitReached(reason=limiter._exhausted, ending="final_tool")
+                    break
+        if self.ending is not None:
+            # A final tool may settle before a parallel sibling is refused.
+            # Update its result before the executor publishes the final reply.
+            for result in self.final_results:
+                result.metadata[CALL_LIMIT_KEY] = {"reason": self.ending.reason, "ending": self.ending.ending}
 
     async def call_model(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
         # Storage may hand us its live list; snapshot it before publishing notes.
@@ -518,7 +536,7 @@ def _error(message: str, recovery: list[str]) -> dict[str, Any]:
 def _last_text(events: Sequence[BaseEvent]) -> str | None:
     """The model's last non-empty text in this turn, back to the request that began it."""
     for event in reversed(events):
-        if isinstance(event, ModelRequest) and not isinstance(event, _RemainingNote):
+        if isinstance(event, ModelRequest) and not isinstance(event, DrainedModelRequest):
             return None
         if isinstance(event, ModelResponse) and event.message and event.message.content.strip():
             return event.message.content

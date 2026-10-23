@@ -49,6 +49,9 @@ request, had run in production since October 2026.
   missing from the next request, preventing reuse of that conversation cache.
 - Exhaustion is announced when the turn actually finishes, including when an
   exempt tool returns a final result without another model call.
+  A final tool completing a batch with a total refusal has ending `"final_tool"`;
+  metadata is attached before the final response is published, regardless of
+  which parallel tool settles first.
 - Discarded synthesis responses emit their own `UsageEvent`; the agent reports
   usage for the returned response, preserving accounting without duplication.
 - `RetryMiddleware` must wrap all limiters so every provider attempt is charged.

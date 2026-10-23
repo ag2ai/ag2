@@ -123,8 +123,9 @@ class CallLimitReached(BaseEvent):
 
     ``ending`` says how the reply was written: ``"synthesis"`` when the model
     answered the limiter's final call, ``"empty"`` or ``"last_text"`` when no
-    model call was left to write it. A final call that raised is reported here
-    by ``error_type`` and ``error``, and the turn still ends.
+    model call was left to write it, or ``"final_tool"`` when a final tool
+    completed a batch containing a total-limit refusal. A final call that raised
+    is reported here by ``error_type`` and ``error``, and the turn still ends.
     """
 
     __transient__ = True

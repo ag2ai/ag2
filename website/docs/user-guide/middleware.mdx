@@ -472,6 +472,7 @@ A reply that no model call wrote has `finish_reason="call_limit"`. Whenever the 
 - `"synthesis"`: the model answered the final call.
 - `"empty"` (the default): no model call was left, and the reply has no message.
 - `"last_text"`: no model call was left, and the reply is the model's last text in this turn. Opt in with `ending="last_text"`. That text is often a half-finished line like "Let me search…", so check it before showing it as an answer.
+- `"final_tool"`: a total-limit refusal occurred in a batch that also finished through a final tool result, without a synthesis call.
 
 A reply with a message also carries the reason and the ending in `metadata["ag2:call_limit"]`. If the final call raises, the turn still ends, and the event carries `error_type` and `error`.
 

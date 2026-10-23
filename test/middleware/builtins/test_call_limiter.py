@@ -51,6 +51,7 @@ class Run:
     ran: Counter[str] = field(default_factory=Counter)
     results: list[ToolResultEvent] = field(default_factory=list)
     limits: list[CallLimitReached] = field(default_factory=list)
+    response_metadata: list[dict[str, Any]] = field(default_factory=list)
     config: TrackingConfig | None = None
 
     def last_messages(self) -> list[BaseEvent]:
@@ -65,6 +66,9 @@ class Run:
 
     async def record_result(self, event: ToolResultEvent) -> None:
         self.results.append(event)
+
+    async def record_response(self, event: ModelResponse) -> None:
+        self.response_metadata.append(dict(event.metadata))
 
     def search(self) -> str:
         """Search."""
@@ -84,6 +88,16 @@ class Run:
 
 def finish() -> ToolResult:
     return ToolResult("finished", final=True, metadata={"recorded": True})
+
+
+async def immediate_finish() -> ToolResult:
+    return ToolResult("finished", final=True, metadata={"recorded": True})
+
+
+def search_and_enqueue(context: Context) -> str:
+    """Search and add details to the ongoing turn."""
+    context.enqueue("More details for the ongoing search.")
+    return "found"
 
 
 class PromptRecorder(BaseMiddleware):
@@ -286,6 +300,51 @@ class TestTotals:
 
 @pytest.mark.asyncio()
 class TestEndings:
+    async def test_enqueued_input_does_not_hide_the_last_text_in_the_turn(self) -> None:
+        agent = Agent(
+            "limited",
+            config=TestConfig(
+                ModelResponse(
+                    ModelMessage("Let me search."),
+                    tool_calls=ToolCallsEvent([_call("search_and_enqueue")]),
+                )
+            ),
+            tools=[search_and_enqueue],
+            middleware=[CallLimiter(max_llm_calls=1, on_exhausted="stop", ending="last_text")],
+        )
+
+        reply = await agent.ask("Investigate.")
+
+        assert reply.body == "Let me search."
+        assert reply.response.metadata[CALL_LIMIT_KEY] == {"reason": "max_llm_calls", "ending": "last_text"}
+
+    @pytest.mark.parametrize("finish_first", [False, True])
+    async def test_total_refusal_and_final_tool_in_one_batch_announce_exhaustion(self, finish_first: bool) -> None:
+        run = Run()
+        counter = CallCounter()
+        calls = [_call("search"), _call("search")]
+        calls.insert(0 if finish_first else len(calls), _call("immediate_finish"))
+        stream = MemoryStream()
+        stream.where(CallLimitReached).subscribe(run.record_limit)
+        stream.where(ModelResponse).subscribe(run.record_response)
+        agent = Agent(
+            "limited",
+            config=TestConfig(calls),
+            tools=[run.search, immediate_finish],
+            middleware=[CallLimiter(max_tool_calls=1, exempt={"immediate_finish"}, counter=counter)],
+        )
+
+        reply = await agent.ask("Finish.", stream=stream)
+
+        assert reply.body == "finished"
+        assert counter.denied == 1
+        assert reply.response.metadata == {
+            "recorded": True,
+            CALL_LIMIT_KEY: {"reason": "max_tool_calls", "ending": "final_tool"},
+        }
+        assert run.response_metadata[-1] == reply.response.metadata
+        assert [(event.reason, event.ending) for event in run.limits] == [("max_tool_calls", "final_tool")]
+
     @pytest.mark.parametrize("on_exhausted", ["stop", "synthesise"])
     async def test_last_text_ending_accepts_iterator_storage(self, on_exhausted: str) -> None:
         run = Run()
