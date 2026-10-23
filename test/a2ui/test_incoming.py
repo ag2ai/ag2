@@ -106,8 +106,7 @@ class TestParseIncomingFunctionCall:
             "callAgentFunction": {"surfaceId": "s", "functionCallId": "fc", "callFunction": {"@call": "ping"}},
         })
         assert isinstance(result, A2UIIncomingFunctionCallResult)
-        assert result.function_call.args == {}
-        assert result.function_call.catalog_id is None
+        assert result.function_call == A2UIIncomingFunctionCall(function_call_id="fc", surface_id="s", call="ping")
 
     def test_missing_function_call_id_is_unknown(self) -> None:
         result = parse_incoming_message({"callAgentFunction": {"callFunction": {"@call": "ping"}}})
