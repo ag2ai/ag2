@@ -74,6 +74,10 @@ from .mappers import (
 )
 
 
+def _message_usage(message: Message) -> Usage:
+    return normalize_usage(message.usage.model_dump() if message.usage else {})
+
+
 class CreateOptions(TypedDict, total=False):
     # `temperature`, `top_p` and `top_k` are absent on purpose: `anthropic` 1.x
     # removed them from the Messages API signature, so passing one here is a
@@ -232,7 +236,7 @@ class AnthropicClient(LLMClient):
             for _ in range(max_continuations):
                 if response.stop_reason != "pause_turn":
                     break
-                continuation_usage += normalize_usage(response.usage.model_dump() if response.usage else {})
+                continuation_usage += _message_usage(response)
                 await self._emit_builtin_tool_events(response.content, context)
                 anthropic_messages.append({"role": "assistant", "content": response.content})
                 create_kwargs["messages"] = anthropic_messages
@@ -338,12 +342,10 @@ class AnthropicClient(LLMClient):
                     type(block).__name__,
                 )
 
-        usage = normalize_usage(response.usage.model_dump() if response.usage else {})
-
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls),
-            usage=usage,
+            usage=_message_usage(response),
             model=response.model,
             provider="anthropic",
             finish_reason=response.stop_reason,
@@ -448,7 +450,7 @@ class AnthropicClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls),
-            usage=normalize_usage(final_message.usage.model_dump() if final_message.usage else {}),
+            usage=_message_usage(final_message),
             model=final_message.model,
             provider="anthropic",
             finish_reason=final_message.stop_reason,
