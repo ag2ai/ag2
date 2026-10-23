@@ -35,6 +35,7 @@ def _as_object(value: "JsonValue | None") -> JsonObject:
 # (what ``jsonschema`` matches patterns with) rejects. Check those keys with a format
 # instead, at load time, leaving the vendored files byte-faithful.
 _XID_KEYS = r"^[\p{XID_Start}_][\p{XID_Continue}]*$"
+_IMPLICIT_FUNCTION_SCHEMA_URI = "urn:ag2:a2ui:implicit-renderer-function"
 
 
 def _xid_property_names(schema: JsonValue) -> JsonValue:
@@ -81,6 +82,19 @@ def _catalog_function_variant(catalog: JsonSchema, *, agent_initiated: bool, exp
             {"if": function_schema, "then": {"properties": {"@call": {"enum": allowed}}}},
         ],
     }
+
+
+def _registry_for_surface_catalog(registry: Registry, catalog_id: str) -> Registry:
+    """Select the default function catalog without changing the shared registry."""
+    catalog = registry.get(catalog_id)
+    schema = (
+        _catalog_function_variant(catalog.contents, agent_initiated=False, explicit=False)
+        if catalog is not None
+        else {"not": {}}
+    )
+    return registry.with_resources([
+        (_IMPLICIT_FUNCTION_SCHEMA_URI, Resource.from_contents(schema, default_specification=DRAFT202012)),
+    ])
 
 
 class _VersionConfigEntry(TypedDict):
@@ -243,8 +257,10 @@ class A2UISchemaManager:
                 _catalog_function_variant(catalog, agent_initiated=agent_initiated, explicit=True)
                 for catalog in catalogs.values()
             ]
-            variants.append(_catalog_function_variant(active, agent_initiated=agent_initiated, explicit=False))
-            if not agent_initiated:
+            if agent_initiated:
+                variants.append(_catalog_function_variant(active, agent_initiated=True, explicit=False))
+            else:
+                variants.append({"$ref": _IMPLICIT_FUNCTION_SCHEMA_URI})
                 variants.append({"$ref": "#/$defs/IndexSystemFunction"})
             definitions[name] = {
                 **function_call,
@@ -406,6 +422,26 @@ class A2UISchemaManager:
                     custom_id,
                     Resource.from_contents(active_catalog, default_specification=DRAFT202012),
                 ))
+        if self._protocol_version == "v1.0":
+            catalogs = {
+                str(self._basic_catalog["$id"]): self._basic_catalog,
+                str(active_catalog["$id"]): active_catalog,
+            }
+            # With no surface context a stateless validator can only establish
+            # that an implicit call is valid in at least one configured catalog.
+            # The parser narrows this resource when createSurface supplies one.
+            resources.append((
+                _IMPLICIT_FUNCTION_SCHEMA_URI,
+                Resource.from_contents(
+                    {
+                        "anyOf": [
+                            _catalog_function_variant(catalog, agent_initiated=False, explicit=False)
+                            for catalog in catalogs.values()
+                        ]
+                    },
+                    default_specification=DRAFT202012,
+                ),
+            ))
         return Registry().with_resources(resources)
 
     def _load_json_file(self, path: Path) -> "list[JsonValue] | JsonSchema":

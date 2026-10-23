@@ -201,6 +201,15 @@ async def run_agent_function(
         )
         return []
 
+    if not call.catalog_id_valid:
+        return [
+            _function_response(
+                call.function_call_id,
+                version,
+                error={"code": "INVALID_FUNCTION_CALL", "message": f"Invalid catalogId for function {call.call!r}."},
+            )
+        ]
+
     if action is None or call.catalog_id not in (None, catalog_id):
         return [
             _function_response(

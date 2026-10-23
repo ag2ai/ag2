@@ -250,6 +250,52 @@ async def test_function_calls_resolve_only_in_the_active_catalog(catalog_id: str
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("catalog_id", [None, 42, True, [], ["https://foreign.example/catalog.json"], {}])
+async def test_invalid_catalog_override_does_not_execute_handler(catalog_id: Any) -> None:
+    calls: list[str] = []
+
+    @a2ui_action
+    def lookup() -> str:
+        calls.append("called")
+        return "ok"
+
+    tracking = TrackingConfig(TestConfig("UNEXPECTED MODEL CALL"))
+    app = A2UIServer(
+        Agent("ui", config=tracking),
+        actions=[lookup],
+        protocol_version="v1.0",
+        transport=RestTransport(encoding="jsonl"),
+    )
+    messages = await _post(
+        app,
+        {
+            "a2ui": [
+                {
+                    "version": "v1.0",
+                    "callAgentFunction": {
+                        "surfaceId": "s",
+                        "functionCallId": "fc-1",
+                        "callFunction": {"@call": "lookup", "args": {}, "catalogId": catalog_id},
+                    },
+                }
+            ]
+        },
+    )
+
+    assert calls == []
+    assert tracking.calls == []
+    assert messages == [
+        {
+            "version": "v1.0",
+            "agentFunctionResponse": {
+                "functionCallId": "fc-1",
+                "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid catalogId for function 'lookup'."},
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
 @pytest.mark.parametrize("binding", ["property", "action", "nested"])
 async def test_agent_only_bindings_trigger_a_corrective_retry(message_key: str, binding: str) -> None:

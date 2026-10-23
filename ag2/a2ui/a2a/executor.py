@@ -8,6 +8,7 @@ import contextvars
 import logging
 import os
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -45,13 +46,20 @@ from .parts import create_a2ui_parts, get_a2ui_data
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass(slots=True, frozen=True)
+class _IncomingRequest:
+    interactions: tuple[A2UIIncomingParseResult, ...]
+    awaiting_input: bool
+
+
 # Per-request carrier for the client→server interactions parsed in ``execute``
 # (where the raw A2UI DataParts are available, before they are rewritten to
 # text) so ``_run_one_turn`` can surface them as A2UIClientEvents. A ContextVar
 # keeps this coroutine-local — the executor instance is shared across requests,
 # so a plain attribute would race between concurrent turns.
-_INCOMING_INTERACTIONS: "contextvars.ContextVar[tuple[A2UIIncomingParseResult, ...]]" = contextvars.ContextVar(
-    "a2ui_incoming_interactions", default=()
+_INCOMING_REQUEST: "contextvars.ContextVar[_IncomingRequest | None]" = contextvars.ContextVar(
+    "a2ui_incoming_request", default=None
 )
 
 
@@ -125,16 +133,22 @@ class A2UIAgentExecutor(AgentExecutor):
         return self._runtime.protocol_version
 
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        token: contextvars.Token[tuple[A2UIIncomingParseResult, ...]] | None = None
+        token: contextvars.Token[_IncomingRequest | None] | None = None
         if request_context.message is not None:
             try_activate_a2ui_extension(request_context, version=self.protocol_version)
             interactions = self._rewrite_incoming_a2ui_parts(request_context)
-            token = _INCOMING_INTERACTIONS.set(tuple(interactions))
+            task = request_context.current_task
+            token = _INCOMING_REQUEST.set(
+                _IncomingRequest(
+                    interactions=tuple(interactions),
+                    awaiting_input=task is not None and task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED,
+                )
+            )
         try:
             await super().execute(request_context, event_queue)
         finally:
             if token is not None:
-                _INCOMING_INTERACTIONS.reset(token)
+                _INCOMING_REQUEST.reset(token)
 
     def _rewrite_incoming_a2ui_parts(self, request_context: RequestContext) -> list[A2UIIncomingParseResult]:
         """Consume incoming A2UI DataParts, rewriting them into text prompts.
@@ -242,7 +256,8 @@ class A2UIAgentExecutor(AgentExecutor):
         # before the A2UI DataParts were rewritten to text) as an A2UIClientEvent
         # on the turn's stream, alongside the validation middleware.
         extra_middleware = list(self._runtime.middleware_factories())
-        interactions = _INCOMING_INTERACTIONS.get()
+        incoming = _INCOMING_REQUEST.get()
+        interactions = incoming.interactions if incoming is not None else ()
         if interactions:
             extra_middleware.append(A2UIInboundMiddleware(interactions))
 
@@ -264,9 +279,12 @@ class A2UIAgentExecutor(AgentExecutor):
         # Pure server interactions skip the agent, but their messages still go
         # through the shared finalization below: a handler can itself request a
         # renderer function and must leave the task open for its response.
-        if handled_server and not parsed.inputs and not parsed.tool_results:
+        server_only = handled_server and not parsed.inputs and not parsed.tool_results
+        if server_only:
             agent_msg = self._build_a2ui_message(updater, "", a2ui_messages, {})
-            has_pending = False
+            # An unrelated server RPC does not answer the renderer function or
+            # client tool that left this task awaiting input on an earlier turn.
+            has_pending = incoming is not None and incoming.awaiting_input
         else:
             response, final_variables = await self._dispatch_to_agent(
                 initial_event,
@@ -307,12 +325,14 @@ class A2UIAgentExecutor(AgentExecutor):
             return
 
         if has_pending or pending_client_calls:
-            await updater.requires_input()
+            pending_message = agent_msg if server_only else None
+            await updater.requires_input(message=pending_message)
             await lifecycle_ctx.send(
                 task_state_to_status_update(
                     TaskState.TASK_STATE_INPUT_REQUIRED,
                     task_id=task_id,
                     context_id=context_id,
+                    message=pending_message,
                     timestamp=datetime.now(tz=timezone.utc),
                 ),
             )

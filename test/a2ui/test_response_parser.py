@@ -455,6 +455,141 @@ class TestA2UIResponseParserV1Validation:
         assert result.is_valid is True
 
 
+class TestSurfaceCatalogValidation:
+    @pytest.fixture()
+    def parser(self) -> A2UIResponseParser:
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "functions": {
+                    "openUrl": {
+                        "type": "object",
+                        "returnType": "void",
+                        "allowedCallers": "agentOnly",
+                        "properties": {
+                            "@call": {"const": "openUrl"},
+                            "args": {
+                                "type": "object",
+                                "properties": {"url": {"type": "string"}},
+                                "required": ["url"],
+                            },
+                        },
+                        "required": ["@call", "args"],
+                    },
+                },
+            },
+        )
+        return A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+        )
+
+    @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
+    @pytest.mark.parametrize("surface_catalog", ["basic", "custom"])
+    @pytest.mark.parametrize("call_catalog", [None, "basic", "custom"])
+    def test_function_inherits_the_surface_catalog_unless_explicitly_overridden(
+        self,
+        parser: A2UIResponseParser,
+        message_key: str,
+        surface_catalog: str,
+        call_catalog: str | None,
+    ) -> None:
+        catalogs = {
+            "basic": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "custom": "https://example.com/catalog.json",
+        }
+        call: JsonObject = {"@call": "openUrl", "args": {"url": "https://example.com"}}
+        if call_catalog is not None:
+            call["catalogId"] = catalogs[call_catalog]
+        components: list[JsonObject] = [
+            {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
+            {"id": "label", "component": "Text", "text": "Open"},
+        ]
+        create: JsonObject = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
+        if message_key == "createSurface":
+            create["components"] = components
+            operations = [{"version": "v1.0", "createSurface": create}]
+        else:
+            operations = [
+                {"version": "v1.0", "createSurface": create},
+                {"version": "v1.0", "updateComponents": {"surfaceId": "s", "components": components}},
+            ]
+
+        result = parser.validate(operations)
+
+        # The basic function is rendererOnly; the custom override is agentOnly.
+        assert result.is_valid is ((call_catalog or surface_catalog) == "basic"), result.errors
+
+    @pytest.mark.parametrize("call_catalog", [None, "basic", "custom"])
+    def test_an_earlier_responses_surface_uses_only_the_available_catalog_context(
+        self, parser: A2UIResponseParser, call_catalog: str | None
+    ) -> None:
+        basic_id = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+        custom_id = "https://example.com/catalog.json"
+        # A parser is shared by clients: this earlier response must not establish
+        # a persistent binding for another validation call's identical surface id.
+        assert parser.validate([
+            {"version": "v1.0", "createSurface": {"surfaceId": "s", "catalogId": custom_id}}
+        ]).is_valid
+        call: JsonObject = {"@call": "openUrl", "args": {"url": "https://example.com"}}
+        if call_catalog is not None:
+            call["catalogId"] = basic_id if call_catalog == "basic" else custom_id
+        operations = [
+            {
+                "version": "v1.0",
+                "updateComponents": {
+                    "surfaceId": "s",
+                    "components": [
+                        {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
+                        {"id": "label", "component": "Text", "text": "Open"},
+                    ],
+                },
+            }
+        ]
+
+        result = parser.validate(operations)
+
+        # With no binding available, the implicit call has a valid interpretation
+        # in the basic catalog. An explicit custom call remains forbidden.
+        assert result.is_valid is (call_catalog != "custom"), result.errors
+
+    def test_surface_catalogs_are_kept_separate_within_a_response(self, parser: A2UIResponseParser) -> None:
+        operations = [
+            {
+                "version": "v1.0",
+                "createSurface": {
+                    "surfaceId": "basic",
+                    "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                },
+            },
+            {
+                "version": "v1.0",
+                "createSurface": {"surfaceId": "custom", "catalogId": "https://example.com/catalog.json"},
+            },
+            {
+                "version": "v1.0",
+                "updateComponents": {
+                    "surfaceId": "basic",
+                    "components": [
+                        {
+                            "id": "root",
+                            "component": "Button",
+                            "child": "label",
+                            "action": {"functionCall": {"@call": "openUrl", "args": {"url": "https://example.com"}}},
+                        },
+                        {"id": "label", "component": "Text", "text": "Open"},
+                    ],
+                },
+            },
+        ]
+
+        result = parser.validate(operations)
+
+        assert result.is_valid, result.errors
+
+
 class TestPerComponentValidation:
     @pytest.fixture()
     def parser_with_components(self) -> A2UIResponseParser:

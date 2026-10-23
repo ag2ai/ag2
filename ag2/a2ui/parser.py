@@ -15,6 +15,7 @@ from referencing.exceptions import Unresolvable
 from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue, ServerToClientMessage, server_to_client_payload_keys
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 from .diagnostics import MessageChecker
+from .schema_manager import _registry_for_surface_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,26 @@ def _components_of(update_components: JsonValue) -> list[JsonValue]:
     return components if isinstance(components, list) else []
 
 
+def _surface_catalog(operation: JsonValue, surfaces: dict[str, str], registry: Registry) -> str | None:
+    if not isinstance(operation, dict):
+        return None
+    for key in ("createSurface", "updateComponents", "callRendererFunction", "deleteSurface"):
+        payload = operation.get(key)
+        if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
+            continue
+        if key == "createSurface":
+            catalog_id = payload.get("catalogId")
+            default = registry.get("catalog.json")
+            if not isinstance(catalog_id, str):
+                catalog_id = default.id() if default is not None else None
+            if catalog_id is not None:
+                surfaces[surface_id] = catalog_id
+        elif key == "deleteSurface":
+            surfaces.pop(surface_id, None)
+        return surfaces.get(surface_id)
+    return None
+
+
 class A2UIResponseParser:
     """Parses and validates A2UI messages from agent responses.
 
@@ -147,6 +168,8 @@ class A2UIResponseParser:
             MessageChecker(server_to_client_schema, schema_registry) if server_to_client_schema is not None else None
         )
         self._version_string = version_string
+        self._schema = server_to_client_schema
+        self._registry = schema_registry
 
     @property
     def version_string(self) -> A2UIVersion:
@@ -226,16 +249,34 @@ class A2UIResponseParser:
         return "\n".join(lines)
 
     def validate(self, operations: Sequence[ServerToClientMessage]) -> A2UIValidationResult:
-        """Validate A2UI operations against the server_to_client schema."""
+        """Validate messages, inheriting catalogs from surfaces created in this response.
+
+        Surface context belongs to this validation call, since a parser can be
+        shared by clients. For a surface created in an earlier response, an
+        implicit function is accepted if any configured catalog supports it;
+        without its saved catalog binding we cannot verify that association.
+        An explicit function catalog is always checked exactly.
+        """
         if self._checker is None:
             return A2UIValidationResult(is_valid=True)
 
         # Message TypedDicts are JSON objects on the wire; the checker reads them as such.
         objects = cast(Sequence[JsonObject], operations)
         errors: list[str] = []
+        surface_catalogs: dict[str, str] = {}
+        catalog_checkers: dict[str, MessageChecker] = {}
         for i, op in enumerate(objects):
             try:
-                errors.extend(f"Operation {i}: {issue.render(op)}" for issue in self._checker.issues(op))
+                checker = self._checker
+                if self._version_string == "v1.0" and self._registry is not None and self._schema is not None:
+                    catalog_id = _surface_catalog(op, surface_catalogs, self._registry)
+                    if catalog_id is not None:
+                        if catalog_id not in catalog_checkers:
+                            catalog_checkers[catalog_id] = MessageChecker(
+                                self._schema, _registry_for_surface_catalog(self._registry, catalog_id)
+                            )
+                        checker = catalog_checkers[catalog_id]
+                errors.extend(f"Operation {i}: {issue.render(op)}" for issue in checker.issues(op))
             except Unresolvable as re:
                 # A ref we cannot resolve means we could not validate this op —
                 # surface it instead of letting it escape as an unhandled crash.

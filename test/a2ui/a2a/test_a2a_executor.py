@@ -5,18 +5,27 @@
 import json
 from typing import Annotated
 
+import httpx
 import pytest
 from a2a.client import ClientCallInterceptor
 from a2a.client.interceptors import BeforeArgs
-from a2a.types import Part, TaskState
+from a2a.types import Message, Part, Task, TaskState
+from google.protobuf.json_format import MessageToDict, ParseDict
 
 from ag2 import Agent, Depends
+from ag2.a2a import A2AServer
 from ag2.a2a.extension import EXTRA_PARTS_DEPENDENCY_KEY
+from ag2.a2a.mappers import data_part
+from ag2.a2a.mappers.messages import build_tool_result_message, build_user_message
+from ag2.a2a.testing import make_test_client_factory
 from ag2.a2ui import a2ui_action
-from ag2.a2ui.a2a import create_a2ui_parts
+from ag2.a2ui.a2a import A2UIAgentExecutor, create_a2ui_parts, get_a2ui_data
 from ag2.a2ui.a2a.executor import _extract_a2ui_envelopes
+from ag2.a2ui.constants import A2UI_MIME_TYPE
+from ag2.events import TextInput, ToolCallEvent, ToolResultEvent, ToolResultsEvent
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.final.function_tool import FunctionToolSchema
 
 from ._helpers import (
     FUNCTION_RESULT_MARK,
@@ -77,6 +86,25 @@ _CALL_RENDERER_FUNCTION_BLOCK = (
     '"callFunction":{"@call":"openUrl","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",'
     '"args":{"url":"https://example.com"}}}}]'
 )
+
+
+async def _send_a2a_message(http: httpx.AsyncClient, message: Message) -> Task:
+    response = await http.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": message.message_id,
+            "method": "SendMessage",
+            "params": {"message": MessageToDict(message)},
+        },
+        headers={"A2A-Version": "1.0"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "error" not in payload, payload
+    task = Task()
+    ParseDict(payload["result"]["task"], task)
+    return task
 
 
 class _FunctionRoundTrip(ClientCallInterceptor):
@@ -476,6 +504,70 @@ class TestCallAgentFunction:
                 {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "agent-1", "value": None}},
             ]
         ]
+
+    @pytest.mark.parametrize("pending", ["renderer_function", "client_tool"])
+    async def test_server_rpc_preserves_an_existing_input_request(self, pending: str) -> None:
+        @a2ui_action
+        def verify_provider(provider_id: str) -> bool:
+            return provider_id == "PRV-102"
+
+        tool_call = ToolCallEvent(id="tool-1", name="lookup", arguments="{}")
+        first_response = (
+            f"<a2ui-json>{_CALL_RENDERER_FUNCTION_BLOCK}</a2ui-json>" if pending == "renderer_function" else tool_call
+        )
+        agent = Agent("ui", config=TestConfig(first_response))
+        executor = A2UIAgentExecutor(
+            agent, actions=[verify_provider], protocol_version="v1.0", validate_responses=False
+        )
+        server = A2AServer(agent, executor=executor)
+        tool_schemas = [
+            FunctionToolSchema.from_dict({"function": {"name": "lookup", "parameters": {"type": "object"}}})
+        ]
+        async with make_test_client_factory(server)() as http:
+            first = await _send_a2a_message(
+                http, build_user_message([TextInput("Look it up")], tool_schemas=tool_schemas)
+            )
+            assert first.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
+
+            tracking = TrackingConfig(TestConfig("Resumed."))
+            agent.config = tracking
+            intermediate = await _send_a2a_message(
+                http,
+                build_user_message(
+                    [],
+                    task_id=first.id,
+                    context_id=first.context_id,
+                    extra_parts=[data_part([CALL_AGENT_FUNCTION_ENVELOPE], media_type=A2UI_MIME_TYPE)],
+                ),
+            )
+
+            assert intermediate.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
+            assert get_a2ui_data(intermediate.status.message.parts[0]) == [
+                {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-7", "value": True}}
+            ]
+            assert tracking.calls == []
+
+            if pending == "renderer_function":
+                continuation = build_user_message(
+                    [],
+                    task_id=first.id,
+                    context_id=first.context_id,
+                    extra_parts=[data_part([FUNCTION_RESPONSE_ENVELOPE], media_type=A2UI_MIME_TYPE)],
+                )
+            else:
+                continuation = build_tool_result_message(
+                    [ToolResultEvent.from_call(tool_call, "Found it")],
+                    task_id=first.id,
+                    context_id=first.context_id,
+                )
+            final = await _send_a2a_message(http, continuation)
+
+        assert final.id == first.id
+        assert final.status.state == TaskState.TASK_STATE_COMPLETED
+        assert final.status.message.parts[0].text == "Resumed."
+        assert len(tracking.calls) == 1
+        if pending == "client_tool":
+            assert isinstance(tracking.mock.call_args.args[0], ToolResultsEvent)
 
 
 @pytest.mark.asyncio

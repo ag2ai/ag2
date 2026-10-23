@@ -50,6 +50,9 @@ class A2UIIncomingFunctionCall:
     a usable id and function name (a malformed one parses as unknown instead).
     ``args`` preserves the wire value so a non-object can be rejected without
     invoking the handler; only an omitted ``args`` defaults to an empty object.
+    ``catalog_id_valid`` distinguishes an omitted catalog from an explicitly
+    malformed override, including JSON null, so malformed input cannot select a
+    handler by silently falling back to the active catalog.
     """
 
     function_call_id: str
@@ -57,6 +60,7 @@ class A2UIIncomingFunctionCall:
     call: str
     args: JsonValue = field(default_factory=dict)
     catalog_id: str | None = None
+    catalog_id_valid: bool = True
 
     @property
     def arguments(self) -> dict[str, JsonValue]:
@@ -195,6 +199,7 @@ def _parse_function_call(obj: dict[str, JsonValue]) -> A2UIIncomingParseResult:
             # Preserve malformed input so it cannot silently run a handler with defaults.
             args=dict(raw_args) if isinstance(raw_args, dict) else raw_args,
             catalog_id=_optional_str(call_obj.get("catalogId")),
+            catalog_id_valid="catalogId" not in call_obj or isinstance(call_obj["catalogId"], str),
         ),
     )
 
