@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
+from dirty_equals import IsPartialDict
 
 from ag2 import Agent, Context, MemoryStream
 from ag2.context import StreamId
@@ -231,7 +232,7 @@ class TestTotals:
         assert run.ran == {"search": 1}
         assert Counter(run.error_types()) == Counter([None, CALL_LIMIT_ERROR_TYPE])
         refused = next(r for r in run.results if _error(r))
-        assert "answer now" in _error(refused)["recovery"][0]
+        assert _error(refused) == IsPartialDict({"recovery": ["answer now from the information you already have"]})
         assert SYNTHESIS in _text(run.last_messages()[-1])
         assert reply.body == "the answer"
         assert reply.response.metadata[CALL_LIMIT_KEY] == {"reason": "max_tool_calls", "ending": "synthesis"}
