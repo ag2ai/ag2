@@ -11,12 +11,15 @@ instead. Skipped without ``TYPESAFE_API_KEY``; excluded from ``just test`` by th
 """
 
 import os
+import struct
+import zlib
 from enum import Enum, IntEnum
 
 import pytest
 
-from ag2 import Agent, ResponseSchema
+from ag2 import Agent, ImageInput, ResponseSchema
 from ag2.config import TypeSafeConfig
+from ag2.config.typesafe import BoundingBox
 
 pytestmark = [pytest.mark.typesafe, pytest.mark.asyncio]
 
@@ -87,3 +90,40 @@ async def test_int_enum_is_a_score(typesafe_config: TypeSafeConfig) -> None:
 
     assert await reply.content() is Severity.HIGH
     assert set(reply.response.metadata["probabilities"]) == {0, 1, 2}
+
+
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+
+def _red_square_png() -> bytes:
+    """A 400x400 white PNG with a red square over x, y in [100, 300)."""
+    white, red = b"\xff\xff\xff", b"\xff\x00\x00"
+    plain = b"\x00" + white * 400
+    striped = b"\x00" + white * 100 + red * 200 + white * 100
+    rows = plain * 100 + striped * 200 + plain * 100
+
+    header = struct.pack(">IIBBBBB", 400, 400, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", header)
+        + _png_chunk(b"IDAT", zlib.compress(rows))
+        + _png_chunk(b"IEND", b"")
+    )
+
+
+async def test_bounding_box_locates_in_an_image(typesafe_config: TypeSafeConfig) -> None:
+    finder = Agent(
+        "finder",
+        prompt="The red square",
+        config=typesafe_config.copy(model="jev-preview", headers={"TypeSafe-Danger-Zone-Images": "true"}),
+        response_schema=ResponseSchema(BoundingBox),
+    )
+
+    reply = await finder.ask("Where is it?", ImageInput(data=_red_square_png(), media_type="image/png"))
+
+    box = await reply.content()
+    # The box is an estimate, so only require that it covers the centre of the square.
+    assert box.top < 0.5 < box.bottom
+    assert box.left < 0.5 < box.right
+    assert "confidence" in reply.response.metadata

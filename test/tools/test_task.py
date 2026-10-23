@@ -1061,10 +1061,13 @@ def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
 
     A fresh Agent per round, because the cap can only go missing while its
     semaphore is first provisioned, and a tightened switch interval so CPython
-    interleaves the two threads inside that window.
+    interleaves the two threads inside that window. The interval is left alone
+    under a tracer (coverage): on 3.11 a thread switch landing inside a new
+    thread's ``settrace`` kills that thread, so AnyIO's worker never answers.
     """
     old_interval = sys.getswitchinterval()
-    sys.setswitchinterval(0.00001)
+    if sys.gettrace() is None:
+        sys.setswitchinterval(0.00001)
 
     def make_parent() -> Agent:
         return Agent(

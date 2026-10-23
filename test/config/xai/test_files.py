@@ -5,14 +5,16 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import grpc
 import pytest
+from google.protobuf.timestamp_pb2 import Timestamp
 from xai_sdk.proto import files_pb2, files_pb2_grpc
 
 from ag2.config import XAIConfig
 from ag2.config.xai import XAIFilesClient
 from ag2.files import FilesAPI
 from ag2.files.types import FileContent, FileProvider, UploadedFile
+
+from ._helpers import serve_files
 
 
 class PaginatedFilesServer(files_pb2_grpc.FilesServicer):
@@ -37,14 +39,8 @@ class PaginatedFilesServer(files_pb2_grpc.FilesServicer):
 @pytest.mark.parametrize("page_count", [0, 1, 3])
 async def test_list_follows_sdk_pages(page_count: int) -> None:
     servicer = PaginatedFilesServer(page_count)
-    server = grpc.aio.server()
-    files_pb2_grpc.add_FilesServicer_to_server(servicer, server)  # type: ignore[no-untyped-call]
-    port = server.add_secure_port("localhost:0", grpc.local_server_credentials())
-    await server.start()
-    try:
-        files = await FilesAPI(XAIConfig(model="test", api_key="test", api_host=f"localhost:{port}")).list()
-    finally:
-        await server.stop(None)
+    async with serve_files(servicer) as address:
+        files = await FilesAPI(XAIConfig(model="test", api_key="test", api_host=address)).list()
 
     assert files == [
         UploadedFile(
@@ -88,7 +84,7 @@ class TestXAIFilesClient:
             id="file_123",
             filename="hello.txt",
             size=5,
-            created_at=123,
+            created_at=Timestamp(seconds=123),
         )
 
         result = await XAIFilesClient(XAIConfig(model="grok-4-fast")).upload(
@@ -129,7 +125,7 @@ class TestXAIFilesClient:
                     id="file_1",
                     filename="a.txt",
                     size=100,
-                    created_at=123,
+                    created_at=Timestamp(seconds=123),
                 ),
             ],
         )
