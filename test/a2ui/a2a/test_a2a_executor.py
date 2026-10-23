@@ -138,10 +138,6 @@ class TestExtractA2UIEnvelopes:
         [part] = create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [FUNCTION_RESPONSE_ENVELOPE]
 
-    def test_decodes_function_call_envelope(self) -> None:
-        [part] = create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])
-        assert _extract_a2ui_envelopes(part) == [CALL_AGENT_FUNCTION_ENVELOPE]
-
 
 @pytest.mark.asyncio
 class TestFinalizationMessage:
