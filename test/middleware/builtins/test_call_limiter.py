@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from ag2 import Agent, Context, MemoryStream
+from ag2.context import StreamId
 from ag2.events import (
     BaseEvent,
     CallLimitReached,
@@ -26,6 +27,7 @@ from ag2.events import (
     Usage,
     UsageEvent,
 )
+from ag2.history import MemoryStorage
 from ag2.middleware import (
     BaseMiddleware,
     CallCounter,
@@ -89,6 +91,11 @@ class PromptRecorder(BaseMiddleware):
     async def on_llm_call(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
         self.prompts.append(tuple(events))
         return await call_next(events, context)
+
+
+class SnapshotStorage(MemoryStorage):
+    async def get_history(self, stream_id: StreamId) -> list[BaseEvent]:
+        return list(await super().get_history(stream_id))
 
 
 def _error(result: ToolResultEvent) -> dict[str, Any]:
@@ -476,6 +483,27 @@ class TestClock:
 
 @pytest.mark.asyncio()
 class TestRemainingNote:
+    @pytest.mark.parametrize("failures", [1, 2])
+    async def test_retry_notes_preserve_the_cached_prefix_with_snapshot_storage(self, failures: int) -> None:
+        prompts: list[tuple[BaseEvent, ...]] = []
+        run = Run()
+        agent = Agent(
+            "limited",
+            config=TestConfig(*[TimeoutError("retry") for _ in range(failures)], _call("search"), "done"),
+            tools=[run.search],
+            middleware=[
+                RetryMiddleware(),
+                CallLimiter(max_llm_calls=5, show_remaining=True),
+                Middleware(PromptRecorder, prompts=prompts),
+            ],
+        )
+
+        reply = await agent.ask("Investigate.", stream=MemoryStream(storage=SnapshotStorage()))
+
+        assert reply.body == "done"
+        assert len(prompts) == failures + 2
+        assert all(later[: len(earlier)] == earlier for earlier, later in zip(prompts, prompts[1:]))
+
     async def test_remaining_notes_do_not_hide_the_last_text_ending(self) -> None:
         reply, _ = await _run(
             CallLimiter(max_llm_calls=2, show_remaining=True, on_exhausted="stop", ending="last_text"),

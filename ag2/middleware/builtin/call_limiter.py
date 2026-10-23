@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias
+from uuid import UUID, uuid4
 
 from ag2.annotations import Context
 from ag2.events import (
@@ -14,9 +15,11 @@ from ag2.events import (
     BuiltinToolCallEvent,
     CallLimitReached,
     DrainedModelRequest,
+    Field,
     ModelMessage,
     ModelRequest,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultEvent,
@@ -24,8 +27,6 @@ from ag2.events import (
 )
 from ag2.middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory, ToolExecution, ToolResultType
 from ag2.middleware.describe import MiddlewareDescription
-
-logger = logging.getLogger(__name__)
 
 #: ``ModelMessage.metadata`` key of a reply the limiter shaped: ``{"reason": ..., "ending": ...}``.
 CALL_LIMIT_KEY = "ag2:call_limit"
@@ -108,6 +109,8 @@ class _LimitPrompt(ModelRequest):
 
 class _RemainingNote(DrainedModelRequest):
     """Persistent budget context, without starting a new user turn or model call."""
+
+    note_id: UUID = Field(default_factory=uuid4)
 
 
 class CallLimiter(MiddlewareFactory):
@@ -351,6 +354,7 @@ class _CallGroup:
         self.limiters: list[_CallLimiter] = []
         self.collecting = True
         self.ending: CallLimitReached | None = None
+        self.pending_notes: list[_RemainingNote] = []
 
     async def execute_tool(self, call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
         participating = [limiter for limiter in self.limiters if event.name not in limiter._limits.exempt]
@@ -386,6 +390,10 @@ class _CallGroup:
     async def call_model(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
         # Storage may hand us its live list; snapshot it before publishing notes.
         prompt = list(events)
+        # Retries reuse the caller's original snapshot. Carry input appended by
+        # failed attempts even when storage does not expose a live history list.
+        known = {event.note_id for event in prompt if isinstance(event, _RemainingNote)}
+        prompt.extend(note for note in self.pending_notes if note.note_id not in known)
         retrying: _CallLimiter | None = None
         while True:
             exhausted = self._first_exhausted()
@@ -394,12 +402,15 @@ class _CallGroup:
                     counter.llm_calls += 1
                 for limiter in self.limiters:
                     if limiter._limits.show_remaining and (text := limiter._remaining_note()) is not None:
-                        note = _RemainingNote.ensure_request([text])
+                        note = _RemainingNote([TextInput(text)])
                         # Persist this append-only input without scheduling a second
                         # model call. Replaying it preserves the next cached prefix.
                         await context.send(note)
                         prompt.append(note)
-                return await call_next(prompt, context)
+                        self.pending_notes.append(note)
+                response = await call_next(prompt, context)
+                self.pending_notes.clear()
+                return response
 
             index, limiter = exhausted
             if limiter._limits.on_exhausted == "stop" or not limiter._final_calls:
@@ -424,7 +435,7 @@ class _CallGroup:
             text = response.message.content.strip() if response.message else ""
             if kept or text or not calls:
                 if len(kept) != len(calls):
-                    logger.warning(
+                    logging.getLogger(__name__).warning(
                         "CallLimiter dropped tool calls %s from the final reply (%s)",
                         [call.name for call in calls if all(call is not other for other in kept)],
                         limiter._exhausted,
@@ -434,6 +445,7 @@ class _CallGroup:
                 self.ending = CallLimitReached(reason=limiter._exhausted, ending="synthesis")
                 if response.message is not None:
                     response.message.metadata[CALL_LIMIT_KEY] = {"reason": limiter._exhausted, "ending": "synthesis"}
+                self.pending_notes.clear()
                 return response
             # The agent emits usage only for the response returned by this hook.
             # Discarding a tool-only answer must not discard its billable work.
