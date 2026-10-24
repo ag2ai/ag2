@@ -9,9 +9,9 @@ AG2 supports two ways to let an agent run code: have the LLM provider execute it
 
 | | Built-in Provider | Remote (`SandboxCodeTool`) |
 | :--- | :--- | :--- |
-| **Where it runs** | Provider's sandbox | A `CodeEnvironment` you supply (Tenki, Daytona, Docker, custom) |
+| **Where it runs** | Provider's sandbox | A `CodeEnvironment` you supply (E2B, Tenki, Daytona, Docker, custom) |
 | **Setup** | Add the tool, done | Choose / configure a backend |
-| **Cost** | Bundled in provider tokens | Your sandbox bill (Tenki/Daytona) or free (local Docker) |
+| **Cost** | Bundled in provider tokens | Your sandbox bill (E2B/Tenki/Daytona) or free (local Docker) |
 | **Custom packages, images** | No | Yes |
 | **State persistence** | Provider-defined | Per-environment instance |
 | **Provider support** | Only providers with native code-exec | Any provider |
@@ -42,12 +42,12 @@ See the [Built-in Tools page](/docs/user-guide/tools/builtin_tools#code-executio
 `SandboxCodeTool` exposes a `run_code(code, language)` function the agent can call. Because it's a regular function tool, it works on **any** model provider. Where the code actually runs is decided by the [`CodeEnvironment`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/code/environment/base.py){.external-link target="_blank"} you hand it.
 
 !!! note "`environment` is required"
-    `SandboxCodeTool` has no default backend. Pass `TenkiEnvironment().code_environment()`, `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation. Tenki needs the `code_environment()` call because its guest image ships `python3` rather than `python`.
+    `SandboxCodeTool` has no default backend. Pass `E2BEnvironment`, `TenkiEnvironment().code_environment()`, `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation. Tenki needs the `code_environment()` call because its guest image ships `python3` rather than `python`.
 
 !!! note "When to use this"
     You need custom packages or images, persistent state across calls, your own infrastructure, or you're working with a provider that doesn't have a native code-execution capability.
 
-Three environments are available: **Tenki** and **Daytona** (hosted), plus **Docker** (local container). You can also implement your own — see the **Custom** tab below.
+Four environments are available: **E2B**, **Tenki**, and **Daytona** (hosted), plus **Docker** (local container). You can also implement your own — see the **Custom** tab below.
 
 <Tabs>
   <Tab title="Tenki">
@@ -75,6 +75,33 @@ async with env:
 ```
 
 `TenkiEnvironment` reads `TENKI_API_KEY` and `TENKI_API_URL`. It auto-selects a sole visible workspace; pass `workspace_id` when the key has access to more than one. `code_environment()` supplies a `CodeAdapter` matching the guest image, whose Python interpreter is `python3`. See the [Tenki Sandbox extension guide](/docs/user-guide/extensions/tenki) for lifecycle and resource configuration.
+  </Tab>
+
+  <Tab title="E2B">
+[E2B](https://e2b.dev/){.external-link target="_blank"} provides isolated, managed cloud sandboxes with a bounded server-side lifetime.
+
+```bash
+pip install "ag2[anthropic]" "e2b>=2.0.0,<3"
+```
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.e2b import E2BEnvironment
+from ag2.tools import SandboxCodeTool
+
+env = E2BEnvironment()
+async with env:
+    agent = Agent(
+        "analyst",
+        config=AnthropicConfig(model="claude-sonnet-5"),
+        tools=[SandboxCodeTool(env)],
+    )
+    reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
+    print(await reply.content())
+```
+
+`E2BEnvironment` reads `E2B_API_KEY`. The default template ships `python` and `node`, so `python`, `bash`, and `javascript` work out of the box. See the [E2B Sandbox extension guide](/docs/user-guide/extensions/e2b) for templates, lifetime, and networking options.
   </Tab>
 
   <Tab title="Daytona">
@@ -134,7 +161,7 @@ Safety defaults are deliberately strict:
   </Tab>
 
   <Tab title="Custom">
-`SandboxCodeTool` only depends on the `CodeEnvironment` protocol, so any backend that satisfies it works — e2b, an SSH host, an internal CI runner.
+`SandboxCodeTool` only depends on the `CodeEnvironment` protocol, so any backend that satisfies it works — an SSH host, an internal CI runner, or another sandbox service.
 
 ```python linenums="1"
 from ag2.tools import SandboxCodeTool
@@ -177,11 +204,11 @@ async with DaytonaEnvironment(image="python:3.12") as env:
 # sandbox deleted here
 ```
 
-The same pattern works with `TenkiEnvironment`, `DockerEnvironment` (container stopped + removed), and any other backend that implements `__aenter__` / `__aexit__`.
+The same pattern works with `E2BEnvironment`, `TenkiEnvironment`, `DockerEnvironment` (container stopped + removed), and any other backend that implements `__aenter__` / `__aexit__`.
 
 ### Credentials and runtime config
 
-`DaytonaEnvironment` accepts [`Variable`](/docs/user-guide/context/variables) markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `TenkiEnvironment` accepts them for `api_key`, `api_url`, `workspace_id`, `image`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
+`DaytonaEnvironment` accepts [`Variable`](/docs/user-guide/context/variables) markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `TenkiEnvironment` accepts them for `api_key`, `api_url`, `workspace_id`, `image`, and `env_vars`. `E2BEnvironment` accepts them for `api_key`, `template`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call — useful for multi-tenant setups:
 
 ```python linenums="1"
 from ag2 import Variable
