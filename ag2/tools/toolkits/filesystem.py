@@ -200,6 +200,11 @@ class FilesystemToolkit(Toolkit):
             # Without this, the read/write pair on Windows would silently
             # transcode the file into cp1252 every time the model edits it.
             text = target.read_text(encoding="utf-8")
+            # "" matches at index 0 of any text, so on a non-empty file it would
+            # silently prepend new_content. On an empty file it is the valid way
+            # to fill a freshly created file.
+            if not old_content and text:
+                raise ValueError("old_content must not be empty unless the file is empty")
             if old_content not in text:
                 raise ValueError(f"old_content not found in {path}")
             target.write_text(text.replace(old_content, new_content, 1), encoding="utf-8")
