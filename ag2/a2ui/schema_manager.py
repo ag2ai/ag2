@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 from typing import TypedDict
+from urllib.parse import urljoin
 
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
@@ -13,6 +14,7 @@ from referencing.jsonschema import DRAFT202012
 from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue
 from .actions import A2UIEventAction
 from .constants import A2UI_DEFAULT_CATALOG_ID_BY_VERSION, A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
+from .diagnostics import XID_FORMAT
 
 _VERSIONS_DIR = Path(__file__).parent
 
@@ -29,10 +31,96 @@ def _as_object(value: "JsonValue | None") -> JsonObject:
     return value if isinstance(value, dict) else {}
 
 
+# v1.0 constrains extension keys with Unicode property escapes, which Python's ``re``
+# (what ``jsonschema`` matches patterns with) rejects. Check those keys with a format
+# instead, at load time, leaving the vendored files byte-faithful.
+_XID_KEYS = r"^[\p{XID_Start}_][\p{XID_Continue}]*$"
+_IMPLICIT_FUNCTION_SCHEMA_URI = "urn:ag2:a2ui:implicit-renderer-function"
+_IMPLICIT_COMPONENT_SCHEMA_URI = "urn:ag2:a2ui:implicit-component"
+
+
+def _xid_property_names(schema: JsonValue) -> JsonValue:
+    """Rewrite objects whose keys must be UAX #31 identifiers to a ``propertyNames`` format check."""
+    if isinstance(schema, list):
+        return [_xid_property_names(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    if schema.get("patternProperties") == {_XID_KEYS: {}} and schema.get("additionalProperties") is False:
+        rest = {key: value for key, value in schema.items() if key not in ("patternProperties", "additionalProperties")}
+        return {**rest, "propertyNames": {"format": XID_FORMAT}}
+    return {key: _xid_property_names(value) for key, value in schema.items()}
+
+
+def _instructions_of(catalog: JsonSchema) -> str:
+    """Return a catalog's embedded ``instructions`` text (v1.0), or ``""``."""
+    instructions = catalog.get("instructions")
+    return instructions.strip() if isinstance(instructions, str) else ""
+
+
+def _catalog_definition_ref(catalog_id: str, collection: str, key: str) -> str:
+    token = key.replace("~", "~0").replace("/", "~1")
+    return f"{catalog_id}#/{collection}/{token}"
+
+
+def _catalog_selection(catalog_id: str, *, explicit: bool) -> JsonSchema:
+    if explicit:
+        return {"properties": {"catalogId": {"const": catalog_id}}, "required": ["catalogId"]}
+    return {"not": {"required": ["catalogId"]}}
+
+
+def _catalog_component_variant(catalog: JsonSchema, *, explicit: bool) -> JsonSchema:
+    catalog_id = str(catalog["$id"])
+    return {"allOf": [{"$ref": f"{catalog_id}#/$defs/anyComponent"}, _catalog_selection(catalog_id, explicit=explicit)]}
+
+
+def _catalog_function_variant(catalog: JsonSchema, *, agent_initiated: bool, explicit: bool) -> JsonSchema:
+    catalog_id = str(catalog["$id"])
+    allowed: list[JsonValue] = []
+    for key, definition in _as_object(catalog.get("functions")).items():
+        callers = definition.get("allowedCallers", "rendererOnly") if isinstance(definition, dict) else "rendererOnly"
+        if (agent_initiated and callers in ("agentOnly", "rendererOrAgent")) or (
+            not agent_initiated and callers != "agentOnly"
+        ):
+            allowed.append({"$ref": _catalog_definition_ref(catalog_id, "functions", key)})
+    function_schema: JsonSchema = {"$ref": f"{catalog_id}#/$defs/anyFunction"}
+    return {
+        "allOf": [
+            function_schema,
+            _catalog_selection(catalog_id, explicit=explicit),
+            # Report malformed function names/arguments before caller restrictions.
+            {"if": function_schema, "then": {"anyOf": allowed} if allowed else {"not": {}}},
+        ],
+    }
+
+
+def _registry_for_surface_catalog(registry: Registry, catalog_id: str) -> Registry:
+    """Select the surface's component and function defaults in a request-local registry."""
+    catalog = registry.get(catalog_id)
+    schema = (
+        _catalog_function_variant(catalog.contents, agent_initiated=False, explicit=False)
+        if catalog is not None
+        else {"not": {}}
+    )
+    return registry.with_resources([
+        (_IMPLICIT_FUNCTION_SCHEMA_URI, Resource.from_contents(schema, default_specification=DRAFT202012)),
+        (
+            _IMPLICIT_COMPONENT_SCHEMA_URI,
+            Resource.from_contents(
+                _catalog_component_variant(catalog.contents, explicit=False) if catalog is not None else {"not": {}},
+                default_specification=DRAFT202012,
+            ),
+        ),
+    ])
+
+
 class _VersionConfigEntry(TypedDict):
     default_catalog_id: str
     schema_base_uri: str
     version_string: A2UIVersion
+    # Vendored file names of the two message schemas. Upstream renamed
+    # server/client to agent/renderer in v1.0; the wire direction is the same.
+    server_to_client_file: str
+    client_to_server_file: str
 
 
 # Catalog ids / schema base uris are the canonical A2UI identifiers (they
@@ -45,16 +133,22 @@ _VERSION_CONFIG: dict[A2UIVersion, _VersionConfigEntry] = {
         "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9"],
         "schema_base_uri": "https://a2ui.org/specification/v0_9/",
         "version_string": "v0.9",
+        "server_to_client_file": "server_to_client.json",
+        "client_to_server_file": "client_to_server.json",
     },
     "v0.9.1": {
         "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9.1"],
         "schema_base_uri": "https://a2ui.org/specification/v0_9/",
         "version_string": "v0.9.1",
+        "server_to_client_file": "server_to_client.json",
+        "client_to_server_file": "client_to_server.json",
     },
     "v1.0": {
         "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v1.0"],
         "schema_base_uri": "https://a2ui.org/specification/v1_0/",
         "version_string": "v1.0",
+        "server_to_client_file": "agent_to_renderer.json",
+        "client_to_server_file": "renderer_to_agent.json",
     },
 }
 
@@ -114,11 +208,14 @@ class A2UISchemaManager:
         if self._loaded:
             return
 
-        self._server_to_client = self._load_spec_json("server_to_client.json")
-        self._client_to_server = self._load_spec_json("client_to_server.json")
-        self._common_types = self._load_spec_json("common_types.json")
+        config = _VERSION_CONFIG[self._protocol_version]
+        self._server_to_client = self._load_spec_json(config["server_to_client_file"])
+        self._client_to_server = self._load_spec_json(config["client_to_server_file"])
+        self._common_types = _as_object(_xid_property_names(self._load_spec_json("common_types.json")))
         self._basic_catalog = self._load_spec_json("basic_catalog.json")
-        self._catalog_rules = self._load_spec_text("basic_catalog_rules.txt")
+        # v0.9.x ships the catalog guidance as a separate rules file; v1.0 embeds
+        # it in the catalog's own ``instructions`` field.
+        self._catalog_rules = self._load_spec_text("basic_catalog_rules.txt") or _instructions_of(self._basic_catalog)
 
         self._prompt_example = self._load_version_json("prompt_example.json")
         self._prompt_message_types = self._load_version_text("prompt_message_types.md")
@@ -156,6 +253,56 @@ class A2UISchemaManager:
             self._catalog_id = str(_VERSION_CONFIG[self._protocol_version]["default_catalog_id"])
 
         self._loaded = True
+        if self._protocol_version == "v1.0":
+            self._restrict_catalog_references()
+
+    def _restrict_catalog_references(self) -> None:
+        """Select component and function definitions from their declared catalogs.
+
+        Restrict schema references rather than walking component JSON: data models,
+        extension metadata and custom literal properties can legitimately contain
+        an object with an ``@call`` key. The top-level renderer RPC uses the
+        agent-callable definition; renderer-evaluated bindings exclude agent-only
+        functions. Component overrides leave nested functions' surface defaults intact.
+        """
+        active = self._get_active_catalog()
+        catalogs = {str(self._basic_catalog["$id"]): self._basic_catalog, str(active["$id"]): active}
+        definitions = _as_object(self._common_types.get("$defs"))
+        function_call = _as_object(definitions.get("FunctionCall"))
+        for name, agent_initiated in (("FunctionCall", False), ("AgentFunctionCall", True)):
+            variants: list[JsonValue] = [
+                _catalog_function_variant(catalog, agent_initiated=agent_initiated, explicit=True)
+                for catalog in catalogs.values()
+            ]
+            if agent_initiated:
+                variants.append(_catalog_function_variant(active, agent_initiated=True, explicit=False))
+            else:
+                variants.append({"$ref": _IMPLICIT_FUNCTION_SCHEMA_URI})
+                variants.append({"$ref": "#/$defs/IndexSystemFunction"})
+            definitions[name] = {
+                **function_call,
+                "allOf": [{"$ref": "#/$defs/FunctionCommon"}, {"oneOf": variants}],
+            }
+
+        message_definitions = _as_object(self._server_to_client.get("$defs"))
+        component = _as_object(message_definitions.get("Component"))
+        component["allOf"] = [
+            {"$ref": "common_types.json#/$defs/ComponentCommon"},
+            {
+                "oneOf": [
+                    *[_catalog_component_variant(catalog, explicit=True) for catalog in catalogs.values()],
+                    {"$ref": _IMPLICIT_COMPONENT_SCHEMA_URI},
+                ],
+            },
+            {"properties": {"component": {"not": {"const": "Surface"}}}},
+        ]
+        message = _as_object(message_definitions.get("CallRendererFunctionMessage"))
+        payload = _as_object(_as_object(message.get("properties")).get("callRendererFunction"))
+        call = _as_object(_as_object(payload.get("properties")).get("callFunction"))
+        call["allOf"] = [
+            {"$ref": "common_types.json#/$defs/AgentFunctionCall"},
+            {"required": ["catalogId"]},
+        ]
 
     @property
     def protocol_version(self) -> A2UIVersion:
@@ -222,12 +369,12 @@ class A2UISchemaManager:
         defs.update(_as_object(self._custom_catalog.get("$defs")))
         if components:
             defs["anyComponent"] = {
-                "oneOf": [{"$ref": f"#/components/{name}"} for name in components],
+                "oneOf": [{"$ref": _catalog_definition_ref("", "components", name)} for name in components],
                 "discriminator": {"propertyName": "component"},
             }
         if functions:
             defs["anyFunction"] = {
-                "oneOf": [{"$ref": f"#/functions/{name}"} for name in functions],
+                "oneOf": [{"$ref": _catalog_definition_ref("", "functions", name)} for name in functions],
             }
         merged["$defs"] = defs
 
@@ -274,6 +421,15 @@ class A2UISchemaManager:
             schema_id = schema.get("$id")
             if isinstance(schema_id, str):
                 resources.append((schema_id, Resource.from_contents(schema, default_specification=DRAFT202012)))
+        # v1.0 catalogs reference the shared types by a bare ``common_types.json``,
+        # which resolves next to the catalog's own ``$id``.
+        for catalog in [self._basic_catalog, active_catalog]:
+            catalog_uri = catalog.get("$id")
+            if isinstance(catalog_uri, str):
+                resources.append((
+                    urljoin(catalog_uri, "common_types.json"),
+                    Resource.from_contents(self._common_types, default_specification=DRAFT202012),
+                ))
         if self._custom_catalog is not None:
             custom_id = self._custom_catalog.get("$id")
             if isinstance(custom_id, str):
@@ -283,6 +439,39 @@ class A2UISchemaManager:
                     custom_id,
                     Resource.from_contents(active_catalog, default_specification=DRAFT202012),
                 ))
+        if self._protocol_version == "v1.0":
+            catalogs = {
+                str(self._basic_catalog["$id"]): self._basic_catalog,
+                str(active_catalog["$id"]): active_catalog,
+            }
+            # With no surface context a stateless validator can only establish
+            # that an implicit call is valid in at least one configured catalog.
+            # The parser narrows this resource when createSurface supplies one.
+            resources.append((
+                _IMPLICIT_FUNCTION_SCHEMA_URI,
+                Resource.from_contents(
+                    {
+                        "anyOf": [
+                            _catalog_function_variant(catalog, agent_initiated=False, explicit=False)
+                            for catalog in catalogs.values()
+                        ]
+                    },
+                    default_specification=DRAFT202012,
+                ),
+            ))
+            resources.append((
+                _IMPLICIT_COMPONENT_SCHEMA_URI,
+                Resource.from_contents(
+                    # Prefer the active catalog's diagnostics when both branches fail.
+                    {
+                        "anyOf": [
+                            _catalog_component_variant(catalog, explicit=False)
+                            for catalog in reversed(catalogs.values())
+                        ],
+                    },
+                    default_specification=DRAFT202012,
+                ),
+            ))
         return Registry().with_resources(resources)
 
     def _load_json_file(self, path: Path) -> "list[JsonValue] | JsonSchema":
@@ -398,6 +587,8 @@ class A2UISchemaManager:
                 rules_parts.append(self._catalog_rules)
             if self._custom_catalog_rules:
                 rules_parts.append(self._custom_catalog_rules)
+            elif self._custom_catalog is not None and (custom_instructions := _instructions_of(self._custom_catalog)):
+                rules_parts.append(custom_instructions)
             if rules_parts:
                 sections.append("\n\n## Component Rules\n\n" + "\n\n".join(rules_parts))
 

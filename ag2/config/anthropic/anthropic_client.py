@@ -31,6 +31,7 @@ from ag2.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
@@ -71,6 +72,10 @@ from .mappers import (
     take_sampling_fields,
     tools_to_api,
 )
+
+
+def _message_usage(message: Message) -> Usage:
+    return normalize_usage(message.usage.model_dump() if message.usage else {})
 
 
 class CreateOptions(TypedDict, total=False):
@@ -197,6 +202,7 @@ class AnthropicClient(LLMClient):
             create_kwargs["extra_body"] = {**existing, **self._extra_body}
 
         max_continuations = 5
+        continuation_usage = Usage()
 
         if self._streaming:
             if self._cache_diagnostics:
@@ -209,6 +215,7 @@ class AnthropicClient(LLMClient):
             for _ in range(max_continuations):
                 if result.finish_reason != "pause_turn":
                     break
+                continuation_usage += result.usage
                 anthropic_messages.append({"role": "assistant", "content": final_msg.content})
                 create_kwargs["messages"] = anthropic_messages
                 if self._cache_diagnostics:
@@ -218,6 +225,7 @@ class AnthropicClient(LLMClient):
                     final_msg = await stream.get_final_message()
                 await self._report_cache_diagnostics(final_msg, create_kwargs, context)
 
+            result.usage += continuation_usage
             return result
         else:
             if self._cache_diagnostics:
@@ -228,6 +236,7 @@ class AnthropicClient(LLMClient):
             for _ in range(max_continuations):
                 if response.stop_reason != "pause_turn":
                     break
+                continuation_usage += _message_usage(response)
                 await self._emit_builtin_tool_events(response.content, context)
                 anthropic_messages.append({"role": "assistant", "content": response.content})
                 create_kwargs["messages"] = anthropic_messages
@@ -236,7 +245,9 @@ class AnthropicClient(LLMClient):
                 response = await self._client.messages.create(**create_kwargs)
                 await self._report_cache_diagnostics(response, create_kwargs, context)
 
-            return await self._process_response(response, context)
+            result = await self._process_response(response, context)
+            result.usage += continuation_usage
+            return result
 
     async def _report_cache_diagnostics(
         self,
@@ -331,12 +342,10 @@ class AnthropicClient(LLMClient):
                     type(block).__name__,
                 )
 
-        usage = normalize_usage(response.usage.model_dump() if response.usage else {})
-
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls),
-            usage=usage,
+            usage=_message_usage(response),
             model=response.model,
             provider="anthropic",
             finish_reason=response.stop_reason,
@@ -441,7 +450,7 @@ class AnthropicClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls),
-            usage=normalize_usage(final_message.usage.model_dump() if final_message.usage else {}),
+            usage=_message_usage(final_message),
             model=final_message.model,
             provider="anthropic",
             finish_reason=final_message.stop_reason,
