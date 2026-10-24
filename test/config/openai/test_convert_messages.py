@@ -24,6 +24,7 @@ from ag2.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolErrorEvent,
     ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
@@ -713,6 +714,21 @@ class TestCompletionsAssistantTurn:
         result = convert_messages([], [ModelResponse(message=TextInput("Hi."))], SerializerCls)
 
         assert result[1] == {"role": "assistant", "content": "Hi."}
+
+    def test_truncated_arguments_preserve_raw_string(self) -> None:
+        truncated = '{"city": "Par'
+        call = ToolCallEvent(id="c1", name="get_weather", arguments=truncated)
+        response = ModelResponse(tool_calls=ToolCallsEvent([call]))
+        error = ToolErrorEvent.from_call(call, ValueError("boom"))
+        result = convert_messages([], [response, ToolResultsEvent([error])], SerializerCls)
+
+        assert result[1] == {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {"id": "c1", "type": "function", "function": {"name": "get_weather", "arguments": truncated}},
+            ],
+        }
 
 
 def _hallucinated_tool_call() -> ToolResultsEvent:

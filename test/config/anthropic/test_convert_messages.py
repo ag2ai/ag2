@@ -102,6 +102,22 @@ class TestConvertMessagesEmptyArguments:
             "content": [IsPartialDict({"type": "tool_use", "input": {}})],
         })
 
+    def test_truncated_arguments_produce_empty_dict(self) -> None:
+        truncated = '{"city": "Par'
+        call = ToolCallEvent(id="tc_1", name="list_items", arguments=truncated)
+        response = ModelResponse(tool_calls=ToolCallsEvent([call]))
+        error = ToolErrorEvent.from_call(call, ValueError("boom"))
+        result = convert_messages([response, error], SerializerCls)
+
+        assert result[0] == IsPartialDict({
+            "role": "assistant",
+            "content": [IsPartialDict({"type": "tool_use", "id": "tc_1", "input": {}})],
+        })
+        assert result[1] == IsPartialDict({
+            "role": "user",
+            "content": [IsPartialDict({"type": "tool_result", "tool_use_id": "tc_1"})],
+        })
+
 
 def test_full_sequence_with_empty_args() -> None:
     """A request -> response-with-tool-call -> tool-result sequence should convert cleanly."""
