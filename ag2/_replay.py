@@ -33,6 +33,7 @@ from ag2.events import (
     BuiltinToolCallEvent,
     ModelRequest,
     ModelResponse,
+    ModelResponseDiscarded,
     ProviderReplay,
     ToolCallEvent,
     ToolCallsEvent,
@@ -115,7 +116,7 @@ def _prune(events: Sequence[BaseEvent], cut: int) -> list[BaseEvent]:
             anchor = index
         elif _is_turn_item(event):
             turn_item = index
-        elif isinstance(event, ModelRequest):
+        elif isinstance(event, (ModelRequest, ModelResponseDiscarded)):
             anchor = None
             turn_item = None
         elif isinstance(event, ModelResponse):

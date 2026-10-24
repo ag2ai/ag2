@@ -46,8 +46,10 @@ class ModelRequest(BaseEvent):
 
 
 class DrainedModelRequest(ModelRequest):
-    """``ModelRequest`` re-emitted by the agent loop after draining
-    ``context.pending_messages``.
+    """Input incorporated into an already scheduled model call.
+
+    The agent loop uses this after draining ``context.pending_messages``;
+    middleware can also use it to append input without starting a second call.
 
     Observers, logging middleware, and history storage treat it as a normal
     ``ModelRequest`` (``TypeCondition`` uses ``isinstance``). The agent loop's

@@ -118,6 +118,35 @@ class AggregationFailed(BaseEvent):
     error: str
 
 
+class ModelResponseDiscarded(BaseEvent):
+    """A middleware discarded the response from the preceding model attempt.
+
+    Durable replay control: provider-native turn state already emitted by that
+    attempt must not resurrect the discarded response on a later request.
+    This does not trigger the agent's response subscribers or complete a turn.
+    """
+
+    __conversational__ = False
+
+
+class CallLimitReached(BaseEvent):
+    """Emitted on the agent's stream when ``CallLimiter`` ends a turn on a used-up limit.
+
+    ``ending`` says how the reply was written: ``"synthesis"`` when the model
+    answered the limiter's final call, ``"empty"`` or ``"last_text"`` when no
+    model call was left to write it, or ``"final_tool"`` when a final tool
+    completed a batch containing a total-limit refusal. A final call that raised
+    is reported here by ``error_type`` and ``error``, and the turn still ends.
+    """
+
+    __transient__ = True
+
+    reason: str
+    ending: str
+    error_type: str | None = None
+    error: str | None = None
+
+
 class EventLogFailed(BaseEvent):
     """Emitted when the post-``ask`` event-log writer raises.
 
