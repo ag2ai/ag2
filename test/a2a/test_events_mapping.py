@@ -255,10 +255,10 @@ class TestParseTaskArtifact:
                 context_id="c",
                 artifact=artifact,
                 append=False,
-                last_chunk=True,
+                last_chunk=False,
             ),
             append=False,
-            last_chunk=True,
+            last_chunk=False,
             text="final text",
         )
 
@@ -277,10 +277,10 @@ class TestParseTaskArtifact:
                 context_id="c",
                 artifact=artifact,
                 append=False,
-                last_chunk=True,
+                last_chunk=False,
             ),
             append=False,
-            last_chunk=True,
+            last_chunk=False,
             call=ToolCallEvent(id="c-1", name="f", arguments="{}"),
         )
 

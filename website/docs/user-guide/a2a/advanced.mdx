@@ -90,12 +90,13 @@ All A2A errors live in `#!python ag2.a2a.errors` and inherit from `#!python A2AE
 | `#!python A2ACardSignatureError` | A card failed JWS verification — `#!python err.source` says which card (see [Card Signing](/docs/user-guide/a2a/card_signing#failure-modes)) |
 | `#!python A2AStaleCardSignatureError` | Server-side: a `#!python build_*` call was handed an already-signed card whose capability flags AG2 has to flip, with no `#!python card_signer` to re-sign it (see [Card Signing](/docs/user-guide/a2a/card_signing#bringing-your-own-signature)) |
 | `#!python A2AReconnectError` | Streaming reconnect attempts exhausted — `#!python err.attempts` holds the count |
-| `#!python A2ATaskTerminalError` | Base for the three terminal-state errors below; carries `#!python err.task` with the final `#!python Task` (status, history, artifacts) |
+| `#!python A2ATaskTerminalError` | Base for the terminal-state errors below; carries `#!python err.task` with the final `#!python Task` (status, history, artifacts) |
 | `#!python A2ATaskFailedError` | Task ended in `#!python TASK_STATE_FAILED` |
 | `#!python A2ATaskRejectedError` | Task ended in `#!python TASK_STATE_REJECTED` |
+| `#!python A2ATaskCancelledError` | Task ended in `#!python TASK_STATE_CANCELED` — `#!python err.task.artifacts` holds the partial text received before the cancellation |
 | `#!python A2ATaskAuthRequiredError` | Task ended in `#!python TASK_STATE_AUTH_REQUIRED`. Per A2A spec §7.6 the agent expects credentials out-of-band — apply them and retry |
 
-Catch `#!python A2ATaskTerminalError` to handle any terminal failure uniformly; switch on the concrete subclass when the recovery path differs (e.g. retry with auth on `#!python AuthRequired`, surface the error to the operator on `#!python Failed` / `#!python Rejected`).
+Catch `#!python A2ATaskTerminalError` to handle any terminal failure uniformly; switch on the concrete subclass when the recovery path differs (e.g. retry with auth on `#!python AuthRequired`, surface the error to the operator on `#!python Failed` / `#!python Rejected`, treat `#!python Cancelled` as an operator or server decision rather than a fault).
 
 ## Testing Helpers
 

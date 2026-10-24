@@ -11,7 +11,7 @@ from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
 from a2a.server.agent_execution import RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import Part, Task, TaskState, TaskStatus
+from a2a.types import Message, Part, Task, TaskState, TaskStatus
 
 from ag2.agent import Agent
 from ag2.context import ConversationContext, strip_reserved_variables
@@ -40,6 +40,41 @@ from .mappers import (
     parse_message,
     task_state_to_status_update,
 )
+
+
+class _ClosingTaskUpdater(TaskUpdater):
+    """``TaskUpdater`` that sends ``last_chunk=True`` on the streamed text artifact before the task leaves ``working``."""
+
+    def __init__(
+        self,
+        event_queue: EventQueue,
+        task_id: str,
+        context_id: str,
+        *,
+        text_artifact_id: str,
+        text_pieces: Sequence[str],
+    ) -> None:
+        super().__init__(event_queue, task_id, context_id)
+        self._text_artifact_id = text_artifact_id
+        self._text_pieces = text_pieces
+        self._closed = False
+
+    async def update_status(
+        self,
+        state: TaskState,
+        message: Message | None = None,
+        timestamp: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if state != TaskState.TASK_STATE_WORKING and self._text_pieces and not self._closed:
+            self._closed = True
+            await self.add_artifact(
+                parts=[Part(text="")],
+                artifact_id=self._text_artifact_id,
+                append=True,
+                last_chunk=True,
+            )
+        await super().update_status(state, message, timestamp, metadata)
 
 
 class AgentExecutor(A2AAgentExecutorBase):
@@ -94,7 +129,15 @@ class AgentExecutor(A2AAgentExecutorBase):
         # when no task has been persisted yet for this id.
         is_first_turn = request_context.current_task is None
 
-        updater = TaskUpdater(event_queue, task_id, context_id)
+        text_artifact_id = uuid4().hex
+        text_pieces: list[str] = []
+        updater = _ClosingTaskUpdater(
+            event_queue,
+            task_id,
+            context_id,
+            text_artifact_id=text_artifact_id,
+            text_pieces=text_pieces,
+        )
 
         # Per-request stream lifted out of ``_run_one_turn`` so it spans
         # the whole lifecycle. Each ``TaskUpdater`` transition is mirrored
@@ -113,8 +156,6 @@ class AgentExecutor(A2AAgentExecutorBase):
         # required so subscribers can resolve DI on these events.
         lifecycle_ctx = ConversationContext(stream, dependency_provider=self._agent.dependency_provider)
 
-        text_artifact_id = uuid4().hex
-        text_pieces: list[str] = []
         pending_client_calls: list[ClientToolCallEvent] = []
 
         @stream.subscribe
@@ -201,9 +242,9 @@ class AgentExecutor(A2AAgentExecutorBase):
             raise
 
     async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        # Per a2a-sdk contract: the framework already cancels the asyncio
-        # Task running ``execute()`` (raising ``asyncio.CancelledError``)
-        # before this hook is invoked. Our only job is to publish the
+        # Per a2a-sdk contract: the framework awaits this hook first and only
+        # afterwards cancels the asyncio Task running ``execute()`` (raising
+        # ``asyncio.CancelledError``). Our only job is to publish the
         # CANCELED status update — the running coroutine winds down on
         # its own. The ``except Exception`` in ``execute`` deliberately
         # does NOT catch ``CancelledError`` (it's a ``BaseException``),
