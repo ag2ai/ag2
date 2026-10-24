@@ -22,6 +22,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 pytest.importorskip("opentelemetry.sdk")
 
 from ag2 import Agent, tool
+from ag2.config import ModelConfig
 from ag2.eval import (
     BudgetThresholds,
     Feedback,
@@ -493,6 +494,45 @@ async def test_repeats_runs_each_task_n_times(tmp_path: Path) -> None:
     assert len(result.tasks) == 5
     assert {t.task.task_id for t in result.tasks} == {"tokyo#1", "tokyo#2", "tokyo#3", "tokyo#4", "tokyo#5"}
     assert result.pass_rate("called_get_weather") == 1.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("repeats", [1, 2])
+@pytest.mark.parametrize("paris_task_id", ["paris", "tokyo#1"])
+async def test_repeats_preserve_per_task_model_config(tmp_path: Path, repeats: int, paris_task_id: str) -> None:
+    suite = Suite.from_list([
+        {"task_id": "tokyo", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}},
+        {"task_id": paris_task_id, "inputs": {"input": "Paris?"}, "reference_outputs": {"city": "Paris"}},
+        {"task_id": "sydney", "inputs": {"input": "Sydney?"}, "reference_outputs": {"city": "Sydney"}},
+    ])
+    configs: dict[str, ModelConfig] = {"tokyo": _cassette("Tokyo"), paris_task_id: _cassette("Paris")}
+    original_configs = configs.copy()
+
+    result = await run_agent(
+        suite,
+        agent=_build_weather_agent(config=_cassette("Sydney")),
+        model_config=configs,
+        scorers=[city_argument_correct],
+        repeats=repeats,
+        concurrency=3,
+        store_dir=tmp_path,
+    )
+
+    assert [
+        (tr.task.task_id, tr.trace.events_of(ModelResponse)[-1].content, tr.feedback, tr.trace.exception)
+        for tr in result.tasks
+    ] == [
+        (
+            f"{task_id}#{i + 1}" if repeats > 1 else task_id,
+            f"{city} is sunny.",
+            (Feedback(key="city_argument_correct", score=True),),
+            None,
+        )
+        for task_id, city in (("tokyo", "Tokyo"), (paris_task_id, "Paris"), ("sydney", "Sydney"))
+        for i in range(repeats)
+    ]
+    assert result.pass_rate("city_argument_correct") == 1.0
+    assert configs == original_configs
 
 
 @pytest.mark.asyncio

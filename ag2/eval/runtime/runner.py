@@ -111,7 +111,8 @@ async def run_agent(
             ``ModelConfig`` to apply everywhere, or a
             ``dict[task_id, ModelConfig]`` for per-task configs (e.g.
             one ``TestConfig`` cassette per task). Passed to ``ask``, so it
-            overrides the agent's config for that task.
+            overrides the agent's config for that task. With ``repeats > 1``,
+            use the original task IDs; each repeat receives the same config.
         repeats: Run each task this many times (default ``1``) — for
             measuring consistency. ``pass_rate`` / ``score_stats`` pool
             all runs; with ``repeats > 1`` each run gets a distinct
@@ -155,6 +156,10 @@ async def run_agent(
     """
     resolved_suite = _resolve_suite(suite)
     tasks_to_run = _expand_repeats(resolved_suite, repeats)
+    if repeats > 1 and isinstance(model_config, dict):
+        model_config = {
+            f"{task_id}#{i + 1}": config for task_id, config in model_config.items() for i in range(repeats)
+        }
 
     # Resolve run_id up front so it can be stamped on the produced spans; caller keys win.
     resolved_run_id = run_id if run_id is not None else uuid4().hex
