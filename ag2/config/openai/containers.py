@@ -110,8 +110,8 @@ class ContainerManager:
         container = await self._client.containers.create(**body)
         return ContainerInfo(
             id=container.id,
-            name=getattr(container, "name", None),
-            status=getattr(container, "status", None),
+            name=container.name,
+            status=container.status,
         )
 
     async def delete(self, container_id: str) -> None:

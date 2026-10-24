@@ -19,6 +19,7 @@ MIME_TOOL_SCHEMAS = "application/vnd.ag2.tool-schemas+json"
 MIME_TOOL_CALL = "application/vnd.ag2.tool-call+json"
 MIME_TOOL_RESULT = "application/vnd.ag2.tool-result+json"
 MIME_HISTORY = "application/vnd.ag2.history+json"
+AG2_INPUT_MODES = (MIME_HISTORY, MIME_TOOL_CALL, MIME_TOOL_RESULT, MIME_TOOL_SCHEMAS)
 
 # Bidirectional context-variables sync rides on Message.metadata under this key.
 CONTEXT_UPDATE_METADATA_KEY = "ag2.context_update"

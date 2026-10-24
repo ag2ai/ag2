@@ -12,6 +12,9 @@ from dirty_equals import IsPartialDict
 
 pytest.importorskip("elevenlabs")
 
+from elevenlabs.speech_to_text.client import OMIT
+from elevenlabs.types import SpeechToTextChunkResponseModel, VoiceSettings
+
 from ag2 import Agent, MemoryStream, events, testing
 from ag2.context import ConversationContext
 from ag2.live import (
@@ -60,15 +63,14 @@ class FakeSpeechToText:
         return self._response
 
 
-class Transcript:
-    def __init__(self, text: str) -> None:
-        self.text = text
+def scribe_response(text: str) -> SpeechToTextChunkResponseModel:
+    return SpeechToTextChunkResponseModel(language_code="en", language_probability=1.0, text=text, words=[])
 
 
 class FakeClient:
     def __init__(self, chunks: list[bytes], transcript: Any = None) -> None:
         self.text_to_speech = FakeTextToSpeech(chunks)
-        self.speech_to_text = FakeSpeechToText(transcript or Transcript("hello there"))
+        self.speech_to_text = FakeSpeechToText(transcript or scribe_response("hello there"))
 
 
 @pytest.fixture
@@ -87,6 +89,9 @@ class TestTTSConfig:
                 "text": "hello there",
                 "model_id": "eleven_v3",
                 "output_format": "pcm_24000",
+                "voice_settings": OMIT,
+                "language_code": OMIT,
+                "seed": OMIT,
             }
         ]
         assert client.text_to_speech.stream_calls == []
@@ -105,9 +110,23 @@ class TestTTSConfig:
                 "text": "hello there",
                 "model_id": "eleven_flash_v2_5",
                 "output_format": "pcm_24000",
+                "voice_settings": OMIT,
+                "language_code": OMIT,
+                "seed": OMIT,
             }
         ]
         assert client.text_to_speech.convert_calls == []
+
+    @pytest.mark.parametrize("config_cls", [ElevenLabsTTSConfig, ElevenLabsStreamingTTSConfig])
+    async def test_forwards_explicit_voice_options(
+        self, client: FakeClient, config_cls: type[ElevenLabsTTSConfig | ElevenLabsStreamingTTSConfig]
+    ) -> None:
+        settings = VoiceSettings(stability=0.3, speed=1.1)
+
+        await config_cls(voice_settings=settings, language_code="fr", seed=7, client=client).synthesize("salut")
+
+        [call] = client.text_to_speech.convert_calls or client.text_to_speech.stream_calls
+        assert call == IsPartialDict({"voice_settings": settings, "language_code": "fr", "seed": 7})
 
     async def test_streaming_config_can_still_buffer_a_complete_clip(self, client: FakeClient) -> None:
         assert await ElevenLabsStreamingTTSConfig(client=client).synthesize("hello there") == b"onetwothree"
@@ -149,9 +168,15 @@ class TestSTTConfig:
         assert text == "hello there"
         assert seen == [events.TranscriptionCompletedEvent("hello there")]
         [call] = client.speech_to_text.convert_calls
-        assert call == IsPartialDict({"model_id": "scribe_v2", "diarize": False})
+        assert call == IsPartialDict({
+            "model_id": "scribe_v2",
+            "diarize": False,
+            "language_code": OMIT,
+            "num_speakers": OMIT,
+            "tag_audio_events": OMIT,
+            "keyterms": OMIT,
+        })
         assert call["file"].startswith(b"RIFF")
-        assert "language_code" not in call
 
     async def test_forwards_explicit_scribe_options(self, client: FakeClient) -> None:
         await ElevenLabsTranscriber("scribe_v2", language_code="fr", diarize=True, client=client).transcribe(
@@ -162,6 +187,14 @@ class TestSTTConfig:
         assert client.speech_to_text.convert_calls == [
             IsPartialDict({"model_id": "scribe_v2", "language_code": "fr", "diarize": True})
         ]
+
+    async def test_forwards_audio_event_and_speaker_options(self, client: FakeClient) -> None:
+        await ElevenLabsTranscriber(
+            num_speakers=2, tag_audio_events=False, keyterms=["AG2", "Scribe"], client=client
+        ).transcribe(VOICE, ConversationContext(stream=MemoryStream()))
+
+        [call] = client.speech_to_text.convert_calls
+        assert call == IsPartialDict({"num_speakers": 2, "tag_audio_events": False, "keyterms": ["AG2", "Scribe"]})
 
     async def test_rejects_responses_without_transcript_text(self) -> None:
         with pytest.raises(TypeError, match="no transcript text"):

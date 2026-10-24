@@ -3,12 +3,115 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
+from google import genai
+from google.genai import types
 
+from ag2.config import GeminiConfig
 from ag2.config.gemini.files import GeminiFilesClient
+from ag2.files import FilesAPI
 from ag2.files.types import FileContent, FileProvider, UploadedFile
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["list", "read", "delete"])
+async def test_file_operations_use_configured_http_client(operation: str) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            return httpx.Response(200, json={})
+        if request.url.path.endswith("/files/output"):
+            return httpx.Response(
+                200,
+                json={
+                    "name": "files/output",
+                    "displayName": "output.txt",
+                    "mimeType": "text/plain",
+                    "downloadUri": "https://files.example/output",
+                },
+            )
+        if request.url.path.endswith(":download"):
+            return httpx.Response(200, content=b"generated text")
+        return httpx.Response(200, json={"files": []})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), headers={"x-custom": "present"}
+    ) as http_client:
+        with patch("ag2.config.gemini.files.genai.Client", wraps=genai.Client) as constructor:
+            api = FilesAPI(GeminiConfig(model="test", api_key="test", http_client=http_client))
+        # Check the public SDK option before making a request: the broken version must not contact Google.
+        options = constructor.call_args.kwargs.get("http_options")
+        assert isinstance(options, types.HttpOptions)
+        assert options.httpx_async_client is http_client
+        assert constructor.call_args.kwargs.get("vertexai") is False
+
+        if operation == "list":
+            assert await api.list() == []
+        elif operation == "read":
+            assert await api.read("files/output") == FileContent(
+                name="output.txt", data=b"generated text", media_type="text/plain"
+            )
+        else:
+            await api.delete("files/output")
+        assert not http_client.is_closed
+
+    assert len(requests) == (2 if operation == "read" else 1)
+    assert all(request.headers["x-custom"] == "present" for request in requests)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("page_count", [0, 1, 3])
+async def test_list_follows_sdk_pages(page_count: int) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        page = len(requests)
+        payload: dict[str, Any] = {
+            "files": [
+                {
+                    "name": f"files/{page}",
+                    "displayName": f"{page}.txt",
+                    "sizeBytes": str(page),
+                    "createTime": "2025-01-01T00:00:00Z",
+                }
+            ]
+            if page_count
+            else []
+        }
+        if page < page_count:
+            payload["nextPageToken"] = f"page-{page + 1}"
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        sdk = genai.Client(
+            api_key="test", vertexai=False, http_options=types.HttpOptions(httpx_async_client=http_client)
+        )
+        # Supply the real SDK at its public constructor seam, without a live API request.
+        with patch("ag2.config.gemini.files.genai.Client", return_value=sdk):
+            files = await FilesAPI(GeminiConfig(model="test", api_key="test")).list()
+
+    assert files == [
+        UploadedFile(
+            file_id=f"files/{page}",
+            filename=f"{page}.txt",
+            provider=FileProvider.GEMINI,
+            bytes_count=page,
+            purpose=None,
+            created_at=1735689600.0,
+        )
+        for page in range(1, page_count + 1)
+    ]
+    assert [dict(request.url.params) for request in requests] == [
+        {},
+        *[{"pageToken": f"page-{page + 1}"} for page in range(1, page_count)],
+    ]
 
 
 @pytest.mark.asyncio
@@ -43,7 +146,7 @@ class TestGeminiFilesClient:
     ) -> None:
         mock_client = AsyncMock()
         mock_genai.Client.return_value = mock_client
-        mock_client.aio.files.upload.return_value = SimpleNamespace(name="files/x", size_bytes=3)
+        mock_client.aio.files.upload.return_value = types.File(name="files/x", size_bytes=3)
 
         await GeminiFilesClient(gemini_config).upload(b"abc", "blob.unknownext")
 
@@ -82,35 +185,6 @@ class TestGeminiFilesClient:
 
         with pytest.raises(NotImplementedError, match="user-uploaded files"):
             await GeminiFilesClient(gemini_config).read("files/abc123")
-
-    @patch("ag2.config.gemini.files.genai")
-    async def test_list(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
-        mock_client = AsyncMock()
-        mock_genai.Client.return_value = mock_client
-        mock_client.aio.files.list.return_value = SimpleNamespace(
-            page=[
-                SimpleNamespace(
-                    name="files/1",
-                    display_name="doc.pdf",
-                    size_bytes=100,
-                    create_time="2025-01-01",
-                ),
-            ]
-        )
-
-        result = await GeminiFilesClient(gemini_config).list()
-
-        assert result == [
-            UploadedFile(
-                file_id="files/1",
-                filename="doc.pdf",
-                provider=FileProvider.GEMINI,
-                bytes_count=100,
-                purpose=None,
-                created_at=1735689600.0,
-            ),
-        ]
-        assert result[0].created_at == 1735689600.0
 
     @patch("ag2.config.gemini.files.genai")
     async def test_delete(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:

@@ -257,33 +257,23 @@ def convert_messages(
     system_prompt: Iterable[str],
     messages: Iterable[BaseEvent],
     serializer: SerializerProto,
-) -> tuple[list[chat_pb2.Message], list["XAIResponse"]]:
-    """Convert AG2 events to xAI helper messages + persisted assistant ``Response`` objects.
+) -> list[chat_pb2.Message | XAIResponse]:
+    """Convert events to messages and persisted responses in conversation order.
 
-    Returns a 2-tuple:
-
-    * ``messages`` — list of ``chat_pb2.Message`` to pass to ``chat.create(messages=...)``.
-    * ``responses`` — list of ``xai_sdk.chat.Response`` objects (restored from
-      ``XAIAssistantEvent.proto_bytes``) to ``chat.append(...)`` AFTER chat is
-      created. This is the canonical way xai-sdk replays assistant turns with
-      tool_calls — there is no public helper to construct them from primitives.
-
-    The order is preserved: an ``XAIAssistantEvent`` followed by a
-    ``ToolResultsEvent`` becomes a Response + tool_result message at the
-    corresponding offset in the output stream.
+    Append each item through ``chat.append(...)``, which accepts both SDK
+    messages and responses and preserves provider-native assistant state.
     """
-    result: list[chat_pb2.Message] = []
+    result: list[chat_pb2.Message | XAIResponse] = []
     prompt_text = "\n".join(s for s in system_prompt if s)
     if prompt_text:
         result.append(system(prompt_text))
 
-    responses: list[XAIResponse] = []
     skip_next_model_response = False
 
     for message in messages:
         if isinstance(message, XAIAssistantEvent):
             proto = chat_pb2.GetChatCompletionResponse.FromString(message.proto_bytes)
-            responses.append(XAIResponse(proto, None))
+            result.append(XAIResponse(proto, None))
             # The companion ModelResponse (emitted alongside) carries the same
             # turn — skip it so we don't double-append the assistant message.
             skip_next_model_response = True
@@ -310,7 +300,7 @@ def convert_messages(
             # Surface the summary as a user turn so it stays visible and gives a valid opening turn
             result.append(user(f"[Summary of earlier conversation]\n{message.summary}"))
 
-    return result, responses
+    return result
 
 
 def normalize_usage(usage: usage_pb2.SamplingUsage | None) -> Usage:

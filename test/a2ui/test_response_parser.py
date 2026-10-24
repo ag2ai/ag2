@@ -4,6 +4,7 @@
 
 import pytest
 
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.parser import (
     A2UIParseResult,
     A2UIResponseParser,
@@ -11,6 +12,17 @@ from ag2.a2ui.parser import (
     strip_markdown_fences,
 )
 from ag2.a2ui.schema_manager import A2UISchemaManager
+
+
+def _create_surface_with_extension(key: str) -> JsonObject:
+    return {
+        "version": "v1.0",
+        "createSurface": {
+            "surfaceId": "s",
+            "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "metadata": {"extensions": {key: {}}},
+        },
+    }
 
 
 class TestA2UIResponseParser:
@@ -236,8 +248,6 @@ class TestA2UIResponseParserV091Validation:
             version_string=manager.version_string,
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
-            component_schemas=manager.get_component_schemas(),
-            catalog_id=manager.catalog_id,
         )
 
     def test_accepts_v0_9_1_version_string(self, parser_v091: A2UIResponseParser) -> None:
@@ -258,55 +268,177 @@ class TestA2UIResponseParserV1Validation:
             version_string=manager.version_string,
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
-            component_schemas=manager.get_component_schemas(),
-            catalog_id=manager.catalog_id,
         )
 
-    def test_validate_call_function(self, parser_v1: A2UIResponseParser) -> None:
-        # 'openUrl' is a function defined in the v1.0 basic catalog.
+    @pytest.fixture()
+    def parser_v1_agent_function(self) -> A2UIResponseParser:
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://mycompany.com/cat.json",
+                "functions": {
+                    "lookup": {
+                        "type": "object",
+                        "returnType": "string",
+                        "allowedCallers": "agentOnly",
+                        "properties": {"@call": {"const": "lookup"}},
+                        "required": ["@call"],
+                    },
+                },
+            },
+        )
+        return A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+        )
+
+    def test_call_renderer_function_accepts_a_function_the_agent_may_call(
+        self, parser_v1_agent_function: A2UIResponseParser
+    ) -> None:
         ops = [
             {
                 "version": "v1.0",
-                "functionCallId": "fc-1",
-                "callFunction": {"call": "openUrl", "args": {"url": "https://example.com"}},
+                "callRendererFunction": {
+                    "functionCallId": "fc-1",
+                    "callFunction": {"@call": "lookup", "catalogId": "https://mycompany.com/cat.json"},
+                },
+            }
+        ]
+        assert parser_v1_agent_function.validate(ops).is_valid is True
+
+    @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
+    def test_unknown_component_property_is_reported_on_its_component(
+        self, parser_v1: A2UIResponseParser, message_key: str
+    ) -> None:
+        # The envelope's ``oneOf`` alone only says "no branch matched"; the LLM needs the property.
+        slider = {"id": "root", "component": "Slider", "min": 1, "max": 3, "step": 1, "value": {"@path": "/n"}}
+        ops = [{"version": "v1.0", message_key: {"surfaceId": "s", "components": [slider]}}]
+
+        result = parser_v1.validate(ops)
+
+        assert result.errors == [
+            "Operation 0: Component 'root' (Slider): Unevaluated properties are not allowed ('step' was unexpected)"
+        ]
+
+    def test_call_renderer_function_rejects_a_renderer_only_function(self, parser_v1: A2UIResponseParser) -> None:
+        # 'openUrl' is in the v1.0 basic catalog, which leaves allowedCallers at its
+        # default (rendererOnly): the renderer would reject the agent's call.
+        ops = [
+            {
+                "version": "v1.0",
+                "callRendererFunction": {
+                    "functionCallId": "fc-1",
+                    "callFunction": {
+                        "@call": "openUrl",
+                        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                        "args": {"url": "https://example.com"},
+                    },
+                },
             }
         ]
         result = parser_v1.validate(ops)
-        assert result.is_valid is True
-        assert result.errors == []
+        assert result.is_valid is False
+        assert len(result.errors) == 1
+        [error] = result.errors
+        assert "openUrl" in error
 
-    def test_validate_action_response_value(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "actionId": "act-1", "actionResponse": {"value": 42}}]
+    def test_agent_function_response_is_not_generated_by_the_llm(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": 42}}]
         result = parser_v1.validate(ops)
-        assert result.is_valid is True
+        assert result.is_valid is False
+        assert any("do not emit it" in error for error in result.errors)
 
-    def test_validate_action_response_error(self, parser_v1: A2UIResponseParser) -> None:
+    @pytest.mark.parametrize("key", ["a\u0301", "_private", "x2", "дом"])
+    def test_extension_keys_follow_uax31_identifiers(self, parser_v1: A2UIResponseParser, key: str) -> None:
+        # A letter plus a combining mark is a valid identifier (XID_Continue covers marks).
+        assert parser_v1.validate([_create_surface_with_extension(key)]).is_valid is True
+
+    @pytest.mark.parametrize("key", ["\u00b2", "1x", "a-b", ""])
+    def test_extension_keys_reject_non_identifiers(self, parser_v1: A2UIResponseParser, key: str) -> None:
+        # "²" is \w-class but cannot start an identifier; digits and dashes never can.
+        assert parser_v1.validate([_create_surface_with_extension(key)]).is_valid is False
+
+    def test_function_response_rejects_value_and_error_together(self, parser_v1: A2UIResponseParser) -> None:
+        # Spec: a FunctionResponse carries exactly one of value | error (oneOf).
         ops = [
             {
                 "version": "v1.0",
-                "actionId": "act-1",
-                "actionResponse": {"error": {"code": "NOT_FOUND", "message": "missing"}},
-            }
-        ]
-        result = parser_v1.validate(ops)
-        assert result.is_valid is True
-
-    def test_action_response_rejects_value_and_error_together(self, parser_v1: A2UIResponseParser) -> None:
-        # Spec: actionResponse carries exactly one of value | error (oneOf).
-        ops = [
-            {
-                "version": "v1.0",
-                "actionId": "act-1",
-                "actionResponse": {"value": 1, "error": {"code": "c", "message": "m"}},
+                "agentFunctionResponse": {
+                    "functionCallId": "fc-1",
+                    "value": 1,
+                    "error": {"code": "c", "message": "m"},
+                },
             }
         ]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
 
-    def test_call_function_requires_function_call_id(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "callFunction": {"call": "openUrl"}}]
+    def test_call_renderer_function_requires_function_call_id(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "callRendererFunction": {"callFunction": {"@call": "openUrl"}}}]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
+
+    @pytest.mark.parametrize(
+        "legacy",
+        [
+            {"functionCallId": "fc-1", "callFunction": {"call": "openUrl"}},
+            {"actionId": "act-1", "actionResponse": {"value": 42}},
+        ],
+    )
+    def test_pre_rc_function_messages_are_rejected(self, parser_v1: A2UIResponseParser, legacy: dict) -> None:
+        # ``callFunction`` / ``actionResponse`` were replaced by the RC's role-based messages.
+        assert parser_v1.validate([{"version": "v1.0", **legacy}]).is_valid is False
+
+    def test_create_surface_carries_initial_components_and_data_model(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [
+            {
+                "version": "v1.0",
+                "createSurface": {
+                    "surfaceId": "s1",
+                    "components": [{"id": "root", "component": "Text", "text": {"@path": "/greeting"}}],
+                    "dataModel": {"greeting": "hi"},
+                    "metadata": {"extensions": {"a2ui_trace": "t-1"}},
+                },
+            }
+        ]
+        assert parser_v1.validate(ops).is_valid is True
+
+    def test_create_surface_inline_components_need_a_root(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [
+            {
+                "version": "v1.0",
+                "createSurface": {"surfaceId": "s1", "components": [{"id": "a", "component": "Text", "text": "hi"}]},
+            }
+        ]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is False
+        assert any("root" in error for error in result.errors)
+
+    def test_create_surface_inline_component_errors_are_drilled_into(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [
+            {
+                "version": "v1.0",
+                "createSurface": {"surfaceId": "s1", "components": [{"id": "root", "component": "Text", "text": 5}]},
+            }
+        ]
+        result = parser_v1.validate(ops)
+        assert result.is_valid is False
+        assert any(error.startswith("Operation 0: Component 'root' (Text)") for error in result.errors)
+
+    def test_create_surface_rejects_the_removed_theme(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "createSurface": {"surfaceId": "s1", "theme": {"primaryColor": "#fff"}}}]
+        assert parser_v1.validate(ops).is_valid is False
+
+    def test_create_surface_rejects_malformed_extension_keys(self, parser_v1: A2UIResponseParser) -> None:
+        ops = [{"version": "v1.0", "createSurface": {"surfaceId": "s1", "metadata": {"extensions": {"@x": 1}}}}]
+        assert parser_v1.validate(ops).is_valid is False
+
+    def test_update_data_model_requires_value(self, parser_v1: A2UIResponseParser) -> None:
+        missing = [{"version": "v1.0", "updateDataModel": {"surfaceId": "s1", "path": "/a"}}]
+        deleting = [{"version": "v1.0", "updateDataModel": {"surfaceId": "s1", "path": "/a", "value": None}}]
+        assert parser_v1.validate(missing).is_valid is False
+        assert parser_v1.validate(deleting).is_valid is True
 
     def test_create_surface_valid_in_v1(self, parser_v1: A2UIResponseParser) -> None:
         # createSurface is shared across versions; the v1.0 parser accepts it
@@ -324,6 +456,393 @@ class TestA2UIResponseParserV1Validation:
         assert result.is_valid is True
 
 
+class TestSurfaceCatalogValidation:
+    @pytest.fixture()
+    def parser(self) -> A2UIResponseParser:
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "functions": {
+                    "openUrl": {
+                        "type": "object",
+                        "returnType": "void",
+                        "allowedCallers": "agentOnly",
+                        "properties": {
+                            "@call": {"const": "openUrl"},
+                            "args": {
+                                "type": "object",
+                                "properties": {"url": {"type": "string"}},
+                                "required": ["url"],
+                            },
+                        },
+                        "required": ["@call", "args"],
+                    },
+                },
+            },
+        )
+        return A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+        )
+
+    @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
+    @pytest.mark.parametrize("surface_catalog", ["basic", "custom"])
+    @pytest.mark.parametrize("call_catalog", [None, "basic", "custom"])
+    def test_function_inherits_the_surface_catalog_unless_explicitly_overridden(
+        self,
+        parser: A2UIResponseParser,
+        message_key: str,
+        surface_catalog: str,
+        call_catalog: str | None,
+    ) -> None:
+        catalogs = {
+            "basic": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "custom": "https://example.com/catalog.json",
+        }
+        call: JsonObject = {"@call": "openUrl", "args": {"url": "https://example.com"}}
+        if call_catalog is not None:
+            call["catalogId"] = catalogs[call_catalog]
+        components: list[JsonObject] = [
+            {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
+            {"id": "label", "component": "Text", "text": "Open"},
+        ]
+        create: JsonObject = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
+        if message_key == "createSurface":
+            create["components"] = components
+            operations = [{"version": "v1.0", "createSurface": create}]
+        else:
+            operations = [
+                {"version": "v1.0", "createSurface": create},
+                {"version": "v1.0", "updateComponents": {"surfaceId": "s", "components": components}},
+            ]
+
+        result = parser.validate(operations)
+
+        # The basic function is rendererOnly; the custom override is agentOnly.
+        assert result.is_valid is ((call_catalog or surface_catalog) == "basic"), result.errors
+
+    @pytest.mark.parametrize("call_catalog", [None, "basic", "custom"])
+    def test_an_earlier_responses_surface_uses_only_the_available_catalog_context(
+        self, parser: A2UIResponseParser, call_catalog: str | None
+    ) -> None:
+        basic_id = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+        custom_id = "https://example.com/catalog.json"
+        # A parser is shared by clients: this earlier response must not establish
+        # a persistent binding for another validation call's identical surface id.
+        assert parser.validate([
+            {"version": "v1.0", "createSurface": {"surfaceId": "s", "catalogId": custom_id}}
+        ]).is_valid
+        call: JsonObject = {"@call": "openUrl", "args": {"url": "https://example.com"}}
+        if call_catalog is not None:
+            call["catalogId"] = basic_id if call_catalog == "basic" else custom_id
+        operations = [
+            {
+                "version": "v1.0",
+                "updateComponents": {
+                    "surfaceId": "s",
+                    "components": [
+                        {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
+                        {"id": "label", "component": "Text", "text": "Open"},
+                    ],
+                },
+            }
+        ]
+
+        result = parser.validate(operations)
+
+        # With no binding available, the implicit call has a valid interpretation
+        # in the basic catalog. An explicit custom call remains forbidden.
+        assert result.is_valid is (call_catalog != "custom"), result.errors
+
+    def test_surface_catalogs_are_kept_separate_within_a_response(self, parser: A2UIResponseParser) -> None:
+        operations = [
+            {
+                "version": "v1.0",
+                "createSurface": {
+                    "surfaceId": "basic",
+                    "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                },
+            },
+            {
+                "version": "v1.0",
+                "createSurface": {"surfaceId": "custom", "catalogId": "https://example.com/catalog.json"},
+            },
+            {
+                "version": "v1.0",
+                "updateComponents": {
+                    "surfaceId": "basic",
+                    "components": [
+                        {
+                            "id": "root",
+                            "component": "Button",
+                            "child": "label",
+                            "action": {"functionCall": {"@call": "openUrl", "args": {"url": "https://example.com"}}},
+                        },
+                        {"id": "label", "component": "Text", "text": "Open"},
+                    ],
+                },
+            },
+        ]
+
+        result = parser.validate(operations)
+
+        assert result.is_valid, result.errors
+
+    @pytest.mark.parametrize("surface_catalog", ["basic", "custom"])
+    def test_component_catalog_does_not_override_its_functions_surface_default(
+        self, parser: A2UIResponseParser, surface_catalog: str
+    ) -> None:
+        catalogs = {
+            "basic": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "custom": "https://example.com/catalog.json",
+        }
+        result = parser.validate([
+            {
+                "version": "v1.0",
+                "createSurface": {
+                    "surfaceId": "s",
+                    "catalogId": catalogs[surface_catalog],
+                    "components": [
+                        {
+                            "id": "root",
+                            "component": "Button",
+                            "catalogId": catalogs["custom" if surface_catalog == "basic" else "basic"],
+                            "child": "label",
+                            "action": {"functionCall": {"@call": "openUrl", "args": {"url": "https://example.com"}}},
+                        },
+                        {"id": "label", "component": "Text", "text": "Open"},
+                    ],
+                },
+            },
+        ])
+
+        assert result.is_valid is (surface_catalog == "basic"), result.errors
+
+
+def test_component_can_select_basic_catalog_over_custom_surface() -> None:
+    manager = A2UISchemaManager(
+        protocol_version="v1.0",
+        custom_catalog={
+            "$id": "https://example.com/catalog.json",
+            "components": {
+                "Text": {
+                    "type": "object",
+                    "properties": {"component": {"const": "Text"}, "customText": {"type": "string"}},
+                    "required": ["component", "customText"],
+                },
+            },
+        },
+    )
+    parser = A2UIResponseParser(
+        version_string=manager.version_string,
+        server_to_client_schema=manager.server_to_client_schema,
+        schema_registry=manager.build_schema_registry(),
+    )
+
+    result = parser.validate([
+        {
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "s",
+                "catalogId": manager.catalog_id,
+                "components": [
+                    {
+                        "id": "root",
+                        "component": "Text",
+                        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                        "text": "Hello",
+                    },
+                ],
+            },
+        },
+    ])
+
+    assert result.is_valid, result.errors
+
+
+class TestComponentCatalogValidation:
+    @pytest.fixture()
+    def parser(self) -> A2UIResponseParser:
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "components": {
+                    "Text": {
+                        "type": "object",
+                        "properties": {"component": {"const": "Text"}, "customText": {"type": "string"}},
+                        "required": ["component", "customText"],
+                    },
+                },
+            },
+        )
+        return A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+        )
+
+    @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
+    @pytest.mark.parametrize("surface_catalog", ["basic", "custom"])
+    @pytest.mark.parametrize("component_catalog", [None, "basic", "custom", "unknown"])
+    @pytest.mark.parametrize("text_field", ["text", "customText"])
+    def test_components_use_the_selected_catalog_definition(
+        self,
+        parser: A2UIResponseParser,
+        message_key: str,
+        surface_catalog: str,
+        component_catalog: str | None,
+        text_field: str,
+    ) -> None:
+        catalogs = {
+            "basic": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "custom": "https://example.com/catalog.json",
+            "unknown": "https://unknown.example/catalog.json",
+        }
+        component: JsonObject = {"id": "root", "component": "Text", text_field: "Hello"}
+        if component_catalog is not None:
+            component["catalogId"] = catalogs[component_catalog]
+        create: JsonObject = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
+        if message_key == "createSurface":
+            create["components"] = [component]
+            operations = [{"version": "v1.0", "createSurface": create}]
+        else:
+            operations = [
+                {"version": "v1.0", "createSurface": create},
+                {"version": "v1.0", "updateComponents": {"surfaceId": "s", "components": [component]}},
+            ]
+
+        result = parser.validate(operations)
+
+        selected = component_catalog or surface_catalog
+        expected = (selected == "basic" and text_field == "text") or (
+            selected == "custom" and text_field == "customText"
+        )
+        assert result.is_valid is expected, result.errors
+
+    def test_component_catalog_defaults_are_isolated_between_responses(self, parser: A2UIResponseParser) -> None:
+        assert parser.validate([
+            {
+                "version": "v1.0",
+                "createSurface": {"surfaceId": "s", "catalogId": "https://example.com/catalog.json"},
+            },
+        ]).is_valid
+
+        result = parser.validate([
+            {
+                "version": "v1.0",
+                "updateComponents": {
+                    "surfaceId": "s",
+                    "components": [{"id": "root", "component": "Text", "text": "Hello"}],
+                },
+            },
+        ])
+
+        assert result.is_valid, result.errors
+
+
+class TestCatalogFunctionDefinitions:
+    @pytest.fixture()
+    def function_schema(self) -> JsonObject:
+        return {
+            "type": "object",
+            "returnType": "string",
+            "requiresUserActivation": False,
+            "properties": {
+                "@call": {"const": "lookup"},
+                "args": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}},
+                    "required": ["id"],
+                },
+            },
+            "required": ["@call", "args"],
+        }
+
+    @pytest.mark.parametrize("call_kind", ["rpc", "binding"])
+    @pytest.mark.parametrize("allowed_callers", [None, "rendererOnly", "agentOnly", "rendererOrAgent"])
+    def test_callers_use_function_definitions_independently_of_schema_keys(
+        self, function_schema: JsonObject, call_kind: str, allowed_callers: str | None
+    ) -> None:
+        if allowed_callers is not None:
+            function_schema["allowedCallers"] = allowed_callers
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "functions": {"lookup/~definition": function_schema},
+            },
+        )
+        parser = A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+        )
+        call: JsonObject = {"@call": "lookup", "catalogId": manager.catalog_id, "args": {"id": "x"}}
+        if call_kind == "rpc":
+            operation = {"version": "v1.0", "callRendererFunction": {"functionCallId": "fc", "callFunction": call}}
+        else:
+            operation = {
+                "version": "v1.0",
+                "createSurface": {
+                    "surfaceId": "s",
+                    "components": [
+                        {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
+                        {"id": "label", "component": "Text", "text": "Lookup"},
+                    ],
+                },
+            }
+
+        result = parser.validate([operation])
+
+        expected = (
+            allowed_callers in ("agentOnly", "rendererOrAgent")
+            if call_kind == "rpc"
+            else allowed_callers != "agentOnly"
+        )
+        assert result.is_valid is expected, result.errors
+
+    @pytest.mark.parametrize(
+        ("call", "expected_error"),
+        [
+            ({"@call": "missing", "args": {"id": "x"}}, "unknown @call 'missing'"),
+            ({"@call": "lookup", "args": {}}, "'id' is a required property"),
+        ],
+    )
+    def test_definition_keys_do_not_obscure_function_validation_errors(
+        self, function_schema: JsonObject, call: JsonObject, expected_error: str
+    ) -> None:
+        function_schema["allowedCallers"] = "agentOnly"
+        manager = A2UISchemaManager(
+            protocol_version="v1.0",
+            custom_catalog={
+                "$id": "https://example.com/catalog.json",
+                "functions": {"lookupDefinition": function_schema},
+            },
+        )
+        parser = A2UIResponseParser(
+            version_string=manager.version_string,
+            server_to_client_schema=manager.server_to_client_schema,
+            schema_registry=manager.build_schema_registry(),
+        )
+        result = parser.validate([
+            {
+                "version": "v1.0",
+                "callRendererFunction": {
+                    "functionCallId": "fc",
+                    "callFunction": {**call, "catalogId": manager.catalog_id},
+                },
+            }
+        ])
+
+        assert not result.is_valid
+        assert len(result.errors) == 1
+        [error] = result.errors
+        assert expected_error in error
+
+
 class TestPerComponentValidation:
     @pytest.fixture()
     def parser_with_components(self) -> A2UIResponseParser:
@@ -332,8 +851,6 @@ class TestPerComponentValidation:
             version_string="v0.9",
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
-            component_schemas=manager.get_component_schemas(),
-            catalog_id=manager.catalog_id,
         )
 
     def test_button_missing_child_gives_actionable_error(self, parser_with_components: A2UIResponseParser) -> None:
@@ -426,7 +943,6 @@ def test_per_component_validation_works_without_catalog_id() -> None:
         version_string="v0.9",
         server_to_client_schema=manager.server_to_client_schema,
         schema_registry=manager.build_schema_registry(),
-        component_schemas=manager.get_component_schemas(),
         # catalog_id intentionally omitted — should still drill into components.
     )
     ops = [
@@ -480,6 +996,13 @@ class TestFormatValidationError:
         feedback = parser.format_validation_error(parse_result, validation_result)
         assert "v0.9" in feedback
 
+    def test_tells_the_llm_not_to_address_the_correction_to_the_user(self) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        parse_result = A2UIParseResult(text="", operations=[], has_a2ui=True)
+        validation_result = A2UIValidationResult(is_valid=False, errors=["missing version"])
+        feedback = parser.format_validation_error(parse_result, validation_result)
+        assert "do not mention the errors" in feedback
+
 
 class TestStripMarkdownFences:
     def test_no_fences(self) -> None:
@@ -493,6 +1016,15 @@ class TestStripMarkdownFences:
 
     def test_fence_no_newline(self) -> None:
         assert strip_markdown_fences('```{"key": "value"}```') == '{"key": "value"}'
+
+    def test_single_line_fence_with_language_tag(self) -> None:
+        assert strip_markdown_fences('```json {"key": "value"}```') == '{"key": "value"}'
+
+    def test_single_line_fence_with_language_tag_before_array(self) -> None:
+        assert strip_markdown_fences("```json[1, 2]```") == "[1, 2]"
+
+    def test_single_line_fence_with_uppercase_language_tag(self) -> None:
+        assert strip_markdown_fences('```JSON {"a": 1}```') == '{"a": 1}'
 
     def test_whitespace_around_fences(self) -> None:
         assert strip_markdown_fences("  ```json\n[1, 2]\n```  ") == "[1, 2]"
@@ -520,6 +1052,17 @@ class TestParseWithMarkdownFences:
         parser = A2UIResponseParser(version_string="v0.9")
         response = (
             'Text\n<a2ui-json>\n```\n{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}\n```\n</a2ui-json>'
+        )
+        result = parser.parse(response)
+        assert result.has_a2ui is True
+        assert len(result.operations) == 1
+        assert result.parse_error is None
+
+    def test_parse_single_line_json_fence(self) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        response = (
+            "Here is your UI.\n<a2ui-json>\n```json "
+            '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]```\n</a2ui-json>'
         )
         result = parser.parse(response)
         assert result.has_a2ui is True

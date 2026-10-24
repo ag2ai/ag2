@@ -18,26 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True, frozen=True)
-class ActionResponseRequest:
-    """The v1.0 correlation handle when a client action awaits an ``actionResponse``.
-
-    Present only when the client set ``wantResponse`` **and** supplied an
-    ``actionId``. Making the id non-optional here is what keeps the illegal
-    "wants a response but gave no id to correlate it" state unrepresentable: an
-    :class:`A2UIIncomingAction` either carries a fully-formed request or ``None``.
-    """
-
-    action_id: str
-
-
-@dataclass(slots=True, frozen=True)
 class A2UIIncomingAction:
     """A client→server ``action`` envelope content.
 
-    Mirrors ``client_to_server.json#/properties/action``. ``response_request``
-    is the v1.0 addition: when set, the client expects the server to reply with
-    an ``actionResponse`` carrying the same ``action_id``. It is ``None`` for
-    v0.9 clients (no response expected).
+    Mirrors ``client_to_server.json#/properties/action`` (``renderer_to_agent.json``
+    in v1.0). ``user_message`` and ``metadata`` are v1.0 additions; an action is
+    fire-and-forget — a renderer that wants a reply sends a ``callAgentFunction``.
     """
 
     name: str
@@ -45,7 +31,43 @@ class A2UIIncomingAction:
     source_component_id: str
     timestamp: str
     context: dict[str, JsonValue] = field(default_factory=dict)
-    response_request: ActionResponseRequest | None = None
+    user_message: str | None = None
+    metadata: dict[str, JsonValue] | None = None
+
+    @property
+    def arguments(self) -> dict[str, JsonValue]:
+        """The keyword arguments a server action handler is run with."""
+        return self.context
+
+
+@dataclass(slots=True, frozen=True)
+class A2UIIncomingFunctionCall:
+    """A client→server ``callAgentFunction`` envelope content (v1.0).
+
+    The renderer asks the agent to run the function ``call`` with ``args``. The
+    agent must answer with an ``agentFunctionResponse`` carrying the same
+    ``function_call_id`` — so, unlike the other envelopes, a parsed call always has
+    a usable id and function name (a malformed one parses as unknown instead).
+    ``args`` preserves the wire value so a non-object can be rejected without
+    invoking the handler; only an omitted ``args`` defaults to an empty object.
+    ``catalog_id_valid`` distinguishes an omitted catalog from an explicitly
+    malformed override, including JSON null, so malformed input cannot select a
+    handler by silently falling back to the active catalog.
+    """
+
+    function_call_id: str
+    surface_id: str
+    call: str
+    args: JsonValue = field(default_factory=dict)
+    catalog_id: str | None = None
+    catalog_id_valid: bool = True
+
+    @property
+    def arguments(self) -> dict[str, JsonValue]:
+        """The keyword arguments a server action handler is run with."""
+        if not isinstance(self.args, dict):
+            raise ValueError("Function arguments must be a JSON object")
+        return self.args
 
 
 @dataclass(slots=True, frozen=True)
@@ -64,9 +86,9 @@ class A2UIIncomingSurfaceError:
 
 @dataclass(slots=True, frozen=True)
 class A2UIIncomingFunctionError:
-    """A client→server ``error`` answering a server-initiated ``callFunction`` (v1.0).
+    """A client→server ``error`` reporting a failed server-initiated function call (v1.0).
 
-    The generic-error arm of ``client_to_server.json#/properties/error``: it
+    The generic-error arm of ``renderer_to_agent.json#/properties/error``: it
     carries a ``function_call_id`` instead of a surface. Splitting this from
     :class:`A2UIIncomingSurfaceError` makes the spec's "surface XOR functionCall"
     rule structural — neither class can hold the other's correlation field.
@@ -83,17 +105,26 @@ A2UIIncomingError = A2UIIncomingSurfaceError | A2UIIncomingFunctionError
 
 
 @dataclass(slots=True, frozen=True)
-class A2UIIncomingFunctionResponse:
-    """A client→server ``functionResponse`` envelope content (v1.0).
+class A2UIFunctionError:
+    """The ``error`` arm of a ``FunctionResponse`` (v1.0): why a function call failed."""
 
-    The client's successful reply to a server-initiated ``callFunction``.
-    Mirrors ``client_to_server.json#/properties/functionResponse``;
-    ``function_call_id`` is copied verbatim from the originating call.
+    code: str
+    message: str
+
+
+@dataclass(slots=True, frozen=True)
+class A2UIIncomingFunctionResponse:
+    """A client→server ``rendererFunctionResponse`` envelope content (v1.0).
+
+    The client's reply to a server-initiated ``callRendererFunction``. Mirrors
+    ``common_types.json#/$defs/FunctionResponse``; ``function_call_id`` is copied
+    verbatim from the originating call. A response carries a ``value`` or an
+    ``error`` — ``error`` is set exactly when the call failed.
     """
 
     function_call_id: str
-    call: str
     value: JsonValue = None
+    error: A2UIFunctionError | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -101,6 +132,13 @@ class A2UIIncomingActionResult:
     """A successfully parsed client→server ``action`` envelope."""
 
     action: A2UIIncomingAction
+
+
+@dataclass(slots=True, frozen=True)
+class A2UIIncomingFunctionCallResult:
+    """A successfully parsed client→server ``callAgentFunction`` envelope (v1.0)."""
+
+    function_call: A2UIIncomingFunctionCall
 
 
 @dataclass(slots=True, frozen=True)
@@ -112,7 +150,7 @@ class A2UIIncomingErrorResult:
 
 @dataclass(slots=True, frozen=True)
 class A2UIIncomingFunctionResponseResult:
-    """A successfully parsed client→server ``functionResponse`` envelope (v1.0)."""
+    """A successfully parsed client→server ``rendererFunctionResponse`` envelope (v1.0)."""
 
     function_response: A2UIIncomingFunctionResponse
 
@@ -125,24 +163,87 @@ class A2UIIncomingUnknownResult:
 
 
 # Result of parsing one client→server envelope. A discriminated union over the
-# four mutually exclusive outcomes — each arm carries only its own payload, so
+# mutually exclusive outcomes — each arm carries only its own payload, so
 # the old "kind says action but action is None" states are unrepresentable.
 # Branch with ``isinstance`` (mirrors the ``A2UIIncomingError`` union above).
 A2UIIncomingParseResult = (
-    A2UIIncomingActionResult | A2UIIncomingErrorResult | A2UIIncomingFunctionResponseResult | A2UIIncomingUnknownResult
+    A2UIIncomingActionResult
+    | A2UIIncomingFunctionCallResult
+    | A2UIIncomingErrorResult
+    | A2UIIncomingFunctionResponseResult
+    | A2UIIncomingUnknownResult
 )
+
+
+def _optional_str(value: JsonValue) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _parse_function_call(obj: dict[str, JsonValue]) -> A2UIIncomingParseResult:
+    function_call_id = obj.get("functionCallId")
+    call_obj = obj.get("callFunction")
+    name = call_obj.get("@call") if isinstance(call_obj, dict) else None
+    if not isinstance(function_call_id, str):
+        return A2UIIncomingUnknownResult(parse_error="'callAgentFunction' has no 'functionCallId' to correlate a reply")
+    if not isinstance(call_obj, dict) or not isinstance(name, str):
+        return A2UIIncomingUnknownResult(parse_error="'callAgentFunction' has no 'callFunction' with an '@call' name")
+    surface_id = obj.get("surfaceId")
+    if not isinstance(surface_id, str):
+        return A2UIIncomingUnknownResult(parse_error="'callAgentFunction' has no string 'surfaceId'")
+    raw_args = call_obj.get("args", {})
+    return A2UIIncomingFunctionCallResult(
+        function_call=A2UIIncomingFunctionCall(
+            function_call_id=function_call_id,
+            surface_id=surface_id,
+            call=name,
+            # Preserve malformed input so it cannot silently run a handler with defaults.
+            args=dict(raw_args) if isinstance(raw_args, dict) else raw_args,
+            catalog_id=_optional_str(call_obj.get("catalogId")),
+            catalog_id_valid="catalogId" not in call_obj or isinstance(call_obj["catalogId"], str),
+        ),
+    )
+
+
+def _parse_function_response(obj: dict[str, JsonValue]) -> A2UIIncomingParseResult:
+    function_call_id = obj.get("functionCallId")
+    if not isinstance(function_call_id, str):
+        return A2UIIncomingUnknownResult(
+            parse_error="'rendererFunctionResponse' has no 'functionCallId' to correlate with a call",
+        )
+    if ("value" in obj) == ("error" in obj):
+        return A2UIIncomingUnknownResult(
+            parse_error="'rendererFunctionResponse' must carry exactly one of 'value' or 'error'",
+        )
+    error: A2UIFunctionError | None = None
+    if "error" in obj:
+        error_obj = obj["error"]
+        code = error_obj.get("code") if isinstance(error_obj, dict) else None
+        message = error_obj.get("message") if isinstance(error_obj, dict) else None
+        if not isinstance(code, str) or not isinstance(message, str):
+            return A2UIIncomingUnknownResult(
+                parse_error="'rendererFunctionResponse' error must be an object with string 'code' and 'message'",
+            )
+        error = A2UIFunctionError(code=code, message=message)
+    return A2UIIncomingFunctionResponseResult(
+        function_response=A2UIIncomingFunctionResponse(
+            function_call_id=function_call_id,
+            value=obj.get("value"),
+            error=error,
+        ),
+    )
 
 
 def parse_incoming_message(data: JsonValue) -> A2UIIncomingParseResult:
     """Classify a single client→server A2UI envelope.
 
     Accepts a dict shaped like ``{"version": ..., "action": {...}}``,
-    ``{"version": ..., "functionResponse": {...}}``, or
+    ``{"version": ..., "callAgentFunction": {...}}``,
+    ``{"version": ..., "rendererFunctionResponse": {...}}``, or
     ``{"version": ..., "error": {...}}`` and returns a typed result. Parsing is
-    structural and version-neutral — v1.0-only arms (``functionResponse``,
-    ``action.wantResponse``/``actionId``, ``error.functionCallId``) decode when
-    present and are simply absent for v0.9 clients. Does NOT validate the
-    envelope against the JSON schema — use
+    structural and version-neutral — v1.0-only arms (``callAgentFunction``,
+    ``rendererFunctionResponse``, ``action.userMessage``, ``error.functionCallId``)
+    decode when present and are simply absent for v0.9 clients. Does NOT validate
+    the envelope against the JSON schema — use
     ``A2UISchemaManager.client_to_server_schema`` for strict validation.
     """
     if not isinstance(data, dict):
@@ -150,43 +251,27 @@ def parse_incoming_message(data: JsonValue) -> A2UIIncomingParseResult:
 
     action_obj = data.get("action")
     if isinstance(action_obj, dict):
-        name = str(action_obj.get("name", ""))
-        raw_action_id = action_obj.get("actionId")
-        action_id = raw_action_id if isinstance(raw_action_id, str) else None
-        response_request: ActionResponseRequest | None = None
-        if action_obj.get("wantResponse", False):
-            if action_id:
-                response_request = ActionResponseRequest(action_id=action_id)
-            else:
-                # Malformed v1.0: wantResponse with no actionId. Without an id we
-                # cannot correlate an actionResponse, so the request is dropped
-                # (and the client's pending response can never be satisfied) —
-                # surface it rather than fabricate a correlation handle.
-                logger.warning(
-                    "A2UI action %r set wantResponse but provided no actionId; cannot correlate an actionResponse.",
-                    name,
-                )
         raw_context = action_obj.get("context")
+        raw_metadata = action_obj.get("metadata")
         return A2UIIncomingActionResult(
             action=A2UIIncomingAction(
-                name=name,
+                name=str(action_obj.get("name", "")),
                 surface_id=str(action_obj.get("surfaceId", "")),
                 source_component_id=str(action_obj.get("sourceComponentId", "")),
                 timestamp=str(action_obj.get("timestamp", "")),
                 context=dict(raw_context) if isinstance(raw_context, dict) else {},
-                response_request=response_request,
+                user_message=_optional_str(action_obj.get("userMessage")),
+                metadata=dict(raw_metadata) if isinstance(raw_metadata, dict) else None,
             ),
         )
 
-    function_response_obj = data.get("functionResponse")
+    function_call_obj = data.get("callAgentFunction")
+    if isinstance(function_call_obj, dict):
+        return _parse_function_call(function_call_obj)
+
+    function_response_obj = data.get("rendererFunctionResponse")
     if isinstance(function_response_obj, dict):
-        return A2UIIncomingFunctionResponseResult(
-            function_response=A2UIIncomingFunctionResponse(
-                function_call_id=str(function_response_obj.get("functionCallId", "")),
-                call=str(function_response_obj.get("call", "")),
-                value=function_response_obj.get("value"),
-            ),
-        )
+        return _parse_function_response(function_response_obj)
 
     error_obj = data.get("error")
     if isinstance(error_obj, dict):
@@ -208,7 +293,7 @@ def parse_incoming_message(data: JsonValue) -> A2UIIncomingParseResult:
         return A2UIIncomingErrorResult(error=error)
 
     return A2UIIncomingUnknownResult(
-        parse_error="envelope has none of 'action', 'functionResponse', or 'error' keys",
+        parse_error="envelope has none of 'action', 'callAgentFunction', 'rendererFunctionResponse', or 'error' keys",
     )
 
 
@@ -280,28 +365,17 @@ def action_to_prompt(action: A2UIIncomingAction) -> str | None:
         origin_bits.append(f"at={sanitize_for_prompt(action.timestamp)}")
     origin = f" ({', '.join(origin_bits)})" if origin_bits else ""
 
-    # v1.0: when the client expects an actionResponse, tell the LLM the
-    # correlation id so it can emit one inside its <a2ui-json> output. The
-    # malformed "wantResponse without actionId" case is already dropped (and
-    # warned) at parse time, so here a present ``response_request`` always
-    # carries a usable id.
-    response_hint = ""
-    if action.response_request is not None:
-        action_id = sanitize_for_prompt(action.response_request.action_id)
-        response_hint = (
-            f" The UI is awaiting a response: emit an A2UI 'actionResponse' message with "
-            f"actionId '{action_id}' carrying the result (a 'value' on success, or an 'error')."
-        )
+    user_message = f" User message: {sanitize_for_prompt(action.user_message)}" if action.user_message else ""
 
-    return f"The user clicked the '{name}' button{origin}. Context: {ctx_json}{response_hint}"
+    return f"The user clicked the '{name}' button{origin}. Context: {ctx_json}{user_message}"
 
 
 def error_to_prompt(err: A2UIIncomingError) -> str:
     """Rewrite a client-reported A2UI ``error`` as a corrective LLM instruction.
 
     Handles both error arms: a surface-scoped validation/render error, and the
-    v1.0 generic error answering a server-initiated ``callFunction`` (carrying
-    a ``functionCallId`` instead of a surface).
+    v1.0 generic error reporting a failed server-initiated ``callRendererFunction``
+    (carrying a ``functionCallId`` instead of a surface).
     """
     code = sanitize_for_prompt(err.code) if err.code else "(none)"
     message = sanitize_for_prompt(err.message)
@@ -323,22 +397,33 @@ def error_to_prompt(err: A2UIIncomingError) -> str:
     )
 
 
-def function_response_to_prompt(fr: A2UIIncomingFunctionResponse) -> str:
-    """Rewrite a client ``functionResponse`` (v1.0) as a continuation instruction.
+def function_response_to_prompt(fr: A2UIIncomingFunctionResponse, function_name: str | None = None) -> str:
+    """Rewrite a client ``rendererFunctionResponse`` (v1.0) as a continuation instruction.
 
-    The client has executed a server-initiated ``callFunction`` and returned its
-    result. All client-supplied values pass through :func:`sanitize_for_prompt`.
+    The client has run a server-initiated ``callRendererFunction`` and returned
+    its result or its failure. ``function_name`` (when the server remembers the call)
+    names the function. All client-supplied values pass through
+    :func:`sanitize_for_prompt`.
     """
-    call = sanitize_for_prompt(fr.call) if fr.call else "(unknown)"
-    fc_id = sanitize_for_prompt(fr.function_call_id) if fr.function_call_id else "(unknown)"
+    fc_id = sanitize_for_prompt(fr.function_call_id)
+    if function_name:
+        fc_id = f"{fc_id}, function={sanitize_for_prompt(function_name)}"
+    if fr.error is not None:
+        code = sanitize_for_prompt(fr.error.code) if fr.error.code else "(none)"
+        return (
+            f"The client's function call (id={fc_id}) failed. Code: {code}. "
+            f"Message: {sanitize_for_prompt(fr.error.message)}. "
+            "Adjust your approach and continue without relying on that function's result."
+        )
     try:
         value_json = sanitize_for_prompt(json.dumps(fr.value))
     except (TypeError, ValueError):
-        logger.warning("functionResponse value for call '%s' is not JSON-serializable; using a placeholder.", fr.call)
+        logger.warning(
+            "rendererFunctionResponse value for call '%s' is not JSON-serializable; using a placeholder.", fc_id
+        )
         value_json = "<non-serializable>"
     return (
-        f"The client executed the '{call}' function call (id={fc_id}) and returned: {value_json}. "
-        "Use this result to continue."
+        f"The client executed the function call (id={fc_id}) and returned: {value_json}. Use this result to continue."
     )
 
 
@@ -348,7 +433,7 @@ def parse_incoming_interactions(envelopes: Iterable[JsonValue]) -> list[A2UIInco
     Used by the transports to surface each incoming interaction as an
     :class:`~ag2.a2ui.A2UIClientEvent`. Unlike :func:`iter_incoming_prompts`
     (which rewrites envelopes into prompt strings), this keeps the structured
-    result — ``action`` / ``functionResponse`` / ``error`` — for observers.
+    result — ``action`` / ``callAgentFunction`` / ``rendererFunctionResponse`` / ``error`` — for observers.
     ``unknown`` (unclassifiable) envelopes are skipped.
     """
     results: list[A2UIIncomingParseResult] = []
@@ -363,6 +448,7 @@ def parse_incoming_interactions(envelopes: Iterable[JsonValue]) -> list[A2UIInco
 def iter_incoming_prompts(
     envelopes: Iterable[JsonValue],
     resolve_action: Callable[[str], A2UIEventAction | None],
+    resolve_function: Callable[[str], str | None] | None = None,
 ) -> Iterator[str]:
     """Rewrite client→server A2UI envelopes into corrective prompt strings.
 
@@ -371,9 +457,12 @@ def iter_incoming_prompts(
     transport only wraps the yielded strings in its own input type
     (``TextInput`` / ``Part(text=...)``). Clicks on a **registered** action
     (``resolve_action`` returns its declaration) are skipped here — they run on
-    the server via ``run_server_action`` instead. Envelopes that cannot be safely
-    mapped are dropped with a warning: a nameless ``action``, a
-    ``functionResponse`` missing its ``functionCallId``, or an unrecognized kind.
+    the server via ``run_server_action`` instead. So is every ``callAgentFunction``:
+    the agent is never asked to answer one, the server does, via
+    ``run_agent_function``. Envelopes that cannot be safely mapped are dropped with
+    a warning: a nameless ``action`` or an unrecognized or malformed kind.
+    ``resolve_function`` maps a ``functionCallId`` to the name of the
+    ``callRendererFunction`` it answers, so the continuation prompt can name it.
     """
     for envelope in envelopes:
         result = parse_incoming_message(envelope)
@@ -387,13 +476,13 @@ def iter_incoming_prompts(
                 logger.warning("Dropping A2UI action with no name.")
                 continue
             yield prompt
+        elif isinstance(result, A2UIIncomingFunctionCallResult):
+            # Answered on the server (run_agent_function), never by the LLM.
+            continue
         elif isinstance(result, A2UIIncomingFunctionResponseResult):
-            if not result.function_response.function_call_id:
-                logger.warning(
-                    "Dropping A2UI functionResponse — missing functionCallId, cannot correlate to a callFunction.",
-                )
-                continue
-            yield function_response_to_prompt(result.function_response)
+            response = result.function_response
+            name = resolve_function(response.function_call_id) if resolve_function else None
+            yield function_response_to_prompt(response, name)
         elif isinstance(result, A2UIIncomingErrorResult):
             yield error_to_prompt(result.error)
         elif isinstance(result, A2UIIncomingUnknownResult):
@@ -403,17 +492,19 @@ def iter_incoming_prompts(
 
 
 __all__ = (
+    "A2UIFunctionError",
     "A2UIIncomingAction",
     "A2UIIncomingActionResult",
     "A2UIIncomingError",
     "A2UIIncomingErrorResult",
+    "A2UIIncomingFunctionCall",
+    "A2UIIncomingFunctionCallResult",
     "A2UIIncomingFunctionError",
     "A2UIIncomingFunctionResponse",
     "A2UIIncomingFunctionResponseResult",
     "A2UIIncomingParseResult",
     "A2UIIncomingSurfaceError",
     "A2UIIncomingUnknownResult",
-    "ActionResponseRequest",
     "action_to_prompt",
     "error_to_prompt",
     "function_response_to_prompt",
