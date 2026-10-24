@@ -6,7 +6,7 @@ import json
 import logging
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import httpx2
 from anthropic import NOT_GIVEN, AsyncAnthropic
@@ -89,6 +89,7 @@ class CreateOptions(TypedDict, total=False):
     stream: bool
     metadata: dict[str, str] | None
     service_tier: str | None
+    speed: Literal["standard", "fast"] | None
 
 
 class AnthropicClient(LLMClient):

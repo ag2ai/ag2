@@ -11,6 +11,7 @@ they are asserted there rather than against AG2's own kwargs.
 """
 
 import json
+from typing import Literal
 
 import httpx2
 import pytest
@@ -121,6 +122,57 @@ async def test_sampling_fields_reach_the_api_when_streaming() -> None:
     await _ask(config)
 
     assert captured["body"] == IsPartialDict({"temperature": 0.2, "stream": True})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("streaming", [False, True])
+@pytest.mark.parametrize("speed", ["standard", "fast", None])
+async def test_speed_reaches_the_api_when_set(speed: Literal["standard", "fast"] | None, streaming: bool) -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-opus-5-5",
+        api_key="test",
+        speed=speed,
+        streaming=streaming,
+        http_client=_capturing_client(captured, stream=streaming),
+    )
+
+    await _ask(config)
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    if speed is None:
+        assert "speed" not in body
+    else:
+        assert body == IsPartialDict({"speed": speed})
+    headers = captured["headers"]
+    assert isinstance(headers, httpx2.Headers)
+    assert "anthropic-beta" not in headers
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("streaming", [False, True])
+@pytest.mark.parametrize("speed", ["standard", "fast"])
+async def test_speed_preserves_the_users_beta_header_with_mcp(
+    context: Context, speed: Literal["standard", "fast"], streaming: bool
+) -> None:
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-opus-5",
+        api_key="test",
+        speed=speed,
+        streaming=streaming,
+        default_headers={"Anthropic-Beta": "fast-mode-2026-02-01"},
+        http_client=_capturing_client(captured, stream=streaming),
+    )
+    schemas = await MCPServerTool(server_url="https://mcp.example.com/x", server_label="x").schemas(context)
+
+    await _ask(config, tools=schemas)
+
+    assert captured["body"] == IsPartialDict({"speed": speed})
+    headers = captured["headers"]
+    assert isinstance(headers, httpx2.Headers)
+    assert headers.get_list("anthropic-beta") == ["fast-mode-2026-02-01,mcp-client-2025-11-20"]
 
 
 @pytest.mark.asyncio
