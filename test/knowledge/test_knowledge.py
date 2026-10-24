@@ -21,6 +21,7 @@ from ag2.knowledge import (
     DefaultBootstrap,
     DiskKnowledgeStore,
     EventLogWriter,
+    KnowledgeStore,
     LockedKnowledgeStore,
     MemoryKnowledgeStore,
     SqliteKnowledgeStore,
@@ -156,6 +157,54 @@ class TestEventLogWriter:
             ModelRequest([TextInput("batch-2")]),
             ModelRequest([TextInput("final")]),
         ]
+
+    @pytest.mark.parametrize("backend", ["memory", "disk", "sqlite"])
+    async def test_concurrent_dropped_batches_survive(
+        self, backend: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        store: KnowledgeStore
+        if backend == "memory":
+            store = MemoryKnowledgeStore()
+        elif backend == "disk":
+            store = DiskKnowledgeStore(tmp_path)
+        else:
+            store = SqliteKnowledgeStore(tmp_path / "knowledge.db")
+
+        stream_id = uuid4()
+        left = EventLogWriter(store)
+        right = EventLogWriter(store)
+        first = [ModelRequest([TextInput("left-1")]), ModelRequest([TextInput("left-2")])]
+        second = [ModelRequest([TextInput("right-1")]), ModelRequest([TextInput("right-2")])]
+        original_list = store.list
+        snapshots: list[list[str]] = []
+        both_listed = asyncio.Event()
+
+        async def simultaneous_list(path: str = "/") -> list[str]:
+            entries = await original_list(path)
+            snapshots.append(entries)
+            if len(snapshots) == 2:
+                both_listed.set()
+            await both_listed.wait()
+            return entries
+
+        try:
+            # Both writers choose from the same snapshot, regardless of backend scheduling.
+            with monkeypatch.context() as patch:
+                patch.setattr(store, "list", simultaneous_list)
+                await asyncio.wait_for(
+                    asyncio.gather(left.persist_dropped(stream_id, first), right.persist_dropped(stream_id, second)),
+                    timeout=5,
+                )
+
+            later = [ModelRequest([TextInput("later")])]
+            final = [ModelRequest([TextInput("final")])]
+            await left.persist_dropped(stream_id, later)
+            await right.persist(stream_id, final)
+            loaded = await EventLogWriter(store).load(stream_id)
+            assert loaded in ([*first, *second, *later, *final], [*second, *first, *later, *final])
+        finally:
+            if isinstance(store, SqliteKnowledgeStore):
+                store.close()
 
     async def test_persist_dropped_after_gap_uses_max_plus_one(self) -> None:
         store = MemoryKnowledgeStore()
