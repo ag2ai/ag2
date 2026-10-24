@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("opentelemetry.sdk")
 
 from ag2 import Agent
-from ag2.eval import Suite, Variants, run_variants, scorer
+from ag2.eval import Suite, Variants, load_run, run_variants, scorer
 from ag2.eval.scorers import final_answer_matches
 from ag2.testing import TestConfig
 
@@ -114,3 +114,27 @@ async def test_tie_shares_a_rank_and_has_no_unique_best(tmp_path) -> None:
 
     assert {row.rank for row in board.leaderboard("final_answer_matches")} == {1}  # both rank 1
     assert board.best("final_answer_matches") is None  # no unique winner
+
+
+@scorer
+def reply_text(outputs) -> str:
+    return outputs["body"]
+
+
+@pytest.mark.asyncio()
+async def test_colliding_variant_names_keep_separate_saved_runs(tmp_path) -> None:
+    names = ("model/a", "model:a", "model_a")
+    board = await run_variants(
+        "say hi",
+        variants=Variants({name: Agent("variant", config=TestConfig(name)) for name in names}),
+        scorers=[reply_text],
+        run_id="sweep",
+        store_dir=tmp_path,
+    )
+
+    assert len({result.run_id for result in board.results.values()}) == len(names)
+    assert len(list(tmp_path.glob("*.json"))) == len(names)
+    for name, result in board.results.items():
+        loaded = load_run(tmp_path / f"{result.run_id}.json")
+        assert loaded.run_id == result.run_id
+        assert loaded.value_counts("reply_text") == {name: 1}
