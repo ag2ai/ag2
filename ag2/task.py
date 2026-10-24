@@ -232,8 +232,8 @@ class Task:
         self._context = context
         self._owns_context = False
         self._metadata: TaskMetadata | None = None
-        self._had_previous_dep = False
         self._previous_dep: Any = None
+        self._exited = False
         self._checkpoint_store = checkpoint_store
         self._resume_from = resume_from
         # Populated in ``__aenter__`` by reading from ``checkpoint_store``
@@ -435,9 +435,13 @@ class Task:
             expires_at=_expires_iso(self._ttl_seconds, now),
         )
 
+        self._exited = False
         existing = self._context.dependencies.get(_TASK_DEP_KEY)
+        # Walk past already-exited siblings to the nearest still-active task
+        # so the chain survives when middle siblings exit first.
+        while existing is not None and existing._exited:
+            existing = existing._previous_dep
         if existing is not None:
-            self._had_previous_dep = True
             self._previous_dep = existing
         self._context.dependencies[_TASK_DEP_KEY] = self
 
@@ -466,13 +470,20 @@ class Task:
             elif self._metadata.state == TaskState.RUNNING:
                 await self.complete()
         finally:
-            if self._context is not None:
-                if self._had_previous_dep:
-                    self._context.dependencies[_TASK_DEP_KEY] = self._previous_dep
+            self._exited = True
+            # Only restore the dependency entry if we still own it. Sibling
+            # tasks can enter the same context concurrently; restoring
+            # unconditionally would pop or overwrite another task's entry.
+            # The chain is kept intact after exit: a later sibling exit walks
+            # it to the nearest still-active task.
+            if self._context is not None and self._context.dependencies.get(_TASK_DEP_KEY) is self:
+                prev = self._previous_dep
+                while prev is not None and prev._exited:
+                    prev = prev._previous_dep
+                if prev is not None:
+                    self._context.dependencies[_TASK_DEP_KEY] = prev
                 else:
                     self._context.dependencies.pop(_TASK_DEP_KEY, None)
-            self._had_previous_dep = False
-            self._previous_dep = None
 
 
 TaskInject = Annotated[Task | None, Inject(_TASK_DEP_KEY, default=None)]
