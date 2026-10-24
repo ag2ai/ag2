@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
@@ -404,3 +404,29 @@ async def start_grpc_pair(
         grpc_url=grpc_url,
         grpc_server=grpc_server,
     )
+
+
+_Script = Callable[[TaskUpdater, asyncio.Event], Awaitable[None]]
+
+
+class ScriptedExecutor(A2AAgentExecutorBase):
+    """Runs a fresh task through ``script``; ``release`` is opened by the test, never by a timer."""
+
+    def __init__(self, script: _Script) -> None:
+        self._script = script
+        self.release = asyncio.Event()
+
+    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        msg = request_context.message
+        assert msg is not None
+        task_id = msg.task_id or uuid4().hex
+        context_id = msg.context_id or uuid4().hex
+        await event_queue.enqueue_event(
+            Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
+        )
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        await updater.start_work()
+        await self._script(updater, self.release)
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        return None

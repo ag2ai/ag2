@@ -12,6 +12,7 @@ from a2a.client import A2ACardResolver, Client, ClientCallContext, ClientCallInt
 from a2a.client.errors import A2AClientError
 from a2a.types import (
     AgentCard,
+    Artifact,
     GetExtendedAgentCardRequest,
     GetTaskRequest,
     Message,
@@ -51,6 +52,7 @@ from .errors import (
     A2AClientToolsNotSupportedError,
     A2AReconnectError,
     A2ATaskAuthRequiredError,
+    A2ATaskCancelledError,
     A2ATaskFailedError,
     A2ATaskRejectedError,
 )
@@ -120,6 +122,7 @@ _TERMINAL_STATES = frozenset({
 # streaming and polling paths can never disagree on the mapping.
 _FAILURE_REASONS: dict[TaskState, str] = {
     TaskState.TASK_STATE_FAILED: "failed",
+    TaskState.TASK_STATE_CANCELED: "cancelled",
     TaskState.TASK_STATE_REJECTED: "rejected",
     TaskState.TASK_STATE_AUTH_REQUIRED: "auth_required",
 }
@@ -129,6 +132,7 @@ _FAILURE_REASONS: dict[TaskState, str] = {
 # and keeps the wire→exception mapping in one place.
 _FAILURE_ERRORS: dict[str, type[Exception]] = {
     "failed": A2ATaskFailedError,
+    "cancelled": A2ATaskCancelledError,
     "rejected": A2ATaskRejectedError,
     "auth_required": A2ATaskAuthRequiredError,
 }
@@ -138,14 +142,43 @@ _FAILURE_ERRORS: dict[str, type[Exception]] = {
 class A2ADriveState:
     """State accumulated across one ``ask`` to its terminal task; survives ``input_required`` continuations."""
 
-    accumulated_text: str = ""
+    # Text in order of first appearance; a text artifact owns one slot that later updates extend or replace.
+    text_segments: list[str] = field(default_factory=list)
+    text_slot: dict[str, int] = field(default_factory=dict)
     pending_calls: list[ToolCallEvent] = field(default_factory=list)
     finish_reason: str = "completed"
     terminal_task: Task | None = None
-    # Dedup keys: SDK may replay artifacts/messages on ``SubscribeToTask`` reconnect
-    # (spec §3.5.2), and polling re-reads cumulative ``task.artifacts`` on every poll.
-    seen_artifact_ids: set[str] = field(default_factory=set)
+    # Completed artifacts (``last_chunk``): the SDK may replay them on a ``SubscribeToTask``
+    # reconnect (spec §3.5.2), and polling re-reads cumulative ``task.artifacts``.
+    closed_artifact_ids: set[str] = field(default_factory=set)
     seen_message_ids: set[str] = field(default_factory=set)
+    # Artifacts absorbed by this call / by earlier calls on the same task (tool-result continuations).
+    touched_artifact_ids: set[str] = field(default_factory=set)
+    prior_artifact_ids: frozenset[str] = frozenset()
+
+    def text(self) -> str:
+        return "".join(self.text_segments)
+
+    def add_parts(self, text: str, calls: Sequence[ToolCallEvent]) -> None:
+        self.text_segments.append(text)
+        self.pending_calls.extend(calls)
+
+    def absorb_text(self, artifact_id: str, text: str, append: bool) -> str:
+        """Fold a text artifact update into its slot; return the newly arrived text."""
+        slot = self.text_slot.get(artifact_id)
+        if slot is None:
+            self.text_slot[artifact_id] = len(self.text_segments)
+            self.text_segments.append(text)
+            return text
+        if append:
+            self.text_segments[slot] += text
+            return text
+        # Not an append: the update restates the whole artifact; an older restatement changes nothing.
+        old = self.text_segments[slot]
+        if old.startswith(text):
+            return ""
+        self.text_segments[slot] = text
+        return text[len(old) :] if text.startswith(old) else ""
 
 
 @dataclass(slots=True)
@@ -214,6 +247,7 @@ class A2AClient(LLMClient):
         self._sdk_client: Client | None = None
         self._agent_card: AgentCard | None = preset_card
         self._task_id: str | None = None
+        self._consumed_artifact_ids: set[str] = set()
         self._call_context: ClientCallContext | None = None
 
     async def __call__(
@@ -241,11 +275,12 @@ class A2AClient(LLMClient):
             last = messages[-1] if messages else None
             if not isinstance(last, ToolResultsEvent):
                 self._task_id = None
+                self._consumed_artifact_ids = set()
 
             function_schemas = self._validate_and_extract_tools(tools)
             outgoing = self._build_outgoing(messages, function_schemas, context)
 
-            state = A2ADriveState()
+            state = A2ADriveState(prior_artifact_ids=frozenset(self._consumed_artifact_ids))
             while True:
                 outcome = await self._drive_task(outgoing, context, state)
                 if not outcome.input_required:
@@ -270,10 +305,12 @@ class A2AClient(LLMClient):
                     extra_extensions=self._extensions,
                 )
 
+            self._consumed_artifact_ids |= state.touched_artifact_ids
+
             if state.terminal_task is not None and (exc_cls := _FAILURE_ERRORS.get(state.finish_reason)):
                 raise exc_cls(state.terminal_task)
 
-            message = ModelMessage(state.accumulated_text) if state.accumulated_text else None
+            message = ModelMessage(state.text()) if state.text() else None
 
             return ModelResponse(
                 message=message,
@@ -454,7 +491,7 @@ class A2AClient(LLMClient):
             context,
             state,
         )
-        if state.finish_reason in ("failed", "rejected", "auth_required") or outcome.input_required:
+        if state.finish_reason in _FAILURE_ERRORS or outcome.input_required:
             return outcome
 
         if self._task_id is None:
@@ -500,6 +537,8 @@ class A2AClient(LLMClient):
             if isinstance(a2a_event, A2ATaskSnapshot):
                 self._task_id = a2a_event.task.id
                 self._save_context_id(context, a2a_event.task.context_id)
+                # A resubscribe opens with the task as it stands, covering what streamed while disconnected.
+                await self._absorb_snapshot_artifacts(a2a_event.task, context, state, terminal_calls_visible=False)
                 continue
 
             if isinstance(a2a_event, A2ATaskStatusUpdate):
@@ -526,8 +565,7 @@ class A2AClient(LLMClient):
                     continue
                 self._merge_context_update(context, extract_context_update(msg))
                 text_chunk, calls = await self._handle_artifact_parts(msg.parts, context)
-                state.accumulated_text += text_chunk
-                state.pending_calls.extend(calls)
+                state.add_parts(text_chunk, calls)
                 if msg.message_id:
                     state.seen_message_ids.add(msg.message_id)
                 continue
@@ -544,10 +582,12 @@ class A2AClient(LLMClient):
         sd_state = status_update.status.state
 
         if reason := _FAILURE_REASONS.get(sd_state):
+            partial = state.text() if reason == "cancelled" else ""
             state.terminal_task = Task(
                 id=status_update.task_id,
                 status=status_update.status,
                 context_id=status_update.context_id,
+                artifacts=[Artifact(artifact_id="partial", parts=[Part(text=partial)])] if partial else [],
             )
             state.finish_reason = reason
             return True
@@ -577,25 +617,16 @@ class A2AClient(LLMClient):
             return
         self._merge_context_update(context, extract_context_update(msg))
         text_chunk, calls = await self._handle_artifact_parts(msg.parts, context)
-        state.accumulated_text += text_chunk
-        state.pending_calls.extend(calls)
+        state.add_parts(text_chunk, calls)
         if msg.message_id:
             state.seen_message_ids.add(msg.message_id)
 
     async def _absorb_task_artifacts(self, task: Task, context: ConversationContext, state: A2ADriveState) -> None:
-        # Polling re-reads cumulative ``task.artifacts`` every poll, and a fresh
-        # ``A2AClient`` per ask means state.seen_* is empty across calls. Gate
-        # tool-call absorption on ``INPUT_REQUIRED`` so historical calls from
-        # earlier turns aren't re-surfaced. Streaming doesn't need this gate.
+        # Polling re-reads cumulative ``task.artifacts`` every poll: each snapshot is
+        # the current full content of every artifact, reconciled against what was
+        # already absorbed. Tool calls are only surfaced on ``INPUT_REQUIRED``.
         terminal_calls_visible = task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
-        for artifact in task.artifacts:
-            a2a_event = parse_task_artifact(artifact, task_id=task.id, context_id=task.context_id)
-            if isinstance(a2a_event, A2AToolCallArtifact) and not terminal_calls_visible:
-                # Mark as seen so streaming-mode reconnect won't re-deliver,
-                # but skip the call accumulation for non-terminal polls.
-                state.seen_artifact_ids.add(artifact.artifact_id)
-                continue
-            await self._apply_artifact_update(a2a_event, context, state)
+        await self._absorb_snapshot_artifacts(task, context, state, terminal_calls_visible=terminal_calls_visible)
         # On INPUT_REQUIRED, status.message is the HITL prompt — routed via
         # input_prompt, not assistant text. Skip here for parity with streaming.
         if task.status.HasField("message") and task.status.state != TaskState.TASK_STATE_INPUT_REQUIRED:
@@ -603,12 +634,28 @@ class A2AClient(LLMClient):
             if not msg.message_id or msg.message_id not in state.seen_message_ids:
                 for part in msg.parts:
                     if part.text:
-                        state.accumulated_text += part.text
+                        state.text_segments.append(part.text)
+                        await context.send(ModelMessageChunk(part.text))
                     if terminal_calls_visible and is_data_part_with_mime(part, MIME_TOOL_CALL):
                         state.pending_calls.append(payload_to_call(part_data_to_python(part)))
                 self._merge_context_update(context, extract_context_update(msg))
                 if msg.message_id:
                     state.seen_message_ids.add(msg.message_id)
+
+    async def _absorb_snapshot_artifacts(
+        self,
+        task: Task,
+        context: ConversationContext,
+        state: A2ADriveState,
+        *,
+        terminal_calls_visible: bool,
+    ) -> None:
+        for artifact in task.artifacts:
+            a2a_event = parse_task_artifact(artifact, task_id=task.id, context_id=task.context_id)
+            if isinstance(a2a_event, A2AToolCallArtifact) and not terminal_calls_visible:
+                # Left unseen: the call is only surfaced once the task asks for input.
+                continue
+            await self._apply_artifact_update(a2a_event, context, state)
 
     async def _apply_artifact_update(
         self,
@@ -619,22 +666,24 @@ class A2AClient(LLMClient):
         """Apply an artifact update to drive state; typed subclasses route directly, others scan parts."""
         update = a2a_event.update
         artifact = update.artifact
-        if artifact.artifact_id in state.seen_artifact_ids:
+        artifact_id = artifact.artifact_id
+        if artifact_id in state.closed_artifact_ids or artifact_id in state.prior_artifact_ids:
             return
+        first_sight = artifact_id not in state.touched_artifact_ids
+        state.touched_artifact_ids.add(artifact_id)
 
         if isinstance(a2a_event, A2ATextArtifact):
-            state.accumulated_text += a2a_event.text
-            await context.send(ModelMessageChunk(a2a_event.text))
+            if fresh := state.absorb_text(artifact_id, a2a_event.text, a2a_event.append):
+                await context.send(ModelMessageChunk(fresh))
         elif isinstance(a2a_event, A2AToolCallArtifact):
             state.pending_calls.append(a2a_event.call)
-        else:
+            state.closed_artifact_ids.add(artifact_id)
+        elif first_sight or a2a_event.append:
             text_chunk, calls = await self._handle_artifact_parts(artifact.parts, context)
-            state.accumulated_text += text_chunk
-            state.pending_calls.extend(calls)
+            state.add_parts(text_chunk, calls)
 
-        # Dedup on last_chunk only; the append=False opening chunk of a stream is not yet complete.
         if a2a_event.last_chunk:
-            state.seen_artifact_ids.add(artifact.artifact_id)
+            state.closed_artifact_ids.add(artifact_id)
 
     async def _handle_artifact_parts(
         self,

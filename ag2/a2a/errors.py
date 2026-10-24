@@ -100,7 +100,7 @@ class A2AReconnectError(A2AError):
 
 
 class A2ATaskTerminalError(A2AError):
-    """Base class for terminal Task error states (failed / rejected)."""
+    """Base class for terminal Task error states (failed / rejected / cancelled / auth-required)."""
 
     def __init__(self, task: Task) -> None:
         self.task = task
@@ -114,6 +114,10 @@ class A2ATaskFailedError(A2ATaskTerminalError):
 
 class A2ATaskRejectedError(A2ATaskTerminalError):
     """Task ended in TASK_STATE_REJECTED."""
+
+
+class A2ATaskCancelledError(A2ATaskTerminalError):
+    """Task ended in TASK_STATE_CANCELED; ``task.artifacts`` holds the partial text received."""
 
 
 class A2ATaskAuthRequiredError(A2ATaskTerminalError):

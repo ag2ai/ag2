@@ -49,6 +49,31 @@ def _artifact(artifact_id: str, text: str) -> StreamResponse:
     )
 
 
+def _chunk(artifact_id: str, text: str, *, append: bool = True) -> StreamResponse:
+    """Open (not last) artifact chunk."""
+    return StreamResponse(
+        artifact_update=TaskArtifactUpdateEvent(
+            task_id=TASK_ID,
+            context_id=CONTEXT_ID,
+            artifact=Artifact(artifact_id=artifact_id, parts=[Part(text=text)]),
+            append=append,
+            last_chunk=False,
+        ),
+    )
+
+
+def _snapshot(artifact_id: str, text: str) -> StreamResponse:
+    """Task as it stands on resubscribe: the artifact with everything written so far."""
+    return StreamResponse(
+        task=Task(
+            id=TASK_ID,
+            context_id=CONTEXT_ID,
+            status=TaskStatus(state=TaskState.TASK_STATE_WORKING),
+            artifacts=[Artifact(artifact_id=artifact_id, parts=[Part(text=text)])],
+        ),
+    )
+
+
 def _completed() -> StreamResponse:
     return StreamResponse(
         status_update=TaskStatusUpdateEvent(
@@ -167,6 +192,16 @@ class TestStreamingReconnect:
         reply = await _client(server).ask("ping")
 
         assert reply.body == "hello"
+
+    async def test_text_written_while_disconnected_is_recovered_from_the_snapshot(self) -> None:
+        server = _ScriptedServer(
+            send=_Leg([_task(), _chunk("art-1", "he", append=False)], drop=True),
+            resubscribes=[_Leg([_snapshot("art-1", "hello wor"), _chunk("art-1", "ld"), _completed()])],
+        )
+
+        reply = await _client(server).ask("ping")
+
+        assert reply.body == "hello world"
 
     async def test_gives_up_after_max_reconnects(self) -> None:
         server = _ScriptedServer(
