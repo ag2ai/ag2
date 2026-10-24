@@ -294,7 +294,7 @@ requires-dist = [
     { name = "a2a-sdk", marker = "extra == 'a2a'", specifier = ">=1.2.0,<2" },
     { name = "ag-ui-protocol", marker = "extra == 'ag-ui'", specifier = ">=1.0,<2" },
     { name = "ag2", extras = ["mcp"], marker = "extra == 'acp'" },
-    { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.12.1,<0.13" },
+    { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=1.0.0rc3,<2" },
     { name = "aiobotocore", marker = "extra == 'bedrock'", specifier = ">=3.9.1,<4" },
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.9.0,<2" },
     { name = "anyio", specifier = ">=4.0.0,<5.0.0" },
@@ -518,19 +518,21 @@ types = [
 
 [[package]]
 name = "agent-client-protocol"
-version = "0.12.1"
+version = "1.0.0rc3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
+    { name = "pydantic-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9d/95/2c28ca34e545ce0282e88272aa3a8abdf8f3f926a0492f567ea11acd071b/agent_client_protocol-0.12.1.tar.gz", hash = "sha256:9963ccb590ed96d7dc542c9c023e90676fc76b1c6562e21a9ee112f4fbcb0095", size = 130605, upload-time = "2026-08-16T14:08:22.545Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/66/ad/2c00ce0a2d1381cec36f2841c74ab67a4436d490d7c432b36b76b901f49c/agent_client_protocol-1.0.0rc3.tar.gz", hash = "sha256:a5bdaab0a0bc7e5a0a660c82f5acf7804d60aa8c65a373acc743dd88c7a72cf5", size = 182759, upload-time = "2026-10-12T09:38:46.409Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/21/61/0a2186c8ca53cf464767d4c4fb7fd9e23f48ce4547c2fa0d1c83a4d52410/agent_client_protocol-0.12.1-py3-none-any.whl", hash = "sha256:aaf3cc301ed87d9e2c4ccb91adfe1cd58784355f6ce7e513f50e7ca2391862ef", size = 85929, upload-time = "2026-08-16T14:08:21.307Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/40/f1f64b3a439ac8fe0e66208d3d5cd8c87db3c8ceac8d06864143fb2414c9/agent_client_protocol-1.0.0rc3-py3-none-any.whl", hash = "sha256:003c087eae1b03f2410f2e06bcfbaaa26ae99abbdd011c7a2183e5a699a3426f", size = 127192, upload-time = "2026-10-12T09:38:45.252Z" },
 ]
 
 [package.optional-dependencies]
 http = [
-    { name = "httpx", extra = ["http2"] },
+    { name = "httpx2", extra = ["http2"] },
+    { name = "starlette" },
     { name = "websockets" },
 ]
 
@@ -2681,11 +2683,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
 ]
 
-[package.optional-dependencies]
-http2 = [
-    { name = "h2" },
-]
-
 [[package]]
 name = "httpx-sse"
 version = "0.4.3"
@@ -2725,6 +2722,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d5/44/474bef2a0e9d90f1715d32cb98b0738695ca17ba324095fb2497ed7fbd59/httpx2-2.13.1.tar.gz", hash = "sha256:e48744a19e3af5ee48313d0ce5fe941d5422fae5705ea922a4aabf94d7800dfa", size = 100405, upload-time = "2026-09-23T07:47:23.052Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d8/9c/6fe8931fd9f381042a9e4c7d5a7b4cbf7016b252bec0c99a49fce42c3326/httpx2-2.13.1-py3-none-any.whl", hash = "sha256:6dff50fabc270ee5fd25d845d0b078ed20564579744d6d962850975996d2f9a4", size = 95597, upload-time = "2026-09-23T07:47:20.995Z" },
+]
+
+[package.optional-dependencies]
+http2 = [
+    { name = "h2" },
 ]
 
 [[package]]

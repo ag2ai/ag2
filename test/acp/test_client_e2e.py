@@ -14,7 +14,7 @@ from mcp.client.streamable_http import streamable_http_client
 from ag2 import Agent, Context
 from ag2.acp import MCPCapabilityError
 from ag2.acp.testing import ACPTurn, fake_acp_config
-from ag2.events import BaseEvent, ModelReasoning, ModelResponse, ToolCallEvent, ToolResultEvent
+from ag2.events import BaseEvent, ModelMessage, ModelReasoning, ModelResponse, ToolCallEvent, ToolResultEvent
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
 from ag2.exceptions import HumanInputNotProvidedError, UnsupportedToolError
 from ag2.history import HUMAN_INPUT_ABANDONED_TOOL_RESULT
@@ -114,6 +114,101 @@ async def test_ask_streams_thoughts_tools_and_returns_text() -> None:
     assert any(isinstance(e, BuiltinToolResultEvent) for e in seen)
 
 
+def _chunk(text: str, message_id: str | None = None) -> schema.AgentMessageChunk:
+    return schema.AgentMessageChunk(session_update="agent_message_chunk", message_id=message_id, content=_text(text))
+
+
+@pytest.mark.asyncio
+async def test_chunks_of_one_message_make_one_message() -> None:
+    cfg = fake_acp_config(ACPTurn(updates=[_chunk("Hello "), _chunk("world")]), permission_policy="auto")
+    seen: list[BaseEvent] = []
+
+    try:
+        async with Agent("acp", config=cfg).run("hi") as run:
+            run.stream.subscribe(lambda e: seen.append(e))
+            result = await run.result()
+    finally:
+        await cfg.aclose()
+
+    assert result.body == "Hello world"
+    assert [e.content for e in seen if isinstance(e, ModelMessage)] == ["Hello world"]
+
+
+@pytest.mark.asyncio
+async def test_messages_the_agent_names_apart_are_not_run_together() -> None:
+    cfg = fake_acp_config(
+        ACPTurn(updates=[_chunk("Let me check.", "m1"), _chunk("Done: ", "m2"), _chunk("it works.", "m2")]),
+        permission_policy="auto",
+    )
+    seen: list[BaseEvent] = []
+
+    try:
+        async with Agent("acp", config=cfg).run("hi") as run:
+            run.stream.subscribe(lambda e: seen.append(e))
+            result = await run.result()
+    finally:
+        await cfg.aclose()
+
+    assert [e.content for e in seen if isinstance(e, ModelMessage)] == ["Let me check.", "Done: it works."]
+    assert result.body == "Done: it works."  # the last message is the response's, as with other providers
+
+
+@pytest.mark.asyncio
+async def test_thoughts_are_not_part_of_the_message() -> None:
+    cfg = fake_acp_config(
+        ACPTurn(
+            updates=[
+                schema.AgentThoughtChunk(session_update="agent_thought_chunk", content=_text("thinking")),
+                _chunk("answer"),
+            ]
+        ),
+        permission_policy="auto",
+    )
+
+    try:
+        reply = await Agent("acp", config=cfg).ask("hi")
+    finally:
+        await cfg.aclose()
+
+    assert reply.body == "answer"
+
+
+@pytest.mark.asyncio
+async def test_resources_in_a_message_are_not_dropped() -> None:
+    cfg = fake_acp_config(
+        ACPTurn(
+            updates=[
+                schema.AgentMessageChunk(
+                    session_update="agent_message_chunk",
+                    content=schema.ResourceContentBlock(type="resource_link", name="spec", uri="file:///spec.md"),
+                ),
+                schema.AgentMessageChunk(
+                    session_update="agent_message_chunk",
+                    content=schema.EmbeddedResourceContentBlock(
+                        type="resource",
+                        resource=schema.BlobResourceContents(
+                            blob="ZG9j", mime_type="application/pdf", uri="file:///a.pdf"
+                        ),
+                    ),
+                ),
+            ]
+        ),
+        permission_policy="auto",
+    )
+    seen: list[BaseEvent] = []
+
+    try:
+        async with Agent("acp", config=cfg).run("hi") as run:
+            run.stream.subscribe(lambda e: seen.append(e))
+            result = await run.result()
+    finally:
+        await cfg.aclose()
+
+    assert result.body == "[resource] spec (file:///spec.md)"
+    [response] = [e for e in seen if isinstance(e, ModelResponse)]
+    assert [(f.data, f.metadata) for f in response.files] == [(b"doc", {"mimeType": "application/pdf"})]
+
+
 @pytest.mark.asyncio
 async def test_turn_timeout_surfaces_timeout() -> None:
     cfg = fake_acp_config(ACPTurn(hang=True), permission_policy="auto", turn_timeout=0.5)
@@ -127,8 +222,8 @@ async def test_turn_timeout_surfaces_timeout() -> None:
     finally:
         await cfg.aclose()
 
-    # The turn timed out; body is whatever streamed before the timeout (empty here).
-    assert result.body == ""
+    # The turn timed out; nothing had streamed, so there is no message at all.
+    assert result.body is None
     [response] = [e for e in seen if isinstance(e, ModelResponse)]
     assert response.finish_reason == "timeout"
 
@@ -325,7 +420,7 @@ class TestEmptyTurnWarning:
         finally:
             await cfg.aclose()
 
-        assert reply.body == ""
+        assert reply.body is None
         [record] = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert "provider/model" in record.getMessage()
 
@@ -347,7 +442,7 @@ class TestEmptyTurnWarning:
         finally:
             await cfg.aclose()
 
-        assert reply.body == ""
+        assert reply.body is None
         assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
     async def test_file_only_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -361,7 +456,7 @@ class TestEmptyTurnWarning:
         finally:
             await cfg.aclose()
 
-        assert reply.body == ""
+        assert reply.body is None
         assert len(reply.response.files) == 1
         assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
@@ -389,7 +484,7 @@ class TestEmptyTurnWarning:
         finally:
             await cfg.aclose()
 
-        assert reply.body == ""
+        assert reply.body is None
         assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
 

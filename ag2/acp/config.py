@@ -22,6 +22,7 @@ from typing_extensions import Self
 
 from ag2.hitl import ElicitationPolicy
 
+from .stdio import StdioConnection
 from .tool_gateway import GatewayAddress
 
 if TYPE_CHECKING:
@@ -170,21 +171,8 @@ class ACPConfig:
         self, client: "acp.Client"
     ) -> "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]":
         """Reach the agent by launching it, which is what this config is for."""
-        import acp
-
         executable, *args = self.command
-        # `use_unstable_protocol` is what registers the `elicitation/*` routes
-        # on the client side; without it the SDK answers the agent's question
-        # with method-not-found before the bridge ever sees it. Elicitation is
-        # the only unstable route a Client serves, so this enables nothing else.
-        return acp.spawn_agent_process(
-            client,
-            executable,
-            *args,
-            env=self.env,
-            cwd=self.cwd,
-            use_unstable_protocol=True,
-        )
+        return StdioConnection(client, executable, *args, env=self.env, cwd=self.cwd)
 
     def _gateway_address(self) -> GatewayAddress:
         """Where the tool gateway should bind, and what address the agent gets.
@@ -218,7 +206,7 @@ class ACPConfig:
 
         A session outlives the ``agent.run()`` that created it — ``reply.ask()``
         reuses it — so the config's scope, not the run's, is the conversation's
-        lifetime. Nothing reclaims a session implicitly.
+        lifetime. Without this scope a session lives until the event loop shuts down, and its subprocess exits with it.
         """
         return self
 
