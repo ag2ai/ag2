@@ -90,6 +90,28 @@ class TestMemoryKnowledgeStore:
         entries = await store.list("/")
         assert entries == []
 
+    @pytest.mark.parametrize("resubscribe", [False, True])
+    async def test_repeated_close_preserves_other_subscription(self, resubscribe: bool) -> None:
+        store = MemoryKnowledgeStore()
+        received: list[str] = []
+
+        async def callback(path: str) -> None:
+            received.append(path)
+
+        old = await store.on_change("/watched", callback)
+        if resubscribe:
+            await old.close()
+        active = await store.on_change("/watched", callback)
+
+        await old.close()
+        await old.close()
+        await store.write("/watched/file.txt", "first")
+        assert received == ["/watched/file.txt"]
+
+        await active.close()
+        await store.write("/watched/file.txt", "second")
+        assert received == ["/watched/file.txt"]
+
 
 @pytest.mark.asyncio
 class TestEventLogWriter:
