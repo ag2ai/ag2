@@ -134,7 +134,7 @@ class MemoryStream(ABCStream):
         # ordered dict
         self._interrupters: dict[SubId, tuple[Condition | None, CallModel]] = {}
 
-        storage = storage or MemoryStorage()
+        storage = storage if storage is not None else MemoryStorage()
         self.history = History(self.id, storage)
 
         # Stream-scoped inbox + background task set. The inbox outlives any
