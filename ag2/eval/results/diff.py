@@ -12,7 +12,10 @@ anything that did not line up.
 A ``(task, scorer)`` pair is **comparable** only when the ``task_id`` is in both runs,
 its ``inputs`` / ``reference_outputs`` are identical (same id with changed content is
 *content drift* — never a valid comparison), and the scorer key exists in both. The
-delta math runs only over comparable pairs.
+delta math runs only over comparable pairs, and only where both sides scored that
+pair the same way: pass rates over tasks with a bool on both sides, means over tasks
+with a number on both sides. A ``None`` score (a scorer that raised, or a judge with
+no verdict) stays out of both denominators — it is not a failure.
 
 By default (``strict=True``) any mismatch — a task or scorer present in only one run,
 or content drift — raises :class:`RunsNotComparableError`, whose message points at
@@ -46,9 +49,11 @@ class RunDiff:
     """The result of comparing a run against a baseline over what they share.
 
     ``pass_rate_deltas`` / ``mean_deltas`` map a scorer key to ``(baseline, current)``
-    over the comparable tasks. ``flipped_to_fail`` / ``flipped_to_pass`` are
-    ``(scorer_key, task_id)`` pairs whose boolean verdict changed. The remaining tuples
-    list everything excluded from the comparison.
+    over the comparable tasks both sides scored for that key (a bool for the pass
+    rate, a number for the mean). A ``None`` score is left out of both denominators.
+    ``flipped_to_fail`` / ``flipped_to_pass`` are ``(scorer_key, task_id)`` pairs whose
+    boolean verdict changed. The remaining tuples list everything excluded from the
+    comparison.
     """
 
     current_run_id: str
@@ -132,15 +137,23 @@ def compute_diff(current: RunResult, baseline: RunResult, *, strict: bool = True
     flipped_to_pass: list[tuple[str, str]] = []
 
     for key in shared_keys:
-        base_bools = [s for t in comparable if (s := _bool(base_fb[t].get(key))) is not None]
-        cur_bools = [s for t in comparable if (s := _bool(cur_fb[t].get(key))) is not None]
-        if base_bools or cur_bools:
-            pass_rate_deltas[key] = (_rate(base_bools), _rate(cur_bools))
+        # Pair on tasks both sides scored. A None on one side must not shrink only
+        # that side's denominator (raised scorer / judge with no verdict).
+        bool_pairs = [
+            (b, c)
+            for t in comparable
+            if (b := _bool(base_fb[t].get(key))) is not None and (c := _bool(cur_fb[t].get(key))) is not None
+        ]
+        if bool_pairs:
+            pass_rate_deltas[key] = (_rate([b for b, _ in bool_pairs]), _rate([c for _, c in bool_pairs]))
 
-        base_nums = [float(base_fb[t][key].score) for t in comparable if _is_num(base_fb[t].get(key))]
-        cur_nums = [float(cur_fb[t][key].score) for t in comparable if _is_num(cur_fb[t].get(key))]
-        if base_nums or cur_nums:
-            mean_deltas[key] = (_mean(base_nums), _mean(cur_nums))
+        num_pairs = [
+            (float(base_fb[t][key].score), float(cur_fb[t][key].score))
+            for t in comparable
+            if _is_num(base_fb[t].get(key)) and _is_num(cur_fb[t].get(key))
+        ]
+        if num_pairs:
+            mean_deltas[key] = (_mean([b for b, _ in num_pairs]), _mean([c for _, c in num_pairs]))
 
         for t in comparable:
             b, c = base_fb[t].get(key), cur_fb[t].get(key)
