@@ -54,7 +54,7 @@ async def _finished(agent: Agent) -> RunFinishedEvent:
 
 
 async def test_the_output_a_client_sees_counts_what_gemini_spent_thinking() -> None:
-    """Gemini reports its thoughts beside the candidates, so they are added in on the way out."""
+    """Gemini thoughts are already in normalized completion and must not be added twice."""
     agent = _agent({
         "promptTokenCount": 12,
         "candidatesTokenCount": 10,
