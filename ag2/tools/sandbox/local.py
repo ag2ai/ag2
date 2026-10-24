@@ -48,6 +48,7 @@ def _run_subprocess(
             cwd=cwd,
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=timeout,
             env=merged_env,
         )
