@@ -31,8 +31,16 @@ from .tool import Tool
 
 
 class ToolExecutor:
-    def __init__(self, serializer: SerializerProto) -> None:
+    def __init__(
+        self,
+        serializer: SerializerProto,
+        *,
+        max_concurrent_tool_calls: int | None = None,
+    ) -> None:
+        if max_concurrent_tool_calls is not None and max_concurrent_tool_calls < 1:
+            raise ValueError(f"max_concurrent_tool_calls must be >= 1 when set, got {max_concurrent_tool_calls}.")
         self.__serializer = serializer
+        self.__max_concurrent_tool_calls = max_concurrent_tool_calls
 
     def register(
         self,
@@ -57,8 +65,15 @@ class ToolExecutor:
         results: list[ToolErrorEvent | ToolResultEvent] = []
         client_calls: list[ClientToolCallEvent] = []
 
-        # Execute called tools in parallel
-        tasks = [asyncio.ensure_future(_execute_call(context, call)) for call in event.calls]
+        # Execute called tools in parallel. With a cap configured, each call
+        # waits for a slot before it starts. The semaphore is per batch, not per
+        # executor: it bounds one model response's burst, and — because
+        # ``asyncio.Semaphore`` binds to the first loop that contends on it — a
+        # fresh one each batch is also what keeps an executor reusable across
+        # event loops.
+        limit = self.__max_concurrent_tool_calls
+        slots = asyncio.Semaphore(limit) if limit is not None else None
+        tasks = [asyncio.ensure_future(_gated_call(context, call, slots)) for call in event.calls]
         try:
             outcomes = await asyncio.gather(*tasks)
         except HumanInputError:
@@ -171,6 +186,26 @@ async def _execute_call(
         # tool-level middleware could leads to execution exceptions
         except Exception as e:
             return ToolErrorEvent.from_call(call, e)
+
+
+async def _gated_call(
+    context: Context,
+    call: ToolCallEvent,
+    slots: "asyncio.Semaphore | None",
+) -> ToolErrorEvent | ToolResultEvent | ClientToolCallEvent:
+    """Run ``call`` once a concurrency slot is free.
+
+    ``slots`` is ``None`` when no cap is configured, in which case the call runs
+    straight through and the batch behaves exactly as it did before. Waiting
+    happens *before* ``_execute_call`` touches the stream, so a batch cancelled
+    while calls are queued leaves those calls unstarted: ``gather`` cancels them
+    and they unwind at ``async with slots``, never reaching the tool.
+    """
+    if slots is None:
+        return await _execute_call(context, call)
+
+    async with slots:
+        return await _execute_call(context, call)
 
 
 def _tool_not_found(known_tools: Iterable[str]) -> Callable[..., Any]:

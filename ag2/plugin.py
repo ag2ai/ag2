@@ -294,6 +294,7 @@ class PluginTarget(PromptObserverMixin):
         dependencies: dict[Any, Any],
         variables: dict[Any, Any],
         plugins: Iterable["Plugin"],
+        max_concurrent_tool_calls: int | None = None,
     ) -> None:
         """Set up the contribution surface shared by every plugin target.
 
@@ -315,7 +316,7 @@ class PluginTarget(PromptObserverMixin):
             pydantic_config={"arbitrary_types_allowed": True},
             use_fastdepends_errors=False,
         )
-        self._tool_executor = ToolExecutor(self._serializer)
+        self._tool_executor = ToolExecutor(self._serializer, max_concurrent_tool_calls=max_concurrent_tool_calls)
 
         self.dependency_provider = Provider()
         self.tools = []
