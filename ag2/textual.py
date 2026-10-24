@@ -4,7 +4,7 @@
 
 from typing import Any
 
-from ag2.import_utils import optional_import_block
+from ag2._import_utils import optional_import_block
 
 with optional_import_block() as _textual_import:
     from textual import on
