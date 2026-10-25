@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import Any, Literal, TypedDict
+from typing import Any, TypedDict
 
 import httpx2
 from anthropic.types import ModelParam
@@ -11,7 +11,7 @@ from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
 
-from .anthropic_client import AnthropicClient, CreateOptions
+from .anthropic_client import AnthropicClient, CreateOptions, Speed
 from .files import AnthropicFilesClient
 from .mappers import SAMPLING_FIELDS, merge_sampling_into_extra_body
 
@@ -35,7 +35,7 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     prompt_caching: bool
     cache_diagnostics: bool
     extra_body: dict[str, Any] | None
-    speed: Literal["standard", "fast"] | None
+    speed: Speed | None
 
 
 @dataclass(slots=True)
@@ -58,7 +58,7 @@ class AnthropicConfig(ModelConfig):
     prompt_caching: bool = True
     cache_diagnostics: bool = False
     extra_body: dict[str, Any] | None = None
-    speed: Literal["standard", "fast"] | None = None
+    speed: Speed | None = None
     """Inference speed; some models require a fast-mode beta header for either value."""
 
     @property

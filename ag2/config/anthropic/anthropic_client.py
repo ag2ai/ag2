@@ -78,6 +78,9 @@ def _message_usage(message: Message) -> Usage:
     return normalize_usage(message.usage.model_dump() if message.usage else {})
 
 
+Speed = Literal["standard", "fast"]
+
+
 class CreateOptions(TypedDict, total=False):
     # `temperature`, `top_p` and `top_k` are absent on purpose: `anthropic` 1.x
     # removed them from the Messages API signature, so passing one here is a
@@ -89,7 +92,7 @@ class CreateOptions(TypedDict, total=False):
     stream: bool
     metadata: dict[str, str] | None
     service_tier: str | None
-    speed: Literal["standard", "fast"] | None
+    speed: Speed | None
 
 
 class AnthropicClient(LLMClient):
