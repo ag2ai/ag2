@@ -4,6 +4,8 @@
 
 import base64
 import json
+import shutil
+import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -264,6 +266,67 @@ async def test_delete_directory(tmp_path: Path) -> None:
     await agent.ask("delete it")
 
     assert not target.exists()
+
+
+@pytest.fixture
+def git_checkout_with_symlink(tmp_path: Path) -> Path:
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("git is not available")
+
+    repository = tmp_path / "repository"
+    docs = repository / "docs"
+    docs.mkdir(parents=True)
+    (docs / "guide.md").write_text("Keep the canonical guide.\n", encoding="utf-8")
+    try:
+        (docs / "legacy.md").symlink_to("guide.md")
+    except OSError:
+        pytest.skip("symlinks are not available")
+
+    subprocess.run([git, "init", "--quiet", str(repository)], check=True)
+    subprocess.run([git, "-C", str(repository), "config", "core.symlinks", "true"], check=True)
+    subprocess.run([git, "-C", str(repository), "add", "docs/guide.md", "docs/legacy.md"], check=True)
+    tracked = subprocess.run(
+        [git, "-C", str(repository), "ls-files", "--stage", "docs/legacy.md"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert tracked.stdout.startswith("120000 ")
+
+    workspace = tmp_path / "checkout"
+    workspace.mkdir()
+    subprocess.run(
+        [git, "-C", str(repository), "checkout-index", "--all", f"--prefix={workspace}/"],
+        check=True,
+    )
+    link = workspace / "docs" / "legacy.md"
+    assert link.is_symlink()
+    return workspace
+
+
+@pytest.mark.asyncio
+async def test_agent_deletes_a_git_checked_out_symlink_without_removing_its_target(
+    git_checkout_with_symlink: Path,
+) -> None:
+    workspace = git_checkout_with_symlink
+    link = workspace / "docs" / "legacy.md"
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="read_file", arguments=json.dumps({"path": "docs/legacy.md"})),
+            ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "docs/legacy.md"})),
+            "done",
+        ),
+        tools=[FilesystemToolkit(base_path=workspace)],
+    )
+    await agent.ask("Read the legacy guide, then remove that obsolete alias and keep the canonical guide.")
+
+    target = workspace / "docs" / "guide.md"
+    assert {
+        "alias_is_symlink": link.is_symlink(),
+        "canonical_content": target.read_text(encoding="utf-8") if target.is_file() else None,
+    } == {"alias_is_symlink": False, "canonical_content": "Keep the canonical guide.\n"}
 
 
 @pytest.mark.asyncio
