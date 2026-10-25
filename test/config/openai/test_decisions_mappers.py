@@ -10,6 +10,7 @@ import pytest
 from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 from openai.types import Decision
+from openai.types.decision_create_params import DecisionQuestionInputPart
 
 from ag2.compact import CompactionSummary
 from ag2.config.openai.decisions_mappers import (
@@ -117,6 +118,31 @@ class TestQuestion:
                 {"value": "technical", "description": "Bugs, outages, integrations."},
             ]
         })
+
+    def test_structured_parts_carry_the_question_as_a_trailing_text_part(self) -> None:
+        parts: list[DecisionQuestionInputPart] = [
+            {"type": "input_text", "text": "You triage tickets."},
+            {"type": "input_image", "image_url": "data:image/png;base64,aGk=", "detail": "high"},
+            {"type": "input_json", "data": {"tenant": "acme"}},
+        ]
+        question = response_proto_to_question(ResponseSchema(Department), instructions=parts)
+
+        assert question == {
+            "type": "choice",
+            "name": "answer",
+            "instructions": [
+                *parts,
+                {"type": "input_text", "text": "Which team should handle this ticket?"},
+            ],
+            "choices": [
+                {"value": "billing", "description": "Payments, invoicing, refunds."},
+                {"value": "technical", "description": "Bugs, outages, integrations."},
+            ],
+        }
+
+    def test_empty_parts_without_a_question_are_refused(self) -> None:
+        with pytest.raises(ValueError, match="needs a question"):
+            response_proto_to_question(ResponseSchema(bool), instructions=[])
 
     def test_int_enum_is_a_score_labelled_by_member_names(self) -> None:
         question = response_proto_to_question(

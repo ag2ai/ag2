@@ -154,6 +154,43 @@ async def test_agent_answers_yes_no_with_bool_schema() -> None:
 
 
 @pytest.mark.asyncio
+async def test_question_instructions_parts_replace_the_prompt_on_the_wire() -> None:
+    requests: list[httpx2.Request] = []
+    guard = Agent(
+        "guard",
+        prompt="A prompt that must not reach the question.",
+        config=OpenAIDecisionsConfig(
+            api_key="test-key",
+            http_client=_fake_api(requests, {"type": "predicate", "name": "answer", "probability": 0.92}),
+            question_instructions=[
+                {"type": "input_text", "text": "Is the customer asking for a refund?"},
+                {"type": "input_image", "image_url": "data:image/png;base64,aGk="},
+                {"type": "input_json", "data": {"tenant": "acme"}},
+            ],
+        ),
+        response_schema=ResponseSchema(bool, description="Is this a refund request?"),
+    )
+
+    reply = await guard.ask("You billed me twice. I want that money back.")
+
+    assert await reply.content() is True
+    questions = json.loads(requests[0].content)["questions"]
+    assert questions == [
+        {
+            "type": "predicate",
+            "name": "answer",
+            "instructions": [
+                {"type": "input_text", "text": "Is the customer asking for a refund?"},
+                {"type": "input_image", "image_url": "data:image/png;base64,aGk="},
+                {"type": "input_json", "data": {"tenant": "acme"}},
+                # The schema description still reaches the model, as a trailing text part.
+                {"type": "input_text", "text": "Is this a refund request?"},
+            ],
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_refusal_raises() -> None:
     guard = Agent(
         "guard",
