@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import copy
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, replace
@@ -11,6 +12,7 @@ from uuid import UUID, uuid4
 from ag2.annotations import Context
 from ag2.events import (
     HumanInputRequest,
+    TaskCancelled,
     TaskCompleted,
     TaskFailed,
     TaskStarted,
@@ -142,9 +144,12 @@ async def run_task(
     """Run ``agent`` as a sub-task and return its ``TaskResult``.
 
     ``emit_events`` controls whether ``TaskStarted`` / ``TaskCompleted`` /
-    ``TaskFailed`` events are emitted onto ``parent_context.stream``.
+    ``TaskFailed`` / ``TaskCancelled`` events are emitted onto
+    ``parent_context.stream``.
     Keep it at the default (``True``) unless the caller is itself going to
-    emit its own task lifecycle events.
+    emit its own task lifecycle events. Cancellation reports any incurred
+    usage before ``TaskCancelled``, then propagates ``asyncio.CancelledError``
+    instead of returning a ``TaskResult``.
 
     ``task_id`` lets callers pre-assign the lifecycle id, which is useful for
     background tools that must return the id before the task completes.
@@ -211,20 +216,23 @@ async def run_task(
             usage=usage,
         )
 
-        if emit_events:
-            await _emit_rollup(parent_context, agent.name, incurred)
-            await parent_context.send(
-                TaskCompleted(
-                    task_id=task_id,
-                    agent_name=agent.name,
-                    objective=objective,
-                    result=reply.body,
-                    task_stream=task_stream.id,
-                    usage=usage,
+    except asyncio.CancelledError as cancelled:
+        # Cancellation does not undo billable work. Use this invocation's
+        # observed events, not the reused child stream's cumulative snapshot.
+        # Keep the original cancellation even if a reporting subscriber fails.
+        try:
+            if emit_events:
+                await _emit_rollup(parent_context, agent.name, incurred)
+                await parent_context.send(
+                    TaskCancelled(
+                        task_id=task_id,
+                        agent_name=agent.name,
+                        objective=objective,
+                        reason=str(cancelled),
+                    )
                 )
-            )
-
-        return result
+        finally:
+            raise cancelled
 
     except Exception as e:
         # The sub-task may already have made billable model calls before it
@@ -270,6 +278,24 @@ async def run_task(
             error=e,
             usage=usage,
         )
+
+    else:
+        # Completion reporting is outside the execution handlers: cancellation
+        # after a rollup or terminal event was persisted must not emit it again.
+        if emit_events:
+            await _emit_rollup(parent_context, agent.name, incurred)
+            await parent_context.send(
+                TaskCompleted(
+                    task_id=task_id,
+                    agent_name=agent.name,
+                    objective=objective,
+                    result=reply.body,
+                    task_stream=task_stream.id,
+                    usage=usage,
+                )
+            )
+
+        return result
 
     finally:
         task_stream.unsubscribe(usage_sub_id)
