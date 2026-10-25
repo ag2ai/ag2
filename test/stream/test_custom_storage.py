@@ -5,7 +5,7 @@
 import pytest
 
 from ag2 import Context, MemoryStream
-from ag2.events import BaseEvent, ModelMessage
+from ag2.events import BaseEvent, ModelResponse
 from ag2.history import MemoryStorage
 
 
@@ -28,7 +28,7 @@ async def test_explicit_empty_storage_is_not_replaced() -> None:
     assert len(storage) == 0
 
     stream = MemoryStream(storage=storage)
-    event = ModelMessage("hello")
+    event = ModelResponse()
     await stream.send(event, Context(stream))
 
     assert list(await storage.get_history(stream.id)) == [event]
