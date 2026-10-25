@@ -798,6 +798,9 @@ def normalize_usage(usage: CompletionUsage) -> Usage:
         completion_tokens=usage.completion_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.prompt_tokens_details.cached_tokens if usage.prompt_tokens_details else None,
+        cache_creation_input_tokens=usage.prompt_tokens_details.cache_write_tokens
+        if usage.prompt_tokens_details
+        else None,
         thinking_tokens=usage.completion_tokens_details.reasoning_tokens if usage.completion_tokens_details else None,
     )
 
@@ -808,6 +811,7 @@ def normalize_responses_usage(usage: ResponseUsage) -> Usage:
         completion_tokens=usage.output_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
+        cache_creation_input_tokens=usage.input_tokens_details.cache_write_tokens,
         thinking_tokens=usage.output_tokens_details.reasoning_tokens,
     )
 
