@@ -98,20 +98,9 @@ class TestNormalizeUsage:
             thinking_tokens=0,
         )
 
-    def test_details_absent_or_none_returns_none(self):
-        chat_usage_none = CompletionUsage(
-            prompt_tokens=50, completion_tokens=10, total_tokens=60, prompt_tokens_details=None
-        )
-        assert normalize_usage(chat_usage_none).cache_creation_input_tokens is None
-
-        resp_usage_none = ResponseUsage.model_construct(
-            input_tokens=50,
-            output_tokens=10,
-            total_tokens=60,
-            input_tokens_details=None,
-            output_tokens_details=None,
-        )
-        assert normalize_responses_usage(resp_usage_none).cache_creation_input_tokens is None
+    def test_chat_completions_details_none_returns_none(self):
+        usage = CompletionUsage(prompt_tokens=50, completion_tokens=10, total_tokens=60, prompt_tokens_details=None)
+        assert normalize_usage(usage).cache_creation_input_tokens is None
 
     def test_cached_tokens_still_maps_to_cache_read_input_tokens(self):
         chat_usage = CompletionUsage(

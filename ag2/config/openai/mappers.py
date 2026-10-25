@@ -810,11 +810,9 @@ def normalize_responses_usage(usage: ResponseUsage) -> Usage:
         prompt_tokens=usage.input_tokens,
         completion_tokens=usage.output_tokens,
         total_tokens=usage.total_tokens,
-        cache_read_input_tokens=usage.input_tokens_details.cached_tokens if usage.input_tokens_details else None,
-        cache_creation_input_tokens=getattr(usage.input_tokens_details, "cache_write_tokens", None)
-        if usage.input_tokens_details
-        else None,
-        thinking_tokens=usage.output_tokens_details.reasoning_tokens if usage.output_tokens_details else None,
+        cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
+        cache_creation_input_tokens=usage.input_tokens_details.cache_write_tokens,
+        thinking_tokens=usage.output_tokens_details.reasoning_tokens,
     )
 
 
