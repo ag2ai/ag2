@@ -240,7 +240,7 @@ def parse_artifact_update(update: TaskArtifactUpdateEvent) -> A2ATaskArtifactUpd
     """
     artifact = update.artifact
     parts = list(artifact.parts)
-    text_only = parts and all(bool(p.text) for p in parts)
+    text_only = bool(parts) and all(p.HasField("text") for p in parts)
     if text_only:
         return A2ATextArtifact(
             update=update,
