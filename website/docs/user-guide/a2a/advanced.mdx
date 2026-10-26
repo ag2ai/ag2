@@ -33,7 +33,11 @@ See [Human in the Loop](/docs/user-guide/context/human_in_the_loop) for the unde
 
 Streaming connections drop. Network blips, load balancer recycles, idle timeouts — the SSE channel breaks, and the client needs to recover without losing partially-streamed artifacts.
 
-The A2A client keeps internal drive state across drops: on `#!python A2AClientError` mid-stream it issues a fresh `#!python subscribe` against the same `#!python task_id`, deduplicates artifacts already seen by `#!python artifact_id` (and messages by `#!python message_id`), and continues from where it failed. Application code sees a single uninterrupted reply.
+The A2A client keeps internal drive state across drops: on `#!python A2AClientError` mid-stream it issues a fresh `#!python subscribe` against the same `#!python task_id` and continues from where it failed. The new stream opens with the task as it stands, so text produced while the client was disconnected is recovered from that snapshot. Artifacts are reconciled by `#!python artifact_id` (messages by `#!python message_id`): an update that restates what was already received adds nothing, and a completed artifact is never applied twice. Application code sees a single uninterrupted reply.
+
+If the task finished while the stream was down, the server refuses the subscription; the client then reads the final task with `#!python get_task` and builds the reply from it, so a dropped connection at the very end does not fail the call.
+
+The client can only resubscribe once it knows the task id, which arrives with the first event. A connection lost before that raises `#!python A2AReconnectError` without retrying: sending the message again would start a second task.
 
 ```python linenums="1" hl_lines="6-7"
 remote = Agent(
@@ -51,7 +55,7 @@ reply = await remote.ask("a long answer")
 | Field | Default | Purpose |
 |---|---|---|
 | `#!python max_reconnects` | `#!python 3` | Total reconnect attempts before giving up with `#!python A2AReconnectError` |
-| `#!python reconnect_backoff` | `#!python 0.5` | Seconds to wait between attempts (constant — no jitter or exponential) |
+| `#!python reconnect_backoff` | `#!python 0.5` | Seconds to wait before the first attempt; doubles on each following one (no jitter) |
 
 When attempts are exhausted the client raises `#!python A2AReconnectError(attempts=N)`. Catch it to fall back to a polling re-fetch via `#!python get_task` if you need recovery beyond the streaming budget.
 

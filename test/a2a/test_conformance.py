@@ -3,18 +3,24 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
+from uuid import uuid4
 
 import pytest
+from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import Part, TaskState
+from a2a.types import Part, Task, TaskState, TaskStatus
 from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.a2a import A2AConfig, A2AServer
 from ag2.a2a.errors import A2ATaskCancelledError, A2ATaskTerminalError
 from ag2.a2a.events import A2ATaskArtifactUpdate, A2ATextArtifact
+from ag2.a2a.extension import MIME_TOOL_CALL
+from ag2.a2a.mappers.parts import data_part
+from ag2.a2a.mappers.tools import call_to_payload
 from ag2.a2a.testing import make_test_client_factory
 from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig
@@ -53,6 +59,25 @@ async def _resent_artifact(updater: TaskUpdater, release: asyncio.Event) -> None
 
 async def _answer_in_completion_message(updater: TaskUpdater, release: asyncio.Event) -> None:
     await updater.complete(message=updater.new_agent_message([Part(text="done")]))
+
+
+async def _shortened_replacement(updater: TaskUpdater, release: asyncio.Event) -> None:
+    await updater.add_artifact(parts=[Part(text="hello world")], artifact_id="art")
+    await updater.add_artifact(parts=[Part(text="hello")], artifact_id="art")
+    await updater.complete()
+
+
+async def _cleared_replacement(updater: TaskUpdater, release: asyncio.Event) -> None:
+    await updater.add_artifact(parts=[Part(text="hello")], artifact_id="art")
+    await updater.add_artifact(parts=[Part(text="")], artifact_id="art")
+    await updater.complete()
+
+
+async def _growing_mixed_artifact(updater: TaskUpdater, release: asyncio.Event) -> None:
+    image = Part(url="http://test/image.png", media_type="image/png")
+    await updater.add_artifact(parts=[Part(text="hello"), image], artifact_id="art")
+    await updater.add_artifact(parts=[Part(text="hello world"), image], artifact_id="art")
+    await updater.complete()
 
 
 async def _cancelled_midway(updater: TaskUpdater, release: asyncio.Event) -> None:
@@ -104,6 +129,28 @@ async def test_resent_artifact_replaces_instead_of_concatenating() -> None:
     reply = await pair.client.ask("go")
 
     assert reply.response.content == "ab"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [
+        pytest.param(_shortened_replacement, "hello", id="shortened"),
+        pytest.param(_cleared_replacement, None, id="cleared"),
+        pytest.param(_growing_mixed_artifact, "hello world", id="mixed-growing"),
+    ],
+)
+@_both_modes
+async def test_full_restatement_replaces_artifact_text(
+    script: Callable[[TaskUpdater, asyncio.Event], Awaitable[None]],
+    expected: str | None,
+    streaming: bool,
+) -> None:
+    pair = make_executor_pair(ScriptedExecutor(script), streaming=streaming)
+
+    reply = await pair.client.ask("go")
+
+    assert reply.response.content == expected
 
 
 @pytest.mark.asyncio
@@ -271,3 +318,42 @@ async def test_answer_only_in_completion_message_emits_one_chunk(streaming: bool
 
     assert reply.response.content == "done"
     assert chunks == ["done"]
+
+
+class _ReusedArtifactExecutor(AgentExecutor):
+    """Opens text artifact ``art`` and asks for a client tool; the continuation reuses ``art`` for the answer."""
+
+    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        msg = request_context.message
+        assert msg is not None
+        continuation = request_context.current_task is not None
+        task_id = msg.task_id or uuid4().hex
+        context_id = msg.context_id or uuid4().hex
+        if not continuation:
+            await event_queue.enqueue_event(
+                Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
+            )
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        await updater.start_work()
+        if continuation:
+            await updater.add_artifact(parts=[Part(text="end")], artifact_id="art", last_chunk=True)
+            await updater.complete()
+            return
+        await updater.add_artifact(parts=[Part(text="pre-")], artifact_id="art")
+        call = data_part(call_to_payload(ToolCallEvent(name="step", arguments="{}")), media_type=MIME_TOOL_CALL)
+        await updater.add_artifact(parts=[call], artifact_id="call")
+        await updater.requires_input()
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_artifact_id_reused_after_tool_round_trip_carries_the_answer(streaming: bool) -> None:
+    pair = make_executor_pair(_ReusedArtifactExecutor(), streaming=streaming)
+    client = Agent("client", config=pair.client.config, tools=[step])
+
+    reply = await client.ask("go")
+
+    assert reply.response.content == "end"

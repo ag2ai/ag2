@@ -118,17 +118,29 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
     that runs out the last entry repeats, so "every retry also drops" is a
     one-element script rather than a padded list.
 
+    ``finished`` models a task that ended while the stream was down: a
+    resubscribe is refused as ``UnsupportedOperation`` (spec §3.1.6) and
+    ``GetTask`` returns it.
+
     ``methods`` records the JSON-RPC method of every request in order —
     the reconnect behaviour under test is exactly *which* calls happen.
     """
 
     send: _Leg
     resubscribes: Sequence[_Leg] = ()
+    finished: Task | None = None
     methods: list[str] = field(default_factory=list)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        method = json.loads(await request.aread())["method"]
+        payload = json.loads(await request.aread())
+        method = payload["method"]
         self.methods.append(method)
+        if self.finished is not None and method == "SubscribeToTask":
+            error = {"code": -32004, "message": f"Task {TASK_ID} is in terminal state: 3"}
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": payload["id"], "error": error})
+        if self.finished is not None and method == "GetTask":
+            result = json_format.MessageToDict(self.finished)
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": payload["id"], "result": result})
         return httpx.Response(
             200,
             headers={"content-type": "text/event-stream"},
@@ -192,6 +204,22 @@ class TestStreamingReconnect:
         reply = await _client(server).ask("ping")
 
         assert reply.body == "hello"
+
+    async def test_task_finished_while_disconnected_is_read_back_instead_of_failing(self) -> None:
+        server = _ScriptedServer(
+            send=_Leg([_task(), _chunk("art-1", "he", append=False)], drop=True),
+            finished=Task(
+                id=TASK_ID,
+                context_id=CONTEXT_ID,
+                status=TaskStatus(state=TaskState.TASK_STATE_COMPLETED),
+                artifacts=[Artifact(artifact_id="art-1", parts=[Part(text="hello world")])],
+            ),
+        )
+
+        reply = await _client(server).ask("ping")
+
+        assert reply.body == "hello world"
+        assert server.methods == ["SendStreamingMessage", "SubscribeToTask", "GetTask"]
 
     async def test_text_written_while_disconnected_is_recovered_from_the_snapshot(self) -> None:
         server = _ScriptedServer(

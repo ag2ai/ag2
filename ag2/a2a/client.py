@@ -26,6 +26,7 @@ from a2a.types import (
     TaskStatus,
     TaskStatusUpdateEvent,
 )
+from a2a.utils.errors import UnsupportedOperationError
 from fast_depends.library.serializer import SerializerProto
 
 from ag2.config.client import LLMClient
@@ -145,16 +146,18 @@ class A2ADriveState:
     # Text in order of first appearance; a text artifact owns one slot that later updates extend or replace.
     text_segments: list[str] = field(default_factory=list)
     text_slot: dict[str, int] = field(default_factory=dict)
+    # Full text of each artifact as last seen; ``prior_text`` is what earlier tool-result drives consumed.
+    artifact_text: dict[str, str] = field(default_factory=dict)
+    prior_text: Mapping[str, str] = field(default_factory=dict)
     pending_calls: list[ToolCallEvent] = field(default_factory=list)
     finish_reason: str = "completed"
     terminal_task: Task | None = None
     # Completed artifacts (``last_chunk``): the SDK may replay them on a ``SubscribeToTask``
-    # reconnect (spec §3.5.2), and polling re-reads cumulative ``task.artifacts``.
+    # reconnect (spec §3.5.2).
     closed_artifact_ids: set[str] = field(default_factory=set)
     seen_message_ids: set[str] = field(default_factory=set)
-    # Artifacts absorbed by this call / by earlier calls on the same task (tool-result continuations).
+    # Artifacts absorbed by this drive; polling re-reads cumulative ``task.artifacts`` on every poll.
     touched_artifact_ids: set[str] = field(default_factory=set)
-    prior_artifact_ids: frozenset[str] = frozenset()
 
     def text(self) -> str:
         return "".join(self.text_segments)
@@ -164,21 +167,29 @@ class A2ADriveState:
         self.pending_calls.extend(calls)
 
     def absorb_text(self, artifact_id: str, text: str, append: bool) -> str:
-        """Fold a text artifact update into its slot; return the newly arrived text."""
+        """Fold a text artifact update into its slot; return the newly arrived text.
+
+        A non-append update restates the whole artifact and replaces what was known, even
+        when it shortens it; text already consumed by an earlier turn is not part of the reply.
+        """
+        prior = self.prior_text.get(artifact_id, "")
+        known = self.artifact_text.get(artifact_id, prior if artifact_id in self.prior_text else None)
+        content = (known or "") + text if append else text
+        self.artifact_text[artifact_id] = content
+        if known is None:
+            fresh = content
+        elif content.startswith(known):
+            fresh = content[len(known) :]
+        else:
+            fresh = ""
+        mine = content[len(prior) :] if content.startswith(prior) else content
         slot = self.text_slot.get(artifact_id)
-        if slot is None:
+        if slot is not None:
+            self.text_segments[slot] = mine
+        elif mine or artifact_id not in self.prior_text:
             self.text_slot[artifact_id] = len(self.text_segments)
-            self.text_segments.append(text)
-            return text
-        if append:
-            self.text_segments[slot] += text
-            return text
-        # Not an append: the update restates the whole artifact; an older restatement changes nothing.
-        old = self.text_segments[slot]
-        if old.startswith(text):
-            return ""
-        self.text_segments[slot] = text
-        return text[len(old) :] if text.startswith(old) else ""
+            self.text_segments.append(mine)
+        return fresh
 
 
 @dataclass(slots=True)
@@ -247,7 +258,7 @@ class A2AClient(LLMClient):
         self._sdk_client: Client | None = None
         self._agent_card: AgentCard | None = preset_card
         self._task_id: str | None = None
-        self._consumed_artifact_ids: set[str] = set()
+        self._consumed_text: dict[str, str] = {}
         self._call_context: ClientCallContext | None = None
 
     async def __call__(
@@ -275,12 +286,12 @@ class A2AClient(LLMClient):
             last = messages[-1] if messages else None
             if not isinstance(last, ToolResultsEvent):
                 self._task_id = None
-                self._consumed_artifact_ids = set()
+                self._consumed_text = {}
 
             function_schemas = self._validate_and_extract_tools(tools)
             outgoing = self._build_outgoing(messages, function_schemas, context)
 
-            state = A2ADriveState(prior_artifact_ids=frozenset(self._consumed_artifact_ids))
+            state = A2ADriveState(prior_text=dict(self._consumed_text))
             while True:
                 outcome = await self._drive_task(outgoing, context, state)
                 if not outcome.input_required:
@@ -305,7 +316,10 @@ class A2AClient(LLMClient):
                     extra_extensions=self._extensions,
                 )
 
-            self._consumed_artifact_ids |= state.touched_artifact_ids
+            for artifact_id in state.touched_artifact_ids:
+                self._consumed_text[artifact_id] = state.artifact_text.get(
+                    artifact_id, self._consumed_text.get(artifact_id, "")
+                )
 
             if state.terminal_task is not None and (exc_cls := _FAILURE_ERRORS.get(state.finish_reason)):
                 raise exc_cls(state.terminal_task)
@@ -468,6 +482,12 @@ class A2AClient(LLMClient):
         while True:
             try:
                 return await self._drain_stream(stream, context, state)
+            except UnsupportedOperationError:
+                # Spec §3.1.6: a task that ended while the stream was down cannot be subscribed to;
+                # its final state is read instead. On the opening request this is a real failure.
+                if attempt == 0:
+                    raise
+                return await self._poll_until_settled(context, state)
             except A2AClientError as exc:
                 if self._task_id is None or attempt >= self._max_reconnects:
                     raise A2AReconnectError(attempt) from exc
@@ -496,6 +516,11 @@ class A2AClient(LLMClient):
 
         if self._task_id is None:
             return outcome
+
+        return await self._poll_until_settled(context, state)
+
+    async def _poll_until_settled(self, context: ConversationContext, state: A2ADriveState) -> A2ATurnOutcome:
+        assert self._sdk_client is not None
 
         while True:
             get_kwargs = self._maybe_tenant(context, id=self._task_id)
@@ -667,7 +692,10 @@ class A2AClient(LLMClient):
         update = a2a_event.update
         artifact = update.artifact
         artifact_id = artifact.artifact_id
-        if artifact_id in state.closed_artifact_ids or artifact_id in state.prior_artifact_ids:
+        if artifact_id in state.closed_artifact_ids:
+            return
+        # A tool call from an earlier turn reappears in cumulative snapshots; it is never re-surfaced.
+        if isinstance(a2a_event, A2AToolCallArtifact) and artifact_id in state.prior_text:
             return
         first_sight = artifact_id not in state.touched_artifact_ids
         state.touched_artifact_ids.add(artifact_id)
@@ -678,9 +706,17 @@ class A2AClient(LLMClient):
         elif isinstance(a2a_event, A2AToolCallArtifact):
             state.pending_calls.append(a2a_event.call)
             state.closed_artifact_ids.add(artifact_id)
-        elif first_sight or a2a_event.append:
-            text_chunk, calls = await self._handle_artifact_parts(artifact.parts, context)
-            state.add_parts(text_chunk, calls)
+        else:
+            # Mixed artifact: its text reconciles by identity like a text artifact, its calls once.
+            text = "".join(part.text for part in artifact.parts)
+            if fresh := state.absorb_text(artifact_id, text, a2a_event.append):
+                await context.send(ModelMessageChunk(fresh))
+            if (first_sight and artifact_id not in state.prior_text) or a2a_event.append:
+                state.pending_calls.extend(
+                    payload_to_call(part_data_to_python(part))
+                    for part in artifact.parts
+                    if is_data_part_with_mime(part, MIME_TOOL_CALL)
+                )
 
         if a2a_event.last_chunk:
             state.closed_artifact_ids.add(artifact_id)
