@@ -6,6 +6,7 @@ import asyncio
 import atexit
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 from contextlib import suppress
@@ -39,31 +40,40 @@ def _run_subprocess(
     timeout: float,
     max_output: int,
 ) -> ExecResult:
-    """Run *argv* under :func:`subprocess.run` with the project's conventions."""
+    """Run *argv*, terminating its POSIX process group on timeout."""
     merged_env = {**os.environ, **env} if env is not None else None
 
     try:
-        result = subprocess.run(
+        with subprocess.Popen(
             argv,
             cwd=cwd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
             env=merged_env,
-        )
+            start_new_session=os.name == "posix",
+        ) as process:
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                if os.name == "posix":
+                    with suppress(ProcessLookupError):
+                        os.killpg(process.pid, signal.SIGKILL)
+                else:
+                    process.kill()
+                process.wait()
+                return ExecResult(output=f"Command timed out after {timeout}s", exit_code=124)
+            except BaseException:
+                process.kill()
+                raise
     except FileNotFoundError as e:
         return ExecResult(output=f"Command not found: {e}", exit_code=127)
-    except subprocess.TimeoutExpired:
-        return ExecResult(
-            output=f"Command timed out after {timeout}s",
-            exit_code=124,
-        )
 
-    output = (result.stdout + result.stderr).strip()
+    output = (stdout + stderr).strip()
     if (total := len(output)) > max_output:
         output = output[:max_output]
         output += f"\n[truncated: showing first {max_output} of {total} chars]"
-    return ExecResult(output=output, exit_code=result.returncode or 0)
+    return ExecResult(output=output, exit_code=process.returncode or 0)
 
 
 class LocalSandbox(SandboxBase):
@@ -80,7 +90,8 @@ class LocalSandbox(SandboxBase):
                  backstop). Defaults to ``True`` when ``path=None``
                  (auto temp dir) and ``False`` otherwise.
         timeout: Default per-call timeout in seconds. Must be ``> 0``.
-                 Overridable per :meth:`exec` call.
+                 Overridable per :meth:`exec` call. On POSIX, timeout
+                 terminates the command's process group, including shell children.
         max_output: Maximum number of characters in :attr:`ExecResult.output`.
                     Excess is truncated with a trailing notice.
         env_vars: Default environment variables merged into every command

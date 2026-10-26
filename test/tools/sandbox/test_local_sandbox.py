@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import os
+import shlex
+import sys
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -53,6 +57,27 @@ class TestLocalSandboxExec:
         sandbox = LocalSandbox(timeout=10)
         result = await sandbox.exec(["sleep", "5"], timeout=0.1)
         assert result.exit_code == 124
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX shell process groups")
+    @pytest.mark.parametrize("ending", ["; echo done", " &"])
+    async def test_timeout_stops_shell_children(self, tmp_path: Path, ending: str) -> None:
+        program = (
+            "from pathlib import Path; import time; "
+            "Path('started').touch(); "
+            "deadline = time.monotonic() + 3; "
+            "\nwhile not Path('release').exists() and time.monotonic() < deadline: time.sleep(0.01)"
+            "\nif Path('release').exists(): Path('completed').touch()"
+        )
+        command = f"{shlex.quote(sys.executable)} -c {shlex.quote(program)}{ending}"
+        async with LocalSandbox(tmp_path, timeout=0.5) as sandbox:
+            result = await sandbox.exec(["sh", "-c", command])
+            assert result.exit_code == 124
+            assert (tmp_path / "started").exists()
+
+            (tmp_path / "release").touch()
+            await asyncio.sleep(0.5)
+
+        assert not (tmp_path / "completed").exists()
 
     async def test_output_is_truncated_when_too_long(self) -> None:
         sandbox = LocalSandbox(max_output=10)
