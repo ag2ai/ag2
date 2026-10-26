@@ -21,6 +21,7 @@ from ag2.a2a.events import A2ATaskArtifactUpdate, A2ATextArtifact
 from ag2.a2a.extension import MIME_TOOL_CALL
 from ag2.a2a.mappers.parts import data_part
 from ag2.a2a.mappers.tools import call_to_payload
+from ag2.a2a.tasks import cancel_task, list_tasks
 from ag2.a2a.testing import make_test_client_factory
 from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig
@@ -36,7 +37,7 @@ from ag2.events import (
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
-from ._helpers import ScriptedExecutor, make_executor_pair
+from ._helpers import EventCollector, ScriptedExecutor, a2a_config, make_executor_pair
 
 _URL = "http://test"
 
@@ -91,17 +92,16 @@ async def _two_artifacts(updater: TaskUpdater, release: asyncio.Event) -> None:
     await updater.complete()
 
 
-def _release_on_first_chunk(stream: MemoryStream, executor: ScriptedExecutor) -> list[str]:
-    """Collect chunk events; the executor holds its remaining output until the first one lands."""
-    chunks: list[str] = []
+class _ChunkGate(EventCollector):
+    """Collects chunk events; the executor holds its remaining output until the first one lands."""
 
-    @stream.where(ModelMessageChunk).subscribe
-    async def collect(event: BaseEvent) -> None:
-        assert isinstance(event, ModelMessageChunk)
-        chunks.append(event.content)
-        executor.release.set()
+    def __init__(self, executor: ScriptedExecutor) -> None:
+        super().__init__()
+        self._executor = executor
 
-    return chunks
+    async def on_event(self, event: BaseEvent) -> None:
+        await super().on_event(event)
+        self._executor.release.set()
 
 
 @pytest.mark.asyncio
@@ -110,7 +110,8 @@ async def test_growing_artifact_is_returned_in_full(streaming: bool) -> None:
     executor = ScriptedExecutor(_growing_artifact)
     pair = make_executor_pair(executor, streaming=streaming)
     stream = MemoryStream()
-    chunks = _release_on_first_chunk(stream, executor)
+    gate = _ChunkGate(executor)
+    stream.where(ModelMessageChunk).subscribe(gate.on_event)
     if streaming:
         # The in-process transport buffers a streamed response until the task ends,
         # so no chunk can arrive early to open the gate.
@@ -119,7 +120,7 @@ async def test_growing_artifact_is_returned_in_full(streaming: bool) -> None:
     reply = await pair.client.ask("go", stream=stream)
 
     assert reply.response.content == "abc"
-    assert "".join(chunks) == "abc"
+    assert "".join(gate.chunks) == "abc"
 
 
 @pytest.mark.asyncio
@@ -171,49 +172,20 @@ async def test_cancelled_task_raises_and_keeps_partial_text(streaming: bool) -> 
     with pytest.raises(A2ATaskCancelledError) as exc_info:
         await pair.client.ask("go")
 
+    task = exc_info.value.task
+    partial = "".join(part.text for artifact in task.artifacts for part in artifact.parts)
     assert isinstance(exc_info.value, A2ATaskTerminalError)
-    assert exc_info.value.task.status.state == TaskState.TASK_STATE_CANCELED
-    partial = "".join(part.text for artifact in exc_info.value.task.artifacts for part in artifact.parts)
-    assert partial == "partial"
-
-
-class _ChunkingConfig(ModelConfig):
-    """Streams each chunk, then answers with their concatenation (a provider that streams)."""
-
-    def __init__(self, chunks: Sequence[str]) -> None:
-        self._chunks = chunks
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "_ChunkingClient":
-        return _ChunkingClient(self._chunks)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class _ChunkingClient(LLMClient):
-    def __init__(self, chunks: Sequence[str]) -> None:
-        self._chunks = chunks
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **_: Any) -> ModelResponse:
-        for chunk in self._chunks:
-            await context.send(ModelMessageChunk(chunk))
-        return ModelResponse(message=ModelMessage("".join(self._chunks)))
+    assert (task.status.state, partial) == (TaskState.TASK_STATE_CANCELED, "partial")
 
 
 async def _text_artifact_updates(agent: Agent) -> list[A2ATextArtifact]:
     stream = MemoryStream()
-    updates: list[A2ATextArtifact] = []
-
-    @stream.where(A2ATaskArtifactUpdate).subscribe
-    async def collect(event: BaseEvent) -> None:
-        if isinstance(event, A2ATextArtifact):
-            updates.append(event)
+    collector = EventCollector()
+    stream.where(A2ATaskArtifactUpdate).subscribe(collector.on_event)
 
     await agent.ask("go", stream=stream)
-    return updates
+
+    return [e for e in collector.events if isinstance(e, A2ATextArtifact)]
 
 
 def _client(server_agent: Agent, *, streaming: bool = True, tools: Sequence[Any] = ()) -> Agent:
@@ -233,7 +205,8 @@ def _client(server_agent: Agent, *, streaming: bool = True, tools: Sequence[Any]
 @pytest.mark.asyncio
 @pytest.mark.parametrize("chunks", [["he", "llo"], ["h", "e", "l", "l", "o"], ["hello"]], ids=str)
 async def test_server_closes_streamed_text_artifact_exactly_once(chunks: list[str]) -> None:
-    client = _client(Agent("server", config=_ChunkingConfig(chunks)))
+    turn = [*(ModelMessageChunk(c) for c in chunks), ModelResponse(message=ModelMessage("".join(chunks)))]
+    client = _client(Agent("server", config=TestConfig(*turn)))
 
     updates = await _text_artifact_updates(client)
 
@@ -299,7 +272,7 @@ async def test_tool_only_turn_opens_no_text_artifact() -> None:
     updates = await _text_artifact_updates(client)
 
     assert len({u.update.artifact.artifact_id for u in updates}) == 1
-    assert updates[-1].last_chunk
+    assert [u.last_chunk for u in updates] == [False] * (len(updates) - 1) + [True]
 
 
 @pytest.mark.asyncio
@@ -307,21 +280,21 @@ async def test_tool_only_turn_opens_no_text_artifact() -> None:
 async def test_answer_only_in_completion_message_emits_one_chunk(streaming: bool) -> None:
     pair = make_executor_pair(ScriptedExecutor(_answer_in_completion_message), streaming=streaming)
     stream = MemoryStream()
-    chunks: list[str] = []
-
-    @stream.where(ModelMessageChunk).subscribe
-    async def collect(event: BaseEvent) -> None:
-        assert isinstance(event, ModelMessageChunk)
-        chunks.append(event.content)
+    collector = EventCollector()
+    stream.where(ModelMessageChunk).subscribe(collector.on_event)
 
     reply = await pair.client.ask("go", stream=stream)
 
     assert reply.response.content == "done"
-    assert chunks == ["done"]
+    assert collector.chunks == ["done"]
 
 
 class _ReusedArtifactExecutor(AgentExecutor):
     """Opens text artifact ``art`` and asks for a client tool; the continuation reuses ``art`` for the answer."""
+
+    def __init__(self, answer: str = "end", *, append: bool = False) -> None:
+        self._answer = answer
+        self._append = append
 
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
         msg = request_context.message
@@ -336,7 +309,9 @@ class _ReusedArtifactExecutor(AgentExecutor):
         updater = TaskUpdater(event_queue, task_id, context_id)
         await updater.start_work()
         if continuation:
-            await updater.add_artifact(parts=[Part(text="end")], artifact_id="art", last_chunk=True)
+            await updater.add_artifact(
+                parts=[Part(text=self._answer)], artifact_id="art", append=self._append, last_chunk=True
+            )
             await updater.complete()
             return
         await updater.add_artifact(parts=[Part(text="pre-")], artifact_id="art")
@@ -357,3 +332,117 @@ async def test_artifact_id_reused_after_tool_round_trip_carries_the_answer(strea
     reply = await client.ask("go")
 
     assert reply.response.content == "end"
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_artifact_id_reused_after_tool_round_trip_streams_the_answer(streaming: bool) -> None:
+    pair = make_executor_pair(_ReusedArtifactExecutor(), streaming=streaming)
+    client = Agent("client", config=pair.client.config, tools=[step])
+    stream = MemoryStream()
+    collector = EventCollector()
+    stream.where(ModelMessageChunk).subscribe(collector.on_event)
+
+    await client.ask("go", stream=stream)
+
+    assert collector.chunks == ["pre-", "end"]
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_replacement_sharing_the_previous_turn_prefix_is_kept_whole(streaming: bool) -> None:
+    pair = make_executor_pair(_ReusedArtifactExecutor("pre-final"), streaming=streaming)
+    client = Agent("client", config=pair.client.config, tools=[step])
+
+    reply = await client.ask("go")
+
+    assert reply.response.content == "pre-final"
+
+
+@pytest.mark.asyncio
+async def test_live_append_to_an_artifact_from_the_previous_turn_adds_only_the_new_text() -> None:
+    pair = make_executor_pair(_ReusedArtifactExecutor("end", append=True), streaming=True)
+    client = Agent("client", config=pair.client.config, tools=[step])
+
+    reply = await client.ask("go")
+
+    assert reply.response.content == "end"
+
+
+class _MixedCallExecutor(AgentExecutor):
+    """Opens an artifact of text plus an image, then replaces it with text plus a client-tool call."""
+
+    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        msg = request_context.message
+        assert msg is not None
+        continuation = request_context.current_task is not None
+        task_id = msg.task_id or uuid4().hex
+        context_id = msg.context_id or uuid4().hex
+        if not continuation:
+            await event_queue.enqueue_event(
+                Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
+            )
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        await updater.start_work()
+        if continuation:
+            await updater.complete(message=updater.new_agent_message([Part(text="ok")]))
+            return
+        image = Part(url="http://test/image.png", media_type="image/png")
+        call = data_part(call_to_payload(ToolCallEvent(name="step", arguments="{}")), media_type=MIME_TOOL_CALL)
+        await updater.add_artifact(parts=[Part(text="look"), image], artifact_id="art")
+        await updater.add_artifact(parts=[Part(text="look"), call], artifact_id="art", last_chunk=True)
+        await updater.requires_input()
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_tool_call_introduced_by_a_mixed_artifact_replacement_runs_once(streaming: bool) -> None:
+    pair = make_executor_pair(_MixedCallExecutor(), streaming=streaming)
+    client = Agent("client", config=pair.client.config, tools=[step])
+    stream = MemoryStream()
+
+    reply = await client.ask("go", stream=stream)
+
+    results = [e for e in await stream.history.get_events() if isinstance(e, ToolResultEvent)]
+    assert len(results) == 1
+    assert reply.response.content == "ok"
+
+
+class _Blocker:
+    """A tool that never returns, so a task stays ``working`` until it is cancelled."""
+
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+
+    async def hold(self, context: Context) -> str:
+        self.started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            # The model keeps streaming while the cancel is being processed.
+            await context.send(ModelMessageChunk("late"))
+            raise
+        return "unreachable"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_task_closes_the_streamed_text_artifact_for_good() -> None:
+    blocker = _Blocker()
+    turn = [ModelMessageChunk("partial"), ToolCallEvent(name="hold", arguments="{}"), "unused"]
+    client = _client(Agent("server", config=TestConfig(*turn), tools=[blocker.hold]))
+    stream = MemoryStream()
+    collector = EventCollector()
+    stream.where(A2ATaskArtifactUpdate).subscribe(collector.on_event)
+
+    asking = asyncio.create_task(client.ask("go", stream=stream))
+    await blocker.started.wait()
+    [task] = (await list_tasks(a2a_config(client))).tasks
+    await cancel_task(a2a_config(client), task.id)
+
+    with pytest.raises(A2ATaskCancelledError):
+        await asking
+    updates = [e for e in collector.events if isinstance(e, A2ATextArtifact)]
+    assert [u.last_chunk for u in updates] == [False, True]

@@ -109,6 +109,8 @@ class AgentExecutor(A2AAgentExecutorBase):
 
     def __init__(self, agent: Agent) -> None:
         self._agent = agent
+        # Updaters of the tasks running on this executor, so ``cancel`` can close their text artifact.
+        self._running: dict[str, _ClosingTaskUpdater] = {}
 
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
         msg = request_context.message
@@ -217,6 +219,7 @@ class AgentExecutor(A2AAgentExecutorBase):
                 ),
             )
 
+        self._running[task_id] = updater
         try:
             await self._run_one_turn(
                 parsed,
@@ -240,6 +243,8 @@ class AgentExecutor(A2AAgentExecutorBase):
                 ),
             )
             raise
+        finally:
+            self._running.pop(task_id, None)
 
     async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
         # Per a2a-sdk contract: the framework awaits this hook first and only
@@ -251,7 +256,9 @@ class AgentExecutor(A2AAgentExecutorBase):
         # so a cancel never flips the task to FAILED by accident.
         task_id = request_context.task_id or ""
         context_id = request_context.context_id or ""
-        updater = TaskUpdater(event_queue, task_id, context_id)
+        # The running turn's updater closes the streamed text before the task leaves ``working``;
+        # a task this executor is not running (another replica, already finished) gets a plain one.
+        updater = self._running.get(task_id) or TaskUpdater(event_queue, task_id, context_id)
         await updater.cancel()
 
     def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:

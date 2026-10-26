@@ -158,6 +158,8 @@ class A2ADriveState:
     seen_message_ids: set[str] = field(default_factory=set)
     # Artifacts absorbed by this drive; polling re-reads cumulative ``task.artifacts`` on every poll.
     touched_artifact_ids: set[str] = field(default_factory=set)
+    # ``(artifact_id, call_id)`` of every tool call surfaced so far, this ask's earlier drives included.
+    seen_calls: set[tuple[str, str]] = field(default_factory=set)
 
     def text(self) -> str:
         return "".join(self.text_segments)
@@ -166,24 +168,35 @@ class A2ADriveState:
         self.text_segments.append(text)
         self.pending_calls.extend(calls)
 
-    def absorb_text(self, artifact_id: str, text: str, append: bool) -> str:
+    def add_call(self, artifact_id: str, call: ToolCallEvent) -> None:
+        """Surface a tool call once; cumulative snapshots re-send calls that earlier drives already surfaced."""
+        if (artifact_id, call.id) not in self.seen_calls:
+            self.seen_calls.add((artifact_id, call.id))
+            self.pending_calls.append(call)
+
+    def absorb_text(self, artifact_id: str, text: str, append: bool, *, snapshot: bool = False) -> str:
         """Fold a text artifact update into its slot; return the newly arrived text.
 
-        A non-append update restates the whole artifact and replaces what was known, even
-        when it shortens it; text already consumed by an earlier turn is not part of the reply.
+        A non-append update, live or a snapshot, restates the whole artifact and replaces what
+        was known, even when it shortens it. Text consumed by an earlier turn is not part of the
+        reply: a snapshot that is exactly that text is a replay and adds nothing.
         """
         prior = self.prior_text.get(artifact_id, "")
         known = self.artifact_text.get(artifact_id, prior if artifact_id in self.prior_text else None)
         content = (known or "") + text if append else text
         self.artifact_text[artifact_id] = content
-        if known is None:
-            fresh = content
-        elif content.startswith(known):
-            fresh = content[len(known) :]
-        else:
-            fresh = ""
-        mine = content[len(prior) :] if content.startswith(prior) else content
         slot = self.text_slot.get(artifact_id)
+        own = self.text_segments[slot] if slot is not None else None
+        if append and own is not None:
+            mine = own + text
+        elif append and content.startswith(prior):
+            mine = content[len(prior) :]
+        elif snapshot and own is None and content == prior:
+            mine = ""
+        else:
+            mine = content
+        # A restatement that does not extend what was already given out cannot be retracted.
+        fresh = mine[len(own or "") :] if mine.startswith(own or "") else ""
         if slot is not None:
             self.text_segments[slot] = mine
         elif mine or artifact_id not in self.prior_text:
@@ -259,6 +272,7 @@ class A2AClient(LLMClient):
         self._agent_card: AgentCard | None = preset_card
         self._task_id: str | None = None
         self._consumed_text: dict[str, str] = {}
+        self._consumed_calls: set[tuple[str, str]] = set()
         self._call_context: ClientCallContext | None = None
 
     async def __call__(
@@ -287,11 +301,12 @@ class A2AClient(LLMClient):
             if not isinstance(last, ToolResultsEvent):
                 self._task_id = None
                 self._consumed_text = {}
+                self._consumed_calls = set()
 
             function_schemas = self._validate_and_extract_tools(tools)
             outgoing = self._build_outgoing(messages, function_schemas, context)
 
-            state = A2ADriveState(prior_text=dict(self._consumed_text))
+            state = A2ADriveState(prior_text=dict(self._consumed_text), seen_calls=set(self._consumed_calls))
             while True:
                 outcome = await self._drive_task(outgoing, context, state)
                 if not outcome.input_required:
@@ -320,6 +335,7 @@ class A2AClient(LLMClient):
                 self._consumed_text[artifact_id] = state.artifact_text.get(
                     artifact_id, self._consumed_text.get(artifact_id, "")
                 )
+            self._consumed_calls = state.seen_calls
 
             if state.terminal_task is not None and (exc_cls := _FAILURE_ERRORS.get(state.finish_reason)):
                 raise exc_cls(state.terminal_task)
@@ -680,13 +696,15 @@ class A2AClient(LLMClient):
             if isinstance(a2a_event, A2AToolCallArtifact) and not terminal_calls_visible:
                 # Left unseen: the call is only surfaced once the task asks for input.
                 continue
-            await self._apply_artifact_update(a2a_event, context, state)
+            await self._apply_artifact_update(a2a_event, context, state, snapshot=True)
 
     async def _apply_artifact_update(
         self,
         a2a_event: A2ATaskArtifactUpdate,
         context: ConversationContext,
         state: A2ADriveState,
+        *,
+        snapshot: bool = False,
     ) -> None:
         """Apply an artifact update to drive state; typed subclasses route directly, others scan parts."""
         update = a2a_event.update
@@ -694,29 +712,22 @@ class A2AClient(LLMClient):
         artifact_id = artifact.artifact_id
         if artifact_id in state.closed_artifact_ids:
             return
-        # A tool call from an earlier turn reappears in cumulative snapshots; it is never re-surfaced.
-        if isinstance(a2a_event, A2AToolCallArtifact) and artifact_id in state.prior_text:
-            return
-        first_sight = artifact_id not in state.touched_artifact_ids
         state.touched_artifact_ids.add(artifact_id)
 
         if isinstance(a2a_event, A2ATextArtifact):
-            if fresh := state.absorb_text(artifact_id, a2a_event.text, a2a_event.append):
+            if fresh := state.absorb_text(artifact_id, a2a_event.text, a2a_event.append, snapshot=snapshot):
                 await context.send(ModelMessageChunk(fresh))
         elif isinstance(a2a_event, A2AToolCallArtifact):
-            state.pending_calls.append(a2a_event.call)
+            state.add_call(artifact_id, a2a_event.call)
             state.closed_artifact_ids.add(artifact_id)
         else:
-            # Mixed artifact: its text reconciles by identity like a text artifact, its calls once.
+            # Mixed artifact: its text reconciles by identity like a text artifact, its calls by call id.
             text = "".join(part.text for part in artifact.parts)
-            if fresh := state.absorb_text(artifact_id, text, a2a_event.append):
+            if fresh := state.absorb_text(artifact_id, text, a2a_event.append, snapshot=snapshot):
                 await context.send(ModelMessageChunk(fresh))
-            if (first_sight and artifact_id not in state.prior_text) or a2a_event.append:
-                state.pending_calls.extend(
-                    payload_to_call(part_data_to_python(part))
-                    for part in artifact.parts
-                    if is_data_part_with_mime(part, MIME_TOOL_CALL)
-                )
+            for part in artifact.parts:
+                if is_data_part_with_mime(part, MIME_TOOL_CALL):
+                    state.add_call(artifact_id, payload_to_call(part_data_to_python(part)))
 
         if a2a_event.last_chunk:
             state.closed_artifact_ids.add(artifact_id)

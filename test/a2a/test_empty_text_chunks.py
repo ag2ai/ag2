@@ -8,10 +8,10 @@ import pytest
 from a2a.server.tasks import TaskUpdater
 from a2a.types import Part
 
-from ag2.events import BaseEvent, ModelMessageChunk
+from ag2.events import ModelMessageChunk
 from ag2.stream import MemoryStream
 
-from ._helpers import ScriptedExecutor, make_executor_pair
+from ._helpers import EventCollector, ScriptedExecutor, make_executor_pair
 
 
 async def _empty_text_parts(updater: TaskUpdater, release: asyncio.Event) -> None:
@@ -25,15 +25,11 @@ async def _empty_text_parts(updater: TaskUpdater, release: asyncio.Event) -> Non
 @pytest.mark.asyncio
 async def test_empty_text_parts_do_not_emit_empty_message_chunks() -> None:
     pair = make_executor_pair(ScriptedExecutor(_empty_text_parts), streaming=True)
-    chunks: list[str] = []
     stream = MemoryStream()
-
-    @stream.where(ModelMessageChunk).subscribe
-    async def collect(event: BaseEvent) -> None:
-        assert isinstance(event, ModelMessageChunk)
-        chunks.append(event.content)
+    collector = EventCollector()
+    stream.where(ModelMessageChunk).subscribe(collector.on_event)
 
     reply = await pair.client.ask("ping", stream=stream)
 
     assert reply.response.content == "hello"
-    assert chunks == ["hello"]
+    assert collector.chunks == ["hello"]

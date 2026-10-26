@@ -33,6 +33,7 @@ from ag2.config.config import ModelConfig
 from ag2.events import (
     BaseEvent,
     ModelMessage,
+    ModelMessageChunk,
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
@@ -430,3 +431,17 @@ class ScriptedExecutor(A2AAgentExecutorBase):
 
     async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
         return None
+
+
+class EventCollector:
+    """Subscriber that records the events it is given; ``on_event`` is handed to ``stream.subscribe``."""
+
+    def __init__(self) -> None:
+        self.events: list[BaseEvent] = []
+
+    async def on_event(self, event: BaseEvent) -> None:
+        self.events.append(event)
+
+    @property
+    def chunks(self) -> list[str]:
+        return [e.content for e in self.events if isinstance(e, ModelMessageChunk)]

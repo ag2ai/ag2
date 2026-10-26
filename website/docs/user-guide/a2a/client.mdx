@@ -206,7 +206,7 @@ See [Declaring Extensions](/docs/user-guide/a2a/server#declaring-extensions) for
 
 ## What the Reply Contains
 
-The reply is the text of the final model turn; text from earlier turns of a tool round trip is not repeated. A text artifact the server re-sends in full replaces its earlier content instead of being appended to it, and each artifact's text appears once, in order of first appearance, and the same holds for an artifact that carries other parts next to its text. When the server cancels the task, the client raises `#!python A2ATaskCancelledError` with the text received so far in `#!python err.task.artifacts`. Polling and streaming follow the same rules.
+The reply is the text of the final model turn; text from earlier turns of a tool round trip is not repeated. A text artifact the server re-sends in full replaces its earlier content instead of being appended to it (even when the new text is shorter, or reuses an artifact id from an earlier turn and begins with that turn's text; an artifact that comes back unchanged is not counted again), and a tool call is surfaced once however often later updates or polls repeat it, and each artifact's text appears once, in order of first appearance, and the same holds for an artifact that carries other parts next to its text. When the server cancels the task, the client raises `#!python A2ATaskCancelledError` with the text received so far in `#!python err.task.artifacts`. Polling and streaming follow the same rules.
 
 ## A2AConfig Reference
 

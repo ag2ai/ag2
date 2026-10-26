@@ -36,7 +36,7 @@ async def main() -> None:
 
 After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.well-known/agent-card.json`. A client connects by passing that base URL to `#!python A2AConfig(card_url=...)` — see the [Client](/docs/user-guide/a2a/client) page.
 
-When the model streams its answer, the server publishes the text as one artifact and closes it (`#!python last_chunk=True`) before the task leaves `#!python working`, so any A2A client can tell the answer is complete.
+When the model streams its answer, the server publishes the text as one artifact and closes it (`#!python last_chunk=True`) before the task leaves `#!python working` (completed, failed, input required or cancelled), so any A2A client can tell the answer is complete.
 
 ## What `A2AServer` Holds
 
