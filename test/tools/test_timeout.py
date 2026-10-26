@@ -14,7 +14,7 @@ from fast_depends import Depends
 from freezegun import freeze_time
 from freezegun.api import FrozenDateTimeFactory
 
-from ag2 import Agent, Context, tool
+from ag2 import Agent, Context, Plugin, Toolkit, tool
 from ag2.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent, ToolResultsEvent
 from ag2.middleware import ToolExecution, ToolResultType
 from ag2.testing import TestConfig, TrackingConfig
@@ -121,6 +121,19 @@ async def test_timeout_returns_error_and_parallel_sibling_result() -> None:
 def test_invalid_timeout(timeout: float) -> None:
     with pytest.raises(ValueError, match="`timeout` must be a finite number > 0 seconds or None"):
         tool(_immediate, timeout=timeout)
+
+
+def test_timeout_reaches_every_registration_helper() -> None:
+    toolkit = Toolkit()
+    toolkit.tool(name="from_toolkit", timeout=7)(_immediate)
+    plugin = Plugin()
+    plugin.tool(name="from_plugin", timeout=8)(_immediate)
+    agent = Agent("test", plugins=[plugin])
+    agent.tool(name="from_agent", timeout=9)(_immediate)
+
+    timeouts = {t.name: t.timeout for t in [*toolkit.tools, *agent.tools]}
+
+    assert timeouts == {"from_toolkit": 7, "from_plugin": 8, "from_agent": 9}
 
 
 @pytest.mark.asyncio
