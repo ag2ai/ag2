@@ -4,6 +4,7 @@
 
 import json
 import os
+from collections.abc import Collection
 from pathlib import Path
 from typing import TypedDict
 from urllib.parse import urljoin
@@ -51,6 +52,35 @@ def _xid_property_names(schema: JsonValue) -> JsonValue:
     return {key: _xid_property_names(value) for key, value in schema.items()}
 
 
+# A schema with any of these can take properties from outside its own ``properties``.
+_COMPOSING_KEYWORDS = ("$ref", "allOf", "oneOf", "if", "dependentSchemas", "patternProperties", "additionalProperties")
+
+
+def _closed_objects(schema: JsonValue) -> JsonValue:
+    """Rewrite ``unevaluatedProperties: false`` as ``additionalProperties: false`` on self-contained objects.
+
+    ``unevaluatedProperties`` makes ``jsonschema`` re-walk whatever matched, which compounds with every nested call.
+    """
+    if isinstance(schema, list):
+        return [_closed_objects(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    closed = {key: _closed_objects(value) for key, value in schema.items()}
+    branches = closed.get("anyOf")
+    adds_nothing = (
+        all(isinstance(b, dict) and set(b) <= {"required"} for b in branches) if isinstance(branches, list) else True
+    )
+    if (
+        closed.get("unevaluatedProperties") is False
+        and isinstance(closed.get("properties"), dict)
+        and adds_nothing
+        and not any(key in closed for key in _COMPOSING_KEYWORDS)
+    ):
+        del closed["unevaluatedProperties"]
+        closed["additionalProperties"] = False
+    return closed
+
+
 def _instructions_of(catalog: JsonSchema) -> str:
     """Return a catalog's embedded ``instructions`` text (v1.0), or ``""``."""
     instructions = catalog.get("instructions")
@@ -73,24 +103,100 @@ def _catalog_component_variant(catalog: JsonSchema, *, explicit: bool) -> JsonSc
     return {"allOf": [{"$ref": f"{catalog_id}#/$defs/anyComponent"}, _catalog_selection(catalog_id, explicit=explicit)]}
 
 
-def _catalog_function_variant(catalog: JsonSchema, *, agent_initiated: bool, explicit: bool) -> JsonSchema:
+_CALL_ENVELOPE = ("@call", "catalogId")
+
+# Keywords a function definition may carry and still be closed by listing its ``properties``; anything else
+# (``anyOf``, ``not``, ``then``, ...) may admit properties it does not list.
+_PLAIN_DEFINITION_KEYWORDS = frozenset((
+    "type",
+    "title",
+    "description",
+    "returnType",
+    "properties",
+    "required",
+    "allowedCallers",
+    "requiresUserActivation",
+))
+
+
+def _call_tag_is(tag: str) -> JsonSchema:
+    """Match a call whose ``@call`` is ``tag``."""
+    return {"properties": {"@call": {"const": tag}}, "required": ["@call"]}
+
+
+def _call_tag(key: str, definition: JsonValue) -> str:
+    """The ``@call`` value a function answers to: the ``const`` the spec requires, else its catalog key."""
+    properties = _as_object(_as_object(definition).get("properties"))
+    tag = _as_object(properties.get("@call")).get("const")
+    return tag if isinstance(tag, str) else key
+
+
+def _callable_by(definition: JsonValue, *, agent_initiated: bool) -> bool:
+    """Whether the function's ``allowedCallers`` admits a caller in this position."""
+    callers = _as_object(definition).get("allowedCallers", "rendererOnly")
+    if agent_initiated:
+        return callers in ("agentOnly", "rendererOrAgent")
+    return callers != "agentOnly"
+
+
+def _function_body(ref: str, definition: JsonValue) -> JsonSchema:
+    """The function's schema, closed over the properties a call may carry: the envelope and its own."""
+    body = _as_object(definition)
+    properties = _as_object(body.get("properties"))
+    if properties and set(body) <= _PLAIN_DEFINITION_KEYWORDS:
+        declared: JsonObject = dict.fromkeys((*_CALL_ENVELOPE, *properties), True)
+        return {"allOf": [{"$ref": ref}], "properties": declared, "additionalProperties": False}
+    envelope: JsonObject = dict.fromkeys(_CALL_ENVELOPE, True)
+    return {"allOf": [{"properties": envelope}, {"$ref": ref}], "unevaluatedProperties": False}
+
+
+def _catalog_function_variant(
+    catalog: JsonSchema, *, agent_initiated: bool, explicit: bool, owned: Collection[str] | None = None
+) -> JsonSchema:
+    """Validate a call against only the function its ``@call`` names, among the ``owned`` ones (default: all).
+
+    Trying every function's ``args`` compounds with each level of nested calls.
+    """
     catalog_id = str(catalog["$id"])
-    allowed: list[JsonValue] = []
-    for key, definition in _as_object(catalog.get("functions")).items():
-        callers = definition.get("allowedCallers", "rendererOnly") if isinstance(definition, dict) else "rendererOnly"
-        if (agent_initiated and callers in ("agentOnly", "rendererOrAgent")) or (
-            not agent_initiated and callers != "agentOnly"
-        ):
-            allowed.append({"$ref": _catalog_definition_ref(catalog_id, "functions", key)})
-    function_schema: JsonSchema = {"$ref": f"{catalog_id}#/$defs/anyFunction"}
-    return {
-        "allOf": [
-            function_schema,
-            _catalog_selection(catalog_id, explicit=explicit),
-            # Report malformed function names/arguments before caller restrictions.
-            {"if": function_schema, "then": {"anyOf": allowed} if allowed else {"not": {}}},
-        ],
+    functions = _as_object(catalog.get("functions"))
+    tags = {key: _call_tag(key, definition) for key, definition in functions.items()}
+    callable_here = {
+        key: _callable_by(definition, agent_initiated=agent_initiated) for key, definition in functions.items()
     }
+    allowed: list[JsonValue] = [_call_tag_is(tags[key]) for key in functions if callable_here[key]]
+    answered = [key for key in functions if owned is None or key in owned]
+    dispatch: list[JsonValue] = []
+    for key in answered:
+        ref = _catalog_definition_ref(catalog_id, "functions", key)
+        body = _function_body(ref, functions[key])
+        if not callable_here[key]:
+            # Report malformed arguments before the caller restriction.
+            body = {"allOf": [body, {"if": {"$ref": ref}, "then": {"anyOf": allowed} if allowed else {"not": {}}}]}
+        dispatch.append({"if": _call_tag_is(tags[key]), "then": body})
+    selection = _catalog_selection(catalog_id, explicit=explicit)
+    return {
+        "if": selection,
+        "then": {
+            "allOf": [{"oneOf": [_call_tag_is(tag) for tag in dict.fromkeys(tags[key] for key in answered)]}, *dispatch]
+        },
+        "else": selection,
+    }
+
+
+def _owned_functions(catalogs: list[JsonSchema]) -> list[tuple[JsonSchema, set[str] | None]]:
+    """Pair each catalog with the functions no earlier catalog defines identically (``None``: all of them).
+
+    A custom catalog contains the basic one, so checking both would repeat the shared functions at every level.
+    """
+    seen: dict[str, JsonValue] = {}
+    pairs: list[tuple[JsonSchema, set[str] | None]] = []
+    for index, catalog in enumerate(catalogs):
+        functions = _as_object(catalog.get("functions"))
+        owned = {key for key, definition in functions.items() if seen.get(key) != definition}
+        seen.update(functions)
+        if index == 0 or owned:
+            pairs.append((catalog, None if index == 0 else owned))
+    return pairs
 
 
 def _registry_for_surface_catalog(registry: Registry, catalog_id: str) -> Registry:
@@ -265,9 +371,11 @@ class A2UISchemaManager:
         agent-callable definition; renderer-evaluated bindings exclude agent-only
         functions. Component overrides leave nested functions' surface defaults intact.
         """
+        self._basic_catalog["functions"] = _closed_objects(self._basic_catalog.get("functions"))
+        definitions = _as_object(self._common_types.get("$defs"))
+        definitions["IndexSystemFunction"] = _closed_objects(definitions.get("IndexSystemFunction"))
         active = self._get_active_catalog()
         catalogs = {str(self._basic_catalog["$id"]): self._basic_catalog, str(active["$id"]): active}
-        definitions = _as_object(self._common_types.get("$defs"))
         function_call = _as_object(definitions.get("FunctionCall"))
         for name, agent_initiated in (("FunctionCall", False), ("AgentFunctionCall", True)):
             variants: list[JsonValue] = [
@@ -279,8 +387,9 @@ class A2UISchemaManager:
             else:
                 variants.append({"$ref": _IMPLICIT_FUNCTION_SCHEMA_URI})
                 variants.append({"$ref": "#/$defs/IndexSystemFunction"})
+            # Each variant closes its own property set, so the call-wide ``unevaluatedProperties`` goes.
             definitions[name] = {
-                **function_call,
+                **{key: value for key, value in function_call.items() if key != "unevaluatedProperties"},
                 "allOf": [{"$ref": "#/$defs/FunctionCommon"}, {"oneOf": variants}],
             }
 
@@ -452,8 +561,8 @@ class A2UISchemaManager:
                 Resource.from_contents(
                     {
                         "anyOf": [
-                            _catalog_function_variant(catalog, agent_initiated=False, explicit=False)
-                            for catalog in catalogs.values()
+                            _catalog_function_variant(catalog, agent_initiated=False, explicit=False, owned=owned)
+                            for catalog, owned in _owned_functions(list(catalogs.values()))
                         ]
                     },
                     default_specification=DRAFT202012,
