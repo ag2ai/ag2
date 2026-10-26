@@ -3,9 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
+from threading import Event
+from unittest.mock import patch
 
 import pytest
 
@@ -32,6 +36,40 @@ async def _start_command_before_shutdown(sandbox: LocalSandbox, program: str) ->
     await asyncio.wait_for(_wait_for_marker(sandbox.host_workdir / "started"), timeout=2)
     await asyncio.sleep(0.025)
     assert not execution.done()
+
+
+async def _cancel_queued_command(sandbox: LocalSandbox) -> None:
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
+    release = Event()
+    occupied = loop.run_in_executor(None, release.wait, 3)
+    execution = asyncio.create_task(
+        sandbox.exec([sys.executable, "-c", "from pathlib import Path; Path('launched').touch()"])
+    )
+    try:
+        await asyncio.sleep(0)
+        execution.cancel()
+        await asyncio.sleep(0)
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(execution, timeout=2)
+        await occupied
+        # Wait behind every queued command before inspecting its filesystem side effect.
+        await loop.run_in_executor(None, str)
+    finally:
+        release.set()
+        execution.cancel()
+        with suppress(asyncio.CancelledError):
+            await execution
+        await sandbox.aclose()
+
+
+def test_cancelled_queued_command_never_launches(tmp_path: Path) -> None:
+    sandbox = LocalSandbox(tmp_path, timeout=2)
+    with patch("ag2.tools.sandbox.local.subprocess.Popen", wraps=subprocess.Popen) as launch:
+        asyncio.run(_cancel_queued_command(sandbox))
+    launch.assert_not_called()
+    assert not (tmp_path / "launched").exists()
 
 
 @pytest.mark.parametrize("attempt", [0, 1, 2])
