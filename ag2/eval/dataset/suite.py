@@ -160,7 +160,7 @@ def _coerce_tags(raw: Any, *, source: str, index: int) -> tuple[str, ...]:
         return ()
     if isinstance(raw, str):
         return (raw,)
-    if isinstance(raw, (list, tuple)):
+    if isinstance(raw, (list, tuple)) and all(isinstance(tag, str) for tag in raw):
         return tuple(raw)
     raise ValueError(f"{source}: task at index {index} has invalid 'tags' (must be a string or a list of strings)")
 

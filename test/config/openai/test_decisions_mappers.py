@@ -365,5 +365,6 @@ class TestAnswer:
             completion_tokens=0,
             total_tokens=30,
             cache_read_input_tokens=4,
+            cache_creation_input_tokens=0,
             thinking_tokens=0,
         )

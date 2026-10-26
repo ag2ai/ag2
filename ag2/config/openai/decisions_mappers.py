@@ -266,5 +266,6 @@ def normalize_usage(usage: DecisionUsage) -> Usage:
         completion_tokens=usage.output_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
+        cache_creation_input_tokens=usage.input_tokens_details.cache_write_tokens,
         thinking_tokens=usage.output_tokens_details.reasoning_tokens,
     )
