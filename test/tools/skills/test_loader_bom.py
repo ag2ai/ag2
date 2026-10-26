@@ -4,8 +4,6 @@
 
 """Regression: SKILL.md files that start with a UTF-8 BOM must still load."""
 
-from __future__ import annotations
-
 import textwrap
 from pathlib import Path
 
