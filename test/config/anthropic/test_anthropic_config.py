@@ -49,12 +49,10 @@ def test_max_tokens_defaults_to_4096() -> None:
 
 
 @pytest.mark.parametrize("sampling", [{"temperature": 0.2}, {"top_p": 0.9}, {"top_k": 5}])
-@pytest.mark.parametrize(("sdk_2x", "sent"), [(False, True), (True, False)])
-def test_sampling_parameters_are_deprecated_and_sent_only_by_sdk_1x(
-    monkeypatch: pytest.MonkeyPatch, sampling: dict[str, Any], sdk_2x: bool, sent: bool
-) -> None:
+def test_sampling_parameters_are_deprecated_and_sent_only_by_sdk_1x(sampling: dict[str, Any]) -> None:
     # `anthropic` 2.x sends an API version that answers 400 to temperature, top_p and top_k.
-    monkeypatch.setattr(_compat, "SDK_2X", sdk_2x)
+    # The `test-anthropic-1x` CI job runs this against the 1.x SDK.
+    sent = not _compat.SDK_2X
     config = AnthropicConfig(model="claude-sonnet-5", **sampling)
 
     with pytest.warns(DeprecationWarning, match="removed in 1.4.0"):
@@ -126,3 +124,15 @@ def test_copy_with_extra_body() -> None:
 
     assert copied.extra_body == extra
     assert base.extra_body is None
+
+
+def test_drop_sampling_keeps_extra_body() -> None:
+    with pytest.warns(DeprecationWarning, match="removed in 1.4.0"):
+        assert _compat._drop_sampling({"top_k": 5}, {"a": 1}) == {"a": 1}
+
+
+def test_send_sampling_merges_and_extra_body_wins() -> None:
+    with pytest.warns(DeprecationWarning, match="removed in 1.4.0"):
+        result = _compat._send_sampling({"temperature": 0.2, "top_k": 5}, {"top_k": 9})
+
+    assert result == {"temperature": 0.2, "top_k": 9}

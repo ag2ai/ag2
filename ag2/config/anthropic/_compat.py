@@ -25,17 +25,23 @@ def take_sampling_fields(values: dict[str, Any]) -> dict[str, Any]:
     return {name: value for name in SAMPLING_FIELDS if (value := values.pop(name, None)) is not None}
 
 
-def sampling_extra_body(sampling: dict[str, Any], extra_body: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Return the request's extra body with the deprecated sampling values applied for the installed SDK.
+def _drop_sampling(sampling: dict[str, Any], extra_body: dict[str, Any] | None) -> dict[str, Any] | None:
+    """`anthropic` 2.x: the API version it sends rejects the sampling values, so they are dropped."""
+    if sampling:
+        warnings.warn(SAMPLING_DEPRECATION, DeprecationWarning, stacklevel=3)
+    return extra_body
 
-    With 2.x they are dropped. With 1.x they left the method signatures but the API still reads
-    them from the body, so they go there; an explicit ``extra_body`` wins on collision.
+
+def _send_sampling(sampling: dict[str, Any], extra_body: dict[str, Any] | None) -> dict[str, Any] | None:
+    """`anthropic` 1.x: the sampling values left the method signatures but the API still reads them from the body.
+
+    An explicit ``extra_body`` wins on collision.
     """
     if not sampling:
         return extra_body
-
     warnings.warn(SAMPLING_DEPRECATION, DeprecationWarning, stacklevel=3)
-
-    if SDK_2X:
-        return extra_body
     return {**sampling, **(extra_body or {})}
+
+
+sampling_extra_body = _drop_sampling if SDK_2X else _send_sampling
+"""Return the request's extra body with the deprecated sampling values applied for the installed SDK."""
