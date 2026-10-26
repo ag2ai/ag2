@@ -578,8 +578,18 @@ class A2AClient(LLMClient):
             if isinstance(a2a_event, A2ATaskSnapshot):
                 self._task_id = a2a_event.task.id
                 self._save_context_id(context, a2a_event.task.context_id)
-                # A resubscribe opens with the task as it stands, covering what streamed while disconnected.
-                await self._absorb_snapshot_artifacts(a2a_event.task, context, state, terminal_calls_visible=False)
+                # A resubscribe opens with the task as it stands, covering what streamed while disconnected,
+                # including a request for input that was made while the stream was down.
+                status = a2a_event.task.status
+                input_required = status.state == TaskState.TASK_STATE_INPUT_REQUIRED
+                await self._absorb_snapshot_artifacts(
+                    a2a_event.task, context, state, terminal_calls_visible=input_required
+                )
+                if input_required:
+                    state.finish_reason = "input_required"
+                    outcome.input_required = True
+                    outcome.input_prompt = _extract_status_prompt(status)
+                    return outcome
                 continue
 
             if isinstance(a2a_event, A2ATaskStatusUpdate):
@@ -719,7 +729,6 @@ class A2AClient(LLMClient):
                 await context.send(ModelMessageChunk(fresh))
         elif isinstance(a2a_event, A2AToolCallArtifact):
             state.add_call(artifact_id, a2a_event.call)
-            state.closed_artifact_ids.add(artifact_id)
         else:
             # Mixed artifact: its text reconciles by identity like a text artifact, its calls by call id.
             text = "".join(part.text for part in artifact.parts)

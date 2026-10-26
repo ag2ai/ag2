@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 import pytest
@@ -23,6 +24,10 @@ from google.protobuf import json_format
 from ag2 import Agent
 from ag2.a2a import A2AConfig, build_card
 from ag2.a2a.errors import A2AReconnectError
+from ag2.a2a.extension import MIME_TOOL_CALL
+from ag2.a2a.mappers.parts import data_part
+from ag2.a2a.mappers.tools import call_to_payload
+from ag2.events import ToolCallEvent
 from ag2.testing import TestConfig
 
 URL = "http://test"
@@ -70,6 +75,19 @@ def _snapshot(artifact_id: str, text: str) -> StreamResponse:
             context_id=CONTEXT_ID,
             status=TaskStatus(state=TaskState.TASK_STATE_WORKING),
             artifacts=[Artifact(artifact_id=artifact_id, parts=[Part(text=text)])],
+        ),
+    )
+
+
+def _input_required_with_call(artifact_id: str, tool: str) -> StreamResponse:
+    """Task as it stands on resubscribe after the server asked for a client tool."""
+    call = data_part(call_to_payload(ToolCallEvent(name=tool, arguments="{}")), media_type=MIME_TOOL_CALL)
+    return StreamResponse(
+        task=Task(
+            id=TASK_ID,
+            context_id=CONTEXT_ID,
+            status=TaskStatus(state=TaskState.TASK_STATE_INPUT_REQUIRED),
+            artifacts=[Artifact(artifact_id=artifact_id, parts=[call])],
         ),
     )
 
@@ -122,12 +140,16 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
     resubscribe is refused as ``UnsupportedOperation`` (spec §3.1.6) and
     ``GetTask`` returns it.
 
+    ``continuation`` answers any ``SendStreamingMessage`` after the first, the
+    turn a client sends once it has run a tool.
+
     ``methods`` records the JSON-RPC method of every request in order —
     the reconnect behaviour under test is exactly *which* calls happen.
     """
 
     send: _Leg
     resubscribes: Sequence[_Leg] = ()
+    continuation: _Leg | None = None
     finished: Task | None = None
     methods: list[str] = field(default_factory=list)
 
@@ -149,6 +171,8 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
 
     def _leg_for(self, method: str) -> _Leg:
         if method == "SendStreamingMessage":
+            if self.continuation is not None and self.methods.count(method) > 1:
+                return self.continuation
             return self.send
         assert method == "SubscribeToTask", f"unscripted JSON-RPC method {method!r}"
         assert self.resubscribes, "script has no resubscribe leg"
@@ -160,7 +184,11 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
         return self.methods.count("SubscribeToTask")
 
 
-def _client(server: _ScriptedServer, *, max_reconnects: int = 3) -> Agent:
+def lookup() -> str:
+    return "result"
+
+
+def _client(server: _ScriptedServer, *, max_reconnects: int = 3, tools: Sequence[Callable[..., Any]] = ()) -> Agent:
     """Agent whose A2A transport is ``server``, with backoff disabled.
 
     ``preset_card`` skips card discovery, so the script only has to answer
@@ -177,6 +205,7 @@ def _client(server: _ScriptedServer, *, max_reconnects: int = 3) -> Agent:
             max_reconnects=max_reconnects,
             reconnect_backoff=0.0,
         ),
+        tools=list(tools),
     )
 
 
@@ -230,6 +259,18 @@ class TestStreamingReconnect:
         reply = await _client(server).ask("ping")
 
         assert reply.body == "hello world"
+
+    async def test_tool_call_requested_while_disconnected_is_run_from_the_snapshot(self) -> None:
+        server = _ScriptedServer(
+            send=_Leg([_task(), _chunk("art-1", "he", append=False)], drop=True),
+            resubscribes=[_Leg([_input_required_with_call("calls", "lookup")])],
+            continuation=_Leg([_artifact("art-2", "found"), _completed()]),
+        )
+
+        reply = await _client(server, tools=[lookup]).ask("ping")
+
+        assert reply.body == "found"
+        assert server.methods == ["SendStreamingMessage", "SubscribeToTask", "SendStreamingMessage"]
 
     async def test_gives_up_after_max_reconnects(self) -> None:
         server = _ScriptedServer(

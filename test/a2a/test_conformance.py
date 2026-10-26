@@ -411,6 +411,52 @@ async def test_tool_call_introduced_by_a_mixed_artifact_replacement_runs_once(st
     assert reply.response.content == "ok"
 
 
+def step_again() -> str:
+    return "again"
+
+
+class _GrowingCallsExecutor(AgentExecutor):
+    """Streams two client-tool calls into one artifact: the first leaves it open, the second closes it."""
+
+    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        msg = request_context.message
+        assert msg is not None
+        continuation = request_context.current_task is not None
+        task_id = msg.task_id or uuid4().hex
+        context_id = msg.context_id or uuid4().hex
+        if not continuation:
+            await event_queue.enqueue_event(
+                Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
+            )
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        await updater.start_work()
+        if continuation:
+            await updater.complete(message=updater.new_agent_message([Part(text="ok")]))
+            return
+        first = data_part(call_to_payload(ToolCallEvent(name="step", arguments="{}")), media_type=MIME_TOOL_CALL)
+        second = data_part(call_to_payload(ToolCallEvent(name="step_again", arguments="{}")), media_type=MIME_TOOL_CALL)
+        await updater.add_artifact(parts=[first], artifact_id="calls", last_chunk=False)
+        await updater.add_artifact(parts=[second], artifact_id="calls", append=True, last_chunk=True)
+        await updater.requires_input()
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_tool_calls_growing_in_one_artifact_all_run(streaming: bool) -> None:
+    pair = make_executor_pair(_GrowingCallsExecutor(), streaming=streaming)
+    client = Agent("client", config=pair.client.config, tools=[step, step_again])
+    stream = MemoryStream()
+
+    reply = await client.ask("go", stream=stream)
+
+    results = [e for e in await stream.history.get_events() if isinstance(e, ToolResultEvent)]
+    assert sorted(r.name for r in results) == ["step", "step_again"]
+    assert reply.response.content == "ok"
+
+
 class _Blocker:
     """A tool that never returns, so a task stays ``working`` until it is cancelled."""
 
