@@ -60,16 +60,15 @@ def _tool_use_vendor_metadata(block: ToolUseBlock) -> dict[str, Any]:
     return meta
 
 
+from ._compat import sampling_extra_body, take_sampling_fields
 from .mappers import (
     convert_messages,
     extract_mcp_servers,
     extract_skills_for_container,
     has_file_id_references,
     inject_cache_breakpoint,
-    merge_sampling_into_extra_body,
     normalize_usage,
     response_proto_to_output_config,
-    take_sampling_fields,
     tools_to_api,
 )
 
@@ -82,10 +81,8 @@ Speed = Literal["standard", "fast"]
 
 
 class CreateOptions(TypedDict, total=False):
-    # `temperature`, `top_p` and `top_k` are absent on purpose: `anthropic` 1.x
-    # removed them from the Messages API signature, so passing one here is a
-    # `TypeError`. `AnthropicConfig` forwards them in the request's extra body
-    # instead — see `AnthropicConfig._request_extra_body`.
+    # `temperature`, `top_p` and `top_k` are absent on purpose: the Messages API
+    # version `anthropic` 2.x sends no longer accepts them, and answers 400.
     model: str
     max_tokens: int
     stop_sequences: list[str] | None
@@ -124,11 +121,8 @@ class AnthropicClient(LLMClient):
         self._cache_diagnostics = cache_diagnostics
         self._last_message_id: str | None = None
 
-        # A caller reaching this class directly (rather than through
-        # `AnthropicConfig`) may still be passing the sampling parameters 1.x
-        # removed from the method signature. Route them the same way, instead of
-        # letting them reach the SDK as a bare `TypeError` at request time.
-        self._extra_body = merge_sampling_into_extra_body(take_sampling_fields(self._create_options), extra_body)
+        # Reaching this class directly, not through `AnthropicConfig`, may still pass sampling keys.
+        self._extra_body = sampling_extra_body(take_sampling_fields(self._create_options), extra_body)
 
         self._default_betas = _default_betas(default_headers)
 

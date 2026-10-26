@@ -68,7 +68,7 @@ def anthropic_config() -> AnthropicConfig:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         pytest.skip("ANTHROPIC_API_KEY not set")
-    return AnthropicConfig(model="claude-haiku-4-5", api_key=api_key, temperature=0)
+    return AnthropicConfig(model="claude-haiku-4-5", api_key=api_key)
 
 
 async def _wait_for_text_count(

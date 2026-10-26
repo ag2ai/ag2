@@ -6,7 +6,7 @@ import base64
 import json
 import logging
 from collections.abc import Iterable, Sequence
-from typing import Any, Literal, TypeAlias, TypeGuard, cast, get_args
+from typing import Any, Literal, TypeAlias, cast
 
 from anthropic.types import (
     CacheControlEphemeralParam,
@@ -196,7 +196,7 @@ def _unfiltered_source_to_api(source: Literal["all", "none"]) -> UnfilteredUrlSo
     if source == "none":
         return {"type": "none"}
 
-    return cast(UnfilteredUrlSourceParam, {"type": source})
+    return {"type": source}
 
 
 def _url_source_to_api(source: ToolResultSources) -> UrlSourceParam:
@@ -222,16 +222,15 @@ def _url_sources_to_api(url_sources: UrlSources) -> WebFetchURLSourcesParam:
     return result
 
 
-def _web_fetch_tool_to_api(t: WebFetchToolSchema) -> WebFetchTool20260318Param:
-    """Build the web fetch entry against the newest version's param, whichever version is sent.
+def _web_fetch_tool_to_api(t: WebFetchToolSchema) -> dict[str, Any]:
+    """Build the web fetch entry, checking its fields against the newest version's param.
 
     Its fields are a superset of every older one's, and the gate above has already refused any
-    option the selected version predates.
+    option the selected version predates. The params differ only in the `type` literal, so the
+    selected version replaces the newest one's on the way out.
     """
     result: WebFetchTool20260318Param = {
-        # The four params differ only in this literal, so the newest stands in as their
-        # superset and the version is carried through unchecked.
-        "type": cast(Literal["web_fetch_20260318"], t.web_fetch_version),
+        "type": "web_fetch_20260318",
         "name": WEB_FETCH_TOOL_NAME,
     }
     if t.max_uses is not None:
@@ -252,7 +251,7 @@ def _web_fetch_tool_to_api(t: WebFetchToolSchema) -> WebFetchTool20260318Param:
         result["response_inclusion"] = t.response_inclusion
     if t.url_sources is not None and (sources := _url_sources_to_api(t.url_sources)):
         result["url_sources"] = sources
-    return result
+    return {**result, "type": t.web_fetch_version}
 
 
 def _user_location_to_api(location: UserLocation) -> UserLocationParam:
@@ -269,12 +268,14 @@ def _user_location_to_api(location: UserLocation) -> UserLocationParam:
     return result
 
 
-def _web_search_tool_to_api(t: WebSearchToolSchema) -> WebSearchTool20260318Param:
-    """Build the web search entry against the newest version's param, whichever version is sent."""
+def _web_search_tool_to_api(t: WebSearchToolSchema) -> dict[str, Any]:
+    """Build the web search entry, checking its fields against the newest version's param.
+
+    The params differ only in the `type` literal, so the selected version replaces the newest
+    one's on the way out.
+    """
     result: WebSearchTool20260318Param = {
-        # The three params differ only in this literal, so the newest stands in as their
-        # superset and the version is carried through unchecked.
-        "type": cast(Literal["web_search_20260318"], t.web_search_version),
+        "type": "web_search_20260318",
         "name": "web_search",
     }
     if t.max_uses is not None:
@@ -285,7 +286,7 @@ def _web_search_tool_to_api(t: WebSearchToolSchema) -> WebSearchTool20260318Para
         result["allowed_domains"] = t.allowed_domains
     if t.blocked_domains is not None:
         result["blocked_domains"] = t.blocked_domains
-    return result
+    return {**result, "type": t.web_search_version}
 
 
 def _tool_search_tool_to_api(t: ToolSearchToolSchema) -> ToolSearchParam:
@@ -321,22 +322,18 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         return dict(fn_tool)
 
     elif isinstance(t, WebSearchToolSchema):
-        return dict(_web_search_tool_to_api(t))
+        return _web_search_tool_to_api(t)
 
     elif isinstance(t, CodeExecutionToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool
-        # The versioned params differ only in the `type` literal, so the newest stands in
-        # for all of them and the version is carried through unchecked.
-        code_execution: CodeExecutionTool20260521Param = {
-            "type": cast(Literal["code_execution_20260521"], t.version),
-            "name": "code_execution",
-        }
-        return dict(code_execution)
+        # The versioned params differ only in the `type` literal, so the selected version
+        # replaces the newest one's.
+        code_execution: CodeExecutionTool20260521Param = {"type": "code_execution_20260521", "name": "code_execution"}
+        return {**code_execution, "type": t.version}
 
     elif isinstance(t, WebFetchToolSchema):
         _reject_unsupported_web_fetch_options(t)
-        # A TypedDict is a plain dict at runtime; the copy only widens the static type.
-        return dict(_web_fetch_tool_to_api(t))
+        return _web_fetch_tool_to_api(t)
 
     elif isinstance(t, MemoryToolSchema):
         # https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
@@ -473,40 +470,7 @@ def extract_skills_for_container(tools: Iterable[ToolSchema]) -> list[dict[str, 
     return skills
 
 
-# `anthropic` 1.x dropped these from the Messages API signature; the API still reads them from the request body.
-SAMPLING_FIELDS = ("temperature", "top_p", "top_k")
-
-
-def take_sampling_fields(values: dict[str, Any]) -> dict[str, Any]:
-    """Pop every sampling key from ``values``, an explicit ``None`` included, returning the ones that were set."""
-    return {name: value for name in SAMPLING_FIELDS if (value := values.pop(name, None)) is not None}
-
-
-def merge_sampling_into_extra_body(
-    sampling: dict[str, Any], extra_body: dict[str, Any] | None
-) -> dict[str, Any] | None:
-    """Fold the sampling values under an explicit ``extra_body``, which wins on collision — as with ``mcp_servers``."""
-    if not sampling:
-        return extra_body
-    return {**sampling, **(extra_body or {})}
-
-
 _IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp"})
-
-_ImageMediaType: TypeAlias = Literal["image/jpeg", "image/png", "image/gif", "image/webp"]
-"""The only image media types the API accepts inline; anything else is answered with a 400."""
-
-_CacheTtl: TypeAlias = Literal["5m", "1h"]
-
-_Role: TypeAlias = Literal["user", "assistant"]
-
-
-def _is_image_media_type(media_type: str) -> TypeGuard[_ImageMediaType]:
-    return media_type in get_args(_ImageMediaType)
-
-
-def _is_cache_ttl(value: str) -> TypeGuard[_CacheTtl]:
-    return value in get_args(_CacheTtl)
 
 
 def _file_id_block(file_id: str, filename: str | None) -> ImageBlockParam | DocumentBlockParam:
@@ -529,11 +493,13 @@ def _url_block(inp: UrlInput) -> ImageBlockParam | DocumentBlockParam:
 
 
 def _image_block(inp: BinaryInput) -> ImageBlockParam:
-    media_type = inp.media_type
-    if not _is_image_media_type(media_type):
-        raise UnsupportedInputError(f"BinaryInput(image, media_type={media_type})", "anthropic")
-    b64 = base64.b64encode(inp.data).decode()
-    return {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}}
+    match inp.media_type:
+        # The only image media types the API accepts inline; anything else is answered with a 400.
+        case "image/jpeg" | "image/png" | "image/gif" | "image/webp" as media_type:
+            b64 = base64.b64encode(inp.data).decode()
+            return {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}}
+        case _:
+            raise UnsupportedInputError(f"BinaryInput(image, media_type={inp.media_type})", "anthropic")
 
 
 def _document_block(inp: BinaryInput) -> DocumentBlockParam:
@@ -558,12 +524,11 @@ def _cache_control(inp: BinaryInput) -> CacheControlEphemeralParam | None:
     if value is None:
         return None
     if isinstance(value, dict) and value.get("type") == "ephemeral" and set(value) <= {"type", "ttl"}:
-        cache_control: CacheControlEphemeralParam = {"type": "ephemeral"}
         if "ttl" not in value:
-            return cache_control
-        if isinstance(ttl := value["ttl"], str) and _is_cache_ttl(ttl):
-            cache_control["ttl"] = ttl
-            return cache_control
+            return {"type": "ephemeral"}
+        match value["ttl"]:
+            case "5m" | "1h" as ttl:
+                return {"type": "ephemeral", "ttl": ttl}
     raise UnsupportedInputError(f"BinaryInput(cache_control={value!r})", "anthropic")
 
 
@@ -718,9 +683,7 @@ def convert_messages(
                     raise UnsupportedInputError(f"ToolCallEvent(toolset_name={name!r})", "anthropic")
                 toolset_names[call.id] = name
 
-    # Content is gathered per turn and each message is built once at the end: the SDK
-    # declares `content` as an `Iterable`, so a built message cannot be appended to.
-    turns: list[tuple[_Role, str | list[ContentBlockParam]]] = []
+    turns: list[MessageParam] = []
     # Track tool_use_ids we've emitted tool_result blocks for, so the
     # individual-ToolResultEvent fallback below doesn't double-emit when
     # both the wrapper and the leaves are present. Pre-populate from any
@@ -767,7 +730,7 @@ def convert_messages(
                     use_block["toolset_name"] = toolset_name
                 content.append(use_block)
             if content:
-                turns.append(("assistant", content))
+                turns.append(_turn("assistant", content))
 
         # AnthropicRedactedThinkingEvent rides along: Anthropic requires the block
         # echoed back unchanged. AnthropicContainerUploadEvent deliberately has no
@@ -779,10 +742,10 @@ def convert_messages(
             # The one untyped boundary: the dump of the SDK's own response block, which
             # pydantic validated on the way in, is the param block of the same kind.
             block = cast(ContentBlockParam, message.block.model_dump(exclude_none=True, mode="json"))
-            if turns and turns[-1][0] == "assistant" and isinstance(open_turn := turns[-1][1], list):
+            if turns and turns[-1]["role"] == "assistant" and isinstance(open_turn := turns[-1]["content"], list):
                 open_turn.append(block)
             else:
-                turns.append(("assistant", [block]))
+                turns.append(_turn("assistant", [block]))
 
         elif isinstance(message, ToolResultsEvent):
             tool_results: list[ContentBlockParam] = []
@@ -797,7 +760,7 @@ def convert_messages(
                 tool_results.append(_tool_result_block(r, serializer, toolset_names.get(r.parent_id)))
                 emitted_result_ids.add(r.parent_id)
             if tool_results:
-                turns.append(("user", tool_results))
+                turns.append(_turn("user", tool_results))
 
         elif isinstance(message, ModelRequest):
             content_parts: list[ContentBlockParam] = []
@@ -849,13 +812,13 @@ def convert_messages(
 
             if content_parts:
                 if len(content_parts) == 1 and (part := content_parts[0])["type"] == "text":
-                    turns.append(("user", part["text"]))
+                    turns.append(_turn("user", part["text"]))
                 else:
-                    turns.append(("user", content_parts))
+                    turns.append(_turn("user", content_parts))
 
         elif isinstance(message, CompactionSummary):
             # Surface the summary as a user turn so it stays visible and gives a valid opening turn
-            turns.append(("user", f"[Summary of earlier conversation]\n{message.summary}"))
+            turns.append(_turn("user", f"[Summary of earlier conversation]\n{message.summary}"))
 
         elif isinstance(message, (ToolResultEvent, ToolErrorEvent)):
             # Fallback path — an individual result event without a
@@ -866,9 +829,15 @@ def convert_messages(
             parent = message.parent_id
             if parent and parent in valid_tool_ids and parent not in emitted_result_ids:
                 emitted_result_ids.add(parent)
-                turns.append(("user", [_tool_result_block(message, serializer, toolset_names.get(parent))]))
+                result_block = _tool_result_block(message, serializer, toolset_names.get(parent))
+                turns.append(_turn("user", [result_block]))
 
-    return [{"role": role, "content": content} for role, content in turns]
+    return turns
+
+
+def _turn(role: Literal["user", "assistant"], content: str | Iterable[ContentBlockParam]) -> MessageParam:
+    """Build a message turn; `anthropic` 1.x and 2.x name the per-role param types differently."""
+    return cast(MessageParam, {"role": role, "content": content})
 
 
 def inject_cache_breakpoint(messages: list[MessageParam]) -> None:
