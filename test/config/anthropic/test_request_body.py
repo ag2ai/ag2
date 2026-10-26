@@ -4,10 +4,9 @@
 
 """What actually goes out on the wire, pinned through an ``httpx2`` mock transport.
 
-The `anthropic` 1.x floor moved two things AG2 depends on: the sampling
-parameters left the method signature, and header names started matching
-case-insensitively. Both are only observable in the request the SDK builds, so
-they are asserted there rather than against AG2's own kwargs.
+The `anthropic` 1.x floor made header names match case-insensitively, and the
+2.x API version dropped the sampling parameters. Both are only observable in the
+request the SDK builds, so they are asserted there rather than against AG2's own kwargs.
 """
 
 import json
@@ -19,7 +18,7 @@ from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
 from ag2 import Context, MemoryStream
-from ag2.config.anthropic import AnthropicClient, AnthropicConfig
+from ag2.config.anthropic import AnthropicClient, AnthropicConfig, _compat
 from ag2.events import ImageInput, ModelRequest, ModelResponse, TextInput
 from ag2.exceptions import WebFetchOptionUnsupportedError, WebFetchUrlSourceToolNotFoundError
 from ag2.tools.builtin.mcp_server import MCPServerTool
@@ -74,57 +73,6 @@ async def _ask(config: AnthropicConfig, **kwargs: object) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sampling_fields_still_reach_the_api() -> None:
-    captured: dict[str, object] = {}
-    config = AnthropicConfig(
-        model="claude-haiku-4-5",
-        api_key="test",
-        temperature=0.2,
-        top_p=0.9,
-        top_k=5,
-        http_client=_capturing_client(captured),
-    )
-
-    await _ask(config)
-
-    assert captured["body"] == IsPartialDict({"temperature": 0.2, "top_p": 0.9, "top_k": 5})
-
-
-@pytest.mark.asyncio
-async def test_a_zero_sampling_field_is_sent_not_dropped() -> None:
-    """Zero is the value determinism is asked for with, and it is falsy."""
-    captured: dict[str, object] = {}
-    config = AnthropicConfig(
-        model="claude-haiku-4-5",
-        api_key="test",
-        temperature=0,
-        top_p=0,
-        top_k=0,
-        http_client=_capturing_client(captured),
-    )
-
-    await _ask(config)
-
-    assert captured["body"] == IsPartialDict({"temperature": 0, "top_p": 0, "top_k": 0})
-
-
-@pytest.mark.asyncio
-async def test_sampling_fields_reach_the_api_when_streaming() -> None:
-    captured: dict[str, object] = {}
-    config = AnthropicConfig(
-        model="claude-haiku-4-5",
-        api_key="test",
-        temperature=0.2,
-        streaming=True,
-        http_client=_capturing_client(captured, stream=True),
-    )
-
-    await _ask(config)
-
-    assert captured["body"] == IsPartialDict({"temperature": 0.2, "stream": True})
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("streaming", [False, True])
 @pytest.mark.parametrize("speed", ["standard", "fast", None])
 async def test_speed_reaches_the_api_when_set(speed: Literal["standard", "fast"] | None, streaming: bool) -> None:
@@ -176,42 +124,6 @@ async def test_speed_preserves_the_users_beta_header_with_mcp(
 
 
 @pytest.mark.asyncio
-async def test_user_extra_body_wins_over_a_sampling_field() -> None:
-    captured: dict[str, object] = {}
-    config = AnthropicConfig(
-        model="claude-haiku-4-5",
-        api_key="test",
-        temperature=0.2,
-        extra_body={"temperature": 0.9},
-        http_client=_capturing_client(captured),
-    )
-
-    await _ask(config)
-
-    assert captured["body"] == IsPartialDict({"temperature": 0.9})
-
-
-@pytest.mark.asyncio
-async def test_sampling_fields_join_the_mcp_servers_in_the_extra_body(context: Context) -> None:
-    """Both are folded into the one ``extra_body`` the client sends; neither displaces the other."""
-    captured: dict[str, object] = {}
-    config = AnthropicConfig(
-        model="claude-haiku-4-5",
-        api_key="test",
-        temperature=0.2,
-        http_client=_capturing_client(captured),
-    )
-    schemas = await MCPServerTool(server_url="https://mcp.example.com/x", server_label="x").schemas(context)
-
-    await _ask(config, tools=schemas)
-
-    assert captured["body"] == IsPartialDict({
-        "temperature": 0.2,
-        "mcp_servers": [{"type": "url", "url": "https://mcp.example.com/x", "name": "x"}],
-    })
-
-
-@pytest.mark.asyncio
 async def test_no_sampling_fields_leaves_the_body_alone() -> None:
     captured: dict[str, object] = {}
     config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
@@ -221,6 +133,31 @@ async def test_no_sampling_fields_leaves_the_body_alone() -> None:
     body = captured["body"]
     assert isinstance(body, dict)
     assert not {"temperature", "top_p", "top_k"} & body.keys()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("sdk_2x", "sent"), [(False, True), (True, False)])
+async def test_deprecated_sampling_fields_reach_the_body_only_with_sdk_1x(
+    monkeypatch: pytest.MonkeyPatch, sdk_2x: bool, sent: bool
+) -> None:
+    monkeypatch.setattr(_compat, "SDK_2X", sdk_2x)
+    captured: dict[str, object] = {}
+    config = AnthropicConfig(
+        model="claude-haiku-4-5",
+        api_key="test",
+        http_client=_capturing_client(captured),
+        temperature=0,
+        top_p=0.9,
+        top_k=5,
+    )
+
+    with pytest.warns(DeprecationWarning):
+        await _ask(config)
+
+    body = captured["body"]
+    assert isinstance(body, dict)
+    assert ({"temperature", "top_p", "top_k"} <= body.keys()) is sent
+    assert bool({"temperature", "top_p", "top_k"} & body.keys()) is sent
 
 
 @pytest.mark.asyncio
@@ -297,65 +234,6 @@ async def _ask_client(client: AnthropicClient) -> None:
         response_schema=None,
         serializer=SerializerCls,
     )
-
-
-@pytest.mark.asyncio
-async def test_a_direct_client_caller_gets_the_extra_body_route_not_a_type_error() -> None:
-    """`AnthropicClient` is public and `CreateOptions` used to type these keys.
-
-    Without its own handling the keys would reach `messages.create()`, which raises
-    a bare `TypeError` on the 1.x floor — at request time, with nothing said about
-    what to do instead.
-    """
-    captured: dict[str, object] = {}
-    client = AnthropicClient(
-        api_key="test",
-        prompt_caching=False,
-        http_client=_capturing_client(captured),
-        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "temperature": 0.2},  # type: ignore[typeddict-unknown-key]
-    )
-
-    await _ask_client(client)
-
-    assert captured["body"] == IsPartialDict({"temperature": 0.2})
-
-
-@pytest.mark.asyncio
-async def test_a_direct_caller_may_still_spell_a_sampling_field_none() -> None:
-    """The pre-1.x ``CreateOptions`` typed these ``float | None``.
-
-    A key left behind because its value happened to be ``None`` would reach
-    ``messages.create()`` all the same, and the argument is what 1.x removed.
-    """
-    captured: dict[str, object] = {}
-    client = AnthropicClient(
-        api_key="test",
-        prompt_caching=False,
-        http_client=_capturing_client(captured),
-        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "temperature": None},  # type: ignore[typeddict-unknown-key]
-    )
-
-    await _ask_client(client)
-
-    body = captured["body"]
-    assert isinstance(body, dict)
-    assert "temperature" not in body
-
-
-@pytest.mark.asyncio
-async def test_a_direct_callers_extra_body_still_wins() -> None:
-    captured: dict[str, object] = {}
-    client = AnthropicClient(
-        api_key="test",
-        prompt_caching=False,
-        http_client=_capturing_client(captured),
-        create_options={"model": "claude-haiku-4-5", "max_tokens": 16, "top_k": 5},  # type: ignore[typeddict-unknown-key]
-        extra_body={"top_k": 9},
-    )
-
-    await _ask_client(client)
-
-    assert captured["body"] == IsPartialDict({"top_k": 9})
 
 
 @pytest.mark.asyncio

@@ -2,16 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Literal
+import warnings
+from typing import Any, Literal
 
 import pytest
 
 from ag2.config import AnthropicConfig
-from ag2.config.anthropic import AnthropicClient
+from ag2.config.anthropic import AnthropicClient, _compat
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
-    config = AnthropicConfig(model="claude-sonnet-5", temperature=0.2, streaming=True)
+    config = AnthropicConfig(model="claude-sonnet-5", max_tokens=2048, streaming=True)
 
     copied = config.copy()
 
@@ -20,17 +21,17 @@ def test_copy_without_overrides_returns_new_equal_instance() -> None:
 
 
 def test_copy_applies_overrides_without_mutating_original() -> None:
-    config = AnthropicConfig(model="claude-sonnet-5", api_key="key", temperature=0.2, streaming=False)
+    config = AnthropicConfig(model="claude-sonnet-5", api_key="key", max_tokens=2048, streaming=False)
 
-    copied = config.copy(model="claude-haiku-4-5-20251001", temperature=0.8, streaming=True, api_key=None)
+    copied = config.copy(model="claude-haiku-4-5-20251001", max_tokens=4096, streaming=True, api_key=None)
 
     assert copied.model == "claude-haiku-4-5-20251001"
-    assert copied.temperature == 0.8
+    assert copied.max_tokens == 4096
     assert copied.streaming is True
     assert copied.api_key is None
 
     assert config.model == "claude-sonnet-5"
-    assert config.temperature == 0.2
+    assert config.max_tokens == 2048
     assert config.streaming is False
     assert config.api_key == "key"  # pragma: allowlist secret
 
@@ -45,6 +46,34 @@ def test_create_returns_anthropic_client() -> None:
 def test_max_tokens_defaults_to_4096() -> None:
     config = AnthropicConfig(model="claude-sonnet-5")
     assert config.max_tokens == 4096
+
+
+@pytest.mark.parametrize("sampling", [{"temperature": 0.2}, {"top_p": 0.9}, {"top_k": 5}])
+@pytest.mark.parametrize(("sdk_2x", "sent"), [(False, True), (True, False)])
+def test_sampling_parameters_are_deprecated_and_sent_only_by_sdk_1x(
+    monkeypatch: pytest.MonkeyPatch, sampling: dict[str, Any], sdk_2x: bool, sent: bool
+) -> None:
+    # `anthropic` 2.x sends an API version that answers 400 to temperature, top_p and top_k.
+    monkeypatch.setattr(_compat, "SDK_2X", sdk_2x)
+    config = AnthropicConfig(model="claude-sonnet-5", **sampling)
+
+    with pytest.warns(DeprecationWarning, match="removed in 1.4.0"):
+        client = config.create()
+
+    assert not set(sampling) & client._create_options.keys()
+    assert client._extra_body == (sampling if sent else None)
+
+
+def test_no_warning_without_sampling_parameters() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        AnthropicConfig(model="claude-sonnet-5").create()
+
+
+def test_sampling_parameters_survive_copy() -> None:
+    config = AnthropicConfig(model="claude-sonnet-5", temperature=0.2)
+
+    assert config.copy(max_tokens=10).temperature == 0.2
 
 
 def test_max_tokens_can_be_overridden() -> None:
