@@ -9,7 +9,11 @@ import shutil
 import subprocess
 import tempfile
 from contextlib import suppress
+from contextvars import copy_context
+from functools import partial
 from pathlib import Path, PurePosixPath
+from threading import Event
+from time import monotonic
 
 from ag2.tools.code.environment.base import CodeLanguage
 
@@ -38,19 +42,39 @@ def _run_subprocess(
     env: dict[str, str] | None,
     timeout: float,
     max_output: int,
+    cancelled: Event,
 ) -> ExecResult:
-    """Run *argv* under :func:`subprocess.run` with the project's conventions."""
+    """Run *argv*, observing cancellation while collecting command output."""
     merged_env = {**os.environ, **env} if env is not None else None
+    if cancelled.is_set():
+        raise asyncio.CancelledError
 
     try:
-        result = subprocess.run(
+        with subprocess.Popen(
             argv,
             cwd=cwd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
             env=merged_env,
-        )
+        ) as process:
+            deadline = monotonic() + timeout
+            try:
+                while True:
+                    if cancelled.is_set():
+                        raise asyncio.CancelledError
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(argv, timeout)
+                    try:
+                        stdout, stderr = process.communicate(timeout=min(remaining, 0.1))
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+            except BaseException:
+                process.kill()
+                process.wait()
+                raise
     except FileNotFoundError as e:
         return ExecResult(output=f"Command not found: {e}", exit_code=127)
     except subprocess.TimeoutExpired:
@@ -59,19 +83,21 @@ def _run_subprocess(
             exit_code=124,
         )
 
-    output = (result.stdout + result.stderr).strip()
+    output = (stdout + stderr).strip()
     if (total := len(output)) > max_output:
         output = output[:max_output]
         output += f"\n[truncated: showing first {max_output} of {total} chars]"
-    return ExecResult(output=output, exit_code=result.returncode or 0)
+    return ExecResult(output=output, exit_code=process.returncode or 0)
 
 
 class LocalSandbox(SandboxBase):
     """Sandbox backed by a local subprocess.
 
-    A thin wrapper around :func:`subprocess.run` with a fixed working
-    directory. ``__aenter__`` / ``__aexit__`` are no-ops — local sandboxes
-    are usable immediately after construction.
+    A thin wrapper around :class:`subprocess.Popen` with a fixed working
+    directory. Cancelling and awaiting :meth:`exec` terminates and reaps
+    the direct command before cancellation is propagated. ``__aenter__`` /
+    ``__aexit__`` are no-ops — local sandboxes are usable immediately after
+    construction.
 
     Args:
         path: Working directory. ``None`` (default) creates a temporary
@@ -179,14 +205,32 @@ class LocalSandbox(SandboxBase):
             return ExecResult(output="", exit_code=2)
 
         host_workdir = self._ensure_workdir()
-        return await asyncio.to_thread(
-            _run_subprocess,
-            argv,
-            cwd=host_workdir,
-            env=self._merge_env(env),
-            timeout=timeout if timeout is not None else self._default_timeout,
-            max_output=self._max_output,
+        cancelled = Event()
+        # A Future keeps worker completion independent of Tasks cancelled at loop shutdown.
+        execution = asyncio.get_running_loop().run_in_executor(
+            None,
+            partial(
+                copy_context().run,
+                _run_subprocess,
+                argv,
+                cwd=host_workdir,
+                env=self._merge_env(env),
+                timeout=timeout if timeout is not None else self._default_timeout,
+                max_output=self._max_output,
+                cancelled=cancelled,
+            ),
         )
+        try:
+            return await asyncio.shield(execution)
+        except asyncio.CancelledError:
+            cancelled.set()
+            # Shield cleanup from repeated cancellation as well as the first request.
+            while not execution.done():
+                with suppress(asyncio.CancelledError, Exception):
+                    await asyncio.shield(execution)
+            with suppress(asyncio.CancelledError, Exception):
+                execution.result()
+            raise
 
     async def put_file(self, path: PurePosixPath, content: bytes) -> None:
         if self._closed:
