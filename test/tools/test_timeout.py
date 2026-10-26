@@ -3,18 +3,36 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import sys
 import threading
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
+from contextlib import contextmanager
 from typing import Annotated
 
 import pytest
 from fast_depends import Depends
 from freezegun import freeze_time
+from freezegun.api import FrozenDateTimeFactory
 
 from ag2 import Agent, Context, tool
 from ag2.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent, ToolResultsEvent
 from ag2.middleware import ToolExecution, ToolResultType
 from ag2.testing import TestConfig, TrackingConfig
+
+
+@contextmanager
+def _frozen_clock() -> Generator[FrozenDateTimeFactory]:
+    # Inspecting lazy exports can import SDK models under FakeDatetime, or load
+    # entire optional ML stacks. Leave those namespaces alone; freeze asyncio.
+    lazy_modules = [
+        name
+        for name, module in list(sys.modules.items())
+        if module is not None
+        and not name.startswith("asyncio")
+        and ("__getattr__" in vars(module) or hasattr(type(module), "__getattr__"))
+    ]
+    with freeze_time(ignore=lazy_modules) as clock:
+        yield clock
 
 
 async def _wait_for_release(context: Context) -> str:
@@ -82,8 +100,7 @@ async def test_timeout_returns_error_and_parallel_sibling_result() -> None:
     )
     agent.tool(name="work", timeout=30)(_use_resource)
 
-    # Scanning Daytona's lazy exports imports Pydantic models under FakeDatetime.
-    with freeze_time(ignore=["daytona"]) as clock:
+    with _frozen_clock() as clock:
         task = asyncio.create_task(agent.ask("Run both tools"))
         await started.wait()
         clock.tick(31)
@@ -119,7 +136,7 @@ async def test_sync_timeout_stops_waiting_but_thread_finishes_later() -> None:
         tools=[tool(_sync_wait_for_release, name="work", timeout=30)],
         dependencies={"started": started, "release": release, "settled": settled},
     )
-    with freeze_time(ignore=["daytona"]) as clock:
+    with _frozen_clock() as clock:
         task = asyncio.create_task(agent.ask("Run work"))
         try:
             await asyncio.to_thread(started.wait)
@@ -169,7 +186,7 @@ async def test_timeout_starts_after_tool_middleware() -> None:
         tools=[tool(_immediate, name="work", timeout=30, middleware=[_wait_in_middleware])],
         dependencies={"started": started, "release": release},
     )
-    with freeze_time(ignore=["daytona"]) as clock:
+    with _frozen_clock() as clock:
         task = asyncio.create_task(agent.ask("Run work"))
         try:
             await started.wait()
