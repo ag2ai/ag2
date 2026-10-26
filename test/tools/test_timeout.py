@@ -123,17 +123,31 @@ def test_invalid_timeout(timeout: float) -> None:
         tool(_immediate, timeout=timeout)
 
 
-def test_timeout_reaches_every_registration_helper() -> None:
-    toolkit = Toolkit()
-    toolkit.tool(name="from_toolkit", timeout=7)(_immediate)
-    plugin = Plugin()
-    plugin.tool(name="from_plugin", timeout=8)(_immediate)
-    agent = Agent("test", plugins=[plugin])
-    agent.tool(name="from_agent", timeout=9)(_immediate)
+@pytest.mark.asyncio
+@pytest.mark.parametrize("registration", ["toolkit", "plugin", "agent"])
+async def test_timeout_applies_through_every_registration_helper(registration: str) -> None:
+    started = asyncio.Event()
+    dependencies = {"started": started, "release": asyncio.Event(), "settled": asyncio.Event()}
+    config = TestConfig(ToolCallEvent(name="work"), "done")
 
-    timeouts = {t.name: t.timeout for t in [*toolkit.tools, *agent.tools]}
+    if registration == "toolkit":
+        toolkit = Toolkit()
+        toolkit.tool(name="work", timeout=30)(_wait_for_release)
+        agent = Agent("test", config=config, tools=[toolkit], dependencies=dependencies)
+    elif registration == "plugin":
+        plugin = Plugin()
+        plugin.tool(name="work", timeout=30)(_wait_for_release)
+        agent = Agent("test", config=config, plugins=[plugin], dependencies=dependencies)
+    else:
+        agent = Agent("test", config=config, dependencies=dependencies)
+        agent.tool(name="work", timeout=30)(_wait_for_release)
 
-    assert timeouts == {"from_toolkit": 7, "from_plugin": 8, "from_agent": 9}
+    with _frozen_clock() as clock:
+        task = asyncio.create_task(agent.ask("Run work"))
+        await started.wait()
+        clock.tick(31)
+        with pytest.raises(TimeoutError, match="^Tool 'work' timed out after 30 seconds$"):
+            await task
 
 
 @pytest.mark.asyncio
@@ -159,7 +173,8 @@ async def test_sync_timeout_stops_waiting_but_thread_finishes_later() -> None:
             assert not settled.is_set()
         finally:
             release.set()
-            await asyncio.to_thread(settled.wait)
+            if started.is_set():
+                await asyncio.to_thread(settled.wait)
 
 
 @pytest.mark.asyncio
