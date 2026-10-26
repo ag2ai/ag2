@@ -14,6 +14,27 @@ from ag2.a2ui.parser import (
 from ag2.a2ui.schema_manager import A2UISchemaManager
 
 
+def _text_with_nested_format_string(depth: int, leaf: JsonObject | str) -> JsonObject:
+    value: JsonObject | str = leaf
+    for _ in range(depth):
+        value = {"@call": "formatString", "args": {"value": value}}
+    return {
+        "version": "v1.0",
+        "updateComponents": {"surfaceId": "s", "components": [{"id": "root", "component": "Text", "text": value}]},
+    }
+
+
+def _parser_with_functions(functions: JsonObject) -> A2UIResponseParser:
+    manager = A2UISchemaManager(
+        protocol_version="v1.0", custom_catalog={"$id": "https://mycompany.com/cat.json", "functions": functions}
+    )
+    return A2UIResponseParser(
+        version_string=manager.version_string,
+        server_to_client_schema=manager.server_to_client_schema,
+        schema_registry=manager.build_schema_registry(),
+    )
+
+
 def _create_surface_with_extension(key: str) -> JsonObject:
     return {
         "version": "v1.0",
@@ -454,6 +475,91 @@ class TestA2UIResponseParserV1Validation:
         ]
         result = parser_v1.validate(ops)
         assert result.is_valid is True
+
+    def test_deeply_nested_function_calls_validate(self, parser_v1: A2UIResponseParser) -> None:
+        # Validation cost used to multiply with every level of nested calls; this never finished.
+        assert parser_v1.validate([_text_with_nested_format_string(8, "hi")]).is_valid is True
+
+    def test_deeply_nested_agent_only_function_is_rejected(self, parser_v1_agent_function: A2UIResponseParser) -> None:
+        result = parser_v1_agent_function.validate([_text_with_nested_format_string(8, {"@call": "lookup"})])
+        assert result.is_valid is False
+
+    @pytest.mark.parametrize(
+        ("call", "valid"),
+        [
+            ({"@call": "formatString", "args": {"value": "x"}}, True),
+            (
+                {
+                    "@call": "formatString",
+                    "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                    "args": {"value": "x"},
+                },
+                True,
+            ),
+            ({"@call": "formatString", "args": {"value": "x"}, "bogus": 1}, False),
+            ({"@call": "formatString", "args": {"value": "x", "bogus": 1}}, False),
+            ({"@call": "formatString", "args": {}}, False),
+            ({"@call": "noSuchFunction"}, False),
+        ],
+    )
+    def test_function_call_keeps_its_property_set_closed(
+        self, parser_v1: A2UIResponseParser, call: JsonObject, valid: bool
+    ) -> None:
+        assert parser_v1.validate([_text_with_nested_format_string(0, call)]).is_valid is valid
+
+    def test_function_whose_any_of_adds_properties_accepts_them(self) -> None:
+        parser = _parser_with_functions({
+            "pick": {
+                "type": "object",
+                "returnType": "string",
+                "properties": {"@call": {"const": "pick"}},
+                "required": ["@call"],
+                "anyOf": [
+                    {"properties": {"@call": {"const": "pick"}, "a": {}}, "required": ["a"]},
+                    {"properties": {"@call": {"const": "pick"}, "b": {}}, "required": ["b"]},
+                ],
+            }
+        })
+        assert parser.validate([_text_with_nested_format_string(0, {"@call": "pick", "a": 1})]).is_valid is True
+
+    def test_function_without_a_call_const_answers_to_its_catalog_key(self) -> None:
+        parser = _parser_with_functions({
+            "shout": {"type": "object", "returnType": "string", "properties": {"@call": {"type": "string"}}}
+        })
+        assert parser.validate([_text_with_nested_format_string(0, {"@call": "shout"})]).is_valid is True
+        assert parser.validate([_text_with_nested_format_string(0, {"@call": "other"})]).is_valid is False
+
+    def test_custom_catalog_without_functions_leaves_the_basic_ones_working(
+        self, parser_v1: A2UIResponseParser
+    ) -> None:
+        parser = _parser_with_functions({})
+        call = {"@call": "formatString", "args": {"value": "x"}}
+        assert parser.validate([_text_with_nested_format_string(1, call)]).is_valid is True
+        assert parser_v1.validate([_text_with_nested_format_string(1, call)]).is_valid is True
+
+    def test_custom_function_overriding_a_basic_one_is_checked_by_its_own_definition(self) -> None:
+        parser = _parser_with_functions({
+            "formatString": {
+                "type": "object",
+                "returnType": "string",
+                "properties": {"@call": {"const": "formatString"}, "args": {"type": "object", "required": ["only"]}},
+                "required": ["@call"],
+            }
+        })
+        assert parser.validate([
+            _text_with_nested_format_string(0, {"@call": "formatString", "args": {"only": 1}})
+        ]).is_valid
+
+    def test_agent_only_function_in_an_action_is_reported_by_name(
+        self, parser_v1_agent_function: A2UIResponseParser
+    ) -> None:
+        components = [
+            {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": {"@call": "lookup"}}},
+            {"id": "label", "component": "Text", "text": "Go"},
+        ]
+        ops = [{"version": "v1.0", "createSurface": {"surfaceId": "s", "components": components}}]
+        result = parser_v1_agent_function.validate(ops)
+        assert result.errors == ["Operation 0: Component 'root' (Button): unknown @call 'lookup'"]
 
 
 class TestSurfaceCatalogValidation:
