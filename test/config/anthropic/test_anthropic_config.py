@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Literal
+
+import pytest
+
 from ag2.config import AnthropicConfig
 from ag2.config.anthropic import AnthropicClient
 
@@ -46,6 +50,22 @@ def test_max_tokens_defaults_to_4096() -> None:
 def test_max_tokens_can_be_overridden() -> None:
     config = AnthropicConfig(model="claude-sonnet-5", max_tokens=8192)
     assert config.max_tokens == 8192
+
+
+def test_speed_defaults_to_none() -> None:
+    config = AnthropicConfig(model="claude-opus-5-5")
+    assert config.speed is None
+
+
+@pytest.mark.parametrize("speed", ["standard", "fast", None])
+def test_copy_with_speed(speed: Literal["standard", "fast"] | None) -> None:
+    config = AnthropicConfig(model="claude-opus-5-5", speed="fast")
+
+    copied = config.copy(speed=speed)
+
+    assert copied == AnthropicConfig(model="claude-opus-5-5", speed=speed)
+    assert config.speed == "fast"
+    assert copied is not config
 
 
 def test_extra_body_defaults_to_none() -> None:

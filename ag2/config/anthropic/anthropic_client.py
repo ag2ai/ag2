@@ -6,7 +6,7 @@ import json
 import logging
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import httpx2
 from anthropic import NOT_GIVEN, AsyncAnthropic
@@ -78,6 +78,9 @@ def _message_usage(message: Message) -> Usage:
     return normalize_usage(message.usage.model_dump() if message.usage else {})
 
 
+Speed = Literal["standard", "fast"]
+
+
 class CreateOptions(TypedDict, total=False):
     # `temperature`, `top_p` and `top_k` are absent on purpose: `anthropic` 1.x
     # removed them from the Messages API signature, so passing one here is a
@@ -89,6 +92,7 @@ class CreateOptions(TypedDict, total=False):
     stream: bool
     metadata: dict[str, str] | None
     service_tier: str | None
+    speed: Speed | None
 
 
 class AnthropicClient(LLMClient):
