@@ -32,6 +32,7 @@ def _frozen_clock() -> Generator[FrozenDateTimeFactory]:
         and ("__getattr__" in vars(module) or hasattr(type(module), "__getattr__"))
     ]
     with freeze_time(ignore=lazy_modules) as clock:
+        assert isinstance(clock, FrozenDateTimeFactory)
         yield clock
 
 
