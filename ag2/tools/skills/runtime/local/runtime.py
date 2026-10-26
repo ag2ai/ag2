@@ -7,6 +7,7 @@ import os
 import shlex
 import shutil
 import stat
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -159,7 +160,12 @@ class LocalRuntime(SkillRuntime):
         resolved_script = _resolve_within(scripts_dir / script, scripts_dir)
         if script not in {s.name for s in skill.scripts} or resolved_script is None:
             raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
-        command = _script_command(resolved_script, resolved_script.relative_to(scripts_dir.resolve()))
+        relative_script = resolved_script.relative_to(scripts_dir.resolve())
+        if sys.platform == "win32" and self.sandbox is None and resolved_script.suffix.lower() == ".py":
+            # Windows cannot execute shebangs and need not have a python3 alias.
+            command = [sys.executable, f"./{relative_script.as_posix()}"]
+        else:
+            command = _script_command(resolved_script, relative_script)
         if args:
             command.extend(args)
         # async + await env.run(...) so the command runs in the agent's own
