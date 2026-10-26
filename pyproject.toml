@@ -148,6 +148,7 @@ test-core = [
     "pytest-cov==7.1.0",
     "pytest-timeout>=2.4.0,<3",
     "dirty-equals>=0.11,<0.12",
+    "freezegun>=1.5,<2",
 ]
 
 test = [
