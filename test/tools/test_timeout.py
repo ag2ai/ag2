@@ -82,7 +82,8 @@ async def test_timeout_returns_error_and_parallel_sibling_result() -> None:
     )
     agent.tool(name="work", timeout=30)(_use_resource)
 
-    with freeze_time() as clock:
+    # Scanning Daytona's lazy exports imports Pydantic models under FakeDatetime.
+    with freeze_time(ignore=["daytona"]) as clock:
         task = asyncio.create_task(agent.ask("Run both tools"))
         await started.wait()
         clock.tick(31)
@@ -118,7 +119,7 @@ async def test_sync_timeout_stops_waiting_but_thread_finishes_later() -> None:
         tools=[tool(_sync_wait_for_release, name="work", timeout=30)],
         dependencies={"started": started, "release": release, "settled": settled},
     )
-    with freeze_time() as clock:
+    with freeze_time(ignore=["daytona"]) as clock:
         task = asyncio.create_task(agent.ask("Run work"))
         try:
             await asyncio.to_thread(started.wait)
@@ -168,7 +169,7 @@ async def test_timeout_starts_after_tool_middleware() -> None:
         tools=[tool(_immediate, name="work", timeout=30, middleware=[_wait_in_middleware])],
         dependencies={"started": started, "release": release},
     )
-    with freeze_time() as clock:
+    with freeze_time(ignore=["daytona"]) as clock:
         task = asyncio.create_task(agent.ask("Run work"))
         try:
             await started.wait()
