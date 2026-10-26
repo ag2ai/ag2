@@ -10,7 +10,6 @@ import pytest
 from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 from openai.types import Decision
-from openai.types.decision_create_params import DecisionQuestionInputPart
 
 from ag2.compact import CompactionSummary
 from ag2.config.openai.decisions_mappers import (
@@ -95,7 +94,9 @@ class TestQuestion:
     def test_enum_is_a_choice_described_by_member_docstrings(
         self, embed: bool, instructions: str | None, expected_instructions: str
     ) -> None:
-        question = response_proto_to_question(ResponseSchema(Department, embed=embed), instructions=instructions)
+        question = response_proto_to_question(
+            ResponseSchema(Department, embed=embed), instructions=instructions, serializer=SerializerCls
+        )
 
         assert question == {
             "type": "choice",
@@ -109,7 +110,10 @@ class TestQuestion:
 
     def test_descriptions_outrank_docstrings(self) -> None:
         question = response_proto_to_question(
-            ResponseSchema(Department), instructions=None, descriptions={"billing": "Money."}
+            ResponseSchema(Department),
+            instructions=None,
+            descriptions={"billing": "Money."},
+            serializer=SerializerCls,
         )
 
         assert question == IsPartialDict({
@@ -119,19 +123,24 @@ class TestQuestion:
             ]
         })
 
-    def test_structured_parts_carry_the_question_as_a_trailing_text_part(self) -> None:
-        parts: list[DecisionQuestionInputPart] = [
-            {"type": "input_text", "text": "You triage tickets."},
-            {"type": "input_image", "image_url": "data:image/png;base64,aGk=", "detail": "high"},
-            {"type": "input_json", "data": {"tenant": "acme"}},
-        ]
-        question = response_proto_to_question(ResponseSchema(Department), instructions=parts)
+    def test_inputs_become_parts_with_the_question_as_a_trailing_text_part(self) -> None:
+        question = response_proto_to_question(
+            ResponseSchema(Department),
+            instructions=[
+                "You triage tickets.",
+                BinaryInput(b"hi", media_type="image/png", kind=BinaryType.IMAGE, vendor_metadata={"detail": "high"}),
+                DataInput({"tenant": "acme"}),
+            ],
+            serializer=SerializerCls,
+        )
 
         assert question == {
             "type": "choice",
             "name": "answer",
             "instructions": [
-                *parts,
+                {"type": "input_text", "text": "You triage tickets."},
+                {"type": "input_image", "image_url": "data:image/png;base64,aGk=", "detail": "high"},
+                {"type": "input_text", "text": '{"tenant":"acme"}'},
                 {"type": "input_text", "text": "Which team should handle this ticket?"},
             ],
             "choices": [
@@ -140,13 +149,51 @@ class TestQuestion:
             ],
         }
 
-    def test_empty_parts_without_a_question_are_refused(self) -> None:
+    def test_sdk_parts_pass_through_next_to_inputs(self) -> None:
+        question = response_proto_to_question(
+            ResponseSchema(bool, description="Is it?"),
+            instructions=[
+                {"type": "input_json", "data": {"tenant": "acme"}},
+                BinaryInput(b"hi", media_type="image/png", kind=BinaryType.IMAGE),
+            ],
+            serializer=SerializerCls,
+        )
+
+        assert question["instructions"] == [
+            {"type": "input_json", "data": {"tenant": "acme"}},
+            {"type": "input_image", "image_url": "data:image/png;base64,aGk="},
+            {"type": "input_text", "text": "Is it?"},
+        ]
+
+    def test_hosted_image_url_is_allowed_in_instructions(self) -> None:
+        question = response_proto_to_question(
+            ResponseSchema(bool, description="Is it?"),
+            instructions=[UrlInput("https://x.test/y.png", kind=BinaryType.IMAGE)],
+            serializer=SerializerCls,
+        )
+
+        assert question["instructions"] == [
+            {"type": "input_image", "image_url": "https://x.test/y.png"},
+            {"type": "input_text", "text": "Is it?"},
+        ]
+
+    def test_unsupported_input_in_instructions_is_refused(self) -> None:
+        with pytest.raises(UnsupportedInputError):
+            response_proto_to_question(
+                ResponseSchema(bool),
+                instructions=[UrlInput("https://x.test/y.pdf", kind=BinaryType.DOCUMENT)],
+                serializer=SerializerCls,
+            )
+
+    def test_empty_inputs_without_a_question_are_refused(self) -> None:
         with pytest.raises(ValueError, match="needs a question"):
-            response_proto_to_question(ResponseSchema(bool), instructions=[])
+            response_proto_to_question(ResponseSchema(bool), instructions=[], serializer=SerializerCls)
 
     def test_int_enum_is_a_score_labelled_by_member_names(self) -> None:
         question = response_proto_to_question(
-            ResponseSchema(Severity, description="How severe is this issue?"), instructions=None
+            ResponseSchema(Severity, description="How severe is this issue?"),
+            instructions=None,
+            serializer=SerializerCls,
         )
 
         assert question == {
@@ -162,7 +209,9 @@ class TestQuestion:
 
     def test_score_levels_must_start_at_zero(self) -> None:
         with pytest.raises(UnsupportedResponseSchemaError, match="numbered from 0"):
-            response_proto_to_question(ResponseSchema(Gapped, description="How bad?"), instructions=None)
+            response_proto_to_question(
+                ResponseSchema(Gapped, description="How bad?"), instructions=None, serializer=SerializerCls
+            )
 
     @pytest.mark.parametrize(
         "schema",
@@ -170,7 +219,7 @@ class TestQuestion:
         ids=["bool", "probability"],
     )
     def test_bool_and_probability_are_predicates(self, schema: ResponseSchema[Any]) -> None:
-        question = response_proto_to_question(schema, instructions=None)
+        question = response_proto_to_question(schema, instructions=None, serializer=SerializerCls)
 
         assert question["type"] == "predicate"
         assert question["instructions"] in {"Is this a refund request?", "How likely is churn?"}
@@ -178,7 +227,7 @@ class TestQuestion:
     @pytest.mark.parametrize("embed", [True, False], ids=["embedded", "unembedded"])
     def test_bool_docstring_is_not_a_question(self, embed: bool) -> None:
         with pytest.raises(ValueError, match="needs a question"):
-            response_proto_to_question(ResponseSchema(bool, embed=embed), instructions=None)
+            response_proto_to_question(ResponseSchema(bool, embed=embed), instructions=None, serializer=SerializerCls)
 
     @pytest.mark.parametrize(
         "schema",
@@ -187,7 +236,7 @@ class TestQuestion:
     )
     def test_non_decision_schemas_are_rejected(self, schema: Any) -> None:
         with pytest.raises(UnsupportedResponseSchemaError):
-            response_proto_to_question(schema, instructions="Decide.")
+            response_proto_to_question(schema, instructions="Decide.", serializer=SerializerCls)
 
 
 class TestInput:

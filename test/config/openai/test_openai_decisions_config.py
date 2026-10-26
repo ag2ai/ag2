@@ -11,7 +11,7 @@ import httpx2
 import pytest
 from dirty_equals import IsPartialDict
 
-from ag2 import Agent, ResponseSchema
+from ag2 import Agent, DataInput, ImageInput, ResponseSchema
 from ag2.config import OpenAIDecisionsConfig
 from ag2.config.openai import DecisionRefusedError, OpenAIDecisionsClient
 from ag2.events import Usage
@@ -154,7 +154,7 @@ async def test_agent_answers_yes_no_with_bool_schema() -> None:
 
 
 @pytest.mark.asyncio
-async def test_question_instructions_parts_replace_the_prompt_on_the_wire() -> None:
+async def test_question_instructions_inputs_replace_the_prompt_on_the_wire() -> None:
     requests: list[httpx2.Request] = []
     guard = Agent(
         "guard",
@@ -163,9 +163,9 @@ async def test_question_instructions_parts_replace_the_prompt_on_the_wire() -> N
             api_key="test-key",
             http_client=_fake_api(requests, {"type": "predicate", "name": "answer", "probability": 0.92}),
             question_instructions=[
-                {"type": "input_text", "text": "Is the customer asking for a refund?"},
-                {"type": "input_image", "image_url": "data:image/png;base64,aGk="},
-                {"type": "input_json", "data": {"tenant": "acme"}},
+                "Is the customer asking for a refund?",
+                ImageInput(data=b"hi", media_type="image/png"),
+                DataInput({"tenant": "acme"}),
             ],
         ),
         response_schema=ResponseSchema(bool, description="Is this a refund request?"),
@@ -182,12 +182,32 @@ async def test_question_instructions_parts_replace_the_prompt_on_the_wire() -> N
             "instructions": [
                 {"type": "input_text", "text": "Is the customer asking for a refund?"},
                 {"type": "input_image", "image_url": "data:image/png;base64,aGk="},
-                {"type": "input_json", "data": {"tenant": "acme"}},
+                {"type": "input_text", "text": '{"tenant":"acme"}'},
                 # The schema description still reaches the model, as a trailing text part.
                 {"type": "input_text", "text": "Is this a refund request?"},
             ],
         }
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("empty", ["", []])
+async def test_empty_question_instructions_fall_back_to_the_prompt(empty: object) -> None:
+    requests: list[httpx2.Request] = []
+    guard = Agent(
+        "guard",
+        prompt="Is the sky blue?",
+        config=OpenAIDecisionsConfig(
+            api_key="test-key",
+            http_client=_fake_api(requests, {"type": "predicate", "name": "answer", "probability": 0.9}),
+            question_instructions=empty,  # type: ignore[arg-type]
+        ),
+        response_schema=ResponseSchema(bool),
+    )
+
+    await guard.ask("go")
+
+    assert json.loads(requests[0].content)["questions"][0]["instructions"] == "Is the sky blue?"
 
 
 @pytest.mark.asyncio

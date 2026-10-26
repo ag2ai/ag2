@@ -22,7 +22,6 @@ from openai.types.decision import (
 )
 from openai.types.decision import Usage as DecisionUsage
 from openai.types.decision_create_params import (
-    DecisionQuestionInputPart,
     Question,
     QuestionQuestionParamChoice,
     QuestionQuestionParamChoiceChoice,
@@ -30,6 +29,7 @@ from openai.types.decision_create_params import (
     QuestionQuestionParamScore,
     QuestionQuestionParamScoreLevel,
 )
+from openai.types.shared_params import DecisionQuestionInputPart
 
 from ag2.compact import CompactionSummary
 from ag2.events import (
@@ -148,32 +148,49 @@ def _part(part: Input, serializer: SerializerProto) -> DecisionInputPartUnionPar
 
 
 def _question_instructions(
-    instructions: str | Sequence[DecisionQuestionInputPart] | None, question: str
+    instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None,
+    question: str | None,
+    serializer: SerializerProto,
 ) -> str | list[DecisionQuestionInputPart]:
-    """The ``instructions`` to send: text joined into one string, or the given parts with the question appended.
+    """The ``instructions`` to send: text joined into one string, or the given items as parts with the question appended.
 
-    Structured parts let a question carry images and JSON next to its text, which a joined
-    string cannot; the schema's question text then goes out as a trailing ``input_text`` part
-    instead of being joined in.
+    Strings and ``Input`` events become parts like the conversation's own inputs; SDK parts pass
+    through, which is the only way to send ``input_json``. Parts let a question carry images and
+    JSON next to its text, which a joined string cannot; the schema's question text then goes out
+    as a trailing ``input_text`` part instead of being joined in.
     """
     if instructions is None or isinstance(instructions, str):
         return "\n\n".join(s for s in (instructions, question) if s)
 
-    parts: list[DecisionQuestionInputPart] = list(instructions)
+    parts = [_instruction_part(p, serializer) for p in instructions]
     if question:
-        parts.append({"type": "input_text", "text": question})
+        parts.append(_text(question))
     return parts
+
+
+def _instruction_part(
+    item: str | Input | DecisionQuestionInputPart, serializer: SerializerProto
+) -> DecisionQuestionInputPart:
+    if isinstance(item, str):
+        return _text(item)
+    if isinstance(item, UrlInput) and item.kind == BinaryType.IMAGE:
+        # Question instructions, unlike ``input``, take a hosted image URL.
+        return {"type": "input_image", "image_url": item.url}
+    if isinstance(item, Input):
+        return _part(item, serializer)
+    return item
 
 
 def response_proto_to_question(
     response: ResponseProto[Any] | None,
     *,
-    instructions: str | Sequence[DecisionQuestionInputPart] | None,
+    instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None,
+    serializer: SerializerProto,
     descriptions: Mapping[str, str] | None = None,
 ) -> Question:
     """Convert a ``response_schema`` to the single Decisions question: predicate, choice or score."""
     spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
-    instructions_param = _question_instructions(instructions, spec.question)
+    instructions_param = _question_instructions(instructions, spec.question, serializer)
     if not instructions_param:
         # Every question type requires instructions; fail before the request with a way out.
         raise ValueError(
