@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, TypedDict, overload
 
 import httpx2
+from anthropic import OpenTelemetryClientOption
 from anthropic.types import ModelParam
 from typing_extensions import Unpack, deprecated
 
@@ -33,6 +34,7 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     cache_diagnostics: bool
     extra_body: dict[str, Any] | None
     speed: Speed | None
+    open_telemetry: OpenTelemetryClientOption
 
 
 class _DeprecatedConfigOverrides(AnthropicConfigOverrides, total=False):
@@ -66,6 +68,11 @@ class AnthropicConfig(ModelConfig):
     extra_body: dict[str, Any] | None = None
     speed: Speed | None = None
     """Inference speed; some models require a fast-mode beta header for either value."""
+    open_telemetry: OpenTelemetryClientOption = None
+    """The SDK's own OpenTelemetry tracing of API calls: `False` disables its spans, a dict configures them.
+
+    `None` leaves the option unset, so the SDK reads the `ANTHROPIC_OPEN_TELEMETRY*` environment variables.
+    """
 
     if TYPE_CHECKING:
         # The generated `__init__` carries the deprecated sampling parameters; these overloads
@@ -89,6 +96,7 @@ class AnthropicConfig(ModelConfig):
             cache_diagnostics: bool = False,
             extra_body: dict[str, Any] | None = None,
             speed: Speed | None = None,
+            open_telemetry: OpenTelemetryClientOption = None,
         ) -> None: ...
 
         @overload
@@ -114,6 +122,7 @@ class AnthropicConfig(ModelConfig):
             cache_diagnostics: bool = False,
             extra_body: dict[str, Any] | None = None,
             speed: Speed | None = None,
+            open_telemetry: OpenTelemetryClientOption = None,
         ) -> None: ...
 
         def __init__(self, *args: Any, **kwargs: Any) -> None: ...
@@ -161,6 +170,7 @@ class AnthropicConfig(ModelConfig):
             prompt_caching=self.prompt_caching,
             cache_diagnostics=self.cache_diagnostics,
             extra_body=sampling_extra_body(sampling, self.extra_body),
+            open_telemetry=self.open_telemetry,
         )
 
     def create_files_client(self) -> AnthropicFilesClient:

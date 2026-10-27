@@ -136,3 +136,38 @@ def test_send_sampling_merges_and_extra_body_wins() -> None:
         result = _compat._send_sampling({"temperature": 0.2, "top_k": 5}, {"top_k": 9})
 
     assert result == {"temperature": 0.2, "top_k": 9}
+
+
+def test_open_telemetry_defaults_to_none() -> None:
+    config = AnthropicConfig(model="claude-sonnet-5")
+
+    assert config.open_telemetry is None
+
+
+@pytest.mark.parametrize("open_telemetry", [None, False, {"traces": {"content_mode": "content"}}])
+def test_open_telemetry_passed_to_sdk_clients(open_telemetry: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    from ag2.config.anthropic import anthropic_client, files
+
+    calls: list[dict[str, Any]] = []
+
+    def fake_async_anthropic(**kwargs: Any) -> object:
+        calls.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(anthropic_client, "AsyncAnthropic", fake_async_anthropic)
+    monkeypatch.setattr(files, "AsyncAnthropic", fake_async_anthropic)
+    config = AnthropicConfig(model="claude-sonnet-5", api_key="test-key", open_telemetry=open_telemetry)
+
+    config.create()
+    config.create_files_client()
+
+    assert [call["open_telemetry"] for call in calls] == [open_telemetry, open_telemetry]
+
+
+def test_copy_with_open_telemetry() -> None:
+    base = AnthropicConfig(model="claude-sonnet-5")
+
+    copied = base.copy(open_telemetry=False)
+
+    assert copied.open_telemetry is False
+    assert base.open_telemetry is None

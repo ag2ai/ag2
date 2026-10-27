@@ -9,7 +9,7 @@ from itertools import chain
 from typing import Any, Literal, TypedDict
 
 import httpx2
-from anthropic import NOT_GIVEN, AsyncAnthropic
+from anthropic import NOT_GIVEN, AsyncAnthropic, OpenTelemetryClientOption
 from anthropic.types import (
     ContainerUploadBlock,
     Message,
@@ -105,6 +105,7 @@ class AnthropicClient(LLMClient):
         prompt_caching: bool = True,
         cache_diagnostics: bool = False,
         extra_body: dict[str, Any] | None = None,
+        open_telemetry: OpenTelemetryClientOption = None,
     ) -> None:
         self._client = AsyncAnthropic(
             api_key=api_key,
@@ -113,6 +114,7 @@ class AnthropicClient(LLMClient):
             max_retries=max_retries,
             default_headers=default_headers,
             http_client=http_client,
+            open_telemetry=open_telemetry,
         )
 
         self._create_options = {k: v for k, v in (create_options or {}).items() if k != "stream"}
