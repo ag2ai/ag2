@@ -17,7 +17,7 @@ from openai.types.chat.completion_create_params import PromptCacheOptions, WebSe
 from openai.types.responses import ServiceTier as ResponseServiceTier
 from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
 from openai.types.shared_params import Reasoning
-from typing_extensions import Unpack
+from typing_extensions import Self, Unpack, deprecated
 
 from ag2.config.config import ModelConfig, ModelProvider
 
@@ -74,7 +74,9 @@ class OpenAIConfigOverrides(TypedDict, total=False):
 
 
 @dataclass(slots=True)
-class OpenAIConfig(ModelConfig):
+class OpenAIChatConfig(ModelConfig):
+    """Configure the OpenAI Chat Completions API, including compatible endpoints."""
+
     model: ChatModel | str
     api_key: str | None = None
     base_url: str | None = None
@@ -126,7 +128,7 @@ class OpenAIConfig(ModelConfig):
     def provider(self) -> ModelProvider:
         return ModelProvider.OPENAI
 
-    def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> "OpenAIConfig":
+    def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> Self:
         return replace(self, **overrides)
 
     def create(self) -> OpenAIClient:
@@ -180,6 +182,26 @@ class OpenAIConfig(ModelConfig):
 
     def create_files_client(self) -> OpenAIFilesClient:
         return OpenAIFilesClient(self)
+
+
+@deprecated(
+    "OpenAIConfig as a Chat Completions config is deprecated and will be removed in 1.4.0. "
+    "Use OpenAIChatConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
+    "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig.",
+    category=None,
+)
+class OpenAIConfig(OpenAIChatConfig):
+    """Compatibility name for Chat Completions until the Responses alias switch in 1.4.0."""
+
+    __slots__ = ()
+
+    @deprecated(
+        "OpenAIConfig as a Chat Completions config is deprecated and will be removed in 1.4.0. "
+        "Use OpenAIChatConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
+        "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig.",
+    )
+    def create(self) -> OpenAIClient:
+        return super().create()
 
 
 class OpenAIResponsesConfigOverrides(TypedDict, total=False):

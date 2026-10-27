@@ -12,11 +12,13 @@ try:
         ContainerInfo,
         ContainerManager,
         ExpiresAfter,
+        OpenAIChatConfig,
         OpenAIConfig,
         OpenAIDecisionsConfig,
         OpenAIResponsesConfig,
     )
 except ImportError as e:
+    OpenAIChatConfig = missing_optional_dependency("OpenAIChatConfig", "openai", e)  # type: ignore[misc]
     OpenAIConfig = missing_optional_dependency("OpenAIConfig", "openai", e)  # type: ignore[misc]
     OpenAIResponsesConfig = missing_optional_dependency("OpenAIResponsesConfig", "openai", e)  # type: ignore[misc]
     OpenAIDecisionsConfig = missing_optional_dependency("OpenAIDecisionsConfig", "openai", e)  # type: ignore[misc]
@@ -83,6 +85,7 @@ __all__ = (
     "ModelConfig",
     "ModelProvider",
     "OllamaConfig",
+    "OpenAIChatConfig",
     "OpenAIConfig",
     "OpenAIDecisionsConfig",
     "OpenAIResponsesConfig",

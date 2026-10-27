@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .config import OpenAIConfig, OpenAIDecisionsConfig, OpenAIResponsesConfig
+from .config import OpenAIChatConfig, OpenAIConfig, OpenAIDecisionsConfig, OpenAIResponsesConfig
 from .containers import ContainerInfo, ContainerManager, ExpiresAfter
 from .decisions_mappers import DecisionRefusedError, UnsupportedResponseSchemaError
 from .openai_client import OpenAIClient
@@ -14,6 +14,7 @@ __all__ = (
     "ContainerManager",
     "DecisionRefusedError",
     "ExpiresAfter",
+    "OpenAIChatConfig",
     "OpenAIClient",
     "OpenAIConfig",
     "OpenAIDecisionsClient",

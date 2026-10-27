@@ -36,7 +36,7 @@ class ImageGenerationTool(Tool):
 
     Instructs the model to generate images inline during the conversation.
     Only supported with ``OpenAIResponsesConfig`` — raises ``UnsupportedToolError``
-    when used with ``OpenAIConfig`` (Chat Completions API).
+    when used with ``OpenAIChatConfig`` (Chat Completions API).
 
     Generated images are returned as ``list[BinaryResult]`` via ``reply.files``.
 
