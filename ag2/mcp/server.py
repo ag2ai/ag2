@@ -76,7 +76,7 @@ def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | Non
     return SessionStore(
         max_sessions=cfg.max_sessions,
         ttl=cfg.ttl,
-        storage=cfg.storage or MemoryStorage(),
+        storage=cfg.storage if cfg.storage is not None else MemoryStorage(),
     )
 
 
