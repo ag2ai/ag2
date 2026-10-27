@@ -445,3 +445,35 @@ class EventCollector:
     @property
     def chunks(self) -> list[str]:
         return [e.content for e in self.events if isinstance(e, ModelMessageChunk)]
+
+
+_Turn = Callable[[TaskUpdater], Awaitable[None]]
+
+
+async def _complete_with_ok(updater: TaskUpdater) -> None:
+    await updater.complete(message=updater.new_agent_message([Part(text="ok")]))
+
+
+class ToolRoundTripExecutor(A2AAgentExecutorBase):
+    """Runs ``first_turn`` for a new task and ``continuation`` once the client answers its request for input."""
+
+    def __init__(self, first_turn: _Turn, continuation: _Turn = _complete_with_ok) -> None:
+        self._first_turn = first_turn
+        self._continuation = continuation
+
+    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        msg = request_context.message
+        assert msg is not None
+        resumed = request_context.current_task is not None
+        task_id = msg.task_id or uuid4().hex
+        context_id = msg.context_id or uuid4().hex
+        if not resumed:
+            await event_queue.enqueue_event(
+                Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
+            )
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        await updater.start_work()
+        await (self._continuation if resumed else self._first_turn)(updater)
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        return None

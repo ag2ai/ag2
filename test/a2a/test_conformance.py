@@ -4,14 +4,12 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
+from functools import partial
 from typing import Any
-from uuid import uuid4
 
 import pytest
-from a2a.server.agent_execution import AgentExecutor, RequestContext
-from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import Part, Task, TaskState, TaskStatus
+from a2a.types import Part, Task, TaskState
 from typing_extensions import Self
 
 from ag2 import Agent, Context
@@ -37,7 +35,7 @@ from ag2.events import (
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
-from ._helpers import EventCollector, ScriptedExecutor, a2a_config, make_executor_pair
+from ._helpers import EventCollector, ScriptedExecutor, ToolRoundTripExecutor, a2a_config, make_executor_pair
 
 _URL = "http://test"
 
@@ -173,9 +171,12 @@ async def test_cancelled_task_raises_and_keeps_partial_text(streaming: bool) -> 
         await pair.client.ask("go")
 
     task = exc_info.value.task
-    partial = "".join(part.text for artifact in task.artifacts for part in artifact.parts)
     assert isinstance(exc_info.value, A2ATaskTerminalError)
-    assert (task.status.state, partial) == (TaskState.TASK_STATE_CANCELED, "partial")
+    assert (task.status.state, _artifact_text(task)) == (TaskState.TASK_STATE_CANCELED, "partial")
+
+
+def _artifact_text(task: Task) -> str:
+    return "".join(part.text for artifact in task.artifacts for part in artifact.parts)
 
 
 async def _text_artifact_updates(agent: Agent) -> list[A2ATextArtifact]:
@@ -186,6 +187,14 @@ async def _text_artifact_updates(agent: Agent) -> list[A2ATextArtifact]:
     await agent.ask("go", stream=stream)
 
     return [e for e in collector.events if isinstance(e, A2ATextArtifact)]
+
+
+def _closing_flags_per_artifact(updates: Sequence[A2ATextArtifact]) -> list[list[bool]]:
+    """``last_chunk`` of every update, grouped by artifact in order of first appearance."""
+    flags: dict[str, list[bool]] = {}
+    for u in updates:
+        flags.setdefault(u.update.artifact.artifact_id, []).append(u.last_chunk)
+    return list(flags.values())
 
 
 def _client(server_agent: Agent, *, streaming: bool = True, tools: Sequence[Any] = ()) -> Agent:
@@ -210,8 +219,7 @@ async def test_server_closes_streamed_text_artifact_exactly_once(chunks: list[st
 
     updates = await _text_artifact_updates(client)
 
-    assert len({u.update.artifact.artifact_id for u in updates}) == 1
-    assert [u.last_chunk for u in updates] == [False] * (len(updates) - 1) + [True]
+    assert _closing_flags_per_artifact(updates) == [[False] * (len(updates) - 1) + [True]]
 
 
 @pytest.mark.asyncio
@@ -271,8 +279,7 @@ async def test_tool_only_turn_opens_no_text_artifact() -> None:
 
     updates = await _text_artifact_updates(client)
 
-    assert len({u.update.artifact.artifact_id for u in updates}) == 1
-    assert [u.last_chunk for u in updates] == [False] * (len(updates) - 1) + [True]
+    assert _closing_flags_per_artifact(updates) == [[False] * (len(updates) - 1) + [True]]
 
 
 @pytest.mark.asyncio
@@ -289,44 +296,32 @@ async def test_answer_only_in_completion_message_emits_one_chunk(streaming: bool
     assert collector.chunks == ["done"]
 
 
-class _ReusedArtifactExecutor(AgentExecutor):
+def _call_part(name: str) -> Part:
+    return data_part(call_to_payload(ToolCallEvent(name=name, arguments="{}")), media_type=MIME_TOOL_CALL)
+
+
+async def _text_then_tool_call(updater: TaskUpdater) -> None:
+    await updater.add_artifact(parts=[Part(text="pre-")], artifact_id="art")
+    await updater.add_artifact(parts=[_call_part("step")], artifact_id="call")
+    await updater.requires_input()
+
+
+async def _answer_in_reused_artifact(updater: TaskUpdater, *, answer: str, append: bool) -> None:
+    await updater.add_artifact(parts=[Part(text=answer)], artifact_id="art", append=append, last_chunk=True)
+    await updater.complete()
+
+
+def _reused_artifact_executor(answer: str = "end", *, append: bool = False) -> ToolRoundTripExecutor:
     """Opens text artifact ``art`` and asks for a client tool; the continuation reuses ``art`` for the answer."""
-
-    def __init__(self, answer: str = "end", *, append: bool = False) -> None:
-        self._answer = answer
-        self._append = append
-
-    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        msg = request_context.message
-        assert msg is not None
-        continuation = request_context.current_task is not None
-        task_id = msg.task_id or uuid4().hex
-        context_id = msg.context_id or uuid4().hex
-        if not continuation:
-            await event_queue.enqueue_event(
-                Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
-            )
-        updater = TaskUpdater(event_queue, task_id, context_id)
-        await updater.start_work()
-        if continuation:
-            await updater.add_artifact(
-                parts=[Part(text=self._answer)], artifact_id="art", append=self._append, last_chunk=True
-            )
-            await updater.complete()
-            return
-        await updater.add_artifact(parts=[Part(text="pre-")], artifact_id="art")
-        call = data_part(call_to_payload(ToolCallEvent(name="step", arguments="{}")), media_type=MIME_TOOL_CALL)
-        await updater.add_artifact(parts=[call], artifact_id="call")
-        await updater.requires_input()
-
-    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        return None
+    return ToolRoundTripExecutor(
+        _text_then_tool_call, partial(_answer_in_reused_artifact, answer=answer, append=append)
+    )
 
 
 @pytest.mark.asyncio
 @_both_modes
 async def test_artifact_id_reused_after_tool_round_trip_carries_the_answer(streaming: bool) -> None:
-    pair = make_executor_pair(_ReusedArtifactExecutor(), streaming=streaming)
+    pair = make_executor_pair(_reused_artifact_executor(), streaming=streaming)
     client = Agent("client", config=pair.client.config, tools=[step])
 
     reply = await client.ask("go")
@@ -337,7 +332,7 @@ async def test_artifact_id_reused_after_tool_round_trip_carries_the_answer(strea
 @pytest.mark.asyncio
 @_both_modes
 async def test_artifact_id_reused_after_tool_round_trip_streams_the_answer(streaming: bool) -> None:
-    pair = make_executor_pair(_ReusedArtifactExecutor(), streaming=streaming)
+    pair = make_executor_pair(_reused_artifact_executor(), streaming=streaming)
     client = Agent("client", config=pair.client.config, tools=[step])
     stream = MemoryStream()
     collector = EventCollector()
@@ -351,7 +346,7 @@ async def test_artifact_id_reused_after_tool_round_trip_streams_the_answer(strea
 @pytest.mark.asyncio
 @_both_modes
 async def test_replacement_sharing_the_previous_turn_prefix_is_kept_whole(streaming: bool) -> None:
-    pair = make_executor_pair(_ReusedArtifactExecutor("pre-final"), streaming=streaming)
+    pair = make_executor_pair(_reused_artifact_executor("pre-final"), streaming=streaming)
     client = Agent("client", config=pair.client.config, tools=[step])
 
     reply = await client.ask("go")
@@ -361,7 +356,7 @@ async def test_replacement_sharing_the_previous_turn_prefix_is_kept_whole(stream
 
 @pytest.mark.asyncio
 async def test_live_append_to_an_artifact_from_the_previous_turn_adds_only_the_new_text() -> None:
-    pair = make_executor_pair(_ReusedArtifactExecutor("end", append=True), streaming=True)
+    pair = make_executor_pair(_reused_artifact_executor("end", append=True), streaming=True)
     client = Agent("client", config=pair.client.config, tools=[step])
 
     reply = await client.ask("go")
@@ -369,38 +364,22 @@ async def test_live_append_to_an_artifact_from_the_previous_turn_adds_only_the_n
     assert reply.response.content == "end"
 
 
-class _MixedCallExecutor(AgentExecutor):
+async def _mixed_artifact_replaced_by_call(updater: TaskUpdater) -> None:
+    image = Part(url="http://test/image.png", media_type="image/png")
+    await updater.add_artifact(parts=[Part(text="look"), image], artifact_id="art")
+    await updater.add_artifact(parts=[Part(text="look"), _call_part("step")], artifact_id="art", last_chunk=True)
+    await updater.requires_input()
+
+
+def _mixed_call_executor() -> ToolRoundTripExecutor:
     """Opens an artifact of text plus an image, then replaces it with text plus a client-tool call."""
-
-    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        msg = request_context.message
-        assert msg is not None
-        continuation = request_context.current_task is not None
-        task_id = msg.task_id or uuid4().hex
-        context_id = msg.context_id or uuid4().hex
-        if not continuation:
-            await event_queue.enqueue_event(
-                Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
-            )
-        updater = TaskUpdater(event_queue, task_id, context_id)
-        await updater.start_work()
-        if continuation:
-            await updater.complete(message=updater.new_agent_message([Part(text="ok")]))
-            return
-        image = Part(url="http://test/image.png", media_type="image/png")
-        call = data_part(call_to_payload(ToolCallEvent(name="step", arguments="{}")), media_type=MIME_TOOL_CALL)
-        await updater.add_artifact(parts=[Part(text="look"), image], artifact_id="art")
-        await updater.add_artifact(parts=[Part(text="look"), call], artifact_id="art", last_chunk=True)
-        await updater.requires_input()
-
-    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        return None
+    return ToolRoundTripExecutor(_mixed_artifact_replaced_by_call)
 
 
 @pytest.mark.asyncio
 @_both_modes
 async def test_tool_call_introduced_by_a_mixed_artifact_replacement_runs_once(streaming: bool) -> None:
-    pair = make_executor_pair(_MixedCallExecutor(), streaming=streaming)
+    pair = make_executor_pair(_mixed_call_executor(), streaming=streaming)
     client = Agent("client", config=pair.client.config, tools=[step])
     stream = MemoryStream()
 
@@ -415,38 +394,21 @@ def step_again() -> str:
     return "again"
 
 
-class _GrowingCallsExecutor(AgentExecutor):
+async def _calls_growing_in_one_artifact(updater: TaskUpdater) -> None:
+    await updater.add_artifact(parts=[_call_part("step")], artifact_id="calls", last_chunk=False)
+    await updater.add_artifact(parts=[_call_part("step_again")], artifact_id="calls", append=True, last_chunk=True)
+    await updater.requires_input()
+
+
+def _growing_calls_executor() -> ToolRoundTripExecutor:
     """Streams two client-tool calls into one artifact: the first leaves it open, the second closes it."""
-
-    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        msg = request_context.message
-        assert msg is not None
-        continuation = request_context.current_task is not None
-        task_id = msg.task_id or uuid4().hex
-        context_id = msg.context_id or uuid4().hex
-        if not continuation:
-            await event_queue.enqueue_event(
-                Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
-            )
-        updater = TaskUpdater(event_queue, task_id, context_id)
-        await updater.start_work()
-        if continuation:
-            await updater.complete(message=updater.new_agent_message([Part(text="ok")]))
-            return
-        first = data_part(call_to_payload(ToolCallEvent(name="step", arguments="{}")), media_type=MIME_TOOL_CALL)
-        second = data_part(call_to_payload(ToolCallEvent(name="step_again", arguments="{}")), media_type=MIME_TOOL_CALL)
-        await updater.add_artifact(parts=[first], artifact_id="calls", last_chunk=False)
-        await updater.add_artifact(parts=[second], artifact_id="calls", append=True, last_chunk=True)
-        await updater.requires_input()
-
-    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
-        return None
+    return ToolRoundTripExecutor(_calls_growing_in_one_artifact)
 
 
 @pytest.mark.asyncio
 @_both_modes
 async def test_tool_calls_growing_in_one_artifact_all_run(streaming: bool) -> None:
-    pair = make_executor_pair(_GrowingCallsExecutor(), streaming=streaming)
+    pair = make_executor_pair(_growing_calls_executor(), streaming=streaming)
     client = Agent("client", config=pair.client.config, tools=[step, step_again])
     stream = MemoryStream()
 
