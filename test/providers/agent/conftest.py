@@ -49,7 +49,6 @@ def anthropic_config() -> AnthropicConfig:
     return AnthropicConfig(
         model="claude-haiku-4-5",
         api_key=_require("ANTHROPIC_API_KEY"),
-        temperature=0,
     )
 
 
@@ -107,7 +106,6 @@ def streaming_config(request):
         return AnthropicConfig(
             model="claude-haiku-4-5",
             api_key=_require("ANTHROPIC_API_KEY"),
-            temperature=0,
             streaming=True,
         )
     if request.param == "zai":

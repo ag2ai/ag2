@@ -105,7 +105,12 @@ async def test_agent_routes_with_enum_schema() -> None:
         "probabilities": [{"value": "billing", "probability": 0.95}, {"value": "technical", "probability": 0.05}],
     }
     assert reply.response.usage == Usage(
-        prompt_tokens=30, completion_tokens=0, total_tokens=30, cache_read_input_tokens=0, thinking_tokens=0
+        prompt_tokens=30,
+        completion_tokens=0,
+        total_tokens=30,
+        cache_read_input_tokens=0,
+        cache_creation_input_tokens=0,
+        thinking_tokens=0,
     )
 
     [request] = requests

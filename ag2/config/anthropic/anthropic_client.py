@@ -6,7 +6,7 @@ import json
 import logging
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import httpx2
 from anthropic import NOT_GIVEN, AsyncAnthropic
@@ -31,6 +31,7 @@ from ag2.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
@@ -59,31 +60,36 @@ def _tool_use_vendor_metadata(block: ToolUseBlock) -> dict[str, Any]:
     return meta
 
 
+from ._compat import sampling_extra_body, take_sampling_fields
 from .mappers import (
     convert_messages,
     extract_mcp_servers,
     extract_skills_for_container,
     has_file_id_references,
     inject_cache_breakpoint,
-    merge_sampling_into_extra_body,
     normalize_usage,
     response_proto_to_output_config,
-    take_sampling_fields,
     tools_to_api,
 )
 
 
+def _message_usage(message: Message) -> Usage:
+    return normalize_usage(message.usage.model_dump() if message.usage else {})
+
+
+Speed = Literal["standard", "fast"]
+
+
 class CreateOptions(TypedDict, total=False):
-    # `temperature`, `top_p` and `top_k` are absent on purpose: `anthropic` 1.x
-    # removed them from the Messages API signature, so passing one here is a
-    # `TypeError`. `AnthropicConfig` forwards them in the request's extra body
-    # instead — see `AnthropicConfig._request_extra_body`.
+    # `temperature`, `top_p` and `top_k` are absent on purpose: the Messages API
+    # version `anthropic` 2.x sends no longer accepts them, and answers 400.
     model: str
     max_tokens: int
     stop_sequences: list[str] | None
     stream: bool
     metadata: dict[str, str] | None
     service_tier: str | None
+    speed: Speed | None
 
 
 class AnthropicClient(LLMClient):
@@ -115,11 +121,8 @@ class AnthropicClient(LLMClient):
         self._cache_diagnostics = cache_diagnostics
         self._last_message_id: str | None = None
 
-        # A caller reaching this class directly (rather than through
-        # `AnthropicConfig`) may still be passing the sampling parameters 1.x
-        # removed from the method signature. Route them the same way, instead of
-        # letting them reach the SDK as a bare `TypeError` at request time.
-        self._extra_body = merge_sampling_into_extra_body(take_sampling_fields(self._create_options), extra_body)
+        # Reaching this class directly, not through `AnthropicConfig`, may still pass sampling keys.
+        self._extra_body = sampling_extra_body(take_sampling_fields(self._create_options), extra_body)
 
         self._default_betas = _default_betas(default_headers)
 
@@ -197,6 +200,7 @@ class AnthropicClient(LLMClient):
             create_kwargs["extra_body"] = {**existing, **self._extra_body}
 
         max_continuations = 5
+        continuation_usage = Usage()
 
         if self._streaming:
             if self._cache_diagnostics:
@@ -209,6 +213,7 @@ class AnthropicClient(LLMClient):
             for _ in range(max_continuations):
                 if result.finish_reason != "pause_turn":
                     break
+                continuation_usage += result.usage
                 anthropic_messages.append({"role": "assistant", "content": final_msg.content})
                 create_kwargs["messages"] = anthropic_messages
                 if self._cache_diagnostics:
@@ -218,6 +223,7 @@ class AnthropicClient(LLMClient):
                     final_msg = await stream.get_final_message()
                 await self._report_cache_diagnostics(final_msg, create_kwargs, context)
 
+            result.usage += continuation_usage
             return result
         else:
             if self._cache_diagnostics:
@@ -228,6 +234,7 @@ class AnthropicClient(LLMClient):
             for _ in range(max_continuations):
                 if response.stop_reason != "pause_turn":
                     break
+                continuation_usage += _message_usage(response)
                 await self._emit_builtin_tool_events(response.content, context)
                 anthropic_messages.append({"role": "assistant", "content": response.content})
                 create_kwargs["messages"] = anthropic_messages
@@ -236,7 +243,9 @@ class AnthropicClient(LLMClient):
                 response = await self._client.messages.create(**create_kwargs)
                 await self._report_cache_diagnostics(response, create_kwargs, context)
 
-            return await self._process_response(response, context)
+            result = await self._process_response(response, context)
+            result.usage += continuation_usage
+            return result
 
     async def _report_cache_diagnostics(
         self,
@@ -331,12 +340,10 @@ class AnthropicClient(LLMClient):
                     type(block).__name__,
                 )
 
-        usage = normalize_usage(response.usage.model_dump() if response.usage else {})
-
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls),
-            usage=usage,
+            usage=_message_usage(response),
             model=response.model,
             provider="anthropic",
             finish_reason=response.stop_reason,
@@ -441,7 +448,7 @@ class AnthropicClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls),
-            usage=normalize_usage(final_message.usage.model_dump() if final_message.usage else {}),
+            usage=_message_usage(final_message),
             model=final_message.model,
             provider="anthropic",
             finish_reason=final_message.stop_reason,

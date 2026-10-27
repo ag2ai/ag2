@@ -88,7 +88,7 @@ ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=3.27.0,<4"]
-anthropic = ["anthropic>=1.9.0,<2"]
+anthropic = ["anthropic>=1.15.0,<3"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
@@ -148,6 +148,7 @@ test-core = [
     "pytest-cov==7.1.0",
     "pytest-timeout>=2.4.0,<3",
     "dirty-equals>=0.11,<0.12",
+    "freezegun>=1.5,<2",
 ]
 
 test = [
