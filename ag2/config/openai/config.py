@@ -184,22 +184,20 @@ class OpenAICompletionsConfig(ModelConfig):
         return OpenAIFilesClient(self)
 
 
-@deprecated(
+OPENAI_CONFIG_DEPRECATION = (
     "OpenAIConfig as a Chat Completions config is deprecated and will be removed in 1.4.0. "
     "Use OpenAICompletionsConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
-    "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig.",
-    category=None,
+    "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig."
 )
+
+
+@deprecated(OPENAI_CONFIG_DEPRECATION, category=None)
 class OpenAIConfig(OpenAICompletionsConfig):
     """Compatibility name for Chat Completions until the Responses alias switch in 1.4.0."""
 
     __slots__ = ()
 
-    @deprecated(
-        "OpenAIConfig as a Chat Completions config is deprecated and will be removed in 1.4.0. "
-        "Use OpenAICompletionsConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
-        "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig.",
-    )
+    @deprecated(OPENAI_CONFIG_DEPRECATION)
     def create(self) -> OpenAIClient:
         return super().create()
 
