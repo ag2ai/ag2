@@ -36,10 +36,11 @@ one question named `answer`, and the agent's `response_schema` is that question:
 
 Anything else raises `UnsupportedResponseSchemaError` before a request. The
 prompt and the schema description join into the question's `instructions`;
-`question_instructions` on the config takes the prompt's place, as a string or
-as `input_text` / `input_image` / `input_json` parts, with the schema
-description still appended; member docstrings describe options; `descriptions`
-on the config overrides them.
+`question_instructions` on the config follows the prompt, which stays the
+question's text everywhere, as a string or a sequence of strings, inputs (`ImageInput`, `DataInput`, ... mapped like the
+conversation's own inputs) and the SDK's `input_text` / `input_image` /
+`input_json` parts, with the schema description still appended; member
+docstrings describe options; `descriptions` on the config overrides them.
 Answers are rendered back through the `ResponseSchema` envelope, and the raw
 answer (minus `type` and `name`) lands on `reply.response.metadata`.
 
