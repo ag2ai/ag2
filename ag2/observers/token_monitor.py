@@ -77,6 +77,8 @@ class TokenMonitor(BaseObserver):
         Total tokens at which a CRITICAL alert is emitted.
     name:
         Observer display name.
+    timeout:
+        Per-call limit for ``process`` in seconds, or ``None`` for no limit.
     """
 
     def __init__(
@@ -85,8 +87,9 @@ class TokenMonitor(BaseObserver):
         alert_threshold: int = 100_000,
         *,
         name: str = "token-monitor",
+        timeout: float | None = None,
     ) -> None:
-        super().__init__(name, watch=EventWatch(UsageEvent))
+        super().__init__(name, watch=EventWatch(UsageEvent), timeout=timeout)
         self._warn_threshold = warn_threshold
         self._alert_threshold = alert_threshold
         self._total_tokens: int = 0

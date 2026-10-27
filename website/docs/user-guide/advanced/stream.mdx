@@ -128,6 +128,37 @@ with stream.where(ModelMessage).sub_scope(temp_listener):
     pass
 ```
 
+## Subscriber timeouts
+
+Set `#!python timeout` in seconds to limit each invocation of a subscriber or interrupter. The default is `#!python None` (no limit); a configured value must be finite and greater than zero.
+
+```python linenums="1" hl_lines="8"
+import httpx
+
+from ag2 import Agent, MemoryStream
+from ag2.events import ModelResponse
+
+stream = MemoryStream()
+
+@stream.where(ModelResponse).subscribe(timeout=5.0)
+async def report_response(event: ModelResponse) -> None:
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        response = await client.post("https://metrics.example.com/responses", json={"content": event.content})
+        response.raise_for_status()
+
+agent = Agent("assistant")
+reply = await agent.ask("Hello!", stream=stream)
+```
+
+The same parameter works with `#!python stream.subscribe(handler, timeout=5.0)` and `#!python stream.sub_scope(handler, timeout=5.0)`, including filtered streams and `#!python interrupt=True` subscriptions.
+
+The limit starts when delivery reaches that handler and covers dependency resolution, handler execution, and dependency cleanup. Waiting for earlier handlers does not consume it. Calls the handler awaits, including nested event publication, share its limit. It does not limit the subscription's lifetime or detached background tasks.
+
+Expiry raises `asyncio.TimeoutError` to the event publisher, like other handler exceptions, and stops delivery of that event to subsequent handlers. During an agent turn this can fail the turn. The subscription remains registered for later events until explicitly removed or its scope ends.
+
+!!! warning "Cancellation is cooperative"
+    AG2 requests cancellation and waits for it to finish, so cancellation cleanup can exceed the configured limit. A synchronous callback running in a worker thread may continue after AG2 stops waiting. Configure timeouts on its HTTP client, database driver, or subprocess as well. Blocking code with `#!python sync_to_thread=False` prevents the event loop from enforcing the timeout.
+
 ## Get specific events
 
 To wait for and get the next occurrence of a specific event asynchronously, use the `get` async context manager. This yields a future that resolves to the matched event.

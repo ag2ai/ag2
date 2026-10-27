@@ -97,21 +97,27 @@ class PromptObserverMixin:
         self,
         condition: ClassInfo | Condition | None,
         callback: Callable[..., Any],
+        *,
+        timeout: float | None = None,
     ) -> Callable[..., Any]: ...
 
     @overload
     def observer(
         self,
         condition: ClassInfo | Condition | None = None,
+        *,
+        timeout: float | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
     def observer(
         self,
         condition: ClassInfo | Condition | None = None,
         callback: Callable[..., Any] | None = None,
+        *,
+        timeout: float | None = None,
     ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
         def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
-            obs = observer_factory(condition, func)
+            obs = observer_factory(condition, func, timeout=timeout)
             self._observers.append(obs)
             return func
 
