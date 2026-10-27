@@ -159,16 +159,15 @@ async def test_agent_answers_yes_no_with_bool_schema() -> None:
 
 
 @pytest.mark.asyncio
-async def test_question_instructions_inputs_replace_the_prompt_on_the_wire() -> None:
+async def test_question_instructions_inputs_follow_the_prompt_on_the_wire() -> None:
     requests: list[httpx2.Request] = []
     guard = Agent(
         "guard",
-        prompt="A prompt that must not reach the question.",
+        prompt="Is the customer asking for a refund?",
         config=OpenAIDecisionsConfig(
             api_key="test-key",
             http_client=_fake_api(requests, {"type": "predicate", "name": "answer", "probability": 0.92}),
             question_instructions=[
-                "Is the customer asking for a refund?",
                 ImageInput(data=b"hi", media_type="image/png"),
                 DataInput({"tenant": "acme"}),
             ],
@@ -197,7 +196,7 @@ async def test_question_instructions_inputs_replace_the_prompt_on_the_wire() -> 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("empty", ["", []])
-async def test_empty_question_instructions_fall_back_to_the_prompt(empty: object) -> None:
+async def test_empty_question_instructions_leave_the_prompt_alone(empty: str | list[str]) -> None:
     requests: list[httpx2.Request] = []
     guard = Agent(
         "guard",
@@ -205,14 +204,39 @@ async def test_empty_question_instructions_fall_back_to_the_prompt(empty: object
         config=OpenAIDecisionsConfig(
             api_key="test-key",
             http_client=_fake_api(requests, {"type": "predicate", "name": "answer", "probability": 0.9}),
-            question_instructions=empty,  # type: ignore[arg-type]
+            question_instructions=empty,
         ),
         response_schema=ResponseSchema(bool),
     )
 
     await guard.ask("go")
 
-    assert json.loads(requests[0].content)["questions"][0]["instructions"] == "Is the sky blue?"
+    assert json.loads(requests[0].content) == IsPartialDict({
+        "questions": [{"type": "predicate", "name": "answer", "instructions": "Is the sky blue?"}]
+    })
+
+
+@pytest.mark.asyncio
+async def test_question_instructions_text_is_joined_after_the_prompt() -> None:
+    requests: list[httpx2.Request] = []
+    guard = Agent(
+        "guard",
+        prompt="Is the sky blue?",
+        config=OpenAIDecisionsConfig(
+            api_key="test-key",
+            http_client=_fake_api(requests, {"type": "predicate", "name": "answer", "probability": 0.9}),
+            question_instructions="Answer for a clear day.",
+        ),
+        response_schema=ResponseSchema(bool),
+    )
+
+    await guard.ask("go")
+
+    assert json.loads(requests[0].content) == IsPartialDict({
+        "questions": [
+            {"type": "predicate", "name": "answer", "instructions": "Is the sky blue?\n\nAnswer for a clear day."}
+        ]
+    })
 
 
 @pytest.mark.asyncio

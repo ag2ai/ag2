@@ -147,6 +147,17 @@ def _part(part: Input, serializer: SerializerProto) -> DecisionInputPartUnionPar
     raise UnsupportedInputError(type(part).__name__, PROVIDER)
 
 
+def with_prompt(
+    instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None, prompt: str
+) -> str | list[str | Input | DecisionQuestionInputPart] | None:
+    """Lead ``question_instructions`` with the agent prompt, which stays the question's text."""
+    if not instructions:
+        return prompt or None
+    if isinstance(instructions, str):
+        return "\n\n".join(s for s in (prompt, instructions) if s)
+    return [prompt, *instructions] if prompt else list(instructions)
+
+
 def _question_instructions(
     instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None,
     question: str | None,

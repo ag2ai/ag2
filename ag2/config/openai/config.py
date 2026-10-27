@@ -343,8 +343,8 @@ class OpenAIDecisionsConfig(ModelConfig):
     # Option descriptions keyed by choice value or score level as a string; they
     # outrank the docstrings under ``Enum`` members.
     descriptions: Mapping[str, str] | None = None
-    # The question's instructions, in place of the agent prompt: a string, or a
-    # sequence of strings, inputs (``ImageInput``, ``DataInput``, ...) and SDK parts
+    # What the question carries after the agent prompt: a string, or a sequence of
+    # strings, inputs (``ImageInput``, ``DataInput``, ...) and SDK parts
     # (``input_text`` / ``input_image`` / ``input_json``) when the question needs to
     # carry an image or JSON. The schema description is still appended.
     question_instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None = None

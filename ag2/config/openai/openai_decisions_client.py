@@ -25,6 +25,7 @@ from .decisions_mappers import (
     normalize_usage,
     response_proto_to_question,
     tool_to_api,
+    with_prompt,
 )
 
 __all__ = ["OpenAIDecisionsClient"]
@@ -82,7 +83,7 @@ class OpenAIDecisionsClient(LLMClient):
 
         question = response_proto_to_question(
             response_schema,
-            instructions=self._question_instructions or "\n".join(s for s in context.prompt if s) or None,
+            instructions=with_prompt(self._question_instructions, "\n".join(s for s in context.prompt if s)),
             serializer=serializer,
             descriptions=self._descriptions,
         )

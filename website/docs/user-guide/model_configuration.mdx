@@ -705,7 +705,9 @@ reply.response.metadata["score"]   # e.g. 1.1, before snapping to a level
 
 #### Images
 
-Image inputs are sent inline as base64 data URLs, the only image form the endpoint accepts. `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work, and `vendor_metadata={"detail": ...}` is forwarded. Hosted image URLs, `file_id`s and non-image files raise `UnsupportedInputError`.
+Image inputs are sent inline as base64 data URLs, the only image form the endpoint accepts. `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work, and `vendor_metadata={"detail": ...}` is forwarded. Hosted image URLs, `file_id`s and non-image files raise `UnsupportedInputError`. There is no minimum size, and the cap is on area rather than on a side: a 5500×5500 image passes, while 5600×5600 is answered with `400 ... exceeds the limit of 30000 patches`.
+
+Images that every question should carry, such as a reference photo, go in `question_instructions` on the config: a string, or a list of strings, inputs and OpenAI parts (`input_text` / `input_image` / `input_json`). They follow the agent `prompt` in the question's `instructions`, and a hosted `https` image URL is allowed there. See [Decision Models](/docs/user-guide/decision_models#image-inspection) for an example.
 
 #### Refusals and what the Decisions API does not do
 
@@ -781,7 +783,7 @@ The agent `prompt` frames the question; the schema's own description asks it. Th
 
 `BoundingBox` asks Jev **where** something is in an image. The agent `prompt` says what to find, the image goes in with the question, and the answer is the box around it.
 
-Images and box questions are experimental on TypeSafe's side, so two settings are required: the `jev-preview` model and the opt-in header `TypeSafe-Danger-Zone-Images: true`, sent through `headers`. Without the header the API answers `400 Images are experimental`.
+Images and box questions are experimental on TypeSafe's side, so two settings are required: the `jev-preview` model and the opt-in header `TypeSafe-Danger-Zone-Images: true`, sent through `headers`. Without the header the API answers `400 Images are experimental`. Each side of an image must be between 280 and 1568 pixels: a smaller or larger one, such as a 256×256 icon or a 1600×1200 photo, is answered with `400 Invalid image dimensions`, so resize it before sending.
 
 ```python linenums="1" hl_lines="7-9 12"
 from ag2 import Agent, ImageInput, ResponseSchema
