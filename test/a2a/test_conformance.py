@@ -10,7 +10,6 @@ from typing import Any
 import pytest
 from a2a.server.tasks import TaskUpdater
 from a2a.types import Part, Task, TaskState
-from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.a2a import A2AConfig, A2AServer
@@ -20,16 +19,13 @@ from ag2.a2a.extension import MIME_TOOL_CALL
 from ag2.a2a.mappers.parts import data_part
 from ag2.a2a.mappers.tools import call_to_payload
 from ag2.a2a.tasks import cancel_task, list_tasks
-from ag2.a2a.testing import make_test_client_factory
-from ag2.config.client import LLMClient
-from ag2.config.config import ModelConfig
+from ag2.a2a.testing import ToolRoundsConfig, make_test_client_factory
 from ag2.events import (
     BaseEvent,
     ModelMessage,
     ModelMessageChunk,
     ModelResponse,
     ToolCallEvent,
-    ToolCallsEvent,
     ToolResultEvent,
 )
 from ag2.stream import MemoryStream
@@ -229,44 +225,23 @@ async def test_server_emits_no_closing_marker_when_nothing_streamed() -> None:
     assert await _text_artifact_updates(client) == []
 
 
-class _ToolTurnsConfig(ModelConfig):
-    """Each turn streams its text (if any); every turn but the last then calls a client tool."""
-
-    def __init__(self, texts: Sequence[str] = ("pre-", "mid-", "end")) -> None:
-        self._texts = texts
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "_ToolTurnsClient":
-        return _ToolTurnsClient(self._texts)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class _ToolTurnsClient(LLMClient):
-    def __init__(self, texts: Sequence[str]) -> None:
-        self._texts = texts
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **_: Any) -> ModelResponse:
-        turn = sum(isinstance(m, ToolResultEvent) for m in messages)
-        text = self._texts[turn]
-        if text:
-            await context.send(ModelMessageChunk(text))
-        if turn < len(self._texts) - 1:
-            return ModelResponse(tool_calls=ToolCallsEvent([ToolCallEvent(name="step", arguments="{}")]))
-        return ModelResponse(message=ModelMessage(text))
-
-
 def step() -> str:
     return "done"
+
+
+def _call_step() -> ToolCallEvent:
+    return ToolCallEvent(name="step", arguments="{}")
 
 
 @pytest.mark.asyncio
 @_both_modes
 async def test_tool_round_trips_return_only_the_final_turn_text(streaming: bool) -> None:
-    client = _client(Agent("server", config=_ToolTurnsConfig()), streaming=streaming, tools=[step])
+    config = ToolRoundsConfig(
+        TestConfig(ModelMessageChunk("pre-"), _call_step()),
+        TestConfig(ModelMessageChunk("mid-"), _call_step()),
+        TestConfig(ModelMessageChunk("end"), ModelResponse(message=ModelMessage("end"))),
+    )
+    client = _client(Agent("server", config=config), streaming=streaming, tools=[step])
 
     reply = await client.ask("go")
 
@@ -275,7 +250,11 @@ async def test_tool_round_trips_return_only_the_final_turn_text(streaming: bool)
 
 @pytest.mark.asyncio
 async def test_tool_only_turn_opens_no_text_artifact() -> None:
-    client = _client(Agent("server", config=_ToolTurnsConfig(("", "end"))), tools=[step])
+    config = ToolRoundsConfig(
+        _call_step(),
+        TestConfig(ModelMessageChunk("end"), ModelResponse(message=ModelMessage("end"))),
+    )
+    client = _client(Agent("server", config=config), tools=[step])
 
     updates = await _text_artifact_updates(client)
 
@@ -415,7 +394,7 @@ async def test_tool_calls_growing_in_one_artifact_all_run(streaming: bool) -> No
     reply = await client.ask("go", stream=stream)
 
     results = [e for e in await stream.history.get_events() if isinstance(e, ToolResultEvent)]
-    assert sorted(r.name for r in results) == ["step", "step_again"]
+    assert sorted(str(r.name) for r in results) == ["step", "step_again"]
     assert reply.response.content == "ok"
 
 
@@ -439,8 +418,8 @@ class _Blocker:
 @pytest.mark.asyncio
 async def test_cancelled_task_closes_the_streamed_text_artifact_for_good() -> None:
     blocker = _Blocker()
-    turn = [ModelMessageChunk("partial"), ToolCallEvent(name="hold", arguments="{}"), "unused"]
-    client = _client(Agent("server", config=TestConfig(*turn), tools=[blocker.hold]))
+    config = TestConfig(ModelMessageChunk("partial"), ToolCallEvent(name="hold", arguments="{}"), "unused")
+    client = _client(Agent("server", config=config, tools=[blocker.hold]))
     stream = MemoryStream()
     collector = EventCollector()
     stream.where(A2ATaskArtifactUpdate).subscribe(collector.on_event)

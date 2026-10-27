@@ -122,6 +122,23 @@ await remote.ask("ping")
 | `#!python make_test_client_factory(server, url=..., card=..., timeout=...)` | `#!python httpx.AsyncClient` factory dispatching JSON-RPC into the server's ASGI app via `#!python httpx.ASGITransport` |
 | `#!python make_test_rest_client_factory(server, url=..., card=..., timeout=...)` | Same idea for REST — builds the REST app and a card declaring only the REST interface |
 | `#!python pick_free_port(host="127.0.0.1")` | Probe a free TCP port. Used by gRPC tests since gRPC has no in-process transport equivalent |
+| `#!python ToolRoundsConfig(*rounds)` | Script a served agent one tool round at a time — a `#!python Turn`, or a `#!python TestConfig` for a round that streams before it ends — for tests where the client runs tools and the server continues the task |
+
+The server builds a fresh LLM client for every request, so a single `#!python TestConfig` would replay its first turn after each client-tool round trip. `#!python ToolRoundsConfig` picks the round from the conversation history instead:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.a2a.testing import ToolRoundsConfig
+from ag2.events import ToolCallEvent
+
+server_agent = Agent(
+    "server",
+    config=ToolRoundsConfig(
+        ToolCallEvent(name="get_weather", arguments='{"city": "Paris"}'),  # round 1: call the client tool
+        "Sunny in Paris.",  # round 2: answer after the tool result
+    ),
+)
+```
 
 Pass `#!python card=` when the default `#!python build_card(agent, url=url)` can't express what the test needs — a custom `#!python extensions` list, for instance. It defaults to `#!python None`, which keeps the auto-built card.
 

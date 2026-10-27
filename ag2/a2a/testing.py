@@ -3,13 +3,82 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import socket
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from a2a.types import AgentCard
+from typing_extensions import Self
+
+from ag2.config.client import LLMClient
+from ag2.config.config import ModelConfig, ModelProvider
+from ag2.context import ConversationContext
+from ag2.events import BaseEvent, ModelResponse, ToolResultsEvent
+from ag2.testing import TestConfig, Turn
 
 from .card import build_card
 from .server import A2AServer
+
+if TYPE_CHECKING:
+    from ag2.files.protocol import FilesClient
+
+
+class ToolRoundsConfig(ModelConfig):
+    """Script a served agent one tool round at a time.
+
+    ``A2AServer`` builds a fresh LLM client for every request — the first
+    message and each continuation carrying client-tool results — so a single
+    :class:`~ag2.testing.TestConfig` would replay its first turn on every
+    continuation. This config reads the round from the history instead: the
+    model call that follows the N-th ``ToolResultsEvent`` is answered by
+    ``rounds[N]``. Being stateless, it also behaves the same when the
+    continuation lands on another server replica.
+
+    A round is a single :data:`~ag2.testing.Turn`, or a ``TestConfig`` when it
+    publishes events (chunks, reasoning) before the turn that ends it:
+
+    .. code-block:: python
+
+        config = ToolRoundsConfig(
+            TestConfig(ModelMessageChunk("Checking..."), ToolCallEvent(name="lookup")),
+            "Found it.",
+        )
+    """
+
+    def __init__(self, *rounds: Turn | TestConfig) -> None:
+        self.rounds = [r if isinstance(r, TestConfig) else TestConfig(r) for r in rounds]
+
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError
+
+    @property
+    def model(self) -> str:
+        raise NotImplementedError
+
+    def copy(self) -> Self:
+        return self
+
+    def create(self) -> "ToolRoundsClient":
+        return ToolRoundsClient(self.rounds)
+
+    def create_files_client(self) -> "FilesClient":
+        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+
+
+class ToolRoundsClient(LLMClient):
+    def __init__(self, rounds: Sequence[TestConfig]) -> None:
+        self.rounds = rounds
+
+    async def __call__(
+        self, messages: Sequence[BaseEvent], context: ConversationContext, **kwargs: Any
+    ) -> ModelResponse:
+        index = sum(isinstance(m, ToolResultsEvent) for m in messages)
+        if index >= len(self.rounds):
+            raise RuntimeError(
+                f"ToolRoundsConfig scripts {len(self.rounds)} round(s); the model was called for round {index + 1}"
+            )
+        return await self.rounds[index].create()(messages, context, **kwargs)
 
 
 def make_test_client_factory(

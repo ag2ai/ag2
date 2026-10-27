@@ -11,7 +11,9 @@ from a2a.types import (
     OAuth2SecurityScheme,
     OAuthFlows,
     OpenIdConnectSecurityScheme,
+    SecurityRequirement,
     SecurityScheme,
+    StringList,
 )
 
 from ag2.a2a.security import (
@@ -179,8 +181,7 @@ class TestRequire:
 
         req = require(oauth.with_scopes("read", "write"))
 
-        proto = req.to_proto()
-        assert list(proto.schemes["oauth"].list) == ["read", "write"]
+        assert req.to_proto() == SecurityRequirement(schemes={"oauth": StringList(list=["read", "write"])})
 
     def test_mix_scoped_and_unscoped(self) -> None:
         bearer = bearer_scheme(name="bearer")
@@ -188,15 +189,13 @@ class TestRequire:
 
         req = require(bearer, oauth.with_scopes("read"))
 
-        proto = req.to_proto()
-        assert set(proto.schemes.keys()) == {"bearer", "oauth"}
-        assert list(proto.schemes["bearer"].list) == []
-        assert list(proto.schemes["oauth"].list) == ["read"]
+        assert req.to_proto() == SecurityRequirement(
+            schemes={"bearer": StringList(list=[]), "oauth": StringList(list=["read"])},
+        )
 
     def test_non_identifier_scheme_name(self) -> None:
         s = bearer_scheme(name="X-My-Scheme")
 
         req = require(s)
 
-        proto = req.to_proto()
-        assert list(proto.schemes["X-My-Scheme"].list) == []
+        assert req.to_proto() == SecurityRequirement(schemes={"X-My-Scheme": StringList(list=[])})

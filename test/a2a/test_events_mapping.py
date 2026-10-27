@@ -293,21 +293,19 @@ class TestParseTaskArtifact:
         assert type(polled) is type(streamed)
 
 
-@pytest.mark.asyncio
-class TestRoundTrip:
-    async def test_chunk_artifact_roundtrip(self) -> None:
-        original = chunk_to_text_artifact(
-            ModelMessageChunk("hello"),
-            artifact_id="a-1",
-            task_id="t-1",
-            context_id="c-1",
-            append=True,
-            last_chunk=True,
-        )
+def test_chunk_artifact_roundtrip() -> None:
+    original = chunk_to_text_artifact(
+        ModelMessageChunk("hello"),
+        artifact_id="a-1",
+        task_id="t-1",
+        context_id="c-1",
+        append=True,
+        last_chunk=True,
+    )
 
-        reparsed = parse_stream_response(StreamResponse(artifact_update=a2a_event_to_sdk(original)))
+    reparsed = parse_stream_response(StreamResponse(artifact_update=a2a_event_to_sdk(original)))
 
-        assert reparsed == original
+    assert reparsed == original
 
 
 class TestWireMetadata:
