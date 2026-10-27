@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-import math
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
 from copy import deepcopy
@@ -25,7 +24,7 @@ from ag2.middleware import (
 )
 from ag2.tools.schemas import ToolSchema
 from ag2.tools.tool import Tool
-from ag2.utils import CONTEXT_OPTION_NAME, build_model
+from ag2.utils import CONTEXT_OPTION_NAME, _validate_timeout, build_model
 
 FunctionParameters: TypeAlias = dict[str, Any]
 
@@ -71,8 +70,7 @@ class FunctionTool(Tool):
         timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        if timeout is not None and (not math.isfinite(timeout) or timeout <= 0):
-            raise ValueError("`timeout` must be a finite number > 0 seconds or None.")
+        _validate_timeout(timeout)
         self.timeout = timeout
         self.model = model
         self._middleware: tuple[ToolMiddleware, ...] = tuple(middleware)
