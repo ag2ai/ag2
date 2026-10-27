@@ -448,7 +448,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | Provider | Configuration Class | Installation Command |
 | :--- | :--- | :--- |
 | **[OpenAI Responses](https://developers.openai.com/api/reference/responses/overview)** | `OpenAIResponsesConfig` | `pip install "ag2[openai]"` |
-| **[OpenAI](https://developers.openai.com/api/reference/overview)** | `OpenAIConfig` | `pip install "ag2[openai]"` |
+| **[OpenAI Chat Completions](https://developers.openai.com/api/reference/overview)** | `OpenAICompletionsConfig` | `pip install "ag2[openai]"` |
 | **[OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions)** | `OpenAIDecisionsConfig` | `pip install "ag2[openai]"` |
 | **[Anthropic](https://platform.claude.com/docs/en/build-with-claude/overview)** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
 | **[Gemini](https://ai.google.dev/gemini-api/docs)** | `GeminiConfig` | `pip install "ag2[gemini]"` |
@@ -461,7 +461,17 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[Mistral](https://docs.mistral.ai)** | `MistralConfig` | `pip install "ag2[mistral]"` |
 | **[TypeSafe (Jev)](https://docs.typesafe.ai)** | `TypeSafeConfig` | `pip install "ag2[typesafe]"` |
 
-*(Note: `OpenAIConfig` is also available for OpenAI-compatible endpoints).*
+Use `OpenAIResponsesConfig` for new OpenAI integrations. Use `OpenAICompletionsConfig` for the Chat Completions API and compatible endpoints.
+
+!!! warning "OpenAIConfig changes in 1.4.0"
+
+    `OpenAIConfig` still uses Chat Completions, but this compatibility name is deprecated.
+    Its `create()` method emits a `DeprecationWarning`; constructing or copying the config does not.
+    Use `OpenAICompletionsConfig` explicitly to preserve Chat Completions behavior, or migrate to
+    `OpenAIResponsesConfig` for the Responses API. In **1.4.0**, the deprecated Chat Completions
+    binding will be removed and `OpenAIConfig` will become an alias for `OpenAIResponsesConfig`.
+    Chat Completions parameters such as `max_completion_tokens` and `reasoning_effort` must be
+    translated to Responses parameters such as `max_output_tokens` and `reasoning` when migrating.
 
 ---
 
@@ -483,12 +493,12 @@ To configure a model, import the specific provider's configuration class and ini
     )
     ```
 
-=== "OpenAI"
+=== "OpenAI Chat Completions"
     ```python linenums="1"
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
     # Configure an OpenAI model
-    config = OpenAIConfig(
+    config = OpenAICompletionsConfig(
         model="gpt-4o-mini",
         api_key="sk-...",
         temperature=0.2,
@@ -508,7 +518,7 @@ To configure a model, import the specific provider's configuration class and ini
     )
     ```
 
-    `ag2[anthropic]` requires `anthropic>=1.6.0,<2`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and the sampling parameters (`temperature`, `top_p`, `top_k`).
+    `ag2[anthropic]` requires `anthropic>=1.15.0,<3`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and why `temperature`, `top_p` and `top_k` are deprecated.
 
 === "Gemini"
     ```python linenums="1"
@@ -632,17 +642,17 @@ For security and convenience, you don't need to hardcode your API keys. If `api_
 The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `ZAI_API_KEY`, `TYPESAFE_API_KEY`).
 
 ```python
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 
 # Automatically falls back to OPENAI_API_KEY from the environment
-config = OpenAIConfig(model="gpt-5")
+config = OpenAIResponsesConfig(model="gpt-5")
 ```
 
 ### Controlling OpenAI Reasoning
 
 OpenAI reasoning models spend extra tokens thinking before they answer. Both OpenAI configs let you bound that effort, and the Responses config can also request a summary of the thinking. See the [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) for which values each model accepts.
 
-`OpenAIConfig` (Chat Completions) takes `reasoning_effort`. `OpenAIResponsesConfig` takes the Responses API `reasoning` object:
+`OpenAICompletionsConfig` (Chat Completions) takes `reasoning_effort`. `OpenAIResponsesConfig` takes the Responses API `reasoning` object:
 
 === "OpenAI Responses"
     ```python linenums="1"
@@ -655,12 +665,12 @@ OpenAI reasoning models spend extra tokens thinking before they answer. Both Ope
     )
     ```
 
-=== "OpenAI"
+=== "OpenAI Chat Completions"
     ```python linenums="1"
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
     # Auth resolved from OPENAI_API_KEY when omitted
-    config = OpenAIConfig(model="gpt-5-mini", reasoning_effort="low")
+    config = OpenAICompletionsConfig(model="gpt-5-mini", reasoning_effort="low")
     ```
 
 `effort` is one of `none`, `minimal`, `low`, `medium`, `high` or `xhigh`; the models that accept each value differ. `summary` is one of `auto`, `concise` or `detailed`.
@@ -669,7 +679,7 @@ The model only returns its thinking when you set `summary`; without it the model
 
 ### Anthropic Configuration
 
-`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview) through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.6.0,<2`.
+`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview) through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.15.0,<3`.
 
 If `api_key` is not passed explicitly, it is resolved from the `ANTHROPIC_API_KEY` environment variable.
 
@@ -679,6 +689,24 @@ from ag2.config import AnthropicConfig
 # Auth resolved from ANTHROPIC_API_KEY when omitted
 config = AnthropicConfig(model="claude-haiku-4-5-20251001", streaming=True)
 ```
+
+#### Inference Speed
+
+Set `speed="fast"` or `speed="standard"` to select the inference speed on supported models. The default, `None`, omits the parameter and leaves the API's default behavior unchanged. The option works with both streaming and non-streaming requests, including `config.copy(speed="standard")` overrides.
+
+Some models require the `fast-mode-2026-02-01` beta header for **either** explicit value, including `"standard"`. AG2 does not add this model-specific header automatically; set it through `default_headers` when required:
+
+```python
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(
+    model="claude-opus-5",
+    speed="fast",
+    default_headers={"anthropic-beta": "fast-mode-2026-02-01"},
+)
+```
+
+Caller-supplied beta headers are preserved when AG2 adds its own tool-related betas. See [Anthropic's fast-mode guide](https://platform.claude.com/docs/en/build-with-claude/fast-mode) for current model availability, header requirements and pricing. Fast mode has premium pricing; enabling it does not make an unsupported model compatible.
 
 #### Custom HTTP Client
 
@@ -701,25 +729,11 @@ config = AnthropicConfig(
 
 #### Sampling Parameters
 
-`temperature`, `top_p` and `top_k` are ordinary fields on `AnthropicConfig`. The 1.x Messages API dropped them from its method signature, so AG2 sends them in the request body, where the API still reads them:
+`temperature`, `top_p` and `top_k` on `AnthropicConfig` are deprecated and are removed in 1.4.0. The Messages API version that `anthropic` 2.x sends (`2026-10-21`) no longer accepts them: a request carrying any of them is answered with HTTP 400 `Extra inputs are not permitted`, on every model, Claude Haiku 4.5 included. With `anthropic` 2.x, AG2 therefore drops the value; with `anthropic` 1.x it is still sent. Either way, `config.create()` emits a `DeprecationWarning`.
 
-```python
-from ag2.config import AnthropicConfig
+!!! note "`extra_body`"
 
-config = AnthropicConfig(
-    model="claude-haiku-4-5-20251001",
-    api_key="sk-ant-...",
-    temperature=0.2,
-)
-```
-
-!!! warning "Recent Claude models reject sampling parameters"
-
-    Claude Fable 5, Opus 5, Opus 4.8, Opus 4.7 and Sonnet 5 removed `temperature`, `top_p` and `top_k` from the Messages API - a request carrying any of them is answered with HTTP 400. Leave all three unset (the default) on those models. Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 and earlier still accept them.
-
-!!! note "`extra_body` precedence"
-
-    Pass `extra_body` to forward provider-specific keys that have no dedicated field. A key you write there wins over the same key AG2 derived from a field - an `extra_body={"temperature": 0.9}` overrides `temperature=0.2` - while unrelated keys are merged through untouched.
+    Pass `extra_body` to forward provider-specific keys that have no dedicated field. AG2 does not interpret it, so the API still answers 400 to a sampling key written there.
 
 ### Amazon Bedrock Authentication
 
@@ -928,7 +942,7 @@ config = OllamaConfig(
 
 !!! warning "`httpx`, not `httpx2`"
 
-    Unlike `OpenAIConfig` and `AnthropicConfig`, which take an `httpx2` client, Ollama's `http_client` is an `httpx` client. Use `proxy=` rather than `proxies=`, which current `httpx` rejects.
+    Unlike `OpenAICompletionsConfig` and `AnthropicConfig`, which take an `httpx2` client, Ollama's `http_client` is an `httpx` client. Use `proxy=` rather than `proxies=`, which current `httpx` rejects.
 
 #### Tool Results
 
@@ -1112,7 +1126,9 @@ reply.response.metadata["score"]   # e.g. 1.1, before snapping to a level
 
 #### Images
 
-Image inputs are sent inline as base64 data URLs, the only image form the endpoint accepts. `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work, and `vendor_metadata={"detail": ...}` is forwarded. Hosted image URLs, `file_id`s and non-image files raise `UnsupportedInputError`.
+Image inputs are sent inline as base64 data URLs, the only image form the endpoint accepts. `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work, and `vendor_metadata={"detail": ...}` is forwarded. Hosted image URLs, `file_id`s and non-image files raise `UnsupportedInputError`. There is no minimum size, and the cap is on area rather than on a side: a 5500×5500 image passes, while 5600×5600 is answered with `400 ... exceeds the limit of 30000 patches`.
+
+Images that every question should carry, such as a reference photo, go in `question_instructions` on the config: a string, or a list of strings, inputs and OpenAI parts (`input_text` / `input_image` / `input_json`). They follow the agent `prompt` in the question's `instructions`, and a hosted `https` image URL is allowed there. See [Decision Models](decision_models.md#image-inspection) for an example.
 
 #### Refusals and what the Decisions API does not do
 
@@ -1188,7 +1204,7 @@ The agent `prompt` frames the question; the schema's own description asks it. Th
 
 `BoundingBox` asks Jev **where** something is in an image. The agent `prompt` says what to find, the image goes in with the question, and the answer is the box around it.
 
-Images and box questions are experimental on TypeSafe's side, so two settings are required: the `jev-preview` model and the opt-in header `TypeSafe-Danger-Zone-Images: true`, sent through `headers`. Without the header the API answers `400 Images are experimental`.
+Images and box questions are experimental on TypeSafe's side, so two settings are required: the `jev-preview` model and the opt-in header `TypeSafe-Danger-Zone-Images: true`, sent through `headers`. Without the header the API answers `400 Images are experimental`. Each side of an image must be between 280 and 1568 pixels: a smaller or larger one, such as a 256×256 icon or a 1600×1200 photo, is answered with `400 Invalid image dimensions`, so resize it before sending.
 
 ```python
 from ag2 import Agent, ImageInput, ResponseSchema
@@ -1273,13 +1289,13 @@ Structured data extraction, one of the decision shapes in [TypeSafe's docs](http
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
-If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAIConfig` class and specify a custom `base_url`.
+If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAICompletionsConfig` class and specify a custom `base_url`.
 
 ```python
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Configure a vLLM or other OpenAI-compatible endpoint
-config = OpenAIConfig(
+config = OpenAICompletionsConfig(
     model="qwen-3",
     base_url="http://localhost:8000/v1",
     # Some endpoints don't require an API key, but the client expects a non-empty string
@@ -1292,9 +1308,9 @@ config = OpenAIConfig(
 
     ```python linenums="1" hl_lines="8"
     import httpx2
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
-    config = OpenAIConfig(
+    config = OpenAICompletionsConfig(
         model="qwen-3",
         base_url="https://localhost:8000/v1",
         api_key="NotRequired",
@@ -1304,7 +1320,7 @@ config = OpenAIConfig(
 
 !!! note "`http_client` is an `httpx2` client"
     From `openai>=3` the OpenAI SDK uses [`httpx2`](https://pypi.org/project/httpx2/), which
-    `ag2[openai]` installs for you. `OpenAIConfig` and `OpenAIResponsesConfig` annotate
+    `ag2[openai]` installs for you. `OpenAICompletionsConfig` and `OpenAIResponsesConfig` annotate
     `http_client` accordingly, and ag2 forwards whatever you pass to the SDK untouched.
 
     A legacy `httpx.AsyncClient` still works at runtime: the SDK keeps a compatibility path
@@ -1325,9 +1341,9 @@ config = OpenAIConfig(
 
     ```python
     import httpx2
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
-    config = OpenAIConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
+    config = OpenAICompletionsConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
     ```
 
     `certifi` remains installed - ag2's own core depends on `httpx` - but the OpenAI client
@@ -1335,15 +1351,15 @@ config = OpenAIConfig(
 
 ### Extra Body Parameters
 
-Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAIConfig` to pass these through directly to the API call.
+Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAICompletionsConfig` to pass these through directly to the API call.
 
 This is useful for enabling features like extended thinking on self-hosted or third-party models:
 
 ```python
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # NVIDIA NIM
-nemotron = OpenAIConfig(
+nemotron = OpenAICompletionsConfig(
     model="nvidia/nemotron-3-super-120b-a12b",
     base_url="https://integrate.api.nvidia.com/v1",
     extra_body={"chat_template_kwargs": {"thinking": True{{ "}}" }},
@@ -1356,9 +1372,9 @@ Model configurations are **immutable**. If you need to reuse a configuration for
 
 ```python
 from ag2.agent import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-base_config = OpenAIConfig(model="gpt-5")
+base_config = OpenAICompletionsConfig(model="gpt-5")
 
 agent1 = Agent(
     "Assistant",
@@ -1381,7 +1397,7 @@ You can accomplish this by passing the configuration to the `.ask()` method when
 
 ```python
 from ag2.agent import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Define an agent without an initial model config,
 # or with a default one you plan to override later
@@ -1394,7 +1410,7 @@ agent = Agent(
 # Ask the agent, passing the explicit model configuration
 response = await agent.ask(
     "Hello!",
-    config=OpenAIConfig(
+    config=OpenAICompletionsConfig(
         model="gpt-5",
         api_key="sk-user-specific-key"
     )
@@ -1406,17 +1422,17 @@ response = await agent.ask(
 
     ```python linenums="1" hl_lines="6 12"
     from ag2.agent import Agent
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
     agent = Agent(
         "Assistant",
-        config=OpenAIConfig(model="gpt-5"),
+        config=OpenAICompletionsConfig(model="gpt-5"),
     )
 
     response = await agent.ask(
         "Hello!",
         # overrides the original model configuration
-        config=OpenAIConfig(model="gpt-5-mini")
+        config=OpenAICompletionsConfig(model="gpt-5-mini")
     )
     ```
 
@@ -2672,6 +2688,27 @@ probability = reply.response.metadata["probability"]
 ```
 
 Images are sent inline as base64 data URLs, the only form the endpoint accepts: `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work. A hosted image URL or an uploaded `file_id` raises `UnsupportedInputError`.
+
+With either provider the agent `prompt` is the question, and the images and data being judged go to `ask(...)`. When every request is compared against the same material, such as a reference photo, OpenAI Decisions can attach it to the question itself with `question_instructions`:
+
+```python
+from ag2 import Agent, ImageInput, ResponseSchema
+from ag2.config import OpenAIDecisionsConfig
+
+matcher = Agent(
+    "matcher",
+    prompt="Compare the photo with the reference product.",
+    config=OpenAIDecisionsConfig(question_instructions=[
+        ImageInput("https://cdn.example.com/reference.png"),
+        {"type": "input_json", "data": {"sku": "MUG-RED-350"{{ "}}" }},
+    ]),
+    response_schema=ResponseSchema(bool, description="Is this the same product?"),
+)
+
+reply = await matcher.ask(ImageInput(path="photo.png"))
+```
+
+`question_instructions` takes a string, or a list of strings, inputs (`ImageInput`, `DataInput`) and OpenAI parts such as `{"type": "input_json", ...}`, the only way to send real JSON (a `DataInput` goes out as text). They follow the prompt in the question's `instructions`, with the schema description last. Unlike inputs passed to `ask(...)`, an image here may be a hosted `https` URL. TypeSafe's Jev takes text instructions only, so it has no such option: send the reference image with `ask(...)`.
 
 ## Describe every option
 
@@ -5949,6 +5986,9 @@ The easiest way to create a tool is by using the `@tool` decorator. This decorat
 
 For the best results, **always provide clear type hints and a descriptive docstring**. The LLM relies heavily on these to know when and how to invoke your tool.
 
+!!! tip "Set a timeout for tools that may block"
+    Use `@tool(timeout=30.0)` to limit how long AG2 waits for a function tool. The default is `None` (no time limit). See [Tool timeouts](#tool-timeouts) for examples and cancellation behavior.
+
 ```python
 from ag2 import tool
 
@@ -6010,21 +6050,27 @@ Agent interactions are naturally asynchronous. To support this, tools are execut
 To ensure that heavy computational tasks or blocking I/O operations do not freeze the entire application, **synchronous tools are automatically executed in a separate thread** by default.
 
 ```python
+import aiohttp
+import requests
+
+from ag2 import Agent, tool
+
 # This synchronous tool runs in a separate thread to prevent blocking
-@tool
+@tool(timeout=30.0)
 def fetch_data_sync(url: str) -> str:
     """Fetches data from a URL using a blocking request library."""
-    import requests
-    return requests.get(url).text
+    # Also limit the request itself: cancelling the await cannot stop its thread.
+    return requests.get(url, timeout=20.0).text
 
 # This native asynchronous tool runs directly in the main event loop
-@tool
+@tool(timeout=30.0)
 async def fetch_data_async(url: str) -> str:
     """Fetches data from a URL using an async request library."""
-    import aiohttp
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20.0)) as session:
         async with session.get(url) as response:
             return await response.text()
+
+agent = Agent(name="WebAssistant", tools=[fetch_data_sync, fetch_data_async])
 ```
 
 ### Disabling Threaded Execution
@@ -6042,6 +6088,40 @@ def format_name(first_name: str, last_name: str) -> str:
 
 !!! warning
     When `sync_to_thread=False` is set, the synchronous tool runs directly within the asynchronous context. If the function performs time-consuming operations (like network requests or large loops), **it will block the entire event loop** until it finishes, preventing other agents or asynchronous tasks from making progress.
+
+## Tool timeouts
+
+Set `timeout` in seconds for tools that perform network requests or other potentially slow operations. AG2 waits indefinitely when `timeout=None` (the default). A configured timeout must be a finite number greater than zero.
+
+```python
+import httpx
+
+from ag2 import Agent, tool
+from ag2.config import OpenAIConfig
+
+@tool(timeout=30.0)
+async def fetch_page(url: str) -> str:
+    """Fetches the text of a web page."""
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.text
+
+agent = Agent(
+    name="WebAssistant",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[fetch_page],
+)
+```
+
+The same parameter is available on `@agent.tool(timeout=30.0)`, `@toolkit.tool(timeout=30.0)`, and `@plugin.tool(timeout=30.0)`, as well as `tool(function, timeout=30.0)`. It is a local execution setting and is not included in the tool schema sent to the model.
+
+The timeout covers each invocation's dependency resolution, function execution, and dependency cleanup. [Tool middleware](tool_middleware.md) and agent middleware run outside this limit: an approval hook keeps its own [human-input timeout](approval_required.md). A timeout produces a `ToolErrorEvent` containing a `TimeoutError` with the tool name and limit. The model receives that error as the tool result and can continue; other tools in the same parallel batch keep running.
+
+!!! warning "Cancellation has limits"
+    Async tools receive cancellation when the deadline expires. AG2 waits for cancellation and cleanup to finish, so a tool that delays or suppresses cancellation can exceed the configured timeout. Do not swallow `asyncio.CancelledError`.
+
+    A synchronous tool running in a worker thread can continue after AG2 stops waiting, including any side effects. Set timeouts on the underlying HTTP client, database driver, or subprocess too. With `sync_to_thread=False`, blocking code prevents the event loop from enforcing the timeout at all.
 
 ## Customizing Tool Schemas
 
@@ -10215,6 +10295,20 @@ invoke_agent assistant
   +-- await_human_input assistant   # human-in-the-loop
 ```
 
+### Anthropic SDK spans
+
+The `anthropic` SDK traces its own API calls with OpenTelemetry, on by default. When a global tracer provider is
+registered, each request also produces an `anthropic.messages.create` client span (scope `com.anthropic.sdk.python`),
+nested under AG2's `chat` span, and the SDK sends a `traceparent` header. Set `open_telemetry` on `AnthropicConfig`
+to configure or disable these spans; leaving it unset keeps the SDK's `ANTHROPIC_OPEN_TELEMETRY*` environment
+variables in charge:
+
+```python
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(model="claude-sonnet-5", open_telemetry=False)  # no SDK spans, only AG2's
+```
+
 ## Span Types
 
 Every span includes an `ag2.span.type` attribute:
@@ -13229,6 +13323,37 @@ with stream.where(ModelMessage).sub_scope(temp_listener):
     pass
 ```
 
+## Subscriber timeouts
+
+Set `timeout` in seconds to limit each invocation of a subscriber or interrupter. The default is `None` (no limit); a configured value must be finite and greater than zero.
+
+```python
+import httpx
+
+from ag2 import Agent, MemoryStream
+from ag2.events import ModelResponse
+
+stream = MemoryStream()
+
+@stream.where(ModelResponse).subscribe(timeout=5.0)
+async def report_response(event: ModelResponse) -> None:
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        response = await client.post("https://metrics.example.com/responses", json={"content": event.content})
+        response.raise_for_status()
+
+agent = Agent("assistant")
+reply = await agent.ask("Hello!", stream=stream)
+```
+
+The same parameter works with `stream.subscribe(handler, timeout=5.0)` and `stream.sub_scope(handler, timeout=5.0)`, including filtered streams and `interrupt=True` subscriptions.
+
+The limit starts when delivery reaches that handler and covers dependency resolution, handler execution, and dependency cleanup. Waiting for earlier handlers does not consume it. Calls the handler awaits, including nested event publication, share its limit. It does not limit the subscription's lifetime or detached background tasks.
+
+Expiry raises `asyncio.TimeoutError` to the event publisher, like other handler exceptions, and stops delivery of that event to subsequent handlers. During an agent turn this can fail the turn. The subscription remains registered for later events until explicitly removed or its scope ends.
+
+!!! warning "Cancellation is cooperative"
+    AG2 requests cancellation and waits for it to finish, so cancellation cleanup can exceed the configured limit. A synchronous callback running in a worker thread may continue after AG2 stops waiting. Configure timeouts on its HTTP client, database driver, or subprocess as well. Blocking code with `sync_to_thread=False` prevents the event loop from enforcing the timeout.
+
 ## Get specific events
 
 To wait for and get the next occurrence of a specific event asynchronously, use the `get` async context manager. This yields a future that resolves to the matched event.
@@ -13549,6 +13674,30 @@ def intercept(event: ModelResponse) -> ModelResponse:
     return event
 ```
 
+## Callback timeouts
+
+Use `timeout` to bound each invocation of a callback observer:
+
+```python
+import httpx
+
+from ag2 import Agent, observer
+from ag2.events import ModelResponse
+
+@observer(ModelResponse, timeout=5.0)
+async def report_response(event: ModelResponse) -> None:
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        response = await client.post("https://metrics.example.com/responses", json={"content": event.content})
+        response.raise_for_status()
+
+agent = Agent("assistant", observers=[report_response])
+reply = await agent.ask("Hello!")
+```
+
+The parameter also works with `observer(ModelResponse, callback, timeout=5.0)`, `@agent.observer(ModelResponse, timeout=5.0)`, and `@plugin.observer(ModelResponse, timeout=5.0)`. Omit the condition to apply it to callbacks receiving every event.
+
+The default is `None` (no limit). A configured timeout must be finite and greater than zero. It covers dependency resolution, the callback, and dependency cleanup. Expiry raises `asyncio.TimeoutError` to the event publisher and can fail the agent turn, just like other callback exceptions. See [Subscriber timeouts](stream.md#subscriber-timeouts) for delivery and cancellation behavior.
+
 ## Observers vs Middleware vs Stream Subscribers
 
 | Feature | Observer | Middleware | Stream Subscriber |
@@ -13645,8 +13794,8 @@ from ag2.events import BaseEvent, ModelResponse, ObserverAlert, Severity
 class AvgCompletionObserver(BaseObserver):
     """Every N responses, emit an INFO alert with the average completion-token count."""
 
-    def __init__(self, window: int = 5) -> None:
-        super().__init__("avg-completion", watch=CadenceWatch(n=window, condition=ModelResponse))
+    def __init__(self, window: int = 5, *, timeout: float | None = None) -> None:
+        super().__init__("avg-completion", watch=CadenceWatch(n=window, condition=ModelResponse), timeout=timeout)
         self._window = window
 
     async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
@@ -13669,11 +13818,19 @@ from ag2.config import OpenAIConfig
 agent = Agent(
     "assistant",
     config=OpenAIConfig(model="gpt-5"),
-    observers=[AvgCompletionObserver(window=5)],
+    observers=[AvgCompletionObserver(window=5, timeout=5.0)],
 )
 ```
 
 `process()` may also emit events directly via `await ctx.send(...)` - returning an `ObserverAlert` is just the common case.
+
+### Process timeouts
+
+Pass `timeout` to `BaseObserver` to limit each `process()` invocation. `LoopDetector` and `TokenMonitor` also accept this parameter. The value is a finite positive number of seconds, or `None` for no limit.
+
+The timeout applies to event, batch, timer, and composite watches. It starts when `process()` runs; watch intervals, delays, and time spent buffering events are outside the limit. Work awaited inside `process()` shares its limit. Publishing a returned `ObserverAlert` happens after `process()` completes and is outside this timeout.
+
+Like other `BaseObserver` process errors, expiry is logged rather than propagated to the publisher. It produces no returned alert, and the watch retains its normal scheduling behavior for subsequent invocations. Caller cancellation still propagates. Cancellation is cooperative, with the same [limitations as subscriber timeouts](stream.md#subscriber-timeouts).
 
 ---
 
@@ -17339,7 +17496,7 @@ If you only need a conversational reply, serve a plain `ag2.Agent` directly. A2U
    └────────────────────────────┘   (the next request)    └─────────────────────────┘
 ```
 
-The transport applies A2UI behaviour to the plain agent per turn (prompt + validation middleware) and validates every A2UI message against the chosen **catalog** schema (with retry-on-error), so malformed UI never reaches the client - on repeated failure it gracefully degrades to prose. A button click travels back as a client->server `action` (or v1.0 `functionResponse`) envelope, which the transport rewrites into the next turn.
+The transport applies A2UI behaviour to the plain agent per turn (prompt + validation middleware) and validates every A2UI message against the chosen **catalog** schema (with retry-on-error), so malformed UI never reaches the client - on repeated failure it gracefully degrades to prose. A button click travels back as a client->server `action` envelope (or, in v1.0, a `callAgentFunction` / `rendererFunctionResponse`), which the transport answers on the server or rewrites into the next turn.
 
 ## Core Concepts
 
@@ -17348,7 +17505,7 @@ The transport applies A2UI behaviour to the plain agent per turn (prompt + valid
 | `Agent` | `ag2` | A plain agent - wrap it in an A2UI transport to emit validated A2UI output |
 | `a2ui_action` | `ag2.a2ui` | Decorator turning a function into a clickable button (server `event` action). A click runs the handler **on the server** - the agent is not invoked. Declared on the transport via `actions=[...]` |
 | `A2UIMessageEvent` | `ag2.a2ui` | One validated A2UI server->client message on the stream - the event seam every transport consumes |
-| `A2UIClientEvent` | `ag2.a2ui` | One client->server interaction received from the renderer (click / `functionResponse` / error) - the inbound observability seam |
+| `A2UIClientEvent` | `ag2.a2ui` | One client->server interaction received from the renderer (click / `callAgentFunction` / `rendererFunctionResponse` / error) - the inbound observability seam |
 | `A2UIValidationFailedEvent` | `ag2.a2ui` | Observability signal that validation exhausted its retries and the turn degraded to prose |
 | `A2UIClientCapabilities` | `ag2.a2ui` | Catalog negotiation - tells the agent which catalogs/components the client can render |
 | `A2UIServer` | `ag2.a2ui` | Wraps a plain `Agent` into an ASGI app and serves it over HTTP, using a `transport=` for the wire encoding (REST/SSE or AG-UI) |
@@ -17359,7 +17516,7 @@ The transport applies A2UI behaviour to the plain agent per turn (prompt + valid
 The A2UI transports accept three protocol versions via `protocol_version=`:
 
 - `"v0.9"` (default) and `"v0.9.1"` - server->client surfaces and components, plus server `event` actions.
-- `"v1.0"` - adds the `callFunction` / `functionResponse` / `actionResponse` round-trip for richer client->server interaction.
+- `"v1.0"` - the upstream release candidate (pinned to `main` of 2026-10-19). It adds the role-based function round-trip - `callRendererFunction` / `rendererFunctionResponse` and `callAgentFunction` / `agentFunctionResponse` - lets `createSurface` carry the initial `components` and `dataModel`, and writes data bindings and function calls with the reserved `@path` / `@call` keys. `theme` is gone. The agent may only call renderer functions whose catalog entry sets `allowedCallers` to `agentOnly` or `rendererOrAgent` (the default is `rendererOnly`; the basic catalog has none), and `agentFunctionResponse` is sent by the server, never generated by the LLM - the validator rejects both. It is not wire-compatible with v0.9.x, nor with the earlier v1.0 draft.
 
 !!! note
     A2UI's wire is **transport-agnostic**. The same validated messages serialize identically whether served over the built-in [REST/SSE adapter](server.md), embedded in an [A2A `DataPart`](a2a.md), or carried by AG-UI events.
@@ -17486,8 +17643,11 @@ The adapter speaks a minimal, dependency-free JSON body (no `ag-ui` / `a2a-sdk` 
 |---|---|
 | `messages` | The conversation. A trailing run of `user` messages is the current turn; earlier messages become history. `system` / `developer` roles become prompt; `assistant` becomes a prior response. |
 | `variables` | Context variables merged into the turn (e.g. locale, user id). |
-| `a2ui` | Client->server envelopes - button clicks (`action`), v1.0 `functionResponse`, and client errors - rewritten into corrective prompts for the turn. See [Actions](actions.md). |
-| `a2uiClientCapabilities` | Optional catalog negotiation, nested under the protocol version. Folded into the prompt so the LLM only targets components the client can render. |
+| `a2ui` | Client->server envelopes - button clicks (`action`), v1.0 `callAgentFunction` / `rendererFunctionResponse`, and client errors - answered on the server or rewritten into corrective prompts for the turn. See [Actions](actions.md). |
+| `a2uiRendererDataModel` | Optional (`a2uiClientDataModel` before v1.0): `{"version": ..., "surfaces": {"<surfaceId>": {...}}}`, the current data model of surfaces created with `sendDataModel: true`. Folded into the prompt as untrusted, user-editable state - not instructions. |
+| `a2uiClientCapabilities` | Optional catalog negotiation, nested under the protocol version (`a2uiRendererCapabilities` for v1.0). Folded into the prompt so the LLM only targets components the client can render. |
+
+An envelope in `a2ui` that does not match the spec is skipped with a logged warning rather than guessed at: a `callAgentFunction` without a string `surfaceId`, or a `rendererFunctionResponse` without a `functionCallId` or without exactly one of `value` / `error`.
 
 A body that is not valid JSON, not a JSON object, or has a mistyped field returns **400** with an `{"error": ...}` payload. A failure *during* the turn (after the 200 has been sent) surfaces as a final `event: error` (SSE) or `{"error": ...}` (NDJSON) frame and is logged - the connection is not torn down silently.
 
@@ -17582,7 +17742,7 @@ if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
 ```
 
-The turn is served at `POST /` by default (pass `AgUiTransport(path="/agent")` to change it) and the request body is an AG-UI `RunAgentInput`. Each validated A2UI message reaches the renderer as an `ACTIVITY_SNAPSHOT` event with `activityType="a2ui-surface"` and the operations under `content["a2ui_operations"]`; the prose arrives as `TEXT_MESSAGE_CHUNK`. A CopilotKit button click rides `forwardedProps.a2uiAction` and is rewritten into the next turn - the same click round-trip as REST (see [Actions](actions.md)).
+The turn is served at `POST /` by default (pass `AgUiTransport(path="/agent")` to change it) and the request body is an AG-UI `RunAgentInput`. Each validated A2UI message reaches the renderer as an `ACTIVITY_SNAPSHOT` event with `activityType="a2ui-surface"` and the operations under `content["a2ui_operations"]`; the prose arrives as `TEXT_MESSAGE_CHUNK`. A CopilotKit button click rides `forwardedProps.a2uiAction` and is rewritten into the next turn - the same click round-trip as REST (see [Actions](actions.md)). The v1.0 envelopes (`callAgentFunction`, `rendererFunctionResponse`) and client `error`s are read from the same place: either as the `forwardedProps.a2uiAction` value itself, or as a list under `forwardedProps.a2ui` (the array REST takes as `a2ui`). A `callAgentFunction` is answered on the server, its `agentFunctionResponse` arriving in the run's `ACTIVITY_SNAPSHOT`.
 
 It speaks the same AG-UI 1.0 as `AGUIStream`: the same [protocol version](../ag-ui/overview.md#protocol-version) on every `RUN_STARTED` and the same refusal of another major, the same run outcomes (an abandoned question ends the run as `cancelled`), the same [run ending](../ag-ui/overview.md#how-a-run-ends) (a failure is logged and reported as `RUN_ERROR`, and shutdown finishes a live run as `cancelled`), the same [stripping](../ag-ui/overview.md#input-from-a-newer-client) of input it does not recognise, the same [application context](../ag-ui/overview.md#application-context) block, the same [delegations](../ag-ui/overview.md#delegations) as subagent invocations, and the same per-run [token usage](../ag-ui/overview.md#token-usage) accounting.
 
@@ -17607,8 +17767,9 @@ A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride 
 | A2UI concept | A2A representation |
 |---|---|
 | Validated server->client messages | One `DataPart` (MIME `application/a2ui+json`) carrying the full message list, alongside a text `Part` for the prose |
-| Button click / `functionResponse` / client error | An inbound A2UI `DataPart` on the request message - a registered action runs its handler on the server; anything else is rewritten into the turn's prompt |
-| Catalog negotiation | `a2uiClientCapabilities` on the A2A message `metadata` |
+| Button click / `callAgentFunction` / `rendererFunctionResponse` / client error | An inbound A2UI `DataPart` on the request message - a registered action runs its handler on the server, a `callAgentFunction` is answered on the server; anything else is rewritten into the turn's prompt |
+| Catalog negotiation | `a2uiClientCapabilities` (`a2uiRendererCapabilities` for v1.0) on the A2A message `metadata` |
+| Client data model | `a2uiClientDataModel` (`a2uiRendererDataModel` for v1.0) on the A2A message `metadata`, sent by a renderer for surfaces created with `sendDataModel: true`. Folded into the turn's prompt as untrusted state |
 | Protocol support advertised | An `AgentExtension` on the agent card's `capabilities.extensions` |
 
 The executor splits each completed turn into a text `Part` (the conversational prose) plus a single A2UI `DataPart` whose `data` is the JSON array of validated messages - the canonical A2A v1.0 encoding for A2UI.
@@ -17686,10 +17847,10 @@ for part in message.parts:
 
 ## The Click Round-Trip
 
-A button click is sent back as an inbound A2UI `DataPart` on the next request message - an `action` envelope, or a `functionResponse` (v1.0) for a server-initiated `callFunction`. A click on a **registered** `@a2ui_action` runs that handler on the server (its messages lead the `DataPart`, the agent is not invoked); a click on any other button - plus `error` and `functionResponse` envelopes - is rewritten into the turn's prompt so the agent continues. A turn carrying only registered server-action clicks finalizes without invoking the agent. See [Actions](actions.md) for the envelope shapes.
+A button click is sent back as an inbound A2UI `DataPart` on the next request message - an `action` envelope, a `callAgentFunction` (v1.0), or a `rendererFunctionResponse` (v1.0) for a server-initiated `callRendererFunction`. A click on a **registered** `@a2ui_action` runs that handler on the server (its messages lead the `DataPart`, the agent is not invoked), and a `callAgentFunction` is answered the same way with an `agentFunctionResponse`; a click on any other button - plus `error` and `rendererFunctionResponse` envelopes - is rewritten into the turn's prompt so the agent continues. A turn carrying only server-handled interactions finalizes without invoking the agent. See [Actions](actions.md) for the envelope shapes.
 
 !!! note "v1.0 pause/resume"
-    With `protocol_version="v1.0"`, a `callFunction(wantResponse=true)` transitions the A2A task to `input-required`, carrying the `callFunction` `DataPart` on the finalization message so the client knows which function to run. The client's `functionResponse` arrives on the next request and resumes the task - standard A2A task lifecycle, no extra bookkeeping.
+    With `protocol_version="v1.0"`, a `callRendererFunction` transitions the A2A task to `input-required`, carrying the `callRendererFunction` `DataPart` on the finalization message so the client knows which function to run. The client's `rendererFunctionResponse` arrives on the next request and resumes the task - standard A2A task lifecycle, no extra bookkeeping.
 
 ## Manually Building Parts
 
@@ -17737,9 +17898,9 @@ When the LLM renders a button whose `action.event.name` is `"schedule_posts"`, a
 What the handler returns is mapped to the client per the A2UI spec:
 
 - one A2UI server->client message - or a list of them (e.g. `updateComponents` / `updateDataModel`) - is sent to the renderer as a **surface update** (works on every protocol version);
-- any other JSON value becomes an `actionResponse` **only** when the client asked for one (`wantResponse` + `actionId`, v1.0); otherwise it is fire-and-forget.
+- any other JSON value is dropped: a click is fire-and-forget. To get a value back, the renderer [calls the action as a function](#calling-an-action-as-a-function-v10) instead.
 
-A turn whose only input is registered server-action clicks **skips the agent entirely** - the handlers' messages are the whole response.
+A turn whose only input is registered server-action interactions **skips the agent entirely** - the handlers' messages are the whole response.
 
 Declaring the button on the transport - not on the agent - keeps the `Agent` plain and reusable across deployments. The same `actions=[...]` is accepted by `A2UIAgentExecutor` for the [A2A transport](a2a.md), so a button is declared the same way wherever the agent is served.
 
@@ -17751,6 +17912,8 @@ A2UI components support two button shapes the spec distinguishes by what the cli
 - **Client `functionCall`** - runs a function **on the renderer with no network round-trip** (e.g. `openUrl`, copy-to-clipboard).
 
 Client `functionCall` buttons execute entirely in the client, so they are **not registered on the server**. The LLM learns which client functions it may target from the active **catalog** and from the client's advertised [capabilities](capabilities.md) - not from server-side code. You can also render a button whose `event.name` isn't backed by a registered action: a click on it is rewritten generically into the next prompt so the LLM simply continues the conversation.
+
+In v1.0, a component's or function's explicit `catalogId` selects its definition. Otherwise, validation inherits the surface catalog from a `createSurface` in the same response. For updates to a surface created in an earlier response, the server does not retain its catalog binding: implicit components and function calls are accepted if a configured catalog supports them. Use explicit `catalogId` values when validation must select particular definitions across responses. The renderer still resolves implicit references against its surface's catalog.
 
 ## The Click Round-Trip
 
@@ -17782,11 +17945,46 @@ async with httpx.AsyncClient(base_url="http://127.0.0.1:8000") as client:
 When the action name matches a registered `@a2ui_action`, the click runs that handler on the server (the agent is not invoked); otherwise the click is rewritten into a plain instruction so the LLM continues the conversation.
 
 !!! note "v1.0 round-trip"
-    With `protocol_version="v1.0"`, a client's reply to a server `callFunction` arrives as a `functionResponse` envelope in the next request and is rewritten to a continuation prompt - the stateless transport needs no pause/resume bookkeeping. The same applies to `actionResponse`.
+    With `protocol_version="v1.0"`, a renderer's reply to a `callRendererFunction` the LLM emitted arrives as a `rendererFunctionResponse` envelope in the next request and is rewritten to a continuation prompt. On the stateless REST transport, the prompt carries the call ID and its value or error; include conversation history when the model also needs the originating call's context. A2A keeps the task in `input-required` until the renderer responds.
+
+## Calling an Action as a Function (v1.0)
+
+A v1.0 renderer that needs a *value* back - verifying an id, a typeahead, an inventory check - sends a `callAgentFunction` envelope instead of a click. The function name (`callFunction["@call"]`) selects a registered `@a2ui_action`, and `args` become its keyword arguments. The server answers with an `agentFunctionResponse` that echoes the call's `functionCallId`; the agent is not invoked:
+
+```json
+{
+  "a2ui": [
+    {
+      "version": "v1.0",
+      "callAgentFunction": {
+        "surfaceId": "s1",
+        "functionCallId": "verify-1",
+        "callFunction": {"@call": "verify_provider", "args": {"provider_id": "PRV-102"{{ "}}" }}
+      }
+    }
+  ]
+}
+```
+
+```json
+{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "verify-1", "value": {"valid": true{{ "}}" }}}
+```
+
+Over [AG-UI](server.md#serving-over-ag-ui-copilotkit) the same envelope rides `forwardedProps.a2uiAction` (or in a list under `forwardedProps.a2ui`), and the `agentFunctionResponse` comes back in the run's `ACTIVITY_SNAPSHOT`.
+
+The reply is always exactly one of `value` or `error`. Any messages the handler returns (an `updateDataModel`, say) are sent first, and then the response carries `null`. A failure is reported rather than raised:
+
+| `error.code` | When |
+|---|---|
+| `UNKNOWN_FUNCTION` | No action is registered under that name, or an explicit `catalogId` differs from the server's active catalog. |
+| `INVALID_FUNCTION_CALL` | An explicit `catalogId` is not a string, or `args` is not an object or does not fit the handler's parameters, including unknown keyword names when the handler has no `**kwargs`. An omitted `args` uses the handler's defaults. |
+| `FUNCTION_FAILED` | The handler raised (the error text is logged, not sent to the renderer). |
+
+`callAgentFunction` does not exist before v1.0; on an earlier protocol version it is logged and left unanswered, and the turn is handed to the agent as usual.
 
 ## Observing Client Interactions
 
-Each client->server interaction the server receives - a button `action`, a v1.0 `functionResponse`, or an `error` - is surfaced on the turn's stream as an `A2UIClientEvent`, the inbound mirror of `A2UIMessageEvent`. Subscribe to react to or log client interactions (beyond what the LLM sees in its prompt):
+Each client->server interaction the server receives - a button `action`, a v1.0 `callAgentFunction` or `rendererFunctionResponse`, or an `error` - is surfaced on the turn's stream as an `A2UIClientEvent`, the inbound mirror of `A2UIMessageEvent`. Subscribe to react to or log client interactions (beyond what the LLM sees in its prompt):
 
 ```python
 from ag2.a2ui import A2UIClientEvent
@@ -17875,7 +18073,7 @@ Negotiation is **advisory**: if the client's supported catalogs don't include th
 How capabilities reach the agent depends on the transport:
 
 === "REST"
-    Send them in the request body under `a2uiClientCapabilities`, nested by protocol version (see the [Server](server.md) request contract):
+    Send them in the request body under `a2uiClientCapabilities` (`a2uiRendererCapabilities` for v1.0), nested by protocol version (see the [Server](server.md) request contract):
 
     ```json
     {
@@ -17889,7 +18087,7 @@ How capabilities reach the agent depends on the transport:
     ```
 
 === "A2A"
-    The client puts the same shape on the A2A message `metadata`. The [A2A executor](a2a.md) reads it off the incoming message and folds it into the turn's system prompt automatically.
+    The client puts the same shape on the A2A message `metadata` - under `a2uiClientCapabilities`, or `a2uiRendererCapabilities` for v1.0 (the key the upstream v1.0 extension specification uses). The [A2A executor](a2a.md) reads it off the incoming message and folds it into the turn's system prompt automatically.
 
 Whatever the transport, the capabilities become a short prompt section listing the supported catalogs (and a summary of any inline catalogs), so the LLM steers toward what the client can render.
 
@@ -26657,6 +26855,123 @@ Errors raised while a tool runs reach the model as tool errors.
 
 !!! tip
     Use `firecrawl_search` with `scrape_results=True` when the agent needs to read several sources for one question. Use `firecrawl_scrape` when the agent already knows the URL it wants to read.
+
+---
+
+# Glasser
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/glasser/
+
+`GlasserToolkit` gives AG2 agents six focused paid-data tools through [Glasser](https://glasser.ai). An application supplies one Glasser API key and selects which tools the agent may call.
+
+!!! note
+    Each call can incur a charge. The toolkit uses AG2's existing `httpx` dependency. Set `GLASSER_API_KEY` in your environment; the toolkit does not read environment variables itself.
+
+```python
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import GlasserToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+    tools=[GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"], limit=5)],
+)
+```
+
+## Tools
+
+Each tool uses one fixed action in a Glasser Solution endpoint. The model supplies only the inputs shown below. The application controls Provider choice, result limits, country, Task ID, metadata, and returned text length.
+
+| Tool / factory | Model inputs | Glasser action |
+| :--- | :--- | :--- |
+| `glasser_web_search` / `web_search()` | `query` | `web_research.search` |
+| `glasser_company_profile` / `company_profile()` | `domain` | `company_intelligence.enrich` |
+| `glasser_find_people` / `find_people()` | At least one of `job_titles`, `locations`, `company_domain`, `keywords` | `people_search.search` |
+| `glasser_keyword_overview` / `keyword_overview()` | Non-empty `keywords` list | `seo_research.keyword_overview` |
+| `glasser_social_search` / `social_search()` | `platform`, `query` | `social_research.search` |
+| `glasser_stock_quote` / `stock_quote()` | `symbol` | `market_data.stock_quote` |
+
+The toolkit rejects empty required inputs before making a paid request. Glasser validates Provider support and the remaining request fields. Other Solution actions can be added as separate tools.
+
+## Select tools and set application options
+
+Passing the toolkit to an agent registers all six tools. Use factory methods to register a subset:
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import GlasserToolkit
+
+config = AnthropicConfig(model="claude-haiku-4-5-20251001")
+toolkit = GlasserToolkit(api_key="YOUR_GLASSER_API_KEY")
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[
+        toolkit.web_search(provider="serper", limit=5, country="us"),
+        toolkit.company_profile(),
+    ],
+)
+```
+
+`provider` and `metadata` apply to all six tools. `limit` applies to web search, company profiles, people search, and keyword overviews. `country` applies to web search, company profiles, and keyword overviews. `task_id` applies to all except social search. The constructor passes its options to its six default tools. A factory called separately uses only its own options; omitted values let Glasser use its server defaults. Every factory also accepts `name`, `description`, and `middleware`.
+
+`limit` is the application-controlled lever for result count and, where the Provider charges per result, cost. There is no universal per-call spending ceiling on these six actions. The model cannot change `limit` or select a more expensive action. Applications should register only the tools they intend to fund and set their own Glasser Workspace budget.
+
+Options support AG2 `Variable` values:
+
+```python
+from ag2 import Agent, Variable
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import GlasserToolkit
+
+config = AnthropicConfig(model="claude-haiku-4-5-20251001")
+toolkit = GlasserToolkit(api_key="YOUR_GLASSER_API_KEY")
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.web_search(limit=Variable("result_limit"), country=Variable("country"))],
+    variables={"result_limit": 5, "country": "gb"},
+)
+```
+
+A missing variable without a default raises `KeyError` before an HTTP request is sent.
+
+## Results and charges
+
+Tools return a typed `GlasserResult` with `id`, `status`, `result_status`, `provider`, `charge_usd`, `output`, `error`, `failure`, `provider_response`, `runs`, `run_url`, `result_url`, and `truncated`. An invalid input instead returns `{"error": "..."}` without a paid call.
+
+`status` describes the Run lifecycle. `result_status` describes the Solution delivery outcome and can be `success`, `partial`, `no_result`, `error`, or `pending`. `charge_usd` is the exact USD decimal string returned by Glasser, or null until the listed Runs settle. A failed or empty result can still incur a charge. People search returns a native Run; its `provider_response` and `output` depend on the Provider.
+
+`max_characters` limits the combined text in `output`, `error`, `failure`, and `provider_response` to 10,000 characters by default. A cut object is returned as a text excerpt, and `truncated` becomes true. The limit never cuts status, IDs, URLs, charges, or Run references. Set `max_characters=None` to keep all content. A pending result retains its retrieval URL or Run ID.
+
+## Async execution and retries
+
+For a pending result, the toolkit polls with authenticated GET requests: the returned `result_url` for normalized results, or `GET /v1/runs/<id>` for people search. Result URLs must refer to the same capability on the configured API origin. Redirects are not followed.
+
+The default polling budget is 120 seconds, with a one-second interval. If it expires or a polling GET fails, the tool returns the latest pending result. `wait_timeout=0` disables polling. To continue, use an authenticated GET to the result URL or Run endpoint. A new tool call can incur a new charge.
+
+Each POST has an `Idempotency-Key` derived from the stream ID, tool-call ID, and capability. Replaying the same call in the same stream uses the same key. A different call or stream produces a new key. The toolkit does not retry POST requests automatically.
+
+## Connection settings
+
+```python
+from ag2.extensions.tools.search import GlasserToolkit
+
+toolkit = GlasserToolkit(
+    api_key="YOUR_GLASSER_API_KEY",
+    base_url="https://api.glasser.ai",
+    timeout=60.0,
+    wait_timeout=120.0,
+    poll_interval=1.0,
+)
+```
+
+Each execution opens an `httpx.AsyncClient` and closes it after its result is returned. A custom `base_url` can include a gateway path; the gateway must return result URLs on that same origin and path. The polling budget does not include the initial POST. HTTP errors raise `httpx.HTTPStatusError`, transport failures raise an `httpx` exception, and malformed JSON or a non-object response raises `ValueError`.
+
+See the [Solutions reference](https://glasser.ai/docs/api-reference/solutions/overview) for Provider support, output contracts, and billing behavior.
 
 ---
 
