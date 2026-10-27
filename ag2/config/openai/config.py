@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -16,10 +16,11 @@ from openai.types.chat import (
 from openai.types.chat.completion_create_params import PromptCacheOptions, WebSearchOptions
 from openai.types.responses import ServiceTier as ResponseServiceTier
 from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
-from openai.types.shared_params import Reasoning
+from openai.types.shared_params import DecisionQuestionInputPart, Reasoning
 from typing_extensions import Self, Unpack, deprecated
 
 from ag2.config.config import ModelConfig, ModelProvider
+from ag2.events import Input
 
 from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, Modality, OpenAIClient, ReasoningEffort, ServiceTier, Verbosity
@@ -338,6 +339,7 @@ class OpenAIDecisionsConfigOverrides(TypedDict, total=False):
     safety_identifier: str | None | Omit
     boolean_threshold: float
     descriptions: Mapping[str, str] | None
+    question_instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None
     extra_body: dict[str, Any] | None
 
 
@@ -361,6 +363,11 @@ class OpenAIDecisionsConfig(ModelConfig):
     # Option descriptions keyed by choice value or score level as a string; they
     # outrank the docstrings under ``Enum`` members.
     descriptions: Mapping[str, str] | None = None
+    # What the question carries after the agent prompt: a string, or a sequence of
+    # strings, inputs (``ImageInput``, ``DataInput``, ...) and SDK parts
+    # (``input_text`` / ``input_image`` / ``input_json``) when the question needs to
+    # carry an image or JSON. The schema description is still appended.
+    question_instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None = None
     extra_body: dict[str, Any] | None = None
 
     @property
@@ -385,6 +392,7 @@ class OpenAIDecisionsConfig(ModelConfig):
             safety_identifier=self.safety_identifier,
             boolean_threshold=self.boolean_threshold,
             descriptions=self.descriptions,
+            question_instructions=self.question_instructions,
             extra_body=self.extra_body,
         )
 
