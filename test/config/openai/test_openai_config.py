@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.config import OpenAIChatConfig
+from ag2.config import OpenAICompletionsConfig
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
-    config = OpenAIChatConfig(model="gpt-5", temperature=0.2, streaming=True)
+    config = OpenAICompletionsConfig(model="gpt-5", temperature=0.2, streaming=True)
 
     copied = config.copy()
 
@@ -15,7 +15,7 @@ def test_copy_without_overrides_returns_new_equal_instance() -> None:
 
 
 def test_copy_applies_overrides_without_mutating_original() -> None:
-    config = OpenAIChatConfig(model="gpt-5", api_key="key", temperature=0.2, streaming=False)
+    config = OpenAICompletionsConfig(model="gpt-5", api_key="key", temperature=0.2, streaming=False)
 
     copied = config.copy(model="gpt-5-mini", temperature=0.8, streaming=True, api_key=None)
 
@@ -31,14 +31,14 @@ def test_copy_applies_overrides_without_mutating_original() -> None:
 
 
 def test_extra_body_defaults_to_none() -> None:
-    config = OpenAIChatConfig(model="gpt-5")
+    config = OpenAICompletionsConfig(model="gpt-5")
 
     assert config.extra_body is None
 
 
 def test_extra_body_passed_to_create_options() -> None:
     extra = {"chat_template_kwargs": {"enable_thinking": True}}
-    config = OpenAIChatConfig(
+    config = OpenAICompletionsConfig(
         model="test-model", base_url="http://localhost:8000/v1", api_key="EMPTY", extra_body=extra
     )
 
@@ -48,7 +48,7 @@ def test_extra_body_passed_to_create_options() -> None:
 
 
 def test_copy_with_extra_body() -> None:
-    config = OpenAIChatConfig(model="gpt-5")
+    config = OpenAICompletionsConfig(model="gpt-5")
     extra = {"reasoning_split": True}
 
     copied = config.copy(extra_body=extra)

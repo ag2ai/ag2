@@ -13,7 +13,7 @@ reject Chat Completions parameters in existing applications.
 
 ## Decision
 
-Expose the existing implementation as `OpenAIChatConfig`. Until 1.4.0,
+Expose the existing implementation as `OpenAICompletionsConfig`. Until 1.4.0,
 `OpenAIConfig` remains a compatibility subclass with the same constructor,
 copy behavior and client. Mark the class deprecated for type checkers and emit
 a `DeprecationWarning` from `create()`, following ADR 0025's rule that
@@ -21,7 +21,7 @@ construction and copying stay free of side effects.
 
 In 1.4.0, remove the deprecated Chat Completions binding and bind
 `OpenAIConfig` to `OpenAIResponsesConfig`. Recommend the explicit classes
-during the transition: `OpenAIChatConfig` preserves Chat Completions;
+during the transition: `OpenAICompletionsConfig` preserves Chat Completions;
 `OpenAIResponsesConfig` opts into Responses now.
 
 ## Consequences

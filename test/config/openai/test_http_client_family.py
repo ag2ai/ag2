@@ -18,7 +18,7 @@ from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
 from ag2 import Context, MemoryStream
-from ag2.config import OpenAIChatConfig, OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig, OpenAIResponsesConfig
 from ag2.events import ModelRequest, TextInput
 
 _COMPLETION = {
@@ -74,7 +74,7 @@ def _legacy_client(captured: dict[str, object], payload: dict[str, object]) -> h
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
-async def _ask(config: OpenAIChatConfig | OpenAIResponsesConfig) -> None:
+async def _ask(config: OpenAICompletionsConfig | OpenAIResponsesConfig) -> None:
     client = config.create()
     await client(
         messages=[ModelRequest([TextInput("capital of France?")])],
@@ -99,7 +99,9 @@ class TestHttpx2Client:
     async def test_completions(self) -> None:
         captured: dict[str, object] = {}
 
-        await _ask(OpenAIChatConfig(model="gpt-4o", api_key="test", http_client=_modern_client(captured, _COMPLETION)))
+        await _ask(
+            OpenAICompletionsConfig(model="gpt-4o", api_key="test", http_client=_modern_client(captured, _COMPLETION))
+        )
 
         assert captured["body"] == _COMPLETION_BODY
 
@@ -120,7 +122,9 @@ class TestLegacyHttpxClient:
     async def test_completions(self) -> None:
         captured: dict[str, object] = {}
 
-        await _ask(OpenAIChatConfig(model="gpt-4o", api_key="test", http_client=_legacy_client(captured, _COMPLETION)))
+        await _ask(
+            OpenAICompletionsConfig(model="gpt-4o", api_key="test", http_client=_legacy_client(captured, _COMPLETION))
+        )
 
         assert captured["body"] == _COMPLETION_BODY
 

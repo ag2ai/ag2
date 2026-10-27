@@ -14,7 +14,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | Provider | Configuration Class | Installation Command |
 | :--- | :--- | :--- |
 | **[OpenAI Responses](https://developers.openai.com/api/reference/responses/overview)** | `OpenAIResponsesConfig` | `pip install "ag2[openai]"` |
-| **[OpenAI Chat Completions](https://developers.openai.com/api/reference/overview)** | `OpenAIChatConfig` | `pip install "ag2[openai]"` |
+| **[OpenAI Chat Completions](https://developers.openai.com/api/reference/overview)** | `OpenAICompletionsConfig` | `pip install "ag2[openai]"` |
 | **[OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions)** | `OpenAIDecisionsConfig` | `pip install "ag2[openai]"` |
 | **[Anthropic](https://platform.claude.com/docs/en/build-with-claude/overview)** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
 | **[Gemini](https://ai.google.dev/gemini-api/docs)** | `GeminiConfig` | `pip install "ag2[gemini]"` |
@@ -27,13 +27,13 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[Mistral](https://docs.mistral.ai)** | `MistralConfig` | `pip install "ag2[mistral]"` |
 | **[TypeSafe (Jev)](https://docs.typesafe.ai)** | `TypeSafeConfig` | `pip install "ag2[typesafe]"` |
 
-Use `OpenAIResponsesConfig` for new OpenAI integrations. Use `OpenAIChatConfig` for the Chat Completions API and compatible endpoints.
+Use `OpenAIResponsesConfig` for new OpenAI integrations. Use `OpenAICompletionsConfig` for the Chat Completions API and compatible endpoints.
 
 !!! warning "OpenAIConfig changes in 1.4.0"
 
     `OpenAIConfig` still uses Chat Completions, but this compatibility name is deprecated.
     Its `create()` method emits a `DeprecationWarning`; constructing or copying the config does not.
-    Use `OpenAIChatConfig` explicitly to preserve Chat Completions behavior, or migrate to
+    Use `OpenAICompletionsConfig` explicitly to preserve Chat Completions behavior, or migrate to
     `OpenAIResponsesConfig` for the Responses API. In **1.4.0**, the deprecated Chat Completions
     binding will be removed and `OpenAIConfig` will become an alias for `OpenAIResponsesConfig`.
     Chat Completions parameters such as `max_completion_tokens` and `reasoning_effort` must be
@@ -63,10 +63,10 @@ config = OpenAIResponsesConfig(
 
   <Tab title="OpenAI Chat Completions">
 ```python linenums="1"
-from ag2.config import OpenAIChatConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Configure an OpenAI model
-config = OpenAIChatConfig(
+config = OpenAICompletionsConfig(
     model="gpt-4o-mini",
     api_key="sk-...",
     temperature=0.2,
@@ -232,7 +232,7 @@ config = OpenAIResponsesConfig(model="gpt-5")
 
 OpenAI reasoning models spend extra tokens thinking before they answer. Both OpenAI configs let you bound that effort, and the Responses config can also request a summary of the thinking. See the [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning){.external-link target="_blank"} for which values each model accepts.
 
-`OpenAIChatConfig` (Chat Completions) takes `reasoning_effort`. `OpenAIResponsesConfig` takes the Responses API `reasoning` object:
+`OpenAICompletionsConfig` (Chat Completions) takes `reasoning_effort`. `OpenAIResponsesConfig` takes the Responses API `reasoning` object:
 
 <Tabs>
   <Tab title="OpenAI Responses">
@@ -249,10 +249,10 @@ config = OpenAIResponsesConfig(
 
   <Tab title="OpenAI Chat Completions">
 ```python linenums="1"
-from ag2.config import OpenAIChatConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Auth resolved from OPENAI_API_KEY when omitted
-config = OpenAIChatConfig(model="gpt-5-mini", reasoning_effort="low")
+config = OpenAICompletionsConfig(model="gpt-5-mini", reasoning_effort="low")
 ```
   </Tab>
 </Tabs>
@@ -531,7 +531,7 @@ config = OllamaConfig(
 
 !!! warning "`httpx`, not `httpx2`"
 
-    Unlike `OpenAIChatConfig` and `AnthropicConfig`, which take an `httpx2` client, Ollama's `http_client` is an `httpx` client. Use `proxy=` rather than `proxies=`, which current `httpx` rejects.
+    Unlike `OpenAICompletionsConfig` and `AnthropicConfig`, which take an `httpx2` client, Ollama's `http_client` is an `httpx` client. Use `proxy=` rather than `proxies=`, which current `httpx` rejects.
 
 #### Tool Results
 
@@ -876,13 +876,13 @@ Structured data extraction, one of the decision shapes in [TypeSafe's docs](http
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
-If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAIChatConfig` class and specify a custom `base_url`.
+If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAICompletionsConfig` class and specify a custom `base_url`.
 
 ```python linenums="1" hl_lines="6"
-from ag2.config import OpenAIChatConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Configure a vLLM or other OpenAI-compatible endpoint
-config = OpenAIChatConfig(
+config = OpenAICompletionsConfig(
     model="qwen-3",
     base_url="http://localhost:8000/v1",
     # Some endpoints don't require an API key, but the client expects a non-empty string
@@ -895,9 +895,9 @@ config = OpenAIChatConfig(
 
     ```python linenums="1" hl_lines="8"
     import httpx2
-    from ag2.config import OpenAIChatConfig
+    from ag2.config import OpenAICompletionsConfig
 
-    config = OpenAIChatConfig(
+    config = OpenAICompletionsConfig(
         model="qwen-3",
         base_url="https://localhost:8000/v1",
         api_key="NotRequired",
@@ -907,7 +907,7 @@ config = OpenAIChatConfig(
 
 !!! note "`http_client` is an `httpx2` client"
     From `openai>=3` the OpenAI SDK uses [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, which
-    `ag2[openai]` installs for you. `OpenAIChatConfig` and `OpenAIResponsesConfig` annotate
+    `ag2[openai]` installs for you. `OpenAICompletionsConfig` and `OpenAIResponsesConfig` annotate
     `http_client` accordingly, and ag2 forwards whatever you pass to the SDK untouched.
 
     A legacy `httpx.AsyncClient` still works at runtime: the SDK keeps a compatibility path
@@ -928,9 +928,9 @@ config = OpenAIChatConfig(
 
     ```python
     import httpx2
-    from ag2.config import OpenAIChatConfig
+    from ag2.config import OpenAICompletionsConfig
 
-    config = OpenAIChatConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
+    config = OpenAICompletionsConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
     ```
 
     `certifi` remains installed — ag2's own core depends on `httpx` — but the OpenAI client
@@ -938,15 +938,15 @@ config = OpenAIChatConfig(
 
 ### Extra Body Parameters
 
-Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAIChatConfig` to pass these through directly to the API call.
+Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAICompletionsConfig` to pass these through directly to the API call.
 
 This is useful for enabling features like extended thinking on self-hosted or third-party models:
 
 ```python linenums="1" hl_lines="7"
-from ag2.config import OpenAIChatConfig
+from ag2.config import OpenAICompletionsConfig
 
 # NVIDIA NIM
-nemotron = OpenAIChatConfig(
+nemotron = OpenAICompletionsConfig(
     model="nvidia/nemotron-3-super-120b-a12b",
     base_url="https://integrate.api.nvidia.com/v1",
     extra_body={"chat_template_kwargs": {"thinking": True}},
@@ -959,9 +959,9 @@ Model configurations are **immutable**. If you need to reuse a configuration for
 
 ```python linenums="1" hl_lines="4 9 15"
 from ag2.agent import Agent
-from ag2.config import OpenAIChatConfig
+from ag2.config import OpenAICompletionsConfig
 
-base_config = OpenAIChatConfig(model="gpt-5")
+base_config = OpenAICompletionsConfig(model="gpt-5")
 
 agent1 = Agent(
     "Assistant",
@@ -984,7 +984,7 @@ You can accomplish this by passing the configuration to the `.ask()` method when
 
 ```python linenums="1" hl_lines="15-18"
 from ag2.agent import Agent
-from ag2.config import OpenAIChatConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Define an agent without an initial model config,
 # or with a default one you plan to override later
@@ -997,7 +997,7 @@ agent = Agent(
 # Ask the agent, passing the explicit model configuration
 response = await agent.ask(
     "Hello!",
-    config=OpenAIChatConfig(
+    config=OpenAICompletionsConfig(
         model="gpt-5",
         api_key="sk-user-specific-key"
     )
@@ -1009,16 +1009,16 @@ response = await agent.ask(
 
     ```python linenums="1" hl_lines="6 12"
     from ag2.agent import Agent
-    from ag2.config import OpenAIChatConfig
+    from ag2.config import OpenAICompletionsConfig
 
     agent = Agent(
         "Assistant",
-        config=OpenAIChatConfig(model="gpt-5"),
+        config=OpenAICompletionsConfig(model="gpt-5"),
     )
 
     response = await agent.ask(
         "Hello!",
         # overrides the original model configuration
-        config=OpenAIChatConfig(model="gpt-5-mini")
+        config=OpenAICompletionsConfig(model="gpt-5-mini")
     )
     ```

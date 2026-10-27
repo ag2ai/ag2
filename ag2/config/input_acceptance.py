@@ -16,7 +16,7 @@ from ag2.config import (
     MistralConfig,
     ModelConfig,
     OllamaConfig,
-    OpenAIChatConfig,
+    OpenAICompletionsConfig,
     OpenAIConfig,
     OpenAIResponsesConfig,
     TypeSafeConfig,
@@ -30,7 +30,7 @@ from ag2.types import AudioMediaType, DocumentMediaType, ImageMediaType, VideoMe
 # Each entry names (position, source, kind). Text is accepted everywhere.
 # The table describes mapper behavior, not model-specific ability.
 _MEDIA: dict[type[object], set[tuple[str, str, BinaryType | None]]] = {
-    OpenAIChatConfig: {
+    OpenAICompletionsConfig: {
         ("user", "data", BinaryType.IMAGE),
         ("user", "url", BinaryType.IMAGE),
         ("user", "data", BinaryType.AUDIO),
@@ -112,7 +112,7 @@ def _described(config: ModelConfig | None) -> type[object] | None:
     # Compared by identity, never `isinstance`: a provider whose extra is not
     # installed is a stand-in here, not a class.
     if type(config) is OpenAIConfig:
-        return OpenAIChatConfig
+        return OpenAICompletionsConfig
     return type(config) if type(config) in _MEDIA else None
 
 
@@ -165,7 +165,7 @@ def accepts_input(config: ModelConfig | None, position: str, part: Input) -> boo
                 },
             }
             return kind is not None and part.media_type in supported_media.get(kind, set())
-        if described is OpenAIChatConfig and kind is BinaryType.AUDIO:
+        if described is OpenAICompletionsConfig and kind is BinaryType.AUDIO:
             return part.media_type in ("audio/wav", "audio/mpeg", "audio/mp3")
         if described is AnthropicConfig and kind is BinaryType.IMAGE:
             return part.media_type in ("image/jpeg", "image/png", "image/gif", "image/webp")

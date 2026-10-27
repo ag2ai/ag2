@@ -11,9 +11,9 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from ag2 import Agent
-from ag2.config import OpenAIChatConfig, OpenAIConfig, OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig, OpenAIConfig, OpenAIResponsesConfig
 from ag2.config.input_acceptance import accepts_input, input_modalities
-from ag2.config.openai import OpenAIChatConfig as ProviderChatConfig
+from ag2.config.openai import OpenAICompletionsConfig as ProviderCompletionsConfig
 from ag2.config.openai import OpenAIConfig as ProviderConfig
 from ag2.events import BinaryInput, BinaryType
 
@@ -37,8 +37,10 @@ def _chat_response(request: httpx2.Request) -> httpx2.Response:
     )
 
 
-@pytest.mark.parametrize("config_class", [OpenAIChatConfig, ProviderChatConfig, OpenAIResponsesConfig])
-def test_explicit_configs_do_not_warn(config_class: type[OpenAIChatConfig] | type[OpenAIResponsesConfig]) -> None:
+@pytest.mark.parametrize("config_class", [OpenAICompletionsConfig, ProviderCompletionsConfig, OpenAIResponsesConfig])
+def test_explicit_configs_do_not_warn(
+    config_class: type[OpenAICompletionsConfig] | type[OpenAIResponsesConfig],
+) -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", DeprecationWarning)
         config = config_class("test-model", api_key="test")
@@ -64,15 +66,15 @@ def test_legacy_construction_and_copy_do_not_warn(config_class: type[OpenAIConfi
     assert copied.max_completion_tokens == 20
     assert copied.temperature == 0.5
     assert config.max_completion_tokens == 20
-    with pytest.warns(DeprecationWarning, match="OpenAIChatConfig.*OpenAIResponsesConfig.*1.4.0") as emitted:
+    with pytest.warns(DeprecationWarning, match="OpenAICompletionsConfig.*OpenAIResponsesConfig.*1.4.0") as emitted:
         copied.create()
     assert len(emitted) == 1
     assert Path(emitted[0].filename) == Path(__file__)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("config_class", [OpenAIChatConfig, OpenAIConfig, ProviderConfig])
-async def test_chat_endpoint_is_preserved(config_class: type[OpenAIChatConfig]) -> None:
+@pytest.mark.parametrize("config_class", [OpenAICompletionsConfig, OpenAIConfig, ProviderConfig])
+async def test_chat_endpoint_is_preserved(config_class: type[OpenAICompletionsConfig]) -> None:
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(_chat_response)) as http_client:
         config = config_class(
             "test-model",
@@ -87,14 +89,14 @@ async def test_chat_endpoint_is_preserved(config_class: type[OpenAIChatConfig]) 
             reply = await agent.ask("Hi")
 
     assert reply.body == "Hello"
-    assert len(caught) == (0 if config_class is OpenAIChatConfig else 1)
+    assert len(caught) == (0 if config_class is OpenAICompletionsConfig else 1)
     if caught:
         assert issubclass(caught[0].category, DeprecationWarning)
         assert "1.4.0" in str(caught[0].message)
 
 
-@pytest.mark.parametrize("config_class", [OpenAIChatConfig, OpenAIConfig])
-def test_chat_input_acceptance_is_preserved(config_class: type[OpenAIChatConfig]) -> None:
+@pytest.mark.parametrize("config_class", [OpenAICompletionsConfig, OpenAIConfig])
+def test_chat_input_acceptance_is_preserved(config_class: type[OpenAICompletionsConfig]) -> None:
     config = config_class("test-model")
 
     assert input_modalities(config) == {"image": True, "audio": True, "video": False, "pdf": True}

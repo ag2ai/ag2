@@ -74,7 +74,7 @@ class OpenAIConfigOverrides(TypedDict, total=False):
 
 
 @dataclass(slots=True)
-class OpenAIChatConfig(ModelConfig):
+class OpenAICompletionsConfig(ModelConfig):
     """Configure the OpenAI Chat Completions API, including compatible endpoints."""
 
     model: ChatModel | str
@@ -186,18 +186,18 @@ class OpenAIChatConfig(ModelConfig):
 
 @deprecated(
     "OpenAIConfig as a Chat Completions config is deprecated and will be removed in 1.4.0. "
-    "Use OpenAIChatConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
+    "Use OpenAICompletionsConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
     "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig.",
     category=None,
 )
-class OpenAIConfig(OpenAIChatConfig):
+class OpenAIConfig(OpenAICompletionsConfig):
     """Compatibility name for Chat Completions until the Responses alias switch in 1.4.0."""
 
     __slots__ = ()
 
     @deprecated(
         "OpenAIConfig as a Chat Completions config is deprecated and will be removed in 1.4.0. "
-        "Use OpenAIChatConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
+        "Use OpenAICompletionsConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
         "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig.",
     )
     def create(self) -> OpenAIClient:
