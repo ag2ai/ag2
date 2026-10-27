@@ -141,7 +141,8 @@ async def run_variants(
     Variants run sequentially; within each, tasks run up to ``concurrency`` in
     parallel (and ``repeats`` times each). When ``store_dir`` is set, every
     variant's run is persisted as its own schema-0.2 JSON under it
-    (``<run_id>-<variant>.json``); omit it to run without persisting.
+    (``<run_id>-<index>-<variant>.json``); the one-based index keeps names distinct
+    even when their filesystem-safe forms collide. Omit it to run without persisting.
 
     Pass ``stream`` to observe the sweep: ``VariantStarted`` / ``VariantCompleted``
     wrap each variant, and that variant's own ``EvalStarted`` / ``TaskEvaluated``
@@ -170,7 +171,7 @@ async def run_variants(
             store_dir=store_dir,
             repeats=repeats,
             concurrency=concurrency,
-            run_id=f"{base_run_id}-{_slug(name)}",
+            run_id=f"{base_run_id}-{index}-{_slug(name)}",
             label=label,
             stream=stream,
             variant=name,
