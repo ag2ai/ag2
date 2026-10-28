@@ -585,3 +585,77 @@ async def test_find_files_skips_symlink_out_of_base_dir(tmp_path: Path) -> None:
 
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
     assert tool_result_msg.results[0].result.parts[0].data == []
+
+
+@pytest.mark.asyncio
+async def test_find_files_lists_symlinks(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "a.txt").write_text("a")
+    (base / "real").mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    _symlink(base / "file_link", base / "a.txt")
+    _symlink(base / "dir_link", base / "real", target_is_directory=True)
+    _symlink(base / "dangling", base / "missing")
+    _symlink(base / "outside_link", outside, target_is_directory=True)
+
+    toolkit = FilesystemToolkit(base_path=base)
+
+    tracking = TrackingConfig(
+        TestConfig(
+            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "*"})),
+            "done",
+        )
+    )
+    agent = Agent("", config=tracking, tools=[toolkit.find_files()])
+    await agent.ask("find files")
+
+    tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
+    assert tool_result_msg.results[0].result.parts[0].data == [
+        "a.txt",
+        "dangling",
+        "dir_link",
+        "file_link",
+        "outside_link",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_find_files_skips_link_located_out_of_base_dir(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "a.txt").write_text("a")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    _symlink(outside / "link", base / "a.txt")
+    _symlink(base / "escape", outside, target_is_directory=True)
+
+    toolkit = FilesystemToolkit(base_path=base)
+
+    tracking = TrackingConfig(
+        TestConfig(
+            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "*/*"})),
+            "done",
+        )
+    )
+    agent = Agent("", config=tracking, tools=[toolkit.find_files()])
+    await agent.ask("find files")
+
+    tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
+    assert tool_result_msg.results[0].result.parts[0].data == []
+
+
+@pytest.mark.asyncio
+async def test_escape_error_does_not_reveal_base_dir(tmp_path: Path) -> None:
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+
+    config = TestConfig(
+        ToolCallEvent(name="read_file", arguments=json.dumps({"path": "../secret.txt"})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    with pytest.raises(PermissionError) as exc_info:
+        await agent.ask("read it")
+
+    assert str(exc_info.value) == "Path '../secret.txt' escapes base directory"
