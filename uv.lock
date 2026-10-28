@@ -64,7 +64,7 @@ wheels = [
 
 [[package]]
 name = "ag2"
-version = "1.2.1"
+version = "1.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
@@ -164,6 +164,7 @@ dev = [
     { name = "docker" },
     { name = "exa-py" },
     { name = "firecrawl-py" },
+    { name = "freezegun" },
     { name = "httpx2" },
     { name = "jinja2" },
     { name = "mcp" },
@@ -256,6 +257,7 @@ test = [
     { name = "ag2", extra = ["mcp", "mcp-ui"] },
     { name = "dirty-equals" },
     { name = "docker" },
+    { name = "freezegun" },
     { name = "httpx2" },
     { name = "pillow" },
     { name = "pytest" },
@@ -267,6 +269,7 @@ test = [
 ]
 test-core = [
     { name = "dirty-equals" },
+    { name = "freezegun" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -276,6 +279,7 @@ types = [
     { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "perplexity", "typesafe", "xai", "zai"] },
     { name = "dirty-equals" },
     { name = "docker" },
+    { name = "freezegun" },
     { name = "httpx2" },
     { name = "mypy" },
     { name = "pillow" },
@@ -296,7 +300,7 @@ requires-dist = [
     { name = "ag2", extras = ["mcp"], marker = "extra == 'acp'" },
     { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.12.1,<0.13" },
     { name = "aiobotocore", marker = "extra == 'bedrock'", specifier = ">=3.9.1,<4" },
-    { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.15.0,<2" },
+    { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.15.0,<3" },
     { name = "anyio", specifier = ">=4.0.0,<5.0.0" },
     { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.25.13" },
     { name = "ddgs", marker = "extra == 'ddgs'", specifier = ">=9.0.0,<10" },
@@ -313,7 +317,7 @@ requires-dist = [
     { name = "mcp-ui-server", marker = "extra == 'mcp-ui'", specifier = ">=1.0.0" },
     { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=3.2.0,<4" },
     { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.5.2,<1" },
-    { name = "openai", marker = "extra == 'openai'", specifier = ">=3.27.0,<4" },
+    { name = "openai", marker = "extra == 'openai'", specifier = ">=3.37.0,<4" },
     { name = "opentelemetry-sdk", marker = "extra == 'tracing'", specifier = ">=1.20" },
     { name = "perplexityai", marker = "extra == 'perplexity'", specifier = ">=0.30.0,<1" },
     { name = "prometheus-client", marker = "extra == 'metrics'", specifier = ">=0.20.0,<0.30.0" },
@@ -355,6 +359,7 @@ dev = [
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "firecrawl-py", specifier = ">=4.53,<5" },
+    { name = "freezegun", specifier = ">=1.5,<2" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
@@ -480,6 +485,7 @@ test = [
     { name = "ag2", extras = ["mcp-ui"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
+    { name = "freezegun", specifier = ">=1.5,<2" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
     { name = "pillow" },
     { name = "pytest", specifier = "==9.1.1" },
@@ -491,6 +497,7 @@ test = [
 ]
 test-core = [
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
+    { name = "freezegun", specifier = ">=1.5,<2" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-asyncio", specifier = "==1.4.0" },
     { name = "pytest-cov", specifier = "==7.1.0" },
@@ -503,6 +510,7 @@ types = [
     { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
+    { name = "freezegun", specifier = ">=1.5,<2" },
     { name = "httpx2", specifier = ">=2.9.1,<3" },
     { name = "mypy", specifier = "==2.4.0" },
     { name = "pillow" },
@@ -827,7 +835,7 @@ wheels = [
 
 [[package]]
 name = "anthropic"
-version = "1.15.0"
+version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -839,9 +847,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/10/37/5a2a4316df8babd28f096477a707cd75f240b4264c97fb128c32375105d6/anthropic-1.15.0.tar.gz", hash = "sha256:90caa9df83e2fc8bddb4ddeb83b7191bce255f635c03eae055deec521741df08", size = 1726101, upload-time = "2026-10-15T19:45:34.635Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/ba/4c91947e0d0062d66d371db371597287153f7685fbed512d3294d0cde3c7/anthropic-2.3.0.tar.gz", hash = "sha256:edfdea1e3fa7b3ce25df1511953408b2f03bfa61eb6f6268f766101a9e18ad53", size = 1869656, upload-time = "2026-10-23T23:18:47.649Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d1/65/54437e7edea49a3be9ef56f6b5965999bfdc52b9dadc9b448124ca51a594/anthropic-1.15.0-py3-none-any.whl", hash = "sha256:10189a7993c5c71a0a2d4bb80020ca6a2fd27679f51e627405da37251d15ff49", size = 2047755, upload-time = "2026-10-15T19:45:32.951Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/29/eb3558ab6bf252a07ac41c76ac5b0ea24a0aa0c23f87a40aaf31a5f8dba4/anthropic-2.3.0-py3-none-any.whl", hash = "sha256:aa6a3984f9276f307933d42dc6f58b6efc821a5ecafbc8d1bb5993a066767622", size = 2216980, upload-time = "2026-10-23T23:18:45.779Z" },
 ]
 
 [[package]]
@@ -1014,11 +1022,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.7.22"
+version = "2026.10.18"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz", hash = "sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55", size = 138112, upload-time = "2026-07-22T03:35:12.644Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7e/eb/a2aa1ac3ea30dd3f30ca57f40232138b6b0040719316ecb85daf61167771/certifi-2026.10.18.tar.gz", hash = "sha256:b9995d97b64d0431a5af837d8ca8cd6238104d1f319f04bd93ea43124d6c861e", size = 135227, upload-time = "2026-10-18T16:21:07.655Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl", hash = "sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775", size = 136983, upload-time = "2026-07-22T03:35:11.276Z" },
+    { url = "https://files.pythonhosted.org/packages/08/ba/95dd616042484f7c83a06974388b37b837732740ee70bc5dc715b5fcd55a/certifi-2026.10.18-py3-none-any.whl", hash = "sha256:73191c47aaa79da394e8fee2dbc2ec827432cab56311122c9e47abf79e390f62", size = 134093, upload-time = "2026-10-18T16:21:06.276Z" },
 ]
 
 [[package]]
@@ -2137,6 +2145,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e3/ff/1f93bfb38ca0336f0a104bd4cabd8262495d6eaa91fba42182373f40020c/firecrawl_py-4.53.2.tar.gz", hash = "sha256:61ba929d20fa9ade80b56041eb0b30a2d52c0d72c6aec8b4b5d588174cb7776b", size = 274728, upload-time = "2026-10-19T18:07:16.927Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ab/32/0f3755b1adb97bc9400f3e7bbfccca31013769c947de38f1440ef1707717/firecrawl_py-4.53.2-py3-none-any.whl", hash = "sha256:7619d29408c17da45fae4a2d6b96dbc0d34304f6df37e22258e0d91f9059f9e9", size = 336815, upload-time = "2026-10-19T18:07:15.353Z" },
+]
+
+[[package]]
+name = "freezegun"
+version = "1.5.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/95/dd/23e2f4e357f8fd3bdff613c1fe4466d21bfb00a6177f238079b17f7b1c84/freezegun-1.5.5.tar.gz", hash = "sha256:ac7742a6cc6c25a2c35e9292dfd554b897b517d2dec26891a2e8debf205cb94a", size = 35914, upload-time = "2025-08-09T10:39:08.338Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/2e/b41d8a1a917d6581fc27a35d05561037b048e47df50f27f8ac9c7e27a710/freezegun-1.5.5-py3-none-any.whl", hash = "sha256:cd557f4a75cf074e84bc374249b9dd491eaeacd61376b9eb3c423282211619d2", size = 19266, upload-time = "2025-08-09T10:39:06.636Z" },
 ]
 
 [[package]]
@@ -4276,7 +4296,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "3.27.0"
+version = "3.37.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -4286,9 +4306,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/71/41/d0fdf732f76433de3e9c4c6fbe5d83975c1e8379d46a48d0d7aa631b1c5a/openai-3.27.0.tar.gz", hash = "sha256:b84a941b8e488cd29c1555dd6edda4aa57452add9e3a0eb29eb732cec49e4468", size = 1822874, upload-time = "2026-10-09T13:48:35.936Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/66/d4c48dc690e36b297c178636d8434050ac92df9db8a4c89d9bd451cccc95/openai-3.37.0.tar.gz", hash = "sha256:670bd6f699000d43a2073bcf94374a55bb133bfe5de0d084d47eb9bb9f6a8e5d", size = 2325534, upload-time = "2026-10-22T20:04:39.602Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e8/e1/e99eef310f4d41c19509de49ac8fa829dc217e4e3fa6e5ce01eeb75a3242/openai-3.27.0-py3-none-any.whl", hash = "sha256:342cc911201c0b7acc5b566e4c71212c05b00a30b4b4c4c67b65d96e1db66c8c", size = 2168575, upload-time = "2026-10-09T13:48:33.659Z" },
+    { url = "https://files.pythonhosted.org/packages/56/73/c605f0cee1882e453a4b7fc2f17f4a42a7d4c1ed2304aff4b163ffade819/openai-3.37.0-py3-none-any.whl", hash = "sha256:d9f5b000f52397a7f9f946012744c5bc4c962eed3c100385252464c273a63e57", size = 2303939, upload-time = "2026-10-22T20:04:37.707Z" },
 ]
 
 [[package]]

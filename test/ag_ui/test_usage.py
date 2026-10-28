@@ -629,8 +629,8 @@ class TestProtocolAccounting:
 
     @pytest.mark.parametrize("provider", ["openai", "xai"])
     async def test_other_providers_are_reported_as_they_count(self, provider: str) -> None:
-        """OpenAI counts cache and reasoning inside its totals already. xAI's reasoning
-        is not known to sit outside them, so it is not added in.
+        """OpenAI and xAI count reasoning inside the normalized completion already,
+        so it is not added in again.
         """
         usage = Usage(
             prompt_tokens=100,

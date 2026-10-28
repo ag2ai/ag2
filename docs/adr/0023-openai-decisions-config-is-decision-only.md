@@ -36,7 +36,11 @@ one question named `answer`, and the agent's `response_schema` is that question:
 
 Anything else raises `UnsupportedResponseSchemaError` before a request. The
 prompt and the schema description join into the question's `instructions`;
-member docstrings describe options; `descriptions` on the config overrides them.
+`question_instructions` on the config follows the prompt, which stays the
+question's text everywhere, as a string or a sequence of strings, inputs (`ImageInput`, `DataInput`, ... mapped like the
+conversation's own inputs) and the SDK's `input_text` / `input_image` /
+`input_json` parts, with the schema description still appended; member
+docstrings describe options; `descriptions` on the config overrides them.
 Answers are rendered back through the `ResponseSchema` envelope, and the raw
 answer (minus `type` and `name`) lands on `reply.response.metadata`.
 
@@ -72,12 +76,13 @@ and a `data:` `UrlInput` passes through. Hosted URLs, `file_id`s and non-image
 binaries raise `UnsupportedInputError`; `create_files_client()` raises
 `NotImplementedError`.
 
-### 5. The SDK floor moves to `openai>=3.27.0`
+### 5. The SDK floor moves to `openai>=3.37.0`
 
 The provider requires `openai>=3.27.0` for `client.decisions.create` and the
-typed `Decision` models. Calling the endpoint with `client.post` would avoid
-the bump, but would lose those models;
-the floor is raised for every `ag2[openai]` user instead.
+typed `Decision` models, and `openai>=3.37.0` for the
+`DecisionQuestionInputPart` types behind `question_instructions`. Calling the
+endpoint with `client.post` would avoid the first bump, but would lose those
+models; the floor is raised for every `ag2[openai]` user instead.
 
 ## Consequences
 

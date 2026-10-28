@@ -21,6 +21,7 @@ Both shapes satisfy the same :class:`Observer` protocol so the Agent
 can register either kind via a single ``register(stack, ctx)`` call.
 """
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -32,6 +33,7 @@ from ag2.annotations import Context
 from ag2.events import BaseEvent, ObserverAlert
 from ag2.events.conditions import Condition, TypeCondition
 from ag2.types import ClassInfo
+from ag2.utils import _validate_timeout
 from ag2.watch import Watch
 
 __all__ = (
@@ -75,6 +77,10 @@ class SimpleObserver:
     callback: Callable[..., Any]
     interrupt: bool = False
     sync_to_thread: bool = True
+    timeout: float | None = None
+
+    def __post_init__(self) -> None:
+        _validate_timeout(self.timeout)
 
     def register(self, stack: ExitStack | AsyncExitStack, context: Context) -> None:
         stack.enter_context(
@@ -82,6 +88,7 @@ class SimpleObserver:
                 self.callback,
                 interrupt=self.interrupt,
                 sync_to_thread=self.sync_to_thread,
+                timeout=self.timeout,
             )
         )
 
@@ -104,6 +111,7 @@ class StreamObserver(SimpleObserver):
                 self.callback,
                 interrupt=self.interrupt,
                 sync_to_thread=self.sync_to_thread,
+                timeout=self.timeout,
             )
         )
 
@@ -122,10 +130,15 @@ class BaseObserver(ABC):
         Observer display name (used in alert ``source`` field).
     watch:
         Watch strategy that determines when ``process`` is called.
+    timeout:
+        Per-call limit for ``process`` in seconds, or ``None`` to wait indefinitely.
+        Must be finite and positive. Expiry is logged like other process errors.
     """
 
-    def __init__(self, name: str, watch: Watch) -> None:
+    def __init__(self, name: str, watch: Watch, *, timeout: float | None = None) -> None:
+        _validate_timeout(timeout)
         self.name = name
+        self.timeout = timeout
         self._watch = watch
         self._ctx: Context | None = None
 
@@ -142,7 +155,10 @@ class BaseObserver(ABC):
 
     async def _on_watch(self, events: list[BaseEvent], ctx: Context) -> None:
         try:
-            alert = await self.process(events, ctx)
+            if self.timeout is None:
+                alert = await self.process(events, ctx)
+            else:
+                alert = await asyncio.wait_for(self.process(events, ctx), timeout=self.timeout)
             if alert is not None:
                 await ctx.send(alert)
         except Exception:
@@ -161,6 +177,7 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
+    timeout: float | None = None,
 ) -> Callable[[Callable[..., Any]], StreamObserver]: ...
 
 
@@ -171,6 +188,7 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
+    timeout: float | None = None,
 ) -> StreamObserver: ...
 
 
@@ -180,7 +198,15 @@ def observer(
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
+    timeout: float | None = None,
 ) -> StreamObserver | Callable[[Callable[..., Any]], StreamObserver]:
+    """Register an event callback with an optional per-invocation timeout.
+
+    ``timeout`` is a finite positive number of seconds or ``None`` (no limit).
+    It covers dependency resolution, the callback, and dependency cleanup.
+    Expiry raises ``asyncio.TimeoutError`` to the event publisher. Cancellation is
+    cooperative and cannot stop a synchronous callback's worker thread.
+    """
     if condition is None:
         cond: Condition | None = None
     elif isinstance(condition, Condition):
@@ -194,12 +220,14 @@ def observer(
                 callback=func,
                 interrupt=interrupt,
                 sync_to_thread=sync_to_thread,
+                timeout=timeout,
             )
         return StreamObserver(
             condition=cond,
             callback=func,
             interrupt=interrupt,
             sync_to_thread=sync_to_thread,
+            timeout=timeout,
         )
 
     if callback is not None:

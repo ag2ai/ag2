@@ -204,6 +204,7 @@ class TestWhatDiagnosticsAreNot:
             completion_tokens=1,
             total_tokens=2,
             cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
             thinking_tokens=0,
         )
 

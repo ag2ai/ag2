@@ -28,6 +28,8 @@ class LoopDetector(BaseObserver):
         Number of identical consecutive calls that trigger an alert.
     name:
         Observer display name.
+    timeout:
+        Per-call limit for ``process`` in seconds, or ``None`` for no limit.
     """
 
     def __init__(
@@ -36,8 +38,9 @@ class LoopDetector(BaseObserver):
         repeat_threshold: int = 3,
         *,
         name: str = "loop-detector",
+        timeout: float | None = None,
     ) -> None:
-        super().__init__(name, watch=EventWatch(ToolCallEvent))
+        super().__init__(name, watch=EventWatch(ToolCallEvent), timeout=timeout)
         self._window_size = window_size
         self._repeat_threshold = repeat_threshold
         self._history: deque[tuple[str, str]] = deque(maxlen=window_size)
