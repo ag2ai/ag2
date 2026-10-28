@@ -147,6 +147,30 @@ def intercept(event: ModelResponse) -> ModelResponse:
     return event
 ```
 
+## Callback timeouts
+
+Use `#!python timeout` to bound each invocation of a callback observer:
+
+```python linenums="1" hl_lines="6"
+import httpx
+
+from ag2 import Agent, observer
+from ag2.events import ModelResponse
+
+@observer(ModelResponse, timeout=5.0)
+async def report_response(event: ModelResponse) -> None:
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        response = await client.post("https://metrics.example.com/responses", json={"content": event.content})
+        response.raise_for_status()
+
+agent = Agent("assistant", observers=[report_response])
+reply = await agent.ask("Hello!")
+```
+
+The parameter also works with `#!python observer(ModelResponse, callback, timeout=5.0)`, `#!python @agent.observer(ModelResponse, timeout=5.0)`, and `#!python @plugin.observer(ModelResponse, timeout=5.0)`. Omit the condition to apply it to callbacks receiving every event.
+
+The default is `#!python None` (no limit). A configured timeout must be finite and greater than zero. It covers dependency resolution, the callback, and dependency cleanup. Expiry raises `asyncio.TimeoutError` to the event publisher and can fail the agent turn, just like other callback exceptions. See [Subscriber timeouts](/docs/user-guide/advanced/stream#subscriber-timeouts) for delivery and cancellation behavior.
+
 ## Observers vs Middleware vs Stream Subscribers
 
 | Feature | Observer | Middleware | Stream Subscriber |
@@ -243,8 +267,8 @@ from ag2.events import BaseEvent, ModelResponse, ObserverAlert, Severity
 class AvgCompletionObserver(BaseObserver):
     """Every N responses, emit an INFO alert with the average completion-token count."""
 
-    def __init__(self, window: int = 5) -> None:
-        super().__init__("avg-completion", watch=CadenceWatch(n=window, condition=ModelResponse))
+    def __init__(self, window: int = 5, *, timeout: float | None = None) -> None:
+        super().__init__("avg-completion", watch=CadenceWatch(n=window, condition=ModelResponse), timeout=timeout)
         self._window = window
 
     async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
@@ -267,8 +291,16 @@ from ag2.config import OpenAIConfig
 agent = Agent(
     "assistant",
     config=OpenAIConfig(model="gpt-5"),
-    observers=[AvgCompletionObserver(window=5)],
+    observers=[AvgCompletionObserver(window=5, timeout=5.0)],
 )
 ```
 
 `process()` may also emit events directly via `#!python await ctx.send(...)` — returning an `ObserverAlert` is just the common case.
+
+### Process timeouts
+
+Pass `#!python timeout` to `BaseObserver` to limit each `process()` invocation. `LoopDetector` and `TokenMonitor` also accept this parameter. The value is a finite positive number of seconds, or `#!python None` for no limit.
+
+The timeout applies to event, batch, timer, and composite watches. It starts when `process()` runs; watch intervals, delays, and time spent buffering events are outside the limit. Work awaited inside `process()` shares its limit. Publishing a returned `ObserverAlert` happens after `process()` completes and is outside this timeout.
+
+Like other `BaseObserver` process errors, expiry is logged rather than propagated to the publisher. It produces no returned alert, and the watch retains its normal scheduling behavior for subsequent invocations. Caller cancellation still propagates. Cancellation is cooperative, with the same [limitations as subscriber timeouts](/docs/user-guide/advanced/stream#subscriber-timeouts).

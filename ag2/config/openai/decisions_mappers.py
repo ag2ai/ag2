@@ -29,6 +29,7 @@ from openai.types.decision_create_params import (
     QuestionQuestionParamScore,
     QuestionQuestionParamScoreLevel,
 )
+from openai.types.shared_params import DecisionQuestionInputPart
 
 from ag2.compact import CompactionSummary
 from ag2.events import (
@@ -146,25 +147,72 @@ def _part(part: Input, serializer: SerializerProto) -> DecisionInputPartUnionPar
     raise UnsupportedInputError(type(part).__name__, PROVIDER)
 
 
+def with_prompt(
+    instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None, prompt: str
+) -> str | list[str | Input | DecisionQuestionInputPart] | None:
+    """Lead ``question_instructions`` with the agent prompt, which stays the question's text."""
+    if not instructions:
+        return prompt or None
+    if isinstance(instructions, str):
+        return "\n\n".join(s for s in (prompt, instructions) if s)
+    return [prompt, *instructions] if prompt else list(instructions)
+
+
+def _question_instructions(
+    instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None,
+    question: str | None,
+    serializer: SerializerProto,
+) -> str | list[DecisionQuestionInputPart]:
+    """The ``instructions`` to send: text joined into one string, or the given items as parts with the question appended.
+
+    Strings and ``Input`` events become parts like the conversation's own inputs; SDK parts pass
+    through, which is the only way to send ``input_json``. Parts let a question carry images and
+    JSON next to its text, which a joined string cannot; the schema's question text then goes out
+    as a trailing ``input_text`` part instead of being joined in.
+    """
+    if instructions is None or isinstance(instructions, str):
+        return "\n\n".join(s for s in (instructions, question) if s)
+
+    parts = [_instruction_part(p, serializer) for p in instructions]
+    if question:
+        parts.append(_text(question))
+    return parts
+
+
+def _instruction_part(
+    item: str | Input | DecisionQuestionInputPart, serializer: SerializerProto
+) -> DecisionQuestionInputPart:
+    if isinstance(item, str):
+        return _text(item)
+    if isinstance(item, UrlInput) and item.kind == BinaryType.IMAGE:
+        # Question instructions, unlike ``input``, take a hosted image URL.
+        return {"type": "input_image", "image_url": item.url}
+    if isinstance(item, Input):
+        return _part(item, serializer)
+    return item
+
+
 def response_proto_to_question(
     response: ResponseProto[Any] | None,
     *,
-    instructions: str | None,
+    instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None,
+    serializer: SerializerProto,
     descriptions: Mapping[str, str] | None = None,
 ) -> Question:
     """Convert a ``response_schema`` to the single Decisions question: predicate, choice or score."""
     spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
-    instructions = "\n\n".join(s for s in (instructions, spec.question) if s)
-    if not instructions:
+    instructions_param = _question_instructions(instructions, spec.question, serializer)
+    if not instructions_param:
         # Every question type requires instructions; fail before the request with a way out.
         raise ValueError(
-            "A decision needs a question: set the agent prompt or pass `ResponseSchema(..., description=...)`."
+            "A decision needs a question: set the agent prompt, pass `question_instructions`, "
+            "or `ResponseSchema(..., description=...)`."
         )
 
     descriptions = descriptions or {}
 
     if spec.kind == "predicate":
-        return QuestionQuestionParamPredicate(type="predicate", name=ANSWER_KEY, instructions=instructions)
+        return QuestionQuestionParamPredicate(type="predicate", name=ANSWER_KEY, instructions=instructions_param)
 
     if spec.kind == "choice":
         choices: list[QuestionQuestionParamChoiceChoice] = []
@@ -173,7 +221,9 @@ def response_proto_to_question(
             if description := descriptions.get(str(option.value)) or option.description:
                 choice["description"] = description
             choices.append(choice)
-        return QuestionQuestionParamChoice(type="choice", name=ANSWER_KEY, instructions=instructions, choices=choices)
+        return QuestionQuestionParamChoice(
+            type="choice", name=ANSWER_KEY, instructions=instructions_param, choices=choices
+        )
 
     # The API numbers levels by position, so the rubric must already be 0..n-1.
     if not spec.is_rubric or len(spec.options) < 2:
@@ -184,7 +234,7 @@ def response_proto_to_question(
         if description := descriptions.get(str(option.value)) or option.description:
             level["description"] = description
         levels.append(level)
-    return QuestionQuestionParamScore(type="score", name=ANSWER_KEY, instructions=instructions, levels=levels)
+    return QuestionQuestionParamScore(type="score", name=ANSWER_KEY, instructions=instructions_param, levels=levels)
 
 
 def find_answer(decision: Decision) -> Answer:
@@ -227,5 +277,6 @@ def normalize_usage(usage: DecisionUsage) -> Usage:
         completion_tokens=usage.output_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
+        cache_creation_input_tokens=usage.input_tokens_details.cache_write_tokens,
         thinking_tokens=usage.output_tokens_details.reasoning_tokens,
     )

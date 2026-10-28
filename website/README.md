@@ -54,10 +54,3 @@ When switching branches or making major changes to the documentation structure, 
 ./scripts/docs_build_mkdocs.sh --force
 ./scripts/docs_serve_mkdocs.sh
 ```
-
-
-## Adding Notebooks to the Website
-
-When you want to add a new Jupyter notebook and have it rendered in the documentation, you need to follow specific guidelines to ensure proper integration with the website.
-
-Please refer to <a href="https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-to-get-a-notebook-displayed-on-the-website" target="_blank">this</a> guideline for more details.

@@ -7,6 +7,7 @@ from ag2.exceptions import missing_optional_dependency
 try:
     from ..capabilities import (
         A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
+        A2UI_RENDERER_CAPABILITIES_METADATA_KEY,
         A2UIClientCapabilities,
         parse_client_capabilities,
     )
@@ -30,6 +31,7 @@ except ImportError as e:
     )
     parse_client_capabilities = missing_optional_dependency("parse_client_capabilities", "a2a", e)
     A2UI_CLIENT_CAPABILITIES_METADATA_KEY = "a2uiClientCapabilities"
+    A2UI_RENDERER_CAPABILITIES_METADATA_KEY = "a2uiRendererCapabilities"
 
 try:
     from .executor import A2UIAgentExecutor
@@ -38,6 +40,7 @@ except ImportError as e:
 
 __all__ = (
     "A2UI_CLIENT_CAPABILITIES_METADATA_KEY",
+    "A2UI_RENDERER_CAPABILITIES_METADATA_KEY",
     "ACTIVATED_EXTENSIONS_KEY",
     "A2UIAgentExecutor",
     "A2UIClientCapabilities",
