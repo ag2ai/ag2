@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from dirty_equals import IsPartialDict
 
-from ag2 import Agent, Context, KnowledgeConfig, MemoryStream, Scope, Var, observer
+from ag2 import Agent, Context, KnowledgeConfig, MemoryStream, Scope, ScopedValue, observer
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.events import (
     BaseEvent,
@@ -178,7 +178,7 @@ async def test_targeted_halt_cancels_running_tool_without_aborting_parent_or_sib
             "root survived",
         ),
         tools=[child.as_tool(description="Work"), sibling.as_tool(description="Work")],
-        variables={"cleanup": Var([], scope=Scope.SHARED)},
+        variables={"cleanup": ScopedValue([], scope=Scope.SHARED)},
     )
     journal = Journal()
     reply = await asyncio.wait_for(
@@ -358,7 +358,7 @@ async def test_parent_cancellation_settles_background_descendants_before_returni
             ToolCallEvent(name="long_work", arguments="{}"),
         ]),
         tools=[background_agent_tool(child, description="Work"), long_work],
-        variables={"cleanup": Var([], scope=Scope.SHARED)},
+        variables={"cleanup": ScopedValue([], scope=Scope.SHARED)},
     )
     state = CancellationState()
     turn = asyncio.create_task(root.ask("start", observers=[observer(callback=state.record)]))
