@@ -5,6 +5,7 @@
 import base64
 import os
 import shutil
+import stat
 import sys
 from collections.abc import Iterable
 from pathlib import Path
@@ -229,13 +230,18 @@ class FilesystemToolkit(Toolkit):
                 Field(description="Relative path to the file or directory to delete."),
             ],
         ) -> str:
-            target = _resolve_path(base_dir, path)
             entry = base_dir / path
-            if entry.is_symlink():
-                # Validate the link's location as well as its resolved target.
-                _resolve_path(base_dir, str(entry.parent))
+            if _is_link(entry):
+                # Unlinking touches only the link itself, so it is the link's
+                # location that must stay within the base, not its target.
+                _check_within(base_dir, entry.parent.resolve(), path)
                 entry.unlink()
-            elif target.is_dir():
+                return f"Successfully deleted {path}"
+
+            target = _resolve_path(base_dir, path)
+            if target == base_dir:
+                raise PermissionError(f"Path '{path}' refers to the base directory itself")
+            if target.is_dir():
                 shutil.rmtree(target)
             else:
                 target.unlink()
@@ -257,9 +263,26 @@ def _resolve_dir(
 def _resolve_path(base: Path, path: str) -> Path:
     """Resolve *path* relative to *base* and verify it stays within *base*."""
     resolved = (base / path).resolve()
+    _check_within(base, resolved, path)
+    return resolved
+
+
+def _check_within(base: Path, resolved: Path, path: str) -> None:
+    """Reject *resolved* (the resolution of the requested *path*) if it lies outside *base*."""
     if not resolved.is_relative_to(base):
         raise PermissionError(f"Path '{path}' escapes base directory '{base}'")
-    return resolved
+
+
+def _is_link(path: Path) -> bool:
+    """Return True for a symlink or a Windows directory junction, without following it."""
+    if path.is_symlink():
+        return True
+    if sys.platform != "win32":
+        return False
+    try:
+        return path.lstat().st_reparse_tag == stat.IO_REPARSE_TAG_MOUNT_POINT
+    except OSError:
+        return False
 
 
 def _check_pattern(pattern: str) -> None:

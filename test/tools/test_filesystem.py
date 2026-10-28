@@ -4,8 +4,8 @@
 
 import base64
 import json
-import shutil
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -309,135 +309,171 @@ async def test_delete_directory(tmp_path: Path) -> None:
     assert not target.exists()
 
 
-@pytest.fixture
-def git_checkout_with_symlink(tmp_path: Path) -> Path:
-    git = shutil.which("git")
-    if git is None:
-        pytest.skip("git is not available")
-
-    repository = tmp_path / "repository"
-    docs = repository / "docs"
-    docs.mkdir(parents=True)
-    (docs / "guide.md").write_text("Keep the canonical guide.\n", encoding="utf-8")
+def _symlink(link: Path, target: Path, *, target_is_directory: bool = False) -> None:
     try:
-        (docs / "legacy.md").symlink_to("guide.md")
+        link.symlink_to(target, target_is_directory=target_is_directory)
     except OSError:
         pytest.skip("symlinks are not available")
 
-    subprocess.run([git, "init", "--quiet", str(repository)], check=True)
-    subprocess.run([git, "-C", str(repository), "config", "core.symlinks", "true"], check=True)
-    subprocess.run([git, "-C", str(repository), "add", "docs/guide.md", "docs/legacy.md"], check=True)
-    tracked = subprocess.run(
-        [git, "-C", str(repository), "ls-files", "--stage", "docs/legacy.md"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    assert tracked.stdout.startswith("120000 ")
-
-    workspace = tmp_path / "checkout"
-    workspace.mkdir()
-    subprocess.run(
-        [git, "-C", str(repository), "checkout-index", "--all", f"--prefix={workspace}/"],
-        check=True,
-    )
-    link = workspace / "docs" / "legacy.md"
-    assert link.is_symlink()
-    return workspace
-
 
 @pytest.mark.asyncio
-async def test_agent_deletes_a_git_checked_out_symlink_without_removing_its_target(
-    git_checkout_with_symlink: Path,
-) -> None:
-    workspace = git_checkout_with_symlink
-    link = workspace / "docs" / "legacy.md"
-    agent = Agent(
-        "",
-        config=TestConfig(
-            ToolCallEvent(name="read_file", arguments=json.dumps({"path": "docs/legacy.md"})),
-            ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "docs/legacy.md"})),
-            "done",
-        ),
-        tools=[FilesystemToolkit(base_path=workspace)],
+async def test_delete_symlink_to_file_keeps_target(tmp_path: Path) -> None:
+    target = tmp_path / "guide.md"
+    target.write_text("keep me")
+    link = tmp_path / "legacy.md"
+    _symlink(link, target)
+
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+
+    config = TestConfig(
+        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "legacy.md"})),
+        "done",
     )
-    await agent.ask("Read the legacy guide, then remove that obsolete alias and keep the canonical guide.")
-
-    target = workspace / "docs" / "guide.md"
-    assert {
-        "alias_is_symlink": link.is_symlink(),
-        "canonical_content": target.read_text(encoding="utf-8") if target.is_file() else None,
-    } == {"alias_is_symlink": False, "canonical_content": "Keep the canonical guide.\n"}
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("target_kind", ["file", "directory", "missing"])
-async def test_delete_symlink_preserves_target(tmp_path: Path, target_kind: str) -> None:
-    target = tmp_path / "target"
-    if target_kind == "directory":
-        target.mkdir()
-        (target / "data.txt").write_text("keep me")
-    elif target_kind == "file":
-        target.write_text("keep me")
-    link = tmp_path / "link"
-    try:
-        link.symlink_to(target, target_is_directory=target_kind == "directory")
-    except OSError:
-        pytest.skip("symlinks are not available")
-
-    agent = Agent(
-        "",
-        config=TestConfig(
-            ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "link"})),
-            "done",
-        ),
-        tools=[FilesystemToolkit(base_path=tmp_path)],
-    )
-
-    await agent.ask("delete the symlink")
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("delete it")
 
     assert not link.is_symlink()
-    if target_kind == "directory":
-        assert (target / "data.txt").read_text() == "keep me"
-    elif target_kind == "file":
-        assert target.read_text() == "keep me"
-    else:
-        assert not target.exists()
+    assert target.read_text() == "keep me"
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("link_location", ["inside", "outside", "escaped_parent"])
-async def test_delete_symlink_rejects_paths_outside_base(tmp_path: Path, link_location: str) -> None:
+# A trailing slash still names the link, never the directory it points to.
+@pytest.mark.parametrize("path", ["alias", "alias/"])
+async def test_delete_symlink_to_directory_keeps_target(tmp_path: Path, path: str) -> None:
+    target = tmp_path / "real"
+    target.mkdir()
+    (target / "data.txt").write_text("keep me")
+    link = tmp_path / "alias"
+    _symlink(link, target, target_is_directory=True)
+
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+
+    config = TestConfig(
+        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": path})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("delete it")
+
+    assert not link.is_symlink()
+    assert (target / "data.txt").read_text() == "keep me"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target_name", ["missing", "../missing"])
+async def test_delete_dangling_symlink(tmp_path: Path, target_name: str) -> None:
     base = tmp_path / "base"
     base.mkdir()
+    link = base / "link"
+    _symlink(link, Path(target_name))
+
+    toolkit = FilesystemToolkit(base_path=base)
+
+    config = TestConfig(
+        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "link"})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("delete it")
+
+    assert not link.is_symlink()
+
+
+@pytest.mark.asyncio
+async def test_delete_symlink_pointing_out_of_base_dir_keeps_target(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    base.mkdir()
+    target = tmp_path / "outside.txt"
+    target.write_text("keep me")
+    link = base / "link"
+    _symlink(link, target)
+
+    toolkit = FilesystemToolkit(base_path=base)
+
+    config = TestConfig(
+        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "link"})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("delete it")
+
+    assert not link.is_symlink()
+    assert target.read_text() == "keep me"
+
+
+@pytest.mark.asyncio
+async def test_delete_symlink_through_escaping_parent_blocked(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    base.mkdir()
+    target = base / "target.txt"
+    target.write_text("keep me")
     outside = tmp_path / "outside"
     outside.mkdir()
-    link = (base if link_location == "inside" else outside) / "link"
-    target = (outside if link_location == "inside" else base) / "target"
-    target.write_text("keep me")
-    requested_path = link
-    try:
-        link.symlink_to(target)
-        if link_location == "escaped_parent":
-            (base / "escape").symlink_to(outside, target_is_directory=True)
-            requested_path = base / "escape" / "link"
-    except OSError:
-        pytest.skip("symlinks are not available")
+    link = outside / "link"
+    _symlink(link, target)
+    _symlink(base / "escape", outside, target_is_directory=True)
 
-    agent = Agent(
-        "",
-        config=TestConfig(
-            ToolCallEvent(name="delete_file", arguments=json.dumps({"path": str(requested_path)})),
-            "done",
-        ),
-        tools=[FilesystemToolkit(base_path=base)],
+    toolkit = FilesystemToolkit(base_path=base)
+
+    config = TestConfig(
+        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "escape/link"})),
+        "done",
     )
-
+    agent = Agent("", config=config, tools=[toolkit])
     with pytest.raises(PermissionError, match="escapes base directory"):
-        await agent.ask("delete the symlink")
+        await agent.ask("delete it")
 
     assert link.is_symlink()
     assert target.read_text() == "keep me"
+
+
+@pytest.fixture
+def junction(tmp_path: Path) -> Path:
+    if sys.platform != "win32":
+        pytest.skip("directory junctions are Windows-only")
+    target = tmp_path / "real"
+    target.mkdir()
+    (target / "data.txt").write_text("keep me")
+    link = tmp_path / "alias"
+    subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)], check=True, capture_output=True)
+    return link
+
+
+@pytest.mark.asyncio
+async def test_delete_junction_keeps_target(tmp_path: Path, junction: Path) -> None:
+    target = tmp_path / "real"
+
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+
+    config = TestConfig(
+        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": "alias"})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    await agent.ask("delete it")
+
+    assert not junction.exists()
+    assert (target / "data.txt").read_text() == "keep me"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", [".", "", "sub/.."])
+async def test_delete_base_dir_blocked(tmp_path: Path, path: str) -> None:
+    (tmp_path / "sub").mkdir()
+    kept = tmp_path / "kept.txt"
+    kept.write_text("keep me")
+
+    toolkit = FilesystemToolkit(base_path=tmp_path)
+
+    config = TestConfig(
+        ToolCallEvent(name="delete_file", arguments=json.dumps({"path": path})),
+        "done",
+    )
+    agent = Agent("", config=config, tools=[toolkit])
+    with pytest.raises(PermissionError, match="base directory itself"):
+        await agent.ask("delete it")
+
+    assert kept.read_text() == "keep me"
 
 
 @pytest.mark.asyncio
