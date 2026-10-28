@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import sys
 import threading
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
@@ -41,6 +42,48 @@ def _symlink_or_skip(link: Path, target: Path) -> None:
         link.symlink_to(target)
     except (OSError, NotImplementedError):  # pragma: no cover - e.g. Windows without privilege
         pytest.skip("symlinks are not supported on this platform")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="needs a real Windows interpreter lookup")
+@pytest.mark.parametrize("shebang", ["", "#!/usr/bin/env python3\n"])
+@pytest.mark.asyncio
+async def test_local_python_script_on_windows(tmp_path: Path, context: Context, shebang: str) -> None:
+    base = _write_script_skill(tmp_path, "python-skill")
+    scripts = base / "python-skill" / "scripts"
+    scripts.mkdir()
+    (scripts / "hello.py").write_text(shebang + "import sys\nprint(sys.argv[1])\n", encoding="utf-8")
+
+    runtime = LocalRuntime(dir=base)
+    result = await runtime.execute("python-skill", "hello.py", context, args=["hello from Python"])
+
+    assert result == "hello from Python"
+
+
+@pytest.mark.asyncio
+async def test_local_python_script_uses_host_interpreter_on_windows(tmp_path: Path, context: Context) -> None:
+    # The shebang names an interpreter that does not exist, so the script only
+    # runs if the Windows branch bypasses it in favour of sys.executable.
+    base = _write_script_skill(tmp_path, "python-skill")
+    scripts = base / "python-skill" / "scripts"
+    scripts.mkdir()
+    (scripts / "hello.py").write_text("#!/nonexistent/python3\nprint('host python')\n", encoding="utf-8")
+
+    runtime = LocalRuntime(dir=base)
+    with patch("sys.platform", "win32"):
+        result = await runtime.execute("python-skill", "hello.py", context)
+
+    assert result == "host python"
+
+
+@pytest.mark.asyncio
+async def test_supplied_sandbox_never_receives_host_interpreter_on_windows(skill_tree: Path, context: Context) -> None:
+    factory = _RemoteFactory()
+    runtime = LocalRuntime(dir=skill_tree, sandbox=factory)
+
+    with patch("sys.platform", "win32"):
+        await runtime.execute("react-best-practices", "scaffold.py", context)
+
+    assert factory.sandbox.execs == [["sh", "-c", "python3 ./scaffold.py"]]
 
 
 @pytest.mark.asyncio

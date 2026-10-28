@@ -64,6 +64,20 @@ invoke_agent assistant
   +-- await_human_input assistant   # human-in-the-loop
 ```
 
+### Anthropic SDK spans
+
+The `anthropic` SDK traces its own API calls with OpenTelemetry, on by default. When a global tracer provider is
+registered, each request also produces an `anthropic.messages.create` client span (scope `com.anthropic.sdk.python`),
+nested under AG2's `chat` span, and the SDK sends a `traceparent` header. Set `open_telemetry` on `AnthropicConfig`
+to configure or disable these spans; leaving it unset keeps the SDK's `ANTHROPIC_OPEN_TELEMETRY*` environment
+variables in charge:
+
+```python linenums="1"
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(model="claude-sonnet-5", open_telemetry=False)  # no SDK spans, only AG2's
+```
+
 ## Span Types
 
 Every span includes an `ag2.span.type` attribute:

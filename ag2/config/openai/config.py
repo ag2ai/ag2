@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -16,10 +16,11 @@ from openai.types.chat import (
 from openai.types.chat.completion_create_params import PromptCacheOptions, WebSearchOptions
 from openai.types.responses import ServiceTier as ResponseServiceTier
 from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
-from openai.types.shared_params import Reasoning
-from typing_extensions import Unpack
+from openai.types.shared_params import DecisionQuestionInputPart, Reasoning
+from typing_extensions import Self, Unpack, deprecated
 
 from ag2.config.config import ModelConfig, ModelProvider
+from ag2.events import Input
 
 from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, Modality, OpenAIClient, ReasoningEffort, ServiceTier, Verbosity
@@ -74,7 +75,9 @@ class OpenAIConfigOverrides(TypedDict, total=False):
 
 
 @dataclass(slots=True)
-class OpenAIConfig(ModelConfig):
+class OpenAICompletionsConfig(ModelConfig):
+    """Configure the OpenAI Chat Completions API, including compatible endpoints."""
+
     model: ChatModel | str
     api_key: str | None = None
     base_url: str | None = None
@@ -126,7 +129,7 @@ class OpenAIConfig(ModelConfig):
     def provider(self) -> ModelProvider:
         return ModelProvider.OPENAI
 
-    def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> "OpenAIConfig":
+    def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> Self:
         return replace(self, **overrides)
 
     def create(self) -> OpenAIClient:
@@ -180,6 +183,24 @@ class OpenAIConfig(ModelConfig):
 
     def create_files_client(self) -> OpenAIFilesClient:
         return OpenAIFilesClient(self)
+
+
+OPENAI_CONFIG_DEPRECATION = (
+    "OpenAIConfig as a Chat Completions config is deprecated and will be removed in 1.4.0. "
+    "Use OpenAICompletionsConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
+    "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig."
+)
+
+
+@deprecated(OPENAI_CONFIG_DEPRECATION, category=None)
+class OpenAIConfig(OpenAICompletionsConfig):
+    """Compatibility name for Chat Completions until the Responses alias switch in 1.4.0."""
+
+    __slots__ = ()
+
+    @deprecated(OPENAI_CONFIG_DEPRECATION)
+    def create(self) -> OpenAIClient:
+        return super().create()
 
 
 class OpenAIResponsesConfigOverrides(TypedDict, total=False):
@@ -318,6 +339,7 @@ class OpenAIDecisionsConfigOverrides(TypedDict, total=False):
     safety_identifier: str | None | Omit
     boolean_threshold: float
     descriptions: Mapping[str, str] | None
+    question_instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None
     extra_body: dict[str, Any] | None
 
 
@@ -341,6 +363,11 @@ class OpenAIDecisionsConfig(ModelConfig):
     # Option descriptions keyed by choice value or score level as a string; they
     # outrank the docstrings under ``Enum`` members.
     descriptions: Mapping[str, str] | None = None
+    # What the question carries after the agent prompt: a string, or a sequence of
+    # strings, inputs (``ImageInput``, ``DataInput``, ...) and SDK parts
+    # (``input_text`` / ``input_image`` / ``input_json``) when the question needs to
+    # carry an image or JSON. The schema description is still appended.
+    question_instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None = None
     extra_body: dict[str, Any] | None = None
 
     @property
@@ -365,6 +392,7 @@ class OpenAIDecisionsConfig(ModelConfig):
             safety_identifier=self.safety_identifier,
             boolean_threshold=self.boolean_threshold,
             descriptions=self.descriptions,
+            question_instructions=self.question_instructions,
             extra_body=self.extra_body,
         )
 

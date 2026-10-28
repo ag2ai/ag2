@@ -84,6 +84,7 @@ class Stream(Protocol):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         condition: Condition | None = None,
     ) -> SubId: ...
 
@@ -94,6 +95,7 @@ class Stream(Protocol):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         condition: Condition | None = None,
     ) -> Callable[[Callable[..., Any]], SubId]: ...
 
@@ -103,6 +105,7 @@ class Stream(Protocol):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         condition: Condition | None = None,
     ) -> Callable[[Callable[..., Any]], SubId] | SubId: ...
 
@@ -114,6 +117,7 @@ class Stream(Protocol):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
     ) -> AbstractContextManager[None]: ...
 
     def get(

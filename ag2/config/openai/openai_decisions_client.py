@@ -8,10 +8,11 @@ from typing import Any
 import httpx2
 from fast_depends.library.serializer import SerializerProto
 from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, Omit, not_given, omit
+from openai.types.shared_params import DecisionQuestionInputPart
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
-from ag2.events import BaseEvent, ModelMessage, ModelResponse
+from ag2.events import BaseEvent, Input, ModelMessage, ModelResponse
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
@@ -24,6 +25,7 @@ from .decisions_mappers import (
     normalize_usage,
     response_proto_to_question,
     tool_to_api,
+    with_prompt,
 )
 
 __all__ = ["OpenAIDecisionsClient"]
@@ -46,6 +48,7 @@ class OpenAIDecisionsClient(LLMClient):
         safety_identifier: str | None | Omit = omit,
         boolean_threshold: float = 0.5,
         descriptions: Mapping[str, str] | None = None,
+        question_instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None = None,
         extra_body: dict[str, Any] | None = None,
     ) -> None:
         self._client = AsyncOpenAI(
@@ -63,6 +66,7 @@ class OpenAIDecisionsClient(LLMClient):
         self._safety_identifier = safety_identifier
         self._boolean_threshold = boolean_threshold
         self._descriptions = descriptions
+        self._question_instructions = question_instructions
         self._extra_body = extra_body
 
     async def __call__(
@@ -79,7 +83,8 @@ class OpenAIDecisionsClient(LLMClient):
 
         question = response_proto_to_question(
             response_schema,
-            instructions="\n".join(s for s in context.prompt if s) or None,
+            instructions=with_prompt(self._question_instructions, "\n".join(s for s in context.prompt if s)),
+            serializer=serializer,
             descriptions=self._descriptions,
         )
 

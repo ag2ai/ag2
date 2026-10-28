@@ -25,7 +25,7 @@ class A2UIValidationFailedEvent(BaseEvent):
     This is deliberately an internal observability seam, **not** a wire frame.
     The A2UI spec has no server→client error message (errors are client→server
     only; server→client is createSurface/updateComponents/updateDataModel/
-    deleteSurface [+ v1.0 callFunction/actionResponse]), so emitting a wire-level
+    deleteSurface [+ v1.0 callRendererFunction/agentFunctionResponse]), so emitting a wire-level
     error would diverge from the protocol. The transports therefore keep their
     graceful-degradation behaviour unchanged; observers/monitoring subscribed to
     the stream consume this event to tell "failed to build UI" apart from
@@ -62,8 +62,9 @@ class A2UIClientEvent(BaseEvent):
 
     Emitted on the turn's stream when a transport receives a client→server
     envelope — an ``action`` (a click on a server ``event`` button), a v1.0
-    ``functionResponse`` (the client's reply to a server-initiated
-    ``callFunction``), or an ``error``. Symmetric to :class:`A2UIMessageEvent`
+    ``callAgentFunction`` (the renderer calling a server function), a v1.0
+    ``rendererFunctionResponse`` (the renderer's reply to a server-initiated
+    ``callRendererFunction``), or an ``error``. Symmetric to :class:`A2UIMessageEvent`
     (server→client): it lets server-side observers react to / log client
     interactions, in addition to the envelope being rewritten into the LLM's
     prompt for the turn.
