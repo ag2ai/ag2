@@ -486,7 +486,7 @@ async def _serve_turn(
             stream=stream,
         )
 
-    if shares_state and (closing := _encode_context(result.context.variables)) != held_by_client:
+    if shares_state and (closing := _encode_context(dict(result.context.variables))) != held_by_client:
         await output.send(StateSnapshotEvent(snapshot=closing, timestamp=timestamp_ms()))
 
 
