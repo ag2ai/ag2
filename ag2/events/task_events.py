@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
 
 class TaskEvent(BaseEvent):
+    __conversational__ = False
+
     task_id: str
     agent_name: str
     objective: str
@@ -55,14 +57,14 @@ class TaskCompleted(TaskEvent):
     # Widened from ``str | None`` to ``Any`` so framework-core ``Task``
     # owners can return structured results. ``run_task`` still passes a
     # string, so existing callers are unaffected.
-    result: Any = Field(None)
+    result: Any = Field(default=None)
     # Stream reference for inspection. Resolves against the parent's storage
     # only when the sub-task's stream shares it, as `stream=None` builds it to.
     task_stream: "StreamId"
     # Cumulative snapshot of the sub-task's stream, for a holder of this one
     # event to inspect. Never sum these: on a reused stream each snapshot
     # re-reports everything spent before it. Anything that accumulates reads
-    # the ``UsageEvent`` rollup instead — see
+    # the source ``UsageEvent`` records instead — see
     # ``docs/adr/0014-token-accounting-reads-usageevent.md``.
     usage: Usage = Field(default_factory=Usage)
 

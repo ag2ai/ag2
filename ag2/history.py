@@ -161,6 +161,7 @@ class HistoryQuery(Generic[EventT]):
 HUMAN_INPUT_ABANDONED_TOOL_RESULT = (
     "This tool call was not completed: the turn ended because a human-input request could not be answered."
 )
+CANCELLED_TOOL_RESULT = "The turn was cancelled before this tool finished."
 
 # Stands in for the result of a client tool call batched with a ``final=True``
 # tool: the turn ended on the final result before the call was handed to the

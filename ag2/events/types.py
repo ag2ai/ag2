@@ -159,8 +159,8 @@ class UsageEvent(BaseEvent):
 
     Decoupled from :class:`ModelResponse` so token accounting is independent of
     whether a response is produced and persisted: every LLM call (main loop,
-    live session, history compaction, memory aggregation) and every sub-task
-    rollup emits one of these onto the stream. :class:`~ag2.UsageReport`
+    live session, history compaction, memory aggregation) emits one source
+    record. Ancestors consume that record from a ChildEvent without a rollup. :class:`~ag2.UsageReport`
     aggregates the event log over these events alone — the single source of
     truth, so there is no double counting.
 
@@ -174,8 +174,10 @@ class UsageEvent(BaseEvent):
     event_id: str = Field(default_factory=lambda: uuid4().hex, compare=False, repr=False)
     usage: Usage = Field(default_factory=Usage, kw_only=False)
     kind: str = Field(default="model_call")
-    """``"model_call"`` for a direct LLM call, ``"subtask"`` for a sub-agent
-    rollup, ``"compaction"`` / ``"aggregation"`` for internal maintenance calls."""
+    """Original stage: model_call, compaction, aggregation, or a client-specific kind.
+
+    Archived records may contain the old subtask rollup kind.
+    """
 
     model: str | None = Field(default=None, compare=False)
     provider: str | None = Field(default=None, compare=False)
@@ -183,7 +185,10 @@ class UsageEvent(BaseEvent):
     label: str | None = Field(default=None, compare=False)
     """Sub-agent name for ``"subtask"`` events; ``None`` otherwise."""
     parts: "list[UsageEvent]" = Field(default_factory=list, compare=False)
-    """For a ``"subtask"`` rollup, the model calls it sums, each under its own provider and model.
+    """Legacy rollup details retained for reading archived records.
+
+    New delegations forward source events and do not populate this field.
+    For an archived ``"subtask"`` rollup, the model calls it sums, each under its own provider and model.
 
     For a reader that has to count each provider's figures its own way before
     adding them up. :class:`~ag2.UsageReport` reads the rollup alone, so these

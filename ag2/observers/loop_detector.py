@@ -7,7 +7,7 @@
 from collections import deque
 
 from ag2.annotations import Context
-from ag2.events import BaseEvent, ObserverAlert, Severity, ToolCallEvent
+from ag2.events import BaseEvent, ChildEvent, ObserverAlert, Severity, ToolCallEvent
 from ag2.watch import EventWatch
 
 from .observer import BaseObserver
@@ -40,29 +40,35 @@ class LoopDetector(BaseObserver):
         name: str = "loop-detector",
         timeout: float | None = None,
     ) -> None:
-        super().__init__(name, watch=EventWatch(ToolCallEvent), timeout=timeout)
+        super().__init__(name, watch=EventWatch(ToolCallEvent | ChildEvent), timeout=timeout)
         self._window_size = window_size
         self._repeat_threshold = repeat_threshold
-        self._history: deque[tuple[str, str]] = deque(maxlen=window_size)
-        self._flagged: set[tuple[str, str]] = set()
+        self._history: dict[str, deque[tuple[str, str]]] = {}
+        self._flagged: set[tuple[str, str, str]] = set()
 
     async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
-        for event in events:
+        for envelope in events:
+            origin = envelope.task_id if isinstance(envelope, ChildEvent) else "local"
+            event = envelope.source_event
             if not isinstance(event, ToolCallEvent):
                 continue
 
             key = (event.name, event.arguments)
-            self._history.append(key)
+            if origin not in self._history:
+                self._history[origin] = deque(maxlen=self._window_size)
+            history = self._history[origin]
+            history.append(key)
 
-            if len(self._history) < self._repeat_threshold:
+            if len(history) < self._repeat_threshold:
                 continue
 
-            tail = list(self._history)[-self._repeat_threshold :]
-            if all(k == key for k in tail) and key not in self._flagged:
-                self._flagged.add(key)
+            tail = list(history)[-self._repeat_threshold :]
+            if all(k == key for k in tail) and (origin, *key) not in self._flagged:
+                self._flagged.add((origin, *key))
                 return ObserverAlert(
                     source=self.name,
                     severity=Severity.WARNING,
+                    data={"task_id": origin, "path": envelope.path} if isinstance(envelope, ChildEvent) else {},
                     message=(
                         f"Potential loop detected: tool '{event.name}' called "
                         f"{self._repeat_threshold} times consecutively with "
