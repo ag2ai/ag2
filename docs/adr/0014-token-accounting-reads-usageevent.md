@@ -5,6 +5,12 @@ date: 2026-08-15
 
 # Anything that adds up tokens reads `UsageEvent`
 
+> Subagents v2 update (2026-10-27):
+> [ADR 0029](0029-account-descendant-usage-from-source-events.md) supersedes the
+> rollup-specific mechanism below with direct consumption of source descendant
+> events. The rule that accumulators read `UsageEvent`, not snapshot fields,
+> remains accepted. The discussion below records the superseded rollup design.
+
 Surfaced while tracing why a coordinator that delegates one sub-task reported 110 of the
 1100 tokens it actually spent. Three consumers of token accounting read three different
 events, and only one of them was right. This ADR records the rule that keeps them from
