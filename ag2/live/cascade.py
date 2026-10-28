@@ -49,7 +49,7 @@ class CascadeConfig(RealtimeConfig):
             "assistant",
             config=CascadeConfig(
                 stt=ElevenLabsTranscriber("scribe_v2"),
-                model=config.OpenAIConfig("gpt-5-mini", streaming=True),
+                model=config.OpenAIResponsesConfig("gpt-5-mini", streaming=True),
                 tts=ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"),
             ),
         )
