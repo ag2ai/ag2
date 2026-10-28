@@ -148,14 +148,14 @@ class GatedExecutor(A2AAgentExecutorBase):
         raise NotImplementedError
 
 
-def _tool_rounds(initial: Turn, after_tool: Turn | None) -> ToolRoundsConfig:
+def _tool_rounds(initial: Turn, after_tool: "Turn | None") -> ToolRoundsConfig:
     """The server answers with ``initial``, then with ``after_tool`` once the tool results come back."""
     return ToolRoundsConfig(initial, after_tool if after_tool is not None else "")
 
 
 def make_pair(
     initial: Turn,
-    after_tool: Turn | None = None,
+    after_tool: "Turn | None" = None,
     *,
     server_tools: Iterable[Callable[..., object]] = (),
     client_tools: Iterable[Callable[..., object]] = (),
@@ -224,7 +224,7 @@ def make_executor_pair(
 
 def make_rest_pair(
     initial: Turn,
-    after_tool: Turn | None = None,
+    after_tool: "Turn | None" = None,
     *,
     server_url: str = "http://test",
     streaming: bool = False,
@@ -248,7 +248,7 @@ def make_rest_pair(
 
 async def start_grpc_pair(
     initial: Turn,
-    after_tool: Turn | None = None,
+    after_tool: "Turn | None" = None,
     *,
     host: str = "127.0.0.1",
     streaming: bool = False,

@@ -6,19 +6,30 @@ import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from functools import partial
 from typing import Any
+from uuid import uuid4
 
 import pytest
-from a2a.server.tasks import TaskUpdater
-from a2a.types import Part, Task, TaskState
+from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
+from a2a.server.agent_execution import RequestContext
+from a2a.server.context import ServerCallContext
+from a2a.server.events import EventQueue
+from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
+from a2a.types import Artifact, Message, Part, Role, Task, TaskState, TaskStatus
+from a2a.utils.errors import TaskNotCancelableError
 
 from ag2 import Agent, Context
 from ag2.a2a import A2AConfig, A2AServer
-from ag2.a2a.errors import A2ATaskCancelledError, A2ATaskTerminalError
+from ag2.a2a.errors import (
+    A2ATaskCancelledError,
+    A2ATaskFailedError,
+    A2ATaskRejectedError,
+    A2ATaskTerminalError,
+)
 from ag2.a2a.events import A2ATaskArtifactUpdate, A2ATextArtifact
 from ag2.a2a.extension import MIME_TOOL_CALL
 from ag2.a2a.mappers.parts import data_part
 from ag2.a2a.mappers.tools import call_to_payload
-from ag2.a2a.tasks import cancel_task, list_tasks
+from ag2.a2a.tasks import cancel_task, get_task, list_tasks
 from ag2.a2a.testing import ToolRoundsConfig, make_test_client_factory
 from ag2.events import (
     BaseEvent,
@@ -84,6 +95,77 @@ async def _two_artifacts(updater: TaskUpdater, release: asyncio.Event) -> None:
     await updater.add_artifact(parts=[Part(text="first")], artifact_id="one", last_chunk=True)
     await updater.add_artifact(parts=[Part(text="-second")], artifact_id="two", last_chunk=True)
     await updater.complete()
+
+
+async def _progress_note_then_answer(updater: TaskUpdater, release: asyncio.Event) -> None:
+    note = updater.new_agent_message([Part(text="thinking...")])
+    await updater.update_status(TaskState.TASK_STATE_WORKING, message=note)
+    await updater.add_artifact(parts=[Part(text="answer")], artifact_id="art", last_chunk=True)
+    await updater.complete()
+
+
+async def _held_until_cancelled(updater: TaskUpdater, release: asyncio.Event) -> None:
+    await updater.add_artifact(parts=[Part(text="partial")], artifact_id="art")
+    await asyncio.Event().wait()
+
+
+class _CompletesWhenCancelled(ScriptedExecutor):
+    """Its cancel hook lets the task finish instead, so the task ends COMPLETED under the cancel."""
+
+    def __init__(self) -> None:
+        super().__init__(self._held_then_completed)
+        self.completed = asyncio.Event()
+
+    async def _held_then_completed(self, updater: TaskUpdater, release: asyncio.Event) -> None:
+        await updater.add_artifact(parts=[Part(text="done")], artifact_id="art")
+        await release.wait()
+        await updater.complete()
+        self.completed.set()
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        self.release.set()
+        await self.completed.wait()
+
+
+class _ArtifactSavedStore(InMemoryTaskStore):
+    """Task store that signals once a task carrying an artifact has been persisted."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.artifact_saved = asyncio.Event()
+
+    async def save(self, task: Task, context: ServerCallContext) -> None:
+        await super().save(task, context)
+        if task.artifacts:
+            self.artifact_saved.set()
+
+
+class _FinishedTaskExecutor(A2AAgentExecutorBase):
+    """Answers with a single ``Task`` already in its final state: a task stream with no update events."""
+
+    def __init__(self, state: TaskState, *, status_text: str | None = None) -> None:
+        self._state = state
+        self._status_text = status_text
+
+    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        msg = request_context.message
+        assert msg is not None
+        status = TaskStatus(state=self._state)
+        if self._status_text is not None:
+            status.message.CopyFrom(
+                Message(message_id=uuid4().hex, role=Role.ROLE_AGENT, parts=[Part(text=self._status_text)])
+            )
+        await event_queue.enqueue_event(
+            Task(
+                id=msg.task_id or uuid4().hex,
+                context_id=msg.context_id or uuid4().hex,
+                status=status,
+                artifacts=[Artifact(artifact_id="art", parts=[Part(text="partial")])],
+            )
+        )
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        return None
 
 
 class _ChunkGate(EventCollector):
@@ -168,11 +250,90 @@ async def test_cancelled_task_raises_and_keeps_partial_text(streaming: bool) -> 
 
     task = exc_info.value.task
     assert isinstance(exc_info.value, A2ATaskTerminalError)
-    assert (task.status.state, _artifact_text(task)) == (TaskState.TASK_STATE_CANCELED, "partial")
+    assert (task.status.state, _artifact_texts(task)) == (TaskState.TASK_STATE_CANCELED, {"art": "partial"})
 
 
-def _artifact_text(task: Task) -> str:
-    return "".join(part.text for artifact in task.artifacts for part in artifact.parts)
+def _artifact_texts(task: Task) -> dict[str, str]:
+    return {artifact.artifact_id: "".join(part.text for part in artifact.parts) for artifact in task.artifacts}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("state", "error"),
+    [
+        pytest.param(TaskState.TASK_STATE_CANCELED, A2ATaskCancelledError, id="cancelled"),
+        pytest.param(TaskState.TASK_STATE_FAILED, A2ATaskFailedError, id="failed"),
+        pytest.param(TaskState.TASK_STATE_REJECTED, A2ATaskRejectedError, id="rejected"),
+    ],
+)
+@_both_modes
+async def test_task_that_arrives_already_finished_raises(
+    state: TaskState, error: type[A2ATaskTerminalError], streaming: bool
+) -> None:
+    pair = make_executor_pair(_FinishedTaskExecutor(state), streaming=streaming)
+
+    with pytest.raises(error) as exc_info:
+        await pair.client.ask("go")
+
+    task = exc_info.value.task
+    assert (task.status.state, _artifact_texts(task)) == (state, {"art": "partial"})
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_task_that_arrives_already_completed_keeps_its_status_message(streaming: bool) -> None:
+    pair = make_executor_pair(
+        _FinishedTaskExecutor(TaskState.TASK_STATE_COMPLETED, status_text="-done"), streaming=streaming
+    )
+
+    reply = await pair.client.ask("go")
+
+    assert reply.response.content == "partial-done"
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_progress_note_on_a_working_task_is_not_part_of_the_reply(streaming: bool) -> None:
+    pair = make_executor_pair(ScriptedExecutor(_progress_note_then_answer), streaming=streaming)
+
+    reply = await pair.client.ask("go")
+
+    assert reply.response.content == "answer"
+
+
+@pytest.mark.asyncio
+async def test_cancel_that_never_reaches_the_stream_still_raises() -> None:
+    # The executor's cancel hook publishes nothing; the SDK records CANCELED in the task
+    # store after the stream's queue is gone, so the stream closes without a final status.
+    store = _ArtifactSavedStore()
+    pair = make_executor_pair(ScriptedExecutor(_held_until_cancelled), streaming=True, task_store=store)
+
+    asking = asyncio.create_task(pair.client.ask("go"))
+    await store.artifact_saved.wait()
+    [task] = (await list_tasks(a2a_config(pair.client))).tasks
+    await cancel_task(a2a_config(pair.client), task.id)
+
+    with pytest.raises(A2ATaskCancelledError) as exc_info:
+        await asyncio.wait_for(asking, timeout=5)
+    assert _artifact_texts(exc_info.value.task) == {"art": "partial"}
+
+
+@pytest.mark.asyncio
+async def test_cancel_outrun_by_the_task_finishing_is_refused() -> None:
+    # A task that ends some other way while the cancel is in flight was not cancelable (spec §3.1.5).
+    store = _ArtifactSavedStore()
+    pair = make_executor_pair(_CompletesWhenCancelled(), streaming=True, task_store=store)
+
+    asking = asyncio.create_task(pair.client.ask("go"))
+    await store.artifact_saved.wait()
+    [task] = (await list_tasks(a2a_config(pair.client))).tasks
+
+    with pytest.raises(TaskNotCancelableError):
+        await cancel_task(a2a_config(pair.client), task.id)
+    reply = await asyncio.wait_for(asking, timeout=5)
+    assert reply.body == "done"
+    finished = await get_task(a2a_config(pair.client), task.id)
+    assert finished.status.state == TaskState.TASK_STATE_COMPLETED
 
 
 async def _text_artifact_updates(agent: Agent) -> list[A2ATextArtifact]:
@@ -334,6 +495,21 @@ async def test_replacement_sharing_the_previous_turn_prefix_is_kept_whole(stream
 
 
 @pytest.mark.asyncio
+@_both_modes
+async def test_replacement_equal_to_the_previous_turn_text_adds_nothing(streaming: bool) -> None:
+    # A non-append update restates the whole artifact; restating it unchanged leaves nothing new to say.
+    pair = make_executor_pair(_reused_artifact_executor("pre-"), streaming=streaming)
+    client = Agent("client", config=pair.client.config, tools=[step])
+    stream = MemoryStream()
+    collector = EventCollector()
+    stream.where(ModelMessageChunk).subscribe(collector.on_event)
+
+    await client.ask("go", stream=stream)
+
+    assert collector.chunks == ["pre-"]
+
+
+@pytest.mark.asyncio
 async def test_live_append_to_an_artifact_from_the_previous_turn_adds_only_the_new_text() -> None:
     pair = make_executor_pair(_reused_artifact_executor("end", append=True), streaming=True)
     client = Agent("client", config=pair.client.config, tools=[step])
@@ -365,7 +541,7 @@ async def test_tool_call_introduced_by_a_mixed_artifact_replacement_runs_once(st
     reply = await client.ask("go", stream=stream)
 
     results = [e for e in await stream.history.get_events() if isinstance(e, ToolResultEvent)]
-    assert len(results) == 1
+    assert [str(r.name) for r in results] == ["step"]
     assert reply.response.content == "ok"
 
 
@@ -433,3 +609,22 @@ async def test_cancelled_task_closes_the_streamed_text_artifact_for_good() -> No
         await asking
     updates = [e for e in collector.events if isinstance(e, A2ATextArtifact)]
     assert [u.last_chunk for u in updates] == [False, True]
+
+
+@pytest.mark.asyncio
+async def test_cancelling_a_task_waiting_for_a_client_tool_marks_it_cancelled() -> None:
+    # No turn runs while the task waits for input, so the executor writes nothing; the SDK closes it.
+    blocker = _Blocker()
+    server = Agent("server", config=TestConfig(ToolCallEvent(name="hold", arguments="{}"), "unused"))
+    client = _client(server, tools=[blocker.hold])
+
+    asking = asyncio.create_task(client.ask("go"))
+    await blocker.started.wait()
+    [task] = (await list_tasks(a2a_config(client))).tasks
+    await cancel_task(a2a_config(client), task.id)
+    asking.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await asking
+    cancelled = await get_task(a2a_config(client), task.id)
+    assert cancelled.status.state == TaskState.TASK_STATE_CANCELED

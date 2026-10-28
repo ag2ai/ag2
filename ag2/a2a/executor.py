@@ -41,9 +41,28 @@ from .mappers import (
     task_state_to_status_update,
 )
 
+_TERMINAL_STATES = frozenset({
+    TaskState.TASK_STATE_COMPLETED,
+    TaskState.TASK_STATE_CANCELED,
+    TaskState.TASK_STATE_FAILED,
+    TaskState.TASK_STATE_REJECTED,
+})
+
 
 class _ClosingTaskUpdater(TaskUpdater):
-    """``TaskUpdater`` that sends ``last_chunk=True`` on the streamed text artifact before the task leaves ``working``."""
+    """``TaskUpdater`` that sends ``last_chunk=True`` on the streamed text artifact before the task leaves ``working``.
+
+    Leaving ``working`` ends the turn's output: ``closed`` tells the stream mapper to drop whatever
+    the turn still produces, such as a chunk racing a cancel, rather than send it after the close.
+
+    The turn's own completion and a cancel race on one updater, as the SDK does not order
+    ``cancel`` against ``execute``. Whichever claims a terminal state first ends the task; any
+    later transition is a no-op instead of the ``RuntimeError`` the base raises, which the SDK
+    would turn into a FAILED written over the winner.
+
+    Each transition that reaches the wire is mirrored onto ``lifecycle`` as an
+    ``A2ATaskStatusUpdate``, so AG2-side observers see exactly the wire's lifecycle.
+    """
 
     def __init__(
         self,
@@ -51,13 +70,16 @@ class _ClosingTaskUpdater(TaskUpdater):
         task_id: str,
         context_id: str,
         *,
+        lifecycle: ConversationContext,
         text_artifact_id: str,
         text_pieces: Sequence[str],
     ) -> None:
         super().__init__(event_queue, task_id, context_id)
+        self._lifecycle = lifecycle
         self._text_artifact_id = text_artifact_id
         self._text_pieces = text_pieces
-        self._closed = False
+        self.closed = False
+        self.ended = False
 
     async def update_status(
         self,
@@ -66,15 +88,31 @@ class _ClosingTaskUpdater(TaskUpdater):
         timestamp: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        if state != TaskState.TASK_STATE_WORKING and self._text_pieces and not self._closed:
-            self._closed = True
-            await self.add_artifact(
-                parts=[Part(text="")],
-                artifact_id=self._text_artifact_id,
-                append=True,
-                last_chunk=True,
-            )
+        if self.ended:
+            return
+        if state in _TERMINAL_STATES:
+            # Claimed before the first await, so the losing side of a race sees it.
+            self.ended = True
+        if state != TaskState.TASK_STATE_WORKING and not self.closed:
+            # Set before the first await, so nothing the turn emits meanwhile lands after the close.
+            self.closed = True
+            if self._text_pieces:
+                await self.add_artifact(
+                    parts=[Part(text="")],
+                    artifact_id=self._text_artifact_id,
+                    append=True,
+                    last_chunk=True,
+                )
         await super().update_status(state, message, timestamp, metadata)
+        await self._lifecycle.send(
+            task_state_to_status_update(
+                state,
+                task_id=self.task_id,
+                context_id=self.context_id,
+                message=message,
+                timestamp=datetime.now(tz=timezone.utc),
+            ),
+        )
 
 
 class AgentExecutor(A2AAgentExecutorBase):
@@ -131,20 +169,10 @@ class AgentExecutor(A2AAgentExecutorBase):
         # when no task has been persisted yet for this id.
         is_first_turn = request_context.current_task is None
 
-        text_artifact_id = uuid4().hex
-        text_pieces: list[str] = []
-        updater = _ClosingTaskUpdater(
-            event_queue,
-            task_id,
-            context_id,
-            text_artifact_id=text_artifact_id,
-            text_pieces=text_pieces,
-        )
-
         # Per-request stream lifted out of ``_run_one_turn`` so it spans
-        # the whole lifecycle. Each ``TaskUpdater`` transition is mirrored
-        # into this stream as a typed ``A2ATaskStatusUpdate`` for AG2-side
-        # observers (``stream.where(A2ATaskStatusUpdate)``); the ``map_ag2_to_a2a``
+        # the whole lifecycle. The updater mirrors each transition into this
+        # stream as a typed ``A2ATaskStatusUpdate`` for AG2-side observers
+        # (``stream.where(A2ATaskStatusUpdate)``); the ``map_ag2_to_a2a``
         # subscriber filters those events out of the queue forward path so
         # ``TaskUpdater`` (with timestamp + terminal-state lock) stays the
         # single source of truth on the wire.
@@ -158,10 +186,24 @@ class AgentExecutor(A2AAgentExecutorBase):
         # required so subscribers can resolve DI on these events.
         lifecycle_ctx = ConversationContext(stream, dependency_provider=self._agent.dependency_provider)
 
+        text_artifact_id = uuid4().hex
+        text_pieces: list[str] = []
+        updater = _ClosingTaskUpdater(
+            event_queue,
+            task_id,
+            context_id,
+            lifecycle=lifecycle_ctx,
+            text_artifact_id=text_artifact_id,
+            text_pieces=text_pieces,
+        )
+
         pending_client_calls: list[ClientToolCallEvent] = []
 
         @stream.subscribe
         async def map_ag2_to_a2a(event: BaseEvent) -> None:
+            if updater.closed:
+                return
+
             if isinstance(event, ModelMessageChunk):
                 # a2a-sdk rejects append=True before the artifact exists, so the first chunk creates it.
                 is_first_chunk = not text_pieces
@@ -210,14 +252,6 @@ class AgentExecutor(A2AAgentExecutorBase):
                 ),
             )
             await updater.start_work()
-            await lifecycle_ctx.send(
-                task_state_to_status_update(
-                    TaskState.TASK_STATE_WORKING,
-                    task_id=task_id,
-                    context_id=context_id,
-                    timestamp=datetime.now(tz=timezone.utc),
-                ),
-            )
 
         self._running[task_id] = updater
         try:
@@ -225,23 +259,12 @@ class AgentExecutor(A2AAgentExecutorBase):
                 parsed,
                 updater,
                 stream,
-                lifecycle_ctx,
                 text_pieces,
                 pending_client_calls,
-                task_id,
-                context_id,
                 extra_prompt=self._extra_system_prompt(request_context),
             )
         except Exception:
             await updater.failed()
-            await lifecycle_ctx.send(
-                task_state_to_status_update(
-                    TaskState.TASK_STATE_FAILED,
-                    task_id=task_id,
-                    context_id=context_id,
-                    timestamp=datetime.now(tz=timezone.utc),
-                ),
-            )
             raise
         finally:
             self._running.pop(task_id, None)
@@ -250,16 +273,17 @@ class AgentExecutor(A2AAgentExecutorBase):
         # Per a2a-sdk contract: the framework awaits this hook first and only
         # afterwards cancels the asyncio Task running ``execute()`` (raising
         # ``asyncio.CancelledError``). Our only job is to publish the
-        # CANCELED status update — the running coroutine winds down on
-        # its own. The ``except Exception`` in ``execute`` deliberately
+        # running turn's CANCELED status update — the coroutine winds down
+        # on its own. The ``except Exception`` in ``execute`` deliberately
         # does NOT catch ``CancelledError`` (it's a ``BaseException``),
         # so a cancel never flips the task to FAILED by accident.
-        task_id = request_context.task_id or ""
-        context_id = request_context.context_id or ""
-        # The running turn's updater closes the streamed text before the task leaves ``working``;
-        # a task this executor is not running (another replica, already finished) gets a plain one.
-        updater = self._running.get(task_id) or TaskUpdater(event_queue, task_id, context_id)
-        await updater.cancel()
+        # The running turn's updater closes the streamed text before the task leaves ``working``,
+        # and yields to the turn if it already ended the task.
+        if updater := self._running.get(request_context.task_id or ""):
+            await updater.cancel()
+        # No turn running: the task waits for input, or its turn just ended and the SDK has not yet
+        # consumed that terminal event. Writing CANCELED here would land over the latter; the SDK
+        # closes a task still open once ``cancel`` returns, after re-reading it, so leave it to that.
 
     def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
         """Per-request system-prompt fragments to fold into the turn.
@@ -277,11 +301,8 @@ class AgentExecutor(A2AAgentExecutorBase):
         parsed: ParsedMessage,
         updater: TaskUpdater,
         stream: MemoryStream,
-        lifecycle_ctx: ConversationContext,
         text_pieces: list[str],
         pending_client_calls: list[ClientToolCallEvent],
-        task_id: str,
-        context_id: str,
         extra_prompt: Sequence[str] = (),
     ) -> None:
         client_tools = [self._make_client_tool(s) for s in parsed.tool_schemas]
@@ -298,14 +319,6 @@ class AgentExecutor(A2AAgentExecutorBase):
         has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
         if has_pending or pending_client_calls:
             await updater.requires_input()
-            await lifecycle_ctx.send(
-                task_state_to_status_update(
-                    TaskState.TASK_STATE_INPUT_REQUIRED,
-                    task_id=task_id,
-                    context_id=context_id,
-                    timestamp=datetime.now(tz=timezone.utc),
-                ),
-            )
             return
 
         # Avoid duplicating text that was already streamed via chunk
@@ -322,15 +335,6 @@ class AgentExecutor(A2AAgentExecutorBase):
         else:
             agent_msg = None
         await updater.complete(message=agent_msg)
-        await lifecycle_ctx.send(
-            task_state_to_status_update(
-                TaskState.TASK_STATE_COMPLETED,
-                task_id=task_id,
-                context_id=context_id,
-                message=agent_msg,
-                timestamp=datetime.now(tz=timezone.utc),
-            ),
-        )
 
     @staticmethod
     def _build_final_message(

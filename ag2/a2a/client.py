@@ -174,35 +174,45 @@ class A2ADriveState:
             self.seen_calls.add((artifact_id, call.id))
             self.pending_calls.append(call)
 
-    def absorb_text(self, artifact_id: str, text: str, append: bool, *, snapshot: bool = False) -> str:
+    def absorb_text(self, artifact_id: str, text: str, append: bool) -> str:
         """Fold a text artifact update into its slot; return the newly arrived text.
 
         A non-append update, live or a snapshot, restates the whole artifact and replaces what
         was known, even when it shortens it. Text consumed by an earlier turn is not part of the
-        reply: a snapshot that is exactly that text is a replay and adds nothing.
+        reply: a restatement that is exactly that text leaves the artifact unchanged and adds nothing.
         """
         prior = self.prior_text.get(artifact_id, "")
-        known = self.artifact_text.get(artifact_id, prior if artifact_id in self.prior_text else None)
-        content = (known or "") + text if append else text
+        received = self.artifact_text.get(artifact_id, prior)
+        content = received + text if append else text
         self.artifact_text[artifact_id] = content
         slot = self.text_slot.get(artifact_id)
-        own = self.text_segments[slot] if slot is not None else None
-        if append and own is not None:
-            mine = own + text
+        # What this reply already holds for the artifact, as opposed to its full content.
+        given = self.text_segments[slot] if slot is not None else None
+        if append and given is not None:
+            reply_text = given + text
         elif append and content.startswith(prior):
-            mine = content[len(prior) :]
-        elif snapshot and own is None and content == prior:
-            mine = ""
+            reply_text = content[len(prior) :]
+        elif given is None and content == prior:
+            reply_text = ""
         else:
-            mine = content
+            reply_text = content
         # A restatement that does not extend what was already given out cannot be retracted.
-        fresh = mine[len(own or "") :] if mine.startswith(own or "") else ""
+        given = given or ""
+        delta = reply_text[len(given) :] if reply_text.startswith(given) else ""
         if slot is not None:
-            self.text_segments[slot] = mine
-        elif mine or artifact_id not in self.prior_text:
+            self.text_segments[slot] = reply_text
+        elif reply_text or artifact_id not in self.prior_text:
             self.text_slot[artifact_id] = len(self.text_segments)
-            self.text_segments.append(mine)
-        return fresh
+            self.text_segments.append(reply_text)
+        return delta
+
+    def received_artifacts(self) -> list[Artifact]:
+        """Every text artifact as received so far, under its own id; stands in for ``task.artifacts`` when no task was."""
+        return [
+            Artifact(artifact_id=artifact_id, parts=[Part(text=text)])
+            for artifact_id, text in self.artifact_text.items()
+            if text
+        ]
 
 
 @dataclass(slots=True)
@@ -211,6 +221,9 @@ class A2ATurnOutcome:
 
     input_required: bool = False
     input_prompt: str | None = None
+    # The task reached a terminal or interrupted state (or the peer answered with a Message):
+    # nothing further will arrive for this turn, so the task need not be read again.
+    settled: bool = False
 
 
 class A2AClient(LLMClient):
@@ -497,7 +510,12 @@ class A2AClient(LLMClient):
         attempt = 0
         while True:
             try:
-                return await self._drain_stream(stream, context, state)
+                outcome = await self._drain_stream(stream, context, state)
+                if outcome.settled or self._task_id is None:
+                    return outcome
+                # The stream closed before the task reached a final state; the final state may
+                # have been recorded without reaching the stream (a cancel, notably), so read it.
+                return await self._poll_until_settled(context, state)
             except UnsupportedOperationError:
                 # Spec §3.1.6: a task that ended while the stream was down cannot be subscribed to;
                 # its final state is read instead. On the opening request this is a real failure.
@@ -527,10 +545,7 @@ class A2AClient(LLMClient):
             context,
             state,
         )
-        if state.finish_reason in _FAILURE_ERRORS or outcome.input_required:
-            return outcome
-
-        if self._task_id is None:
+        if outcome.settled or self._task_id is None:
             return outcome
 
         return await self._poll_until_settled(context, state)
@@ -546,19 +561,9 @@ class A2AClient(LLMClient):
                 GetTaskRequest(**get_kwargs),
                 context=self._call_context,
             )
-            await self._absorb_task_artifacts(task, context, state)
-            if task.status.state in _TERMINAL_STATES:
-                if reason := _FAILURE_REASONS.get(task.status.state):
-                    state.terminal_task = task
-                    state.finish_reason = reason
-                    return A2ATurnOutcome()
-                if task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED:
-                    state.finish_reason = "input_required"
-                    return A2ATurnOutcome(
-                        input_required=True,
-                        input_prompt=_extract_status_prompt(task.status),
-                    )
-                return A2ATurnOutcome()
+            outcome = await self._absorb_task(task, context, state)
+            if outcome.settled:
+                return outcome
             await asyncio.sleep(self._polling_interval)
 
     async def _drain_stream(
@@ -578,18 +583,11 @@ class A2AClient(LLMClient):
             if isinstance(a2a_event, A2ATaskSnapshot):
                 self._task_id = a2a_event.task.id
                 self._save_context_id(context, a2a_event.task.context_id)
-                # A resubscribe opens with the task as it stands, covering what streamed while disconnected,
-                # including a request for input that was made while the stream was down.
-                status = a2a_event.task.status
-                input_required = status.state == TaskState.TASK_STATE_INPUT_REQUIRED
-                await self._absorb_snapshot_artifacts(
-                    a2a_event.task, context, state, terminal_calls_visible=input_required
-                )
-                if input_required:
-                    state.finish_reason = "input_required"
-                    outcome.input_required = True
-                    outcome.input_prompt = _extract_status_prompt(status)
-                    return outcome
+                # The task as it stands: a resubscribe opens with it (covering what streamed while
+                # disconnected), and a stream may carry nothing else, or close on a final snapshot.
+                snapshot_outcome = await self._absorb_task(a2a_event.task, context, state)
+                if snapshot_outcome.settled:
+                    return snapshot_outcome
                 continue
 
             if isinstance(a2a_event, A2ATaskStatusUpdate):
@@ -597,6 +595,8 @@ class A2AClient(LLMClient):
                 self._save_context_id(context, update.context_id)
                 if update.task_id:
                     self._task_id = update.task_id
+                if update.status.state in _TERMINAL_STATES:
+                    outcome.settled = True
                 stop = await self._handle_status_update(update, context, state, outcome)
                 if stop:
                     return outcome
@@ -609,6 +609,8 @@ class A2AClient(LLMClient):
 
             if isinstance(a2a_event, A2AMessage):
                 msg = a2a_event.message
+                # A Message answers the request outright; no task updates follow it.
+                outcome.settled = True
                 self._save_context_id(context, msg.context_id)
                 if msg.task_id:
                     self._task_id = msg.task_id
@@ -633,12 +635,11 @@ class A2AClient(LLMClient):
         sd_state = status_update.status.state
 
         if reason := _FAILURE_REASONS.get(sd_state):
-            partial = state.text() if reason == "cancelled" else ""
             state.terminal_task = Task(
                 id=status_update.task_id,
                 status=status_update.status,
                 context_id=status_update.context_id,
-                artifacts=[Artifact(artifact_id="partial", parts=[Part(text=partial)])] if partial else [],
+                artifacts=state.received_artifacts(),
             )
             state.finish_reason = reason
             return True
@@ -672,26 +673,30 @@ class A2AClient(LLMClient):
         if msg.message_id:
             state.seen_message_ids.add(msg.message_id)
 
-    async def _absorb_task_artifacts(self, task: Task, context: ConversationContext, state: A2ADriveState) -> None:
-        # Polling re-reads cumulative ``task.artifacts`` every poll: each snapshot is
-        # the current full content of every artifact, reconciled against what was
-        # already absorbed. Tool calls are only surfaced on ``INPUT_REQUIRED``.
-        terminal_calls_visible = task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
-        await self._absorb_snapshot_artifacts(task, context, state, terminal_calls_visible=terminal_calls_visible)
-        # On INPUT_REQUIRED, status.message is the HITL prompt — routed via
-        # input_prompt, not assistant text. Skip here for parity with streaming.
-        if task.status.HasField("message") and task.status.state != TaskState.TASK_STATE_INPUT_REQUIRED:
-            msg = task.status.message
-            if not msg.message_id or msg.message_id not in state.seen_message_ids:
-                for part in msg.parts:
-                    if part.text:
-                        state.text_segments.append(part.text)
-                        await context.send(ModelMessageChunk(part.text))
-                    if terminal_calls_visible and is_data_part_with_mime(part, MIME_TOOL_CALL):
-                        state.pending_calls.append(payload_to_call(part_data_to_python(part)))
-                self._merge_context_update(context, extract_context_update(msg))
-                if msg.message_id:
-                    state.seen_message_ids.add(msg.message_id)
+    async def _absorb_task(self, task: Task, context: ConversationContext, state: A2ADriveState) -> A2ATurnOutcome:
+        """Fold a task snapshot (polled, or a stream's) into drive state; ``settled`` once it is final or interrupted.
+
+        Each snapshot is the current full content of every artifact, reconciled against what was
+        already absorbed. Tool calls are only surfaced on ``INPUT_REQUIRED``, where ``status.message``
+        is the HITL prompt rather than assistant text; only ``COMPLETED`` contributes its message to
+        the reply, the same as a streamed status update.
+        """
+        status = task.status
+        input_required = status.state == TaskState.TASK_STATE_INPUT_REQUIRED
+        await self._absorb_snapshot_artifacts(task, context, state, terminal_calls_visible=input_required)
+
+        if reason := _FAILURE_REASONS.get(status.state):
+            state.terminal_task = task
+            state.finish_reason = reason
+            return A2ATurnOutcome(settled=True)
+        if input_required:
+            state.finish_reason = "input_required"
+            return A2ATurnOutcome(input_required=True, input_prompt=_extract_status_prompt(status), settled=True)
+        if status.state == TaskState.TASK_STATE_COMPLETED:
+            if status.HasField("message"):
+                await self._absorb_completion_message(status.message, context, state)
+            return A2ATurnOutcome(settled=True)
+        return A2ATurnOutcome()
 
     async def _absorb_snapshot_artifacts(
         self,
@@ -706,15 +711,13 @@ class A2AClient(LLMClient):
             if isinstance(a2a_event, A2AToolCallArtifact) and not terminal_calls_visible:
                 # Left unseen: the call is only surfaced once the task asks for input.
                 continue
-            await self._apply_artifact_update(a2a_event, context, state, snapshot=True)
+            await self._apply_artifact_update(a2a_event, context, state)
 
     async def _apply_artifact_update(
         self,
         a2a_event: A2ATaskArtifactUpdate,
         context: ConversationContext,
         state: A2ADriveState,
-        *,
-        snapshot: bool = False,
     ) -> None:
         """Apply an artifact update to drive state; typed subclasses route directly, others scan parts."""
         update = a2a_event.update
@@ -725,14 +728,14 @@ class A2AClient(LLMClient):
         state.touched_artifact_ids.add(artifact_id)
 
         if isinstance(a2a_event, A2ATextArtifact):
-            if fresh := state.absorb_text(artifact_id, a2a_event.text, a2a_event.append, snapshot=snapshot):
+            if fresh := state.absorb_text(artifact_id, a2a_event.text, a2a_event.append):
                 await context.send(ModelMessageChunk(fresh))
         elif isinstance(a2a_event, A2AToolCallArtifact):
             state.add_call(artifact_id, a2a_event.call)
         else:
             # Mixed artifact: its text reconciles by identity like a text artifact, its calls by call id.
             text = "".join(part.text for part in artifact.parts)
-            if fresh := state.absorb_text(artifact_id, text, a2a_event.append, snapshot=snapshot):
+            if fresh := state.absorb_text(artifact_id, text, a2a_event.append):
                 await context.send(ModelMessageChunk(fresh))
             for part in artifact.parts:
                 if is_data_part_with_mime(part, MIME_TOOL_CALL):

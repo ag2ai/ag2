@@ -9,7 +9,6 @@ import logging
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
 from a2a.server.agent_execution import RequestContext
@@ -19,9 +18,9 @@ from a2a.types import Message, Part, TaskState
 
 from ag2.a2a.executor import AgentExecutor
 from ag2.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
-from ag2.a2a.mappers import ParsedMessage, struct_to_dict, task_state_to_status_update
+from ag2.a2a.mappers import ParsedMessage, struct_to_dict
 from ag2.agent import Agent
-from ag2.context import ConversationContext, strip_reserved_variables
+from ag2.context import strip_reserved_variables
 from ag2.events import BaseEvent, ClientToolCallEvent
 from ag2.stream import MemoryStream
 
@@ -230,11 +229,8 @@ class A2UIAgentExecutor(AgentExecutor):
         parsed: ParsedMessage,
         updater: TaskUpdater,
         stream: MemoryStream,
-        lifecycle_ctx: ConversationContext,
         text_pieces: list[str],
         pending_client_calls: list[ClientToolCallEvent],
-        task_id: str,
-        context_id: str,
         extra_prompt: Sequence[str] = (),
     ) -> None:
         # Buttons run on the server, not as agent tools — only client-side tool
@@ -313,41 +309,14 @@ class A2UIAgentExecutor(AgentExecutor):
                     "pausing for the renderer function and deferring the pending tool calls this turn.",
                 )
             await updater.requires_input(message=agent_msg)
-            await lifecycle_ctx.send(
-                task_state_to_status_update(
-                    TaskState.TASK_STATE_INPUT_REQUIRED,
-                    task_id=task_id,
-                    context_id=context_id,
-                    message=agent_msg,
-                    timestamp=datetime.now(tz=timezone.utc),
-                ),
-            )
             return
 
         if has_pending or pending_client_calls:
             pending_message = agent_msg if server_only else None
             await updater.requires_input(message=pending_message)
-            await lifecycle_ctx.send(
-                task_state_to_status_update(
-                    TaskState.TASK_STATE_INPUT_REQUIRED,
-                    task_id=task_id,
-                    context_id=context_id,
-                    message=pending_message,
-                    timestamp=datetime.now(tz=timezone.utc),
-                ),
-            )
             return
 
         await updater.complete(message=agent_msg)
-        await lifecycle_ctx.send(
-            task_state_to_status_update(
-                TaskState.TASK_STATE_COMPLETED,
-                task_id=task_id,
-                context_id=context_id,
-                message=agent_msg,
-                timestamp=datetime.now(tz=timezone.utc),
-            ),
-        )
 
     def _build_a2ui_message(
         self,

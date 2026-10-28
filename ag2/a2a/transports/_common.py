@@ -15,7 +15,8 @@ from a2a.server.tasks import (
     PushNotificationSender,
     TaskStore,
 )
-from a2a.types import AgentCard
+from a2a.types import AgentCard, CancelTaskRequest, Task, TaskState
+from a2a.utils.errors import TaskNotCancelableError
 
 from ..errors import A2AStaleCardSignatureError
 
@@ -112,6 +113,23 @@ def prepare_public_card(
     return sign_card(prepared, signer)
 
 
+class _RequestHandler(DefaultRequestHandlerV2):
+    """``DefaultRequestHandlerV2`` that refuses a cancel the task outran.
+
+    A task that ends some other way while a cancel is in flight comes back from the SDK in the
+    state that won. It was not cancelable, so answer ``TaskNotCancelableError`` as the spec asks
+    for a terminal task, and as the SDK itself does when a cancel loses on the cross-replica path.
+    """
+
+    async def on_cancel_task(self, params: CancelTaskRequest, context: ServerCallContext) -> Task | None:
+        task: Task | None = await super().on_cancel_task(params, context)
+        if task is not None and task.status.state != TaskState.TASK_STATE_CANCELED:
+            raise TaskNotCancelableError(
+                message=f"Task finished as {TaskState.Name(task.status.state)} before it could be canceled"
+            )
+        return task
+
+
 def build_default_handler(
     *,
     agent_executor: AgentExecutor,
@@ -126,7 +144,7 @@ def build_default_handler(
     validate_input_modes: bool = False,
 ) -> DefaultRequestHandlerV2:
     """Build the SDK request handler shared by all transports."""
-    return DefaultRequestHandlerV2(
+    return _RequestHandler(
         agent_executor=agent_executor,
         task_store=task_store or InMemoryTaskStore(),
         event_stream=event_stream,

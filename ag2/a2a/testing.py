@@ -22,6 +22,13 @@ from .server import A2AServer
 if TYPE_CHECKING:
     from ag2.files.protocol import FilesClient
 
+__all__ = (
+    "ToolRoundsConfig",
+    "make_test_client_factory",
+    "make_test_rest_client_factory",
+    "pick_free_port",
+)
+
 
 class ToolRoundsConfig(ModelConfig):
     """Script a served agent one tool round at a time.
@@ -45,7 +52,7 @@ class ToolRoundsConfig(ModelConfig):
         )
     """
 
-    def __init__(self, *rounds: Turn | TestConfig) -> None:
+    def __init__(self, *rounds: "Turn | TestConfig") -> None:
         self.rounds = [r if isinstance(r, TestConfig) else TestConfig(r) for r in rounds]
 
     @property
