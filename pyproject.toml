@@ -103,7 +103,7 @@ elevenlabs = ["elevenlabs>=2.73.0,<3"]
 
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
-mistral = ["mistralai>=3.2.0,<4"]
+mistral = ["mistralai>=3.6.0,<4"]
 ollama = ["ollama>=0.5.2,<1"]
 bedrock = ["aiobotocore>=3.9.1,<4"]
 dashscope = ["dashscope>=1.25.13"]
