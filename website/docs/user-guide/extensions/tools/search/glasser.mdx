@@ -1,0 +1,115 @@
+---
+title: Glasser
+sidebarTitle: Glasser
+---
+
+`#!python GlasserToolkit` gives AG2 agents six focused paid-data tools through [Glasser](https://glasser.ai){.external-link target="_blank"}. An application supplies one Glasser API key and selects which tools the agent may call.
+
+!!! note
+    Each call can incur a charge. The toolkit uses AG2's existing `#!python httpx` dependency. Set `GLASSER_API_KEY` in your environment; the toolkit does not read environment variables itself.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import GlasserToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+    tools=[GlasserToolkit(api_key=os.environ["GLASSER_API_KEY"], limit=5)],
+)
+```
+
+## Tools
+
+Each tool uses one fixed action in a Glasser Solution endpoint. The model supplies only the inputs shown below. The application controls Provider choice, result limits, country, Task ID, metadata, and returned text length.
+
+| Tool / factory | Model inputs | Glasser action |
+| :--- | :--- | :--- |
+| `#!python glasser_web_search` / `#!python web_search()` | `#!python query` | `web_research.search` |
+| `#!python glasser_company_profile` / `#!python company_profile()` | `#!python domain` | `company_intelligence.enrich` |
+| `#!python glasser_find_people` / `#!python find_people()` | At least one of `#!python job_titles`, `#!python locations`, `#!python company_domain`, `#!python keywords` | `people_search.search` |
+| `#!python glasser_keyword_overview` / `#!python keyword_overview()` | Non-empty `#!python keywords` list | `seo_research.keyword_overview` |
+| `#!python glasser_social_search` / `#!python social_search()` | `#!python platform`, `#!python query` | `social_research.search` |
+| `#!python glasser_stock_quote` / `#!python stock_quote()` | `#!python symbol` | `market_data.stock_quote` |
+
+The toolkit rejects empty required inputs before making a paid request. Glasser validates Provider support and the remaining request fields. Other Solution actions can be added as separate tools.
+
+## Select tools and set application options
+
+Passing the toolkit to an agent registers all six tools. Use factory methods to register a subset:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import GlasserToolkit
+
+config = AnthropicConfig(model="claude-haiku-4-5-20251001")
+toolkit = GlasserToolkit(api_key="YOUR_GLASSER_API_KEY")
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[
+        toolkit.web_search(provider="serper", limit=5, country="us"),
+        toolkit.company_profile(),
+    ],
+)
+```
+
+`#!python provider` and `#!python metadata` apply to all six tools. `#!python limit` applies to web search, company profiles, people search, and keyword overviews. `#!python country` applies to web search, company profiles, and keyword overviews. `#!python task_id` applies to all except social search. The constructor passes its options to its six default tools. A factory called separately uses only its own options; omitted values let Glasser use its server defaults. Every factory also accepts `#!python name`, `#!python description`, and `#!python middleware`.
+
+`#!python limit` is the application-controlled lever for result count and, where the Provider charges per result, cost. There is no universal per-call spending ceiling on these six actions. The model cannot change `#!python limit` or select a more expensive action. Applications should register only the tools they intend to fund and set their own Glasser Workspace budget.
+
+Options support AG2 `#!python Variable` values:
+
+```python linenums="1"
+from ag2 import Agent, Variable
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import GlasserToolkit
+
+config = AnthropicConfig(model="claude-haiku-4-5-20251001")
+toolkit = GlasserToolkit(api_key="YOUR_GLASSER_API_KEY")
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.web_search(limit=Variable("result_limit"), country=Variable("country"))],
+    variables={"result_limit": 5, "country": "gb"},
+)
+```
+
+A missing variable without a default raises `#!python KeyError` before an HTTP request is sent.
+
+## Results and charges
+
+Tools return a typed `#!python GlasserResult` with `#!python id`, `#!python status`, `#!python result_status`, `#!python provider`, `#!python charge_usd`, `#!python output`, `#!python error`, `#!python failure`, `#!python provider_response`, `#!python runs`, `#!python run_url`, `#!python result_url`, and `#!python truncated`. An invalid input instead returns `#!python {"error": "..."}` without a paid call.
+
+`#!python status` describes the Run lifecycle. `#!python result_status` describes the Solution delivery outcome and can be `success`, `partial`, `no_result`, `#!python error`, or `pending`. `#!python charge_usd` is the exact USD decimal string returned by Glasser, or null until the listed Runs settle. A failed or empty result can still incur a charge. People search returns a native Run; its `#!python provider_response` and `#!python output` depend on the Provider.
+
+`#!python max_characters` limits the combined text in `#!python output`, `#!python error`, `#!python failure`, and `#!python provider_response` to 10,000 characters by default. A cut object is returned as a text excerpt, and `#!python truncated` becomes true. The limit never cuts status, IDs, URLs, charges, or Run references. Set `#!python max_characters=None` to keep all content. A pending result retains its retrieval URL or Run ID.
+
+## Async execution and retries
+
+For a pending result, the toolkit polls with authenticated GET requests: the returned `#!python result_url` for normalized results, or `GET /v1/runs/<id>` for people search. Result URLs must refer to the same capability on the configured API origin. Redirects are not followed.
+
+The default polling budget is 120 seconds, with a one-second interval. If it expires or a polling GET fails, the tool returns the latest pending result. `#!python wait_timeout=0` disables polling. To continue, use an authenticated GET to the result URL or Run endpoint. A new tool call can incur a new charge.
+
+Each POST has an `Idempotency-Key` derived from the stream ID, tool-call ID, and capability. Replaying the same call in the same stream uses the same key. A different call or stream produces a new key. The toolkit does not retry POST requests automatically.
+
+## Connection settings
+
+```python linenums="1"
+from ag2.extensions.tools.search import GlasserToolkit
+
+toolkit = GlasserToolkit(
+    api_key="YOUR_GLASSER_API_KEY",
+    base_url="https://api.glasser.ai",
+    timeout=60.0,
+    wait_timeout=120.0,
+    poll_interval=1.0,
+)
+```
+
+Each execution opens an `#!python httpx.AsyncClient` and closes it after its result is returned. A custom `#!python base_url` can include a gateway path; the gateway must return result URLs on that same origin and path. The polling budget does not include the initial POST. HTTP errors raise `#!python httpx.HTTPStatusError`, transport failures raise an `#!python httpx` exception, and malformed JSON or a non-object response raises `#!python ValueError`.
+
+See the [Solutions reference](https://glasser.ai/docs/api-reference/solutions/overview){.external-link target="_blank"} for Provider support, output contracts, and billing behavior.

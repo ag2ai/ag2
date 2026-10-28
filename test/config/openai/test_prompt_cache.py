@@ -17,7 +17,7 @@ import pytest
 from fast_depends.use import SerializerCls
 
 from ag2 import Context, MemoryStream
-from ag2.config import OpenAIConfig, OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig, OpenAIResponsesConfig
 from ag2.events import ModelRequest, TextInput
 
 CHAT_COMPLETION: dict[str, Any] = {
@@ -54,7 +54,7 @@ def _capturing_client(captured: dict[str, Any], payload: dict[str, Any]) -> http
     return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
 
 
-async def _ask(config: OpenAIConfig | OpenAIResponsesConfig) -> None:
+async def _ask(config: OpenAICompletionsConfig | OpenAIResponsesConfig) -> None:
     await config.create()(
         messages=[ModelRequest([TextInput("capital of France?")])],
         context=Context(stream=MemoryStream()),
@@ -67,7 +67,7 @@ async def _ask(config: OpenAIConfig | OpenAIResponsesConfig) -> None:
 async def _chat_body(**overrides: Any) -> dict[str, Any]:
     captured: dict[str, Any] = {}
     await _ask(
-        OpenAIConfig(
+        OpenAICompletionsConfig(
             model="m",
             api_key="test",
             base_url="http://test/v1",
@@ -161,7 +161,7 @@ async def test_the_cache_and_the_end_user_are_named_separately(body_of: Surface)
 
 
 def test_chat_cache_settings_survive_a_copy() -> None:
-    config = OpenAIConfig(model="m").copy(
+    config = OpenAICompletionsConfig(model="m").copy(
         prompt_cache_key="checkout-agent",
         prompt_cache_options={"mode": "explicit"},
     )

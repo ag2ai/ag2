@@ -244,10 +244,10 @@ async def test_handler_result_is_serialized_for_wire() -> None:
 
 
 @pytest.mark.asyncio
-async def test_action_response_value_is_serialized() -> None:
-    # When the client asks for a correlated reply (v1.0 wantResponse), a handler
-    # returning a Pydantic model must be coerced to JSON for the actionResponse
-    # value — not passed raw to json.dumps.
+async def test_function_response_value_is_serialized() -> None:
+    # When the renderer calls the action as a v1.0 function, a handler returning a
+    # Pydantic model must be coerced to JSON for the agentFunctionResponse value —
+    # not passed raw to json.dumps.
     class Receipt(BaseModel):
         order_id: str
         total: float
@@ -270,14 +270,10 @@ async def test_action_response_value_is_serialized() -> None:
         "a2ui": [
             {
                 "version": "v1.0",
-                "action": {
-                    "name": "checkout",
+                "callAgentFunction": {
                     "surfaceId": "s1",
-                    "sourceComponentId": "btn",
-                    "timestamp": "2026-06-15T00:00:00Z",
-                    "context": {},
-                    "wantResponse": True,
-                    "actionId": "a1",
+                    "functionCallId": "a1",
+                    "callFunction": {"@call": "checkout"},
                 },
             }
         ],
@@ -290,8 +286,7 @@ async def test_action_response_value_is_serialized() -> None:
     assert lines == [
         {
             "version": "v1.0",
-            "actionId": "a1",
-            "actionResponse": {"value": {"order_id": "O1", "total": 9.5}},
+            "agentFunctionResponse": {"functionCallId": "a1", "value": {"order_id": "O1", "total": 9.5}},
         }
     ]
 
@@ -320,3 +315,35 @@ async def test_generator_dependency_is_set_up_and_torn_down() -> None:
 
     assert resp.status_code == 200
     assert events == ["open", "used:['G4']", "close"]
+
+
+@pytest.mark.asyncio
+async def test_call_agent_function_is_unanswered_before_v1_0() -> None:
+    called: list[str] = []
+
+    @a2ui_action(description="Check a provider")
+    def verify_provider(provider_id: str) -> dict:
+        called.append(provider_id)
+        return {"valid": True}
+
+    app = _server(Agent(name="ui", config=TestConfig("ok")), verify_provider)
+    body = {
+        "messages": [],
+        "a2ui": [
+            {
+                "version": "v0.9",
+                "callAgentFunction": {
+                    "surfaceId": "s1",
+                    "functionCallId": "fc-1",
+                    "callFunction": {"@call": "verify_provider", "args": {"provider_id": "PRV-1"}},
+                },
+            }
+        ],
+    }
+
+    async with _client(app) as client:
+        resp = await client.post("/a2ui", json=body)
+
+    assert resp.status_code == 200
+    assert "agentFunctionResponse" not in resp.text
+    assert called == []

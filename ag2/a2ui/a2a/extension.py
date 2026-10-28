@@ -38,10 +38,10 @@ def get_a2ui_agent_extension(
             catalog id.
         supported_catalog_ids: List of catalog IDs the agent can generate.
             Defaults to the basic catalog for ``version``. Matches
-            ``server_capabilities.json#/<version>/supportedCatalogIds``.
+            ``agent_capabilities.json#/<version>/supportedCatalogIds`` (``server_capabilities.json`` before v1.0).
         accepts_inline_catalogs: Whether the agent accepts inline catalogs
             from the client. Matches
-            ``server_capabilities.json#/<version>/acceptsInlineCatalogs``.
+            ``agent_capabilities.json#/<version>/acceptsInlineCatalogs`` (``server_capabilities.json`` before v1.0).
 
     Returns:
         A configured ``AgentExtension`` for the requested A2UI version.

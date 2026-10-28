@@ -19,7 +19,7 @@ from mistralai.client.models import (
     SpeechStreamAudioDelta,
     SpeechStreamDone,
     SpeechStreamEvents,
-    UsageInfoDollarDefs,
+    UsageInfo,
 )
 
 from ag2 import MemoryStream, events
@@ -61,7 +61,7 @@ class FakeSpeech:
             )
         yield SpeechStreamEvents(
             event="speech.audio.done",
-            data=SpeechStreamDone(usage=UsageInfoDollarDefs(prompt_tokens=1, total_tokens=1)),
+            data=SpeechStreamDone(usage=UsageInfo(prompt_tokens=1, total_tokens=1)),
         )
 
 

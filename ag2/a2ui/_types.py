@@ -13,19 +13,24 @@ JsonSchema: TypeAlias = dict[str, "JsonValue"]
 """A JSON Schema document; named distinctly from ``JsonObject`` to express intent."""
 
 A2UIVersion: TypeAlias = Literal["v0.9", "v0.9.1", "v1.0"]
-"""Supported A2UI protocol versions. ``callFunction`` / ``actionResponse`` are ``v1.0``-only."""
+"""Supported A2UI protocol versions. ``callRendererFunction`` / ``agentFunctionResponse`` are ``v1.0``-only."""
 
 
 class CreateSurfaceContent(TypedDict, total=False):
     """Payload of a ``createSurface`` message.
 
-    Mirrors ``server_to_client.json#/$defs/CreateSurfaceMessage/properties/createSurface``.
+    Mirrors ``server_to_client.json#/$defs/CreateSurfaceMessage/properties/createSurface``
+    (``agent_to_renderer.json`` in v1.0). ``theme`` is v0.9.x-only; ``components``,
+    ``dataModel`` and ``metadata`` are v1.0-only (a whole UI in one message).
     """
 
     surfaceId: str
     catalogId: str
     theme: JsonObject
     sendDataModel: bool
+    components: list[JsonObject]
+    dataModel: JsonObject
+    metadata: JsonObject
 
 
 class CreateSurfaceMessage(TypedDict, total=False):
@@ -50,7 +55,10 @@ class UpdateComponentsMessage(TypedDict, total=False):
 
 
 class UpdateDataModelContent(TypedDict, total=False):
-    """Payload of an ``updateDataModel`` message."""
+    """Payload of an ``updateDataModel`` message.
+
+    ``value`` is optional in v0.9.x and required in v1.0, where ``None`` deletes ``path``.
+    """
 
     surfaceId: str
     path: str
@@ -77,35 +85,46 @@ class DeleteSurfaceMessage(TypedDict, total=False):
     deleteSurface: DeleteSurfaceContent
 
 
-class CallFunctionContent(TypedDict, total=False):
-    """Payload of a ``callFunction`` message (v1.0).
+# The reserved ``@call`` key cannot be a keyword argument, so the functional form is needed.
+CallRendererFunctionCall = TypedDict(
+    "CallRendererFunctionCall",
+    {"@call": str, "catalogId": str, "args": JsonObject},
+    total=False,
+)
+"""A ``common_types.json#/$defs/FunctionCall``: the named function, its catalog, and its arguments.
 
-    Mirrors ``server_to_client.json#/$defs/CallFunctionMessage/properties/callFunction``
-    (a ``common_types.json#/$defs/FunctionCall`` with ``call`` required). Per spec,
-    ``args`` values may be any ``DynamicValue`` (including ``DataBinding`` refs and
-    nested function calls), not just plain JSON scalars/objects.
+Per spec, ``args`` values may be any ``DynamicValue`` (including ``@path`` bindings and nested
+function calls), not just plain JSON scalars/objects.
+"""
+
+
+class CallRendererFunctionContent(TypedDict, total=False):
+    """Payload of a ``callRendererFunction`` message (v1.0).
+
+    Mirrors ``agent_to_renderer.json#/$defs/CallRendererFunctionMessage/properties/callRendererFunction``.
+    ``surfaceId`` selects the data model the call's bindings resolve against; without it
+    the function runs against an empty one.
     """
 
-    call: str
-    args: JsonObject
+    surfaceId: str
+    functionCallId: str
+    callFunction: CallRendererFunctionCall
 
 
-class CallFunctionMessage(TypedDict, total=False):
-    """``callFunction`` envelope (v1.0): server-initiated client function call.
+class CallRendererFunctionMessage(TypedDict, total=False):
+    """``callRendererFunction`` envelope (v1.0): agent-initiated renderer function call.
 
-    ``functionCallId`` is a unique id the client copies verbatim into its
-    function response or error. ``version`` is ``v1.0``-only — this message type
+    The renderer always answers with a ``rendererFunctionResponse`` that copies
+    ``functionCallId`` verbatim. ``version`` is ``v1.0``-only — this message type
     does not exist in v0.9.
     """
 
     version: Literal["v1.0"]
-    functionCallId: str
-    wantResponse: bool
-    callFunction: CallFunctionContent
+    callRendererFunction: CallRendererFunctionContent
 
 
-class ActionResponseError(TypedDict, total=False):
-    """The ``error`` arm of an ``actionResponse`` body (v1.0).
+class FunctionResponseError(TypedDict, total=False):
+    """The ``error`` arm of a ``FunctionResponse`` (v1.0).
 
     Both ``code`` and ``message`` are required by spec; kept ``total=False`` to
     match the structural (duck-typed) convention used throughout this module.
@@ -115,25 +134,26 @@ class ActionResponseError(TypedDict, total=False):
     message: str
 
 
-class ActionResponseContent(TypedDict, total=False):
-    """Payload of an ``actionResponse`` message (v1.0).
+class FunctionResponseContent(TypedDict, total=False):
+    """Payload of an ``agentFunctionResponse`` message (v1.0).
 
-    Per spec the body carries exactly one of ``value`` or ``error``.
+    Mirrors ``common_types.json#/$defs/FunctionResponse``: the body carries
+    ``functionCallId`` and exactly one of ``value`` or ``error``.
     """
 
+    functionCallId: str
     value: JsonValue
-    error: ActionResponseError
+    error: FunctionResponseError
 
 
-class ActionResponseMessage(TypedDict, total=False):
-    """``actionResponse`` envelope (v1.0): server response to a client action.
+class AgentFunctionResponseMessage(TypedDict, total=False):
+    """``agentFunctionResponse`` envelope (v1.0): the agent's reply to a ``callAgentFunction``.
 
     ``version`` is ``v1.0``-only — this message type does not exist in v0.9.
     """
 
     version: Literal["v1.0"]
-    actionId: str
-    actionResponse: ActionResponseContent
+    agentFunctionResponse: FunctionResponseContent
 
 
 ServerToClientMessage: TypeAlias = (
@@ -141,8 +161,8 @@ ServerToClientMessage: TypeAlias = (
     | UpdateComponentsMessage
     | UpdateDataModelMessage
     | DeleteSurfaceMessage
-    | CallFunctionMessage
-    | ActionResponseMessage
+    | CallRendererFunctionMessage
+    | AgentFunctionResponseMessage
 )
 
 
@@ -157,8 +177,9 @@ def server_to_client_payload_keys() -> frozenset[str]:
     )
 
 
-# NOTE: client→server (action/error) and client-capability wire shapes are
-# intentionally NOT modeled as TypedDicts here. The code that parses them
+# NOTE: client→server (action / callAgentFunction / rendererFunctionResponse /
+# error) and client-capability wire shapes are intentionally NOT modeled as
+# TypedDicts here. The code that parses them
 # decodes into dedicated dataclasses instead — see ``incoming.py``
 # (``A2UIIncomingAction`` / ``A2UIIncomingError``) and ``capabilities.py``
 # (``A2UIClientCapabilities``). If a future phase needs typed inbound wire
@@ -167,15 +188,16 @@ def server_to_client_payload_keys() -> frozenset[str]:
 
 __all__ = (
     "A2UIVersion",
-    "ActionResponseContent",
-    "ActionResponseError",
-    "ActionResponseMessage",
-    "CallFunctionContent",
-    "CallFunctionMessage",
+    "AgentFunctionResponseMessage",
+    "CallRendererFunctionCall",
+    "CallRendererFunctionContent",
+    "CallRendererFunctionMessage",
     "CreateSurfaceContent",
     "CreateSurfaceMessage",
     "DeleteSurfaceContent",
     "DeleteSurfaceMessage",
+    "FunctionResponseContent",
+    "FunctionResponseError",
     "JsonObject",
     "JsonScalar",
     "JsonSchema",

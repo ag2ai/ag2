@@ -5,6 +5,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from dataclasses import dataclass
 from functools import partial
 from typing import Any, overload
 from uuid import uuid4
@@ -18,9 +19,31 @@ from .context import ConversationContext, Stream, StreamId, SubId, drop_backgrou
 from .events import BaseEvent, Input, ModelRequest
 from .events.conditions import Condition, TypeCondition
 from .history import History, MemoryStorage, Storage
-from .utils import CONTEXT_OPTION_NAME, build_model
+from .utils import CONTEXT_OPTION_NAME, _validate_timeout, build_model
 
 __all__ = ("MemoryStream", "Stream")
+
+
+@dataclass(slots=True)
+class _Subscription:
+    condition: Condition | None
+    model: CallModel
+    timeout: float | None
+
+    async def __call__(self, event: BaseEvent, context: ConversationContext) -> Any:
+        if self.timeout is None:
+            return await self._execute(event, context)
+        return await asyncio.wait_for(self._execute(event, context), timeout=self.timeout)
+
+    async def _execute(self, event: BaseEvent, context: ConversationContext) -> Any:
+        async with AsyncExitStack() as stack:
+            return await self.model.asolve(
+                event,
+                cache_dependencies={},
+                stack=stack,
+                dependency_provider=context.dependency_provider,
+                **{CONTEXT_OPTION_NAME: context},
+            )
 
 
 class ABCStream(Stream):
@@ -31,11 +54,13 @@ class ABCStream(Stream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
     ) -> Generator[None]:
         sub_id = self.subscribe(
             func,
             interrupt=interrupt,
             sync_to_thread=sync_to_thread,
+            timeout=timeout,
         )
 
         try:
@@ -130,11 +155,11 @@ class MemoryStream(ABCStream):
     ) -> None:
         self.id: StreamId = id or uuid4()
 
-        self._subscribers: dict[SubId, tuple[Condition | None, CallModel]] = {}
+        self._subscribers: dict[SubId, _Subscription] = {}
         # ordered dict
-        self._interrupters: dict[SubId, tuple[Condition | None, CallModel]] = {}
+        self._interrupters: dict[SubId, _Subscription] = {}
 
-        storage = storage or MemoryStorage()
+        storage = storage if storage is not None else MemoryStorage()
         self.history = History(self.id, storage)
 
         # Stream-scoped inbox + background task set. The inbox outlives any
@@ -176,6 +201,7 @@ class MemoryStream(ABCStream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         condition: Condition | None = None,
     ) -> SubId: ...
 
@@ -186,6 +212,7 @@ class MemoryStream(ABCStream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         condition: Condition | None = None,
     ) -> Callable[[Callable[..., Any]], SubId]: ...
 
@@ -195,15 +222,25 @@ class MemoryStream(ABCStream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         condition: Condition | None = None,
     ) -> Callable[[Callable[..., Any]], SubId] | SubId:
+        """Subscribe with an optional finite positive per-call timeout in seconds.
+
+        ``None`` waits indefinitely. The limit covers dependency resolution,
+        handler execution, and dependency cleanup. Expiry raises ``asyncio.TimeoutError``
+        to ``send`` and stops delivery of that event to subsequent handlers.
+        Cancellation is cooperative; worker threads can continue after expiry.
+        """
+        _validate_timeout(timeout)
+
         def sub(s: Callable[..., Any]) -> SubId:
             sub_id = uuid4()
             model = build_model(s, sync_to_thread=sync_to_thread, serialize_result=False)
             if interrupt:
-                self._interrupters[sub_id] = (condition, model)
+                self._interrupters[sub_id] = _Subscription(condition, model, timeout)
             else:
-                self._subscribers[sub_id] = (condition, model)
+                self._subscribers[sub_id] = _Subscription(condition, model, timeout)
             return sub_id
 
         if func:
@@ -216,38 +253,22 @@ class MemoryStream(ABCStream):
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
         # interrupters should follow registration order
-        for condition, interrupter in tuple(self._interrupters.values()):
-            if condition and not condition(event):
+        for interrupter in tuple(self._interrupters.values()):
+            if interrupter.condition and not interrupter.condition(event):
                 continue
 
-            async with AsyncExitStack() as stack:
-                if not (
-                    e := await interrupter.asolve(
-                        event,
-                        cache_dependencies={},
-                        stack=stack,
-                        dependency_provider=context.dependency_provider,
-                        **{CONTEXT_OPTION_NAME: context},
-                    )
-                ):
-                    return
+            if not (e := await interrupter(event, context)):
+                return
 
             event = e
 
         # TODO: we need to publish under RWLock to prevent
         # subscribers dictionary mutation. Now it is protected by copy
-        for condition, s in tuple(self._subscribers.values()):
-            if condition and not condition(event):
+        for subscriber in tuple(self._subscribers.values()):
+            if subscriber.condition and not subscriber.condition(event):
                 continue
 
-            async with AsyncExitStack() as stack:
-                await s.asolve(
-                    event,
-                    cache_dependencies={},
-                    stack=stack,
-                    dependency_provider=context.dependency_provider,
-                    **{CONTEXT_OPTION_NAME: context},
-                )
+            await subscriber(event, context)
 
 
 class SubStream(ABCStream):
@@ -276,6 +297,7 @@ class SubStream(ABCStream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         condition: Condition | None = None,
     ) -> SubId: ...
 
@@ -286,6 +308,7 @@ class SubStream(ABCStream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         condition: Condition | None = None,
     ) -> Callable[[Callable[..., Any]], SubId]: ...
 
@@ -295,6 +318,7 @@ class SubStream(ABCStream):
         *,
         interrupt: bool = False,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         condition: Condition | None = None,
     ) -> Callable[[Callable[..., Any]], SubId] | SubId:
         def sub(s: Callable[..., Any]) -> SubId:
@@ -307,6 +331,7 @@ class SubStream(ABCStream):
                 condition=c,
                 interrupt=interrupt,
                 sync_to_thread=sync_to_thread,
+                timeout=timeout,
             )
 
         if func:
