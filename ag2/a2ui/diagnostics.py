@@ -135,7 +135,11 @@ def _narrow(error: _SchemaError) -> list[_Leaf]:
     # A variant that fails on a ``const`` tag (``component: "Slider"``, ``@call: "openUrl"``) is
     # simply not the one the instance meant; what is left are the variants worth reporting on.
     tags = {index: tag for index, errors in variants.items() if (tag := _tag_mismatch(errors)) is not None}
-    candidates = {index: errors for index, errors in variants.items() if index not in tags}
+    # A variant whose selector (``if``) did not match fails only through its ``else``: it was never tried.
+    unselected = {index for index, errors in variants.items() if all(_in_else(e) for e in errors)}
+    candidates = {index: errors for index, errors in variants.items() if index not in tags.keys() | unselected}
+    if not candidates and not tags:
+        candidates = dict(variants)
     if not candidates:
         tag = next(iter(tags.values()))
         value = error.instance.get(tag) if isinstance(error.instance, dict) else None
@@ -148,6 +152,11 @@ def _group_by_variant(context: list[_SchemaError]) -> dict[int, list[_SchemaErro
     for error in context:
         variants[error.schema_path[0]].append(error)
     return variants
+
+
+def _in_else(error: _SchemaError) -> bool:
+    """Whether the error comes from an ``if``/``then``/``else`` schema's ``else`` branch."""
+    return list(error.schema_path)[1:2] == ["else"]
 
 
 def _tag_mismatch(errors: list[_SchemaError]) -> str | None:
