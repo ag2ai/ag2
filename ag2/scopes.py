@@ -27,7 +27,7 @@ class ScopeError(ValueError):
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class Var:
+class ScopedValue:
     value: Any
     scope: Scope = Scope.COPIED
 
@@ -66,7 +66,7 @@ class ScopedVariables(MutableMapping[str, Any]):
         return self._own[key]
 
     def __setitem__(self, key: str, value: Any) -> None:
-        if isinstance(value, Var):
+        if isinstance(value, ScopedValue):
             self._declare(key, value.scope)
             value = value.value
         if self._declared.get(key) == Scope.SHARED:
@@ -108,7 +108,7 @@ def merge_variables(
     """Build a fresh root view, or overlay agent defaults on an inherited view."""
     if isinstance(overrides, ScopedVariables):
         for key, value in defaults.items():
-            if isinstance(value, Var):
+            if isinstance(value, ScopedValue):
                 overrides._declare(key, value.scope)
             if key not in overrides:
                 overrides[key] = deepcopy(value)
@@ -117,14 +117,14 @@ def merge_variables(
     merged = dict(defaults)
     for key, value in (overrides or {}).items():
         previous = merged.get(key)
-        if isinstance(previous, Var):
-            if isinstance(value, Var) and previous.scope != value.scope:
+        if isinstance(previous, ScopedValue):
+            if isinstance(value, ScopedValue) and previous.scope != value.scope:
                 raise ScopeError(f"Variable {key!r} cannot be redeclared differently")
-            if not isinstance(value, Var):
-                value = Var(value, previous.scope)
+            if not isinstance(value, ScopedValue):
+                value = ScopedValue(value, previous.scope)
         merged[key] = value
     merged = deepcopy(merged)
-    if not any(isinstance(value, Var) for value in merged.values()):
+    if not any(isinstance(value, ScopedValue) for value in merged.values()):
         return merged
     result = ScopedVariables({}, {}, {}, root=True)
     result.update(merged)
@@ -136,7 +136,7 @@ def overlay_variables(variables: MutableMapping[str, Any], values: Mapping[str, 
     if isinstance(variables, ScopedVariables):
         variables.update(values)
         return variables
-    if any(isinstance(value, Var) for value in values.values()):
+    if any(isinstance(value, ScopedValue) for value in values.values()):
         result = ScopedVariables(dict(variables), {}, {}, root=True)
         result.update(deepcopy(values))
         return result
@@ -160,8 +160,8 @@ def derive_child_variables(variables: Mapping[str, Any]) -> ScopedVariables:
 __all__ = (
     "Scope",
     "ScopeError",
+    "ScopedValue",
     "ScopedVariables",
-    "Var",
     "derive_child_variables",
     "merge_variables",
     "overlay_variables",

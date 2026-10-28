@@ -7,7 +7,7 @@ from typing import Annotated
 
 import pytest
 
-from ag2 import Agent, Context, MemoryStream, Scope, ScopeError, Var, Variable
+from ag2 import Agent, Context, MemoryStream, Scope, ScopeError, ScopedValue, Variable
 from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, Usage
 from ag2.testing import TestConfig
 from ag2.tools.subagents.run_task import run_task
@@ -52,10 +52,10 @@ async def test_parallel_children_share_rebindings_and_isolate_copied_and_local()
         tools=[alpha.as_tool(description="Contribute"), beta.as_tool(description="Contribute")],
         dependencies={"findings_lock": asyncio.Lock()},
         variables={
-            "findings": Var([], scope=Scope.SHARED),
+            "findings": ScopedValue([], scope=Scope.SHARED),
             "depth": 0,
             "nested": {"n": 0},
-            "secret": Var("root only", scope=Scope.LOCAL),
+            "secret": ScopedValue("root only", scope=Scope.LOCAL),
             "ag:private": "control",
         },
     )
@@ -83,7 +83,7 @@ async def test_variable_injection_returns_the_mutable_shared_value() -> None:
         "root",
         config=TestConfig(ToolCallEvent(name="task_child", arguments='{"objective":"work"}'), "done"),
         tools=[child.as_tool(description="Work")],
-        variables={"findings": Var([], scope=Scope.SHARED)},
+        variables={"findings": ScopedValue([], scope=Scope.SHARED)},
     )
     reply = await root.ask("start")
     assert reply.context.variables["findings"] == ["injected"]
@@ -91,7 +91,7 @@ async def test_variable_injection_returns_the_mutable_shared_value() -> None:
 
 @pytest.mark.asyncio
 async def test_child_cannot_introduce_a_new_shared_name() -> None:
-    child = Agent("child", config=TestConfig("unused"), variables={"new": Var({}, scope=Scope.SHARED)})
+    child = Agent("child", config=TestConfig("unused"), variables={"new": ScopedValue({}, scope=Scope.SHARED)})
     result = await run_task(child, "work", parent_context=Context(MemoryStream()))
     assert not result.completed
     assert isinstance(result.error, ScopeError)
@@ -113,7 +113,7 @@ async def test_equal_cost_calls_remain_distinct_and_roots_do_not_share_defaults(
             "done",
         ),
         tools=[child.as_tool(description="Work")],
-        variables={"kv": Var({}, scope=Scope.SHARED)},
+        variables={"kv": ScopedValue({}, scope=Scope.SHARED)},
     )
     first = await root.ask("start")
     first.context.variables["kv"]["first"] = 1
