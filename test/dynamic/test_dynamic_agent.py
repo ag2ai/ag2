@@ -101,7 +101,7 @@ class TestErrorPaths:
         reply = await parent.ask("Go", stream=parent_stream)
 
         assert reply.body == "Recovered."
-        events = list(await parent_stream.history.get_events())
+        events = [event.source_event for event in await parent_stream.history.get_events()]
         results = [e for e in events if isinstance(e, ToolResultEvent)]
         assert len(results) == 1
         assert "Error: unknown tools" in _text(results[0])
@@ -134,7 +134,7 @@ class TestErrorPaths:
         reply = await parent.ask("Go", stream=parent_stream)
 
         assert reply.body == "Recovered."
-        events = list(await parent_stream.history.get_events())
+        events = [event.source_event for event in await parent_stream.history.get_events()]
         results = [e for e in events if isinstance(e, ToolResultEvent)]
         assert len(results) == 1
         assert _text(results[0]).startswith("Error:")
@@ -187,7 +187,7 @@ async def test_response_schema_in_spec_is_forwarded_to_child() -> None:
     reply = await parent.ask("Go", stream=parent_stream)
 
     assert reply.body == "Done."
-    events = list(await parent_stream.history.get_events())
+    events = [event.source_event for event in await parent_stream.history.get_events()]
     completed = [e for e in events if isinstance(e, TaskCompleted)]
     assert len(completed) == 1
     assert completed[0].agent_name == "structured_helper"
@@ -236,7 +236,7 @@ async def test_child_cannot_recursively_spawn_dynamic_agent() -> None:
     reply = await parent.ask("Go", stream=parent_stream)
     assert reply.body == "Final."
 
-    events = list(await parent_stream.history.get_events())
+    events = [event.source_event for event in await parent_stream.history.get_events()]
     failed = [e for e in events if isinstance(e, TaskFailed)]
     assert len(failed) == 1
     assert failed[0].agent_name == "child"
@@ -265,7 +265,7 @@ async def test_task_started_and_completed_on_parent_stream() -> None:
     )
 
     await parent.ask("Go", stream=parent_stream)
-    events = list(await parent_stream.history.get_events())
+    events = [event.source_event for event in await parent_stream.history.get_events()]
 
     started = [e for e in events if isinstance(e, TaskStarted)]
     completed = [e for e in events if isinstance(e, TaskCompleted)]

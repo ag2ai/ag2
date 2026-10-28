@@ -19,6 +19,7 @@ from ag2.annotations import Context
 from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.events import (
     BaseEvent,
+    ChildEvent,
     HumanInputRequest,
     ModelRequest,
     TaskCancelled,
@@ -73,6 +74,17 @@ TaskEvent = Union[TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExp
 TaskObserver = Callable[[TaskEvent], Awaitable[None]]
 ToolCallObserver = Callable[[ToolCallEvent], Awaitable[None]]
 ToolResultObserver = Callable[[ToolResultEvent], Awaitable[None]]
+
+
+class _TaskObserver:
+    def __init__(self, callback: TaskObserver) -> None:
+        self.callback = callback
+
+    async def __call__(self, event: BaseEvent) -> None:
+        task = event.source_event
+        if isinstance(task, (TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired)):
+            await self.callback(task)
+
 
 # Shared immutable default so the keyword arg never aliases a mutable {}.
 _NO_SERVER_ACTIONS: Mapping[str, A2UIAction] = MappingProxyType({})
@@ -171,9 +183,11 @@ async def stream_turn(
             a2ui_messages.append(event.message)
 
     if usage_records is not None:
-        stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
+        stream.where(UsageEvent | ChildEvent).subscribe(collect_usage_events(usage_records))
     if on_task is not None:
-        stream.where((TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired)).subscribe(on_task)
+        stream.where((TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired, ChildEvent)).subscribe(
+            _TaskObserver(on_task)
+        )
     if on_tool_call is not None:
         stream.where(ToolCallEvent).subscribe(on_tool_call)
     if on_tool_result is not None:

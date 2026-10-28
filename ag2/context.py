@@ -6,16 +6,17 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable, Coroutine, Mapping, MutableMapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
+from copy import copy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import anyio.from_thread
 from fast_depends import Provider
 
 from ag2.types import ClassInfo, SendableMessage
 
-from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, MessageEnqueued, ModelRequest
+from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, MessageEnqueued, ModelRequest, UsageEvent
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
@@ -236,6 +237,9 @@ class ConversationContext:
         return result.content
 
     async def send(self, event: BaseEvent) -> None:
+        if isinstance(event, UsageEvent):
+            event = copy(event)
+            event.event_id = uuid4().hex
         await self.stream.send(event, self)
 
 

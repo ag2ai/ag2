@@ -474,6 +474,15 @@ def spans_to_trace(
     # reads as a no-op — double-counted every instrumented sub-agent. It is a
     # no-op for a trace with no rollups, which is every foreign dialect.
     events = _drop_duplicated_rollups(events, _nested_agent_spend(ordered))
+    seen_usage: set[str] = set()
+    unique: list[BaseEvent] = []
+    for event in events:
+        if isinstance(event, UsageEvent):
+            if event.event_id in seen_usage:
+                continue
+            seen_usage.add(event.event_id)
+        unique.append(event)
+    events = unique
 
     if ordered and not events:
         logger.warning(
@@ -523,6 +532,7 @@ def _usage_span_to_event(span: SpanData) -> UsageEvent:
     )
     return UsageEvent(
         usage,
+        event_id=a.get("ag2.usage.event_id") or span.span_id,
         kind=a.get(ATTR_USAGE_KIND, "model_call"),
         # ``None``, not ``""`` — the live event documents ``None`` for anything
         # that is not a sub-task rollup, and callers test it with ``is None``.
