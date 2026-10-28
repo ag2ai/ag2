@@ -252,8 +252,11 @@ class MemoryStream(ABCStream):
         self._interrupters.pop(sub_id, None)
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
+        validate = getattr(event, "_validate_delivery", None)
         # interrupters should follow registration order
         for interrupter in tuple(self._interrupters.values()):
+            if validate is not None:
+                validate()
             if interrupter.condition and not interrupter.condition(event):
                 continue
 
@@ -265,6 +268,8 @@ class MemoryStream(ABCStream):
         # TODO: we need to publish under RWLock to prevent
         # subscribers dictionary mutation. Now it is protected by copy
         for subscriber in tuple(self._subscribers.values()):
+            if validate is not None:
+                validate()
             if subscriber.condition and not subscriber.condition(event):
                 continue
 

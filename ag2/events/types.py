@@ -171,6 +171,7 @@ class UsageEvent(BaseEvent):
 
     __conversational__ = False
 
+    event_id: str = Field(default_factory=lambda: uuid4().hex, compare=False, repr=False)
     usage: Usage = Field(default_factory=Usage, kw_only=False)
     kind: str = Field(default="model_call")
     """``"model_call"`` for a direct LLM call, ``"subtask"`` for a sub-agent
