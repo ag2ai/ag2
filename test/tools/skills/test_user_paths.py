@@ -15,6 +15,7 @@ from ag2.tools.skills.runtime.local.loader import SkillLoader
 def test_discover_skills_under_home(
     skill_tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, as_path: bool, source: str
 ) -> None:
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(skill_tree))
     monkeypatch.setenv("USERPROFILE", str(skill_tree))
     path = Path("~") if as_path else "~"

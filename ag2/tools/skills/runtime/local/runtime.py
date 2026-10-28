@@ -79,7 +79,7 @@ class LocalRuntime(SkillRuntime):
 
     def __post_init__(self) -> None:
         self._install_dir = Path(self.dir).expanduser() if self.dir is not None else Path(".agents/skills")
-        self._extra: list[Path] = [Path(p).expanduser() for p in self.extra_paths] if self.extra_paths else []
+        self._extra: list[Path] = [Path(p) for p in self.extra_paths] if self.extra_paths else []
         # Lenient discovery: a single non-compliant skill (e.g. authored for
         # another client) is skipped with a warning instead of aborting the whole
         # scan. Strict validation still gates the *install* path, where the
