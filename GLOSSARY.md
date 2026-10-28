@@ -26,6 +26,10 @@ The delivery of an event from an ancestor to a selected subagent delegation.
 The agent that directly authored an event, regardless of how many ancestors
 subsequently receive it.
 
+**Scoped value**:
+A value declared with explicit rules for its visibility and inheritance within
+a delegation tree.
+
 **Local variable**:
 A variable visible only to its owning agent during an invocation.
 
