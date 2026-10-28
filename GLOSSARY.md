@@ -1,0 +1,44 @@
+# AG2
+
+Domain language for agent delegation. See the
+[subagent event routing guide](docs/design/subagent-eventbus-v2.md) for the API.
+
+## Language
+
+**Delegation**:
+A particular assignment of work from a parent agent to a subagent. Repeated
+assignments to the same agent are distinct delegations.
+
+**Subagent**:
+An agent performing work delegated by another agent; that agent may in turn
+delegate work to descendants.
+
+**Delegation subtree**:
+A delegation together with all delegations descended from it.
+
+**Uplink**:
+The upward flow of a delegation subtree's events to its ancestors.
+
+**Downlink**:
+The delivery of an event from an ancestor to a selected subagent delegation.
+
+**Event origin**:
+The agent that directly authored an event, regardless of how many ancestors
+subsequently receive it.
+
+**Local variable**:
+A variable visible only to its owning agent during an invocation.
+
+**Copied variable**:
+A variable whose value is inherited independently by each descendant, with
+changes confined to the descendant's branch.
+
+**Shared variable**:
+A variable declared by the root whose current value is shared throughout a
+delegation tree; changes survive a subagent's failure.
+_Avoid_: Inherited variable, write-back variable
+
+**Source usage record**:
+The record of one unit of token-consuming agent work, attributable to its
+originating agent; appearances of that record at ancestors describe the same
+expenditure.
