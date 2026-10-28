@@ -19,7 +19,7 @@ new top-level shared names or promote local/copied names to shared. Reject such
 declarations with `ScopeError`.
 
 For arbitrary descendant contributions, the root can predeclare a shared
-container, for example `variables={"kv": Var({}, scope=Scope.SHARED)}`. Adding keys
+container, for example `variables={"kv": ScopedValue({}, scope=Scope.SHARED)}`. Adding keys
 inside this container does not declare new shared variable names. Authors supply
 their own locks when concurrent operations require synchronization.
 
