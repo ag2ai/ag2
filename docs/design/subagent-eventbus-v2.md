@@ -20,7 +20,7 @@ is an intervention being audited. The property is computed and is not a
 serialized event field.
 
 ```python
-from ag2 import Agent, Context, Scope, Var, observer
+from ag2 import Agent, Context, Scope, ScopedValue, observer
 from ag2.events import BaseEvent, ChildEvent, HaltEvent
 from ag2.tools.subagents import send_down
 
@@ -36,9 +36,9 @@ root = Agent(
     tools=[worker.as_tool(description="Research")],
     observers=[observer(callback=monitor)],
     variables={
-        "findings": Var({}, scope=Scope.SHARED),
+        "findings": ScopedValue({}, scope=Scope.SHARED),
         "depth": 0,
-        "private": Var("root only", scope=Scope.LOCAL),
+        "private": ScopedValue("root only", scope=Scope.LOCAL),
     },
 )
 ```
@@ -82,9 +82,9 @@ Use a single `variables` mapping on `Agent` or `ask`:
 
 | Declaration | Delegation behavior |
 |---|---|
-| Plain value or `Var(value, Scope.COPIED)` | Deep copy for each branch |
-| `Var(value, Scope.LOCAL)` | Visible only at its owning level |
-| `Var(value, Scope.SHARED)` | One binding shared throughout the tree |
+| Plain value or `ScopedValue(value, Scope.COPIED)` | Deep copy for each branch |
+| `ScopedValue(value, Scope.LOCAL)` | Visible only at its owning level |
+| `ScopedValue(value, Scope.SHARED)` | One binding shared throughout the tree |
 
 Only the root declares shared names. A descendant may change an existing
 shared value, including rebinding it, but declaring a new top-level shared
