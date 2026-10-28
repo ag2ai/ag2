@@ -21,6 +21,7 @@ from .middleware import Middleware
 from .observers import observer
 from .plugin import Plugin
 from .response import PromptedSchema, ResponseSchema, response_schema
+from .scopes import Scope, ScopeError, Var
 from .spec import AgentSpec
 from .stream import MemoryStream
 from .task import Task, TaskInject, TaskSpec
@@ -47,6 +48,8 @@ __all__ = (
     "Plugin",
     "PromptedSchema",
     "ResponseSchema",
+    "Scope",
+    "ScopeError",
     "Task",
     "TaskConfig",
     "TaskInject",
@@ -54,6 +57,7 @@ __all__ = (
     "TextInput",
     "ToolResult",
     "Toolkit",
+    "Var",
     "Variable",
     "VideoInput",
     "__version__",
