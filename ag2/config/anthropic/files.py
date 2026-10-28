@@ -27,6 +27,7 @@ class AnthropicFilesClient:
             max_retries=config.max_retries,
             default_headers=config.default_headers,
             http_client=config.http_client,
+            open_telemetry=config.open_telemetry,
         )
 
     async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:

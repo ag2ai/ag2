@@ -577,6 +577,27 @@ probability = reply.response.metadata["probability"]
 
 Images are sent inline as base64 data URLs, the only form the endpoint accepts: `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work. A hosted image URL or an uploaded `file_id` raises `UnsupportedInputError`.
 
+With either provider the agent `prompt` is the question, and the images and data being judged go to `ask(...)`. When every request is compared against the same material, such as a reference photo, OpenAI Decisions can attach it to the question itself with `question_instructions`:
+
+```python linenums="1" hl_lines="6-10 14"
+from ag2 import Agent, ImageInput, ResponseSchema
+from ag2.config import OpenAIDecisionsConfig
+
+matcher = Agent(
+    "matcher",
+    prompt="Compare the photo with the reference product.",
+    config=OpenAIDecisionsConfig(question_instructions=[
+        ImageInput("https://cdn.example.com/reference.png"),
+        {"type": "input_json", "data": {"sku": "MUG-RED-350"}},
+    ]),
+    response_schema=ResponseSchema(bool, description="Is this the same product?"),
+)
+
+reply = await matcher.ask(ImageInput(path="photo.png"))
+```
+
+`question_instructions` takes a string, or a list of strings, inputs (`ImageInput`, `DataInput`) and OpenAI parts such as `{"type": "input_json", ...}`, the only way to send real JSON (a `DataInput` goes out as text). They follow the prompt in the question's `instructions`, with the schema description last. Unlike inputs passed to `ask(...)`, an image here may be a hosted `https` URL. TypeSafe's Jev takes text instructions only, so it has no such option: send the reference image with `ask(...)`.
+
 ## Describe every option
 
 The model knows what a label means only from its description. The agents below share the prompt and the model, and the labels are deliberately opaque, so the descriptions are the only difference on the wire.
