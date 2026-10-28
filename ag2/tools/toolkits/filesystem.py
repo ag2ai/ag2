@@ -275,10 +275,10 @@ else:
     def _glob(target: Path, pattern: str) -> Iterable[Path]:
         """Yield files matching *pattern* under *target*.
 
-        Backfills Python 3.13 ``**`` semantics for older interpreters:
-        - ``**`` matches zero directory segments (e.g. ``**/*.py`` matches root-level ``.py`` files).
-        - A trailing ``**`` matches files, not only directories.
+        Backfills Python 3.13's trailing ``**`` semantics: match files as well as directories.
         """
+        if pattern.endswith("**"):
+            pattern += "/*"
         results = {p for p in target.glob(pattern) if p.is_file()}
         if "**" in pattern:
             prefix, suffix = pattern.split("**", 1)
