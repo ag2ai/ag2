@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
 from typing import Any
@@ -80,6 +81,9 @@ class _ClosingTaskUpdater(TaskUpdater):
         self._text_pieces = text_pieces
         self.closed = False
         self.ended = False
+        # One transition at a time: a cancel landing while another transition closes the text
+        # waits for it rather than ending the task under it.
+        self._transition = asyncio.Lock()
 
     async def update_status(
         self,
@@ -88,31 +92,31 @@ class _ClosingTaskUpdater(TaskUpdater):
         timestamp: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        if self.ended:
-            return
-        if state in _TERMINAL_STATES:
-            # Claimed before the first await, so the losing side of a race sees it.
-            self.ended = True
-        if state != TaskState.TASK_STATE_WORKING and not self.closed:
-            # Set before the first await, so nothing the turn emits meanwhile lands after the close.
-            self.closed = True
-            if self._text_pieces:
-                await self.add_artifact(
-                    parts=[Part(text="")],
-                    artifact_id=self._text_artifact_id,
-                    append=True,
-                    last_chunk=True,
-                )
-        await super().update_status(state, message, timestamp, metadata)
-        await self._lifecycle.send(
-            task_state_to_status_update(
-                state,
-                task_id=self.task_id,
-                context_id=self.context_id,
-                message=message,
-                timestamp=datetime.now(tz=timezone.utc),
-            ),
-        )
+        async with self._transition:
+            if self.ended:
+                return
+            if state in _TERMINAL_STATES:
+                self.ended = True
+            if state != TaskState.TASK_STATE_WORKING and not self.closed:
+                # Set before the first await, so nothing the turn emits meanwhile lands after the close.
+                self.closed = True
+                if self._text_pieces:
+                    await self.add_artifact(
+                        parts=[Part(text="")],
+                        artifact_id=self._text_artifact_id,
+                        append=True,
+                        last_chunk=True,
+                    )
+            await super().update_status(state, message, timestamp, metadata)
+            await self._lifecycle.send(
+                task_state_to_status_update(
+                    state,
+                    task_id=self.task_id,
+                    context_id=self.context_id,
+                    message=message,
+                    timestamp=datetime.now(tz=timezone.utc),
+                ),
+            )
 
 
 class AgentExecutor(A2AAgentExecutorBase):

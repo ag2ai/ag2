@@ -149,6 +149,8 @@ class A2ADriveState:
     # Full text of each artifact as last seen; ``prior_text`` is what earlier tool-result drives consumed.
     artifact_text: dict[str, str] = field(default_factory=dict)
     prior_text: Mapping[str, str] = field(default_factory=dict)
+    # Artifacts this drive appended to after their ``prior_text``: the reply is their content past it.
+    continued_artifact_ids: set[str] = field(default_factory=set)
     pending_calls: list[ToolCallEvent] = field(default_factory=list)
     finish_reason: str = "completed"
     terminal_task: Task | None = None
@@ -179,7 +181,8 @@ class A2ADriveState:
 
         A non-append update, live or a snapshot, restates the whole artifact and replaces what
         was known, even when it shortens it. Text consumed by an earlier turn is not part of the
-        reply: a restatement that is exactly that text leaves the artifact unchanged and adds nothing.
+        reply: a restatement that is exactly that text leaves the artifact unchanged and adds nothing,
+        and once this turn has appended to it, a restatement keeps only what follows it.
         """
         prior = self.prior_text.get(artifact_id, "")
         received = self.artifact_text.get(artifact_id, prior)
@@ -192,9 +195,15 @@ class A2ADriveState:
             reply_text = given + text
         elif append and content.startswith(prior):
             reply_text = content[len(prior) :]
+            if prior:
+                self.continued_artifact_ids.add(artifact_id)
+        elif artifact_id in self.continued_artifact_ids and content.startswith(prior):
+            # The artifact carries the earlier turn's text, so any restatement of it does too.
+            reply_text = content[len(prior) :]
         elif given is None and content == prior:
             reply_text = ""
         else:
+            self.continued_artifact_ids.discard(artifact_id)
             reply_text = content
         # A restatement that does not extend what was already given out cannot be retracted.
         given = given or ""

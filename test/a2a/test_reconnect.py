@@ -272,6 +272,28 @@ class TestStreamingReconnect:
         assert reply.body == "found"
         assert server.methods == ["SendStreamingMessage", "SubscribeToTask", "SendStreamingMessage"]
 
+    @pytest.mark.parametrize(
+        ("snapshot", "expected"),
+        [
+            pytest.param("pre-end", "end", id="unchanged"),
+            pytest.param("pre-end!", "end!", id="written-while-disconnected"),
+        ],
+    )
+    async def test_snapshot_of_an_artifact_reused_across_a_tool_round_trip_keeps_only_this_turn(
+        self, snapshot: str, expected: str
+    ) -> None:
+        # The continuation appends to the artifact the tool turn opened, so a snapshot restates
+        # the earlier turn's text too; that text was consumed by the tool turn, not this reply.
+        server = _ScriptedServer(
+            send=_Leg([_task(), _chunk("art-1", "pre-", append=False), _input_required_with_call("calls", "lookup")]),
+            continuation=_Leg([_chunk("art-1", "end")], drop=True),
+            resubscribes=[_Leg([_snapshot("art-1", snapshot), _completed()])],
+        )
+
+        reply = await _client(server, tools=[lookup]).ask("ping")
+
+        assert reply.body == expected
+
     async def test_gives_up_after_max_reconnects(self) -> None:
         server = _ScriptedServer(
             send=_Leg([_task(), _artifact("art-1", "hi")], drop=True),
