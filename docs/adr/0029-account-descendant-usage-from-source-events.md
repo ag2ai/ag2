@@ -15,14 +15,18 @@ and cancellation. Subagents v2 already makes descendant events available above.
 ## Decision
 
 Remove generation of subtask rollups. Accounting consumers read original
-`UsageEvent` records from both the local stream and descendant envelopes as
-those records arrive. Do not synthesize replacement accounting events or sum
-snapshot fields on responses and task terminals.
+`UsageEvent` records from both the local stream and descendants as those
+records arrive. Forward these records as plain `UsageEvent` events, without
+`ChildEvent`, so existing type-based observer and stream subscriptions keep
+receiving descendant spend. Do not synthesize replacement accounting events
+or sum snapshot fields on responses and task terminals.
 
 One source publication has one stable accounting identity, preserved through
 forwarding, persistence and usage spans. Count that publication once within a
 report's scope, regardless of how many representations it has. Equal usage
 values from distinct publications remain distinct costs.
+Forwarding preserves that identity through the stream primitive; it does not
+call the ordinary context publication method that allocates a fresh usage ID.
 
 Preserve the original usage kind, provider and model. Ancestor monitors consume
 the same records without waiting for the delegated run's terminal event.
@@ -49,7 +53,9 @@ breakdowns retain `model_call`, `compaction`, `aggregation` and their original
 provider/model attribution. Existing snapshots are inspection results, never
 additional additive inputs.
 
-Forwarding alone is insufficient: envelope extraction, durable accounting
-history, compaction retention and trace identity handling must change together.
+Forwarding alone is insufficient: durable accounting history, compaction
+retention and trace identity handling must change together. Readers continue
+to accept archived observation envelopes without requiring live subscriptions
+to match them.
 Archived traces containing old rollups remain readable through the existing
 legacy reader. This does not reintroduce runtime generation of rollups.
