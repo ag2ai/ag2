@@ -148,6 +148,8 @@ interrupts forwarding before ordinary storage runs, the original accounting
 record is retained in the affected histories before the terminal event.
 Each forwarding hop preserves the same `event_id`; it does not create a new
 publication. Readers still accept archived usage envelopes.
+Explicitly publishing a usage record through `context.send` starts a new
+publication, with a fresh ID and no inherited live origin address.
 
 HITL keeps its original request/answer channel: a local hook takes priority;
 otherwise the request bridges upward under the requester's context. Ancestor

@@ -22,7 +22,8 @@ Beta has two objects in scope on almost every execution path:
   (`variables`, `dependencies`, prompt). It exposes the one-argument
   convenience `send(event)`, which publishes through
   `await self.stream.send(event, self)` (`ag2/context.py`). It also gives each
-  locally published `UsageEvent` a fresh source identity.
+  locally published `UsageEvent` a fresh source identity and clears any address
+  inherited from an earlier forwarded record.
 
 So `context.send(event)` and `stream.send(event, context)` publish onto the
 *same* stream with the *same* context — **when `context.stream is stream`**.
