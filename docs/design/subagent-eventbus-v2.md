@@ -80,11 +80,23 @@ cleanup. Descendants owned by a delegated run settle before its completion.
 
 Use a single `variables` mapping on `Agent` or `ask`:
 
+Variables must be serializable in every scope, including `SHARED`. Locks,
+clients, connections, and other runtime objects belong in `dependencies` and
+are accessed through `Inject` or `context.dependencies`. Delegation copies
+the dependencies mapping shallowly, so those objects keep their identity.
+`ScopedValue` controls variable inheritance, not whether a runtime object can
+be passed as a variable.
+
 | Declaration | Delegation behavior |
 |---|---|
 | Plain value or `ScopedValue(value, Scope.COPIED)` | Deep copy for each branch |
 | `ScopedValue(value, Scope.LOCAL)` | Visible only at its owning level |
 | `ScopedValue(value, Scope.SHARED)` | One binding shared throughout the tree |
+
+Each fresh root invocation deep-copies the merged defaults and per-call
+variable values. Its shared bindings are shared within that invocation's
+tree; they do not alias the caller's original input containers or another
+root invocation. Read the current values from `reply.context.variables`.
 
 Only the root declares shared names. A descendant may change an existing
 shared value, including rebinding it, but declaring a new top-level shared
@@ -96,7 +108,8 @@ Control-plane keys beginning with `ag:` or `a2a:` are not inherited.
 already injected before another tool rebinds that name retains its old object;
 read the mapping again when the current binding is needed. Shared values are
 not transactional or automatically synchronized: authors supply their own locks
-for compound concurrent updates, including synchronous tools running in threads.
+through `dependencies` for compound concurrent updates, including synchronous
+tools running in threads.
 Acquire the lock before reading the binding used for a compound update.
 
 ## Accounting and HITL

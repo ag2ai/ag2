@@ -5,11 +5,11 @@ date: 2026-08-15
 
 # Anything that adds up tokens reads `UsageEvent`
 
-> Subagents v2 update (2026-10-27):
+> Subagents v2 update (2026-10-29):
 > [ADR 0029](0029-account-descendant-usage-from-source-events.md) supersedes the
-> rollup-specific mechanism below with direct consumption of source descendant
-> events. The rule that accumulators read `UsageEvent`, not snapshot fields,
-> remains accepted. The discussion below records the superseded rollup design.
+> original rollup mechanism with direct consumption of source descendant events.
+> The decision below reflects that implementation. Rollup matching is retained
+> only for reading archived traces.
 
 Surfaced while tracing why a coordinator that delegates one sub-task reported 110 of the
 1100 tokens it actually spent. Three consumers of token accounting read three different
@@ -18,10 +18,11 @@ drifting apart again.
 
 ## Context
 
-`UsageEvent` is the framework's accounting record: one event per unit of billable work,
-emitted onto the stream at the point the tokens are spent — a main-loop LLM call, a live
-session, history compaction, memory aggregation, and a sub-agent rollup. Its docstring
-already said so, and `UsageReport.from_events` already read it and nothing else.
+`UsageEvent` is the framework's accounting record: one event per unit of billable
+work, emitted when tokens are spent by a main-loop LLM call, a live session,
+history compaction, or memory aggregation. Descendants' original records now
+reach ancestors inside `ChildEvent` observations. The original delegation
+implementation emitted a sub-agent rollup instead; new runs no longer do.
 
 The rule lived only in that docstring, so the other two consumers each invented their own
 source:
@@ -43,21 +44,31 @@ happens to accompany most billable work instead of the record that accompanies a
 
 ## Decision
 
-**Every consumer that accumulates tokens reads `UsageEvent`. Snapshot fields — `AgentReply.usage`,
+**Every consumer that accumulates tokens reads source `UsageEvent` records.
+Snapshot fields — `AgentReply.usage`,
 `TaskResult.usage`, `TaskCompleted.usage` — are for direct inspection by a caller who holds
 that one object, and must never be summed.**
 
-- `TokenMonitor` watches `UsageEvent` instead of `ModelResponse | TaskCompleted`. All three
-  defects above close together, with no new field on `TaskFailed` and no change to the
-  sub-task runner — the rollup was already emitted on both the success and the failure path,
-  before the terminal lifecycle event.
-- `TelemetryMiddleware` subscribes to `UsageEvent` and records each one as a `record_usage`
-  span. This is the only route by which delegated and maintenance spend reaches a trace at
-  all; no downstream change can recover data that was never captured.
+- Consumers inspect `event.source_event` for both local records and descendant
+  observations. `TokenMonitor` and `TelemetryMiddleware` subscribe to
+  `UsageEvent | ChildEvent`; they do not execute the descendant's local
+  handlers or wait for `TaskCompleted` to expose its spend.
+- Deduplicate by `UsageEvent.event_id`, the identity of one source publication.
+  Preserve that identity through forwarding, persistence, and usage spans.
+  Repeated observations of one record count once; equal-cost calls with
+  different identities remain separate costs. A `DownEvent` audit is its own
+  source; an accounting-shaped payload is not counted from that audit.
+- `TelemetryMiddleware` records each source record as a `record_usage` span,
+  preserving its identity, kind, provider, and model. This captures delegated
+  and maintenance spend without generating replacement rollups.
 - `Trace.tokens` aggregates `UsageEvent` through `UsageReport`, so eval and `agent.usage()`
   report the same number by construction rather than by coincidence.
-- The eval results schema goes `0.1` → `0.2`. A run loaded from disk keeps the version it was
-  written with, so a reader can tell which accounting produced its numbers.
+- Accounting history survives failure, cancellation, and compaction. Reports
+  read retained source records rather than reconstructing spend from terminal
+  snapshots. Budget monitors see descendant spend as the source events arrive.
+- The original accounting correction changed the eval results schema from
+  `0.1` to `0.2`. A run loaded from disk keeps the version it was written with,
+  so a reader can tell which accounting produced its numbers.
 
 Non-obvious choices, each of which looks like a bug until you know why:
 
@@ -86,7 +97,8 @@ Non-obvious choices, each of which looks like a bug until you know why:
 
 ## Consequences
 
-- **A span tree can contain the same tokens twice, and the reader has to cancel one.** When a
+- **Archived rollup traces can contain the same tokens twice.** In the original
+  delegation implementation, when a
   sub-agent is itself instrumented, its per-call accounting flattens into the *same* trace as
   the parent's `"subtask"` rollup. `_nested_agent_spend` totals the spend recorded under each
   nested agent subtree and `_drop_duplicated_rollups` cancels a matching rollup — as a pass over
@@ -102,7 +114,9 @@ Non-obvious choices, each of which looks like a bug until you know why:
   (the caller named no agent) identifies nobody and falls back to value-only matching. Each
   entry cancels at most one rollup, so the residual ambiguity is bounded: two *unnamed*
   workers with identical spend, one instrumented and one not, can still cancel the wrong one —
-  but the total stays correct and only the label is misattributed.
+  but the total stays correct and only the label is misattributed. This matching
+  remains for archived rollup records; current runs preserve source identity
+  instead and never generate a parent `"subtask"` rollup.
 - **The reader adapts to the trace, not to who asked.** Both trace-level adjustments — rollup
   dedupe, and synthesizing usage for a trace captured before AG2 recorded usage spans — apply
   whoever supplied the conventions. Choosing a reader says what a *span* means; it does not
@@ -125,6 +139,8 @@ Non-obvious choices, each of which looks like a bug until you know why:
 - **A new consumer of token counts has one place to look.** Adding a field to a lifecycle
   event to expose spend is the move this ADR exists to prevent — the event is already on the
   stream before it.
-- **`ag2/network/task_mirror.py` still drops usage**: it forwards state, result and error
-  across the network boundary on both terminal events, so a mirrored sub-task's rollup never
-  reaches the parent. Pre-existing, out of scope here, and genuinely separate work.
+- **In-process accounting is not a network usage protocol.**
+  `ag2/network/task_mirror.py` consumes lifecycle observations and forwards task
+  metadata, not source accounting records. Direct descendant accounting in
+  [ADR 0029](0029-account-descendant-usage-from-source-events.md) does not imply
+  that a remote task mirror transports its complete usage history.
