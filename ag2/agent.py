@@ -2254,11 +2254,10 @@ def _with_usage_events(
     record of the run appears exactly once, whatever the strategy did with it.
     The one case this does not cover is a strategy that *synthesises* a new
     ``UsageEvent`` into its returned list without sending it — that record is
-    dropped here, because telling it apart from a rebuilt copy of an existing
-    one would need identity, which does not survive a storage backend that
-    deserializes on read, or equality, which is wrong on an event whose
-    ``model`` / ``provider`` / ``label`` are ``compare=False``. A strategy that
-    ``context.send``s its spend, as the built-in ones do, is accounted correctly.
+    dropped here because it was never published as a source accounting record.
+    A strategy that ``context.send``s its spend, as the built-in ones do, is
+    accounted correctly. Source ``event_id`` values survive serialization, so
+    retained or replayed representations of a publication count once.
 
     Order is telemetry from before the compaction, then the retained
     conversation, then what was spent during it. That is not the chronological
