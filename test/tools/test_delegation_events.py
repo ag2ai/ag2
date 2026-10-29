@@ -474,16 +474,15 @@ async def test_downlink_revalidates_its_recipient_after_an_awaiting_audit(stage:
     assert all(result.completed for result in results)
 
 
-async def halt_on_spend(event: BaseEvent) -> None:
-    if isinstance(event, ChildEvent) and isinstance(event.inner, UsageEvent):
-        await event.origin.send(HaltEvent(reason="budget spent", source="test"))
+async def halt_on_spend(event: UsageEvent) -> None:
+    await event.origin.send(HaltEvent(reason="budget spent", source="test"))
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("emit_events", [True, False])
 async def test_usage_retained_at_source_when_upward_delivery_cancels_it(emit_events: bool) -> None:
     ctx = Context(MemoryStream())
-    ctx.stream.subscribe(halt_on_spend)
+    ctx.stream.where(UsageEvent).subscribe(halt_on_spend)
     child = Agent(
         "child", config=TestConfig(ModelResponse(ModelMessage("done"), usage=Usage(total_tokens=30), model="child"))
     )
@@ -499,10 +498,9 @@ class UsagePause:
     entered: asyncio.Event = field(default_factory=asyncio.Event)
     release: asyncio.Event = field(default_factory=asyncio.Event)
 
-    async def pause(self, event: BaseEvent) -> BaseEvent:
-        if isinstance(event, ChildEvent) and isinstance(event.inner, UsageEvent):
-            self.entered.set()
-            await self.release.wait()
+    async def pause(self, event: UsageEvent) -> UsageEvent:
+        self.entered.set()
+        await self.release.wait()
         return event
 
 
@@ -510,7 +508,7 @@ class UsagePause:
 async def test_parent_cancellation_retains_usage_while_its_interrupter_is_awaiting() -> None:
     pause = UsagePause()
     ctx = Context(MemoryStream())
-    ctx.stream.subscribe(pause.pause, interrupt=True)
+    ctx.stream.where(UsageEvent).subscribe(pause.pause, interrupt=True)
     stream = MemoryStream(storage=ctx.stream.history.storage)
     child = Agent("child", config=TestConfig(UsageEvent(Usage(total_tokens=30)), "done"))
     task = asyncio.create_task(run_task(child, "work", parent_context=ctx, stream=stream))

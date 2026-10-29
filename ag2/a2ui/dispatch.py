@@ -183,7 +183,7 @@ async def stream_turn(
             a2ui_messages.append(event.message)
 
     if usage_records is not None:
-        stream.where(UsageEvent | ChildEvent).subscribe(collect_usage_events(usage_records))
+        stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
     if on_task is not None:
         stream.where((TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired, ChildEvent)).subscribe(
             _TaskObserver(on_task)

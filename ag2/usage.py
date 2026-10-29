@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Account once for each source UsageEvent, local or carried by a descendant envelope.
+"""Account once for each source UsageEvent, including descendant costs.
 
 The event log is the source of truth. Delegation preserves the original record,
 including its identity, kind, provider and model; it generates no usage rollup.
@@ -32,7 +32,7 @@ class _UsageCollector:
 
 
 def collect_usage_events(into: list[UsageEvent]) -> Callable[[BaseEvent], Awaitable[None]]:
-    """Collect source records from a subscription to UsageEvent | ChildEvent."""
+    """Collect source accounting records from a UsageEvent subscription."""
     return _UsageCollector(into)
 
 
@@ -109,6 +109,6 @@ def _record_for(event: BaseEvent) -> UsageRecord | None:
 
 
 def usage_event_from(event: BaseEvent) -> UsageEvent | None:
-    """Read one original accounting record from a local event or an envelope."""
+    """Read a source accounting record, also accepting archived observation envelopes."""
     event = event.source_event
     return event if isinstance(event, UsageEvent) else None
