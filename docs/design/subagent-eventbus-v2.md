@@ -159,7 +159,7 @@ timeout covers all hops.
 
 ## Migration
 
-Broad subscribers and unfiltered cadence watches now see descendant envelopes.
+Broad subscribers and unfiltered cadence watches now see operational descendant envelopes.
 Filter by event type or source when only local events are relevant. Forwarding
 awaits the parent pipeline directly: ancestor callback latency and errors retain
 ordinary stream semantics, without queues, drop policies or stalled-observer
