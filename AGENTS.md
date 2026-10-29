@@ -180,6 +180,11 @@ to one invocation. `run_task`, `TaskResult`, and `DelegationRegistry` remain int
 framework code and tests import them from their implementation modules, not the
 package's public exports.
 
+Forward descendant `UsageEvent` records as plain `UsageEvent`, preserving the
+source `event_id`. Existing type-based observer and stream subscriptions must
+receive descendant costs directly. Operational events use `ChildEvent`
+observations; accounting uses neither that wrapper nor generated rollups.
+
 | File | Purpose |
 |------|---------|
 | `run_task.py` | Internal `run_task()`, `TaskResult` — execute an agent as a sub-task |
@@ -195,6 +200,9 @@ Delegation is explicit: build each worker `Agent` with its own `config`, `prompt
 - **Recursion** is bounded only by what you hand the worker: do not give a worker delegate tools unless recursion is intended.
 - **Concurrency**: the LLM fans out by issuing several delegate calls in one response; they run concurrently. To cap them, pass the same tool middleware to every delegate. It must be a function closing over the `asyncio.Semaphore`, not a middleware object: tool middleware is deep-copied on registration, so an object gets one copy per delegate and the cap silently splits.
 - **Ad-hoc workers** composed by the LLM per objective: `dynamic_agent()` (`ag2.tools.dynamic`).
+
+Each delegation runs on its own stream. Operational events reach ancestors as
+`ChildEvent` observations; accounting arrives as plain `UsageEvent` records.
 
 ### Deprecated: `TaskConfig` / auto-injected `run_subtask` (removed in 1.4.0)
 
@@ -225,7 +233,7 @@ agent.as_tool(description="...", stream=persistent_stream())
 | What | Behavior | Why |
 |------|----------|-----|
 | Dependencies | Shallow-copied (`dict.copy()`) | Isolated at the top level; mutable values are still shared by reference. Treat dependencies as read-only inside subtasks. |
-| Variables | Copied (new dict); **not** synced back | Concurrent siblings via `asyncio.gather` would race-clobber a shared dict — last-writer-wins is silent data loss. Each subtask's mutations stay scoped to it. |
+| Variables | Serializable values: plain/copied values are deep-copied, local values are excluded, and root-declared shared bindings remain shared | Copied values stay branch-local; shared mutations require application-supplied locks in `dependencies`. |
 | History | Fresh stream per call | Clean context; LLM passes relevant info via `context` parameter |
 | Tools | The worker's own `tools=`; nothing is inherited from the parent | The worker's capabilities are explicit and reviewable at construction |
 
