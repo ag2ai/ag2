@@ -12,7 +12,8 @@ spawning).
 A bare ``Agent(name, config=cfg)`` has zero harness middleware — it behaves
 exactly like a plain LLM loop. Harness features are opt-in: pass ``assembly=``
 for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
-or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
+or use ``Agent.as_tool()`` for explicit subagent delegation. The legacy
+``tasks=TaskConfig(...)`` API is deprecated and will be removed in 1.4.0.
 """
 
 import asyncio
@@ -34,6 +35,7 @@ from fast_depends import Provider
 from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
+from typing_extensions import deprecated
 
 from ag2.events import BinaryResult
 
@@ -102,9 +104,15 @@ TAgent = TypeVar313("TAgent", default=str)
 T2 = TypeVar("T2")
 
 
+@deprecated("TaskConfig is deprecated and will be removed in 1.4.0. Use Agent.as_tool() for explicit delegation.")
 @dataclass
 class TaskConfig:
     """Groups task-spawning Agent parameters.
+
+    Deprecated; will be removed in 1.4.0 along with ``Agent(tasks=...)`` and
+    the auto-injected ``run_subtask`` / ``run_subtasks`` tools. Construct
+    worker Agents explicitly and pass their ``Agent.as_tool()`` tools to
+    the parent instead.
 
     By default a subtask Agent inherits **all** of the parent's user-supplied
     tools (everything passed via ``tools=``). Subtask Agents never receive the
@@ -695,7 +703,8 @@ class Agent(PluginTarget, Generic[TResult]):
     * ``tasks=TaskConfig(...)`` — opt in to the auto-injected ``run_subtask``
       / ``run_subtasks`` tools, and override the LLM config / prompt /
       tool-inheritance rules for sub-task Agents. Defaults to ``False``
-      (sub-task tools disabled).
+      (sub-task tools disabled). Deprecated; will be removed in 1.4.0.
+      Use worker Agents exposed through ``Agent.as_tool()`` instead.
     """
 
     @overload
@@ -824,6 +833,12 @@ class Agent(PluginTarget, Generic[TResult]):
         if tasks is False:
             self._task_config: TaskConfig | None = None
         else:
+            warnings.warn(
+                "Agent(tasks=...) is deprecated and will be removed in 1.4.0, including the auto-injected "
+                "run_subtask / run_subtasks tools. Use Agent.as_tool() for explicit delegation.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
         # One Semaphore per running loop: sharing one raises once a second loop
@@ -926,7 +941,10 @@ class Agent(PluginTarget, Generic[TResult]):
 
     @property
     def tasks(self) -> TaskConfig | None:
-        """Sub-task configuration, or ``None`` when sub-tasks are not enabled."""
+        """Sub-task configuration, or ``None`` when sub-tasks are not enabled.
+
+        Deprecated; will be removed in 1.4.0 with ``Agent(tasks=...)``.
+        """
 
         return self._task_config
 

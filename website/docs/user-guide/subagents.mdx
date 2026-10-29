@@ -14,10 +14,10 @@ Breaking work across multiple agents gives you:
 - **LLM-driven orchestration** — the calling agent decides when to delegate, what context to pass, and how to use the result.
 
 !!! note
-    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other. For auto-injected sub-tasks, `TaskConfig(max_concurrency=N)` bounds the total fan-out across both `run_subtask` and `run_subtasks`.
+    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other.
 
-!!! tip
-    For lightweight self-delegation where the parent doesn't need a *named* delegate, opt in to the auto-injected `#!python run_subtask` / `#!python run_subtasks` tools by passing `#!python tasks=TaskConfig(...)` — see [`tasks=` in The Agent Harness](/docs/user-guide/agent_harness#tasks-taskconfig). Use `Agent.as_tool()` (below) when you want a distinct, purpose-named tool exposed to the LLM.
+!!! warning "TaskConfig is deprecated"
+    `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the automatically injected `run_subtask` / `run_subtasks` tools will be removed in **1.4.0**. Existing code continues to work with deprecation warnings. Use `Agent.as_tool()` for new code and follow the [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig) below.
 
 ## Subagents API
 
@@ -91,6 +91,36 @@ coordinator = Agent(
     ],
 )
 ```
+
+## Migrating from TaskConfig
+
+Create a worker explicitly, then add its delegate tool to the parent's `tools` list. This replaces `tasks=TaskConfig(...)` without adding a new configuration API:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+
+worker = Agent(
+    "worker",
+    prompt="Complete the assigned task concisely. Return only the result.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+)
+coordinator = Agent(
+    "coordinator",
+    prompt="Delegate independent work to task_worker, then combine the results.",
+    config=OpenAIConfig(model="gpt-4o-mini"),
+    tools=[worker.as_tool(description="Complete a focused sub-task.")],
+)
+
+reply = await coordinator.ask("Compare Python and Rust for web APIs.")
+print(reply.body)
+```
+
+Move `TaskConfig.config` and `TaskConfig.prompt` to the worker's `config` and `prompt`. Workers do not automatically inherit parent tools: pass the selected tools and any former `extra_tools` to the worker's `tools` list. Omit `tasks=` from both Agents and update prompts that mention `run_subtask` or `run_subtasks` to use the delegate's tool name and its `objective` / `context` parameters.
+
+The calling LLM can request several delegate calls in one response to run them concurrently. `as_tool()` has no `max_concurrency` parameter; if your application needs the shared limit formerly supplied by `TaskConfig.max_concurrency`, enforce it explicitly, for example with tool middleware sharing an `asyncio.Semaphore`. Use an explicit sequence of calls when ordering matters.
+
+`Agent.as_tool()`, `subagent_tool()`, `run_task()`, and `persistent_stream()` remain supported. Each explicit delegate call uses a fresh stream by default; use [persistent streams](/docs/user-guide/subagents#sub-task-streams) when calls should share history. `TaskStarted`, `TaskCompleted`, and `TaskFailed` lifecycle events remain available. Reading the legacy `Agent.tasks` property and leaving tasks disabled emit no deprecation warning; constructing `TaskConfig` or enabling `Agent(tasks=...)` does.
 
 ## Background Subagents
 

@@ -25,7 +25,7 @@ Agent(
     plugins: Iterable[Plugin] = (),
     assembly: Iterable[AssemblyPolicy] = (),
     knowledge: KnowledgeConfig | None = None,
-    tasks: TaskConfig | Literal[False] | None = None,
+    tasks: TaskConfig | Literal[False] = False,  # deprecated; removed in 1.4.0
 )
 ```
 
@@ -112,6 +112,9 @@ The compaction and aggregation middleware are opt-in per field: passing `compact
 
 ## `tasks=` — TaskConfig
 
+!!! warning "Deprecated — removal in 1.4.0"
+    `TaskConfig`, `Agent(tasks=...)`, the `Agent.tasks` property, and the auto-injected `run_subtask` / `run_subtasks` tools are deprecated. They remain functional until removal in **1.4.0**. Construct worker Agents and pass their `Agent.as_tool()` tools to the parent instead; see [Migrating from TaskConfig](/docs/user-guide/subagents#migrating-from-taskconfig).
+
 Sub-task delegation is **off by default** — a bare Agent has no `run_subtask` / `run_subtasks` tools. Pass `tasks=TaskConfig(...)` to opt in, and the Agent will auto-inject the pair of sub-task tools that let the LLM spawn isolated child Agents to handle self-contained work. `TaskConfig` configures how those children are built.
 
 ```python linenums="1"
@@ -172,6 +175,9 @@ focused = Agent(
 
 ## `run_subtask` / `run_subtasks` — auto-injected tools
 
+!!! warning "Deprecated — removal in 1.4.0"
+    These tools remain available through the deprecated `tasks=TaskConfig(...)` API. For new code, use [explicit delegation](/docs/user-guide/subagents#subagents-api) with `Agent.as_tool()`.
+
 When you opt in via `tasks=TaskConfig(...)`, the Agent exposes two tools to the LLM:
 
 - `run_subtask(task: str)` — spawn one sub-task Agent. Useful when the LLM has a single self-contained piece of work to delegate.
@@ -184,7 +190,7 @@ resource limit. The cap is shared by both tools on the Agent, so several
 parallel `run_subtask` calls and a concurrent `run_subtasks` call cannot
 bypass one another.
 
-For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agentas_tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
+Use [`Agent.as_tool()`](#agentas_tool) to expose a named delegate such as `task_researcher`. Existing coordinators can keep both patterns during migration.
 
 See [Subagents](/docs/user-guide/subagents) for the full sub-task delegation guide — context flow and custom streams for self-delegation via `as_tool()`.
 
@@ -223,7 +229,8 @@ An Agent reports what it is made of, so you can compare two agents, assert on co
 | `#!python middleware` | agent-level middleware, in registration order |
 | `#!python dependencies` / `#!python variables` | injected values, keyed as supplied |
 | `#!python config` / `#!python response_schema` / `#!python hitl_hook` | model config, schema, human-input hook |
-| `#!python observers` / `#!python assembly` / `#!python tasks` | observers, assembly policies, `#!python TaskConfig` |
+| `#!python observers` / `#!python assembly` | observers, assembly policies |
+| `#!python tasks` | `#!python TaskConfig` or `#!python None`; deprecated, removed in 1.4.0 |
 
 Sequences come back as tuples and mappings as read-only views, so an agent cannot be changed through them.
 
