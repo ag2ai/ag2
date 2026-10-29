@@ -75,6 +75,11 @@ deleted rather than maintained.
 - One shared `Agent` instance is reused across a suite's tasks (and repeats).
   Agents are effectively stateless across `ask` calls — history lives on the
   per-call stream — so reuse is safe; do not rely on per-task instance identity.
+  Variable defaults are copied into each root invocation. A `SHARED` variable
+  is shared within that invocation's delegation tree, not between independent
+  calls or with the caller's input object. Variables hold serializable state;
+  runtime objects such as locks and clients belong in `dependencies`.
+  See [ADR 0028](0028-root-declares-shared-variable-names.md).
 - Applying rule 1 elsewhere: a new public function that needs a built thing
   should take the built thing, and offer a separate explicit constructor for the
   path/dict/recipe form — not fold the I/O into itself. Reserve the `str`-style
