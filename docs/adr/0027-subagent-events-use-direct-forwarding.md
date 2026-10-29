@@ -12,6 +12,11 @@ respond to an event's author. Buffered forwarding would require queue limits,
 flush rules and policies for failed or stalled observers. The owner explicitly
 chose ordinary event delivery over that isolation machinery.
 
+The addressing use case is responding to the author of an observed event.
+A separate selector-based API would add recipient discovery, broadcast, and
+branch-visibility rules beyond that use case, including ambiguity when several
+delegations have the same agent name.
+
 ## Decision
 
 Forward all source events upward directly, awaiting the parent stream's normal
@@ -30,6 +35,12 @@ Downlink accepts any event through the recipient's normal pipeline. The caller
 chooses the event and is responsible for its effects, including reentrant model
 calls; the transport adds no event-type restrictions or scheduling barrier.
 
+Expose one addressed-delivery entry point: `event.origin.send(event)`. The
+origin handle addresses the original author's invocation, including through
+multiple ancestor hops. Keep the registry internal for cancellation and
+cleanup; expose neither a global routing function nor lookup or broadcast by
+task ID, agent name, or subtree.
+
 The implementation brackets forwarding and lifecycle under the active stream
 turn lock, including terminal publication after observer cleanup.
 
@@ -39,6 +50,10 @@ Upward delivery uses the stream's ordinary ordering and exception behavior.
 There is no separate queue, drop policy, timeout or stalled-observer recovery;
 a slow ancestor observer can delay its descendants. An observer can address
 the event's author directly without unwrapping intermediate agents' identities.
+Matching agent names cannot broaden a handle's recipient set: it always
+addresses one invocation. A queued invocation has no live handle, and a saved
+handle expires when its invocation ends. Selector-based delivery would require
+a separate use case and design decision.
 Broad subscribers and unfiltered cadence watches now see the whole subtree;
 authors use subscription conditions when they need only a subset. This is an
 intentional change to the previous opt-in proposal and v1 event visibility.

@@ -22,7 +22,6 @@ serialized event field.
 ```python
 from ag2 import Agent, Context, Scope, ScopedValue, observer
 from ag2.events import BaseEvent, ChildEvent, HaltEvent
-from ag2.tools.subagents import send_down
 
 
 async def monitor(event: BaseEvent, ctx: Context) -> None:
@@ -48,16 +47,19 @@ This sketch uses application-owned `config`, `worker`, and `should_stop`.
 ## Addressing and cancellation
 
 `await event.origin.send(custom_event)` addresses the source author, even for
-a grandchild. `send_down(ctx, event, task_id=...)`, `agent=...`, or
-`subtree=path` selects executing delegations.
-An agent selector reaches all active invocations with that name. Ordinary
-delivery to a queued, completed or unknown delegation raises `DeliveryError`
-and emits `DeliveryFailed`.
+a grandchild. This is the single public entry point for addressed delivery.
+Each handle identifies one invocation, so agents with the same name remain
+distinct. An observer can retain the handle while that invocation is active.
 
 `StreamHandle` is the live address returned by `event.origin`; applications
-catch `DeliveryError` when delivery fails. These types and `send_down` are
-exported from `ag2.tools.subagents`. The runner, its result type, and the
-delegation registry remain internal implementation details.
+catch `DeliveryError` when delivery fails. These types are exported from
+`ag2.tools.subagents`. The runner, its result type, and the delegation registry
+remain internal implementation details. There is no public lookup or broadcast
+by task ID, agent name, or subtree.
+
+A queued invocation has no live origin handle. Sending after the addressed
+invocation has ended raises `DeliveryError` and emits `DeliveryFailed`;
+replaying a stored observation does not recreate its live origin.
 
 Downlink uses the recipient's ordinary pipeline without a turn lock or event
 type restrictions. The caller owns the consequences, including reentrant
