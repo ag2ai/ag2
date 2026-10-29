@@ -30,7 +30,7 @@ from ag2.events import (
 )
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.testing import TestConfig
-from ag2.tools.subagents import DeliveryError, background_agent_tool, get_registry, send_down
+from ag2.tools.subagents import DeliveryError, background_agent_tool, send_down
 from ag2.tools.subagents.run_task import run_task
 from ag2.usage import UsageReport
 
@@ -421,6 +421,8 @@ class TurnRace:
 async def test_downlink_revalidates_its_recipient_after_an_awaiting_audit(stage: str) -> None:
     race = TurnRace(raw=stage == "recipient_event")
     ctx = Context(MemoryStream(), variables={"number": 1})
+    journal = Journal()
+    ctx.stream.subscribe(journal.record)
     stream = MemoryStream(storage=ctx.stream.history.storage)
     if stage == "sender":
         ctx.stream.subscribe(race.advance_during_audit)
@@ -429,7 +431,11 @@ async def test_downlink_revalidates_its_recipient_after_an_awaiting_audit(stage:
     worker = Agent("worker", config=TestConfig(ToolCallEvent(name="hold", arguments="{}"), "done"), tools=[race.hold])
     first = asyncio.create_task(run_task(worker, "first", parent_context=ctx, stream=stream, task_id="first"))
     await race.first_entered.wait()
-    handle = get_registry(ctx).get("first")
+    handle = next(
+        event.origin
+        for event in journal.events
+        if isinstance(event, ChildEvent) and isinstance(event.source_event, TaskStarted) and event.task_id == "first"
+    )
     assert handle is not None
     ctx.variables["number"] = 2
     second = asyncio.create_task(run_task(worker, "second", parent_context=ctx, stream=stream, task_id="second"))
@@ -500,13 +506,11 @@ class MiddleSender:
             if self.route == "send_down":
                 await send_down(ctx, Directive(text="from middle"), task_id=event.task_id)
             else:
-                address = get_registry(ctx).get(event.task_id)
-                assert address is not None
-                await address.send(Directive(text="from middle"))
+                await event.origin.send(Directive(text="from middle"))
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("route", ["send_down", "registry"])
+@pytest.mark.parametrize("route", ["send_down", "origin"])
 async def test_nested_delivery_records_the_calling_ancestor_as_author(route: str) -> None:
     guidance = Guidance()
     leaf = Agent(
