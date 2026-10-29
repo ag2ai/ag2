@@ -188,6 +188,19 @@ class DiskKnowledgeStore:
             current = current.parent
 
     async def delete(self, path: str) -> None:
+        normalized = _normalize(path).lstrip("/")
+        if normalized:
+            candidate = self._root / normalized
+            if candidate.is_symlink():
+                # Only resolve the parent: resolving the link itself would delete its target.
+                root = self._root.resolve()
+                parent = candidate.parent.resolve()
+                if not parent.is_relative_to(root):
+                    raise ValueError(f"Path traversal blocked: {path}")
+                candidate.unlink()
+                self._prune_empty_parents(parent, root)
+                return
+
         target = self._resolve(path)
         if target.is_file():
             target.unlink()
