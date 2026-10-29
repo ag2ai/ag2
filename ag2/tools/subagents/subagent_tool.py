@@ -94,6 +94,8 @@ def subagent_tool(
             stream=task_stream,
         )
 
+        if result.cancelled:
+            return f"Sub-task '{agent.name}' cancelled: {result.error}"
         if not result.completed:
             return f"Sub-task '{agent.name}' failed: {result.error}"
         return result.result or ""

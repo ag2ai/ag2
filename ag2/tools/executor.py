@@ -61,7 +61,7 @@ class ToolExecutor:
         tasks = [asyncio.ensure_future(_execute_call(context, call)) for call in event.calls]
         try:
             outcomes = await asyncio.gather(*tasks)
-        except HumanInputError:
+        except (HumanInputError, asyncio.CancelledError):
             # ``gather`` propagates the first failure but leaves the rest of the
             # batch running detached, so a sibling would carry on — side effects
             # included — after the caller has been told the turn failed. Stop

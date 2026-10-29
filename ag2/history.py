@@ -64,6 +64,7 @@ class History:
 HUMAN_INPUT_ABANDONED_TOOL_RESULT = (
     "This tool call was not completed: the turn ended because a human-input request could not be answered."
 )
+CANCELLED_TOOL_RESULT = "The turn was cancelled before this tool finished."
 
 
 def _tool_call_batches(events: "Sequence[BaseEvent]") -> "list[ToolCallsEvent]":

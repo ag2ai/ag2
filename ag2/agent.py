@@ -47,8 +47,10 @@ from .events import (
     DrainedModelRequest,
     HumanInputRequest,
     Input,
+    ModelReasoning,
     ModelRequest,
     ModelResponse,
+    ProviderReplay,
     ToolCallsEvent,
     ToolResultsEvent,
     UsageEvent,
@@ -67,7 +69,7 @@ from .events.lifecycle import (
     ObserverStarted,
 )
 from .exceptions import ConfigNotProvidedError, HumanInputError
-from .history import HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
+from .history import CANCELLED_TOOL_RESULT, HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore
 from .knowledge.config import KnowledgeConfig
@@ -89,11 +91,12 @@ from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, Toolkit, tool
 from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
+from .tools.subagents._forwarding import DelegationRegistry, Forwarder
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
 from .types import Omit, Omittable, SendableMessage, omit
-from .usage import UsageReport, collect_usage_events
+from .usage import UsageReport, collect_usage_events, usage_event_from
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 logger = logging.getLogger(__name__)
@@ -452,7 +455,7 @@ class _TurnPlugins:
         self.observers: list[Observer] = []
         self.policies: list[AssemblyPolicy] = []
         self.dependencies: dict[Any, Any] = {}
-        self.variables: Mapping[str, Any] = {}
+        self.variables: dict[Any, Any] = {}
         self.hitl_hook: HumanHook | None = None
         self.has_conflicting_hitl_hooks = False
         for plugin in plugins:
@@ -1431,6 +1434,9 @@ class Agent(PluginTarget, Generic[TResult]):
         """Resolve invocation plugins and bracket their context contributions."""
         plugins = _TurnPlugins(additional_plugins)
         async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
+            delegation = context.dependencies.get(Forwarder)
+            if delegation is not None and delegation.stream.id == context.stream.id:
+                await stack.enter_async_context(delegation.execution(context))
             if context_overrides is not None:
                 context_overrides.apply(context)
             if plugins.has_conflicting_hitl_hooks:
@@ -1583,7 +1589,11 @@ class Agent(PluginTarget, Generic[TResult]):
                 if merged is not None:
                     await context.send(DrainedModelRequest(merged.parts))
 
-                messages = await context.stream.history.get_events()
+                messages = [
+                    message
+                    for message in await context.stream.history.get_events()
+                    if is_conversational(message) or isinstance(message, (ModelReasoning, ProviderReplay))
+                ]
                 result = await llm_call(messages, context)
                 # Emit usage at the point it is spent, decoupled from the
                 # response, so token accounting never depends on a response
@@ -1616,6 +1626,14 @@ class Agent(PluginTarget, Generic[TResult]):
                         ),
                     )
 
+                elif (
+                    delegation := context.dependencies.get(Forwarder)
+                ) is not None and delegation.stream.id == context.stream.id:
+                    stack.enter_context(
+                        context.stream.where(HumanInputRequest).sub_scope(
+                            delegation.bridge, interrupt=True, sync_to_thread=False
+                        )
+                    )
                 else:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
@@ -1638,14 +1656,38 @@ class Agent(PluginTarget, Generic[TResult]):
                 ):
 
                     async def drive() -> "AgentReply[Any, Any]":
+                        delegation = context.dependencies.get(Forwarder)
+                        owns_delegation = delegation is not None and delegation.stream.id == context.stream.id
                         try:
+                            if (
+                                delegation is not None
+                                and delegation.origin is not None
+                                and delegation.origin.context is context
+                            ):
+                                await delegation.start(context)
                             message = await agent_turn(event, context)
-                        except HumanInputError:
-                            await close_unanswered_tool_calls(
-                                context.stream.history,
-                                result=HUMAN_INPUT_ABANDONED_TOOL_RESULT,
-                            )
+                            if owns_delegation:
+                                await context.dependencies[DelegationRegistry].settle_descendants(delegation.path)
+                        except BaseException as exc:
+                            if owns_delegation:
+                                delegation.failure = exc
+                            registry = context.dependencies.get(DelegationRegistry)
+                            if registry is not None and (
+                                owns_delegation or registry.context.stream.id == context.stream.id
+                            ):
+                                path = delegation.path if owns_delegation else ()
+                                registry.cancel_descendants(path, str(exc) or "parent cancelled")
+                                await registry.settle_descendants(path)
+                            if isinstance(exc, (HumanInputError, asyncio.CancelledError)):
+                                await close_unanswered_tool_calls(
+                                    context.stream.history,
+                                    result=HUMAN_INPUT_ABANDONED_TOOL_RESULT
+                                    if isinstance(exc, HumanInputError)
+                                    else CANCELLED_TOOL_RESULT,
+                                )
                             raise
+                        if owns_delegation:
+                            delegation.result = message.content
                         return AgentReply(
                             message,
                             context=context,
@@ -2212,11 +2254,10 @@ def _with_usage_events(
     record of the run appears exactly once, whatever the strategy did with it.
     The one case this does not cover is a strategy that *synthesises* a new
     ``UsageEvent`` into its returned list without sending it — that record is
-    dropped here, because telling it apart from a rebuilt copy of an existing
-    one would need identity, which does not survive a storage backend that
-    deserializes on read, or equality, which is wrong on an event whose
-    ``model`` / ``provider`` / ``label`` are ``compare=False``. A strategy that
-    ``context.send``s its spend, as the built-in ones do, is accounted correctly.
+    dropped here because it was never published as a source accounting record.
+    A strategy that ``context.send``s its spend, as the built-in ones do, is
+    accounted correctly. Source ``event_id`` values survive serialization, so
+    retained or replayed representations of a publication count once.
 
     Order is telemetry from before the compaction, then the retained
     conversation, then what was spent during it. That is not the chronological
@@ -2235,8 +2276,8 @@ def _with_usage_events(
     it belongs with that decision, not here.
     """
     return [
-        *(e for e in before if isinstance(e, UsageEvent)),
-        *(e for e in compacted if not isinstance(e, UsageEvent)),
+        *(e for e in before if usage_event_from(e) is not None),
+        *(e for e in compacted if usage_event_from(e) is None),
         *spent_during,
     ]
 

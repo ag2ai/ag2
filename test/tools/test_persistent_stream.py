@@ -125,7 +125,7 @@ class TestUsageAccountingOnAReusedStream:
         spent = billed + billed + billed
         report = UsageReport.from_events(await ctx.stream.history.get_events())
         assert report.total == spent
-        assert report.by_kind == {"subtask": spent}
+        assert report.by_kind == {"model_call": spent}
 
     async def test_a_failed_delegation_on_a_reused_stream_reports_only_its_own_spend(self, ctx: Context) -> None:
         """The failure path must not carry the over-count either.
@@ -172,7 +172,7 @@ class TestUsageAccountingOnAReusedStream:
         # the failed attempt's single call.
         report = UsageReport.from_events(await ctx.stream.history.get_events())
         assert report.total == dispatch + wrapup + dispatch
-        assert report.by_kind == {"subtask": dispatch + wrapup + dispatch}
+        assert report.by_kind == {"model_call": dispatch + wrapup + dispatch}
 
 
 @pytest.mark.asyncio
@@ -237,7 +237,7 @@ class TestConcurrentDelegationsToOnePersistentWorker:
         spent = billed + billed
         report = UsageReport.from_events(await ctx.stream.history.get_events())
         assert report.total == spent
-        assert report.by_kind == {"subtask": spent}
+        assert report.by_kind == {"model_call": spent}
 
         # The field keeps its documented meaning: the worker's running total on
         # its stream. Whichever delegation went second reads both.

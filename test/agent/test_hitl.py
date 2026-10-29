@@ -437,7 +437,7 @@ async def test_an_unanswerable_subtask_ends_the_parent_turn(parallel: bool) -> N
         await parent.ask("Hi!", stream=stream)
 
     executed.assert_not_called()
-    assert any(isinstance(event, TaskFailed) for event in await stream.history.get_events())
+    assert any(isinstance(event.source_event, TaskFailed) for event in await stream.history.get_events())
 
 
 @pytest.mark.asyncio()
