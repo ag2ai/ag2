@@ -103,7 +103,7 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 | `config/` | LLM provider clients (see [below](#llm-provider-clients)) | `ModelConfig`, `LLMClient`, `AnthropicConfig`, `OpenAIConfig`, `GeminiConfig`, … |
 | `tools/` | Ready-to-use tools | `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
 | `tools/types.py` | Tool abstractions & schema types | `Tool`, `FunctionTool`, `ClientTool`, `Toolkit`, `ToolSchema`, … |
-| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `persistent_stream`, `StreamFactory` |
+| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `persistent_stream`, `StreamFactory`, `send_down`, `StreamHandle`, `DeliveryError` |
 | `eval/` | Offline evaluation framework | `run`, `scorer`, `EvalTarget`, `Suite`, `Task`, `Trace`, `RunResult`, `Feedback`, `BudgetThresholds`, plus prebuilts under `eval.scorers` |
 | `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, `MiddlewareDescription`, … |
 | `response/` | Structured output validation | `ResponseSchema`, `PromptedSchema`, `ResponseProto`, `response_schema` |
@@ -173,9 +173,15 @@ Builtin tools live in `ag2/tools/builtin/`. Each tool has:
 
 Subagent tools live in `ag2/tools/subagents/` and are imported from `ag2.tools.subagents` (not re-exported from `ag2.tools`).
 
+Application code delegates through `Agent.as_tool()` / `subagent_tool()` and
+addresses active descendants through `send_down()` or `event.origin.send()`.
+`run_task`, `TaskResult`, `DelegationRegistry`, and `get_registry` remain internal;
+framework code and tests import them from their implementation modules, not the
+package's public exports.
+
 | File | Purpose |
 |------|---------|
-| `run_task.py` | `run_task()`, `TaskResult` — execute an agent as a sub-task |
+| `run_task.py` | Internal `run_task()`, `TaskResult` — execute an agent as a sub-task |
 | `subagent_tool.py` | `subagent_tool()`, `StreamFactory` — wrap an agent as a callable tool |
 | `persistent_stream.py` | `persistent_stream()` — `StreamFactory` that reuses a stream across calls |
 
