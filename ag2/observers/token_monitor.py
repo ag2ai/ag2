@@ -5,7 +5,7 @@
 """TokenMonitor — tracks cumulative token usage and alerts when thresholds are exceeded."""
 
 from ag2.annotations import Context
-from ag2.events import BaseEvent, ChildEvent, ObserverAlert, Severity, Usage, UsageEvent
+from ag2.events import BaseEvent, ObserverAlert, Severity, Usage, UsageEvent
 from ag2.usage import usage_event_from
 from ag2.watch import EventWatch
 
@@ -90,7 +90,7 @@ class TokenMonitor(BaseObserver):
         name: str = "token-monitor",
         timeout: float | None = None,
     ) -> None:
-        super().__init__(name, watch=EventWatch(UsageEvent | ChildEvent), timeout=timeout)
+        super().__init__(name, watch=EventWatch(UsageEvent), timeout=timeout)
         self._warn_threshold = warn_threshold
         self._alert_threshold = alert_threshold
         self._total_tokens: int = 0

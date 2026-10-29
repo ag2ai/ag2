@@ -32,7 +32,6 @@ from ag2.events import (
     BaseEvent,
     BinaryInput,
     BuiltinToolCallEvent,
-    ChildEvent,
     DataInput,
     FileIdInput,
     HumanInputRequest,
@@ -398,7 +397,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         if previous is not None:
             stream.unsubscribe(previous)
         recorder = _UsageRecorder(ref(self), stream)
-        _usage_watchers[stream] = stream.where(UsageEvent | ChildEvent).subscribe(recorder)
+        _usage_watchers[stream] = stream.where(UsageEvent).subscribe(recorder)
 
     async def record_usage_span(self, event: UsageEvent) -> None:
         """Record one accounting event as its own span.

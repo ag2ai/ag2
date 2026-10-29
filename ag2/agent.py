@@ -44,7 +44,6 @@ from .compact import CompactStrategy, CompactTrigger
 from .config import LLMClient, ModelConfig
 from .events import (
     BaseEvent,
-    ChildEvent,
     DrainedModelRequest,
     HumanInputRequest,
     Input,
@@ -2197,7 +2196,7 @@ class _CompactionMiddleware(BaseMiddleware):
             # how history grew in the meantime and no second full read of it.
             spent_during: list[UsageEvent] = []
             try:
-                with context.stream.where(UsageEvent | ChildEvent).sub_scope(collect_usage_events(spent_during)):
+                with context.stream.where(UsageEvent).sub_scope(collect_usage_events(spent_during)):
                     compacted = await self._strategy.compact(events, context, self._store)
             except Exception as exc:
                 logger.exception("Compaction failed for %s", self._actor_name)

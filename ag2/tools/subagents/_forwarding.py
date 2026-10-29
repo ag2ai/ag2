@@ -25,6 +25,7 @@ from ag2.events import (
     TransientChildEvent,
     TransientDownEvent,
     Usage,
+    UsageEvent,
 )
 from ag2.stream import Stream
 from ag2.usage import UsageReport, usage_event_from
@@ -304,13 +305,18 @@ class Forwarder:
             return event
         if usage_event_from(event) is not None:
             self.accounting.append(event)
-        if isinstance(event, ChildEvent):
-            envelope = copy(event)
+        forwarded: BaseEvent
+        if isinstance(event, UsageEvent):
+            forwarded = copy(event)
+            endpoint = event.origin._endpoint if event._origin is not None else self.origin
+            forwarded._origin = StreamHandle(endpoint, self.parent) if endpoint is not None else None
+        elif isinstance(event, ChildEvent):
+            forwarded = copy(event)
             if event._origin is not None:
-                envelope._origin = StreamHandle(event.origin._endpoint, self.parent)
+                forwarded._origin = StreamHandle(event.origin._endpoint, self.parent)
         else:
             envelope_type = TransientChildEvent if type(event).__transient__ else ChildEvent
-            envelope = envelope_type(
+            forwarded = envelope_type(
                 inner=event,
                 task_id=self.task_id,
                 path=self.path,
@@ -319,9 +325,14 @@ class Forwarder:
                 _origin=StreamHandle(self.origin, self.parent) if self.origin is not None else None,
             )
         try:
-            await self.parent.send(envelope)
+            if isinstance(forwarded, UsageEvent):
+                # Forward the existing publication without Context.send creating
+                # a new accounting identity at each ancestor (ADR 0004).
+                await self.parent.stream.send(forwarded, self.parent)
+            else:
+                await self.parent.send(forwarded)
         except BaseException:
-            if usage_event_from(envelope) is not None:
-                await _persist_accounting(self.parent, [envelope])
+            if usage_event_from(forwarded) is not None:
+                await _persist_accounting(self.parent, [forwarded])
             raise
         return event

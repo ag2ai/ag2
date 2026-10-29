@@ -295,7 +295,7 @@ async def _serve_turn(
     await stream.history.replace(history_messages)
     # Metered as it is spent, not read back from history: a turn carried by
     # several runs reports each run's own share.
-    stream.where(UsageEvent | ChildEvent).subscribe(collect_usage_events(output.usage))
+    stream.where(UsageEvent).subscribe(collect_usage_events(output.usage))
 
     streaming_msg_id: str | None = None
     reasoning_msg_id: str | None = None
