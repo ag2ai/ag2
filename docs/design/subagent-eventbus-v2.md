@@ -49,10 +49,15 @@ This sketch uses application-owned `config`, `worker`, and `should_stop`.
 
 `await event.origin.send(custom_event)` addresses the source author, even for
 a grandchild. `send_down(ctx, event, task_id=...)`, `agent=...`, or
-`subtree=path` selects executing delegations through `get_registry(ctx)`.
+`subtree=path` selects executing delegations.
 An agent selector reaches all active invocations with that name. Ordinary
 delivery to a queued, completed or unknown delegation raises `DeliveryError`
 and emits `DeliveryFailed`.
+
+`StreamHandle` is the live address returned by `event.origin`; applications
+catch `DeliveryError` when delivery fails. These types and `send_down` are
+exported from `ag2.tools.subagents`. The runner, its result type, and the
+delegation registry remain internal implementation details.
 
 Downlink uses the recipient's ordinary pipeline without a turn lock or event
 type restrictions. The caller owns the consequences, including reentrant
@@ -122,8 +127,8 @@ ancestors recorded it. Equal-cost calls remain separate records. Provider,
 model and usage kind stay attached to each original call. Archived rollup
 records remain readable, but new runs do not generate them.
 
-`TaskResult.usage` and `TaskCompleted.usage` are cumulative stream snapshots
-for inspection; never add these snapshots to accounting events. A root
+`TaskCompleted.usage` is a cumulative stream snapshot for inspection;
+never add this snapshot to accounting events. A root
 monitor sees descendant spend when its source record is published, without
 waiting for the delegated run to finish. Already published accounting remains
 available after failure, cancellation, compaction and replay.
