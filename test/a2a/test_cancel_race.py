@@ -89,8 +89,45 @@ def _cancel_request() -> RequestContext:
     return RequestContext(ServerCallContext(), task_id=_TASK_ID, context_id=_CONTEXT_ID)
 
 
+class _CancelOnStatus:
+    def __init__(self, state: TaskState, queue: _RecordingQueue) -> None:
+        self.state = state
+        self.queue = queue
+        self.executor: AgentExecutor | None = None
+        self.observed: list[TaskState] = []
+
+    async def observe(self, context: Context) -> str:
+        context.stream.where(A2ATaskStatusUpdate).subscribe(self.on_status)
+        return "observing"
+
+    async def on_status(self, event: A2ATaskStatusUpdate) -> None:
+        self.observed.append(event.state)
+        if event.state == self.state:
+            assert self.executor is not None
+            await self.executor.cancel(_cancel_request(), self.queue)
+
+
 @pytest.mark.asyncio
 class TestCancelRacingTheTurn:
+    @pytest.mark.parametrize("state", [TaskState.TASK_STATE_INPUT_REQUIRED, TaskState.TASK_STATE_COMPLETED])
+    async def test_lifecycle_observer_can_await_cancellation(self, state: TaskState) -> None:
+        queue = _RecordingQueue()
+        observer = _CancelOnStatus(state, queue)
+        answer = (
+            ToolCallEvent(name="lookup", arguments="{}") if state == TaskState.TASK_STATE_INPUT_REQUIRED else "done"
+        )
+        config = TestConfig(ToolCallEvent(name="observe", arguments="{}"), ModelMessageChunk("thinking"), answer)
+        executor = AgentExecutor(Agent("server", config=config, tools=[observer.observe]))
+        observer.executor = executor
+
+        await asyncio.wait_for(executor.execute(_client_tool_request(), queue), timeout=1.0)
+
+        expected = [state]
+        if state == TaskState.TASK_STATE_INPUT_REQUIRED:
+            expected.append(TaskState.TASK_STATE_CANCELED)
+        assert queue.states() == [TaskState.TASK_STATE_WORKING, *expected]
+        assert observer.observed == expected
+
     async def test_cancel_landing_after_the_turn_completed_leaves_it_completed(self) -> None:
         executor = AgentExecutor(Agent("server", config=TestConfig("done")))
         queue = _RecordingQueue()

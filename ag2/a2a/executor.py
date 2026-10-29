@@ -108,15 +108,18 @@ class _ClosingTaskUpdater(TaskUpdater):
                         last_chunk=True,
                     )
             await super().update_status(state, message, timestamp, metadata)
-            await self._lifecycle.send(
-                task_state_to_status_update(
-                    state,
-                    task_id=self.task_id,
-                    context_id=self.context_id,
-                    message=message,
-                    timestamp=datetime.now(tz=timezone.utc),
-                ),
-            )
+
+        # Subscribers may await another transition, such as canceling on INPUT_REQUIRED.
+        # Keep user callbacks outside the lock that serializes the wire transitions.
+        await self._lifecycle.send(
+            task_state_to_status_update(
+                state,
+                task_id=self.task_id,
+                context_id=self.context_id,
+                message=message,
+                timestamp=datetime.now(tz=timezone.utc),
+            ),
+        )
 
 
 class AgentExecutor(A2AAgentExecutorBase):
