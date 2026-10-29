@@ -416,6 +416,10 @@ python_version = "3.10"
 # (re)introduced module-by-module; until then mypy is scoped to modules
 # that already pass under `strict = true`.
 files = [
+    "ag2/scopes.py",
+    "ag2/events/delegation.py",
+    "ag2/tools/subagents/_forwarding.py",
+    "ag2/usage.py",
     "ag2/_import_utils.py",
     "ag2/__init__.py",
     "ag2/acp/client.py",

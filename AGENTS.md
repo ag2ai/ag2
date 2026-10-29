@@ -103,7 +103,7 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 | `config/` | LLM provider clients (see [below](#llm-provider-clients)) | `ModelConfig`, `LLMClient`, `AnthropicConfig`, `OpenAIConfig`, `GeminiConfig`, … |
 | `tools/` | Ready-to-use tools | `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
 | `tools/types.py` | Tool abstractions & schema types | `Tool`, `FunctionTool`, `ClientTool`, `Toolkit`, `ToolSchema`, … |
-| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `persistent_stream`, `StreamFactory` |
+| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `persistent_stream`, `StreamFactory`, `StreamHandle`, `DeliveryError` |
 | `eval/` | Offline evaluation framework | `run`, `scorer`, `EvalTarget`, `Suite`, `Task`, `Trace`, `RunResult`, `Feedback`, `BudgetThresholds`, plus prebuilts under `eval.scorers` |
 | `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, `MiddlewareDescription`, … |
 | `response/` | Structured output validation | `ResponseSchema`, `PromptedSchema`, `ResponseProto`, `response_schema` |
@@ -173,9 +173,21 @@ Builtin tools live in `ag2/tools/builtin/`. Each tool has:
 
 Subagent tools live in `ag2/tools/subagents/` and are imported from `ag2.tools.subagents` (not re-exported from `ag2.tools`).
 
+Application code delegates through `Agent.as_tool()` / `subagent_tool()` and
+addresses an observed event's author through `event.origin.send()`.
+This is the single public addressed-delivery entry point; each handle belongs
+to one invocation. `run_task`, `TaskResult`, and `DelegationRegistry` remain internal;
+framework code and tests import them from their implementation modules, not the
+package's public exports.
+
+Forward descendant `UsageEvent` records as plain `UsageEvent`, preserving the
+source `event_id`. Existing type-based observer and stream subscriptions must
+receive descendant costs directly. Operational events use `ChildEvent`
+observations; accounting uses neither that wrapper nor generated rollups.
+
 | File | Purpose |
 |------|---------|
-| `run_task.py` | `run_task()`, `TaskResult` — execute an agent as a sub-task |
+| `run_task.py` | Internal `run_task()`, `TaskResult` — execute an agent as a sub-task |
 | `subagent_tool.py` | `subagent_tool()`, `StreamFactory` — wrap an agent as a callable tool |
 | `persistent_stream.py` | `persistent_stream()` — `StreamFactory` that reuses a stream across calls |
 
@@ -189,7 +201,7 @@ Sub-task delegation is **off by default** (`tasks=False`). Pass `tasks=TaskConfi
 
 - Inherits the parent's user-supplied tools by default (filterable via `TaskConfig.include_tools` / `exclude_tools`, extendable via `extra_tools`).
 - Is itself constructed with `tasks=False` (the default), so the subtask has **no** `run_subtask` tools — recursive delegation is structurally impossible. No depth limiting required.
-- Runs on its own `MemoryStream`; child events do not leak into the parent's stream beyond `TaskStarted` / `TaskCompleted` / `TaskFailed` lifecycle events.
+- Runs on its own `MemoryStream`; operational events reach ancestors as inert `ChildEvent` observations, and accounting reaches them as plain `UsageEvent` records.
 
 The LLM is told (via the tool description) that `run_subtask` may be invoked multiple times in parallel within a single response, encouraging the parallel-tool-use pattern Anthropic recommends.
 
@@ -208,7 +220,7 @@ agent.as_tool(description="...", stream=persistent_stream())
 | What | Behavior | Why |
 |------|----------|-----|
 | Dependencies | Shallow-copied (`dict.copy()`) | Isolated at the top level; mutable values are still shared by reference. Treat dependencies as read-only inside subtasks. |
-| Variables | Copied (new dict); **not** synced back | Concurrent siblings via `asyncio.gather` would race-clobber a shared dict — last-writer-wins is silent data loss. Each subtask's mutations stay scoped to it. |
+| Variables | Serializable values: plain/copied values are deep-copied, local values are excluded, and root-declared shared bindings remain shared | Copied values stay branch-local; shared mutations require application-supplied locks in `dependencies`. |
 | History | Fresh stream per call | Clean context; LLM passes relevant info via `context` parameter |
 | Tool inheritance | Parent's user-supplied tools (filtered by `TaskConfig`) | Subtasks need real capabilities to do work; child has no `run_subtask` tools so recursion is impossible |
 
