@@ -7,6 +7,7 @@ import os
 import shlex
 import shutil
 import stat
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -159,7 +160,13 @@ class LocalRuntime(SkillRuntime):
         resolved_script = _resolve_within(scripts_dir / script, scripts_dir)
         if script not in {s.name for s in skill.scripts} or resolved_script is None:
             raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
-        command = _script_command(resolved_script, resolved_script.relative_to(scripts_dir.resolve()))
+        command = _script_command(
+            resolved_script,
+            resolved_script.relative_to(scripts_dir.resolve()),
+            # Only the default local backend shares this interpreter; a supplied
+            # sandbox must never receive a host path.
+            host_python=sys.platform == "win32" and self.sandbox is None,
+        )
         if args:
             command.extend(args)
         # async + await env.run(...) so the command runs in the agent's own
@@ -241,13 +248,20 @@ def _resolve_within(path: Path, base: Path) -> Path | None:
     return resolved
 
 
-def _script_command(resolved_script: Path, relative_script: Path) -> list[str]:
+def _script_command(resolved_script: Path, relative_script: Path, *, host_python: bool = False) -> list[str]:
     """Build the argv to run *resolved_script* from the scripts directory.
 
     A shebang takes precedence; otherwise ``.py``/``.sh`` map to their
     interpreters, and anything else is made executable and run directly.
+
+    With *host_python*, ``.py`` scripts run under :data:`sys.executable` and
+    their shebang is ignored: on Windows ``python3`` (and so
+    ``#!/usr/bin/env python3``) is often missing or the Microsoft Store stub
+    rather than the environment running AG2.
     """
     script_arg = f"./{relative_script.as_posix()}"
+    if host_python and resolved_script.suffix.lower() == ".py":
+        return [sys.executable, script_arg]
     first_line = resolved_script.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
     if first_line.startswith("#!"):
         resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
