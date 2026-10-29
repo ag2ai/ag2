@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ._forwarding import DeliveryError, StreamHandle, send_down
+from ._forwarding import DeliveryError, StreamHandle
 from .background import background_agent_tool
 from .persistent_stream import persistent_stream
 from .subagent_tool import StreamFactory, StreamOrFactory, subagent_tool
@@ -14,6 +14,5 @@ __all__ = (
     "StreamOrFactory",
     "background_agent_tool",
     "persistent_stream",
-    "send_down",
     "subagent_tool",
 )
