@@ -30,7 +30,7 @@ from ag2.events import (
 )
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.testing import TestConfig
-from ag2.tools.subagents import DeliveryError, background_agent_tool, send_down
+from ag2.tools.subagents import DeliveryError, background_agent_tool
 from ag2.tools.subagents.run_task import run_task
 from ag2.usage import UsageReport
 
@@ -159,25 +159,44 @@ async def long_work(ctx: Context) -> str:
     return "unreachable"
 
 
-async def stop_on_signal(event: BaseEvent) -> None:
+async def stop_on_signal(event: BaseEvent, ctx: Context) -> None:
     if isinstance(event, ChildEvent) and isinstance(event.inner, WorkSignal):
-        await event.origin.send(HaltEvent(reason="budget", source="test"))
+        sibling = ctx.dependencies["sibling_gate"]
+        await sibling.entered.wait()
+        try:
+            await event.origin.send(HaltEvent(reason="budget", source="test"))
+        finally:
+            sibling.release.set()
 
 
 @pytest.mark.asyncio
-async def test_targeted_halt_cancels_running_tool_without_aborting_parent_or_sibling() -> None:
-    child = Agent("child", config=TestConfig(ToolCallEvent(name="long_work", arguments="{}")), tools=[long_work])
-    sibling = Agent("sibling", config=TestConfig("sibling done"))
+@pytest.mark.parametrize("same_name", [False, True])
+async def test_targeted_halt_cancels_running_tool_without_aborting_parent_or_sibling(same_name: bool) -> None:
+    child = Agent(
+        "worker" if same_name else "child",
+        config=TestConfig(ToolCallEvent(name="long_work", arguments="{}")),
+        tools=[long_work],
+    )
+    sibling_gate = Gate()
+    sibling = Agent(
+        "worker" if same_name else "sibling",
+        config=TestConfig(ToolCallEvent(name="run", arguments="{}"), "sibling done"),
+        tools=[sibling_gate.run],
+    )
     root = Agent(
         "root",
         config=TestConfig(
             [
-                ToolCallEvent(name="task_child", arguments='{"objective":"work"}'),
-                ToolCallEvent(name="task_sibling", arguments='{"objective":"work"}'),
+                ToolCallEvent(name="cancel_work", arguments='{"objective":"work"}'),
+                ToolCallEvent(name="keep_work", arguments='{"objective":"work"}'),
             ],
             "root survived",
         ),
-        tools=[child.as_tool(description="Work"), sibling.as_tool(description="Work")],
+        tools=[
+            child.as_tool(description="Work", name="cancel_work"),
+            sibling.as_tool(description="Work", name="keep_work"),
+        ],
+        dependencies={"sibling_gate": sibling_gate},
         variables={"cleanup": ScopedValue([], scope=Scope.SHARED)},
     )
     journal = Journal()
@@ -185,9 +204,10 @@ async def test_targeted_halt_cancels_running_tool_without_aborting_parent_or_sib
         root.ask("start", observers=[observer(callback=stop_on_signal), observer(callback=journal.record)]), 2
     )
     assert reply.body == "root survived"
+    assert sibling_gate.received == [False]
     assert reply.context.variables["cleanup"] == ["cleaned"]
     cancelled = [e.inner if isinstance(e, ChildEvent) else e for e in journal.events]
-    assert [e.agent_name for e in cancelled if isinstance(e, TaskCancelled)] == ["child"]
+    assert [e.agent_name for e in cancelled if isinstance(e, TaskCancelled)] == [child.name]
 
 
 async def ask_human(ctx: Context) -> str:
@@ -268,6 +288,7 @@ class HaltCleanup:
 async def test_successfully_delivered_halt_remains_successful_during_recipient_cleanup() -> None:
     cleanup, journal = HaltCleanup(), Journal()
     ctx = Context(MemoryStream())
+    ctx.stream.subscribe(journal.record)
     child = Agent(
         "child",
         config=TestConfig(ToolCallEvent(name="work", arguments="{}")),
@@ -276,7 +297,8 @@ async def test_successfully_delivered_halt_remains_successful_during_recipient_c
     )
     task = asyncio.create_task(run_task(child, "work", parent_context=ctx, task_id="child"))
     await cleanup.entered.wait()
-    await send_down(ctx, HaltEvent(reason="stop", source="test"), task_id="child")
+    handle = next(event.origin for event in journal.events if isinstance(event, ChildEvent))
+    await handle.send(HaltEvent(reason="stop", source="test"))
     result = await task
     assert result.cancelled
     assert cleanup.cleaned.is_set()
@@ -284,7 +306,7 @@ async def test_successfully_delivered_halt_remains_successful_during_recipient_c
 
 
 @pytest.mark.asyncio
-async def test_downlink_to_queued_delegation_never_reaches_the_active_persistent_turn() -> None:
+async def test_queued_delegation_has_no_origin_and_does_not_capture_active_turn_delivery() -> None:
     gate = Gate()
     guidance = Guidance()
     worker = Agent(
@@ -294,19 +316,22 @@ async def test_downlink_to_queued_delegation_never_reaches_the_active_persistent
         observers=[observer(callback=guidance.receive)],
     )
     ctx = Context(MemoryStream())
+    journal = Journal()
+    ctx.stream.subscribe(journal.record)
     shared_stream = MemoryStream(storage=ctx.stream.history.storage)
     first = asyncio.create_task(run_task(worker, "first", parent_context=ctx, stream=shared_stream, task_id="first"))
     await gate.entered.wait()
     second = asyncio.create_task(run_task(worker, "second", parent_context=ctx, stream=shared_stream, task_id="second"))
     await asyncio.sleep(0)
     try:
-        with pytest.raises(DeliveryError):
-            await send_down(ctx, Directive(text="wrong turn"), task_id="second")
+        observations = [event for event in journal.events if isinstance(event, ChildEvent)]
+        assert {event.task_id for event in observations} == {"first"}
+        await observations[0].origin.send(Directive(text="first only"))
     finally:
         gate.release.set()
         results = await asyncio.gather(first, second)
     assert all(result.completed for result in results)
-    assert gate.received == [False, False]
+    assert gate.received == [True, False]
 
 
 @pytest.mark.asyncio
@@ -497,21 +522,14 @@ async def test_parent_cancellation_retains_usage_while_its_interrupter_is_awaiti
     assert UsageReport.from_events(await ctx.stream.history.get_events()).total == Usage(total_tokens=30)
 
 
-@dataclass
 class MiddleSender:
-    route: str
-
-    async def guide(self, event: BaseEvent, ctx: Context) -> None:
+    async def guide(self, event: BaseEvent) -> None:
         if isinstance(event, ChildEvent) and isinstance(event.inner, WorkSignal):
-            if self.route == "send_down":
-                await send_down(ctx, Directive(text="from middle"), task_id=event.task_id)
-            else:
-                await event.origin.send(Directive(text="from middle"))
+            await event.origin.send(Directive(text="from middle"))
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("route", ["send_down", "origin"])
-async def test_nested_delivery_records_the_calling_ancestor_as_author(route: str) -> None:
+async def test_nested_delivery_records_the_calling_ancestor_as_author() -> None:
     guidance = Guidance()
     leaf = Agent(
         "leaf",
@@ -519,7 +537,7 @@ async def test_nested_delivery_records_the_calling_ancestor_as_author(route: str
         tools=[seek_guidance],
         observers=[observer(callback=guidance.receive)],
     )
-    sender = MiddleSender(route)
+    sender = MiddleSender()
     middle = Agent(
         "middle",
         config=TestConfig(ToolCallEvent(name="task_leaf", arguments='{"objective":"work"}'), "done"),

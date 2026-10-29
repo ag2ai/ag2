@@ -31,7 +31,7 @@ from ag2.usage import UsageReport, usage_event_from
 
 
 class DeliveryError(RuntimeError):
-    """The selected delegation is not executing or no longer exists."""
+    """The addressed delegation is not executing or no longer exists."""
 
 
 async def _persist_accounting(context: Context, events: list[BaseEvent]) -> None:
@@ -51,11 +51,19 @@ async def _persist_accounting(context: Context, events: list[BaseEvent]) -> None
 
 
 class DelegationRegistry:
-    """Invocation-owned delegation addresses; queued turns are not recipients."""
+    """Internal bookkeeping for delegation cancellation and cleanup."""
 
-    def __init__(self, context: Context, delegations: "dict[str, Forwarder] | None" = None) -> None:
+    def __init__(self, context: Context) -> None:
         self.context = context
-        self._delegations: dict[str, Forwarder] = delegations if delegations is not None else {}
+        self._delegations: dict[str, Forwarder] = {}
+
+    @classmethod
+    def for_context(cls, context: Context) -> "DelegationRegistry":
+        registry: DelegationRegistry | None = context.dependencies.get(cls)
+        if registry is None:
+            registry = cls(context)
+            context.dependencies[cls] = registry
+        return registry
 
     def register(self, delegation: "Forwarder") -> None:
         delegation.caller_task = asyncio.current_task()
@@ -63,47 +71,6 @@ class DelegationRegistry:
 
     def unregister(self, task_id: str) -> None:
         self._delegations.pop(task_id, None)
-
-    def get(self, task_id: str) -> "StreamHandle | None":
-        delegation = self._delegations.get(task_id)
-        return (
-            StreamHandle(delegation.origin, self.context)
-            if delegation is not None and delegation.origin is not None
-            else None
-        )
-
-    async def send(
-        self,
-        event: BaseEvent,
-        *,
-        task_id: str | None = None,
-        agent: str | None = None,
-        subtree: tuple[str, ...] | str | None = None,
-    ) -> list[str]:
-        if sum(value is not None for value in (task_id, agent, subtree)) != 1:
-            raise ValueError("Choose exactly one selector: task_id, agent or subtree")
-        path = (subtree,) if isinstance(subtree, str) else subtree
-        if isinstance(subtree, str) and subtree in self._delegations:
-            path = self._delegations[subtree].path
-        targets = [
-            d.origin
-            for d in tuple(self._delegations.values())
-            if d.origin is not None
-            and d.origin.alive
-            and (task_id is None or d.task_id == task_id)
-            and (agent is None or d.agent_name == agent)
-            and (path is None or d.path[: len(path)] == path)
-        ]
-        if not targets:
-            await self.context.send(
-                DeliveryFailed(task_id=task_id, reason="no executing delegation matches the selector")
-            )
-            raise DeliveryError("No executing delegation matches the selector")
-        delivered = []
-        for target in targets:
-            await target.send(event, sender=self.context)
-            delivered.append(target.task_id)
-        return delivered
 
     def cancel_descendants(self, path: tuple[str, ...], reason: str) -> None:
         current = asyncio.current_task()
@@ -151,7 +118,7 @@ class _Endpoint:
     async def halt(self, event: HaltEvent) -> None:
         self.halted = True
         self.reason = event.reason
-        get_registry(self.parent).cancel_descendants(self.path, event.reason)
+        DelegationRegistry.for_context(self.parent).cancel_descendants(self.path, event.reason)
         if self.task is not None:
             self.task.cancel()
 
@@ -358,26 +325,3 @@ class Forwarder:
                 await _persist_accounting(self.parent, [envelope])
             raise
         return event
-
-
-def get_registry(context: Context) -> DelegationRegistry:
-    """Return this invocation tree's registry, allocating it only at runtime."""
-    registry = context.dependencies.get(DelegationRegistry)
-    if registry is None:
-        registry = DelegationRegistry(context)
-        context.dependencies[DelegationRegistry] = registry
-    elif registry.context is not context:
-        return DelegationRegistry(context, registry._delegations)
-    return registry
-
-
-async def send_down(
-    context: Context,
-    event: BaseEvent,
-    *,
-    task_id: str | None = None,
-    agent: str | None = None,
-    subtree: tuple[str, ...] | str | None = None,
-) -> list[str]:
-    """Send an arbitrary event through the normal pipeline of selected active turns."""
-    return await get_registry(context).send(event, task_id=task_id, agent=agent, subtree=subtree)

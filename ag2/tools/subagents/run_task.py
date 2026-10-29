@@ -13,7 +13,7 @@ from ag2.exceptions import HumanInputError
 from ag2.scopes import derive_child_variables
 from ag2.stream import MemoryStream, Stream
 
-from ._forwarding import Forwarder, get_registry
+from ._forwarding import DelegationRegistry, Forwarder
 
 if TYPE_CHECKING:
     from ag2.agent import Agent
@@ -51,7 +51,7 @@ async def run_task(
     task_stream = stream or MemoryStream(storage=parent_context.stream.history.storage)
     prompt = f"{objective}\n\n## Context\n{context}" if context else objective
     forwarder = Forwarder(parent_context, task_id, agent.name, task_stream, objective, emit_events)
-    registry = get_registry(parent_context)
+    registry = DelegationRegistry.for_context(parent_context)
     registry.register(forwarder)
     dependencies = parent_context.dependencies.copy()
     dependencies[Forwarder] = forwarder
