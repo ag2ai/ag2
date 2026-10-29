@@ -104,7 +104,7 @@ class Trace:
         maintaining a parallel summation.
 
         Deliberately *not* :class:`ModelResponse`. Most spend never produces
-        one: a delegating agent's workers report through descendant envelopes,
+        one: a delegating agent's workers report original UsageEvent records,
         history compaction and memory aggregation report usage alone, and live
         sessions map realtime usage straight to the accounting event. Counting
         responses *as well* would double every main-loop call, which emits both.
