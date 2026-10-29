@@ -244,6 +244,7 @@ class ConversationContext:
         if isinstance(event, UsageEvent):
             event = copy(event)
             event.event_id = uuid4().hex
+            event._origin = None
         await self.stream.send(event, self)
 
 

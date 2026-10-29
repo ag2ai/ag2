@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from ag2 import Agent, MemoryStream, observer
+from ag2 import Agent, Context, MemoryStream, observer
 from ag2.events import (
     BaseEvent,
     ChildEvent,
@@ -91,6 +91,33 @@ async def test_usage_subscriber_receives_unwrapped_descendant_costs_with_source_
     histories = [*leaf_history, *await middle_stream.history.get_events(), *await root_stream.history.get_events()]
     assert UsageReport.from_events(histories).total.total_tokens == 60
     assert (await reply.usage()).total.total_tokens == 60
+
+
+@pytest.mark.asyncio
+async def test_republishing_forwarded_usage_starts_a_new_publication_without_the_old_address() -> None:
+    child = Agent("child", config=TestConfig(UsageEvent(Usage(total_tokens=10)), "done"))
+    root = Agent(
+        "root",
+        config=TestConfig(ToolCallEvent(name="task_child", arguments='{"objective":"work"}'), "done"),
+        tools=[child.as_tool(description="Work")],
+    )
+    journal = UsageJournal()
+    await root.ask("start", observers=[observer(UsageEvent, journal.record)])
+    [source] = journal.events
+    assert source.origin.agent_name == "child"
+    replayed = UsageEvent.from_dict(source.to_dict())
+    assert replayed.event_id == source.event_id
+    with pytest.raises(RuntimeError, match="no live origin"):
+        _ = replayed.origin
+
+    stream = MemoryStream()
+    await Context(stream).send(source)
+    [published] = await stream.history.get_events()
+    assert isinstance(published, UsageEvent)
+    assert published.event_id != source.event_id
+    with pytest.raises(RuntimeError, match="no live origin"):
+        _ = published.origin
+    assert source.origin.agent_name == "child"
 
 
 @dataclass
