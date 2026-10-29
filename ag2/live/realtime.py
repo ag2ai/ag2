@@ -81,6 +81,7 @@ class LiveAgent(PluginTarget):
         # knowledge
         # tasks
         # assembly
+        max_concurrent_tool_calls: int | None = None,
         stream: Stream | None = None,
     ) -> None:
         self._init_target(
@@ -93,6 +94,7 @@ class LiveAgent(PluginTarget):
             dependencies=dependencies or {},
             variables=variables or {},
             plugins=plugins,
+            max_concurrent_tool_calls=max_concurrent_tool_calls,
         )
         self._config = config
         self._stream = stream
