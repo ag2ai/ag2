@@ -1,7 +1,9 @@
 # Subagent event routing and variables
 
-Each delegation runs on a separate stream. Every source event travels directly
-to its ancestors in a `ChildEvent`, including streaming chunks. There are no
+Each delegation runs on a separate stream. Source operational events travel
+directly to ancestors in a `ChildEvent`, including streaming chunks. Accounting
+records travel as plain `UsageEvent` events, preserving existing type-based
+subscriptions. There are no
 `forward_events` or `forward_transient` flags. Subscription conditions select
 what an observer consumes.
 
@@ -56,6 +58,10 @@ catch `DeliveryError` when delivery fails. These types are exported from
 `ag2.tools.subagents`. The runner, its result type, and the delegation registry
 remain internal implementation details. There is no public lookup or broadcast
 by task ID, agent name, or subtree.
+
+Forwarded `UsageEvent` records also expose the original author's live `origin`.
+This permits budget callbacks subscribed directly to `UsageEvent` to address
+the spender. A local usage record or a replayed record has no live origin.
 
 A queued invocation has no live origin handle. Sending after the addressed
 invocation has ended raises `DeliveryError` and emits `DeliveryFailed`;
@@ -122,7 +128,10 @@ Acquire the lock before reading the binding used for a compound update.
 ## Accounting and HITL
 
 `UsageReport`, `TokenMonitor`, telemetry, UI collectors and compaction read
-original `UsageEvent` records from both local events and descendant envelopes.
+original `UsageEvent` records from both local work and descendants. Descendant
+accounting is forwarded without a `ChildEvent` wrapper, so both
+`observer(UsageEvent, callback)` and `stream.where(UsageEvent).subscribe(callback)`
+continue to receive it. Callbacks get the original accounting type and fields.
 There are no generated subtask rollups. Source identity survives persistence
 and usage spans, so one billable record is counted once even if multiple
 ancestors recorded it. Equal-cost calls remain separate records. Provider,
@@ -137,6 +146,8 @@ available after failure, cancellation, compaction and replay.
 `UsageEvent.event_id` identifies one source publication. If cancellation
 interrupts forwarding before ordinary storage runs, the original accounting
 record is retained in the affected histories before the terminal event.
+Each forwarding hop preserves the same `event_id`; it does not create a new
+publication. Readers still accept archived usage envelopes.
 
 HITL keeps its original request/answer channel: a local hook takes priority;
 otherwise the request bridges upward under the requester's context. Ancestor

@@ -21,7 +21,7 @@ drifting apart again.
 `UsageEvent` is the framework's accounting record: one event per unit of billable
 work, emitted when tokens are spent by a main-loop LLM call, a live session,
 history compaction, or memory aggregation. Descendants' original records now
-reach ancestors inside `ChildEvent` observations. The original delegation
+reach ancestors as plain `UsageEvent` events. The original delegation
 implementation emitted a sub-agent rollup instead; new runs no longer do.
 
 The rule lived only in that docstring, so the other two consumers each invented their own
@@ -49,10 +49,11 @@ Snapshot fields — `AgentReply.usage`,
 `TaskResult.usage`, `TaskCompleted.usage` — are for direct inspection by a caller who holds
 that one object, and must never be summed.**
 
-- Consumers inspect `event.source_event` for both local records and descendant
-  observations. `TokenMonitor` and `TelemetryMiddleware` subscribe to
-  `UsageEvent | ChildEvent`; they do not execute the descendant's local
-  handlers or wait for `TaskCompleted` to expose its spend.
+- Consumers subscribe to `UsageEvent` for both local and descendant spend.
+  This preserves existing type-based observer and stream subscriptions;
+  there is no `ChildEvent` envelope to unwrap or extra condition to enable.
+  Accounting arrives before `TaskCompleted` and does not execute the
+  descendant's operational handlers in the parent.
 - Deduplicate by `UsageEvent.event_id`, the identity of one source publication.
   Preserve that identity through forwarding, persistence, and usage spans.
   Repeated observations of one record count once; equal-cost calls with

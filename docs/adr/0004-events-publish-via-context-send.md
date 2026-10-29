@@ -44,10 +44,12 @@ the context, and it's the single obvious seam.
    directly because they *are* the plumbing — there is no higher-level seam
    below them.
 
-2. **A deliberate cross-stream forward**, where the stream published to and the
-   context used for handler dispatch / reply routing are *intentionally
-   different*. The subagent HITL bridge is implemented by
-   `Forwarder.bridge` in `ag2/tools/subagents/_forwarding.py`.
+2. **Framework forwarding of an existing publication.**
+   `Forwarder.forward` in `ag2/tools/subagents/_forwarding.py` sends an original
+   `UsageEvent` onto the parent stream under the parent context. It preserves
+   the source `event_id`; calling `context.send` would create a new accounting
+   publication. `Forwarder.bridge` also uses this primitive for HITL, with an
+   intentional stream/context mismatch to preserve reply routing.
 
 ## Consequences / things that look wrong but are deliberate
 
@@ -66,9 +68,11 @@ the context, and it's the single obvious seam.
   whole point of using `stream.send` here.
 
 - **Observation forwarding is separate from the HITL bridge.** Ancestors
-  observe descendants through inert `ChildEvent` envelopes under their own
-  contexts. `event.source_event` exposes the source for inspection without
-  executing its local handlers. Only the explicit bridge dispatches a bare
+  observe operational events through inert `ChildEvent` envelopes under their
+  own contexts. Accounting arrives as plain `UsageEvent` records so existing
+  type-based subscriptions keep receiving descendant spend. These records
+  are non-conversational and do not trigger tools or the model loop.
+  Only the explicit bridge dispatches a bare
   `HumanInputRequest` under the requester's context; a local hook takes
   priority. This preserves one answer channel while still making both the
   question and answer observable. See
@@ -82,8 +86,7 @@ the context, and it's the single obvious seam.
   application code.
 
 To emit an event: call `context.send(event)`. Reach for
-`stream.send(event, context)` only when you are implementing a `Stream`, or when
-you genuinely need to publish onto one stream while dispatching under a
-different context — and if you do, leave a comment saying why, because the next
-person running a `context.send` migration will otherwise assume it's an
-oversight.
+`stream.send(event, context)` when implementing a `Stream` or forwarding an
+existing publication. Leave a comment explaining the identity or routing
+requirement, so a later migration does not turn delivery into a new publication
+or change the reply channel.

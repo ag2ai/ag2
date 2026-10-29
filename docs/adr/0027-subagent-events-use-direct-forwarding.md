@@ -25,11 +25,18 @@ tree, including transient chunks; there are no `forward_events` or
 `forward_transient` switches. Subscribers filter what they consume. Preserve
 the direct author's identity and live address through every hop.
 
-Forwarded events remain observation envelopes rather than local execution
-events. They do not enter the ancestor's model transcript or trigger its tool,
-model or HITL handlers. A transient source event has a transient envelope, so
-default storage does not start retaining chunks merely because they travelled
-upward. Ordinary `persist_all` behavior remains available.
+Forwarded operational events remain observation envelopes rather than local
+execution events. They do not enter the ancestor's model transcript or trigger
+its tool, model or HITL handlers. A transient source event has a transient
+envelope, so default storage does not start retaining chunks merely because
+they travelled upward. Ordinary `persist_all` behavior remains available.
+
+Forward `UsageEvent` records directly, without `ChildEvent`, preserving their
+source identity and accounting fields. Existing `UsageEvent` subscriptions
+must continue to receive all descendant spend without changing their filters.
+Usage is non-conversational telemetry and does not activate operational
+handlers. No replacement rollup is generated; see
+[ADR 0029](0029-account-descendant-usage-from-source-events.md).
 
 Downlink accepts any event through the recipient's normal pipeline. The caller
 chooses the event and is responsible for its effects, including reentrant model
