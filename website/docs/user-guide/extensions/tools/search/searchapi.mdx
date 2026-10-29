@@ -1,0 +1,108 @@
+---
+title: SearchApi Search
+sidebarTitle: SearchApi Search
+---
+
+`SearchApiSearchToolkit` gives an agent three related tools powered by [SearchApi](https://www.searchapi.io){.external-link target="_blank"}: Google web search, Google News search, and Google Scholar search. Use it when an agent needs current web results, recent news coverage, or academic articles with citation counts from a single API key.
+
+!!! note
+    Requires a SearchApi API key. No extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import SearchApiSearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[SearchApiSearchToolkit(api_key=os.environ["SEARCHAPI_API_KEY"])],
+)
+```
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `searchapi_web_search` | Search Google web results and return ranked results with position, title, snippet, and URL |
+| `searchapi_news_search` | Search Google News and return recent articles with title, source, publish date, snippet, and URL |
+| `searchapi_scholar_search` | Search Google Scholar and return articles with title, authors, publication, snippet, citation count, URL, and a PDF link when one exists |
+
+All three tools call the same endpoint, `GET https://www.searchapi.io/api/v1/search`, and differ only in the `engine` parameter (`google`, `google_news`, `google_scholar`). The API key travels in the `Authorization: Bearer` header, never in the query string. The web and news tools also send `link=resolved`: Google ships those result links as `google.com/goto` redirects, and SearchApi follows them for you so each `link` is the destination URL. Resolving can add some latency to those two calls.
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default tools:
+
+```python linenums="1"
+toolkit = SearchApiSearchToolkit(
+    api_key=...,
+    num=5,     # number of results, for all three tools
+    gl="us",   # Google country code (web and news), forwarded as a query parameter
+    hl="en",   # Google interface language, forwarded as a query parameter
+)
+```
+
+`num` reaches SearchApi as a query parameter for scholar search only, where Google Scholar serves up to 20 results per page. Google phased out `num` for web search and does not take it for news, so both answer with one page of results and `searchapi_web_search` / `searchapi_news_search` cut that page client-side. When `num` is unset they return the whole page.
+
+`gl` is forwarded by the web and news tools. Google Scholar does not take a country code, so `searchapi_scholar_search` forwards `hl` only.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.web()`, `toolkit.news()`, `toolkit.scholar()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = SearchApiSearchToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.web(num=5), toolkit.scholar(num=10)],
+)
+```
+
+Every factory method also accepts `name` and `description` overrides for the registered tool, plus the same `num` / `gl` / `hl` defaults as the constructor (`gl` on web and news only). All of those accept a `Variable` for deferred context resolution.
+
+## Connection settings
+
+The toolkit opens one `httpx.AsyncClient` per request. Override how that client connects:
+
+```python linenums="1"
+toolkit = SearchApiSearchToolkit(
+    api_key=...,
+    base_url="https://www.searchapi.io",  # override to route through your own gateway
+    timeout=60.0,                         # per-request timeout in seconds
+    proxy="http://proxy.internal:3128",
+    verify=True,                          # set False only to skip TLS verification
+)
+```
+
+A non-2xx response raises `httpx.HTTPStatusError`; SearchApi answers an invalid key with `401` and a JSON body of the form `{"error": "Invalid API key."}`. A response body that is not a JSON object, or an individual result that does not match the expected shape, is skipped rather than raised on, so a partial payload still yields the results it does contain.
+
+## Result
+
+`searchapi_web_search` returns a `SearchApiWebSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SearchApiWebResult` (`title`, `link`, `snippet`, `position`); `link` is the destination URL (resolved by SearchApi) |
+
+`searchapi_news_search` returns a `SearchApiNewsSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SearchApiNewsResult` (`title`, `link`, `snippet`, `source`, `date`); `link` is the publisher's own URL (resolved by SearchApi) and `date` is Google's relative label, such as `2 hours ago` |
+
+`searchapi_scholar_search` returns a `SearchApiScholarSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query the agent executed |
+| `results` | List of `SearchApiScholarResult` (`title`, `link`, `snippet`, `publication`, `authors`, `pdf_link`, `citations`) |
+
+`authors` lists the author names Google Scholar links to a profile; `publication` is Google Scholar's one-line byline (authors, venue, year, host). `pdf_link` is the full-text resource Google Scholar shows next to the article and is empty when there is none, or when Google serves a `javascript:` placeholder instead of a URL there. `citations` is Google Scholar's own "Cited by" count.
+
+Request parameters and response fields are documented in the SearchApi docs for [Google](https://www.searchapi.io/docs/google){.external-link target="_blank"}, [Google News](https://www.searchapi.io/docs/google-news){.external-link target="_blank"} and [Google Scholar](https://www.searchapi.io/docs/google-scholar){.external-link target="_blank"}.
