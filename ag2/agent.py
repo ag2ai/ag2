@@ -1843,7 +1843,7 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
     if isinstance(event, ModelRequest):
         leftover = _drain_pending(context)
         if leftover is not None:
-            event = ModelRequest([*leftover.parts, *event.parts])
+            event = ModelRequest([*leftover.parts, *event.parts], origin=event.origin)
 
     # Sending the event triggers _call_client via the stream subscriber,
     # which drains any pending enqueued input before the LLM call.
@@ -1889,7 +1889,7 @@ def _drain_pending(context: Context) -> ModelRequest | None:
         return None
     parts: list[Input] = [part for request in queue for part in request.parts]
     queue.clear()
-    return ModelRequest(parts)
+    return ModelRequest(parts, origin="service")
 
 
 @asynccontextmanager
