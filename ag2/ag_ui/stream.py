@@ -309,9 +309,7 @@ async def _serve_turn(
         nonlocal streaming_msg_id, reasoning_msg_id
 
         if isinstance(event, ChildEvent):
-            if not isinstance(event.inner, _TASK_LIFECYCLE):
-                return
-            event = event.inner
+            return
 
         if reasoning_msg_id is not None and not isinstance(event, events.ModelReasoning):
             await output.send(

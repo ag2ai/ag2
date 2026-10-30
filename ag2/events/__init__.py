@@ -5,7 +5,7 @@
 from .alert import HaltEvent, ObserverAlert, Severity
 from .base import BaseEvent, Field, ProviderReplay, is_conversational
 from .conditions import Condition
-from .delegation import ChildEvent, DeliveryFailed, DownEvent, TransientChildEvent, TransientDownEvent
+from .delegation import ChildEvent, DeliveryFailed, DownEvent, InertEvent, TransientChildEvent, TransientDownEvent
 from .input_events import (
     AudioInput,
     BinaryInput,
@@ -109,6 +109,7 @@ __all__ = (
     "HumanInputRequest",
     "HumanMessage",
     "ImageInput",
+    "InertEvent",
     "Input",
     "MessageEnqueued",
     "ModelMessage",

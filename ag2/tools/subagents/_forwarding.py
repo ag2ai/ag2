@@ -18,6 +18,7 @@ from ag2.events import (
     DownEvent,
     HaltEvent,
     HumanInputRequest,
+    InertEvent,
     TaskCancelled,
     TaskCompleted,
     TaskFailed,
@@ -300,16 +301,29 @@ class Forwarder:
         if self.origin is not None:
             self.origin.close()
 
+    def stamp(self, event: InertEvent) -> InertEvent:
+        """Name this delegation as the source of a local inert event; keep a forwarded one's source."""
+        forwarded = copy(event)
+        endpoint: _Endpoint | None
+        if not event.path:
+            forwarded.path = self.path
+            if isinstance(forwarded, UsageEvent):
+                forwarded.task_id = self.task_id
+                forwarded.agent_name = self.agent_name
+            endpoint = self.origin
+        else:
+            endpoint = event.origin._endpoint if event._origin is not None else None
+        forwarded._origin = StreamHandle(endpoint, self.parent) if endpoint is not None else None
+        return forwarded
+
     async def forward(self, event: BaseEvent) -> BaseEvent:
         if getattr(event, "_downlink", False) or getattr(event, "_bridged", False):
             return event
         if usage_event_from(event) is not None:
             self.accounting.append(event)
         forwarded: BaseEvent
-        if isinstance(event, UsageEvent):
-            forwarded = copy(event)
-            endpoint = event.origin._endpoint if event._origin is not None else self.origin
-            forwarded._origin = StreamHandle(endpoint, self.parent) if endpoint is not None else None
+        if isinstance(event, InertEvent):
+            forwarded = self.stamp(event)
         elif isinstance(event, ChildEvent):
             forwarded = copy(event)
             if event._origin is not None:
@@ -325,9 +339,9 @@ class Forwarder:
                 _origin=StreamHandle(self.origin, self.parent) if self.origin is not None else None,
             )
         try:
-            if isinstance(forwarded, UsageEvent):
-                # Forward the existing publication without Context.send creating
-                # a new accounting identity at each ancestor (ADR 0004).
+            if isinstance(forwarded, InertEvent):
+                # Forward the existing publication without Context.send starting
+                # a new one, which drops its provenance and usage identity (ADR 0004).
                 await self.parent.stream.send(forwarded, self.parent)
             else:
                 await self.parent.send(forwarded)

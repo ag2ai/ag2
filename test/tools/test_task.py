@@ -19,7 +19,6 @@ from ag2.agent import TaskConfig
 from ag2.context import StreamId
 from ag2.events import (
     BaseEvent,
-    ChildEvent,
     HumanInputRequest,
     HumanMessage,
     ModelMessage,
@@ -259,7 +258,7 @@ class TestSpecialistDelegation:
         parent_stream = MemoryStream()
         await coordinator.ask("Research X", stream=parent_stream)
 
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
         request = [e for e in sub_events if isinstance(e, ModelRequest)][0]
@@ -295,7 +294,7 @@ class TestSpecialistDelegation:
 
         assert reply.body == "Quantum is important."
 
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
         tool_calls = [e for e in sub_events if isinstance(e, ToolCallEvent)]
@@ -329,7 +328,7 @@ class TestSpecialistDelegation:
 
         assert reply.body == "All done."
 
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         started = [e for e in events if isinstance(e, TaskStarted)]
         completed = [e for e in events if isinstance(e, TaskCompleted)]
         assert len(started) == 2
@@ -379,7 +378,7 @@ class TestLifecycleEvents:
 
         await coordinator.ask("Find Y", stream=parent_stream)
 
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
 
         task_started = [e for e in events if isinstance(e, TaskStarted)]
         task_completed = [e for e in events if isinstance(e, TaskCompleted)]
@@ -412,7 +411,7 @@ class TestLifecycleEvents:
 
         await coordinator.ask("Go", stream=parent_stream)
 
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
 
         assert completed.task_stream is not None
@@ -441,7 +440,7 @@ class TestLifecycleEvents:
 
         await coordinator.ask("Try impossible", stream=parent_stream)
 
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         task_failed = [e for e in events if isinstance(e, TaskFailed)]
 
         assert len(task_failed) == 1
@@ -538,7 +537,7 @@ class TestStreamFactory:
 
         await coordinator.ask("Go", stream=parent_stream)
 
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
         assert completed.task_stream is not None
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
@@ -666,7 +665,7 @@ class TestSubtaskInheritance:
         reply = await parent.ask("Define quark", stream=parent_stream)
 
         assert reply.body == "Got it."
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
         # Subtask actually called lookup — proving it inherited the tool.
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
@@ -741,7 +740,7 @@ class TestSubtaskInheritance:
         parent_stream = MemoryStream()
         await parent.ask("go", stream=parent_stream)
 
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         completed = [e for e in events if isinstance(e, TaskCompleted)][0]
         sub_events = list(await parent_stream.history.storage.get_history(completed.task_stream))
         # The extra tool was actually invoked in the subtask.
@@ -785,10 +784,8 @@ class TestParallelSubtasks:
         two_started = asyncio.Event()
         release = asyncio.Event()
 
-        @stream.where(ChildEvent).subscribe
-        async def hold_started(event: ChildEvent) -> None:
-            if not isinstance(event.inner, TaskStarted):
-                return
+        @stream.where(TaskStarted).subscribe
+        async def hold_started(_: TaskStarted) -> None:
             nonlocal active, peak
             active += 1
             peak = max(peak, active)
@@ -832,10 +829,8 @@ class TestParallelSubtasks:
         started = asyncio.Event()
         release = asyncio.Event()
 
-        @stream.where(ChildEvent).subscribe
-        async def hold_started(event: ChildEvent) -> None:
-            if not isinstance(event.inner, TaskStarted):
-                return
+        @stream.where(TaskStarted).subscribe
+        async def hold_started(_: TaskStarted) -> None:
             nonlocal active, peak
             active += 1
             peak = max(peak, active)
@@ -853,7 +848,7 @@ class TestParallelSubtasks:
 
         release.set()
         reply = await asyncio.wait_for(turn, timeout=1)
-        events = [event.source_event for event in await stream.history.get_events()]
+        events = list(await stream.history.get_events())
 
         assert reply.body == "done"
         assert peak == 1
@@ -893,7 +888,7 @@ class TestParallelSubtasks:
         reply = await parent.ask("go", stream=parent_stream)
 
         assert reply.body == "All three done."
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         starts = [e for e in events if isinstance(e, TaskStarted)]
         completions = [e for e in events if isinstance(e, TaskCompleted)]
         # All three subtasks dispatched and completed concurrently.
@@ -925,7 +920,7 @@ class TestParallelSubtasks:
         parent_stream = MemoryStream()
         await parent.ask("go", stream=parent_stream)
 
-        events = [event.source_event for event in await parent_stream.history.get_events()]
+        events = list(await parent_stream.history.get_events())
         completions = [e for e in events if isinstance(e, TaskCompleted)]
         assert len(completions) == 2
 
@@ -977,10 +972,8 @@ def test_max_concurrency_agent_is_reusable_across_event_loops() -> None:
         active = 0
         peak = 0
 
-        @stream.where(ChildEvent).subscribe
-        async def track(event: ChildEvent) -> None:
-            if not isinstance(event.inner, TaskStarted):
-                return
+        @stream.where(TaskStarted).subscribe
+        async def track(_: TaskStarted) -> None:
             nonlocal active, peak
             active += 1
             peak = max(peak, active)
@@ -1031,10 +1024,8 @@ def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
         active = 0
         peak = 0
 
-        @stream.where(ChildEvent).subscribe
-        async def track(event: ChildEvent) -> None:
-            if not isinstance(event.inner, TaskStarted):
-                return
+        @stream.where(TaskStarted).subscribe
+        async def track(_: TaskStarted) -> None:
             nonlocal active, peak
             active += 1
             peak = max(peak, active)
@@ -1158,7 +1149,7 @@ class TestSubtaskSourceUsage:
         assert isinstance(result.error, RuntimeError)
         assert result.usage == spent
         assert UsageReport.from_events(await ctx.stream.history.get_events()).total == spent
-        events = [event.source_event for event in await ctx.stream.history.get_events()]
+        events = list(await ctx.stream.history.get_events())
         assert [type(event) for event in events if isinstance(event, (UsageEvent, TaskFailed))] == [
             UsageEvent,
             TaskFailed,
@@ -1311,13 +1302,11 @@ class TestHitlPropagation:
             return HumanMessage("yes")
 
         stream = MemoryStream()
-        stream.where(ChildEvent).subscribe(_append_to(started))
+        stream.where(TaskStarted).subscribe(_append_to(started))
         await coordinator.ask("Go", stream=stream)
 
         [request] = heard
-        [task] = [
-            event.inner for event in started if isinstance(event, ChildEvent) and isinstance(event.inner, TaskStarted)
-        ]
+        [task] = started
         assert request.task_id == task.task_id
 
 
