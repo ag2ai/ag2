@@ -13,6 +13,7 @@ from .annotations import Context
 from .context import StreamId
 from .events import (
     BaseEvent,
+    ModelRequest,
     ModelResponse,
     ToolCallsEvent,
     ToolResult,
@@ -84,6 +85,14 @@ class History:
         predicate = condition if isinstance(condition, Condition) else TypeCondition(condition)
         return HistoryQuery(self, predicate)
 
+    def since_last_user_input(self) -> "HistoryQuery[BaseEvent]":
+        """Select events after the latest retained user input, excluding it.
+
+        Return an empty interval when its boundary is no longer retained.
+        Query construction does not read storage.
+        """
+        return self.where(BaseEvent).since_last_user_input()
+
 
 @dataclass(frozen=True, slots=True)
 class HistoryQuery(Generic[EventT]):
@@ -96,6 +105,7 @@ class HistoryQuery(Generic[EventT]):
 
     _history: History
     _condition: Condition
+    _since_last_user_input: bool = False
 
     @overload
     def where(self, condition: type[SelectedEventT]) -> "HistoryQuery[SelectedEventT]": ...
@@ -105,11 +115,23 @@ class HistoryQuery(Generic[EventT]):
 
     def where(self, condition: ClassInfo | Condition) -> "HistoryQuery[BaseEvent]":
         """Return an independent query combining this selection with AND."""
-        return HistoryQuery(self._history, self._condition & condition)
+        return HistoryQuery(self._history, self._condition & condition, self._since_last_user_input)
+
+    def since_last_user_input(self) -> "HistoryQuery[EventT]":
+        """Scope this selection to the latest retained user-input interval."""
+        return HistoryQuery(self._history, self._condition, True)
 
     async def all(self) -> list[EventT]:
         """Return a fresh list selected from one snapshot of stored events."""
         events = list(await self._history.get_events())
+        if self._since_last_user_input:
+            start = len(events)
+            for index in range(len(events) - 1, -1, -1):
+                event = events[index]
+                if isinstance(event, ModelRequest) and event.origin == "user":
+                    start = index + 1
+                    break
+            events = events[start:]
         return [cast(EventT, event) for event in events if self._condition(event)]
 
     async def first(self) -> EventT | None:
