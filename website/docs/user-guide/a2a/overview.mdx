@@ -70,7 +70,7 @@ Sub-modules:
 | `#!python ag2.a2a.events` | Typed `#!python A2AEvent` wrappers surfaced into the AG2 stream — `#!python A2ATaskSnapshot`, `#!python A2ATaskStatusUpdate`, `#!python A2ATaskArtifactUpdate`, `#!python A2ATextArtifact`, `#!python A2AToolCallArtifact`, `#!python A2AMessage` |
 | `#!python ag2.a2a.errors` | Exception hierarchy — `#!python A2AError`, `#!python A2ATaskTerminalError`, `#!python A2ATaskCancelledError`, `#!python A2AReconnectError`, `#!python A2AInvalidCardError`, `#!python A2AIncompatibleProtocolVersionError`, `#!python A2AClientToolsNotSupportedError`, `#!python A2ACardSignatureError`, `#!python A2AStaleCardSignatureError` |
 | `#!python ag2.a2a.transports` | `#!python TransportName` — `#!python Literal["jsonrpc", "rest", "grpc"]` — plus low-level `#!python build_*` builders |
-| `#!python ag2.a2a.testing` | In-process test helpers — `#!python make_test_client_factory`, `#!python make_test_rest_client_factory`, `#!python pick_free_port` |
+| `#!python ag2.a2a.testing` | In-process test helpers — `#!python make_test_client_factory`, `#!python make_test_rest_client_factory`, `#!python pick_free_port`, `#!python ToolRoundsConfig`, `#!python ObservedAgentExecutor`, `#!python TaskStatusRecorder`, `#!python TurnGate` |
 
 !!! note
     The A2A integration depends on [`a2a-sdk`](https://pypi.org/project/a2a-sdk/){.external-link target="_blank"}. Install with the `a2a` extras: `#!bash pip install "ag2[a2a]"` — that covers the A2A **client**. Serving needs the SDK's own transport extras on top, installed directly: `#!bash pip install "a2a-sdk[http-server]"` for `#!python build_jsonrpc` / `#!python build_rest`, and `#!bash pip install "a2a-sdk[grpc]"` for `#!python build_grpc`.

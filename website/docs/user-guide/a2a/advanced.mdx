@@ -123,6 +123,9 @@ await remote.ask("ping")
 | `#!python make_test_rest_client_factory(server, url=..., card=..., timeout=...)` | Same idea for REST — builds the REST app and a card declaring only the REST interface |
 | `#!python pick_free_port(host="127.0.0.1")` | Probe a free TCP port. Used by gRPC tests since gRPC has no in-process transport equivalent |
 | `#!python ToolRoundsConfig(*rounds)` | Script a served agent one tool round at a time — a `#!python Turn`, or a `#!python TestConfig` for a round that streams before it ends — for tests where the client runs tools and the server continues the task |
+| `#!python ObservedAgentExecutor(agent, *observers)` | Serve `#!python agent` with observers that see the request's whole task lifecycle, including `#!python WORKING` and the terminal status, which observers on the agent miss because they only run during the model turn. They see what this request puts on the wire: a task parked in `#!python INPUT_REQUIRED` and cancelled afterwards, or one cancelled through another replica, is closed by the SDK outside the request, so read its final state with `#!python get_task` |
+| `#!python TaskStatusRecorder()` | Observer recording every `#!python A2ATaskStatusUpdate` state in delivery order; `#!python await recorder.wait_for(state)` waits for one |
+| `#!python TurnGate()` | A server tool, `#!python gate.hold`, that keeps the task `#!python working` until `#!python gate.release()`, so a test can cancel or inspect it mid-turn |
 
 The server builds a fresh LLM client for every request, so a single `#!python TestConfig` would replay its first turn after each client-tool round trip. `#!python ToolRoundsConfig` picks the round from the conversation history instead:
 
@@ -138,6 +141,35 @@ server_agent = Agent(
         "Sunny in Paris.",  # round 2: answer after the tool result
     ),
 )
+```
+
+To assert on the server side of a task's lifecycle, serve the agent through `#!python ObservedAgentExecutor`:
+
+```python linenums="1"
+import asyncio
+
+from a2a.types import TaskState
+
+from ag2 import Agent
+from ag2.a2a import A2AConfig, A2AServer
+from ag2.a2a.tasks import cancel_task, list_tasks
+from ag2.a2a.testing import ObservedAgentExecutor, TaskStatusRecorder, TurnGate, make_test_client_factory
+from ag2.events import ToolCallEvent
+from ag2.testing import TestConfig
+
+gate = TurnGate()
+statuses = TaskStatusRecorder()
+agent = Agent("server", config=TestConfig(ToolCallEvent(name="hold"), "done"), tools=[gate.hold])
+server = A2AServer(agent, executor=ObservedAgentExecutor(agent, statuses))
+config = A2AConfig(card_url="http://test", httpx_client_factory=make_test_client_factory(server))
+remote = Agent("remote", config=config)
+
+asking = asyncio.create_task(remote.ask("go"))
+await gate.entered.wait()  # the task is working
+[task] = (await list_tasks(config)).tasks
+await cancel_task(config, task.id)
+
+assert statuses.states == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_CANCELED]
 ```
 
 Pass `#!python card=` when the default `#!python build_card(agent, url=url)` can't express what the test needs — a custom `#!python extensions` list, for instance. It defaults to `#!python None`, which keeps the auto-built card.

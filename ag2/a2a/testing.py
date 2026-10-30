@@ -2,28 +2,38 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import socket
 from collections.abc import Callable, Sequence
+from contextlib import AsyncExitStack, ExitStack
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from a2a.types import AgentCard
+from a2a.types import AgentCard, TaskState
 from typing_extensions import Self
 
+from ag2.agent import Agent
+from ag2.annotations import Context
 from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig, ModelProvider
 from ag2.context import ConversationContext
 from ag2.events import BaseEvent, ModelResponse, ToolResultsEvent
+from ag2.observers import Observer
 from ag2.testing import TestConfig, Turn
 
 from .card import build_card
+from .events import A2ATaskStatusUpdate
+from .executor import AgentExecutor
 from .server import A2AServer
 
 if TYPE_CHECKING:
     from ag2.files.protocol import FilesClient
 
 __all__ = (
+    "ObservedAgentExecutor",
+    "TaskStatusRecorder",
     "ToolRoundsConfig",
+    "TurnGate",
     "make_test_client_factory",
     "make_test_rest_client_factory",
     "pick_free_port",
@@ -86,6 +96,80 @@ class ToolRoundsClient(LLMClient):
                 f"ToolRoundsConfig scripts {len(self.rounds)} round(s); the model was called for round {index + 1}"
             )
         return await self.rounds[index].create()(messages, context, **kwargs)
+
+
+class ObservedAgentExecutor(AgentExecutor):
+    """``AgentExecutor`` that runs ``observers`` over each request's whole task lifecycle.
+
+    Observers on the served ``Agent`` only run during the model turn, so they miss ``WORKING``
+    and the terminal status. These see every ``A2ATaskStatusUpdate`` the request puts on the
+    wire, in wire order. Serve it with ``A2AServer(agent, executor=...)``:
+
+    .. code-block:: python
+
+        statuses = TaskStatusRecorder()
+        server = A2AServer(agent, executor=ObservedAgentExecutor(agent, statuses))
+        ...
+        assert statuses.states == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_COMPLETED]
+    """
+
+    def __init__(self, agent: Agent, *observers: Observer) -> None:
+        super().__init__(agent)
+        self._observers = observers
+
+    def _observe(self, stack: ExitStack, context: ConversationContext) -> None:
+        for observer in self._observers:
+            observer.register(stack, context)
+
+
+class TaskStatusRecorder(Observer):
+    """Observer that records the state of every ``A2ATaskStatusUpdate``, in delivery order."""
+
+    def __init__(self) -> None:
+        self.states: list[TaskState] = []
+        self._reached: dict[TaskState, asyncio.Event] = {}
+
+    def register(self, stack: ExitStack | AsyncExitStack, context: Context) -> None:
+        stack.enter_context(context.stream.where(A2ATaskStatusUpdate).sub_scope(self._record))
+
+    async def wait_for(self, state: TaskState) -> None:
+        """Wait until an update with ``state`` has been delivered."""
+        await self._event(state).wait()
+
+    async def _record(self, event: A2ATaskStatusUpdate) -> None:
+        self.states.append(event.state)
+        self._event(event.state).set()
+
+    def _event(self, state: TaskState) -> asyncio.Event:
+        return self._reached.setdefault(state, asyncio.Event())
+
+
+class TurnGate:
+    """A server tool, ``hold``, that keeps the turn running until :meth:`release` is called.
+
+    It holds the task in ``working``, so a test can act on it mid-turn:
+
+    .. code-block:: python
+
+        gate = TurnGate()
+        agent = Agent("server", config=TestConfig(ToolCallEvent(name="hold"), "done"), tools=[gate.hold])
+        asking = asyncio.create_task(client.ask("go"))
+        await gate.entered.wait()
+        ...  # cancel, inspect the task
+        gate.release()
+    """
+
+    def __init__(self) -> None:
+        self.entered = asyncio.Event()
+        self._released = asyncio.Event()
+
+    async def hold(self) -> str:
+        self.entered.set()
+        await self._released.wait()
+        return "released"
+
+    def release(self) -> None:
+        self._released.set()
 
 
 def make_test_client_factory(

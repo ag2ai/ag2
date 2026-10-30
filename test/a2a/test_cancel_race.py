@@ -32,8 +32,9 @@ from ag2.a2a.events import A2ATaskStatusUpdate
 from ag2.a2a.executor import AgentExecutor
 from ag2.a2a.mappers.events import chunk_to_text_artifact
 from ag2.a2a.mappers.messages import build_user_message
-from ag2.context import Stream, SubId
-from ag2.events import BaseEvent, ClientToolCallEvent, ModelMessageChunk, TextInput, ToolCallEvent
+from ag2.a2a.testing import ObservedAgentExecutor, TaskStatusRecorder, TurnGate
+from ag2.events import ClientToolCallEvent, ModelMessageChunk, TextInput, ToolCallEvent
+from ag2.observers import observer
 from ag2.testing import TestConfig
 from ag2.tools.final.function_tool import FunctionDefinition, FunctionToolSchema
 
@@ -92,61 +93,52 @@ def _cancel_request() -> RequestContext:
 
 
 class _CancelOnStatus:
-    def __init__(self, state: TaskState, queue: _RecordingQueue, *, spawn_cancel: bool = False) -> None:
+    """Lifecycle observer that cancels the task once it reaches ``state``, then raises ``error`` if given."""
+
+    def __init__(
+        self,
+        state: TaskState,
+        queue: _RecordingQueue,
+        *,
+        spawn_cancel: bool = False,
+        error: Exception | None = None,
+    ) -> None:
         self.state = state
         self.queue = queue
         self.spawn_cancel = spawn_cancel
+        self.error = error
         self.executor: AgentExecutor | None = None
         self.observed: list[TaskState] = []
-        self.recorded: list[TaskState] = []
-
-    async def observe(self, context: Context) -> str:
-        context.stream.where(A2ATaskStatusUpdate).subscribe(self.on_status)
-        context.stream.where(A2ATaskStatusUpdate).subscribe(self.record_status)
-        return "observing"
 
     async def on_status(self, event: A2ATaskStatusUpdate) -> None:
         self.observed.append(event.state)
-        if event.state == self.state:
-            assert self.executor is not None
-            cancellation = self.executor.cancel(_cancel_request(), self.queue)
-            if self.spawn_cancel:
-                await asyncio.create_task(cancellation)
-            else:
-                await cancellation
+        if event.state != self.state:
+            return
+        assert self.executor is not None
+        cancellation = self.executor.cancel(_cancel_request(), self.queue)
+        if self.spawn_cancel:
+            await asyncio.create_task(cancellation)
+        else:
+            await cancellation
+        if self.error is not None:
+            raise self.error
 
-    async def record_status(self, event: A2ATaskStatusUpdate) -> None:
-        self.recorded.append(event.state)
 
+class _PauseOnStatus:
+    """Lifecycle observer that blocks delivery of ``state`` until resumed."""
 
-class _FailAfterCancel(_CancelOnStatus):
+    def __init__(self, state: TaskState) -> None:
+        self.state = state
+        self.paused = asyncio.Event()
+        self._resumed = asyncio.Event()
+
     async def on_status(self, event: A2ATaskStatusUpdate) -> None:
-        await super().on_status(event)
-        if event.state == TaskState.TASK_STATE_INPUT_REQUIRED:
-            raise ValueError("observer failed after canceling")
+        if event.state == self.state:
+            self.paused.set()
+            await self._resumed.wait()
 
-
-class _PausingObserver:
-    def __init__(self) -> None:
-        self.started = asyncio.Event()
-        self.release = asyncio.Event()
-        self.canceled = asyncio.Event()
-        self.recorded: list[TaskState] = []
-
-    async def observe(self, context: Context) -> str:
-        context.stream.where(A2ATaskStatusUpdate).subscribe(self.pause)
-        context.stream.where(A2ATaskStatusUpdate).subscribe(self.record_status)
-        return "observing"
-
-    async def pause(self, event: A2ATaskStatusUpdate) -> None:
-        if event.state == TaskState.TASK_STATE_INPUT_REQUIRED:
-            self.started.set()
-            await self.release.wait()
-
-    async def record_status(self, event: A2ATaskStatusUpdate) -> None:
-        self.recorded.append(event.state)
-        if event.state == TaskState.TASK_STATE_CANCELED:
-            self.canceled.set()
+    def resume(self) -> None:
+        self._resumed.set()
 
 
 class _PausingArtifactQueue(_RecordingQueue):
@@ -162,47 +154,21 @@ class _PausingArtifactQueue(_RecordingQueue):
         await super().enqueue_event(event)
 
 
-class _FilterAndCancel:
-    def __init__(self, queue: _RecordingQueue) -> None:
+class _DropAndCancel:
+    """Interrupting lifecycle observer that drops the first ``state`` update and cancels the task."""
+
+    def __init__(self, state: TaskState, queue: _RecordingQueue) -> None:
+        self.state = state
         self.queue = queue
         self.executor: AgentExecutor | None = None
-        self.stream: Stream | None = None
-        self.subscription: SubId | None = None
         self.pending: list[asyncio.Task[None]] = []
-        self.recorded: list[TaskState] = []
 
-    async def observe(self, context: Context) -> str:
-        self.stream = context.stream
-        self.subscription = context.stream.where(A2ATaskStatusUpdate).subscribe(self.filter_once, interrupt=True)
-        context.stream.where(A2ATaskStatusUpdate).subscribe(self.record_status)
-        return "observing"
-
-    async def filter_once(self, event: A2ATaskStatusUpdate) -> None:
-        assert self.stream is not None and self.subscription is not None and self.executor is not None
-        self.stream.unsubscribe(self.subscription)
+    async def on_status(self, event: A2ATaskStatusUpdate) -> A2ATaskStatusUpdate | None:
+        if event.state != self.state or self.pending:
+            return event
+        assert self.executor is not None
         self.pending.append(asyncio.create_task(self.executor.cancel(_cancel_request(), self.queue)))
-
-    async def record_status(self, event: A2ATaskStatusUpdate) -> None:
-        self.recorded.append(event.state)
-
-
-class _WireObserver:
-    def __init__(self) -> None:
-        self.started = asyncio.Event()
-        self.release = asyncio.Event()
-        self.terminal = asyncio.Event()
-        self.recorded: list[TaskState] = []
-
-    async def observe(self, context: Context) -> str:
-        context.stream.where(A2ATaskStatusUpdate).subscribe(self.record_status)
-        self.started.set()
-        await self.release.wait()
-        return "observing"
-
-    async def record_status(self, event: A2ATaskStatusUpdate) -> None:
-        self.recorded.append(event.state)
-        if event.state in (TaskState.TASK_STATE_CANCELED, TaskState.TASK_STATE_COMPLETED):
-            self.terminal.set()
+        return None
 
 
 class _SendClientCall:
@@ -279,20 +245,21 @@ class TestCancelRacingTheTurn:
     @pytest.mark.parametrize("kind", ["text", "status"])
     @pytest.mark.parametrize("cancel_count", [1, 2])
     async def test_cancel_after_partial_enqueue_finishes_wire_commit(self, kind: str, cancel_count: int) -> None:
-        observer = _WireObserver()
-        config = TestConfig(ToolCallEvent(name="observe", arguments="{}"), ModelMessageChunk("thinking"), "thinking")
-        executor = AgentExecutor(Agent("server", config=config, tools=[observer.observe]))
+        gate = TurnGate()
+        statuses = TaskStatusRecorder()
+        config = TestConfig(ToolCallEvent(name="hold", arguments="{}"), ModelMessageChunk("thinking"), "thinking")
+        executor = ObservedAgentExecutor(Agent("server", config=config, tools=[gate.hold]), statuses)
         queue = EventQueueLegacy()
         running = asyncio.create_task(executor.execute(_request(), queue))
         canceling: asyncio.Task[None] | None = None
         draining: asyncio.Task[None] | None = None
         events: list[Event] = []
         try:
-            await asyncio.wait_for(observer.started.wait(), timeout=1.0)
+            await asyncio.wait_for(gate.entered.wait(), timeout=1.0)
             child = await queue.tap(max_queue_size=1)
             if kind == "text":
                 await child.enqueue_event(Message(message_id="prefill"))
-            observer.release.set()
+            gate.release()
 
             while True:
                 event = await asyncio.wait_for(queue.dequeue_event(), timeout=1.0)
@@ -319,12 +286,13 @@ class TestCancelRacingTheTurn:
                 await asyncio.wait_for(running, timeout=1.0)
             if canceling is not None:
                 await asyncio.wait_for(canceling, timeout=1.0)
-            await asyncio.wait_for(observer.terminal.wait(), timeout=1.0)
+            expected = TaskState.TASK_STATE_CANCELED if kind == "text" else TaskState.TASK_STATE_COMPLETED
+            await asyncio.wait_for(statuses.wait_for(expected), timeout=1.0)
             while not queue.queue.empty():
                 events.append(await queue.dequeue_event())
                 queue.task_done()
         finally:
-            observer.release.set()
+            gate.release()
             await queue.close(immediate=True)
             tasks = [task for task in (running, canceling, draining) if task is not None]
             for task in tasks:
@@ -332,8 +300,7 @@ class TestCancelRacingTheTurn:
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
 
-        expected = TaskState.TASK_STATE_CANCELED if kind == "text" else TaskState.TASK_STATE_COMPLETED
-        assert observer.recorded == [expected]
+        assert statuses.states == [TaskState.TASK_STATE_WORKING, expected]
         assert [e.last_chunk for e in events if isinstance(e, TaskArtifactUpdateEvent)] == [False, True]
         assert [e.status.state for e in events if isinstance(e, TaskStatusUpdateEvent)] == [
             TaskState.TASK_STATE_WORKING,
@@ -348,14 +315,18 @@ class TestCancelRacingTheTurn:
         loop = asyncio.get_running_loop()
         previous_factory = loop.get_task_factory()
         queue = _RecordingQueue()
-        observer = _FilterAndCancel(queue)
-        config = TestConfig(ToolCallEvent(name="observe", arguments="{}"), ToolCallEvent(name="lookup", arguments="{}"))
-        executor = AgentExecutor(Agent("server", config=config, tools=[observer.observe]))
-        observer.executor = executor
+        dropper = _DropAndCancel(TaskState.TASK_STATE_INPUT_REQUIRED, queue)
+        statuses = TaskStatusRecorder()
+        executor = ObservedAgentExecutor(
+            Agent("server", config=TestConfig(ToolCallEvent(name="lookup", arguments="{}"))),
+            observer(A2ATaskStatusUpdate, dropper.on_status, interrupt=True),
+            statuses,
+        )
+        dropper.executor = executor
         try:
             loop.set_task_factory(eager_factory if eager else None)
             await asyncio.wait_for(executor.execute(_client_tool_request(), queue), timeout=1.0)
-            await asyncio.wait_for(asyncio.gather(*observer.pending), timeout=1.0)
+            await asyncio.wait_for(asyncio.gather(*dropper.pending), timeout=1.0)
         finally:
             loop.set_task_factory(previous_factory)
 
@@ -364,62 +335,87 @@ class TestCancelRacingTheTurn:
             TaskState.TASK_STATE_INPUT_REQUIRED,
             TaskState.TASK_STATE_CANCELED,
         ]
-        assert observer.recorded == [TaskState.TASK_STATE_CANCELED]
+        assert statuses.states == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_CANCELED]
 
     @pytest.mark.parametrize("spawn_cancel", [False, True], ids=["inline", "child-task"])
     @pytest.mark.parametrize("state", [TaskState.TASK_STATE_INPUT_REQUIRED, TaskState.TASK_STATE_COMPLETED])
     async def test_lifecycle_observer_can_await_cancellation(self, state: TaskState, spawn_cancel: bool) -> None:
         queue = _RecordingQueue()
-        observer = _CancelOnStatus(state, queue, spawn_cancel=spawn_cancel)
+        canceler = _CancelOnStatus(state, queue, spawn_cancel=spawn_cancel)
+        statuses = TaskStatusRecorder()
         answer = (
             ToolCallEvent(name="lookup", arguments="{}") if state == TaskState.TASK_STATE_INPUT_REQUIRED else "done"
         )
-        config = TestConfig(ToolCallEvent(name="observe", arguments="{}"), ModelMessageChunk("thinking"), answer)
-        executor = AgentExecutor(Agent("server", config=config, tools=[observer.observe]))
-        observer.executor = executor
+        executor = ObservedAgentExecutor(
+            Agent("server", config=TestConfig(ModelMessageChunk("thinking"), answer)),
+            observer(A2ATaskStatusUpdate, canceler.on_status),
+            statuses,
+        )
+        canceler.executor = executor
 
         await asyncio.wait_for(executor.execute(_client_tool_request(), queue), timeout=1.0)
 
-        expected = [state]
+        expected = [TaskState.TASK_STATE_WORKING, state]
         if state == TaskState.TASK_STATE_INPUT_REQUIRED:
             expected.append(TaskState.TASK_STATE_CANCELED)
-        assert queue.states() == [TaskState.TASK_STATE_WORKING, *expected]
-        assert observer.observed == expected
-        assert observer.recorded == expected
+        assert queue.states() == expected
+        assert canceler.observed == expected
+        assert statuses.states == expected
 
     async def test_producer_cancellation_does_not_drop_queued_terminal_notification(self) -> None:
         queue = _RecordingQueue()
-        observer = _PausingObserver()
-        config = TestConfig(ToolCallEvent(name="observe", arguments="{}"), ToolCallEvent(name="lookup", arguments="{}"))
-        executor = AgentExecutor(Agent("server", config=config, tools=[observer.observe]))
+        pause = _PauseOnStatus(TaskState.TASK_STATE_INPUT_REQUIRED)
+        statuses = TaskStatusRecorder()
+        executor = ObservedAgentExecutor(
+            Agent("server", config=TestConfig(ToolCallEvent(name="lookup", arguments="{}"))),
+            observer(A2ATaskStatusUpdate, pause.on_status),
+            statuses,
+        )
         running = asyncio.create_task(executor.execute(_client_tool_request(), queue))
         try:
-            await asyncio.wait_for(observer.started.wait(), timeout=1.0)
+            await asyncio.wait_for(pause.paused.wait(), timeout=1.0)
             await asyncio.wait_for(executor.cancel(_cancel_request(), queue), timeout=1.0)
             running.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await running
         finally:
-            observer.release.set()
+            pause.resume()
             if not running.done():
                 running.cancel()
                 await asyncio.gather(running, return_exceptions=True)
 
-        await asyncio.wait_for(observer.canceled.wait(), timeout=1.0)
-        assert observer.recorded == [TaskState.TASK_STATE_INPUT_REQUIRED, TaskState.TASK_STATE_CANCELED]
+        await asyncio.wait_for(statuses.wait_for(TaskState.TASK_STATE_CANCELED), timeout=1.0)
+        assert statuses.states == [
+            TaskState.TASK_STATE_WORKING,
+            TaskState.TASK_STATE_INPUT_REQUIRED,
+            TaskState.TASK_STATE_CANCELED,
+        ]
 
-    async def test_observer_failure_does_not_drop_queued_terminal_notification(self) -> None:
+    async def test_observer_failure_does_not_drop_queued_terminal_notification(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         queue = _RecordingQueue()
-        observer = _FailAfterCancel(TaskState.TASK_STATE_INPUT_REQUIRED, queue)
-        config = TestConfig(ToolCallEvent(name="observe", arguments="{}"), ToolCallEvent(name="lookup", arguments="{}"))
-        executor = AgentExecutor(Agent("server", config=config, tools=[observer.observe]))
-        observer.executor = executor
+        canceler = _CancelOnStatus(
+            TaskState.TASK_STATE_INPUT_REQUIRED, queue, error=ValueError("observer failed after canceling")
+        )
+        statuses = TaskStatusRecorder()
+        executor = ObservedAgentExecutor(
+            Agent("server", config=TestConfig(ToolCallEvent(name="lookup", arguments="{}"))),
+            statuses,
+            observer(A2ATaskStatusUpdate, canceler.on_status),
+        )
+        canceler.executor = executor
 
-        with pytest.raises(ValueError, match="observer failed after canceling"):
-            await asyncio.wait_for(executor.execute(_client_tool_request(), queue), timeout=1.0)
+        # The transitions are on the wire, so the observer's failure is logged rather than raised.
+        await asyncio.wait_for(executor.execute(_client_tool_request(), queue), timeout=1.0)
 
-        assert observer.observed == [TaskState.TASK_STATE_INPUT_REQUIRED, TaskState.TASK_STATE_CANCELED]
-        assert observer.recorded == [TaskState.TASK_STATE_CANCELED]
+        assert "observer failed after canceling" in caplog.text
+        assert queue.states() == [
+            TaskState.TASK_STATE_WORKING,
+            TaskState.TASK_STATE_INPUT_REQUIRED,
+            TaskState.TASK_STATE_CANCELED,
+        ]
+        assert statuses.states == canceler.observed == queue.states()
 
     @pytest.mark.parametrize("kind", ["text", "tool-call", "custom-artifact"])
     async def test_cancel_waits_for_an_inflight_artifact(self, kind: str) -> None:
@@ -484,33 +480,21 @@ class TestCancelRacingTheTurn:
         assert len(queue.events) == finished
 
     async def test_turn_finishing_after_a_cancel_ends_quietly(self) -> None:
-        started = asyncio.Event()
-        release = asyncio.Event()
-        mirrored: list[TaskState] = []
-
-        async def record_status(event: BaseEvent) -> None:
-            assert isinstance(event, A2ATaskStatusUpdate)
-            mirrored.append(event.state)
-
-        async def hold(context: Context) -> str:
-            context.stream.where(A2ATaskStatusUpdate).subscribe(record_status)
-            started.set()
-            await release.wait()
-            return "held"
-
+        gate = TurnGate()
+        statuses = TaskStatusRecorder()
         config = TestConfig(ToolCallEvent(name="hold", arguments="{}"), "done")
-        executor = AgentExecutor(Agent("server", config=config, tools=[hold]))
+        executor = ObservedAgentExecutor(Agent("server", config=config, tools=[gate.hold]), statuses)
         queue = _RecordingQueue()
 
         running = asyncio.create_task(executor.execute(_request(), queue))
-        await started.wait()
+        await gate.entered.wait()
         await executor.cancel(_cancel_request(), queue)
-        release.set()
+        gate.release()
         await running
 
         assert queue.states() == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_CANCELED]
         # Server-side observers see the same lifecycle as the wire, not the completion that lost.
-        assert mirrored == [TaskState.TASK_STATE_CANCELED]
+        assert statuses.states == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_CANCELED]
 
     async def test_cancel_landing_during_the_text_close_follows_input_required(self) -> None:
         # Asking for a client tool closes the streamed text before the task leaves ``working``; a

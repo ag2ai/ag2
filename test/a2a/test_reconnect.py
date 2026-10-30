@@ -79,15 +79,27 @@ def _snapshot(artifact_id: str, text: str) -> StreamResponse:
     )
 
 
-def _input_required_with_call(artifact_id: str, tool: str) -> StreamResponse:
-    """Task as it stands on resubscribe after the server asked for a client tool."""
+def _snapshot_with_call(
+    artifact_id: str, tool: str, *, state: TaskState = TaskState.TASK_STATE_INPUT_REQUIRED
+) -> StreamResponse:
+    """Task as it stands on resubscribe after the server wrote a client tool call: asking for input, or about to."""
     call = data_part(call_to_payload(ToolCallEvent(name=tool, arguments="{}")), media_type=MIME_TOOL_CALL)
     return StreamResponse(
         task=Task(
             id=TASK_ID,
             context_id=CONTEXT_ID,
-            status=TaskStatus(state=TaskState.TASK_STATE_INPUT_REQUIRED),
+            status=TaskStatus(state=state),
             artifacts=[Artifact(artifact_id=artifact_id, parts=[call])],
+        ),
+    )
+
+
+def _input_required() -> StreamResponse:
+    return StreamResponse(
+        status_update=TaskStatusUpdateEvent(
+            task_id=TASK_ID,
+            context_id=CONTEXT_ID,
+            status=TaskStatus(state=TaskState.TASK_STATE_INPUT_REQUIRED),
         ),
     )
 
@@ -263,7 +275,22 @@ class TestStreamingReconnect:
     async def test_tool_call_requested_while_disconnected_is_run_from_the_snapshot(self) -> None:
         server = _ScriptedServer(
             send=_Leg([_task(), _chunk("art-1", "he", append=False)], drop=True),
-            resubscribes=[_Leg([_input_required_with_call("calls", "lookup")])],
+            resubscribes=[_Leg([_snapshot_with_call("calls", "lookup")])],
+            continuation=_Leg([_artifact("art-2", "found"), _completed()]),
+        )
+
+        reply = await _client(server, tools=[lookup]).ask("ping")
+
+        assert reply.body == "found"
+        assert server.methods == ["SendStreamingMessage", "SubscribeToTask", "SendStreamingMessage"]
+
+    async def test_tool_call_written_while_disconnected_before_input_required_is_run(self) -> None:
+        # The snapshot still shows the task working; the live INPUT_REQUIRED that follows carries no artifacts.
+        server = _ScriptedServer(
+            send=_Leg([_task(), _chunk("art-1", "he", append=False)], drop=True),
+            resubscribes=[
+                _Leg([_snapshot_with_call("calls", "lookup", state=TaskState.TASK_STATE_WORKING), _input_required()])
+            ],
             continuation=_Leg([_artifact("art-2", "found"), _completed()]),
         )
 
@@ -285,7 +312,7 @@ class TestStreamingReconnect:
         # The continuation appends to the artifact the tool turn opened, so a snapshot restates
         # the earlier turn's text too; that text was consumed by the tool turn, not this reply.
         server = _ScriptedServer(
-            send=_Leg([_task(), _chunk("art-1", "pre-", append=False), _input_required_with_call("calls", "lookup")]),
+            send=_Leg([_task(), _chunk("art-1", "pre-", append=False), _snapshot_with_call("calls", "lookup")]),
             continuation=_Leg([_chunk("art-1", "end")], drop=True),
             resubscribes=[_Leg([_snapshot("art-1", snapshot), _completed()])],
         )

@@ -3,9 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 from collections import deque
-from collections.abc import Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
+from contextlib import ExitStack
 from datetime import datetime, timezone
+from functools import partial
 from typing import Any
 from uuid import uuid4
 
@@ -43,6 +46,8 @@ from .mappers import (
     task_state_to_status_update,
 )
 
+logger = logging.getLogger(__name__)
+
 _TERMINAL_STATES = frozenset({
     TaskState.TASK_STATE_COMPLETED,
     TaskState.TASK_STATE_CANCELED,
@@ -66,7 +71,8 @@ class _ClosingTaskUpdater(TaskUpdater):
     ``A2ATaskStatusUpdate`` in the same order. A separate dispatcher finishes each notification
     before starting the next, even if a subscriber requests another transition. Transitions
     requested during dispatch only enqueue their notifications, so subscribers can await them
-    without waiting on their own notification. Cancelling the caller does not cancel dispatch.
+    without waiting on their own notification. Cancelling the caller does not cancel dispatch,
+    and a failing subscriber is logged rather than raised: the transition is already on the wire.
     """
 
     def __init__(
@@ -92,48 +98,48 @@ class _ClosingTaskUpdater(TaskUpdater):
         self._transition = asyncio.Lock()
         self._lifecycle_events: deque[A2ATaskStatusUpdate] = deque()
         self._lifecycle_dispatcher: asyncio.Task[None] | None = None
+        # Stream subscriptions made through ``AgentExecutor._observe``. Held, not unwound, for the
+        # updater's life: its dispatcher may still deliver a notification after ``execute`` returns.
+        self.subscriptions = ExitStack()
 
     async def send_text_chunk(self, event: ModelMessageChunk) -> None:
-        """Commit a text chunk before any competing closing transition."""
-        commit = asyncio.create_task(self._commit_text_chunk(event))
-        await self._wait_for_commit(commit)
-
-    async def _commit_text_chunk(self, event: ModelMessageChunk) -> None:
-        async with self._transition:
-            if self.closed:
-                return
-            chunk = chunk_to_text_artifact(
-                event,
-                artifact_id=self._text_artifact_id,
-                task_id=self.task_id,
-                context_id=self.context_id,
-                append=bool(self._text_pieces),
-            )
-            await self.event_queue.enqueue_event(a2a_event_to_sdk(chunk))
-            self._text_pieces.append(event.content)
+        """Stream a text chunk while the turn is open."""
+        await self._send_while_open(partial(self._write_text_chunk, event))
 
     async def send_client_call(self, event: ClientToolCallEvent) -> None:
-        commit = asyncio.create_task(self._commit_client_call(event))
-        await self._wait_for_commit(commit)
-
-    async def _commit_client_call(self, event: ClientToolCallEvent) -> None:
-        async with self._transition:
-            if self.closed:
-                return
-            artifact = client_call_to_artifact(event, task_id=self.task_id, context_id=self.context_id)
-            await self.event_queue.enqueue_event(a2a_event_to_sdk(artifact))
-            self._pending_client_calls.append(event)
+        """Publish a client tool call while the turn is open."""
+        await self._send_while_open(partial(self._write_client_call, event))
 
     async def send_event(self, event: Event) -> None:
-        """Forward an event only while the turn remains open."""
-        commit = asyncio.create_task(self._commit_event(event))
+        """Forward an event while the turn is open."""
+        await self._send_while_open(partial(self.event_queue.enqueue_event, event))
+
+    async def _send_while_open(self, write: Callable[[], Awaitable[None]]) -> None:
+        commit = asyncio.create_task(self._commit_while_open(write))
         await self._wait_for_commit(commit)
 
-    async def _commit_event(self, event: Event) -> None:
+    async def _commit_while_open(self, write: Callable[[], Awaitable[None]]) -> None:
+        # Under the transition lock, so a write lands either before the closing transition or not at all.
         async with self._transition:
-            if self.closed:
-                return
-            await self.event_queue.enqueue_event(event)
+            if not self.closed:
+                await write()
+
+    async def _write_text_chunk(self, event: ModelMessageChunk) -> None:
+        # a2a-sdk rejects append=True before the artifact exists, so the first chunk creates it.
+        chunk = chunk_to_text_artifact(
+            event,
+            artifact_id=self._text_artifact_id,
+            task_id=self.task_id,
+            context_id=self.context_id,
+            append=bool(self._text_pieces),
+        )
+        await self.event_queue.enqueue_event(a2a_event_to_sdk(chunk))
+        self._text_pieces.append(event.content)
+
+    async def _write_client_call(self, event: ClientToolCallEvent) -> None:
+        artifact = client_call_to_artifact(event, task_id=self.task_id, context_id=self.context_id)
+        await self.event_queue.enqueue_event(a2a_event_to_sdk(artifact))
+        self._pending_client_calls.append(event)
 
     async def update_status(
         self,
@@ -192,8 +198,11 @@ class _ClosingTaskUpdater(TaskUpdater):
         return dispatcher
 
     async def _wait_for_commit(self, commit: asyncio.Task[Any]) -> None:
-        # A queue may publish to one consumer before awaiting another. Finish its write and
-        # bookkeeping before cancellation can release the transition lock or remove this turn.
+        """Wait for ``commit`` to finish even if the caller is cancelled, then re-raise that cancellation.
+
+        A queue may publish to one consumer before awaiting another. Finish its write and
+        bookkeeping before cancellation can release the transition lock or remove this turn.
+        """
         cancellation: asyncio.CancelledError | None = None
         while True:
             try:
@@ -207,18 +216,16 @@ class _ClosingTaskUpdater(TaskUpdater):
             raise cancellation
 
     async def _dispatch_lifecycle(self) -> None:
-        error: Exception | asyncio.CancelledError | None = None
         try:
             while self._lifecycle_events:
                 event = self._lifecycle_events.popleft()
                 try:
                     await self._lifecycle.send(event)
-                except (Exception, asyncio.CancelledError) as exc:
-                    # A callback failure must not discard transitions already committed to the wire.
-                    if error is None:
-                        error = exc
-            if error is not None:
-                raise error
+                except (Exception, asyncio.CancelledError):
+                    # The transition is already on the wire. Raising would drop the notifications
+                    # queued behind it, and an error out of ``execute`` or ``cancel`` makes the SDK
+                    # write FAILED after the terminal state.
+                    logger.exception("A2A lifecycle subscriber failed on %s", TaskState.Name(event.state))
         finally:
             self._lifecycle_dispatcher = None
 
@@ -332,6 +339,8 @@ class AgentExecutor(A2AAgentExecutorBase):
             if isinstance(event, A2AEvent):
                 await updater.send_event(a2a_event_to_sdk(event))
 
+        self._observe(updater.subscriptions, lifecycle_ctx)
+
         if is_first_turn:
             # SDK 1.x consumer requires a ``Task`` object on the event queue
             # before any ``TaskStatusUpdateEvent`` — TaskUpdater only emits
@@ -376,6 +385,15 @@ class AgentExecutor(A2AAgentExecutorBase):
         # No turn running: the task waits for input, or its turn just ended and the SDK has not yet
         # consumed that terminal event. Writing CANCELED here would land over the latter; the SDK
         # closes a task still open once ``cancel`` returns, after re-reading it, so leave it to that.
+
+    def _observe(self, stack: ExitStack, context: ConversationContext) -> None:
+        """Subscribe to this request's stream before its first status update.
+
+        Extension point: ``execute`` calls this once per request, so a subclass sees every
+        ``A2ATaskStatusUpdate`` the request puts on the wire, unlike agent observers, which only
+        run during the turn. Enter subscriptions on ``stack``; it lives as long as the request can
+        still deliver a notification. The base subscribes nothing.
+        """
 
     def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
         """Per-request system-prompt fragments to fold into the turn.

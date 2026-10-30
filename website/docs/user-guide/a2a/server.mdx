@@ -36,7 +36,7 @@ async def main() -> None:
 
 After startup the agent card is reachable at `#!python http://127.0.0.1:8000/.well-known/agent-card.json`. A client connects by passing that base URL to `#!python A2AConfig(card_url=...)` — see the [Client](/docs/user-guide/a2a/client) page.
 
-When the model streams its answer, the server publishes the text as one artifact and closes it (`#!python last_chunk=True`) before the task leaves `#!python working` (completed, failed, input required or cancelled), so any A2A client can tell the answer is complete.
+When the model streams its answer, the server publishes the text as one artifact and closes it (`#!python last_chunk=True`) before the task leaves `#!python working` (completed, failed, input required or cancelled), so any A2A client can tell the answer is complete. The one exception is a cancel that reaches a [different replica](/docs/user-guide/a2a/server#running-on-several-replicas) from the one running the task: the SDK records `#!python CANCELED` in the shared store and stops the running turn, which gets no chance to send the closing chunk. The terminal status still ends the stream, so clients lose nothing but the marker.
 
 ## What `A2AServer` Holds
 

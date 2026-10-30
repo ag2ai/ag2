@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeAlias
@@ -106,10 +107,14 @@ if TYPE_CHECKING:
 CardVerifier: TypeAlias = Callable[[AgentCard], None]
 """JWS verifier for consumed AgentCards (from :func:`a2a.utils.signing.create_signature_verifier`)."""
 
+logger = logging.getLogger(__name__)
+
 _PROVIDER = "a2a"
 _CONTEXT_ID_VAR_TEMPLATE = "a2a:context_id:{card_url}"
 
-_TERMINAL_STATES = frozenset({
+# States after which nothing more arrives for this turn: the spec's terminal states plus the
+# interrupted ones (§4.1.3), which hand control back to the caller.
+_SETTLED_STATES = frozenset({
     TaskState.TASK_STATE_COMPLETED,
     TaskState.TASK_STATE_CANCELED,
     TaskState.TASK_STATE_FAILED,
@@ -362,6 +367,14 @@ class A2AClient(LLMClient):
             if state.terminal_task is not None and (exc_cls := _FAILURE_ERRORS.get(state.finish_reason)):
                 raise exc_cls(state.terminal_task)
 
+            if state.pending_calls and state.finish_reason != "input_required":
+                # Only a task waiting for input takes tool results back; a finished one would refuse them.
+                logger.warning(
+                    "A2A peer requested client tool calls %s on a task that did not wait for input; ignoring them",
+                    [call.name for call in state.pending_calls],
+                )
+                state.pending_calls.clear()
+
             message = ModelMessage(state.text()) if state.text() else None
 
             return ModelResponse(
@@ -604,7 +617,7 @@ class A2AClient(LLMClient):
                 self._save_context_id(context, update.context_id)
                 if update.task_id:
                     self._task_id = update.task_id
-                if update.status.state in _TERMINAL_STATES:
+                if update.status.state in _SETTLED_STATES:
                     outcome.settled = True
                 stop = await self._handle_status_update(update, context, state, outcome)
                 if stop:
@@ -673,26 +686,40 @@ class A2AClient(LLMClient):
         context: ConversationContext,
         state: A2ADriveState,
     ) -> None:
-        """Absorb text/tool-calls from COMPLETED's ``status.message``; idempotent on ``message_id``."""
+        """Absorb text/tool-calls from COMPLETED's ``status.message``; idempotent on ``message_id``.
+
+        A message whose text is exactly the reply the artifacts already carried restates it, and adds no text.
+        """
         if msg.message_id and msg.message_id in state.seen_message_ids:
             return
         self._merge_context_update(context, extract_context_update(msg))
-        text_chunk, calls = await self._handle_artifact_parts(msg.parts, context)
+        parts: Iterable[Part] = msg.parts
+        if (reply := state.text()) and "".join(part.text for part in msg.parts) == reply:
+            parts = [part for part in msg.parts if not part.text]
+        text_chunk, calls = await self._handle_artifact_parts(parts, context)
         state.add_parts(text_chunk, calls)
         if msg.message_id:
             state.seen_message_ids.add(msg.message_id)
 
-    async def _absorb_task(self, task: Task, context: ConversationContext, state: A2ADriveState) -> A2ATurnOutcome:
+    async def _absorb_task(
+        self,
+        task: Task,
+        context: ConversationContext,
+        state: A2ADriveState,
+    ) -> A2ATurnOutcome:
         """Fold a task snapshot (polled, or a stream's) into drive state; ``settled`` once it is final or interrupted.
 
         Each snapshot is the current full content of every artifact, reconciled against what was
-        already absorbed. Tool calls are only surfaced on ``INPUT_REQUIRED``, where ``status.message``
-        is the HITL prompt rather than assistant text; only ``COMPLETED`` contributes its message to
-        the reply, the same as a streamed status update.
+        already absorbed; a tool call it repeats is surfaced once. Only ``COMPLETED`` contributes its
+        message to the reply, the same as a streamed status update: on ``INPUT_REQUIRED`` the message
+        is the HITL prompt rather than assistant text.
         """
         status = task.status
         input_required = status.state == TaskState.TASK_STATE_INPUT_REQUIRED
-        await self._absorb_snapshot_artifacts(task, context, state, terminal_calls_visible=input_required)
+        for artifact in task.artifacts:
+            await self._apply_artifact_update(
+                parse_task_artifact(artifact, task_id=task.id, context_id=task.context_id), context, state
+            )
 
         if reason := _FAILURE_REASONS.get(status.state):
             state.terminal_task = task
@@ -706,21 +733,6 @@ class A2AClient(LLMClient):
                 await self._absorb_completion_message(status.message, context, state)
             return A2ATurnOutcome(settled=True)
         return A2ATurnOutcome()
-
-    async def _absorb_snapshot_artifacts(
-        self,
-        task: Task,
-        context: ConversationContext,
-        state: A2ADriveState,
-        *,
-        terminal_calls_visible: bool,
-    ) -> None:
-        for artifact in task.artifacts:
-            a2a_event = parse_task_artifact(artifact, task_id=task.id, context_id=task.context_id)
-            if isinstance(a2a_event, A2AToolCallArtifact) and not terminal_calls_visible:
-                # Left unseen: the call is only surfaced once the task asks for input.
-                continue
-            await self._apply_artifact_update(a2a_event, context, state)
 
     async def _apply_artifact_update(
         self,

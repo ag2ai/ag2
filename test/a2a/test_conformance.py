@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Sequence
 from functools import partial
 from typing import Any
@@ -25,12 +26,18 @@ from ag2.a2a.errors import (
     A2ATaskRejectedError,
     A2ATaskTerminalError,
 )
-from ag2.a2a.events import A2ATaskArtifactUpdate, A2ATextArtifact
+from ag2.a2a.events import A2ATaskArtifactUpdate, A2ATaskStatusUpdate, A2ATextArtifact
 from ag2.a2a.extension import MIME_TOOL_CALL
 from ag2.a2a.mappers.parts import data_part
 from ag2.a2a.mappers.tools import call_to_payload
 from ag2.a2a.tasks import cancel_task, get_task, list_tasks
-from ag2.a2a.testing import ToolRoundsConfig, make_test_client_factory
+from ag2.a2a.testing import (
+    ObservedAgentExecutor,
+    TaskStatusRecorder,
+    ToolRoundsConfig,
+    TurnGate,
+    make_test_client_factory,
+)
 from ag2.events import (
     BaseEvent,
     ModelMessage,
@@ -39,6 +46,7 @@ from ag2.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
+from ag2.observers import observer
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
@@ -64,6 +72,11 @@ async def _resent_artifact(updater: TaskUpdater, release: asyncio.Event) -> None
 
 
 async def _answer_in_completion_message(updater: TaskUpdater, release: asyncio.Event) -> None:
+    await updater.complete(message=updater.new_agent_message([Part(text="done")]))
+
+
+async def _answer_in_artifact_and_completion_message(updater: TaskUpdater, release: asyncio.Event) -> None:
+    await updater.add_artifact(parts=[Part(text="done")], artifact_id="art", last_chunk=True)
     await updater.complete(message=updater.new_agent_message([Part(text="done")]))
 
 
@@ -436,6 +449,20 @@ async def test_answer_only_in_completion_message_emits_one_chunk(streaming: bool
     assert collector.chunks == ["done"]
 
 
+@pytest.mark.asyncio
+@_both_modes
+async def test_completion_message_restating_the_artifact_answer_is_not_doubled(streaming: bool) -> None:
+    pair = make_executor_pair(ScriptedExecutor(_answer_in_artifact_and_completion_message), streaming=streaming)
+    stream = MemoryStream()
+    collector = EventCollector()
+    stream.where(ModelMessageChunk).subscribe(collector.on_event)
+
+    reply = await pair.client.ask("go", stream=stream)
+
+    assert reply.response.content == "done"
+    assert collector.chunks == ["done"]
+
+
 def _call_part(name: str) -> Part:
     return data_part(call_to_payload(ToolCallEvent(name=name, arguments="{}")), media_type=MIME_TOOL_CALL)
 
@@ -574,6 +601,41 @@ async def test_tool_calls_growing_in_one_artifact_all_run(streaming: bool) -> No
     assert reply.response.content == "ok"
 
 
+async def _tool_call_then_complete(updater: TaskUpdater, release: asyncio.Event) -> None:
+    await updater.add_artifact(parts=[Part(text="hi")], artifact_id="art", last_chunk=True)
+    await updater.add_artifact(parts=[_call_part("step")], artifact_id="call", last_chunk=True)
+    await updater.complete()
+
+
+async def _mixed_tool_call_then_complete(updater: TaskUpdater, release: asyncio.Event) -> None:
+    await updater.add_artifact(parts=[Part(text="hi"), _call_part("step")], artifact_id="art", last_chunk=True)
+    await updater.complete()
+
+
+@pytest.mark.asyncio
+@_both_modes
+@pytest.mark.parametrize(
+    "script", [_tool_call_then_complete, _mixed_tool_call_then_complete], ids=["call-artifact", "mixed-artifact"]
+)
+async def test_tool_call_on_a_task_that_completes_is_not_run(
+    streaming: bool,
+    script: Callable[[TaskUpdater, asyncio.Event], Awaitable[None]],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    pair = make_executor_pair(ScriptedExecutor(script), streaming=streaming)
+    client = Agent("client", config=pair.client.config, tools=[step])
+    stream = MemoryStream()
+
+    with caplog.at_level(logging.WARNING, logger="ag2.a2a.client"):
+        reply = await client.ask("go", stream=stream)
+
+    assert [e for e in await stream.history.get_events() if isinstance(e, ToolResultEvent)] == []
+    assert reply.response.content == "hi"
+    assert [r.getMessage() for r in caplog.records if r.name == "ag2.a2a.client"] == [
+        "A2A peer requested client tool calls ['step'] on a task that did not wait for input; ignoring them"
+    ]
+
+
 class _Blocker:
     """A tool that never returns, so a task stays ``working`` until it is cancelled."""
 
@@ -628,3 +690,60 @@ async def test_cancelling_a_task_waiting_for_a_client_tool_marks_it_cancelled() 
         await asking
     cancelled = await get_task(a2a_config(client), task.id)
     assert cancelled.status.state == TaskState.TASK_STATE_CANCELED
+
+
+class _FailOn:
+    """Lifecycle observer that raises ``error`` when the task reaches ``state``."""
+
+    def __init__(self, state: TaskState, error: BaseException) -> None:
+        self.state = state
+        self.error = error
+
+    async def on_status(self, event: A2ATaskStatusUpdate) -> None:
+        if event.state == self.state:
+            raise self.error
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [ValueError("observer bug"), asyncio.CancelledError()], ids=["error", "cancelled"])
+async def test_failing_observer_does_not_turn_a_cancel_into_a_failure(error: BaseException) -> None:
+    # CANCELED is terminal (spec §4.1.3): an observer failing on it must not let the SDK write FAILED after it.
+    gate = TurnGate()
+    statuses = TaskStatusRecorder()
+    server = Agent("server", config=TestConfig(ToolCallEvent(name="hold", arguments="{}"), "unused"), tools=[gate.hold])
+    executor = ObservedAgentExecutor(
+        server, statuses, observer(A2ATaskStatusUpdate, _FailOn(TaskState.TASK_STATE_CANCELED, error).on_status)
+    )
+    client = make_executor_pair(executor, streaming=True).client
+
+    asking = asyncio.create_task(client.ask("go"))
+    await gate.entered.wait()
+    [task] = (await list_tasks(a2a_config(client))).tasks
+    cancelled = await cancel_task(a2a_config(client), task.id)
+
+    with pytest.raises(A2ATaskCancelledError):
+        await asyncio.wait_for(asking, timeout=5)
+    assert cancelled.status.state == TaskState.TASK_STATE_CANCELED
+    stored = await get_task(a2a_config(client), task.id)
+    assert stored.status.state == TaskState.TASK_STATE_CANCELED
+    assert statuses.states == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_CANCELED]
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_failing_observer_does_not_fail_a_completed_task(streaming: bool) -> None:
+    statuses = TaskStatusRecorder()
+    server = Agent("server", config=TestConfig("done"))
+    executor = ObservedAgentExecutor(
+        server,
+        statuses,
+        observer(A2ATaskStatusUpdate, _FailOn(TaskState.TASK_STATE_COMPLETED, ValueError("observer bug")).on_status),
+    )
+    client = make_executor_pair(executor, streaming=streaming).client
+
+    reply = await client.ask("go")
+
+    assert reply.response.content == "done"
+    [task] = (await list_tasks(a2a_config(client))).tasks
+    assert task.status.state == TaskState.TASK_STATE_COMPLETED
+    assert statuses.states == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_COMPLETED]
