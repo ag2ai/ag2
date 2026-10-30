@@ -11,7 +11,9 @@ on a recording queue to put each side into that window deterministically.
 """
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
+from contextlib import AsyncExitStack, ExitStack
 
 import pytest
 from a2a.server.agent_execution import RequestContext
@@ -33,6 +35,7 @@ from ag2.a2a.executor import AgentExecutor
 from ag2.a2a.mappers.events import chunk_to_text_artifact
 from ag2.a2a.mappers.messages import build_user_message
 from ag2.a2a.testing import ObservedAgentExecutor, TaskStatusRecorder, TurnGate
+from ag2.context import ConversationContext
 from ag2.events import ClientToolCallEvent, ModelMessageChunk, TextInput, ToolCallEvent
 from ag2.observers import observer
 from ag2.testing import TestConfig
@@ -90,6 +93,21 @@ def _client_tool_request() -> RequestContext:
 
 def _cancel_request() -> RequestContext:
     return RequestContext(ServerCallContext(), task_id=_TASK_ID, context_id=_CONTEXT_ID)
+
+
+class _ScopedStatuses(TaskStatusRecorder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.closed = asyncio.Event()
+        self.states_at_close: list[TaskState] = []
+
+    def register(self, stack: ExitStack | AsyncExitStack, context: ConversationContext) -> None:
+        super().register(stack, context)
+        stack.callback(self.close)
+
+    def close(self) -> None:
+        self.states_at_close = list(self.states)
+        self.closed.set()
 
 
 class _CancelOnStatus:
@@ -365,7 +383,7 @@ class TestCancelRacingTheTurn:
     async def test_producer_cancellation_does_not_drop_queued_terminal_notification(self) -> None:
         queue = _RecordingQueue()
         pause = _PauseOnStatus(TaskState.TASK_STATE_INPUT_REQUIRED)
-        statuses = TaskStatusRecorder()
+        statuses = _ScopedStatuses()
         executor = ObservedAgentExecutor(
             Agent("server", config=TestConfig(ToolCallEvent(name="lookup", arguments="{}"))),
             observer(A2ATaskStatusUpdate, pause.on_status),
@@ -378,6 +396,7 @@ class TestCancelRacingTheTurn:
             running.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await running
+            assert not statuses.closed.is_set()
         finally:
             pause.resume()
             if not running.done():
@@ -385,6 +404,8 @@ class TestCancelRacingTheTurn:
                 await asyncio.gather(running, return_exceptions=True)
 
         await asyncio.wait_for(statuses.wait_for(TaskState.TASK_STATE_CANCELED), timeout=1.0)
+        await asyncio.wait_for(statuses.closed.wait(), timeout=1.0)
+        assert statuses.states_at_close == statuses.states
         assert statuses.states == [
             TaskState.TASK_STATE_WORKING,
             TaskState.TASK_STATE_INPUT_REQUIRED,
@@ -521,3 +542,101 @@ class TestCancelRacingTheTurn:
             TaskState.TASK_STATE_INPUT_REQUIRED,
             TaskState.TASK_STATE_CANCELED,
         ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("client_tool", [False, True], ids=["completed", "input-required"])
+async def test_request_observers_close_after_the_last_notification(client_tool: bool) -> None:
+    statuses = _ScopedStatuses()
+    answer = ToolCallEvent(name="lookup", arguments="{}") if client_tool else "done"
+    executor = ObservedAgentExecutor(Agent("server", config=TestConfig(answer)), statuses)
+    queue = _RecordingQueue()
+
+    await executor.execute(_client_tool_request(), queue)
+
+    assert statuses.closed.is_set()
+    assert statuses.states_at_close == queue.states()
+
+
+@pytest.mark.asyncio
+async def test_observers_close_when_a_later_registration_fails() -> None:
+    statuses = _ScopedStatuses()
+    executor = ObservedAgentExecutor(Agent("server", config=TestConfig("done")), statuses, _FailingObserver())
+
+    with pytest.raises(ValueError, match="registration failed"):
+        await executor.execute(_request(), _RecordingQueue())
+
+    assert statuses.closed.is_set()
+
+
+class _FailingObserver:
+    def register(self, stack: ExitStack | AsyncExitStack, context: ConversationContext) -> None:
+        raise ValueError("registration failed")
+
+
+@pytest.mark.asyncio
+async def test_observers_close_after_a_turn_failure() -> None:
+    statuses = _ScopedStatuses()
+    executor = ObservedAgentExecutor(Agent("unconfigured"), statuses)
+    queue = _RecordingQueue()
+
+    with pytest.raises(RuntimeError, match="Agent.config is not set"):
+        await executor.execute(_request(), queue)
+
+    assert statuses.closed.is_set()
+    assert statuses.states_at_close == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_FAILED]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_startup_keeps_observers_until_working_is_delivered() -> None:
+    statuses = _ScopedStatuses()
+    pause = _PauseOnStatus(TaskState.TASK_STATE_WORKING)
+    executor = ObservedAgentExecutor(
+        Agent("server", config=TestConfig("done")), observer(A2ATaskStatusUpdate, pause.on_status), statuses
+    )
+    running = asyncio.create_task(executor.execute(_request(), _RecordingQueue()))
+    try:
+        await asyncio.wait_for(pause.paused.wait(), timeout=1.0)
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await running
+        assert not statuses.closed.is_set()
+    finally:
+        pause.resume()
+        if not running.done():
+            running.cancel()
+            await asyncio.gather(running, return_exceptions=True)
+
+    await asyncio.wait_for(statuses.closed.wait(), timeout=1.0)
+    assert statuses.states_at_close == [TaskState.TASK_STATE_WORKING]
+
+
+class _FailingCleanupObserver:
+    def __init__(self, error: BaseException) -> None:
+        self.error = error
+
+    def register(self, stack: ExitStack | AsyncExitStack, context: ConversationContext) -> None:
+        stack.callback(self.close)
+
+    def close(self) -> None:
+        raise self.error
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [ValueError("cleanup failed"), asyncio.CancelledError("cleanup cancelled")])
+async def test_observer_cleanup_failure_does_not_fail_the_completed_turn(
+    error: BaseException, caplog: pytest.LogCaptureFixture
+) -> None:
+    statuses = _ScopedStatuses()
+    executor = ObservedAgentExecutor(
+        Agent("server", config=TestConfig("done")), statuses, _FailingCleanupObserver(error)
+    )
+    queue = _RecordingQueue()
+
+    with caplog.at_level(logging.ERROR, logger="ag2.a2a.executor"):
+        await executor.execute(_request(), queue)
+
+    assert statuses.closed.is_set()
+    assert statuses.states_at_close == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_COMPLETED]
+    assert queue.states() == statuses.states_at_close
+    assert "A2A lifecycle subscriber cleanup failed" in caplog.text

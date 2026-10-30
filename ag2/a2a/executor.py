@@ -98,8 +98,10 @@ class _ClosingTaskUpdater(TaskUpdater):
         self._transition = asyncio.Lock()
         self._lifecycle_events: deque[A2ATaskStatusUpdate] = deque()
         self._lifecycle_dispatcher: asyncio.Task[None] | None = None
-        # Stream subscriptions made through ``AgentExecutor._observe``. Held, not unwound, for the
-        # updater's life: its dispatcher may still deliver a notification after ``execute`` returns.
+        # Dispatch and concurrent commits may outlive execute, so subscriptions close only
+        # after execution and every outstanding write/notification have finished.
+        self._execution_finished = False
+        self._active_writes = 0
         self.subscriptions = ExitStack()
 
     async def send_text_chunk(self, event: ModelMessageChunk) -> None:
@@ -115,8 +117,13 @@ class _ClosingTaskUpdater(TaskUpdater):
         await self._send_while_open(partial(self.event_queue.enqueue_event, event))
 
     async def _send_while_open(self, write: Callable[[], Awaitable[None]]) -> None:
-        commit = asyncio.create_task(self._commit_while_open(write))
-        await self._wait_for_commit(commit)
+        self._active_writes += 1
+        try:
+            commit = asyncio.create_task(self._commit_while_open(write))
+            await self._wait_for_commit(commit)
+        finally:
+            self._active_writes -= 1
+            self._close_subscriptions_if_idle()
 
     async def _commit_while_open(self, write: Callable[[], Awaitable[None]]) -> None:
         # Under the transition lock, so a write lands either before the closing transition or not at all.
@@ -148,11 +155,16 @@ class _ClosingTaskUpdater(TaskUpdater):
         timestamp: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        commit = asyncio.create_task(self._commit_status(state, message, timestamp, metadata))
-        await self._wait_for_commit(commit)
-        dispatcher = commit.result()
-        if dispatcher is not None:
-            await asyncio.shield(dispatcher)
+        self._active_writes += 1
+        try:
+            commit = asyncio.create_task(self._commit_status(state, message, timestamp, metadata))
+            await self._wait_for_commit(commit)
+            dispatcher = commit.result()
+            if dispatcher is not None:
+                await asyncio.shield(dispatcher)
+        finally:
+            self._active_writes -= 1
+            self._close_subscriptions_if_idle()
 
     async def _commit_status(
         self,
@@ -228,6 +240,19 @@ class _ClosingTaskUpdater(TaskUpdater):
                     logger.exception("A2A lifecycle subscriber failed on %s", TaskState.Name(event.state))
         finally:
             self._lifecycle_dispatcher = None
+            self._close_subscriptions_if_idle()
+
+    def finish_execution(self) -> None:
+        self._execution_finished = True
+        self._close_subscriptions_if_idle()
+
+    def _close_subscriptions_if_idle(self) -> None:
+        if self._execution_finished and not self._active_writes and self._lifecycle_dispatcher is None:
+            try:
+                self.subscriptions.close()
+            except (Exception, asyncio.CancelledError):
+                # Cleanup is observer code too: it must not overwrite an already committed terminal state.
+                logger.exception("A2A lifecycle subscriber cleanup failed")
 
 
 class AgentExecutor(A2AAgentExecutorBase):
@@ -339,36 +364,39 @@ class AgentExecutor(A2AAgentExecutorBase):
             if isinstance(event, A2AEvent):
                 await updater.send_event(a2a_event_to_sdk(event))
 
-        self._observe(updater.subscriptions, lifecycle_ctx)
-
-        if is_first_turn:
-            # SDK 1.x consumer requires a ``Task`` object on the event queue
-            # before any ``TaskStatusUpdateEvent`` — TaskUpdater only emits
-            # status events, so we enqueue the bootstrap Task ourselves.
-            await event_queue.enqueue_event(
-                Task(
-                    id=task_id,
-                    context_id=context_id,
-                    status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED),
-                ),
-            )
-            await updater.start_work()
-
-        self._running[task_id] = updater
         try:
-            await self._run_one_turn(
-                parsed,
-                updater,
-                stream,
-                text_pieces,
-                pending_client_calls,
-                extra_prompt=self._extra_system_prompt(request_context),
-            )
-        except Exception:
-            await updater.failed()
-            raise
+            self._observe(updater.subscriptions, lifecycle_ctx)
+
+            if is_first_turn:
+                # SDK 1.x consumer requires a ``Task`` object on the event queue
+                # before any ``TaskStatusUpdateEvent`` — TaskUpdater only emits
+                # status events, so we enqueue the bootstrap Task ourselves.
+                await event_queue.enqueue_event(
+                    Task(
+                        id=task_id,
+                        context_id=context_id,
+                        status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED),
+                    ),
+                )
+                await updater.start_work()
+
+            self._running[task_id] = updater
+            try:
+                await self._run_one_turn(
+                    parsed,
+                    updater,
+                    stream,
+                    text_pieces,
+                    pending_client_calls,
+                    extra_prompt=self._extra_system_prompt(request_context),
+                )
+            except Exception:
+                await updater.failed()
+                raise
         finally:
-            self._running.pop(task_id, None)
+            if self._running.get(task_id) is updater:
+                self._running.pop(task_id)
+            updater.finish_execution()
 
     async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
         # Per a2a-sdk contract: the framework awaits this hook first and only

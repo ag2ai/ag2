@@ -747,3 +747,81 @@ async def test_failing_observer_does_not_fail_a_completed_task(streaming: bool) 
     [task] = (await list_tasks(a2a_config(client))).tasks
     assert task.status.state == TaskState.TASK_STATE_COMPLETED
     assert statuses.states == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_COMPLETED]
+
+
+async def _ask_human(updater: TaskUpdater) -> None:
+    await updater.requires_input(message=updater.new_agent_message([Part(text="Confirm?")]))
+
+
+async def _complete_with_tool_call(updater: TaskUpdater) -> None:
+    call = data_part(call_to_payload(ToolCallEvent(name="step", arguments="{}")), media_type=MIME_TOOL_CALL)
+    await updater.add_artifact([call], artifact_id="call")
+    await updater.complete(message=updater.new_agent_message([Part(text="done")]))
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_completed_hitl_continuation_does_not_execute_client_tools(streaming: bool) -> None:
+    calls: list[str] = []
+
+    async def confirm() -> str:
+        return "yes"
+
+    def step() -> str:
+        calls.append("ran")
+        return "result"
+
+    pair = make_executor_pair(
+        ToolRoundTripExecutor(_ask_human, _complete_with_tool_call), streaming=streaming, hitl_hook=confirm
+    )
+    pair.client.tool(step)
+
+    reply = await pair.client.ask("go")
+
+    assert calls == []
+    assert reply.response.content == "done"
+    assert reply.response.finish_reason == "completed"
+
+
+async def _ask_human_with_closed_artifact(updater: TaskUpdater) -> None:
+    await updater.add_artifact([Part(text="before confirmation")], artifact_id="art", last_chunk=True)
+    await _ask_human(updater)
+
+
+class _ToolAfterHuman:
+    def __init__(self) -> None:
+        self.turns = 0
+
+    async def __call__(self, updater: TaskUpdater) -> None:
+        self.turns += 1
+        if self.turns == 1:
+            await updater.add_artifact([_call_part("step")], artifact_id="art", last_chunk=True)
+            await updater.requires_input()
+        else:
+            await updater.complete(message=updater.new_agent_message([Part(text="done")]))
+
+
+@pytest.mark.asyncio
+@_both_modes
+@pytest.mark.parametrize("with_tool", [False, True], ids=["text", "tool-call"])
+async def test_closed_artifact_id_can_be_reused_after_human_input(streaming: bool, with_tool: bool) -> None:
+    prompts: list[str] = []
+
+    async def confirm() -> str:
+        prompts.append("asked")
+        assert len(prompts) == 1, "The continuation should be read instead of asking the human again"
+        return "yes"
+
+    continuation = _ToolAfterHuman() if with_tool else partial(_answer_in_reused_artifact, answer="done", append=False)
+    pair = make_executor_pair(
+        ToolRoundTripExecutor(_ask_human_with_closed_artifact, continuation), streaming=streaming, hitl_hook=confirm
+    )
+    pair.client.tool(step)
+    stream = MemoryStream()
+
+    reply = await pair.client.ask("go", stream=stream)
+
+    assert reply.response.content == "done"
+    assert prompts == ["asked"]
+    results = [e for e in await stream.history.get_events() if isinstance(e, ToolResultEvent)]
+    assert [r.name for r in results] == (["step"] if with_tool else [])

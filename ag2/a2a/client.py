@@ -335,6 +335,11 @@ class A2AClient(LLMClient):
 
             state = A2ADriveState(prior_text=dict(self._consumed_text), seen_calls=set(self._consumed_calls))
             while True:
+                # A HITL continuation is a new turn on the same task: its result replaces
+                # the previous INPUT_REQUIRED reason and may update artifacts closed in that turn.
+                # Keep their content and dedup identities, but reopen them for the new response.
+                state.finish_reason = "completed"
+                state.closed_artifact_ids.clear()
                 outcome = await self._drive_task(outgoing, context, state)
                 if not outcome.input_required:
                     break
