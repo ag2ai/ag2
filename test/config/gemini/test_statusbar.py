@@ -11,12 +11,13 @@ from test.statusbar_support import status_model_inputs
 
 
 @pytest.mark.asyncio
-async def test_dynamic_status_uses_gemini_input_parts_and_preserves_tool_links() -> None:
+@pytest.mark.parametrize("persist", [False, True])
+async def test_status_uses_gemini_input_parts_and_preserves_tool_links(persist: bool) -> None:
     messages = await status_model_inputs(
-        TextInput("status"), DataInput({"step": 1}), ImageInput(data=b"png", media_type="image/png")
+        TextInput("status"), DataInput({"step": 1}), ImageInput(data=b"png", media_type="image/png"), persist=persist
     )
 
-    assert [content.model_dump(exclude_none=True) for content in convert_messages(messages, SerializerCls)] == [
+    expected = [
         {"role": "user", "parts": [{"text": "start"}]},
         {"role": "model", "parts": [{"function_call": {"id": "call-1", "name": "echo", "args": {}}}]},
         {
@@ -32,3 +33,6 @@ async def test_dynamic_status_uses_gemini_input_parts_and_preserves_tool_links()
             ],
         },
     ]
+    if persist:
+        expected.insert(1, expected[-1])
+    assert [content.model_dump(exclude_none=True) for content in convert_messages(messages, SerializerCls)] == expected
