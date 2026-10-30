@@ -141,7 +141,7 @@ Non-obvious choices, each of which looks like a bug until you know why:
   event to expose spend is the move this ADR exists to prevent — the event is already on the
   stream before it.
 - **In-process accounting is not a network usage protocol.**
-  `ag2/network/task_mirror.py` consumes lifecycle observations and forwards task
+  `ag2/network/task_mirror.py` consumes forwarded lifecycle events and forwards task
   metadata, not source accounting records. Direct descendant accounting in
   [ADR 0029](0029-account-descendant-usage-from-source-events.md) does not imply
   that a remote task mirror transports its complete usage history.
