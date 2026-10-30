@@ -10,7 +10,7 @@ events through observers, and optionally runs the harness primitives
 spawning).
 
 A bare ``Agent(name, config=cfg)`` has zero harness middleware — it behaves
-exactly like a plain LLM loop. Harness features are opt-in: pass ``assembly=``
+exactly like a plain LLM loop. Harness features are opt-in: use ``middleware=``
 for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
 or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
 """
@@ -79,6 +79,7 @@ from .middleware.base import (
     ToolMiddleware,
 )
 from .middleware.describe import DescribedMiddleware
+from .middleware.halt import HaltCheckMiddleware
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
@@ -687,9 +688,11 @@ class Agent(PluginTarget, Generic[TResult]):
     A bare ``Agent(name, config=cfg)`` has zero harness middleware and
     behaves exactly like a plain LLM loop. Harness features are opt-in:
 
-    * ``assembly=`` — assembly policies (e.g. ``ConversationPolicy``,
-      ``SlidingWindow``, ``AlertPolicy``). When non-empty,
-      ``AssemblerMiddleware`` and ``_HaltCheckMiddleware`` are wired in.
+    * ``middleware=`` — register context policies with
+      ``Middleware(AssemblerMiddleware, policies=[...])``. Add
+      ``Middleware(HaltCheckMiddleware)`` after it when using ``AlertPolicy``.
+      The legacy ``assembly=`` parameter is deprecated and will be removed
+      in 1.4.0; it keeps wiring both middleware automatically until then.
     * ``knowledge=KnowledgeConfig(store=...)`` — persistent knowledge store,
       compaction, aggregation.
     * ``tasks=TaskConfig(...)`` — opt in to the auto-injected ``run_subtask``
@@ -715,7 +718,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -735,7 +738,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -755,7 +758,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -775,7 +778,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     def __init__(
@@ -794,7 +797,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | Literal[False] = False,
-        assembly: Iterable[AssemblyPolicy] = (),
+        assembly: Iterable[AssemblyPolicy] | None = None,
     ) -> None:
         self._init_target(
             name,
@@ -853,7 +856,9 @@ class Agent(PluginTarget, Generic[TResult]):
             self._knowledge_context = _FakeKnowledgeContext()
 
         # Assembly policies (empty by default; bare Agent has no harness).
-        self._policies.extend(assembly)
+        self._assembly_provided = assembly is not None
+        if assembly is not None:
+            self._policies.extend(assembly)
         if self._policies:
             for w in AssemblerMiddleware.validate_order(self._policies):
                 logger.warning("Assembly policy ordering: %s", w)
@@ -932,7 +937,11 @@ class Agent(PluginTarget, Generic[TResult]):
 
     @property
     def assembly(self) -> tuple[AssemblyPolicy, ...]:
-        """Assembly policies, in the order they are applied."""
+        """Policies registered via legacy ``assembly=`` or plugins, in application order.
+
+        Policies registered directly through middleware are not included.
+        The ``assembly=`` constructor parameter will be removed in 1.4.0.
+        """
 
         return tuple(self._policies)
 
@@ -1428,6 +1437,15 @@ class Agent(PluginTarget, Generic[TResult]):
         response_schema: ResponseProto[Any] | type | None | Omit = omit,
     ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
         """Resolve invocation plugins and bracket their context contributions."""
+        if self._assembly_provided:
+            warnings.warn(
+                "Agent(assembly=...) is deprecated and will be removed in 1.4.0. "
+                "Use middleware=[Middleware(AssemblerMiddleware, policies=[...]), "
+                "Middleware(HaltCheckMiddleware)] instead. Import AssemblerMiddleware from ag2.assembly "
+                "and Middleware / HaltCheckMiddleware from ag2.middleware.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         plugins = _TurnPlugins(additional_plugins)
         async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
             if context_overrides is not None:
@@ -2022,59 +2040,11 @@ def _make_knowledge_tool(store: KnowledgeStore) -> Tool:
     return knowledge
 
 
-class _HaltCheckMiddleware(BaseMiddleware):
-    """Catches ``HaltEvent`` on the stream and short-circuits the LLM call.
-
-    ``AlertPolicy`` emits ``HaltEvent`` when a FATAL alert is detected.
-    This middleware subscribes in ``on_turn`` (scoped to a single turn so
-    the subscription never outlives the ``_execute`` that created it) and,
-    on any subsequent ``on_llm_call``, returns a synthetic ``HALTED``
-    response instead of invoking the model.
-    """
-
-    def __init__(self, event: BaseEvent, context: Context) -> None:
-        super().__init__(event, context)
-        self._halted = False
-        self._halt_reason = ""
-
-    async def on_turn(
-        self,
-        call_next: Callable[..., Any],
-        event: BaseEvent,
-        context: Context,
-    ) -> Any:
-        from .events.alert import HaltEvent
-
-        async def _on_halt(evt: HaltEvent) -> None:
-            self._halted = True
-            self._halt_reason = evt.reason
-
-        sub_id = context.stream.where(HaltEvent).subscribe(_on_halt)
-        try:
-            return await call_next(event, context)
-        finally:
-            context.stream.unsubscribe(sub_id)
-
-    async def on_llm_call(
-        self,
-        call_next: Callable[..., Any],
-        events: Any,
-        context: Context,
-    ) -> ModelResponse:
-        if self._halted:
-            from ag2.events import ModelMessage
-
-            return ModelResponse(
-                message=ModelMessage(content=f"HALTED: {self._halt_reason}"),
-            )
-        return await call_next(events, context)
-
-
 class _HaltCheckMiddlewareFactory:
-    """Factory for _HaltCheckMiddleware."""
+    """Factory for HaltCheckMiddleware."""
 
-    def __call__(self, event: BaseEvent, context: Context) -> _HaltCheckMiddleware:
-        return _HaltCheckMiddleware(event, context)
+    def __call__(self, event: BaseEvent, context: Context) -> HaltCheckMiddleware:
+        return HaltCheckMiddleware(event, context)
 
 
 class _AssemblerMiddlewareFactory:
