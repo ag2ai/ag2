@@ -43,6 +43,7 @@ sequence of `Input` parts, or `None` to skip the insertion. An empty sequence
 also skips it.
 
 ```python linenums="1"
+import asyncio
 from typing import Annotated
 
 from ag2 import Agent, Context, TextInput, Variable
@@ -67,6 +68,8 @@ async def main():
         "Continue the task",
         variables={"task": "Check inventory", "remaining": 3},
     )
+
+asyncio.run(main())
 ```
 
 The bare decorator is equivalent to `@statusbar_middleware(persist=False)`.
