@@ -105,6 +105,7 @@ Equal results create separate records; return `None` or an empty sequence when
 no new observation is needed. Skipping an update keeps earlier records visible.
 
 ```python linenums="1"
+import asyncio
 from typing import Annotated
 
 from ag2 import Agent, TextInput, Variable
@@ -122,6 +123,8 @@ async def main():
         "Start the task", middleware=[progress], variables={"phase": "planning"}
     )
     return await reply.ask("Continue")
+
+asyncio.run(main())
 ```
 
 The continuation still receives the saved planning observation, even though the
