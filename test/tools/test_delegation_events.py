@@ -245,10 +245,7 @@ async def test_root_audits_one_question_and_answer_from_leaf_with_either_hook_ow
     answers = [e.inner for e in journal.events if isinstance(e, ChildEvent) and isinstance(e.inner, HumanMessage)]
     assert len(requests) == len(answers) == 1
     assert answers[0].parent_id == requests[0].id
-    assert any(
-        isinstance(e, ChildEvent) and isinstance(e.inner, TaskStarted) and e.agent_name == "leaf"
-        for e in journal.events
-    )
+    assert any(isinstance(e, TaskStarted) and e.agent_name == "leaf" for e in journal.events)
 
 
 @dataclass
@@ -457,9 +454,7 @@ async def test_downlink_revalidates_its_recipient_after_an_awaiting_audit(stage:
     first = asyncio.create_task(run_task(worker, "first", parent_context=ctx, stream=stream, task_id="first"))
     await race.first_entered.wait()
     handle = next(
-        event.origin
-        for event in journal.events
-        if isinstance(event, ChildEvent) and isinstance(event.source_event, TaskStarted) and event.task_id == "first"
+        event.origin for event in journal.events if isinstance(event, TaskStarted) and event.task_id == "first"
     )
     assert handle is not None
     ctx.variables["number"] = 2

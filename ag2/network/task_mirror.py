@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from ag2.events import (
-    ChildEvent,
     TaskCancelled,
     TaskCompleted,
     TaskExpired,
@@ -138,7 +137,6 @@ class TaskMirror:
     def attach(self, stream: "Stream") -> list[object]:
         """Subscribe to ``Task*`` events; returns sub ids for ``detach``."""
         return [
-            stream.where(ChildEvent).subscribe(self._on_child, sync_to_thread=False),
             stream.where(TaskStarted).subscribe(self._on_started, sync_to_thread=False),
             stream.where(TaskProgress).subscribe(self._on_progress, sync_to_thread=False),
             stream.where(TaskCompleted).subscribe(self._on_completed, sync_to_thread=False),
@@ -146,21 +144,6 @@ class TaskMirror:
             stream.where(TaskExpired).subscribe(self._on_expired, sync_to_thread=False),
             stream.where(TaskCancelled).subscribe(self._on_cancelled, sync_to_thread=False),
         ]
-
-    async def _on_child(self, event: ChildEvent) -> None:
-        inner = event.inner
-        if isinstance(inner, TaskStarted):
-            await self._on_started(inner)
-        elif isinstance(inner, TaskProgress):
-            await self._on_progress(inner)
-        elif isinstance(inner, TaskCompleted):
-            await self._on_completed(inner)
-        elif isinstance(inner, TaskFailed):
-            await self._on_failed(inner)
-        elif isinstance(inner, TaskExpired):
-            await self._on_expired(inner)
-        elif isinstance(inner, TaskCancelled):
-            await self._on_cancelled(inner)
 
     def detach(self, stream: "Stream", sub_ids: list[object]) -> None:
         """Unsubscribe the previously-attached subscriptions."""

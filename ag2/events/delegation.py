@@ -2,12 +2,44 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from copy import copy
 from typing import TYPE_CHECKING, Any, cast
+
+from typing_extensions import Self
 
 if TYPE_CHECKING:
     from ag2.tools.subagents._forwarding import StreamHandle
 
 from .base import BaseEvent, Field
+
+
+class InertEvent(BaseEvent):
+    """An event that triggers nothing, so ancestors receive it as itself.
+
+    Accounting and task lifecycle events are forwarded without a ``ChildEvent``
+    envelope (ADR 0027), so typed subscriptions keep receiving them. The first
+    forwarding hop stamps where the event came from; later hops keep it.
+    """
+
+    path: tuple[str, ...] = Field(default=(), compare=False)
+    """Task ids of the delegations the event came through, outermost first; empty for a local event."""
+    _origin: Any = Field(default=None, compare=False, repr=False)
+
+    @property
+    def origin(self) -> "StreamHandle":
+        """The live address of a forwarded event's author; absent locally or on replay."""
+        if self._origin is None:
+            raise RuntimeError("A local or replayed event has no live origin")
+        return cast("StreamHandle", self._origin)
+
+    def as_local(self) -> Self:
+        """This event as a new publication on the current stream, without inherited provenance."""
+        if not self.path and self._origin is None:
+            return self
+        event = copy(self)
+        event.path = ()
+        event._origin = None
+        return event
 
 
 class ChildEvent(BaseEvent):
