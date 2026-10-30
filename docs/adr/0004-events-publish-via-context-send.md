@@ -21,9 +21,10 @@ Beta has two objects in scope on almost every execution path:
 - **`ConversationContext`** — wraps a stream plus the per-run state
   (`variables`, `dependencies`, prompt). It exposes the one-argument
   convenience `send(event)`, which publishes through
-  `await self.stream.send(event, self)` (`ag2/context.py`). It also gives each
-  locally published `UsageEvent` a fresh source identity and clears any address
-  inherited from an earlier forwarded record.
+  `await self.stream.send(event, self)` (`ag2/context.py`). It also starts a
+  new publication for an inert event (`UsageEvent` or a task lifecycle event):
+  it clears the provenance and live address inherited from an earlier
+  forwarded copy, and gives a `UsageEvent` a fresh source identity.
 
 So `context.send(event)` and `stream.send(event, context)` publish onto the
 *same* stream with the *same* context — **when `context.stream is stream`**.
@@ -47,9 +48,9 @@ the context, and it's the single obvious seam.
 
 2. **Framework forwarding of an existing publication.**
    `Forwarder.forward` in `ag2/tools/subagents/_forwarding.py` sends an original
-   `UsageEvent` onto the parent stream under the parent context. It preserves
-   the source `event_id`; calling `context.send` would create a new accounting
-   publication. `Forwarder.bridge` also uses this primitive for HITL, with an
+   inert event (`UsageEvent` or a task lifecycle event) onto the parent stream
+   under the parent context. It preserves the source provenance and `event_id`;
+   calling `context.send` would start a new publication and drop both. `Forwarder.bridge` also uses this primitive for HITL, with an
    intentional stream/context mismatch to preserve reply routing.
 
 ## Consequences / things that look wrong but are deliberate
@@ -70,9 +71,10 @@ the context, and it's the single obvious seam.
 
 - **Observation forwarding is separate from the HITL bridge.** Ancestors
   observe operational events through inert `ChildEvent` envelopes under their
-  own contexts. Accounting arrives as plain `UsageEvent` records so existing
-  type-based subscriptions keep receiving descendant spend. These records
-  are non-conversational and do not trigger tools or the model loop.
+  own contexts. Accounting and task lifecycle arrive as plain `UsageEvent` and
+  `TaskEvent` records, so existing type-based subscriptions keep receiving
+  them. These records are non-conversational and do not trigger tools or the
+  model loop.
   Only the explicit bridge dispatches a bare
   `HumanInputRequest` under the requester's context; a local hook takes
   priority. This preserves one answer channel while still making both the

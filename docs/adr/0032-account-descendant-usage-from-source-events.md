@@ -28,7 +28,16 @@ values from distinct publications remain distinct costs.
 Forwarding preserves that identity through the stream primitive; it does not
 call the ordinary context publication method that allocates a fresh usage ID.
 
-Preserve the original usage kind, provider and model. Ancestor monitors consume
+Preserve the original usage kind, provider and model, and record which
+delegation spent the tokens. A forwarded `UsageEvent` carries serializable
+`task_id`, `agent_name` and `path` fields, stamped once by the delegation that
+published it and kept by every later hop (see ADR 0027). A local record leaves
+them empty. These are new fields rather than a reuse of `label`: `label` is the
+agent name on archived `kind="subtask"` rollups, and giving it a second meaning
+would make an archived rollup and a source record look alike to a reader that
+groups by it. The live `origin` handle is not serialized, so without these
+fields stored history could not tell descendant spend from the root's own.
+Ancestor monitors consume
 the same records without waiting for the delegated run's terminal event.
 Persist descendant accounting records or durable references needed to recover
 them, and retain that information during compaction. Reports must remain
