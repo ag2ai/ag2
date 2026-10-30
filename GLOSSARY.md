@@ -26,6 +26,16 @@ The delivery of an event from an ancestor to a selected subagent delegation.
 The agent that directly authored an event, regardless of how many ancestors
 subsequently receive it.
 
+**Observation envelope**:
+The `ChildEvent` in which an ancestor receives a descendant's operational
+event, so that the event cannot trigger work in the ancestor.
+
+**Inert event**:
+An event that cannot trigger work in an ancestor (usage records and task
+lifecycle events), so ancestors receive it as itself, stamped with the
+delegation it came from.
+_Avoid_: Unwrapped event, raw event
+
 **Scoped value**:
 A value declared with explicit rules for its visibility and inheritance within
 a delegation tree.
@@ -44,5 +54,5 @@ _Avoid_: Inherited variable, write-back variable
 
 **Source usage record**:
 The record of one unit of token-consuming agent work, attributable to its
-originating agent; appearances of that record at ancestors describe the same
-expenditure.
+originating agent through the delegation stamped on it; appearances of that
+record at ancestors describe the same expenditure.
