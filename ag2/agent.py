@@ -39,6 +39,7 @@ from typing_extensions import deprecated
 
 from ag2.events import BinaryResult
 
+from ._model_input import _model_inputs
 from .aggregate import AggregateStrategy, AggregateTrigger
 from .annotations import Context
 from .assembly import AssemblerMiddleware, AssemblyPolicy
@@ -1613,7 +1614,7 @@ class Agent(PluginTarget, Generic[TResult]):
                     await context.send(DrainedModelRequest(merged.parts, origin=merged.origin))
 
                 messages = await context.stream.history.get_events()
-                result = await llm_call(messages, context)
+                result = await llm_call(_model_inputs(messages), context)
                 # Emit usage at the point it is spent, decoupled from the
                 # response, so token accounting never depends on a response
                 # being produced. UsageReport reads these events alone.
