@@ -38,6 +38,21 @@ Usage is non-conversational telemetry and does not activate operational
 handlers. No replacement rollup is generated; see
 [ADR 0029](0029-account-descendant-usage-from-source-events.md).
 
+Task lifecycle events (every `TaskEvent`) are forwarded the same way, for the
+same reason: they are non-conversational, and no tool, model loop, HITL hook or
+middleware uses them as a trigger. Before v2 a typed lifecycle subscription on
+the parent received its child's `TaskStarted` and terminal event; wrapping them
+would have silently emptied every such subscription. The envelope stays the
+rule for all events that could start work in the parent. Only these inert
+events, which share the `InertEvent` base, are exempt.
+
+An inert event carries its provenance itself. The first forwarding hop, run
+by the delegation that published it, stamps `path` and the live `origin`, and
+on `UsageEvent` also `task_id` and `agent_name`. Later hops keep the stamp and
+only rebind the live handle to their own sender. `ConversationContext.send`
+clears the stamp, because a local publication is a new event with no source
+above it.
+
 Downlink accepts any event through the recipient's normal pipeline. The caller
 chooses the event and is responsible for its effects, including reentrant model
 calls; the transport adds no event-type restrictions or scheduling barrier.

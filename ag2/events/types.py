@@ -2,16 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from copy import copy
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any
 from uuid import uuid4
 
-from .base import BaseEvent, Field
-from .tool_events import ToolCallsEvent
+from typing_extensions import Self
 
-if TYPE_CHECKING:
-    from ag2.tools.subagents._forwarding import StreamHandle
+from .base import BaseEvent, Field
+from .delegation import InertEvent
+from .tool_events import ToolCallsEvent
 
 
 def _add_tokens(a: float | None, b: float | None) -> float | None:
@@ -156,7 +157,7 @@ class ModelResponse(ModelEvent):
         return msg
 
 
-class UsageEvent(BaseEvent):
+class UsageEvent(InertEvent):
     """Token usage for a single unit of work, emitted at the point the tokens
     are spent.
 
@@ -176,7 +177,6 @@ class UsageEvent(BaseEvent):
     __conversational__ = False
 
     event_id: str = Field(default_factory=lambda: uuid4().hex, compare=False, repr=False)
-    _origin: Any = Field(default=None, compare=False, repr=False)
     usage: Usage = Field(default_factory=Usage, kw_only=False)
     kind: str = Field(default="model_call")
     """Original stage: model_call, compaction, aggregation, or a client-specific kind.
@@ -188,7 +188,14 @@ class UsageEvent(BaseEvent):
     provider: str | None = Field(default=None, compare=False)
     finish_reason: str | None = Field(default=None, compare=False)
     label: str | None = Field(default=None, compare=False)
-    """Sub-agent name for ``"subtask"`` events; ``None`` otherwise."""
+    """Sub-agent name on an archived ``"subtask"`` rollup; ``None`` otherwise.
+
+    Spend forwarded from a sub-agent names it in ``agent_name`` instead.
+    """
+    task_id: str | None = Field(default=None, compare=False)
+    """The delegation that spent these tokens; ``None`` for the local agent's own spend."""
+    agent_name: str | None = Field(default=None, compare=False)
+    """The sub-agent that spent these tokens; ``None`` for the local agent's own spend."""
     parts: "list[UsageEvent]" = Field(default_factory=list, compare=False)
     """Legacy rollup details retained for reading archived records.
 
@@ -200,12 +207,13 @@ class UsageEvent(BaseEvent):
     are never counted twice.
     """
 
-    @property
-    def origin(self) -> "StreamHandle":
-        """The live source address on forwarded usage; absent locally or on replay."""
-        if self._origin is None:
-            raise RuntimeError("A local or replayed usage event has no live origin")
-        return cast("StreamHandle", self._origin)
+    def as_local(self) -> Self:
+        """A new publication: a fresh ``event_id`` and no inherited provenance."""
+        event = copy(super().as_local())
+        event.event_id = uuid4().hex
+        event.task_id = None
+        event.agent_name = None
+        return event
 
 
 class ModelMessageChunk(ModelEvent):

@@ -5,7 +5,8 @@
 import traceback
 from typing import TYPE_CHECKING, Any
 
-from .base import BaseEvent, Field
+from .base import Field
+from .delegation import InertEvent
 from .types import Usage
 
 if TYPE_CHECKING:
@@ -13,7 +14,9 @@ if TYPE_CHECKING:
     from ag2.task import TaskSpec
 
 
-class TaskEvent(BaseEvent):
+class TaskEvent(InertEvent):
+    """Task lifecycle; ancestors receive a sub-agent's lifecycle as itself, stamped with its ``path``."""
+
     __conversational__ = False
 
     task_id: str

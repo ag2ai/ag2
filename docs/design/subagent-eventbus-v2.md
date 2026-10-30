@@ -1,16 +1,26 @@
 # Subagent event routing and variables
 
 Each delegation runs on a separate stream. Source operational events travel
-directly to ancestors in a `ChildEvent`, including streaming chunks. Accounting
-records travel as plain `UsageEvent` events, preserving existing type-based
-subscriptions. There are no
-`forward_events` or `forward_transient` flags. Subscription conditions select
-what an observer consumes.
+directly to ancestors in a `ChildEvent`, including streaming chunks. Inert
+events travel as themselves, preserving existing type-based subscriptions:
+`UsageEvent` accounting records and task lifecycle events (every `TaskEvent`:
+`TaskStarted`, `TaskProgress`, `TaskCompleted`, `TaskFailed`, `TaskCancelled`,
+`TaskExpired`). They cannot trigger a handler, so they need no envelope. There
+are no `forward_events` or `forward_transient` flags. Subscription conditions
+select what an observer consumes.
 
 The envelope preserves the original author's `task_id`, `agent_name`, live
 `origin`, and delegation `path`. Paths contain task identifiers rather than
 agent names, so concurrent invocations of the same worker remain distinct.
 An ancestor forwards a single observation rather than nesting envelopes.
+
+An inert event carries the same provenance on itself (`InertEvent`). The first
+forwarding hop, run by the delegation that published it, stamps `path` and the
+live `origin`; a `UsageEvent` also gets `task_id` and `agent_name`, while a
+lifecycle event already names its task in those fields. Later hops keep the
+stamp. `path`, `task_id` and `agent_name` are serialized, so stored history
+still says who spent what after persistence, resume and compaction. A local
+event has an empty `path` and, on `UsageEvent`, no `task_id` or `agent_name`.
 Observations never enter the ancestor's model transcript or trigger its tools,
 model loop or HITL hooks. Transient sources have transient envelopes and are
 not retained by default; `persist_all=True` retains them normally.
@@ -23,19 +33,31 @@ serialized event field.
 
 ```python
 from ag2 import Agent, Context, Scope, ScopedValue, observer
-from ag2.events import BaseEvent, ChildEvent, HaltEvent
+from ag2.events import HaltEvent, UsageEvent
 
 
-async def monitor(event: BaseEvent, ctx: Context) -> None:
-    if isinstance(event, ChildEvent) and should_stop(event.inner):
-        await event.origin.send(HaltEvent(reason="budget exceeded", source="monitor"))
+class Budget:
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.spent = 0
+
+    async def check(self, event: UsageEvent, ctx: Context) -> None:
+        self.spent += event.usage.total_tokens or 0
+        if self.spent <= self.limit:
+            return
+        halt = HaltEvent(reason="budget exceeded", source="budget")
+        if event.path:
+            await event.origin.send(halt)  # stop the subagent that spent it
+        else:
+            await ctx.send(halt)  # the root's own spend
 
 
+budget = Budget(limit=50_000)
 root = Agent(
     "root",
     config=config,
     tools=[worker.as_tool(description="Research")],
-    observers=[observer(callback=monitor)],
+    observers=[observer(UsageEvent, callback=budget.check)],
     variables={
         "findings": ScopedValue({}, scope=Scope.SHARED),
         "depth": 0,
@@ -44,7 +66,8 @@ root = Agent(
 )
 ```
 
-This sketch uses application-owned `config`, `worker`, and `should_stop`.
+This sketch uses application-owned `config` and `worker`. The observer sees
+the root's own spend and every descendant's, each record once, as it is spent.
 
 ## Addressing and cancellation
 
@@ -59,9 +82,11 @@ catch `DeliveryError` when delivery fails. These types are exported from
 remain internal implementation details. There is no public lookup or broadcast
 by task ID, agent name, or subtree.
 
-Forwarded `UsageEvent` records also expose the original author's live `origin`.
-This permits budget callbacks subscribed directly to `UsageEvent` to address
-the spender. A local usage record or a replayed record has no live origin.
+Forwarded inert events (`UsageEvent` and lifecycle events) also expose the
+original author's live `origin`. This permits callbacks subscribed directly to
+`UsageEvent` or `TaskStarted` to address the spender or the started task. A
+local or replayed inert event has no live origin; `origin` raises
+`RuntimeError`.
 
 A queued invocation has no live origin handle. Sending after the addressed
 invocation has ended raises `DeliveryError` and emits `DeliveryFailed`;
@@ -149,7 +174,14 @@ record is retained in the affected histories before the terminal event.
 Each forwarding hop preserves the same `event_id`; it does not create a new
 publication. Readers still accept archived usage envelopes.
 Explicitly publishing a usage record through `context.send` starts a new
-publication, with a fresh ID and no inherited live origin address.
+publication, with a fresh ID and no inherited provenance or live origin. Any
+inert event sent through `context.send` likewise loses an inherited `path` and
+`origin`.
+
+`UsageEvent.label` keeps its old meaning: the agent name on an archived
+`kind="subtask"` rollup. Forwarded records name the spender in the new
+`agent_name`, `task_id` and `path` fields instead, so a reader never has to
+guess whether a label is a rollup's or a source record's.
 
 HITL keeps its original request/answer channel: a local hook takes priority;
 otherwise the request bridges upward under the requester's context. Ancestor
@@ -159,17 +191,61 @@ timeout covers all hops.
 
 ## Migration
 
-Broad subscribers and unfiltered cadence watches now see operational descendant envelopes.
-Filter by event type or source when only local events are relevant. Forwarding
-awaits the parent pipeline directly: ancestor callback latency and errors retain
-ordinary stream semantics, without queues, drop policies or stalled-observer
-recovery. Network forwarding is outside this in-process design.
+What an ancestor receives from a descendant:
 
-Lifecycle subscribers now receive `ChildEvent` observations of `TaskStarted`,
-`TaskCompleted`, `TaskFailed`, or `TaskCancelled`. Subscribe to `ChildEvent` and
-inspect `event.inner`, or use `event.source_event` in a consumer that
-accepts both local events and observations. AG-UI, A2UI, and the network task
-mirror consume these lifecycle observations directly.
+| Event | Arrives as | Who it came from |
+|---|---|---|
+| `UsageEvent` | itself | `task_id`, `agent_name`, `path` on the event |
+| `TaskEvent` (`TaskStarted`, `TaskProgress`, `TaskCompleted`, `TaskFailed`, `TaskCancelled`, `TaskExpired`) | itself | the task's `task_id` and `agent_name`, plus `path` |
+| Any other event: model, tool, HITL, custom | `ChildEvent` | `task_id`, `agent_name`, `path` on the envelope; the event is `event.inner` |
+
+- Broad subscribers and unfiltered cadence watches now see the whole subtree.
+  Filter by event type when only some events matter. A type filter matches the
+  envelope, not the event inside it: `observer(ToolCallEvent, cb)` sees only
+  local tool calls. To see a descendant's operational events, subscribe to
+  `ChildEvent` and inspect `event.inner`, or use `event.source_event` in a
+  consumer that accepts both.
+- Typed lifecycle subscribers keep working: `observer(TaskStarted | TaskCompleted, cb)`
+  receives a direct child's lifecycle, as before. It now also receives the
+  lifecycle of deeper descendants; before, only the direct parent saw a
+  delegation's lifecycle. Use `len(event.path)` to tell them apart. AG-UI, A2UI,
+  the network task mirror and other lifecycle consumers therefore also report
+  grandchild tasks. A delegated agent's own stream now also records its own
+  `TaskStarted` and terminal event.
+- To reply to the source of an observed event:
+  - for an event your agent published, use `ctx.send(reply)`;
+  - for a `ChildEvent`, or a forwarded `UsageEvent` or lifecycle event, use
+    `event.origin.send(reply)`;
+  - a local or replayed event has no live origin: `event.origin` raises
+    `RuntimeError`.
+- `ask` copies the `variables` mapping it receives. The run never changes the
+  caller's dict, including `SHARED` values; read results from
+  `reply.context.variables`.
+- Read the spender of a descendant `UsageEvent` from `agent_name`, `task_id`
+  and `path`. `label` is set only on archived `kind="subtask"` rollups.
+- Forwarding awaits the parent pipeline directly: ancestor callback latency and
+  errors retain ordinary stream semantics, without queues, drop policies or
+  stalled-observer recovery. Network forwarding is outside this in-process
+  design.
+
+### Other behaviour changes
+
+These apply to every agent, including agents that never delegate:
+
+- The model input is the history filtered to conversational events plus
+  `ModelReasoning` and `ProviderReplay`. Before, every event in the window was
+  passed. This keeps `ChildEvent` observations out of the transcript.
+- `TaskEvent` is non-conversational, so lifecycle events never reach the model
+  or move the compaction trigger.
+- `ConversationContext.send` starts a new publication for an inert event: a
+  `UsageEvent` gets a fresh `event_id`, and inherited provenance and `origin`
+  are cleared. Re-sending a stored usage record counts as new spend.
+- `CANCELLED_TOOL_RESULT` moved from `ag2.acp.executor` to `ag2.history`. A
+  cancelled turn now closes its unanswered tool calls with it, as ACP did.
+- `LoopDetector` keeps a separate window per delegation and puts `task_id` and
+  `path` in the alert's `data`.
+- When a delegation is halted, `subagent_tool` returns
+  `"Sub-task '<name>' cancelled: <error>"` to the calling model.
 
 See ADRs [0027](../adr/0027-subagent-events-use-direct-forwarding.md),
 [0028](../adr/0028-root-declares-shared-variable-names.md) and
