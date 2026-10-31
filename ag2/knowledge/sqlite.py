@@ -53,7 +53,6 @@ class SqliteKnowledgeStore:
         self._poll_interval_s = poll_interval_s
         self._conn: sqlite3.Connection | None = None
         self._lock = asyncio.Lock()
-        self._version_counter = 0
 
     def _ensure_connected(self) -> sqlite3.Connection:
         if self._conn is not None:
@@ -69,16 +68,34 @@ class SqliteKnowledgeStore:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS store_metadata (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL
+            )
+            """
+        )
+        # Keep versions monotonic after deletes and across store instances. Seed
+        # the counter from existing entries when opening a database created by
+        # an older version of the store.
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO store_metadata (id, version)
+            SELECT 1, COALESCE(MAX(version), 0) FROM entries
+            """
+        )
         conn.commit()
         self._conn = conn
-        cur = conn.execute("SELECT COALESCE(MAX(version), 0) FROM entries")
-        row = cur.fetchone()
-        self._version_counter = int(row[0]) if row else 0
         return conn
 
-    def _next_version(self) -> int:
-        self._version_counter += 1
-        return self._version_counter
+    def _next_version(self, conn: sqlite3.Connection) -> int:
+        """Allocate a persistent version inside an active write transaction."""
+        conn.execute("UPDATE store_metadata SET version = version + 1 WHERE id = 1")
+        row = conn.execute("SELECT version FROM store_metadata WHERE id = 1").fetchone()
+        if row is None:
+            raise RuntimeError("SQLite knowledge store version counter is missing")
+        return int(row[0])
 
     async def _run(self, func: Callable[[], Any]) -> Any:
         loop = asyncio.get_running_loop()
@@ -92,13 +109,15 @@ class SqliteKnowledgeStore:
             return None
         return row[0].decode("utf-8")
 
-    def _sync_write(self, normalized: str, payload: bytes, version: int) -> None:
+    def _sync_write(self, normalized: str, payload: bytes) -> None:
         conn = self._ensure_connected()
-        conn.execute(
-            "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
-            (normalized, payload, version),
-        )
-        conn.commit()
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            version = self._next_version(conn)
+            conn.execute(
+                "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
+                (normalized, payload, version),
+            )
 
     def _sync_list(self, prefix: str) -> list[str]:
         conn = self._ensure_connected()
@@ -135,7 +154,7 @@ class SqliteKnowledgeStore:
         )
         return cur.fetchone() is not None
 
-    def _sync_append(self, normalized: str, payload: bytes, version: int) -> int:
+    def _sync_append(self, normalized: str, payload: bytes) -> int:
         conn = self._ensure_connected()
         # Reserve the writer before reading: other store instances have their own
         # asyncio locks and must not append from the same stale content snapshot.
@@ -146,6 +165,7 @@ class SqliteKnowledgeStore:
             existing = row[0] if row else b""
             offset = len(existing)
             combined = existing + payload
+            version = self._next_version(conn)
             conn.execute(
                 "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
                 (normalized, combined, version),
@@ -185,8 +205,7 @@ class SqliteKnowledgeStore:
         normalized = _normalize(path)
         payload = content.encode("utf-8")
         async with self._lock:
-            version = self._next_version()
-            await self._run(functools.partial(self._sync_write, normalized, payload, version))
+            await self._run(functools.partial(self._sync_write, normalized, payload))
 
     async def list(self, path: str = "/") -> list[str]:
         prefix = _normalize(path).rstrip("/") + "/"
@@ -209,8 +228,7 @@ class SqliteKnowledgeStore:
         normalized = _normalize(path)
         payload = content.encode("utf-8")
         async with self._lock:
-            version = self._next_version()
-            return await self._run(functools.partial(self._sync_append, normalized, payload, version))
+            return await self._run(functools.partial(self._sync_append, normalized, payload))
 
     async def read_range(self, path: str, start: int, end: int | None = None) -> str:
         normalized = _normalize(path)
