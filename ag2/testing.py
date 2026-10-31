@@ -99,12 +99,13 @@ class TestClient(LLMClient):
 
 @dataclass(frozen=True, slots=True)
 class ModelCall:
-    """What the framework handed the LLM for one call: the prompt, tools and context at that moment."""
+    """What the framework handed the LLM for one call: the history, prompt, tools and context at that moment."""
 
     prompt: tuple[str, ...]
     tools: tuple[ToolSchema, ...]
     dependencies: Mapping[Any, Any]
     variables: Mapping[Any, Any]
+    messages: tuple[BaseEvent, ...] = ()
 
 
 class TrackingClient(LLMClient):
@@ -129,6 +130,7 @@ class TrackingClient(LLMClient):
                 tools=tools,
                 dependencies=dict(context.dependencies),
                 variables=dict(context.variables),
+                messages=tuple(messages),
             )
         )
         return await self.client(messages, context=context, **kwargs)

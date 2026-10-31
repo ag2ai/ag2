@@ -204,6 +204,18 @@ except A2AExtensionNotSupportedError as err:
 
 See [Declaring Extensions](/docs/user-guide/a2a/server#declaring-extensions) for the server side.
 
+## What the Reply Contains
+
+The reply is the text of the final model turn; text from earlier turns of a tool round trip is not repeated. Each artifact's text appears once, including an artifact that carries other parts next to its text. Artifacts are ordered by when they first appeared on the task, which is the order a polled task lists them, so an artifact reused from an earlier turn of a tool round trip comes before one that this turn added. The text of a message answering the turn follows the artifacts. A text artifact the server re-sends in full replaces its earlier content instead of being appended to it, even when the new text is shorter. A tool call is surfaced once however often later updates or polls repeat it.
+
+<!-- Pending maintainer agreement (PR #3494, Open Decision 1): the reading of a re-send into a reused artifact id below is proposed, not settled. Keep it in step with the _ArtifactText docstring. -->
+
+When a server writes into an artifact id it already used in an earlier turn, the reply holds only what the artifact gained in this turn: its text past what it held when the turn began, or its whole text if it no longer begins with that. An artifact that comes back unchanged adds nothing. A full re-send that begins with the earlier turn's text therefore counts as a continuation of it, because a polled snapshot of appended text looks exactly the same. A server that wants a whole new answer in a later turn should write it to a new artifact id, as the AG2 server does.
+
+When the server cancels the task, the client raises `#!python A2ATaskCancelledError` with the text received so far in `#!python err.task.artifacts`, one entry per artifact under its own id. Only a completed task's status message is part of the reply; a message attached to a task that is still working is a progress note and is left out, and one that repeats the artifacts' text exactly is not counted twice. A completion message with other text is appended after the artifacts' text exactly as sent, with no separator added. An AG2 server attaches the final answer to the completion only when the model call that produced it did not stream it, so its text never arrives twice, even when the server ran its own tools between model calls. Client tools run only when the task waits for input: a tool call on a task that completes is logged and ignored, since a finished task takes no tool results. Polling and streaming follow the same rules.
+
+A streamed task can reach its final state without a separate status update: the stream may consist of the task alone, already finished, or close on a final task snapshot. The client reads the outcome from that task, so a cancelled, failed or rejected task raises its error either way. If the stream closes before the task has reached a final state, which can happen when a cancel is recorded after the server has stopped streaming, the client reads the task with `#!python get_task` until it settles instead of returning the partial text as the answer.
+
 ## A2AConfig Reference
 
 | Field | Type | Default | Purpose |

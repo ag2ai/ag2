@@ -100,7 +100,7 @@ class A2AReconnectError(A2AError):
 
 
 class A2ATaskTerminalError(A2AError):
-    """Base class for terminal Task error states (failed / rejected)."""
+    """Base class for terminal Task error states (failed / rejected / cancelled / auth-required)."""
 
     def __init__(self, task: Task) -> None:
         self.task = task
@@ -116,10 +116,15 @@ class A2ATaskRejectedError(A2ATaskTerminalError):
     """Task ended in TASK_STATE_REJECTED."""
 
 
-class A2ATaskAuthRequiredError(A2ATaskTerminalError):
-    """Task ended in TASK_STATE_AUTH_REQUIRED.
+class A2ATaskCancelledError(A2ATaskTerminalError):
+    """Task ended in TASK_STATE_CANCELED; ``task.artifacts`` holds the partial text received."""
 
-    Per A2A spec §7.6 the agent expects credentials to arrive out-of-band.
+
+class A2ATaskAuthRequiredError(A2ATaskTerminalError):
+    """Task stopped in TASK_STATE_AUTH_REQUIRED.
+
+    Unlike the other subclasses this state is interrupted, not terminal (A2A spec §4.1.3): the
+    task waits for credentials rather than ending. Per A2A spec §7.6 the agent expects credentials to arrive out-of-band.
     AG2 does not currently wire an auth hook, so the client surfaces this
     state as an error — the application is expected to obtain credentials,
     apply them (e.g. via interceptor headers or a refreshed config), and

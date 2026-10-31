@@ -11,13 +11,13 @@ from ag2.events import (
     TextInput,
 )
 
-from ._helpers import make_recording_pair
+from ._helpers import make_pair
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("streaming", [False, True])
 async def test_server_sees_full_history_on_second_turn(streaming: bool) -> None:
-    pair = make_recording_pair("ok", streaming=streaming)
+    pair = make_pair("ok", streaming=streaming)
 
     reply1 = await pair.client.ask("first user message")
     assert reply1.response.content == "ok"
@@ -25,11 +25,11 @@ async def test_server_sees_full_history_on_second_turn(streaming: bool) -> None:
     reply2 = await reply1.ask("second user message")
     assert reply2.response.content == "ok"
 
-    [first_call, second_call] = pair.recording.calls
+    [first_call, second_call] = pair.tracking.calls
 
-    assert first_call == [ModelRequest([TextInput("first user message")])]
-    assert second_call == [
+    assert first_call.messages == (ModelRequest([TextInput("first user message")]),)
+    assert second_call.messages == (
         ModelRequest([TextInput("first user message")]),
         ModelResponse(message=ModelMessage("ok")),
         ModelRequest([TextInput("second user message")]),
-    ]
+    )
