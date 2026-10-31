@@ -4,6 +4,46 @@ title: Testing
 
 AG2 provides a built-in `TestConfig` utility in the `ag2.testing` module to help you write unit tests for your agents. It allows you to mock LLM responses and simulate tool execution scenarios without making actual API calls.
 
+## Inspect complete model inputs
+
+Wrap `TestConfig` in `TrackingConfig` to inspect what the framework sends to the
+model. Each entry in `calls` records one attempted call, including attempts that
+raise an exception. Its `messages` tuple contains the complete ordered event
+input, while `prompt`, `tools`, `dependencies`, and `variables` retain the call's
+settings.
+
+```python linenums="1"
+import pytest
+
+from ag2 import Agent, TextInput
+from ag2.events import ModelMessage, ModelRequest, ModelResponse
+from ag2.testing import TestConfig, TrackingConfig
+
+@pytest.mark.asyncio
+async def test_model_receives_conversation():
+    config = TrackingConfig(TestConfig("Hello!", "Goodbye!"))
+    agent = Agent("assistant", config=config)
+
+    reply = await agent.ask("Hi")
+    await reply.ask("Bye")
+
+    assert config.calls[1].messages == (
+        ModelRequest([TextInput("Hi")]),
+        ModelResponse(ModelMessage("Hello!")),
+        ModelRequest([TextInput("Bye")]),
+    )
+    config.mock.assert_called_with(ModelRequest([TextInput("Bye")]))
+```
+
+Message snapshots copy events and their supported mutable payloads, including
+input metadata and provider replay data. Later changes to live history or an
+application's original data do not change earlier snapshots. Snapshot events
+remain ordinary event objects; treat them as observations rather than modifying
+them. The existing `mock` still records each call's original last message.
+For compatibility, `ModelCall` equality compares its existing settings fields;
+assert `call.messages` explicitly to compare message snapshots. Dependencies and
+variables retain their existing shallow-copy behavior.
+
 ## How to mock LLM answers
 
 To mock LLM answers, you can use `TestConfig` in place of a standard model configuration. Pass the expected responses as arguments to `TestConfig`. Each argument represents the mocked response for a sequential turn in the conversation.
