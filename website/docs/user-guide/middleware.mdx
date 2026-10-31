@@ -33,6 +33,69 @@ In practice, you use middleware to:
 - normalize tool inputs or outputs
 - short-circuit or reshape a response
 
+## Dynamic status bars
+
+Use `@statusbar_middleware` to append current application state to every model
+request, including the requests made after tools finish. The callback supports
+normal AG2 dependency injection: `Context`, `Variable`, `Inject`, and `Depends`.
+It can be synchronous or asynchronous and returns an `Input`, an ordered
+sequence of `Input` parts, or `None` to skip the insertion. An empty sequence
+also skips it.
+
+```python linenums="1"
+import asyncio
+from typing import Annotated
+
+from ag2 import Agent, Context, TextInput, Variable
+from ag2.config import OpenAIResponsesConfig
+from ag2.middleware import RetryMiddleware, statusbar_middleware
+
+@statusbar_middleware
+def task_status(
+    context: Context,
+    remaining: Annotated[int, Variable()],
+) -> TextInput:
+    return TextInput(f"Task: {context.variables['task']}; attempts left: {remaining}")
+
+agent = Agent(
+    "assistant",
+    config=OpenAIResponsesConfig(model="gpt-5"),
+    middleware=[task_status, RetryMiddleware(max_retries=2)],
+)
+
+async def main():
+    return await agent.ask(
+        "Continue the task",
+        variables={"task": "Check inventory", "remaining": 3},
+    )
+
+asyncio.run(main())
+```
+
+The bare decorator is equivalent to `@statusbar_middleware(persist=False)`.
+Dynamic status is appended to a separate request list; it is absent from stored
+history, stream notifications, and later model calls. Each later logical call
+computes a fresh observation from current variables, dependencies, and retained
+history. The static system prompt stays unchanged. Text, structured data, and
+media use the same provider conversion as ordinary input parts.
+
+Register status before `RetryMiddleware` to compute one snapshot for all attempts
+of that logical call. Putting retry first uses ordinary wrapper semantics and
+may compute status again for each attempt. Multiple status callbacks append in
+registration order; downstream middleware can still transform their input.
+
+DI is resolved on each logical call, and generator dependencies remain open
+through the wrapped model call and inner retries. Errors and cancellation close
+those resources normally. Callback errors and invalid results stop the call
+before reaching the provider; strings, mappings, generators, and sequences with
+non-`Input` members are rejected. Keep conversation counters in variables or
+dependencies scoped to the conversation, since one middleware factory can be
+shared by concurrent conversations.
+
+Register the decorated callback through the existing `middleware` argument on
+an Agent, a Plugin, or an invocation. Invocation contributions apply to that
+turn; pass them again for a continuation that needs them.
+
 ## Middleware Hooks
 
 `BaseMiddleware` exposes four async hooks.
