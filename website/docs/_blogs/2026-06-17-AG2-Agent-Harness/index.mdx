@@ -102,8 +102,10 @@ Where compaction *discards* history in favour of a gist, aggregation *accumulate
 ```python
 from ag2 import Agent, KnowledgeConfig
 from ag2.aggregate import AggregateTrigger, WorkingMemoryAggregate
+from ag2.assembly import AssemblerMiddleware
 from ag2.config import OpenAIConfig
 from ag2.knowledge import MemoryKnowledgeStore
+from ag2.middleware import Middleware
 from ag2.policies import WorkingMemoryPolicy
 
 agent = Agent(
@@ -115,11 +117,11 @@ agent = Agent(
         aggregate=WorkingMemoryAggregate(config=OpenAIConfig(model="gpt-4o-mini")),
         aggregate_trigger=AggregateTrigger(every_n_turns=5),
     ),
-    assembly=[WorkingMemoryPolicy()],
+    middleware=[Middleware(AssemblerMiddleware, policies=[WorkingMemoryPolicy()])],
 )
 ```
 
-Every 5 turns the aggregator runs, extracts key facts from the conversation, and writes them to `/memory/working.md` in the `KnowledgeStore`. On the next turn the `WorkingMemoryPolicy` in the `assembly=[...]` chain reads that file and prepends the working memory to the context window — so the agent "remembers" facts across compaction boundaries, and across process restarts when the store is persistent.
+Every 5 turns the aggregator runs, extracts key facts from the conversation, and writes them to `/memory/working.md` in the `KnowledgeStore`. On the next turn the `WorkingMemoryPolicy` in the assembler's policy chain reads that file and prepends the working memory to the context window — so the agent "remembers" facts across compaction boundaries, and across process restarts when the store is persistent.
 
 > **Try it live:** open the **Working Memory** demo in the [AG2 Playground](https://playground.ag2.ai/) — `WorkingMemoryAggregate` writes `/memory/working.md` after every turn; a brand-new Agent in session 2 gets it injected by `WorkingMemoryPolicy` and remembers.
 

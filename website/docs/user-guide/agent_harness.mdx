@@ -36,7 +36,7 @@ The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prom
 Wrap your [`AssemblyPolicy`](/docs/user-guide/advanced/assembly) instances in `Middleware(AssemblerMiddleware, policies=[...])`. Add `Middleware(HaltCheckMiddleware)` immediately after it when using `AlertPolicy`.
 
 !!! warning "`assembly=` is deprecated"
-    `Agent(assembly=...)` keeps its existing behavior and emits a `DeprecationWarning` when the agent runs. It will be removed in **1.4.0**. Migrate to `middleware=` as shown below.
+    `Agent(assembly=...)` keeps its existing behavior and emits a `DeprecationWarning` where the agent is constructed. It will be removed in **1.4.0**. Migrate to `middleware=` as shown below.
 
 ```python linenums="1" hl_lines="13-23"
 from ag2 import Agent

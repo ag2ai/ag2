@@ -28,7 +28,7 @@ from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
-from typing import Any, Generic, Literal, TypeVar, overload
+from typing import Any, Generic, Literal, TypeGuard, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
@@ -77,6 +77,7 @@ from .middleware.base import (
     AgentTurn,
     BaseMiddleware,
     LLMCall,
+    Middleware,
     MiddlewareFactory,
     ToolMiddleware,
 )
@@ -108,6 +109,12 @@ T2 = TypeVar("T2")
 TASK_CONFIG_DEPRECATION = (
     "TaskConfig, Agent(tasks=...) and the auto-injected run_subtask / run_subtasks tools are deprecated "
     "and will be removed in 1.4.0. Expose explicitly constructed worker Agents through Agent.as_tool() instead."
+)
+
+ASSEMBLY_DEPRECATION = (
+    "Agent(assembly=...) is deprecated and will be removed in 1.4.0. Register "
+    "middleware=[Middleware(AssemblerMiddleware, policies=[...]), Middleware(HaltCheckMiddleware)] instead; "
+    "import AssemblerMiddleware from ag2.assembly and Middleware / HaltCheckMiddleware from ag2.middleware."
 )
 
 
@@ -873,15 +880,18 @@ class Agent(PluginTarget, Generic[TResult]):
             self._knowledge_context = _FakeKnowledgeContext()
 
         # Assembly policies (empty by default; bare Agent has no harness).
-        self._assembly_provided = assembly is not None
         if assembly is not None:
+            warnings.warn(ASSEMBLY_DEPRECATION, DeprecationWarning, stacklevel=2)
             self._policies.extend(assembly)
         if self._policies:
             for w in AssemblerMiddleware.validate_order(self._policies):
                 logger.warning("Assembly policy ordering: %s", w)
 
-            self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
-            self.add_middleware(_HaltCheckMiddlewareFactory())
+            # Policies may come from constructor plugins alone. Keep the implicit
+            # assembler for them unless the user already registered one.
+            if not _has_user_assembler(self._middleware):
+                self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
+                self.add_middleware(Middleware(HaltCheckMiddleware))
 
     # --- Composition -----------------------------------------------------
     # Read-only views of what this agent is made of, for comparing two agents,
@@ -1457,15 +1467,6 @@ class Agent(PluginTarget, Generic[TResult]):
         response_schema: ResponseProto[Any] | type | None | Omit = omit,
     ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
         """Resolve invocation plugins and bracket their context contributions."""
-        if self._assembly_provided:
-            warnings.warn(
-                "Agent(assembly=...) is deprecated and will be removed in 1.4.0. "
-                "Use middleware=[Middleware(AssemblerMiddleware, policies=[...]), "
-                "Middleware(HaltCheckMiddleware)] instead. Import AssemblerMiddleware from ag2.assembly "
-                "and Middleware / HaltCheckMiddleware from ag2.middleware.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         plugins = _TurnPlugins(additional_plugins)
         async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
             if context_overrides is not None:
@@ -1578,17 +1579,9 @@ class Agent(PluginTarget, Generic[TResult]):
             )
 
             factories = list(self._middleware)
-            policies = list(additional_policies)
-            if policies:
-                policies = [*self._policies, *policies]
-                for warning in AssemblerMiddleware.validate_order(policies):
-                    logger.warning("Assembly policy ordering: %s", warning)
-                for index, factory in enumerate(factories):
-                    if isinstance(factory, _AssemblerMiddlewareFactory):
-                        factories[index] = _AssemblerMiddlewareFactory(policies)
-                        break
-                else:
-                    factories.extend((_AssemblerMiddlewareFactory(policies), _HaltCheckMiddlewareFactory()))
+            turn_policies = list(additional_policies)
+            if self._policies or turn_policies:
+                _attach_policies(factories, self._policies, turn_policies)
 
             for m in reversed(tuple(chain(factories, additional_middleware))):
                 mw = m(event, context)
@@ -2060,11 +2053,44 @@ def _make_knowledge_tool(store: KnowledgeStore) -> Tool:
     return knowledge
 
 
-class _HaltCheckMiddlewareFactory:
-    """Factory for HaltCheckMiddleware."""
+def _is_user_assembler(factory: MiddlewareFactory) -> TypeGuard[Middleware]:
+    return isinstance(factory, Middleware) and issubclass(factory.cls, AssemblerMiddleware)
 
-    def __call__(self, event: BaseEvent, context: Context) -> HaltCheckMiddleware:
-        return HaltCheckMiddleware(event, context)
+
+def _has_user_assembler(factories: Iterable[MiddlewareFactory]) -> bool:
+    return any(_is_user_assembler(f) for f in factories)
+
+
+def _attach_policies(
+    factories: list[MiddlewareFactory],
+    agent_policies: Sequence[AssemblyPolicy],
+    turn_policies: Sequence[AssemblyPolicy],
+) -> None:
+    """Hand agent and invocation-plugin policies to the turn's assembler, in place.
+
+    The assembler is the one ``assembly=`` wired implicitly, or else the first
+    ``Middleware(AssemblerMiddleware, ...)`` the user registered; a user
+    assembler's own policies run first. With neither, an assembler and a halt
+    check are appended, as ``assembly=`` would have done.
+    """
+    for index, factory in enumerate(factories):
+        if isinstance(factory, _AssemblerMiddlewareFactory):
+            if not turn_policies:
+                # Already runs ``agent_policies``, validated at construction.
+                return
+            policies = [*agent_policies, *turn_policies]
+            factories[index] = _AssemblerMiddlewareFactory(policies)
+            break
+        if _is_user_assembler(factory):
+            policies = [*factory.options.get("policies", ()), *agent_policies, *turn_policies]
+            factories[index] = Middleware(factory.cls, **{**factory.options, "policies": policies})
+            break
+    else:
+        policies = [*agent_policies, *turn_policies]
+        factories.extend((_AssemblerMiddlewareFactory(policies), Middleware(HaltCheckMiddleware)))
+
+    for warning in AssemblerMiddleware.validate_order(policies):
+        logger.warning("Assembly policy ordering: %s", warning)
 
 
 class _AssemblerMiddlewareFactory:
