@@ -183,40 +183,47 @@ class CascadeConfig(RealtimeConfig):
     ) -> None:
         speech = Speech(self._tts, self._min_chars)
 
-        with context.stream.where(ModelMessageChunk).sub_scope(speech.on_chunk):
-            for _ in range(MAX_TOOL_ITERATIONS):
-                messages = _conversation(await context.stream.history.get_events())
-                response = await client(  # type: ignore[operator]
-                    messages,
-                    context,
-                    tools=schemas,
-                    response_schema=None,
-                    serializer=serializer,
-                )
-
-                if response.usage:
-                    await context.send(
-                        UsageEvent(
-                            response.usage,
-                            kind="model_call",
-                            model=response.model,
-                            provider=response.provider,
-                            finish_reason=response.finish_reason,
-                        )
+        try:
+            with context.stream.where(ModelMessageChunk).sub_scope(speech.on_chunk):
+                for _ in range(MAX_TOOL_ITERATIONS):
+                    messages = _conversation(await context.stream.history.get_events())
+                    response = await client(  # type: ignore[operator]
+                        messages,
+                        context,
+                        tools=schemas,
+                        response_schema=None,
+                        serializer=serializer,
                     )
-                await context.send(response)
 
-                if not response.tool_calls:
+                    if response.usage:
+                        await context.send(
+                            UsageEvent(
+                                response.usage,
+                                kind="model_call",
+                                model=response.model,
+                                provider=response.provider,
+                                finish_reason=response.finish_reason,
+                            )
+                        )
+                    await context.send(response)
+
+                    # Every model response is its own reply: words said before a
+                    # tool call are spoken before the tool runs, not after it.
                     await speech.finish(response.content, context)
-                    return
+                    if not response.tool_calls:
+                        return
 
-                async with context.stream.get(ToolResultsEvent | ModelResponse) as results:
-                    await context.send(response.tool_calls)
-                    settled = await results
+                    async with context.stream.get(ToolResultsEvent | ModelResponse) as results:
+                        await context.send(response.tool_calls)
+                        settled = await results
 
-                if isinstance(settled, ModelResponse):
-                    await speech.finish(settled.content, context)
-                    return
+                    if isinstance(settled, ModelResponse):
+                        await speech.finish(settled.content, context)
+                        return
+
+        finally:
+            # A barge-in cancels the turn mid-reply: close the reply's request with it.
+            await speech.aclose()
 
         raise RuntimeError(f"Tool loop exceeded {MAX_TOOL_ITERATIONS} iterations in one voice turn")
 

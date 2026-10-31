@@ -245,6 +245,7 @@ optionals = [
     { name = "docker" },
     { name = "exa-py" },
     { name = "firecrawl-py" },
+    { name = "mistralai", extra = ["realtime"] },
     { name = "safetensors" },
     { name = "tenki" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'" },
@@ -474,6 +475,7 @@ optionals = [
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "firecrawl-py", specifier = ">=4.53,<5" },
+    { name = "mistralai", extras = ["realtime"], specifier = ">=3.6.0,<4" },
     { name = "safetensors", specifier = ">=0.4.3,<1" },
     { name = "tenki", specifier = ">=1.4.0,<2" },
     { name = "tinyfish", marker = "python_full_version >= '3.11'", specifier = ">=0.5,<0.6" },
@@ -3504,6 +3506,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d6/e3/1900affb2a59b5dc82af97ae7343ac0f503228775ac6f37056ac59646f02/mistralai-3.6.0.tar.gz", hash = "sha256:1cd130da01979d8ecdc374a88bb7a880524b318a2be34b6e69013ca331de9d70", size = 757796, upload-time = "2026-10-28T09:23:30.886Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/18/48/0bf0a93beb57e62aa238e6d048a4631dd67f25a58235711bf6aa3d953e6f/mistralai-3.6.0-py3-none-any.whl", hash = "sha256:709c31236d1c865f756734cb14f2f725fad993d054bc3be2d6aae3e78b4b3efb", size = 1771933, upload-time = "2026-10-28T09:23:28.761Z" },
+]
+
+[package.optional-dependencies]
+realtime = [
+    { name = "websockets" },
 ]
 
 [[package]]

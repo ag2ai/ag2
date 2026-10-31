@@ -184,6 +184,7 @@ optionals = [
     "agent-client-protocol[http]", # ag2.acp.remote transports — without them `test/acp/test_remote_*` importorskips itself out of the run
     "watchdog>=4.0,<7",  # DiskKnowledgeStore (ag2.knowledge)
     "websockets>=14.0,<17",  # WsLink (ag2.network)
+    "mistralai[realtime]>=3.6.0,<4",  # MistralRealtimeTranscriber, MistralRealtimeTTSConfig (ag2.live)
     "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",
@@ -451,6 +452,7 @@ files = [
     "ag2/live/elevenlabs.py",
     "ag2/live/gemini.py",
     "ag2/live/mistral.py",
+    "ag2/live/mistral_realtime.py",
     "ag2/live/observer.py",
     "ag2/live/openai.py",
     "ag2/live/protocols.py",
