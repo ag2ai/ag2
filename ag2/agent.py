@@ -95,7 +95,7 @@ from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
-from .types import Omit, Omittable, SendableMessage, omit
+from .types import Omit, Omittable, RequestOrigin, SendableMessage, omit
 from .usage import UsageReport, collect_usage_events
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
@@ -575,8 +575,11 @@ class AgentRun(Generic[TResult, TAgent]):
         next turn on this stream. Safe to call from a stream subscriber (inline
         during the drive) or a concurrent task — it appends at once and
         announces the message with ``MessageEnqueued`` from a background task.
+
+        The message counts as user input: when the turn consumes it, a new
+        ``History.since_last_user_input()`` interval starts.
         """
-        self.__context.enqueue(*content)
+        self.__context.enqueue(*content, origin="user")
 
     async def __aenter__(self) -> "AgentRun[TResult, TAgent]":
         self.__driver = await self.__stack.enter_async_context(
@@ -1607,7 +1610,7 @@ class Agent(PluginTarget, Generic[TResult]):
                 # instead of issuing a second LLM call.
                 merged = _drain_pending(context)
                 if merged is not None:
-                    await context.send(DrainedModelRequest(merged.parts))
+                    await context.send(DrainedModelRequest(merged.parts, origin=merged.origin))
 
                 messages = await context.stream.history.get_events()
                 result = await llm_call(messages, context)
@@ -1843,7 +1846,7 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
     if isinstance(event, ModelRequest):
         leftover = _drain_pending(context)
         if leftover is not None:
-            event = ModelRequest([*leftover.parts, *event.parts])
+            event = ModelRequest([*leftover.parts, *event.parts], origin=event.origin)
 
     # Sending the event triggers _call_client via the stream subscriber,
     # which drains any pending enqueued input before the LLM call.
@@ -1882,14 +1885,16 @@ def _drain_pending(context: Context) -> ModelRequest | None:
 
     Returns ``None`` if the queue was empty (so callers can short-circuit).
     Multiple enqueues are merged because the wire form only cares about the
-    flat list of parts — one merged request keeps history compact.
+    flat list of parts — one merged request keeps history compact. The merged
+    request is user input if any queued message was.
     """
     queue = context.pending_messages
     if not queue:
         return None
     parts: list[Input] = [part for request in queue for part in request.parts]
+    origin: RequestOrigin = "user" if any(request.origin == "user" for request in queue) else "service"
     queue.clear()
-    return ModelRequest(parts)
+    return ModelRequest(parts, origin=origin)
 
 
 @asynccontextmanager
