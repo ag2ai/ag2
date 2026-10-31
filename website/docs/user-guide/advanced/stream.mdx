@@ -188,6 +188,47 @@ with stream.where(ToolResultEvent).join(max_events=1) as results:
 !!! warning "Do not timeout individual `join()` pulls"
     Consume the iterator with a plain `#!python async for`. Avoid wrapping individual pulls such as `#!python await asyncio.wait_for(events.__anext__(), timeout=...)`: cancelling one `__anext__()` closes the current iterator, so later events will not be yielded by that iterator. For bounded consumption, use `#!python join(max_events=N)` or put one `#!python asyncio.timeout(...)` around the whole loop.
 
+## Query retained history
+
+Use `#!python stream.history.where(...)` to inspect events already stored in a
+conversation. It accepts the same event classes and field conditions as live
+subscriptions. Building a query is synchronous; its `all()`, `first()`, `last()`,
+and `count()` methods are asynchronous and each reads a fresh, finite snapshot.
+
+```python linenums="1"
+import asyncio
+from ag2 import Context, MemoryStream
+from ag2.events import ToolCallEvent
+
+async def main():
+    stream = MemoryStream()
+    context = Context(stream)
+    await context.send(ToolCallEvent(name="lookup", arguments='{"page": 1}'))
+    await context.send(ToolCallEvent(name="lookup", arguments='{"page": 2}'))
+    calls = stream.history.where(ToolCallEvent)
+    lookups = calls.where(ToolCallEvent.name == "lookup")
+    print(await lookups.count())  # 2
+    print(await lookups.first())  # First stored lookup
+    print(await lookups.last())   # Most recent stored lookup
+    print(await lookups.all())    # Both lookups, in publication order
+
+asyncio.run(main())
+```
+
+Chained `where` clauses combine with AND and leave the original query unchanged.
+Class queries include subclasses. `all()` returns a fresh list of the ordinary
+stored event objects; `first()` and `last()` return `None` for an empty selection,
+and `count()` returns zero. Storage errors propagate to the caller.
+
+History queries select top-level stored occurrences. They preserve repeated
+publications and do not expand tool batches, model responses, or child streams.
+A filtered stream shares its parent's History: a live subscription filter does
+not implicitly restrict history queries.
+
+Unlike `stream.get()` or `join()`, these operations never wait for future events.
+They cover retained history only. Events removed by compaction are unavailable,
+so a history count is not a lifetime total.
+
 ## Raise events manually
 
 To raise or publish events to the stream, you should always use the `Context` object rather than sending them to the stream directly. The `Context` ensures that dependencies and the stream scope are properly propagated.
