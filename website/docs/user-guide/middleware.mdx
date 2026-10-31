@@ -109,14 +109,14 @@ import asyncio
 from typing import Annotated
 
 from ag2 import Agent, TextInput, Variable
+from ag2.config import OpenAIResponsesConfig
 from ag2.middleware import statusbar_middleware
-from ag2.testing import TestConfig
 
 @statusbar_middleware(persist=True)
 def progress(phase: Annotated[str, Variable()]) -> TextInput:
     return TextInput(f"Current phase: {phase}")
 
-agent = Agent("assistant", config=TestConfig("Started.", "Continuing."))
+agent = Agent("assistant", config=OpenAIResponsesConfig(model="gpt-5"))
 
 async def main():
     reply = await agent.ask(
