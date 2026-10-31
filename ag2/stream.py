@@ -186,7 +186,7 @@ class MemoryStream(ABCStream):
         if not content:
             return
         parts = [Input.ensure_input(item) for item in content]
-        self.pending_messages.append(ModelRequest(parts))
+        self.pending_messages.append(ModelRequest(parts, origin="service"))
 
     def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         task = asyncio.create_task(coro)

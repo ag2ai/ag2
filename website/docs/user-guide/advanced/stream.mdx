@@ -229,6 +229,57 @@ Unlike `stream.get()` or `join()`, these operations never wait for future events
 They cover retained history only. Events removed by compaction are unavailable,
 so a history count is not a lifetime total.
 
+### Scope to the current user input
+
+`#!python history.since_last_user_input()` selects events after the latest
+retained actual user input and excludes that input itself. It composes with the
+same filters and terminal methods. This example uses the OpenAI Responses API;
+set `OPENAI_API_KEY` before running it, as described in the
+[Quick Start](/docs/user-guide/quick-start):
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ToolCallEvent
+
+@tool
+def lookup() -> str:
+    """Look up an item."""
+    return "item"
+
+async def main():
+    agent = Agent(
+        "lookup",
+        tools=[lookup],
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Use lookup to find items. Answer acknowledgements directly.",
+    )
+    reply = await agent.ask("Find an item using lookup.")
+    history = reply.context.stream.history
+    calls = history.since_last_user_input().where(ToolCallEvent)
+    print("Calls for this input:", await calls.count())
+    await reply.ask("Thanks")
+    print("Calls for the new input:", await calls.count())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Ask, Run, and their Reply continuations establish user-input boundaries. Tool
+results, summaries, and framework-enqueued updates do not reset the interval,
+including updates delivered after the model has produced its final response.
+The distinction is stored as request provenance, independently of the user role
+used for provider content. Ordinary legacy requests remain user inputs.
+
+Queries can also use `#!python history.where(ToolCallEvent).since_last_user_input()`;
+the boundary is found before filtering. Query construction leaves earlier
+selections unchanged, and each terminal reads one snapshot. If no actual
+user-input boundary remains in retained history, the scoped query returns an
+empty selection. It does not recover that boundary from a summary or archived
+history.
+
 ## Raise events manually
 
 To raise or publish events to the stream, you should always use the `Context` object rather than sending them to the stream directly. The `Context` ensures that dependencies and the stream scope are properly propagated.

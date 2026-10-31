@@ -7,7 +7,7 @@ import os
 from collections.abc import Iterable
 from enum import Enum
 from pathlib import Path
-from typing import Any, overload
+from typing import Any, Literal, overload
 
 from ag2.types import (
     AudioMediaType,
@@ -36,9 +36,15 @@ class Input(BaseEvent):
 
 
 class ModelRequest(BaseEvent):
-    """Event representing a user turn sent to the model, containing one or more inputs."""
+    """Input sent to the model, from a user or the framework's service inbox."""
 
     parts: "list[Input]" = Field(kw_only=False)
+    origin: Literal["user", "service"] = Field(default="user", compare=False)
+    """Input provenance, independent of the provider's user-content wire role.
+
+    Ordinary requests, including histories written before this field existed,
+    represent user input. Framework inbox drains explicitly use ``service``.
+    """
 
     @classmethod
     def ensure_request(cls, msgs: "Iterable[SendableMessage | Input]") -> "ModelRequest":
@@ -55,6 +61,15 @@ class DrainedModelRequest(ModelRequest):
     LLM invocation — without this marker, re-emitting the merged request would
     recursively trigger another LLM call.
     """
+
+    def __init__(
+        self,
+        parts: list[Input],
+        *,
+        origin: Literal["user", "service"] = "service",
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(parts, origin=origin, **kwargs)
 
 
 class MessageEnqueued(BaseEvent):
