@@ -229,6 +229,72 @@ Unlike `stream.get()` or `join()`, these operations never wait for future events
 They cover retained history only. Events removed by compaction are unavailable,
 so a history count is not a lifetime total.
 
+### Scope to the current user input
+
+`#!python history.since_last_user_input()` selects events after the latest
+retained actual user input and excludes that input itself. It composes with the
+same filters and terminal methods. This example uses the OpenAI Responses API;
+set `OPENAI_API_KEY` before running it, as described in the
+[Quick Start](/docs/user-guide/quick-start):
+
+```python linenums="1" hl_lines="21"
+import asyncio
+
+from ag2 import Agent, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ToolCallEvent
+
+@tool
+def lookup() -> str:
+    """Look up an item."""
+    return "item"
+
+async def main():
+    agent = Agent(
+        "lookup",
+        tools=[lookup],
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Use lookup to find items. Answer acknowledgements directly.",
+    )
+    reply = await agent.ask("Find an item using lookup.")
+    history = reply.context.stream.history
+    calls = history.since_last_user_input().where(ToolCallEvent)
+    print("Calls for this input:", await calls.count())
+    await reply.ask("Thanks")
+    print("Calls for the new input:", await calls.count())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The query is lazy, so the same `calls` object counts the second input after
+`#!python reply.ask("Thanks")` starts a new interval.
+
+A new interval starts with:
+
+- `#!python agent.ask()`, `#!python agent.run()`, and their continuations
+  `#!python reply.ask()` and `#!python reply.run()`;
+- a follow-up sent with `#!python run.enqueue(...)`
+  ([feeding the turn while it runs](/docs/user-guide/agents#feeding-the-turn-while-it-runs)),
+  once the running turn consumes it.
+
+Tool results, compaction summaries, and messages queued with
+`#!python context.enqueue(...)` from tools or background tasks do not start a
+new interval, even when they arrive after the model's final response.
+
+Each `ModelRequest` stores this in its `origin` field: `"user"` for input a
+person sent, `"service"` for framework messages. The provider still receives
+both as user-role content. Requests stored before the field existed count as
+`"user"`. Code that forwards a person's message into a running turn, such as a
+chat bridge, marks it explicitly with
+`#!python context.enqueue("Use the March report instead", origin="user")`.
+
+The boundary is found before filters apply, so
+`#!python history.where(ToolCallEvent).since_last_user_input()` selects the same
+events. If compaction or retention has removed the latest user input, the scoped
+query returns an empty selection; it does not recover the boundary from a
+summary.
+
 ## Raise events manually
 
 To raise or publish events to the stream, you should always use the `Context` object rather than sending them to the stream directly. The `Context` ensures that dependencies and the stream scope are properly propagated.
