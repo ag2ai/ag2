@@ -18,6 +18,8 @@ come from the paired :class:`~ag2.eval.Suite` task (via
 ``TraceRef.task_id``); traces with no paired task are graded reference-free.
 The reverse — a suite task with no trace — is governed by ``on_missing_task``
 and counts as an error by default.
+If loading a listed trace fails, its task is graded with an empty trace carrying
+the exception, preserving its dataset fields and place in the scoring results.
 """
 
 import asyncio
@@ -246,10 +248,14 @@ async def _evaluate_ref(
     on_result: Callable[[Task, TaskResult], Awaitable[None]] | None = None,
 ) -> TaskResult:
     async with semaphore:
-        trace = await source.load(ref)
         task = tasks_by_id.get(ref.task_id) if ref.task_id is not None else None
         if task is None:
             task = Task(task_id=ref.task_id or ref.trace_id, inputs={}, reference_outputs=None)
+        try:
+            trace = await source.load(ref)
+        except Exception as exc:
+            logger.error("eval trace load failed: %s", ref.trace_id, exc_info=exc)
+            trace = Trace(events=(), exception=exc, duration_ms=0)
         return await _score(task, trace, ref, scorers=scorers, budgets=budgets, on_result=on_result)
 
 
