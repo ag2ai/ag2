@@ -2,7 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .base import BaseEvent
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from ag2.tools.subagents._forwarding import StreamHandle
+
+from .base import BaseEvent, Field
 
 
 class ChildEvent(BaseEvent):
@@ -16,11 +21,19 @@ class ChildEvent(BaseEvent):
     agent_name: str
     origin_event_id: str
     direction: str = "up"
+    _origin: Any = Field(default=None, compare=False, repr=False)
 
     @property
     def source_event(self) -> BaseEvent:
         """The original authored event, including replayed observations."""
         return self.inner.source_event
+
+    @property
+    def origin(self) -> "StreamHandle":
+        """The live address of the original author; absent on replayed events."""
+        if self._origin is None:
+            raise RuntimeError("A replayed event has no live origin")
+        return cast("StreamHandle", self._origin)
 
 
 class TransientChildEvent(ChildEvent):

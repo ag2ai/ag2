@@ -2,17 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Usage reporting — aggregate token usage over a stream's event log.
+"""Account once for each source UsageEvent, including descendant costs.
 
-The event log is the source of truth. Every place that spends tokens emits a
-:class:`~ag2.events.UsageEvent` onto the stream as the tokens are
-spent — a direct LLM call (``kind="model_call"``), a live session, history
-compaction (``kind="compaction"``), memory aggregation (``kind="aggregation"``),
-or a sub-agent rollup (``kind="subtask"``). A sub-agent's per-call
-``UsageEvent`` events live on its private stream and never reach the parent
-history; only its rolled-up ``"subtask"`` event is emitted on the parent, so
-summing the parent's ``UsageEvent`` events yields the correct grand total with
-no double counting.
+The event log is the source of truth. Delegation preserves the original record,
+including its identity, kind, provider and model; it generates no usage rollup.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
@@ -24,30 +17,23 @@ __all__ = (
     "UsageRecord",
     "UsageReport",
     "collect_usage_events",
+    "usage_event_from",
 )
 
 
-def collect_usage_events(into: list[UsageEvent]) -> Callable[[UsageEvent], Awaitable[None]]:
-    """A stream subscriber that appends every ``UsageEvent`` it sees to ``into``.
+class _UsageCollector:
+    def __init__(self, into: list[UsageEvent]) -> None:
+        self.into = into
 
-    For the places that need what was spent *while* something ran, rather than
-    what history holds afterwards: a sub-task's own invocation, a compaction's
-    summarization call, a turn whose stream the caller never sees. Collecting on
-    send is also what leaves the failure path with something to report, since the
-    records are in hand before the exception unwinds.
+    async def __call__(self, event: BaseEvent) -> None:
+        record = usage_event_from(event)
+        if record is not None:
+            self.into.append(record)
 
-    ``into`` must be a fresh list per scope — it defines what "this one" means,
-    and a reused list would fold a previous scope's spend into this one.
 
-    Subscribe it under ``stream.where(UsageEvent)``; written as a factory rather
-    than a nested closure at each call site because the stream calls subscribers
-    with keyword arguments, so ``into.append`` cannot be subscribed directly.
-    """
-
-    async def _collect(event: UsageEvent) -> None:
-        into.append(event)
-
-    return _collect
+def collect_usage_events(into: list[UsageEvent]) -> Callable[[BaseEvent], Awaitable[None]]:
+    """Collect source accounting records from a UsageEvent subscription."""
+    return _UsageCollector(into)
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,13 +42,12 @@ class UsageRecord:
 
     usage: Usage
     kind: str
-    """``"model_call"`` for a direct LLM call, ``"subtask"`` for a sub-agent
-    rollup, ``"compaction"`` / ``"aggregation"`` for internal maintenance calls."""
+    """The original source stage, preserved across delegation boundaries."""
     model: str | None = None
     provider: str | None = None
     finish_reason: str | None = None
     label: str | None = None
-    """Sub-agent name for ``"subtask"`` records; ``None`` for model calls."""
+    """Optional source label; archived subtask records use an agent name."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +63,13 @@ class UsageReport:
     @classmethod
     def from_events(cls, events: Iterable[BaseEvent]) -> "UsageReport":
         records: list[UsageRecord] = []
+        seen: set[str] = set()
         for event in events:
+            usage_event = usage_event_from(event)
+            if usage_event is None or usage_event.event_id in seen:
+                continue
+            seen.add(usage_event.event_id)
+            event = usage_event
             record = _record_for(event)
             if record is not None:
                 records.append(record)
@@ -115,3 +106,9 @@ def _record_for(event: BaseEvent) -> UsageRecord | None:
             label=event.label,
         )
     return None
+
+
+def usage_event_from(event: BaseEvent) -> UsageEvent | None:
+    """Read a source accounting record, also accepting archived observation envelopes."""
+    event = event.source_event
+    return event if isinstance(event, UsageEvent) else None

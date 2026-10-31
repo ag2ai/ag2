@@ -30,7 +30,7 @@ from ag2.events import (
     TextInput,
 )
 from ag2.exceptions import HumanInputError
-from ag2.history import close_unanswered_tool_calls
+from ag2.history import CANCELLED_TOOL_RESULT, close_unanswered_tool_calls
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 from .mappers import event_to_session_update, prompt_to_inputs
@@ -58,10 +58,6 @@ STOP_CANCELLED = "cancelled"
 # AG2 OSS never interprets what is inside; a downstream agent that cares (e.g.
 # reading AG2 Space provenance) reads this key, and a generic agent ignores it.
 META_VARIABLE = "acp.meta"
-
-# Stands in for a tool result the Client will never get, because the turn was
-# cancelled while the tool was still running. See :func:`heal_cancelled_turn`.
-CANCELLED_TOOL_RESULT = "The turn was cancelled before this tool finished."
 
 # Put on the ``data`` of the protocol error raised when a turn died because
 # nobody could answer a human-input request. Stable across every reason the

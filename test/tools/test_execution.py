@@ -457,4 +457,8 @@ async def test_execute_tools_propagates_cancellation() -> None:
         await agent.ask("Trigger cancellation", stream=stream)
 
     history = await stream.history.get_events()
-    assert not any(isinstance(e, ToolResultsEvent) for e in history)
+    repaired = [e for e in history if isinstance(e, ToolResultsEvent)]
+    assert len(repaired) == 1
+    assert [result.result.parts for result in repaired[0].results] == [
+        [events.TextInput("The turn was cancelled before this tool finished.")]
+    ]

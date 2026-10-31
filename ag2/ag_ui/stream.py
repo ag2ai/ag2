@@ -62,7 +62,7 @@ from ag2 import Agent, Context, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig, ModelProvider
 from ag2.config.input_acceptance import accepts_input
 from ag2.context import strip_reserved_variables
-from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, UsageEvent
+from ag2.events import BinaryInput, BinaryType, ChildEvent, DataInput, FileIdInput, TextInput, UrlInput, UsageEvent
 from ag2.hitl import HumanHook
 from ag2.middleware.base import AgentTurn, BaseMiddleware, Middleware, MiddlewareFactory
 from ag2.observers import Observer
@@ -307,6 +307,11 @@ async def _serve_turn(
     @stream.subscribe
     async def map_events_to_ag_ui(event: events.BaseEvent) -> None:
         nonlocal streaming_msg_id, reasoning_msg_id
+
+        if isinstance(event, ChildEvent):
+            if not isinstance(event.inner, _TASK_LIFECYCLE):
+                return
+            event = event.inner
 
         if reasoning_msg_id is not None and not isinstance(event, events.ModelReasoning):
             await output.send(
