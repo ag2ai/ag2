@@ -24,6 +24,7 @@ from ag2.events import (
     TextInput,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolErrorEvent,
     ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
@@ -59,6 +60,18 @@ class TestConvertMessagesEmptyArguments:
         assert content.model_dump(exclude_none=True) == {
             "role": "model",
             "parts": [{"function_call": {"id": "tc_1", "name": "list_items", "args": {"category": "books"}}}],
+        }
+
+    def test_truncated_arguments_produce_empty_dict(self) -> None:
+        truncated = '{"city": "Par'
+        call = ToolCallEvent(id="tc_1", name="list_items", arguments=truncated)
+        response = ModelResponse(tool_calls=ToolCallsEvent([call]))
+        error = ToolErrorEvent.from_call(call, ValueError("boom"))
+        contents = convert_messages([response, ToolResultsEvent([error])], SerializerCls)
+
+        assert contents[0].model_dump(exclude_none=True) == {
+            "role": "model",
+            "parts": [{"function_call": {"id": "tc_1", "name": "list_items", "args": {}}}],
         }
 
 

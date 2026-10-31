@@ -320,7 +320,7 @@ def convert_messages(
                 tool_use: ToolUseBlockTypeDef = {
                     "toolUseId": call.id,
                     "name": call.name,
-                    "input": json.loads(call.arguments or "{}"),
+                    "input": call.safe_serialized_arguments,
                 }
                 content.append({"toolUse": tool_use})
             _append_blocks(result, "assistant", content)
