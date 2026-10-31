@@ -42,6 +42,7 @@ from ag2.events import (
     Input,
     ModelRequest,
     ModelResponse,
+    ModelResponseDiscarded,
     TextInput,
     ToolResultsEvent,
     UrlInput,
@@ -268,19 +269,25 @@ def convert_messages(
     if prompt_text:
         result.append(system(prompt_text))
 
-    skip_next_model_response = False
+    turn_index: int | None = None
 
     for message in messages:
         if isinstance(message, XAIAssistantEvent):
             proto = chat_pb2.GetChatCompletionResponse.FromString(message.proto_bytes)
+            turn_index = len(result)
             result.append(XAIResponse(proto, None))
-            # The companion ModelResponse (emitted alongside) carries the same
-            # turn — skip it so we don't double-append the assistant message.
-            skip_next_model_response = True
+
+        elif isinstance(message, ModelResponseDiscarded):
+            if turn_index is not None:
+                result.pop(turn_index)
+                turn_index = None
 
         elif isinstance(message, ModelResponse):
-            if skip_next_model_response:
-                skip_next_model_response = False
+            if turn_index is not None:
+                replay = result[turn_index]
+                assert isinstance(replay, XAIResponse)
+                _retain_client_calls(replay.proto, {call.id for call in message.tool_calls.calls})
+                turn_index = None
                 continue
             # Degraded fallback: no XAIAssistantEvent → reconstruct text-only.
             # tool_calls cannot be replayed without the proto; they're lost.
@@ -293,14 +300,28 @@ def convert_messages(
                 result.append(tool_result(payload, tool_call_id=r.parent_id))
 
         elif isinstance(message, ModelRequest):
+            turn_index = None
             contents: list[chat_pb2.Content] = [_content_from_input(p, serializer) for p in message.parts]
             result.append(user(*contents))
 
         elif isinstance(message, CompactionSummary):
+            turn_index = None
             # Surface the summary as a user turn so it stays visible and gives a valid opening turn
             result.append(user(f"[Summary of earlier conversation]\n{message.summary}"))
 
     return result
+
+
+def _retain_client_calls(proto: chat_pb2.GetChatCompletionResponse, accepted: set[str]) -> None:
+    """Replay the calls middleware retained without changing native server state."""
+    for output in proto.outputs:
+        calls = [
+            call
+            for call in output.message.tool_calls
+            if call.type != chat_pb2.TOOL_CALL_TYPE_CLIENT_SIDE_TOOL or call.id in accepted
+        ]
+        del output.message.tool_calls[:]
+        output.message.tool_calls.extend(calls)
 
 
 def normalize_usage(usage: usage_pb2.SamplingUsage | None) -> Usage:

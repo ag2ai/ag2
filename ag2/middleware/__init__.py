@@ -15,6 +15,8 @@ from .base import (
 )
 from .builtin import (
     ApprovalRequired,
+    CallCounter,
+    CallLimiter,
     HistoryLimiter,
     LoggingMiddleware,
     MetricsMiddleware,
@@ -29,6 +31,8 @@ __all__ = (
     "AgentTurn",
     "ApprovalRequired",
     "BaseMiddleware",
+    "CallCounter",
+    "CallLimiter",
     "ConditionalMiddleware",
     "DescribableMiddleware",
     "DescribedMiddleware",

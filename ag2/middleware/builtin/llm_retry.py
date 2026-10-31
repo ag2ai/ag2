@@ -5,8 +5,10 @@
 from collections.abc import Sequence
 
 from ag2.annotations import Context
-from ag2.events import BaseEvent, ModelResponse
-from ag2.middleware.base import BaseMiddleware, LLMCall, MiddlewareFactory
+from ag2.events import BaseEvent, ModelRequest, ModelResponse
+from ag2.events.conditions import TypeCondition
+from ag2.middleware.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
+from ag2.middleware.builtin.call_limiter import _CallGroup
 from ag2.middleware.describe import MiddlewareDescription
 
 
@@ -52,6 +54,12 @@ class _RetryMiddleware(BaseMiddleware):
         self._max_retries = max_retries
         self._retry_on = retry_on
 
+    async def on_turn(self, call_next: AgentTurn, event: BaseEvent, context: Context) -> ModelResponse:
+        group = context.dependencies.get(_CallGroup)
+        if group is not None and group.collecting and group.stream_id == context.stream.id:
+            raise ValueError("RetryMiddleware must wrap every CallLimiter so each provider attempt is counted")
+        return await call_next(event, context)
+
     async def on_llm_call(
         self,
         call_next: LLMCall,
@@ -59,12 +67,9 @@ class _RetryMiddleware(BaseMiddleware):
         context: Context,
     ) -> ModelResponse:
         for _ in range(self._max_retries):
-            # Watch for *any* event: an ``on_llm_call`` scope bottoms out at the
-            # provider client, and the agent loop publishes its own events —
-            # ``ModelRequest``, ``ToolCallsEvent``, ``UsageEvent`` — outside the
-            # middleware chain, so whatever lands here is the client's own output:
-            # streamed chunks and reasoning, the message, server-side tool calls.
-            async with context.stream.get(BaseEvent) as published:
+            # Middleware can append control input (such as budget notes) inside
+            # this scope. Only output makes a failed attempt unsafe to repeat.
+            async with context.stream.get(~TypeCondition(ModelRequest)) as published:
                 try:
                     return await call_next(events, context)
                 except self._retry_on:
