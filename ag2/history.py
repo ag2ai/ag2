@@ -4,7 +4,10 @@
 
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Protocol
+from dataclasses import dataclass
+from typing import Generic, Protocol, TypeVar, cast, overload
+
+from ag2.types import ClassInfo
 
 from .annotations import Context
 from .context import StreamId
@@ -16,6 +19,20 @@ from .events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
+from .events.conditions import Condition, TypeCondition
+
+__all__ = (
+    "HUMAN_INPUT_ABANDONED_TOOL_RESULT",
+    "History",
+    "HistoryQuery",
+    "MemoryStorage",
+    "Storage",
+    "close_unanswered_tool_calls",
+    "unanswered_tool_calls",
+)
+
+EventT = TypeVar("EventT", bound=BaseEvent, covariant=True)
+SelectedEventT = TypeVar("SelectedEventT", bound=BaseEvent)
 
 
 class Storage(Protocol):
@@ -55,6 +72,59 @@ class History:
 
     async def replace(self, events: Iterable["BaseEvent"]) -> None:
         await self.storage.set_history(self.stream_id, events)
+
+    @overload
+    def where(self, condition: type[EventT]) -> "HistoryQuery[EventT]": ...
+
+    @overload
+    def where(self, condition: ClassInfo | Condition) -> "HistoryQuery[BaseEvent]": ...
+
+    def where(self, condition: ClassInfo | Condition) -> "HistoryQuery[BaseEvent]":
+        """Select retained top-level events without reading storage yet."""
+        predicate = condition if isinstance(condition, Condition) else TypeCondition(condition)
+        return HistoryQuery(self, predicate)
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryQuery(Generic[EventT]):
+    """A finite selection of retained history, evaluated afresh by each terminal.
+
+    Queries preserve stored occurrence order, including repeated publications.
+    They neither subscribe to future events nor flatten nested event batches.
+    Events removed by a history retention policy are no longer available.
+    """
+
+    _history: History
+    _condition: Condition
+
+    @overload
+    def where(self, condition: type[SelectedEventT]) -> "HistoryQuery[SelectedEventT]": ...
+
+    @overload
+    def where(self, condition: ClassInfo | Condition) -> "HistoryQuery[EventT]": ...
+
+    def where(self, condition: ClassInfo | Condition) -> "HistoryQuery[BaseEvent]":
+        """Return an independent query combining this selection with AND."""
+        return HistoryQuery(self._history, self._condition & condition)
+
+    async def all(self) -> list[EventT]:
+        """Return a fresh list selected from one snapshot of stored events."""
+        events = list(await self._history.get_events())
+        return [cast(EventT, event) for event in events if self._condition(event)]
+
+    async def first(self) -> EventT | None:
+        """Return the first matching event, or None when no event matches."""
+        events = await self.all()
+        return events[0] if events else None
+
+    async def last(self) -> EventT | None:
+        """Return the last matching event, or None when no event matches."""
+        events = await self.all()
+        return events[-1] if events else None
+
+    async def count(self) -> int:
+        """Count matching retained occurrences, not lifetime events."""
+        return len(await self.all())
 
 
 # Stands in for a tool result nobody will ever produce, because the turn ended
