@@ -23,20 +23,25 @@ Agent(
     response_schema: ResponseProto | type | None = None,
     hitl_hook: HumanHook | None = None,
     plugins: Iterable[Plugin] = (),
-    assembly: Iterable[AssemblyPolicy] = (),
+    assembly: Iterable[AssemblyPolicy] | None = None,  # deprecated; removed in 1.4.0
     knowledge: KnowledgeConfig | None = None,
     tasks: TaskConfig | Literal[False] = False,  # deprecated; removed in 1.4.0
 )
 ```
 
-The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. The harness hooks are `assembly=`, `knowledge=`, and `tasks=`, each documented below.
+The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. Context policies use `middleware=`; the other harness hooks are `knowledge=` and `tasks=`, each documented below. The legacy `assembly=` parameter is deprecated and will be removed in 1.4.0.
 
-## `assembly=` — context policies
+## Context policies through `middleware=`
 
-A list of [`AssemblyPolicy`](/docs/user-guide/advanced/assembly) instances. When non-empty, the Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain so your policies transform `(prompts, events)` before every LLM call.
+Wrap your [`AssemblyPolicy`](/docs/user-guide/advanced/assembly) instances in `Middleware(AssemblerMiddleware, policies=[...])`. Add `Middleware(HaltCheckMiddleware)` immediately after it when using `AlertPolicy`.
 
-```python linenums="1" hl_lines="11-15"
+!!! warning "`assembly=` is deprecated"
+    `Agent(assembly=...)` keeps its existing behavior and emits a `DeprecationWarning` where the agent is constructed. It will be removed in **1.4.0**. Migrate to `middleware=` as shown below.
+
+```python linenums="1" hl_lines="13-23"
 from ag2 import Agent
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import HaltCheckMiddleware, Middleware
 from ag2.policies import (
     AlertPolicy,
     SlidingWindowPolicy,
@@ -46,10 +51,16 @@ from ag2.policies import (
 agent = Agent(
     "assistant",
     config=config,
-    assembly=[
-        WorkingMemoryPolicy(),                # inject /memory/working.md
-        AlertPolicy(),                         # deliver ObserverAlerts, halt on FATAL
-        SlidingWindowPolicy(max_events=50),   # cap history footprint
+    middleware=[
+        Middleware(
+            AssemblerMiddleware,
+            policies=[
+                WorkingMemoryPolicy(),              # inject /memory/working.md
+                AlertPolicy(),                      # deliver alerts, halt on FATAL
+                SlidingWindowPolicy(max_events=50), # cap history footprint
+            ],
+        ),
+        Middleware(HaltCheckMiddleware),
     ],
 )
 ```
@@ -84,9 +95,11 @@ class KnowledgeConfig:
 | `aggregate` / `aggregate_trigger` | Wires an aggregation middleware that fires [`aggregate()`](/docs/user-guide/advanced/aggregation) on the configured cadence. Failures emit `AggregationFailed` on the stream — see [Aggregation › Wiring onto an Agent](/docs/user-guide/advanced/aggregation#wiring-onto-an-agent) for the full lifecycle event triple. |
 | `bootstrap` | Runs once on first use to seed the store. `None` falls back to `#!python DefaultBootstrap(mention_tool=expose_tool)`, so the generated SKILL.md text matches whether the LLM can actually call the `knowledge` tool. |
 
-```python linenums="1" hl_lines="13-19"
+```python linenums="1" hl_lines="15-21"
 from ag2 import Agent, KnowledgeConfig
 from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import Middleware
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.knowledge import DiskKnowledgeStore
 from ag2.policies import WorkingMemoryPolicy
@@ -104,7 +117,7 @@ agent = Agent(
         aggregate=ConversationSummaryAggregate(config=summarizer_config),
         aggregate_trigger=AggregateTrigger(every_n_turns=10, on_end=True),
     ),
-    assembly=[WorkingMemoryPolicy()],
+    middleware=[Middleware(AssemblerMiddleware, policies=[WorkingMemoryPolicy()])],
 )
 ```
 
@@ -271,17 +284,8 @@ first.middleware[0].middleware is second.middleware[0].middleware
 
 ## Turn lifecycle
 
-Each `await agent.ask(...)` runs through the middleware chain in this order (outermost → innermost):
+Each `await agent.ask(...)` enters middleware in registration order (outermost → innermost), then reaches the LLM client. Register `AssemblerMiddleware` before `HaltCheckMiddleware` so alerts can halt the current call. Place retry, logging, or other middleware according to whether they should see the original or assembled context.
 
-```
-1. AssemblerMiddleware              (if assembly=[...])
-2. _HaltCheckMiddleware             (if assembly=[...] — watches for HaltEvent)
-3. _CompactionMiddleware            (if knowledge.compact configured)
-4. _AggregationMiddleware           (if knowledge.aggregate configured)
-5. User-provided middleware         (retry, rate-limit, logging, …)
-6. LLM client                       (innermost)
-```
-
-The internal harness middleware (`_AssemblerMiddleware`, `_HaltCheckMiddleware`, `_CompactionMiddleware`, `_AggregationMiddleware`) are assembled conditionally — you only pay for what you turn on.
+Knowledge compaction and aggregation middleware are appended after constructor-supplied middleware when their strategies are configured. The deprecated `assembly=` parameter appends its assembler and halt checker after those; migration to an explicit list lets you choose their position.
 
 Lifecycle events emitted during a turn include `ObserverStarted` / `ObserverCompleted`, `CompactionCompleted`, `AggregationCompleted`, and `HaltEvent`. Subscribe to any of them via an [Observer](/docs/user-guide/advanced/observers) or a stream subscriber.

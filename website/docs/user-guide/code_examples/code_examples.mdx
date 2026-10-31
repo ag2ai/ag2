@@ -15,7 +15,7 @@ End-to-end runnable scripts demonstrating `ag2`. Each example is self-contained,
 | 04 | [Token Watchdog](/docs/user-guide/code_examples/04_token_watchdog) | Built-in + custom observers, `ObserverAlert` | `BaseObserver`, `TokenMonitor`, `LoopDetector`, `EventWatch` |
 | 05 | [Research Squad](/docs/user-guide/code_examples/05_research_squad) | Parallel delegation + sibling delegation | `Agent.as_tool()`, `TaskStarted` / `TaskCompleted` |
 | 06 | [Journal Companion](/docs/user-guide/code_examples/06_journal_companion) | Persistent memory across runs | `KnowledgeConfig`, `WorkingMemoryAggregate`, `WorkingMemoryPolicy` |
-| 07 | [Long-Doc Chat](/docs/user-guide/code_examples/07_long_doc_chat) | Composing assembly policies + compaction | `assembly=[...]`, `SlidingWindowPolicy`, `TokenBudgetPolicy`, `TailWindowCompact` |
+| 07 | [Long-Doc Chat](/docs/user-guide/code_examples/07_long_doc_chat) | Composing assembly policies + compaction | `Middleware(AssemblerMiddleware, policies=[...])`, `SlidingWindowPolicy`, `TokenBudgetPolicy`, `TailWindowCompact` |
 | 08 | [Safety Guard](/docs/user-guide/code_examples/08_safety_guard) | FATAL alert → `AlertPolicy` → `HaltEvent` | `ObserverAlert(FATAL)`, `AlertPolicy`, `HaltEvent` |
 
 

@@ -196,6 +196,13 @@ See [ADR 0027](docs/adr/0027-taskconfig-is-deprecated-in-favour-of-explicit-dele
 - Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
 - Removal in 1.4.0 covers: `TaskConfig` and its re-export from `ag2`, the `tasks=` parameter and `Agent.tasks`, `_build_subtask_toolkit` / `_spawn_subtask` / `_run_subtask` / `_task_slots_for`, the `agent.tasks` check in `ag2/ag_ui/capabilities.py`, those tests, and the deprecation notes in `website/docs/`.
 
+### Deprecated: `Agent(assembly=...)` (removed in 1.4.0)
+
+Register `Middleware(AssemblerMiddleware, policies=[...])` (plus `Middleware(HaltCheckMiddleware)` with `AlertPolicy`) in `middleware=` instead. Plugin, `add_policy()` and invocation-plugin policies join that assembler each turn.
+
+- Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
+- Removal in 1.4.0 covers: the `assembly=` parameter and `ASSEMBLY_DEPRECATION`, the warning-filtered tests, and the deprecation notes in `website/docs/`. Keep `_attach_policies`: plugin policies still need it.
+
 ### persistent_stream
 
 `persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It stores the stream ID in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.
