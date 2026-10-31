@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -15,6 +16,11 @@ from fast_depends.utils import is_coroutine_callable, run_in_threadpool
 CONTEXT_OPTION_NAME = "__ctx__"
 AGENT_CONTEXT_DEPENDENCY_KEY = "__ag2_agent__"
 MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY = "__ag2_model_config__"
+
+
+def _validate_timeout(timeout: float | None) -> None:
+    if timeout is not None and (not math.isfinite(timeout) or timeout <= 0):
+        raise ValueError("`timeout` must be a finite number > 0 seconds or None.")
 
 
 def build_model(

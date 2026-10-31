@@ -128,6 +128,37 @@ with stream.where(ModelMessage).sub_scope(temp_listener):
     pass
 ```
 
+## Subscriber timeouts
+
+Set `#!python timeout` in seconds to limit each invocation of a subscriber or interrupter. The default is `#!python None` (no limit); a configured value must be finite and greater than zero.
+
+```python linenums="1" hl_lines="8"
+import httpx
+
+from ag2 import Agent, MemoryStream
+from ag2.events import ModelResponse
+
+stream = MemoryStream()
+
+@stream.where(ModelResponse).subscribe(timeout=5.0)
+async def report_response(event: ModelResponse) -> None:
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        response = await client.post("https://metrics.example.com/responses", json={"content": event.content})
+        response.raise_for_status()
+
+agent = Agent("assistant")
+reply = await agent.ask("Hello!", stream=stream)
+```
+
+The same parameter works with `#!python stream.subscribe(handler, timeout=5.0)` and `#!python stream.sub_scope(handler, timeout=5.0)`, including filtered streams and `#!python interrupt=True` subscriptions.
+
+The limit starts when delivery reaches that handler and covers dependency resolution, handler execution, and dependency cleanup. Waiting for earlier handlers does not consume it. Calls the handler awaits, including nested event publication, share its limit. It does not limit the subscription's lifetime or detached background tasks.
+
+Expiry raises `asyncio.TimeoutError` to the event publisher, like other handler exceptions, and stops delivery of that event to subsequent handlers. During an agent turn this can fail the turn. The subscription remains registered for later events until explicitly removed or its scope ends.
+
+!!! warning "Cancellation is cooperative"
+    AG2 requests cancellation and waits for it to finish, so cancellation cleanup can exceed the configured limit. A synchronous callback running in a worker thread may continue after AG2 stops waiting. Configure timeouts on its HTTP client, database driver, or subprocess as well. Blocking code with `#!python sync_to_thread=False` prevents the event loop from enforcing the timeout.
+
 ## Get specific events
 
 To wait for and get the next occurrence of a specific event asynchronously, use the `get` async context manager. This yields a future that resolves to the matched event.
@@ -156,6 +187,113 @@ with stream.where(ToolResultEvent).join(max_events=1) as results:
 
 !!! warning "Do not timeout individual `join()` pulls"
     Consume the iterator with a plain `#!python async for`. Avoid wrapping individual pulls such as `#!python await asyncio.wait_for(events.__anext__(), timeout=...)`: cancelling one `__anext__()` closes the current iterator, so later events will not be yielded by that iterator. For bounded consumption, use `#!python join(max_events=N)` or put one `#!python asyncio.timeout(...)` around the whole loop.
+
+## Query retained history
+
+Use `#!python stream.history.where(...)` to inspect events already stored in a
+conversation. It accepts the same event classes and field conditions as live
+subscriptions. Building a query is synchronous; its `all()`, `first()`, `last()`,
+and `count()` methods are asynchronous and each reads a fresh, finite snapshot.
+
+```python linenums="1"
+import asyncio
+from ag2 import Context, MemoryStream
+from ag2.events import ToolCallEvent
+
+async def main():
+    stream = MemoryStream()
+    context = Context(stream)
+    await context.send(ToolCallEvent(name="lookup", arguments='{"page": 1}'))
+    await context.send(ToolCallEvent(name="lookup", arguments='{"page": 2}'))
+    calls = stream.history.where(ToolCallEvent)
+    lookups = calls.where(ToolCallEvent.name == "lookup")
+    print(await lookups.count())  # 2
+    print(await lookups.first())  # First stored lookup
+    print(await lookups.last())   # Most recent stored lookup
+    print(await lookups.all())    # Both lookups, in publication order
+
+asyncio.run(main())
+```
+
+Chained `where` clauses combine with AND and leave the original query unchanged.
+Class queries include subclasses. `all()` returns a fresh list of the ordinary
+stored event objects; `first()` and `last()` return `None` for an empty selection,
+and `count()` returns zero. Storage errors propagate to the caller.
+
+History queries select top-level stored occurrences. They preserve repeated
+publications and do not expand tool batches, model responses, or child streams.
+A filtered stream shares its parent's History: a live subscription filter does
+not implicitly restrict history queries.
+
+Unlike `stream.get()` or `join()`, these operations never wait for future events.
+They cover retained history only. Events removed by compaction are unavailable,
+so a history count is not a lifetime total.
+
+### Scope to the current user input
+
+`#!python history.since_last_user_input()` selects events after the latest
+retained actual user input and excludes that input itself. It composes with the
+same filters and terminal methods. This example uses the OpenAI Responses API;
+set `OPENAI_API_KEY` before running it, as described in the
+[Quick Start](/docs/user-guide/quick-start):
+
+```python linenums="1" hl_lines="21"
+import asyncio
+
+from ag2 import Agent, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ToolCallEvent
+
+@tool
+def lookup() -> str:
+    """Look up an item."""
+    return "item"
+
+async def main():
+    agent = Agent(
+        "lookup",
+        tools=[lookup],
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Use lookup to find items. Answer acknowledgements directly.",
+    )
+    reply = await agent.ask("Find an item using lookup.")
+    history = reply.context.stream.history
+    calls = history.since_last_user_input().where(ToolCallEvent)
+    print("Calls for this input:", await calls.count())
+    await reply.ask("Thanks")
+    print("Calls for the new input:", await calls.count())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The query is lazy, so the same `calls` object counts the second input after
+`#!python reply.ask("Thanks")` starts a new interval.
+
+A new interval starts with:
+
+- `#!python agent.ask()`, `#!python agent.run()`, and their continuations
+  `#!python reply.ask()` and `#!python reply.run()`;
+- a follow-up sent with `#!python run.enqueue(...)`
+  ([feeding the turn while it runs](/docs/user-guide/agents#feeding-the-turn-while-it-runs)),
+  once the running turn consumes it.
+
+Tool results, compaction summaries, and messages queued with
+`#!python context.enqueue(...)` from tools or background tasks do not start a
+new interval, even when they arrive after the model's final response.
+
+Each `ModelRequest` stores this in its `origin` field: `"user"` for input a
+person sent, `"service"` for framework messages. The provider still receives
+both as user-role content. Requests stored before the field existed count as
+`"user"`. Code that forwards a person's message into a running turn, such as a
+chat bridge, marks it explicitly with
+`#!python context.enqueue("Use the March report instead", origin="user")`.
+
+The boundary is found before filters apply, so
+`#!python history.where(ToolCallEvent).since_last_user_input()` selects the same
+events. If compaction or retention has removed the latest user input, the scoped
+query returns an empty selection; it does not recover the boundary from a
+summary.
 
 ## Raise events manually
 

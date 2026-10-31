@@ -35,7 +35,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-version = "1.2.1"
+version = "1.2.2"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -87,8 +87,8 @@ acp = [
 ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
-openai = ["openai>=3.27.0,<4"]
-anthropic = ["anthropic>=1.15.0,<2"]
+openai = ["openai>=3.37.0,<4"]
+anthropic = ["anthropic>=1.15.0,<3"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
     # with the SDK (local can have extra fields for forward compatibility).
@@ -103,7 +103,7 @@ elevenlabs = ["elevenlabs>=2.73.0,<3"]
 
 xai = ["xai-sdk>=1.12.2,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
-mistral = ["mistralai>=3.2.0,<4"]
+mistral = ["mistralai>=3.6.0,<4"]
 ollama = ["ollama>=0.5.2,<1"]
 bedrock = ["aiobotocore>=3.9.1,<4"]
 dashscope = ["dashscope>=1.25.13"]
@@ -148,6 +148,7 @@ test-core = [
     "pytest-cov==7.1.0",
     "pytest-timeout>=2.4.0,<3",
     "dirty-equals>=0.11,<0.12",
+    "freezegun>=1.5,<2",
 ]
 
 test = [

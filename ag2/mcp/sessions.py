@@ -126,7 +126,7 @@ class SessionStore:
             raise ValueError(f"max_sessions must be >= 1, got {max_sessions}.")
         if ttl is not None and ttl <= 0:
             raise ValueError(f"ttl must be > 0 when set, got {ttl}.")
-        self._storage = storage or MemoryStorage()
+        self._storage = storage if storage is not None else MemoryStorage()
         self._max = max_sessions
         self._ttl = ttl
         self._entries: OrderedDict[str, _Entry] = OrderedDict()
