@@ -114,6 +114,20 @@ def _snapshot_with_call(
     )
 
 
+def _closed_call(artifact_id: str, call_id: str, *, append: bool) -> StreamResponse:
+    """Client tool call written to ``artifact_id`` and closed with ``last_chunk``."""
+    call = data_part(call_to_payload(ToolCallEvent(name="lookup", id=call_id)), media_type=MIME_TOOL_CALL)
+    return StreamResponse(
+        artifact_update=TaskArtifactUpdateEvent(
+            task_id=TASK_ID,
+            context_id=CONTEXT_ID,
+            artifact=Artifact(artifact_id=artifact_id, parts=[call]),
+            append=append,
+            last_chunk=True,
+        ),
+    )
+
+
 def _input_required() -> StreamResponse:
     return StreamResponse(
         status_update=TaskStatusUpdateEvent(
@@ -176,6 +190,8 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
     the turns a client sends once it has run a tool, in order; the last entry
     repeats.
 
+    ``get_task_fails`` makes every ``GetTask`` answer with a JSON-RPC internal error.
+
     ``methods`` records the JSON-RPC method of every request in order —
     the reconnect behaviour under test is exactly *which* calls happen.
     """
@@ -184,6 +200,7 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
     resubscribes: Sequence[_Leg] = ()
     continuations: Sequence[_Leg] = ()
     finished: Task | None = None
+    get_task_fails: bool = False
     methods: list[str] = field(default_factory=list)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
@@ -192,6 +209,9 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
         self.methods.append(method)
         if self.finished is not None and method == "SubscribeToTask":
             error = {"code": -32004, "message": f"Task {TASK_ID} is in terminal state: 3"}
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": payload["id"], "error": error})
+        if self.get_task_fails and method == "GetTask":
+            error = {"code": -32603, "message": "store unavailable"}
             return httpx.Response(200, json={"jsonrpc": "2.0", "id": payload["id"], "error": error})
         if self.finished is not None and method == "GetTask":
             result = json_format.MessageToDict(self.finished)
@@ -303,6 +323,53 @@ class TestStreamingReconnect:
 
         assert reply.body == "xy"
         assert server.methods == ["SendStreamingMessage", "GetTask"]
+
+    async def test_reply_survives_a_failed_read_back_of_a_closed_artifact(self) -> None:
+        # The stream already settled the turn; the read-back only reconciles, so its failure keeps
+        # what the stream delivered instead of failing the turn.
+        server = _ScriptedServer(
+            send=_Leg([_task(), _artifact("art-1", "x"), _closing_chunk("art-1", "y"), _completed()]),
+            get_task_fails=True,
+        )
+
+        reply = await _client(server).ask("ping")
+
+        assert reply.body == "x"
+        assert server.methods == ["SendStreamingMessage", "GetTask"]
+
+    async def test_tool_call_added_after_the_closing_chunk_is_read_back_from_the_task(self) -> None:
+        # A polling client sees both calls in the stored task, so a streaming client must run both.
+        ran: list[str] = []
+
+        def lookup() -> str:
+            ran.append("lookup")
+            return "result"
+
+        stored_calls = [
+            data_part(call_to_payload(ToolCallEvent(name="lookup", id=call_id)), media_type=MIME_TOOL_CALL)
+            for call_id in ("c1", "c2")
+        ]
+        server = _ScriptedServer(
+            send=_Leg([
+                _task(),
+                _closed_call("calls", "c1", append=False),
+                _closed_call("calls", "c2", append=True),
+                _input_required(),
+            ]),
+            finished=Task(
+                id=TASK_ID,
+                context_id=CONTEXT_ID,
+                status=TaskStatus(state=TaskState.TASK_STATE_INPUT_REQUIRED),
+                artifacts=[Artifact(artifact_id="calls", parts=stored_calls)],
+            ),
+            continuations=[_Leg([_artifact("art-1", "done"), _completed()])],
+        )
+
+        reply = await _client(server, tools=[lookup]).ask("ping")
+
+        assert reply.body == "done"
+        assert ran == ["lookup", "lookup"]
+        assert server.methods == ["SendStreamingMessage", "GetTask", "SendStreamingMessage"]
 
     async def test_task_finished_while_disconnected_is_read_back_instead_of_failing(self) -> None:
         server = _ScriptedServer(

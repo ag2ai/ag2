@@ -417,8 +417,8 @@ app = server.build_jsonrpc(url=url, card=card)
 | Argument | Purpose |
 |---|---|
 | `#!python version` | Card version (defaults to `#!python "1.0.0"`) |
-| `#!python description` | Free-form description. Defaults to the first entry of the agent's system prompt |
-| `#!python skills` | Explicit `#!python Sequence[AgentSkill]`. When `#!python None`, `#!python build_card` walks `#!python agent.tools` for any `#!python SkillsToolkit` and publishes its local skills automatically; falls back to a single agent-derived skill if none are found |
+| `#!python description` | Free-form description. Defaults to the first entry of the agent's system prompt, or the agent's name when it has none, since the field is required |
+| `#!python skills` | Explicit `#!python Sequence[AgentSkill]`. When `#!python None`, `#!python build_card` walks `#!python agent.tools` for any `#!python SkillsToolkit` and publishes its local skills automatically, each tagged with its own name since `#!python tags` is required; falls back to a single agent-derived skill, tagged with the agent's name, if none are found |
 | `#!python push_notifications` | Toggles `#!python capabilities.push_notifications` on the card |
 | `#!python provider` | `#!python AgentProvider` block (organization, URL) |
 | `#!python documentation_url` / `#!python icon_url` | Discovery metadata |

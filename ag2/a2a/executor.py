@@ -156,6 +156,10 @@ class _TaskWriter:
             # inside a tool; pass them through unchanged so transports surface them as-is.
             await self._post(_PassThrough(a2a_event_to_sdk(event)))
 
+    async def add_text(self, text: str) -> None:
+        """Append text to the turn's text artifact, as a streamed chunk would."""
+        await self._post(_Chunk(ModelMessageChunk(text)))
+
     async def start_work(self) -> None:
         await self._post(_Transition(TaskState.TASK_STATE_WORKING))
 
@@ -507,34 +511,22 @@ class AgentExecutor(A2AAgentExecutorBase):
             await writer.requires_input()
             return
 
-        # The final answer is the last model call's text. When that call
-        # streamed it, the client already has it as chunks, so sending it again
-        # on ``complete(message=...)`` would make the client see it twice.
-        # Earlier calls of the turn (before a server-side tool) streamed text
-        # of their own, so compare with the last call only.
+        # The final answer is the last model call's text. Results are artifacts, not messages (spec
+        # §3.7), so text that call did not stream goes into the turn's text artifact before it closes.
+        # Text it streamed is there already. Earlier calls of the turn (before a server-side tool)
+        # streamed text of their own, so compare with the last call only.
         final_text = response.message.content if response.message else ""
         if final_text and final_text != writer.answer_text:
-            agent_msg = self._build_final_message(writer, final_text, final_variables)
-        elif final_variables:
-            agent_msg = self._build_final_message(writer, "", final_variables)
-        else:
-            agent_msg = None
-        await writer.complete(message=agent_msg)
+            await writer.add_text(final_text)
+        await writer.complete(message=self._build_final_message(writer, final_variables))
 
     @staticmethod
-    def _build_final_message(
-        writer: _TaskWriter,
-        final_text: str,
-        final_variables: dict[str, Any],
-    ) -> Message | None:
+    def _build_final_message(writer: _TaskWriter, final_variables: dict[str, Any]) -> Message | None:
+        """The completion's message: it carries only the turn's context update, the answer is an artifact."""
         outgoing = strip_reserved_variables(final_variables, source="an outgoing A2A response", warn=False)
-        if not final_text and not outgoing:
+        if not outgoing:
             return None
-        metadata: dict[str, Any] | None = None
-        if outgoing:
-            metadata = {CONTEXT_UPDATE_METADATA_KEY: outgoing}
-        parts = [Part(text=final_text)] if final_text else []
-        return writer.new_agent_message(parts=parts, metadata=metadata)
+        return writer.new_agent_message(parts=[], metadata={CONTEXT_UPDATE_METADATA_KEY: outgoing})
 
     @staticmethod
     def _build_initial_event(parsed: ParsedMessage) -> BaseEvent:

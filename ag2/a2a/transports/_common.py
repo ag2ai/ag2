@@ -14,6 +14,7 @@ from a2a.server.tasks import (
     BasePushNotificationSender,
     InMemoryTaskStore,
     PushNotificationConfigStore,
+    PushNotificationEvent,
     PushNotificationSender,
     TaskStore,
 )
@@ -26,6 +27,9 @@ CardModifier: TypeAlias = Callable[[AgentCard], Awaitable[AgentCard]]
 ExtendedCardModifier: TypeAlias = Callable[[AgentCard, ServerCallContext], Awaitable[AgentCard]]
 
 CardSigner: TypeAlias = Callable[[AgentCard], AgentCard]
+
+# Spec §4.3.3: webhook requests SHOULD time out, "recommended: 10-30 seconds".
+_WEBHOOK_TIMEOUT = httpx.Timeout(10.0)
 
 
 def copy_card(card: AgentCard, *, drop_signatures: bool = False) -> AgentCard:
@@ -132,6 +136,28 @@ class _RequestHandler(DefaultRequestHandlerV2):
         return task
 
 
+class _WebhookSender(PushNotificationSender):
+    """The push sender used when the server has a push store but no sender of its own.
+
+    Each notification is sent by the SDK's ``BasePushNotificationSender`` on an HTTP client opened
+    for it and closed after it, so nothing is opened while the server is built and nothing outlives
+    a delivery.
+    """
+
+    def __init__(
+        self,
+        config_store: PushNotificationConfigStore,
+        push_url_validator: Callable[[str], Awaitable[bool]] | None,
+    ) -> None:
+        self._config_store = config_store
+        self._push_url_validator = push_url_validator
+
+    async def send_notification(self, task_id: str, event: PushNotificationEvent) -> None:
+        async with httpx.AsyncClient(timeout=_WEBHOOK_TIMEOUT) as client:
+            sender = BasePushNotificationSender(client, self._config_store, push_url_validator=self._push_url_validator)
+            await sender.send_notification(task_id, event)
+
+
 def build_default_handler(
     *,
     agent_executor: AgentExecutor,
@@ -149,9 +175,7 @@ def build_default_handler(
     if push_config_store is not None and push_sender is None:
         # A store makes the card advertise push, and an advertised webhook must be called (spec §4.3);
         # the SDK's own default sends nothing. Delivery re-checks each URL with the same policy.
-        push_sender = BasePushNotificationSender(
-            httpx.AsyncClient(), push_config_store, push_url_validator=push_url_validator
-        )
+        push_sender = _WebhookSender(push_config_store, push_url_validator)
     return _RequestHandler(
         agent_executor=agent_executor,
         task_store=task_store or InMemoryTaskStore(),

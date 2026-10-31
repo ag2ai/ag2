@@ -27,7 +27,7 @@ from a2a.types import (
     TaskStatus,
     TaskStatusUpdateEvent,
 )
-from a2a.utils.errors import UnsupportedOperationError
+from a2a.utils.errors import A2AError, UnsupportedOperationError
 from fast_depends.library.serializer import SerializerProto
 
 from ag2.config.client import LLMClient
@@ -529,7 +529,11 @@ class A2AClient(LLMClient):
         else:
             outcome = await self._consume_polling(message, context, state)
         if state.closed_artifact_changed and self._task_id is not None:
-            await self._read_back_artifacts(context, state)
+            try:
+                await self._read_back_artifacts(context, state)
+            except (A2AClientError, A2AError):
+                # The turn is already settled; the read-back only reconciles, so keep what arrived.
+                logger.warning("A2A task %s: reading back its artifacts failed", self._task_id, exc_info=True)
         return outcome
 
     async def _read_back_artifacts(self, context: ConversationContext, state: A2ADriveState) -> None:
@@ -778,21 +782,18 @@ class A2AClient(LLMClient):
         artifact_id = artifact.artifact_id
         record = state.artifacts.setdefault(artifact_id, _ArtifactText())
         text = "" if isinstance(a2a_event, A2AToolCallArtifact) else _artifact_text(a2a_event)
+        calls = _artifact_calls(a2a_event)
         if record.closed:
-            if (record.content + text if a2a_event.append else text) != record.content:
+            changed_text = (record.content + text if a2a_event.append else text) != record.content
+            if changed_text or any((artifact_id, call.id) not in state.seen_calls for call in calls):
                 state.closed_artifact_changed = True
             return
 
-        if isinstance(a2a_event, A2AToolCallArtifact):
-            state.add_call(artifact_id, a2a_event.call)
-        else:
-            # A mixed artifact's text reconciles like a text artifact's; its calls dedup by call id.
-            if fresh := record.update(text, a2a_event.append):
-                await context.send(ModelMessageChunk(fresh))
-            if not isinstance(a2a_event, A2ATextArtifact):
-                for part in artifact.parts:
-                    if is_data_part_with_mime(part, MIME_TOOL_CALL):
-                        state.add_call(artifact_id, payload_to_call(part_data_to_python(part)))
+        # A mixed artifact's text reconciles like a text artifact's; its calls dedup by call id.
+        if not isinstance(a2a_event, A2AToolCallArtifact) and (fresh := record.update(text, a2a_event.append)):
+            await context.send(ModelMessageChunk(fresh))
+        for call in calls:
+            state.add_call(artifact_id, call)
 
         if a2a_event.last_chunk:
             record.closed = True
@@ -868,6 +869,18 @@ def _joined_text(parts: Iterable[Part]) -> str:
 
 def _artifact_text(a2a_event: A2ATaskArtifactUpdate) -> str:
     return a2a_event.text if isinstance(a2a_event, A2ATextArtifact) else _joined_text(a2a_event.update.artifact.parts)
+
+
+def _artifact_calls(a2a_event: A2ATaskArtifactUpdate) -> list[ToolCallEvent]:
+    if isinstance(a2a_event, A2AToolCallArtifact):
+        return [a2a_event.call]
+    if isinstance(a2a_event, A2ATextArtifact):
+        return []
+    return [
+        payload_to_call(part_data_to_python(part))
+        for part in a2a_event.update.artifact.parts
+        if is_data_part_with_mime(part, MIME_TOOL_CALL)
+    ]
 
 
 def _extract_status_prompt(status: TaskStatus) -> str | None:

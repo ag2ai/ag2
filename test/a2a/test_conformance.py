@@ -405,8 +405,8 @@ async def test_server_closes_streamed_text_artifact_exactly_once(chunks: list[st
 
 
 @pytest.mark.asyncio
-async def test_server_emits_no_closing_marker_when_nothing_streamed() -> None:
-    client = _client(Agent("server", config=TestConfig("hi")))
+async def test_server_emits_no_closing_marker_when_the_turn_wrote_no_text() -> None:
+    client = _client(Agent("server", config=TestConfig("")))
 
     assert await _text_artifact_updates(client) == []
 
@@ -492,14 +492,14 @@ def weather(city: str) -> str:
 @pytest.mark.asyncio
 @_both_modes
 @pytest.mark.parametrize(
-    ("final_turn", "completion_text"),
+    "final_turn",
     [
-        pytest.param((ModelMessageChunk("It is sunny."), "It is sunny."), "", id="final-call-streamed"),
-        pytest.param(("It is sunny.",), "It is sunny.", id="final-call-not-streamed"),
+        pytest.param((ModelMessageChunk("It is sunny."), "It is sunny."), id="final-call-streamed"),
+        pytest.param(("It is sunny.",), id="final-call-not-streamed"),
     ],
 )
 async def test_server_turn_with_several_model_calls_sends_its_final_text_once(
-    streaming: bool, final_turn: tuple[Any, ...], completion_text: str
+    streaming: bool, final_turn: tuple[Any, ...]
 ) -> None:
     config = TestConfig(
         ModelMessageChunk("Let me check. "),
@@ -523,9 +523,38 @@ async def test_server_turn_with_several_model_calls_sends_its_final_text_once(
     snapshot = wire.events[0]
     assert isinstance(snapshot, A2ATaskSnapshot)
     task = await get_task(a2a_config(client), snapshot.task.id)
-    # The completion carries only the text that was not streamed.
+    # Spec §3.7: results are artifacts, not messages, whether or not the model streamed them.
     assert task.status.state == TaskState.TASK_STATE_COMPLETED
-    assert "".join(part.text for part in task.status.message.parts) == completion_text
+    assert ["".join(part.text for part in artifact.parts) for artifact in task.artifacts] == [
+        "Let me check. It is sunny."
+    ]
+    assert "".join(part.text for part in task.status.message.parts) == ""
+
+
+@pytest.mark.asyncio
+@_both_modes
+async def test_server_returns_an_answer_the_model_did_not_stream_as_an_artifact(streaming: bool) -> None:
+    # Spec §3.7: "Results SHOULD BE returned using Artifacts"; a client that reads only
+    # ``task.artifacts`` must find the answer.
+    server = A2AServer(Agent("server", config=TestConfig("It is sunny.")))
+    client = Agent(
+        "client",
+        config=A2AConfig(
+            card_url=_URL, httpx_client_factory=make_test_client_factory(server, url=_URL), streaming=streaming
+        ),
+    )
+    stream = MemoryStream()
+    wire = EventCollector()
+    stream.where(A2ATaskSnapshot).subscribe(wire.on_event)
+
+    reply = await client.ask("weather?", stream=stream)
+
+    assert reply.body == "It is sunny."
+    snapshot = wire.events[0]
+    assert isinstance(snapshot, A2ATaskSnapshot)
+    task = await get_task(a2a_config(client), snapshot.task.id)
+    assert ["".join(part.text for part in artifact.parts) for artifact in task.artifacts] == ["It is sunny."]
+    assert "".join(part.text for part in task.status.message.parts) == ""
 
 
 @pytest.mark.asyncio
