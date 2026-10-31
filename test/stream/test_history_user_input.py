@@ -10,7 +10,15 @@ import pytest
 from ag2 import Agent, Context, MemoryStream, tool
 from ag2.compact import CompactionSummary
 from ag2.context import StreamId
-from ag2.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolCallEvent
+from ag2.events import (
+    BaseEvent,
+    DrainedModelRequest,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from ag2.history import MemoryStorage
 from ag2.testing import TestConfig
 
@@ -58,139 +66,163 @@ class UnavailableStorage(MemoryStorage):
 
 
 @pytest.mark.asyncio
-async def test_user_input_scope_resets_on_reply_continuation() -> None:
-    call = ToolCallEvent(name="lookup", arguments="{}")
-    agent = Agent("test", config=TestConfig(call, "first answer", "second answer"), tools=[lookup])
-    reply = await agent.ask("first question")
-    history = reply.context.stream.history
+class TestUserInputBoundaries:
+    async def test_reply_continuation_starts_a_new_interval(self) -> None:
+        call = ToolCallEvent(name="lookup", arguments="{}")
+        agent = Agent("test", config=TestConfig(call, "first answer", "second answer"), tools=[lookup])
+        reply = await agent.ask("first question")
+        history = reply.context.stream.history
 
-    assert await history.since_last_user_input().where(ToolCallEvent).all() == [call]
-    assert await history.since_last_user_input().where(ModelRequest).count() == 0
+        assert await history.since_last_user_input().where(ToolCallEvent).all() == [call]
+        assert await history.since_last_user_input().where(ModelRequest).count() == 0
 
-    await reply.ask("second question")
+        await reply.ask("second question")
 
-    assert await history.since_last_user_input().where(ToolCallEvent).count() == 0
-    assert await history.where(ToolCallEvent).count() == 1
+        assert await history.since_last_user_input().where(ToolCallEvent).count() == 0
+        assert await history.where(ToolCallEvent).count() == 1
 
+    async def test_run_and_reply_run_start_new_intervals(self) -> None:
+        call = ToolCallEvent(name="lookup", arguments="{}")
+        agent = Agent("test", config=TestConfig(call, "first answer", "second answer"), tools=[lookup])
 
-@pytest.mark.asyncio
-async def test_mid_turn_inbox_drain_does_not_reset_user_input_scope() -> None:
-    call = ToolCallEvent(name="queue_update", arguments="{}")
-    agent = Agent("test", config=TestConfig(call, "answer"), tools=[queue_update])
+        async with agent.run("first question") as run:
+            reply = await run.result()
+        history = reply.context.stream.history
+        assert await history.since_last_user_input().where(ToolCallEvent).all() == [call]
 
-    reply = await agent.ask("question")
+        async with reply.run("second question") as run:
+            await run.result()
 
-    assert await reply.context.stream.history.since_last_user_input().where(ToolCallEvent).all() == [call]
+        assert await history.since_last_user_input().where(ToolCallEvent).count() == 0
 
+    async def test_run_enqueue_mid_turn_starts_a_new_interval(self) -> None:
+        first_call = ToolCallEvent(name="queue_update", arguments="{}")
+        second_call = ToolCallEvent(name="lookup", arguments="{}")
+        agent = Agent("test", config=TestConfig(first_call, second_call, "answer"), tools=[queue_update, lookup])
 
-@pytest.mark.asyncio
-async def test_final_inbox_drain_does_not_reset_user_input_scope() -> None:
-    stream = MemoryStream()
-    stream.where(ModelResponse).subscribe(queue_after_answer)
-    call = ToolCallEvent(name="lookup", arguments="{}")
-    agent = Agent("test", config=TestConfig(call, "answer before inbox", "final answer"), tools=[lookup])
+        steered = False
+        async with agent.run("question") as run:
 
-    reply = await agent.ask("question", stream=stream)
+            @run.stream.where(ToolResultEvent).subscribe
+            async def steer(_event: BaseEvent) -> None:
+                nonlocal steered
+                if not steered:
+                    steered = True
+                    run.enqueue("use another source")
 
-    assert reply.body == "final answer"
-    assert await stream.history.since_last_user_input().where(ToolCallEvent).all() == [call]
-    requests = await stream.history.where(ModelRequest).all()
-    assert [request.origin for request in requests] == ["user", "service"]
+            reply = await run.result()
 
+        history = reply.context.stream.history
+        assert await history.since_last_user_input().where(ToolCallEvent).all() == [second_call]
+        assert await history.where(ToolCallEvent).count() == 2
+        assert await history.where(ModelRequest).last() == DrainedModelRequest([
+            TextInput("background update"),
+            TextInput("use another source"),
+        ])
 
-@pytest.mark.asyncio
-async def test_pending_input_before_ask_preserves_the_new_public_boundary() -> None:
-    stream = MemoryStream()
-    config = TestConfig(ToolCallEvent(name="lookup", arguments="{}"), "first answer", "second answer")
-    agent = Agent("test", config=config, tools=[lookup])
-    reply = await agent.ask("first question", stream=stream)
-    stream.enqueue("old background result")
+    async def test_pending_input_before_ask_keeps_the_new_boundary(self) -> None:
+        stream = MemoryStream()
+        config = TestConfig(ToolCallEvent(name="lookup", arguments="{}"), "first answer", "second answer")
+        agent = Agent("test", config=config, tools=[lookup])
+        reply = await agent.ask("first question", stream=stream)
+        stream.enqueue("old background result")
 
-    await reply.ask("second question")
+        await reply.ask("second question")
 
-    assert await stream.history.since_last_user_input().where(ToolCallEvent).count() == 0
-    request = await stream.history.where(ModelRequest).last()
-    assert request == ModelRequest([TextInput("old background result"), TextInput("second question")])
-    assert request is not None and request.origin == "user"
-
-
-@pytest.mark.asyncio
-async def test_run_and_reply_run_establish_user_input_boundaries() -> None:
-    call = ToolCallEvent(name="lookup", arguments="{}")
-    agent = Agent("test", config=TestConfig(call, "first answer", "second answer"), tools=[lookup])
-
-    async with agent.run("first question") as run:
-        reply = await run.result()
-    history = reply.context.stream.history
-    assert await history.since_last_user_input().where(ToolCallEvent).all() == [call]
-
-    async with reply.run("second question") as run:
-        await run.result()
-
-    assert await history.since_last_user_input().where(ToolCallEvent).count() == 0
+        assert await stream.history.since_last_user_input().where(ToolCallEvent).count() == 0
+        assert await stream.history.where(ModelRequest).last() == ModelRequest([
+            TextInput("old background result"),
+            TextInput("second question"),
+        ])
 
 
 @pytest.mark.asyncio
-async def test_user_input_scope_survives_custom_storage_round_trip() -> None:
-    storage = JsonStorage()
-    stream = MemoryStream(storage=storage)
-    stream.where(ModelResponse).subscribe(queue_after_answer)
-    call = ToolCallEvent(name="queue_update", arguments="{}")
-    agent = Agent("test", config=TestConfig(call, "answer before inbox", "final answer"), tools=[queue_update])
-    await agent.ask("question", stream=stream)
-    restored = MemoryStream(storage=storage, id=stream.id)
-    calls = restored.history.where(ToolCallEvent)
-    scoped_calls = calls.since_last_user_input().where(ToolCallEvent.name == "queue_update")
-    reads_before = storage.reads
+class TestServiceInput:
+    async def test_mid_turn_inbox_drain_keeps_the_interval(self) -> None:
+        call = ToolCallEvent(name="queue_update", arguments="{}")
+        agent = Agent("test", config=TestConfig(call, "answer"), tools=[queue_update])
 
-    assert await scoped_calls.all() == [call]
-    assert storage.reads == reads_before + 1
-    assert await scoped_calls.first() == call
-    assert await scoped_calls.last() == call
-    assert await scoped_calls.count() == 1
-    assert await calls.count() == 1
-    requests = await restored.history.where(ModelRequest).all()
-    assert [request.origin for request in requests] == ["user", "service", "service"]
+        reply = await agent.ask("question")
 
+        assert await reply.context.stream.history.since_last_user_input().where(ToolCallEvent).all() == [call]
 
-@pytest.mark.asyncio
-async def test_legacy_requests_still_establish_boundary_after_round_trip() -> None:
-    old_request = ModelRequest([TextInput("old question")]).to_dict()
-    old_request.pop("origin")
-    restored = ModelRequest.from_dict(old_request)
-    call = ToolCallEvent(name="lookup", arguments="{}")
-    stream = MemoryStream()
-    await stream.history.replace([restored, call])
+    async def test_final_inbox_drain_keeps_the_interval(self) -> None:
+        stream = MemoryStream()
+        stream.where(ModelResponse).subscribe(queue_after_answer)
+        call = ToolCallEvent(name="lookup", arguments="{}")
+        agent = Agent("test", config=TestConfig(call, "answer before inbox", "final answer"), tools=[lookup])
 
-    assert await stream.history.since_last_user_input().where(ToolCallEvent).all() == [call]
+        reply = await agent.ask("question", stream=stream)
+
+        assert reply.body == "final answer"
+        assert await stream.history.since_last_user_input().where(ToolCallEvent).all() == [call]
 
 
 @pytest.mark.asyncio
-async def test_no_retained_user_input_produces_empty_scope() -> None:
-    stream = MemoryStream()
-    context = Context(stream)
-    call = ToolCallEvent(name="lookup", arguments="{}")
-    await context.send(ModelRequest([TextInput("question")]))
-    await context.send(call)
-    all_calls = stream.history.where(ToolCallEvent)
-    scoped = all_calls.since_last_user_input()
-    assert await scoped.count() == 1
-    await stream.history.replace([
-        CompactionSummary(summary="earlier conversation", event_count=2),
-        ModelRequest([TextInput("background message")], origin="service"),
-        call,
-    ])
+class TestStoredHistory:
+    async def test_scope_survives_custom_storage_round_trip(self) -> None:
+        storage = JsonStorage()
+        stream = MemoryStream(storage=storage)
+        stream.where(ModelResponse).subscribe(queue_after_answer)
+        call = ToolCallEvent(name="queue_update", arguments="{}")
+        agent = Agent("test", config=TestConfig(call, "answer before inbox", "final answer"), tools=[queue_update])
+        await agent.ask("question", stream=stream)
+        restored = MemoryStream(storage=storage, id=stream.id)
+        calls = restored.history.where(ToolCallEvent)
+        scoped_calls = calls.since_last_user_input().where(ToolCallEvent.name == "queue_update")
+        reads_before = storage.reads
 
-    assert await scoped.all() == []
-    assert await scoped.first() is None
-    assert await scoped.last() is None
-    assert await scoped.count() == 0
-    assert await all_calls.all() == [call]
+        assert await scoped_calls.all() == [call]
+        assert storage.reads == reads_before + 1
+        assert await scoped_calls.first() == call
+        assert await scoped_calls.last() == call
+        assert await scoped_calls.count() == 1
+        assert await calls.count() == 1
 
+    async def test_legacy_requests_establish_a_boundary(self) -> None:
+        old_request = ModelRequest([TextInput("old question")]).to_dict()
+        old_request.pop("origin")
+        restored = ModelRequest.from_dict(old_request)
+        call = ToolCallEvent(name="lookup", arguments="{}")
+        stream = MemoryStream()
+        await stream.history.replace([restored, call])
 
-@pytest.mark.asyncio
-async def test_user_input_scope_propagates_storage_errors() -> None:
-    history = MemoryStream(storage=UnavailableStorage()).history
+        assert await stream.history.since_last_user_input().where(ToolCallEvent).all() == [call]
 
-    with pytest.raises(OSError, match="storage unavailable"):
-        await history.since_last_user_input().where(ToolCallEvent).count()
+    async def test_legacy_drained_requests_do_not_establish_a_boundary(self) -> None:
+        old_drain = DrainedModelRequest([TextInput("background update")]).to_dict()
+        old_drain.pop("origin")
+        restored = DrainedModelRequest.from_dict(old_drain)
+        first_call = ToolCallEvent(name="lookup", arguments="{}")
+        second_call = ToolCallEvent(name="queue_update", arguments="{}")
+        stream = MemoryStream()
+        await stream.history.replace([ModelRequest([TextInput("question")]), first_call, restored, second_call])
+
+        assert await stream.history.since_last_user_input().where(ToolCallEvent).all() == [first_call, second_call]
+
+    async def test_no_retained_user_input_produces_empty_scope(self) -> None:
+        call = ToolCallEvent(name="lookup", arguments="{}")
+        agent = Agent("test", config=TestConfig(call, "answer"), tools=[lookup])
+        reply = await agent.ask("question")
+        history = reply.context.stream.history
+        all_calls = history.where(ToolCallEvent)
+        scoped = all_calls.since_last_user_input()
+        assert await scoped.count() == 1
+
+        await history.replace([
+            CompactionSummary(summary="earlier conversation", event_count=2),
+            ModelRequest([TextInput("background message")], origin="service"),
+            call,
+        ])
+
+        assert await scoped.all() == []
+        assert await scoped.first() is None
+        assert await scoped.last() is None
+        assert await scoped.count() == 0
+        assert await all_calls.all() == [call]
+
+    async def test_storage_errors_propagate(self) -> None:
+        history = MemoryStream(storage=UnavailableStorage()).history
+
+        with pytest.raises(OSError, match="storage unavailable"):
+            await history.since_last_user_input().where(ToolCallEvent).count()

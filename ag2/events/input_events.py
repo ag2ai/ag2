@@ -7,13 +7,14 @@ import os
 from collections.abc import Iterable
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, overload
+from typing import Any, overload
 
 from ag2.types import (
     AudioMediaType,
     DocumentMediaType,
     ImageMediaType,
     MediaType,
+    RequestOrigin,
     SendableMessage,
     VideoMediaType,
 )
@@ -39,11 +40,12 @@ class ModelRequest(BaseEvent):
     """Input sent to the model, from a user or the framework's service inbox."""
 
     parts: "list[Input]" = Field(kw_only=False)
-    origin: Literal["user", "service"] = Field(default="user", compare=False)
+    origin: RequestOrigin = Field(default="user", compare=False)
     """Input provenance, independent of the provider's user-content wire role.
 
     Ordinary requests, including histories written before this field existed,
-    represent user input. Framework inbox drains explicitly use ``service``.
+    represent user input. Framework inbox messages use ``service``; an inbox
+    drain is ``user`` when any drained message came from ``AgentRun.enqueue``.
     """
 
     @classmethod
@@ -66,7 +68,7 @@ class DrainedModelRequest(ModelRequest):
         self,
         parts: list[Input],
         *,
-        origin: Literal["user", "service"] = "service",
+        origin: RequestOrigin = "service",
         **kwargs: Any,
     ) -> None:
         super().__init__(parts, origin=origin, **kwargs)
