@@ -11,6 +11,7 @@ from typing import Annotated, Any
 import pytest
 
 from ag2 import Agent, Context, DataInput, ImageInput, Inject, KnowledgeConfig, MemoryStream, TextInput
+from ag2.assembly import AssemblerMiddleware
 from ag2.compact import CompactTrigger, SummarizeCompact, TailWindowCompact
 from ag2.events import (
     BaseEvent,
@@ -27,11 +28,19 @@ from ag2.events import (
     ToolResultsEvent,
     Usage,
     UsageEvent,
+    estimated_tokens,
     is_conversational,
 )
 from ag2.history import MemoryStorage
 from ag2.knowledge import MemoryKnowledgeStore
-from ag2.middleware import BaseMiddleware, LLMCall, RetryMiddleware, statusbar_middleware
+from ag2.middleware import (
+    BaseMiddleware,
+    LLMCall,
+    Middleware,
+    RetryMiddleware,
+    TokenLimiter,
+    statusbar_middleware,
+)
 from ag2.plugin import Plugin
 from ag2.policies import ConversationPolicy, SlidingWindowPolicy
 from ag2.testing import TestConfig, TrackingConfig
@@ -139,7 +148,9 @@ async def test_skipping_update_keeps_earlier_persistent_observations(skip: Any) 
 @pytest.mark.parametrize("via_plugin", [False, True])
 async def test_observations_remain_visible_after_invocation_scope_ends(via_plugin: bool) -> None:
     config = TrackingConfig(TestConfig("one", "two"))
-    agent = Agent("status", config=config, assembly=[ConversationPolicy()])
+    agent = Agent(
+        "status", config=config, middleware=[Middleware(AssemblerMiddleware, policies=[ConversationPolicy()])]
+    )
     options = {"plugins": [Plugin(middleware=[progress])]} if via_plugin else {"middleware": [progress]}
 
     reply = await agent.ask("start", **options)
@@ -386,6 +397,49 @@ async def test_cancellation_keeps_prepared_observation() -> None:
     assert config.calls == []
 
 
+@statusbar_middleware(persist=True)
+def large_status() -> TextInput:
+    return TextInput("x" * 400)
+
+
+@pytest.mark.asyncio
+async def test_retained_status_tokens_count_toward_compaction_trigger() -> None:
+    summary = TrackingConfig(TestConfig("summary"))
+    agent = Agent(
+        "status",
+        config=TestConfig("done"),
+        middleware=[large_status],
+        knowledge=KnowledgeConfig(
+            store=MemoryKnowledgeStore(),
+            compact=SummarizeCompact(target=1, config=summary),
+            compact_trigger=CompactTrigger(max_tokens=50),
+        ),
+    )
+
+    await agent.ask("start")
+
+    assert len(summary.calls) == 1
+
+
+def test_status_is_sized_as_model_input_while_telemetry_stays_free() -> None:
+    assert estimated_tokens(StatusObservation([TextInput("x" * 400)], source="fixture")) == 100
+    assert estimated_tokens(UsageEvent(Usage(total_tokens=10))) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("persist", [False, True])
+async def test_token_limiter_budgets_status_sent_to_the_model(persist: bool) -> None:
+    config = TrackingConfig(TestConfig("first answer", "second answer"))
+    status = statusbar_middleware(persist=persist)(lambda: TextInput("x" * 400))
+    agent = Agent("status", config=config, middleware=[status, TokenLimiter(max_tokens=50)])
+
+    reply = await agent.ask("start")
+    await reply.ask("continue")
+
+    assert not any(isinstance(event, ModelResponse) for event in config.calls[1].messages)
+    assert texts(config.calls[1].messages)[-2:] == ["continue", "x" * 400]
+
+
 @pytest.mark.asyncio
 async def test_status_records_do_not_advance_conversational_compaction_trigger() -> None:
     summary = TrackingConfig(TestConfig("would summarize"))
@@ -468,7 +522,11 @@ async def test_projected_status_does_not_reset_provider_anchor_relationship_duri
         ModelResponse(ModelMessage("previous answer")),
     ])
     config = TrackingConfig(TestConfig("next answer"))
-    agent = Agent("status", config=config, assembly=[SlidingWindowPolicy(max_events=5)])
+    agent = Agent(
+        "status",
+        config=config,
+        middleware=[Middleware(AssemblerMiddleware, policies=[SlidingWindowPolicy(max_events=5)])],
+    )
 
     await agent.ask("next", stream=stream)
 
@@ -490,7 +548,11 @@ async def test_projected_status_does_not_hide_missing_provider_turn_state() -> N
         ToolResultsEvent([ToolResultEvent(parent_id="call-1", result=ToolResult("result"))]),
     ])
     config = TrackingConfig(TestConfig("next answer"))
-    agent = Agent("status", config=config, assembly=[SlidingWindowPolicy(max_events=4)])
+    agent = Agent(
+        "status",
+        config=config,
+        middleware=[Middleware(AssemblerMiddleware, policies=[SlidingWindowPolicy(max_events=4)])],
+    )
 
     await agent.ask("next", stream=stream)
 

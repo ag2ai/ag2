@@ -7,17 +7,19 @@ from fast_depends.use import SerializerCls
 
 from ag2 import TextInput
 from ag2.config.ollama.mappers import convert_messages
-from ag2.events import ModelRequest
-from test.statusbar_support import status_model_inputs
+from test.config._helpers import status_model_inputs
 
 
 @pytest.mark.asyncio
-async def test_retained_status_parts_use_normal_ollama_conversion() -> None:
-    messages = await status_model_inputs(TextInput("saved"), persist=True)
-    requests = [event for event in messages if isinstance(event, ModelRequest)]
+@pytest.mark.parametrize("persist", [False, True])
+async def test_status_follows_the_tool_result_in_ollama(persist: bool) -> None:
+    messages = await status_model_inputs(TextInput("saved"), persist=persist)
 
-    assert convert_messages([], requests, SerializerCls) == [
+    status = {"role": "user", "content": "saved"}
+    assert convert_messages([], list(messages), SerializerCls) == [
         {"role": "user", "content": "start"},
-        {"role": "user", "content": "saved"},
-        {"role": "user", "content": "saved"},
+        *([status] if persist else []),
+        {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "echo", "arguments": {}}}]},
+        {"role": "tool", "content": "tool output", "tool_name": "echo"},
+        status,
     ]

@@ -81,9 +81,11 @@ media use the same provider conversion as ordinary input parts.
 
 Register status before `RetryMiddleware` to compute one snapshot for all attempts
 of that logical call. Putting retry first uses ordinary wrapper semantics and
-may compute dynamic status again for each attempt. A persistent observation
-published inside retry also engages its existing publication guard, which can
-prevent retry after a failure. Multiple status callbacks append in
+computes dynamic status again for each attempt. Never put a persistent status
+inside `RetryMiddleware`: its observation is published before the model call, so
+retry's publication guard sees output from the failed attempt and re-raises
+instead of retrying. With `persist=True`, retry effectively stops working in that
+order. Multiple status callbacks append in
 registration order; downstream middleware can still transform their input.
 
 DI is resolved on each logical call, and generator dependencies remain open
@@ -143,9 +145,12 @@ in history. Retrying inside the middleware reuses that record.
 Persistent and dynamic callbacks can share one middleware list. Only persistent
 observations accumulate; current insertions follow registration order. Normal
 history reducers and compaction may remove observations. They do not count
-toward conversational compaction limits or enter summarization input, and no
-automatic refresh after removal is provided. Limiters that budget all events
-still apply their existing policy.
+toward event-count compaction limits or enter summarization input, and no
+automatic refresh after removal is provided. Their tokens do count: every
+retained observation is resent on each call, so token limiters and
+`CompactTrigger(max_tokens=...)` include them. When a limiter trims history,
+status never stands in for a turn on its own, so the tool round it follows is
+kept with it.
 
 ## Middleware Hooks
 

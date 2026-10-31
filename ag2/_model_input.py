@@ -2,17 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Project retained service observations into detached provider-neutral inputs."""
+"""Project status into detached provider-neutral request views."""
 
 from collections.abc import Iterable
 from copy import deepcopy
 from typing import Literal
 
-from ag2.events import BaseEvent, Field, ModelRequest, StatusObservation
+from ag2.events import BaseEvent, Field, Input, ModelRequest, StatusObservation
 
 
 class _StatusRequest(ModelRequest):
-    """Request-only view; never changes a stored observation's classification."""
+    """Request-only view; never changes a stored observation's classification.
+
+    Non-conversational, so history reducers do not mistake it for a turn that
+    can stand on its own (see ``ag2._replay.replayable_span``).
+    """
 
     __transient__ = True
     __conversational__ = False
@@ -20,9 +24,15 @@ class _StatusRequest(ModelRequest):
     origin: Literal["user", "service"] = Field(default="service", compare=False)
 
 
-def _status_input(event: StatusObservation) -> ModelRequest:
+def status_request(parts: list[Input]) -> ModelRequest:
+    """Wrap already-copied status parts as a service request view."""
+    return _StatusRequest(parts, origin="service")
+
+
+def observation_request(event: StatusObservation) -> ModelRequest:
+    """Detached request view of a retained observation."""
     return _StatusRequest(deepcopy(event.parts), origin="service", created_at=event.created_at)
 
 
-def _model_inputs(events: Iterable[BaseEvent]) -> list[BaseEvent]:
-    return [_status_input(event) if isinstance(event, StatusObservation) else event for event in events]
+def model_inputs(events: Iterable[BaseEvent]) -> list[BaseEvent]:
+    return [observation_request(event) if isinstance(event, StatusObservation) else event for event in events]

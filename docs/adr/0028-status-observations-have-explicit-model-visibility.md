@@ -27,7 +27,16 @@ without rereading history or losing earlier wrapper insertions. This reuses
 every provider's normal Input handling and ConversationPolicy's existing request
 support, including after an invocation plugin leaves its scope (ADR 0022).
 Provider replay grouping resets only on conversational requests, so a projected
-service view cannot hide a missing native anchor or turn item.
+service view cannot hide a missing native anchor or turn item. Request-only
+(non-persistent) status uses the same service view rather than a plain user
+request.
+
+Non-conversational is not the same as weightless. Token estimates count status
+like any other model input, so token limiters and the compaction token trigger
+see the retained trail that is resent on every call; event counts still exclude
+it. A history reducer never treats a span left with only service views as a
+turn: it widens past them, so status appended after a tool round cannot orphan
+and drop that round.
 
 ## Consequences
 
@@ -39,5 +48,7 @@ keep their classification; ordinary reducers may remove observations.
 
 Persistence precedes the wrapped model call. Once committed, an observation
 survives later failure or cancellation. Status outside retry creates one snapshot
-for its inner attempts; reversing wrappers follows normal publication-guard
-semantics. This provides no cross-backend transaction or crash-exactly-once claim.
+for its inner attempts. Persistent status inside retry publishes before every
+attempt, so retry's publication guard refuses to repeat any failed attempt;
+that order is documented as unsupported rather than special-cased in retry.
+This provides no cross-backend transaction or crash-exactly-once claim.

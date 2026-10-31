@@ -7,15 +7,23 @@ from fast_depends.use import SerializerCls
 
 from ag2 import TextInput
 from ag2.config.bedrock.mappers import convert_messages
-from ag2.events import ModelRequest
-from test.statusbar_support import status_model_inputs
+from test.config._helpers import status_model_inputs
 
 
 @pytest.mark.asyncio
-async def test_retained_status_parts_use_normal_bedrock_conversion() -> None:
-    messages = await status_model_inputs(TextInput("saved"), persist=True)
-    requests = [event for event in messages if isinstance(event, ModelRequest)]
+@pytest.mark.parametrize("persist", [False, True])
+async def test_status_joins_the_tool_result_turn_in_bedrock(persist: bool) -> None:
+    messages = await status_model_inputs(TextInput("saved"), persist=persist)
 
-    assert convert_messages(requests, SerializerCls) == [
-        {"role": "user", "content": [{"text": "start"}, {"text": "saved"}, {"text": "saved"}]}
+    first_turn = [{"text": "start"}, {"text": "saved"}] if persist else [{"text": "start"}]
+    assert convert_messages(list(messages), SerializerCls) == [
+        {"role": "user", "content": first_turn},
+        {"role": "assistant", "content": [{"toolUse": {"toolUseId": "call-1", "name": "echo", "input": {}}}]},
+        {
+            "role": "user",
+            "content": [
+                {"toolResult": {"toolUseId": "call-1", "content": [{"text": "tool output"}]}},
+                {"text": "saved"},
+            ],
+        },
     ]

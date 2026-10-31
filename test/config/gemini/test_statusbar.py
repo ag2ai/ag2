@@ -7,7 +7,7 @@ from fast_depends.use import SerializerCls
 
 from ag2 import DataInput, ImageInput, TextInput
 from ag2.config.gemini.mappers import convert_messages
-from test.statusbar_support import status_model_inputs
+from test.config._helpers import status_model_inputs
 
 
 @pytest.mark.asyncio
