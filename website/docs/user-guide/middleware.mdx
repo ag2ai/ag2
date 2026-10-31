@@ -47,8 +47,8 @@ import asyncio
 from typing import Annotated
 
 from ag2 import Agent, Context, TextInput, Variable
+from ag2.config import OpenAIResponsesConfig
 from ag2.middleware import RetryMiddleware, statusbar_middleware
-from ag2.testing import TestConfig
 
 @statusbar_middleware
 def task_status(
@@ -59,7 +59,7 @@ def task_status(
 
 agent = Agent(
     "assistant",
-    config=TestConfig("Ready."),
+    config=OpenAIResponsesConfig(model="gpt-5"),
     middleware=[task_status, RetryMiddleware(max_retries=2)],
 )
 
