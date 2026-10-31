@@ -38,6 +38,7 @@ from ag2.events import (
     ToolCallsEvent,
     ToolResultEvent,
     ToolResultsEvent,
+    is_conversational,
 )
 
 
@@ -100,8 +101,9 @@ def _prune(events: Sequence[BaseEvent], cut: int) -> list[BaseEvent]:
     never had an anchor cannot lose one.
 
     It is scoped to one response, though: a reasoning item anchors only the builtin
-    calls of the response that emitted it, and ``ModelRequest`` / ``ModelResponse``
-    close that response. Without the reset a stale anchor from an earlier response
+    calls of the response that emitted it, and conversational ``ModelRequest`` /
+    ``ModelResponse`` close that response. Service input views do not. Without
+    the reset a stale anchor from an earlier response
     would condemn a later builtin call that never needed one — and a history can
     genuinely mix the two, since the same model emits a reasoning item only when
     asked for a summary (see ``ag2.config.openai.openai_responses_client``).
@@ -115,7 +117,7 @@ def _prune(events: Sequence[BaseEvent], cut: int) -> list[BaseEvent]:
             anchor = index
         elif _is_turn_item(event):
             turn_item = index
-        elif isinstance(event, ModelRequest):
+        elif isinstance(event, ModelRequest) and is_conversational(event):
             anchor = None
             turn_item = None
         elif isinstance(event, ModelResponse):

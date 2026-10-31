@@ -11,7 +11,6 @@ from ag2.middleware import statusbar_middleware
 from ag2.testing import TestConfig, TrackingConfig
 
 
-@statusbar_middleware
 def supplied_parts(parts: Annotated[Sequence[Input], Inject()]) -> Sequence[Input]:
     return parts
 
@@ -20,8 +19,10 @@ def echo() -> str:
     return "tool output"
 
 
-async def status_model_inputs(*parts: Input) -> tuple[BaseEvent, ...]:
+async def status_model_inputs(*parts: Input, persist: bool = False) -> tuple[BaseEvent, ...]:
     config = TrackingConfig(TestConfig(ToolCallEvent("echo", id="call-1"), "done"))
-    agent = Agent("status", config=config, middleware=[supplied_parts], tools=[echo])
+    agent = Agent(
+        "status", config=config, middleware=[statusbar_middleware(supplied_parts, persist=persist)], tools=[echo]
+    )
     await agent.ask(TextInput("start"), dependencies={"parts": parts})
     return config.calls[-1].messages
