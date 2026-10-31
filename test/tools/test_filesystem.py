@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ag2 import Agent, Context
+from ag2 import Agent, Context, DataInput
 from ag2.events import ToolCallEvent, ToolErrorEvent, ToolResultsEvent
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools import FilesystemToolkit
@@ -526,6 +526,69 @@ async def test_find_files(tmp_path: Path) -> None:
     assert sorted(result_3) == [str(Path("sub/c.py")), str(Path("sub/d.txt")), str(Path("sub/sub2/e.py"))]
 
 
+@pytest.mark.parametrize(
+    ("pattern", "expected"),
+    [
+        (
+            "packages/*/src/**",
+            ["packages/api/src/main.py", "packages/api/src/util/helper.py", "packages/web/src/app.py"],
+        ),
+        ("packages/a?i/src/**", ["packages/api/src/main.py", "packages/api/src/util/helper.py"]),
+        (
+            "packages/[aw]*/src/**",
+            ["packages/api/src/main.py", "packages/api/src/util/helper.py", "packages/web/src/app.py"],
+        ),
+        (
+            "packages/**/src/**",
+            [
+                "packages/api/src/main.py",
+                "packages/api/src/util/helper.py",
+                "packages/nested/worker/src/job.py",
+                "packages/web/src/app.py",
+            ],
+        ),
+        (
+            "**/src/**",
+            [
+                "packages/api/src/main.py",
+                "packages/api/src/util/helper.py",
+                "packages/nested/worker/src/job.py",
+                "packages/web/src/app.py",
+                "src/root.py",
+            ],
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_find_files_recursive_wildcard_prefix(tmp_path: Path, pattern: str, expected: list[str]) -> None:
+    for name in [
+        "packages/api/src/main.py",
+        "packages/api/src/util/helper.py",
+        "packages/web/src/app.py",
+        "packages/nested/worker/src/job.py",
+        "packages/api/tests/test_main.py",
+        "src/root.py",
+    ]:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("source", encoding="utf-8")
+    (tmp_path / "packages/api/src/empty").mkdir()
+
+    tracking = TrackingConfig(
+        TestConfig(
+            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": pattern})),
+            "done",
+        )
+    )
+    agent = Agent("", config=tracking, tools=[FilesystemToolkit(tmp_path).find_files()])
+    await agent.ask("find source files")
+
+    tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
+    [result] = tool_result_msg.results[0].result.parts
+    assert isinstance(result, DataInput)
+    assert result.data == [str(Path(name)) for name in expected]
+
+
 @pytest.mark.parametrize("pattern", ["../**/*", "sub/../../*", "/etc/*"])
 def test_pattern_traversal_blocked(pattern: str) -> None:
     with pytest.raises(PermissionError, match="escapes base directory"):
@@ -559,8 +622,11 @@ async def test_find_files_pattern_cannot_escape_base_dir(tmp_path: Path) -> None
     assert "secret.txt" not in result.result.parts[0].content
 
 
+@pytest.mark.parametrize(("pattern", "expected"), [("*/*", []), ("*/**", ["link"]), ("link/**", ["link"])])
 @pytest.mark.asyncio
-async def test_find_files_skips_symlink_out_of_base_dir(tmp_path: Path) -> None:
+async def test_find_files_skips_symlink_target_out_of_base_dir(
+    tmp_path: Path, pattern: str, expected: list[str]
+) -> None:
     base = tmp_path / "base"
     base.mkdir()
     (base / "a.txt").write_text("a")
@@ -576,7 +642,7 @@ async def test_find_files_skips_symlink_out_of_base_dir(tmp_path: Path) -> None:
 
     tracking = TrackingConfig(
         TestConfig(
-            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "*/*"})),
+            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": pattern})),
             "done",
         )
     )
@@ -584,7 +650,42 @@ async def test_find_files_skips_symlink_out_of_base_dir(tmp_path: Path) -> None:
     await agent.ask("find files")
 
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
-    assert tool_result_msg.results[0].result.parts[0].data == []
+    assert tool_result_msg.results[0].result.parts[0].data == expected
+
+
+@pytest.mark.parametrize(
+    ("pattern", "expected"),
+    [
+        ("alias/**", ["alias", "alias/.hidden.txt", "alias/nested/data.txt"]),
+        (
+            "*/**",
+            ["alias", "alias/.hidden.txt", "alias/nested/data.txt", "real/.hidden.txt", "real/nested/data.txt"],
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_find_files_recursive_pattern_preserves_symlink(
+    tmp_path: Path, pattern: str, expected: list[str]
+) -> None:
+    target = tmp_path / "real"
+    (target / "nested").mkdir(parents=True)
+    (target / ".hidden.txt").write_text("hidden")
+    (target / "nested/data.txt").write_text("nested")
+    _symlink(tmp_path / "alias", target, target_is_directory=True)
+
+    tracking = TrackingConfig(
+        TestConfig(
+            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": pattern})),
+            "done",
+        )
+    )
+    agent = Agent("", config=tracking, tools=[FilesystemToolkit(tmp_path).find_files()])
+    await agent.ask("find files")
+
+    tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
+    [result] = tool_result_msg.results[0].result.parts
+    assert isinstance(result, DataInput)
+    assert result.data == [str(Path(name)) for name in expected]
 
 
 @pytest.mark.asyncio
@@ -621,8 +722,9 @@ async def test_find_files_lists_symlinks(tmp_path: Path) -> None:
     ]
 
 
+@pytest.mark.parametrize(("pattern", "expected"), [("*/*", []), ("*/**", ["escape"])])
 @pytest.mark.asyncio
-async def test_find_files_skips_link_located_out_of_base_dir(tmp_path: Path) -> None:
+async def test_find_files_skips_link_located_out_of_base_dir(tmp_path: Path, pattern: str, expected: list[str]) -> None:
     base = tmp_path / "base"
     base.mkdir()
     (base / "a.txt").write_text("a")
@@ -635,7 +737,7 @@ async def test_find_files_skips_link_located_out_of_base_dir(tmp_path: Path) -> 
 
     tracking = TrackingConfig(
         TestConfig(
-            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": "*/*"})),
+            ToolCallEvent(name="find_files", arguments=json.dumps({"pattern": pattern})),
             "done",
         )
     )
@@ -643,7 +745,7 @@ async def test_find_files_skips_link_located_out_of_base_dir(tmp_path: Path) -> 
     await agent.ask("find files")
 
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
-    assert tool_result_msg.results[0].result.parts[0].data == []
+    assert tool_result_msg.results[0].result.parts[0].data == expected
 
 
 @pytest.mark.asyncio
