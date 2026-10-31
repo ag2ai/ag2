@@ -259,6 +259,11 @@ class BaseEvent(metaclass=_ConditionMeta):
     # repr=False: keeps repr() output clean.
     created_at: float = Field(default_factory=time.time, compare=False, repr=False)
 
+    @property
+    def source_event(self) -> "BaseEvent":
+        """The authored event represented by this event or observation."""
+        return self
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         # MRO walk: map positional args and collect defaults.
         positional_names: list[str] = []
