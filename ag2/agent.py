@@ -104,7 +104,13 @@ TAgent = TypeVar313("TAgent", default=str)
 T2 = TypeVar("T2")
 
 
-@deprecated("TaskConfig is deprecated and will be removed in 1.4.0. Use Agent.as_tool() for explicit delegation.")
+TASK_CONFIG_DEPRECATION = (
+    "TaskConfig, Agent(tasks=...) and the auto-injected run_subtask / run_subtasks tools are deprecated "
+    "and will be removed in 1.4.0. Expose explicitly constructed worker Agents through Agent.as_tool() instead."
+)
+
+
+@deprecated(TASK_CONFIG_DEPRECATION, category=None)
 @dataclass
 class TaskConfig:
     """Groups task-spawning Agent parameters.
@@ -830,15 +836,11 @@ class Agent(PluginTarget, Generic[TResult]):
         # Task spawning. ``tasks=False`` (the default) means no auto-injected
         # ``run_subtask`` / ``run_subtasks`` tools. Pass ``tasks=TaskConfig(...)``
         # to opt in.
-        if tasks is False:
+        # ``None`` is treated as disabled: older docs showed it as the default.
+        if tasks is False or tasks is None:
             self._task_config: TaskConfig | None = None
         else:
-            warnings.warn(
-                "Agent(tasks=...) is deprecated and will be removed in 1.4.0, including the auto-injected "
-                "run_subtask / run_subtasks tools. Use Agent.as_tool() for explicit delegation.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+            warnings.warn(TASK_CONFIG_DEPRECATION, DeprecationWarning, stacklevel=2)
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
         # One Semaphore per running loop: sharing one raises once a second loop

@@ -75,7 +75,7 @@ task_writer(
 |---|---|---|
 | `description` | `str` | Tool description shown to the LLM (required) |
 | `name` | `str | None` | Override the default `task_{agent.name}` tool name |
-| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](/docs/user-guide/subagents#sub-task-streams)) |
 | `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
 
 You can also use `#!python subagent_tool()` directly for more control:
@@ -116,11 +116,62 @@ reply = await coordinator.ask("Compare Python and Rust for web APIs.")
 print(reply.body)
 ```
 
-Move `TaskConfig.config` and `TaskConfig.prompt` to the worker's `config` and `prompt`. Workers do not automatically inherit parent tools: pass the selected tools and any former `extra_tools` to the worker's `tools` list. Omit `tasks=` from both Agents and update prompts that mention `run_subtask` or `run_subtasks` to use the delegate's tool name and its `objective` / `context` parameters.
+Map each `TaskConfig` field onto the worker explicitly. Some of its defaults were implicit, so check each one:
 
-The calling LLM can request several delegate calls in one response to run them concurrently. `as_tool()` has no `max_concurrency` parameter; if your application needs the shared limit formerly supplied by `TaskConfig.max_concurrency`, enforce it explicitly, for example with tool middleware sharing an `asyncio.Semaphore`. Use an explicit sequence of calls when ordering matters.
+| `TaskConfig` | Explicit worker |
+|---|---|
+| `config=None` (the subtask used the **parent's** config) | Pass the parent's config to the worker: `config=` is not inherited. |
+| `prompt` (default: `"You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."`) | Set the worker's `prompt=`; there is no default task prompt. |
+| Parent tools, filtered by `include_tools` / `exclude_tools` | List the tools in the worker's `tools=`. The list is fixed when the worker is built: tools added to the parent later with `add_tool` are not picked up. |
+| `extra_tools` | Add them to the worker's `tools=`. |
+| `max_concurrency` | See [Limiting concurrency](/docs/user-guide/subagents#limiting-concurrency) below. |
 
-`Agent.as_tool()`, `subagent_tool()`, `run_task()`, and `persistent_stream()` remain supported. Each explicit delegate call uses a fresh stream by default; use [persistent streams](/docs/user-guide/subagents#sub-task-streams) when calls should share history. `TaskStarted`, `TaskCompleted`, and `TaskFailed` lifecycle events remain available. Reading the legacy `Agent.tasks` property and leaving tasks disabled emit no deprecation warning; constructing `TaskConfig` or enabling `Agent(tasks=...)` does.
+Omit `tasks=` from the parent and update prompts that mention `run_subtask` or `run_subtasks` to use the delegate's tool name (`task_worker` above) and its `objective` / `context` parameters.
+
+A few behaviours differ:
+
+- **One worker, many calls.** `run_subtask` built a fresh Agent per call; a delegate reuses the same worker Agent. Each call still runs on a fresh stream, so history does not leak between calls. Don't use a [persistent or shared stream](/docs/user-guide/subagents#sub-task-streams) for a worker meant to run in parallel — calls on one stream run one turn at a time.
+- **Fan-out is up to the model.** `run_subtasks(tasks=[...], parallel=True)` dispatched every task from a single tool call. With delegates, the calling LLM requests several calls in one response and the framework runs them concurrently; prompt for it explicitly. Where order matters, have the LLM call the delegate one step at a time.
+- **No built-in recursion guard.** Subtasks could never spawn subtasks. A worker can delegate only through the tools you give it, so keep delegate tools off the worker (avoid [self-delegation](/docs/user-guide/subagents#self-delegation) here).
+- **Workers composed per task.** If you relied on `run_subtask` to spin up a generic worker for arbitrary work, [`dynamic_agent()`](/docs/user-guide/subagents#dynamic-agents) is the closer fit: the LLM composes a focused worker per objective, and spawned workers cannot spawn further.
+
+`TaskStarted`, `TaskCompleted` and `TaskFailed` lifecycle events, HITL bridging, and usage roll-up work the same for delegates.
+
+### Limiting concurrency
+
+`as_tool()` has no `max_concurrency` parameter. To cap how many delegate calls run at once, pass the same tool middleware to every delegate that shares the cap:
+
+```python linenums="1" hl_lines="6-13 19-20"
+import asyncio
+
+from ag2 import Agent
+from ag2.middleware import ToolMiddleware
+
+def concurrency_limit(limit: int) -> ToolMiddleware:
+    slots = asyncio.Semaphore(limit)
+
+    async def limited(call_next, event, context):
+        async with slots:
+            return await call_next(event, context)
+
+    return limited
+
+limit = concurrency_limit(3)
+coordinator = Agent(
+    "coordinator",
+    tools=[
+        researcher.as_tool(description="Research a question.", middleware=[limit]),
+        writer.as_tool(description="Draft a section.", middleware=[limit]),
+    ],
+)
+```
+
+!!! warning "Use a function, not a middleware object"
+    Tool middleware is deep-copied when its tool is registered. A callable *object* holding the semaphore is copied once per delegate, so each delegate silently gets its own cap. A function and its closure are not copied, so every delegate shares one semaphore. Create the limiter inside the event loop that runs the agent; an `asyncio.Semaphore` must not be shared across loops.
+
+### Deprecation warnings
+
+`Agent(tasks=TaskConfig(...))` emits one `DeprecationWarning` pointing at the line that builds the Agent. Constructing, copying or pickling a `TaskConfig` doesn't warn at runtime, but type checkers flag every use of the class. Reading `Agent.tasks` and leaving tasks disabled emit no warning.
 
 ## Background Subagents
 
@@ -156,7 +207,7 @@ How it behaves:
 | `agent` | `Agent` | The agent to run as a background sub-task (positional) |
 | `description` | `str` | Tool description shown to the LLM (required) |
 | `name` | `str | None` | Override the default `background_task_{agent.name}` tool name |
-| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](/docs/user-guide/subagents#sub-task-streams)) |
 | `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
 
 !!! note
