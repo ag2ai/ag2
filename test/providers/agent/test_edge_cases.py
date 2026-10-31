@@ -84,6 +84,7 @@ async def test_unicode_and_emoji_pass_through(provider_config) -> None:
     assert any(token in body for token in ["日本語", "🎌", "ñoño", "🚀"])
 
 
+@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
 async def test_concurrent_tool_calls_via_run_subtasks(provider_config) -> None:
     """run_subtasks(parallel=True) dispatches subtasks concurrently.
 

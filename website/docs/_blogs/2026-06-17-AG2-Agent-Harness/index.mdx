@@ -280,7 +280,10 @@ orchestrator = Agent(
 )
 ```
 
-`as_tool` exposes the researcher as a callable named `task_researcher`; when the orchestrator invokes it, the subagent runs in isolation and its reply is injected back as the tool result — no manual `asyncio.gather` or result wiring needed. When you'd rather the framework inject the delegation tools for you, construct the agent with `tasks=TaskConfig(...)` to gain `run_subtask` / `run_subtasks(parallel=True)` automatically.
+`as_tool` exposes the researcher as a callable named `task_researcher`; when the orchestrator invokes it, the subagent runs in isolation and its reply is injected back as the tool result — no manual `asyncio.gather` or result wiring needed.
+
+!!! warning "TaskConfig is deprecated"
+    The older `tasks=TaskConfig(...)` option and its auto-injected `run_subtask` / `run_subtasks` tools remain functional but will be removed in **1.4.0**. Use `Agent.as_tool()` as shown above; see the [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig).
 
 > **Try it live:** open the **Parallel Research** demo in the [AG2 Playground](https://playground.ag2.ai/) — a lead Beta agent fans out to three specialist subagents running in parallel, with live per-researcher progress lanes and a synthesised cited report.
 

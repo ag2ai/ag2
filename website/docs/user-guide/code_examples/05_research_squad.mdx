@@ -3,19 +3,21 @@ title: "Research Squad"
 sidebarTitle: "05 · Research Squad"
 ---
 
-Two complementary multi-Agent patterns in one example. First, a coordinator opts in to the auto-injected `run_subtasks` tool (via `tasks=TaskConfig()`) to fan out three independent factual lookups concurrently in a single tool call. Then a second coordinator delegates arithmetic to a `math_expert` Agent exposed via `Agent.as_tool()`. Together they show "fan out then collect" alongside "named delegate".
+Two complementary multi-Agent patterns in one example. First, a coordinator calls a researcher's delegate tool for three independent factual lookups, requesting concurrent calls in one response. Then a second coordinator delegates arithmetic to a `math_expert` Agent. Both use `Agent.as_tool()` with explicitly constructed workers.
+
+!!! note "Migrating older examples"
+    `TaskConfig` and the automatically injected `run_subtask` / `run_subtasks` tools are deprecated and will be removed in **1.4.0**. This example uses [explicit delegation](/docs/user-guide/subagents#migrating-from-taskconfig).
 
 ## What it covers
 
-- Opting in to `run_subtask` / `run_subtasks` via `tasks=TaskConfig(...)` — disabled by default; subtasks themselves never get them, so recursion is impossible by construction.
-- Calling `run_subtasks(parallel=True)` to dispatch many sub-questions concurrently from one tool call.
+- Constructing workers with their own prompts, model configs, and tools.
+- Requesting multiple calls to a delegate in one model response for concurrent fan-out.
 - Wrapping an Agent with `Agent.as_tool()` to expose it as a named delegate (`task_math-expert`) on a parent's tool list.
 - Subscribing to `TaskStarted` / `TaskCompleted` lifecycle events to observe the fan-out from outside the Agent.
 
 ## Primitives covered
 
-- `Agent` with `tasks=TaskConfig(...)` to opt in to sub-task tools
-- `run_subtasks(parallel=True)` for concurrent fan-out
+- Explicit worker Agents exposed as tools for concurrent fan-out
 - `Agent.as_tool(description=...)` for sibling delegation
 - `TaskStarted` / `TaskCompleted` events on the stream
 - `MemoryStream` + `stream.where(EventType).subscribe(...)`
@@ -27,17 +29,14 @@ Two complementary multi-Agent patterns in one example. First, a coordinator opts
 
 Two patterns for multi-Agent orchestration:
 
-1. **Opt-in subtask tools.** Pass ``tasks=TaskConfig(...)`` and the Agent
-   gains ``run_subtask`` / ``run_subtasks``. The coordinator uses
-   ``run_subtasks`` with ``parallel=True`` to fan out three short
-   investigations concurrently. Spawned subtasks have **no** ``run_subtask``
-   tools (they default to ``tasks=False``), so recursion is structurally
-   impossible — no depth limiter needed.
+1. **Concurrent delegation.** The coordinator requests three calls to
+   ``task_researcher`` in one model response. Each call runs the explicit
+   researcher Agent on its own fresh stream. The researcher has no tools,
+   so it cannot delegate further.
 
 2. **``Agent.as_tool()``.** A second Agent (``math_expert``) is exposed to
-   the coordinator as a callable tool. The wrapped Agent has no
-   ``run_subtask`` tools either (default), so recursion is bounded by the
-   call structure.
+   the coordinator as a callable tool. The wrapped Agent has no tools,
+   so it cannot delegate further.
 
 Run::
 
@@ -48,7 +47,6 @@ import asyncio
 import time
 
 from ag2 import Agent
-from ag2.agent import TaskConfig
 from ag2.config import GeminiConfig
 from ag2.events import TaskCompleted, TaskStarted
 from ag2.stream import MemoryStream
@@ -59,17 +57,23 @@ def section(title: str) -> None:
 async def main() -> None:
     config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
 
-    section("Parallel subtasks — fan out three lookups in one tool call")
+    section("Parallel subtasks — fan out three lookups through a delegate")
+
+    researcher = Agent(
+        "researcher",
+        prompt="Answer the factual lookup concisely. Return only the result.",
+        config=config,
+    )
 
     coordinator = Agent(
         "coordinator",
         prompt=(
-            "You answer multi-part questions by dispatching run_subtasks "
-            "with parallel=True. Use one tool call with every sub-question "
-            "packed into the 'tasks' list. Be concise."
+            "You answer multi-part questions by calling task_researcher. "
+            "Issue a separate call for each sub-question in one response "
+            "so the lookups run concurrently. Then combine the results. Be concise."
         ),
         config=config,
-        tasks=TaskConfig(),  # Opt in to run_subtask / run_subtasks.
+        tools=[researcher.as_tool(description="Answer an independent factual lookup.")],
     )
 
     # Collect subtask lifecycle events so we can show the fan-out to the user
@@ -81,7 +85,7 @@ async def main() -> None:
 
     start = time.monotonic()
     reply = await coordinator.ask(
-        "Use run_subtasks(parallel=True) to answer, in one tool call: "
+        "Call task_researcher three times in one response to answer: "
         "(a) what is the tallest waterfall in the world, "
         "(b) what year was the Eiffel Tower completed, "
         "(c) what is the boiling point of nitrogen in Celsius. "
@@ -94,7 +98,7 @@ async def main() -> None:
     print()
     print(f"Subtasks dispatched: {len(starts)}")
     print(f"Subtasks finished:   {len(completions)}")
-    print(f"Wall time:           {elapsed:.2f}s (3 concurrent LLM calls)")
+    print(f"Wall time:           {elapsed:.2f}s")
 
     section("Sibling delegation — math_expert is a tool on coordinator2")
 
