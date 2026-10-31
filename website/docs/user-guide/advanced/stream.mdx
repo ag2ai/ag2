@@ -233,13 +233,16 @@ so a history count is not a lifetime total.
 
 `#!python history.since_last_user_input()` selects events after the latest
 retained actual user input and excludes that input itself. It composes with the
-same filters and terminal methods:
+same filters and terminal methods. This example uses the OpenAI Responses API;
+set `OPENAI_API_KEY` before running it, as described in the
+[Quick Start](/docs/user-guide/quick-start):
 
 ```python linenums="1"
 import asyncio
+
 from ag2 import Agent, tool
+from ag2.config import OpenAIResponsesConfig
 from ag2.events import ToolCallEvent
-from ag2.testing import TestConfig
 
 @tool
 def lookup() -> str:
@@ -247,17 +250,21 @@ def lookup() -> str:
     return "item"
 
 async def main():
-    agent = Agent("lookup", tools=[lookup], config=TestConfig(
-        ToolCallEvent(name="lookup", arguments="{}"), "Found", "Done",
-    ))
-    reply = await agent.ask("Find an item")
+    agent = Agent(
+        "lookup",
+        tools=[lookup],
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Use lookup to find items. Answer acknowledgements directly.",
+    )
+    reply = await agent.ask("Find an item using lookup.")
     history = reply.context.stream.history
     calls = history.since_last_user_input().where(ToolCallEvent)
-    print(await calls.count())  # 1
+    print("Calls for this input:", await calls.count())
     await reply.ask("Thanks")
-    print(await calls.count())  # 0: a new user input starts a new interval
+    print("Calls for the new input:", await calls.count())
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 Ask, Run, and their Reply continuations establish user-input boundaries. Tool
