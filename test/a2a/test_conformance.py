@@ -26,7 +26,7 @@ from ag2.a2a.errors import (
     A2ATaskRejectedError,
     A2ATaskTerminalError,
 )
-from ag2.a2a.events import A2ATaskArtifactUpdate, A2ATaskStatusUpdate, A2ATextArtifact
+from ag2.a2a.events import A2ATaskArtifactUpdate, A2ATaskSnapshot, A2ATaskStatusUpdate, A2ATextArtifact
 from ag2.a2a.extension import MIME_TOOL_CALL
 from ag2.a2a.mappers.parts import data_part
 from ag2.a2a.mappers.tools import call_to_payload
@@ -50,7 +50,14 @@ from ag2.observers import observer
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
-from ._helpers import EventCollector, ScriptedExecutor, ToolRoundTripExecutor, a2a_config, make_executor_pair
+from ._helpers import (
+    EventCollector,
+    ScriptedExecutor,
+    ToolRoundTripExecutor,
+    a2a_config,
+    make_executor_pair,
+    make_pair,
+)
 
 _URL = "http://test"
 
@@ -78,6 +85,11 @@ async def _answer_in_completion_message(updater: TaskUpdater, release: asyncio.E
 async def _answer_in_artifact_and_completion_message(updater: TaskUpdater, release: asyncio.Event) -> None:
     await updater.add_artifact(parts=[Part(text="done")], artifact_id="art", last_chunk=True)
     await updater.complete(message=updater.new_agent_message([Part(text="done")]))
+
+
+async def _answer_in_artifact_then_summary(updater: TaskUpdater, release: asyncio.Event) -> None:
+    await updater.add_artifact(parts=[Part(text="long answer")], artifact_id="art", last_chunk=True)
+    await updater.complete(message=updater.new_agent_message([Part(text="Done.")]))
 
 
 async def _shortened_replacement(updater: TaskUpdater, release: asyncio.Event) -> None:
@@ -463,6 +475,83 @@ async def test_completion_message_restating_the_artifact_answer_is_not_doubled(s
     assert collector.chunks == ["done"]
 
 
+@pytest.mark.asyncio
+@_both_modes
+async def test_completion_message_adding_text_follows_the_artifacts_as_sent(streaming: bool) -> None:
+    pair = make_executor_pair(ScriptedExecutor(_answer_in_artifact_then_summary), streaming=streaming)
+
+    reply = await pair.client.ask("go")
+
+    assert reply.body == "long answerDone."
+
+
+def weather(city: str) -> str:
+    return "sunny"
+
+
+@pytest.mark.asyncio
+@_both_modes
+@pytest.mark.parametrize(
+    ("final_turn", "completion_text"),
+    [
+        pytest.param((ModelMessageChunk("It is sunny."), "It is sunny."), "", id="final-call-streamed"),
+        pytest.param(("It is sunny.",), "It is sunny.", id="final-call-not-streamed"),
+    ],
+)
+async def test_server_turn_with_several_model_calls_sends_its_final_text_once(
+    streaming: bool, final_turn: tuple[Any, ...], completion_text: str
+) -> None:
+    config = TestConfig(
+        ModelMessageChunk("Let me check. "),
+        ToolCallEvent(name="weather", arguments='{"city": "Paris"}'),
+        *final_turn,
+    )
+    server = A2AServer(Agent("server", config=config, tools=[weather]))
+    client = Agent(
+        "client",
+        config=A2AConfig(
+            card_url=_URL, httpx_client_factory=make_test_client_factory(server, url=_URL), streaming=streaming
+        ),
+    )
+    stream = MemoryStream()
+    wire = EventCollector()
+    stream.where(A2ATaskSnapshot).subscribe(wire.on_event)
+
+    reply = await client.ask("weather?", stream=stream)
+
+    assert reply.body == "Let me check. It is sunny."
+    snapshot = wire.events[0]
+    assert isinstance(snapshot, A2ATaskSnapshot)
+    task = await get_task(a2a_config(client), snapshot.task.id)
+    # The completion carries only the text that was not streamed.
+    assert task.status.state == TaskState.TASK_STATE_COMPLETED
+    assert "".join(part.text for part in task.status.message.parts) == completion_text
+
+
+@pytest.mark.asyncio
+async def test_server_works_on_a_continuation_turn_again() -> None:
+    # Spec §4.1.3: WORKING is "actively being processed"; a task answering a tool result is, so it
+    # must not stay INPUT_REQUIRED while the continuation runs.
+    pair = make_pair(
+        ToolCallEvent(name="weather", arguments='{"city": "Paris"}'),
+        after_tool="done",
+        client_tools=[weather],
+    )
+    stream = MemoryStream()
+    wire = EventCollector()
+    stream.where(A2ATaskStatusUpdate).subscribe(wire.on_event)
+
+    reply = await pair.client.ask("weather?", stream=stream)
+
+    assert reply.body == "done"
+    assert [event.update.status.state for event in wire.events] == [
+        TaskState.TASK_STATE_WORKING,
+        TaskState.TASK_STATE_INPUT_REQUIRED,
+        TaskState.TASK_STATE_WORKING,
+        TaskState.TASK_STATE_COMPLETED,
+    ]
+
+
 def _call_part(name: str) -> Part:
     return data_part(call_to_payload(ToolCallEvent(name=name, arguments="{}")), media_type=MIME_TOOL_CALL)
 
@@ -512,13 +601,14 @@ async def test_artifact_id_reused_after_tool_round_trip_streams_the_answer(strea
 
 @pytest.mark.asyncio
 @_both_modes
-async def test_replacement_sharing_the_previous_turn_prefix_is_kept_whole(streaming: bool) -> None:
+async def test_replacement_extending_the_previous_turn_text_continues_it(streaming: bool) -> None:
+    # A snapshot of "pre-" plus an appended "final" looks the same, so both read as a continuation.
     pair = make_executor_pair(_reused_artifact_executor("pre-final"), streaming=streaming)
     client = Agent("client", config=pair.client.config, tools=[step])
 
     reply = await client.ask("go")
 
-    assert reply.response.content == "pre-final"
+    assert reply.response.content == "final"
 
 
 @pytest.mark.asyncio

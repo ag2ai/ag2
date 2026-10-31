@@ -7,7 +7,7 @@ Topics that aren't part of the day-to-day A2A path: human-in-the-loop, transpare
 
 ## Human-in-the-Loop via `input_required`
 
-When a server-side executor raises `#!python requires_input(...)` mid-task, the A2A server transitions the task to `#!python TASK_STATE_INPUT_REQUIRED` and surfaces the prompt to the client. The AG2 client invokes the local agent's `#!python hitl_hook` with the prompt and continues the same turn with the reply — the server prompt does **not** leak into the final response text.
+When a server-side executor calls `#!python requires_input(...)` mid-task, the A2A server transitions the task to `#!python TASK_STATE_INPUT_REQUIRED` and surfaces the prompt to the client. The AG2 client invokes the local agent's `#!python hitl_hook` with the prompt and continues the same turn with the reply — the server prompt does **not** leak into the final response text.
 
 ```python linenums="1" hl_lines="4-5 10"
 from ag2 import Agent
@@ -33,7 +33,7 @@ See [Human in the Loop](/docs/user-guide/context/human_in_the_loop) for the unde
 
 Streaming connections drop. Network blips, load balancer recycles, idle timeouts — the SSE channel breaks, and the client needs to recover without losing partially-streamed artifacts.
 
-The A2A client keeps internal drive state across drops: on `#!python A2AClientError` mid-stream it issues a fresh `#!python subscribe` against the same `#!python task_id` and continues from where it failed. The new stream opens with the task as it stands, so text produced while the client was disconnected is recovered from that snapshot. Artifacts are reconciled by `#!python artifact_id` (messages by `#!python message_id`): an update that restates what was already received adds nothing, and a completed artifact is never applied twice. Application code sees a single uninterrupted reply.
+The A2A client keeps internal drive state across drops: on `#!python A2AClientError` mid-stream it issues a fresh `#!python subscribe` against the same `#!python task_id` and continues from where it failed. The new stream opens with the task as it stands, so text produced while the client was disconnected is recovered from that snapshot. Artifacts are reconciled by `#!python artifact_id` (messages by `#!python message_id`): an update that restates what was already received adds nothing, and a completed artifact is never applied twice. An update that would change an artifact already closed with `#!python last_chunk` is either a replay or a server breaking the spec (§4.2.2), so it is not applied as it streams: once the run settles, the client reads the task back with one `#!python GetTask` and takes that artifact's stored content, which is what a polling client sees. Application code sees a single uninterrupted reply.
 
 If the task finished while the stream was down, the server refuses the subscription; the client then reads the final task with `#!python get_task` and builds the reply from it, so a dropped connection at the very end does not fail the call.
 
@@ -98,7 +98,7 @@ All A2A errors live in `#!python ag2.a2a.errors` and inherit from `#!python A2AE
 | `#!python A2ATaskFailedError` | Task ended in `#!python TASK_STATE_FAILED` |
 | `#!python A2ATaskRejectedError` | Task ended in `#!python TASK_STATE_REJECTED` |
 | `#!python A2ATaskCancelledError` | Task ended in `#!python TASK_STATE_CANCELED` — `#!python err.task.artifacts` holds the partial text received before the cancellation |
-| `#!python A2ATaskAuthRequiredError` | Task ended in `#!python TASK_STATE_AUTH_REQUIRED`. Per A2A spec §7.6 the agent expects credentials out-of-band — apply them and retry |
+| `#!python A2ATaskAuthRequiredError` | Task stopped in `#!python TASK_STATE_AUTH_REQUIRED`, an interrupted state rather than a terminal one (spec §4.1.3). Per A2A spec §7.6 the agent expects credentials out-of-band — apply them and retry |
 
 Catch `#!python A2ATaskTerminalError` to handle any terminal failure uniformly; switch on the concrete subclass when the recovery path differs (e.g. retry with auth on `#!python AuthRequired`, surface the error to the operator on `#!python Failed` / `#!python Rejected`, treat `#!python Cancelled` as an operator or server decision rather than a fault).
 

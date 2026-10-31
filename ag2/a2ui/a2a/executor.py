@@ -13,15 +13,14 @@ from typing import Any
 
 from a2a.server.agent_execution import RequestContext
 from a2a.server.events import EventQueue
-from a2a.server.tasks import TaskUpdater
 from a2a.types import Message, Part, TaskState
 
-from ag2.a2a.executor import AgentExecutor
+from ag2.a2a.executor import AgentExecutor, _TaskWriter
 from ag2.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
 from ag2.a2a.mappers import ParsedMessage, struct_to_dict
 from ag2.agent import Agent
 from ag2.context import strip_reserved_variables
-from ag2.events import BaseEvent, ClientToolCallEvent
+from ag2.events import BaseEvent
 from ag2.stream import MemoryStream
 
 from .._runtime import _A2UIRuntime
@@ -227,10 +226,8 @@ class A2UIAgentExecutor(AgentExecutor):
     async def _run_one_turn(
         self,
         parsed: ParsedMessage,
-        updater: TaskUpdater,
+        writer: _TaskWriter,
         stream: MemoryStream,
-        text_pieces: list[str],
-        pending_client_calls: list[ClientToolCallEvent],
         extra_prompt: Sequence[str] = (),
     ) -> None:
         # Buttons run on the server, not as agent tools — only client-side tool
@@ -277,7 +274,7 @@ class A2UIAgentExecutor(AgentExecutor):
         # renderer function and must leave the task open for its response.
         server_only = handled_server and not parsed.inputs and not parsed.tool_results
         if server_only:
-            agent_msg = self._build_a2ui_message(updater, "", a2ui_messages, {})
+            agent_msg = self._build_a2ui_message(writer, "", a2ui_messages, {})
             # An unrelated server RPC does not answer the renderer function or
             # client tool that left this task awaiting input on an earlier turn.
             has_pending = incoming is not None and incoming.awaiting_input
@@ -291,7 +288,7 @@ class A2UIAgentExecutor(AgentExecutor):
                 additional_middleware=extra_middleware,
             )
             prose_text = response.message.content if response.message else ""
-            agent_msg = self._build_a2ui_message(updater, prose_text or "", a2ui_messages, final_variables)
+            agent_msg = self._build_a2ui_message(writer, prose_text or "", a2ui_messages, final_variables)
             has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
 
         # v1.0: a callRendererFunction pauses the task awaiting the renderer's
@@ -301,26 +298,26 @@ class A2UIAgentExecutor(AgentExecutor):
         # transition, otherwise the client never learns what function to run.
         calls_renderer_function = any(isinstance(m, dict) and "callRendererFunction" in m for m in a2ui_messages)
         if calls_renderer_function:
-            if has_pending or pending_client_calls:
+            if has_pending or writer.pending_client_calls:
                 # A callRendererFunction and pending tool calls can co-occur in
                 # a turn; give the callRendererFunction precedence and defer the tool calls.
                 logger.warning(
                     "callRendererFunction emitted alongside pending tool calls; "
                     "pausing for the renderer function and deferring the pending tool calls this turn.",
                 )
-            await updater.requires_input(message=agent_msg)
+            await writer.requires_input(message=agent_msg)
             return
 
-        if has_pending or pending_client_calls:
+        if has_pending or writer.pending_client_calls:
             pending_message = agent_msg if server_only else None
-            await updater.requires_input(message=pending_message)
+            await writer.requires_input(message=pending_message)
             return
 
-        await updater.complete(message=agent_msg)
+        await writer.complete(message=agent_msg)
 
     def _build_a2ui_message(
         self,
-        updater: TaskUpdater,
+        writer: _TaskWriter,
         prose_text: str,
         a2ui_messages: list[ServerToClientMessage],
         final_variables: dict[str, Any],
@@ -348,7 +345,7 @@ class A2UIAgentExecutor(AgentExecutor):
         if outgoing:
             metadata = {CONTEXT_UPDATE_METADATA_KEY: outgoing}
 
-        return updater.new_agent_message(parts=parts, metadata=metadata)
+        return writer.new_agent_message(parts=parts, metadata=metadata)
 
 
 _RENDERER_ENVELOPE_KEYS = ("action", "callAgentFunction", "rendererFunctionResponse", "error")

@@ -121,9 +121,10 @@ class A2ATaskCancelledError(A2ATaskTerminalError):
 
 
 class A2ATaskAuthRequiredError(A2ATaskTerminalError):
-    """Task ended in TASK_STATE_AUTH_REQUIRED.
+    """Task stopped in TASK_STATE_AUTH_REQUIRED.
 
-    Per A2A spec §7.6 the agent expects credentials to arrive out-of-band.
+    Unlike the other subclasses this state is interrupted, not terminal (A2A spec §4.1.3): the
+    task waits for credentials rather than ending. Per A2A spec §7.6 the agent expects credentials to arrive out-of-band.
     AG2 does not currently wire an auth hook, so the client surfaces this
     state as an error — the application is expected to obtain credentials,
     apply them (e.g. via interceptor headers or a refreshed config), and

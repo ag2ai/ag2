@@ -5,11 +5,13 @@
 from collections.abc import Awaitable, Callable
 from typing import TypeAlias
 
+import httpx
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.cluster import TaskEventStream, VersionedTaskStore
 from a2a.server.context import ServerCallContext
 from a2a.server.request_handlers import DefaultRequestHandlerV2
 from a2a.server.tasks import (
+    BasePushNotificationSender,
     InMemoryTaskStore,
     PushNotificationConfigStore,
     PushNotificationSender,
@@ -144,6 +146,12 @@ def build_default_handler(
     validate_input_modes: bool = False,
 ) -> DefaultRequestHandlerV2:
     """Build the SDK request handler shared by all transports."""
+    if push_config_store is not None and push_sender is None:
+        # A store makes the card advertise push, and an advertised webhook must be called (spec §4.3);
+        # the SDK's own default sends nothing. Delivery re-checks each URL with the same policy.
+        push_sender = BasePushNotificationSender(
+            httpx.AsyncClient(), push_config_store, push_url_validator=push_url_validator
+        )
     return _RequestHandler(
         agent_executor=agent_executor,
         task_store=task_store or InMemoryTaskStore(),

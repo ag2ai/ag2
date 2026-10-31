@@ -76,14 +76,14 @@ class ToolRoundsConfig(ModelConfig):
     def copy(self) -> Self:
         return self
 
-    def create(self) -> "ToolRoundsClient":
-        return ToolRoundsClient(self.rounds)
+    def create(self) -> "_ToolRoundsClient":
+        return _ToolRoundsClient(self.rounds)
 
     def create_files_client(self) -> "FilesClient":
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
 
 
-class ToolRoundsClient(LLMClient):
+class _ToolRoundsClient(LLMClient):
     def __init__(self, rounds: Sequence[TestConfig]) -> None:
         self.rounds = rounds
 

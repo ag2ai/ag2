@@ -48,7 +48,7 @@ When the model streams its answer, the server publishes the text as one artifact
 | `#!python task_store` | Shared `#!python TaskStore`, or a `#!python VersionedTaskStore` for [several replicas](#running-on-several-replicas). Defaults to a single `#!python InMemoryTaskStore` reused across every `#!python build_*` call |
 | `#!python event_stream` | `#!python TaskEventStream` that carries task events between replicas. Required with a `#!python VersionedTaskStore`, rejected without one |
 | `#!python push_config_store` | Enables push-notifications CRUD (see [Tasks & Push](/docs/user-guide/a2a/tasks_and_push)). Optional |
-| `#!python push_sender` | Custom delivery sender. Defaults to no-op when not set |
+| `#!python push_sender` | Custom delivery sender. With a `#!python push_config_store` and no sender, the SDK's `#!python BasePushNotificationSender` delivers |
 | `#!python push_url_validator` | Optional async callback receiving a URL and returning `bool`. Rejects disallowed push-notification URLs before storing them |
 | `#!python extended_card` | Auth-aware extra metadata returned via `#!python GetExtendedAgentCard` |
 | `#!python card_modifier` / `#!python extended_card_modifier` | Per-request hooks that mutate the card before it's served |
@@ -111,10 +111,11 @@ gRPC.
 - **Hosts must resolve.** The SDK policy resolves the hostname and rejects it if
   DNS fails or any address is private, loopback, or link-local. The client only
   sees `Invalid push notification URL`; the reason is in the server log.
-- **Registration only.** The validator screens URLs when they are registered. A
+- **Registration and delivery.** The validator screens URLs when they are
+  registered, and the default sender checks them again before each delivery. A
   custom `#!python push_sender` is not covered; give it the same callback (the
   SDK's `#!python BasePushNotificationSender` takes `#!python push_url_validator`).
-- Works on every SDK `ag2[a2a]` installs (`a2a-sdk>=1.2.0`).
+- Works on every SDK `ag2[a2a]` installs (`a2a-sdk>=1.3.0`).
 
 !!! note
     The default `#!python InMemoryTaskStore` is materialised **once** at `#!python __init__` time. This is what makes JSON-RPC, REST and gRPC bound to the same `#!python A2AServer` see each other's tasks — a single store, three transports.

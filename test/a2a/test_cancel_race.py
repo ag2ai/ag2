@@ -12,28 +12,34 @@ on a recording queue to put each side into that window deterministically.
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+import threading
+from collections.abc import Awaitable, Callable, Coroutine
 from contextlib import AsyncExitStack, ExitStack
+from typing import Any
 
 import pytest
 from a2a.server.agent_execution import RequestContext
 from a2a.server.context import ServerCallContext
 from a2a.server.events import Event, EventQueue, EventQueueLegacy
 from a2a.types import (
+    Artifact,
     Message,
     Part,
     Role,
     SendMessageRequest,
+    Task,
     TaskArtifactUpdateEvent,
     TaskState,
     TaskStatusUpdateEvent,
 )
 
 from ag2 import Agent, Context
-from ag2.a2a.events import A2ATaskStatusUpdate
+from ag2.a2a.events import A2ATaskArtifactUpdate, A2ATaskStatusUpdate
 from ag2.a2a.executor import AgentExecutor
+from ag2.a2a.extension import MIME_TOOL_CALL
 from ag2.a2a.mappers.events import chunk_to_text_artifact
 from ag2.a2a.mappers.messages import build_user_message
+from ag2.a2a.mappers.parts import is_data_part_with_mime
 from ag2.a2a.testing import ObservedAgentExecutor, TaskStatusRecorder, TurnGate
 from ag2.context import ConversationContext
 from ag2.events import ClientToolCallEvent, ModelMessageChunk, TextInput, ToolCallEvent
@@ -640,3 +646,155 @@ async def test_observer_cleanup_failure_does_not_fail_the_completed_turn(
     assert statuses.states_at_close == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_COMPLETED]
     assert queue.states() == statuses.states_at_close
     assert "A2A lifecycle subscriber cleanup failed" in caplog.text
+
+
+async def leave_note(context: Context) -> str:
+    """Server tool that puts its own artifact on the wire, passed through by the executor."""
+    note = Artifact(artifact_id="note", parts=[Part(text="N")])
+    await context.send(
+        A2ATaskArtifactUpdate(update=TaskArtifactUpdateEvent(task_id=_TASK_ID, context_id=_CONTEXT_ID, artifact=note))
+    )
+    return "noted"
+
+
+def _describe(event: Event) -> str:
+    if isinstance(event, Task):
+        return "task"
+    if isinstance(event, TaskStatusUpdateEvent):
+        return TaskState.Name(event.status.state)
+    assert isinstance(event, TaskArtifactUpdateEvent)
+    if event.artifact.artifact_id == "note":
+        return "note:" + "".join(part.text for part in event.artifact.parts)
+    if any(is_data_part_with_mime(part, MIME_TOOL_CALL) for part in event.artifact.parts):
+        return "client-call"
+    text = "".join(part.text for part in event.artifact.parts)
+    return f"text:{text}{':last' if event.last_chunk else ''}"
+
+
+@pytest.mark.asyncio
+async def test_wire_order_is_the_order_the_turn_produced_its_output() -> None:
+    config = TestConfig(
+        ModelMessageChunk("a"),
+        ToolCallEvent(name="leave_note", arguments="{}"),
+        ModelMessageChunk("b"),
+        ToolCallEvent(name="lookup", arguments="{}"),
+    )
+    executor = AgentExecutor(Agent("server", config=config, tools=[leave_note]))
+    queue = _RecordingQueue()
+
+    await asyncio.wait_for(executor.execute(_client_tool_request(), queue), timeout=1.0)
+
+    assert [_describe(event) for event in queue.events] == [
+        "task",
+        "TASK_STATE_WORKING",
+        "text:a",
+        "note:N",
+        "text:b",
+        "client-call",
+        "text::last",
+        "TASK_STATE_INPUT_REQUIRED",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_transitions_do_not_wait_for_a_slow_observer() -> None:
+    gate = TurnGate()
+    pause = _PauseOnStatus(TaskState.TASK_STATE_WORKING)
+    statuses = TaskStatusRecorder()
+    config = TestConfig(ModelMessageChunk("thinking"), ToolCallEvent(name="hold", arguments="{}"), "done")
+    executor = ObservedAgentExecutor(
+        Agent("server", config=config, tools=[gate.hold]), observer(A2ATaskStatusUpdate, pause.on_status), statuses
+    )
+    queue = _RecordingQueue()
+    running = asyncio.create_task(executor.execute(_request(), queue))
+    try:
+        # The observer is still holding ``working`` while the turn streams and reaches its tool.
+        await asyncio.wait_for(gate.entered.wait(), timeout=1.0)
+        assert [_describe(event) for event in queue.events] == ["task", "TASK_STATE_WORKING", "text:thinking"]
+
+        await asyncio.wait_for(executor.cancel(_cancel_request(), queue), timeout=1.0)
+        assert queue.states() == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_CANCELED]
+    finally:
+        pause.resume()
+        gate.release()
+        await asyncio.wait_for(running, timeout=1.0)
+
+    # Delivery caught up, in wire order.
+    await asyncio.wait_for(statuses.wait_for(TaskState.TASK_STATE_CANCELED), timeout=1.0)
+    assert statuses.states == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_CANCELED]
+
+
+async def _close_the_loop_while_an_observer_holds_working() -> None:
+    pause = _PauseOnStatus(TaskState.TASK_STATE_WORKING)
+    executor = ObservedAgentExecutor(
+        Agent("server", config=TestConfig("done")), observer(A2ATaskStatusUpdate, pause.on_status)
+    )
+    running = asyncio.create_task(executor.execute(_request(), _RecordingQueue()))
+    await pause.paused.wait()
+    running.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await running
+    # Returning leaves delivery pending; ``asyncio.run`` cancels it and waits for it to stop.
+
+
+async def _close_the_loop_while_a_cancel_waits_behind_a_blocked_write() -> None:
+    queue = _PausingArtifactQueue()
+    executor = AgentExecutor(Agent("server", config=TestConfig(ModelMessageChunk("a"), "done")))
+    running = asyncio.create_task(executor.execute(_request(), queue))
+    await queue.started.wait()
+    cancelling = asyncio.create_task(executor.cancel(_cancel_request(), queue))
+    # One step queues the cancel behind the blocked chunk; returning then stops the writer under it.
+    await asyncio.sleep(0)
+    assert not running.done()
+    assert not cancelling.done()
+
+
+class _LoopRun:
+    """Runs a scenario under its own ``asyncio.run``, which returns only once every task it leaves has stopped."""
+
+    def __init__(self, scenario: Callable[[], Coroutine[Any, Any, None]]) -> None:
+        self.scenario = scenario
+        self.finished = threading.Event()
+        self.error: BaseException | None = None
+
+    def run(self) -> None:
+        try:
+            asyncio.run(self.scenario())
+        except BaseException as exc:
+            self.error = exc
+        self.finished.set()
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [_close_the_loop_while_an_observer_holds_working, _close_the_loop_while_a_cancel_waits_behind_a_blocked_write],
+    ids=["observer-holds-delivery", "cancel-queued-behind-blocked-write"],
+)
+def test_closing_the_event_loop_stops_the_request(scenario: Callable[[], Coroutine[Any, Any, None]]) -> None:
+    loop_run = _LoopRun(scenario)
+    thread = threading.Thread(target=loop_run.run, daemon=True)
+
+    thread.start()
+    thread.join(timeout=5.0)
+
+    assert loop_run.finished.is_set()
+    assert loop_run.error is None
+
+
+async def _refuse_the_closing_chunk(event: Event) -> None:
+    if isinstance(event, TaskArtifactUpdateEvent) and event.last_chunk:
+        raise ConnectionError("queue refused the closing chunk")
+
+
+@pytest.mark.asyncio
+async def test_task_whose_closing_chunk_cannot_be_written_ends_failed() -> None:
+    statuses = TaskStatusRecorder()
+    executor = ObservedAgentExecutor(Agent("server", config=TestConfig(ModelMessageChunk("a"), "a")), statuses)
+    queue = _RecordingQueue()
+    queue.on_event = _refuse_the_closing_chunk
+
+    with pytest.raises(ConnectionError, match="closing chunk"):
+        await executor.execute(_request(), queue)
+
+    assert queue.states() == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_FAILED]
+    assert statuses.states == queue.states()

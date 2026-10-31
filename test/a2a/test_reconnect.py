@@ -21,13 +21,15 @@ from a2a.types import (
 )
 from google.protobuf import json_format
 
-from ag2 import Agent
+from ag2 import Agent, Context
 from ag2.a2a import A2AConfig, build_card
 from ag2.a2a.errors import A2AReconnectError
 from ag2.a2a.extension import MIME_TOOL_CALL
 from ag2.a2a.mappers.parts import data_part
 from ag2.a2a.mappers.tools import call_to_payload
-from ag2.events import ToolCallEvent
+from ag2.events import BaseEvent, ModelResponse, ToolCallEvent
+from ag2.middleware import BaseMiddleware, LLMCall
+from ag2.middleware.base import MiddlewareFactory
 from ag2.testing import TestConfig
 
 URL = "http://test"
@@ -67,6 +69,19 @@ def _chunk(artifact_id: str, text: str, *, append: bool = True) -> StreamRespons
     )
 
 
+def _closing_chunk(artifact_id: str, text: str) -> StreamResponse:
+    """Appended chunk that closes the artifact."""
+    return StreamResponse(
+        artifact_update=TaskArtifactUpdateEvent(
+            task_id=TASK_ID,
+            context_id=CONTEXT_ID,
+            artifact=Artifact(artifact_id=artifact_id, parts=[Part(text=text)]),
+            append=True,
+            last_chunk=True,
+        ),
+    )
+
+
 def _snapshot(artifact_id: str, text: str) -> StreamResponse:
     """Task as it stands on resubscribe: the artifact with everything written so far."""
     return StreamResponse(
@@ -80,10 +95,15 @@ def _snapshot(artifact_id: str, text: str) -> StreamResponse:
 
 
 def _snapshot_with_call(
-    artifact_id: str, tool: str, *, state: TaskState = TaskState.TASK_STATE_INPUT_REQUIRED
+    artifact_id: str,
+    tool: str,
+    *,
+    state: TaskState = TaskState.TASK_STATE_INPUT_REQUIRED,
+    call_id: str | None = None,
 ) -> StreamResponse:
     """Task as it stands on resubscribe after the server wrote a client tool call: asking for input, or about to."""
-    call = data_part(call_to_payload(ToolCallEvent(name=tool, arguments="{}")), media_type=MIME_TOOL_CALL)
+    event = ToolCallEvent(name=tool, arguments="{}") if call_id is None else ToolCallEvent(name=tool, id=call_id)
+    call = data_part(call_to_payload(event), media_type=MIME_TOOL_CALL)
     return StreamResponse(
         task=Task(
             id=TASK_ID,
@@ -152,8 +172,9 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
     resubscribe is refused as ``UnsupportedOperation`` (spec §3.1.6) and
     ``GetTask`` returns it.
 
-    ``continuation`` answers any ``SendStreamingMessage`` after the first, the
-    turn a client sends once it has run a tool.
+    ``continuations`` answer the ``SendStreamingMessage`` calls after the first,
+    the turns a client sends once it has run a tool, in order; the last entry
+    repeats.
 
     ``methods`` records the JSON-RPC method of every request in order —
     the reconnect behaviour under test is exactly *which* calls happen.
@@ -161,7 +182,7 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
 
     send: _Leg
     resubscribes: Sequence[_Leg] = ()
-    continuation: _Leg | None = None
+    continuations: Sequence[_Leg] = ()
     finished: Task | None = None
     methods: list[str] = field(default_factory=list)
 
@@ -183,8 +204,9 @@ class _ScriptedServer(httpx.AsyncBaseTransport):
 
     def _leg_for(self, method: str) -> _Leg:
         if method == "SendStreamingMessage":
-            if self.continuation is not None and self.methods.count(method) > 1:
-                return self.continuation
+            sends = self.methods.count(method)
+            if self.continuations and sends > 1:
+                return self.continuations[min(sends - 2, len(self.continuations) - 1)]
             return self.send
         assert method == "SubscribeToTask", f"unscripted JSON-RPC method {method!r}"
         assert self.resubscribes, "script has no resubscribe leg"
@@ -200,7 +222,23 @@ def lookup() -> str:
     return "result"
 
 
-def _client(server: _ScriptedServer, *, max_reconnects: int = 3, tools: Sequence[Callable[..., Any]] = ()) -> Agent:
+class _RetryEveryFailure(BaseMiddleware):
+    """Retries a failed model call once with the same messages, even after it published output."""
+
+    async def on_llm_call(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
+        try:
+            return await call_next(events, context)
+        except A2AReconnectError:
+            return await call_next(events, context)
+
+
+def _client(
+    server: _ScriptedServer,
+    *,
+    max_reconnects: int = 3,
+    tools: Sequence[Callable[..., Any]] = (),
+    middleware: Sequence[MiddlewareFactory] = (),
+) -> Agent:
     """Agent whose A2A transport is ``server``, with backoff disabled.
 
     ``preset_card`` skips card discovery, so the script only has to answer
@@ -218,6 +256,7 @@ def _client(server: _ScriptedServer, *, max_reconnects: int = 3, tools: Sequence
             reconnect_backoff=0.0,
         ),
         tools=list(tools),
+        middleware=list(middleware),
     )
 
 
@@ -245,6 +284,25 @@ class TestStreamingReconnect:
         reply = await _client(server).ask("ping")
 
         assert reply.body == "hello"
+        assert server.methods == ["SendStreamingMessage", "SubscribeToTask"]
+
+    async def test_text_appended_after_the_closing_chunk_is_read_back_from_the_task(self) -> None:
+        # Spec §4.2.2: ``lastChunk`` marks the final chunk, so a later update for that artifact is
+        # either a replay or a server breaking that rule. The stored task decides, as for a polling client.
+        server = _ScriptedServer(
+            send=_Leg([_task(), _artifact("art-1", "x"), _closing_chunk("art-1", "y"), _completed()]),
+            finished=Task(
+                id=TASK_ID,
+                context_id=CONTEXT_ID,
+                status=TaskStatus(state=TaskState.TASK_STATE_COMPLETED),
+                artifacts=[Artifact(artifact_id="art-1", parts=[Part(text="xy")])],
+            ),
+        )
+
+        reply = await _client(server).ask("ping")
+
+        assert reply.body == "xy"
+        assert server.methods == ["SendStreamingMessage", "GetTask"]
 
     async def test_task_finished_while_disconnected_is_read_back_instead_of_failing(self) -> None:
         server = _ScriptedServer(
@@ -276,7 +334,7 @@ class TestStreamingReconnect:
         server = _ScriptedServer(
             send=_Leg([_task(), _chunk("art-1", "he", append=False)], drop=True),
             resubscribes=[_Leg([_snapshot_with_call("calls", "lookup")])],
-            continuation=_Leg([_artifact("art-2", "found"), _completed()]),
+            continuations=[_Leg([_artifact("art-2", "found"), _completed()])],
         )
 
         reply = await _client(server, tools=[lookup]).ask("ping")
@@ -291,7 +349,7 @@ class TestStreamingReconnect:
             resubscribes=[
                 _Leg([_snapshot_with_call("calls", "lookup", state=TaskState.TASK_STATE_WORKING), _input_required()])
             ],
-            continuation=_Leg([_artifact("art-2", "found"), _completed()]),
+            continuations=[_Leg([_artifact("art-2", "found"), _completed()])],
         )
 
         reply = await _client(server, tools=[lookup]).ask("ping")
@@ -313,13 +371,47 @@ class TestStreamingReconnect:
         # the earlier turn's text too; that text was consumed by the tool turn, not this reply.
         server = _ScriptedServer(
             send=_Leg([_task(), _chunk("art-1", "pre-", append=False), _snapshot_with_call("calls", "lookup")]),
-            continuation=_Leg([_chunk("art-1", "end")], drop=True),
+            continuations=[_Leg([_chunk("art-1", "end")], drop=True)],
             resubscribes=[_Leg([_snapshot("art-1", snapshot), _completed()])],
         )
 
         reply = await _client(server, tools=[lookup]).ask("ping")
 
         assert reply.body == expected
+
+    async def test_retried_tool_turn_runs_the_call_its_failed_attempt_received(self) -> None:
+        # The server asks the retried turn for the call the failed attempt already received.
+        server = _ScriptedServer(
+            send=_Leg([_task(), _snapshot_with_call("calls", "lookup")]),
+            continuations=[
+                _Leg(
+                    [_snapshot_with_call("calls-2", "lookup", call_id="again", state=TaskState.TASK_STATE_WORKING)],
+                    drop=True,
+                ),
+                _Leg([_snapshot_with_call("calls-2", "lookup", call_id="again")]),
+                _Leg([_artifact("art-2", "found"), _completed()]),
+            ],
+        )
+
+        client = _client(server, max_reconnects=0, tools=[lookup], middleware=[_RetryEveryFailure])
+        reply = await client.ask("ping")
+
+        assert reply.body == "found"
+        assert server.methods == ["SendStreamingMessage"] * 4
+
+    async def test_retried_tool_turn_keeps_the_text_its_failed_attempt_received(self) -> None:
+        server = _ScriptedServer(
+            send=_Leg([_task(), _chunk("art-1", "pre-", append=False), _snapshot_with_call("calls", "lookup")]),
+            continuations=[
+                _Leg([_chunk("art-1", "mid")], drop=True),
+                _Leg([_snapshot("art-1", "pre-mid-end"), _completed()]),
+            ],
+        )
+
+        client = _client(server, max_reconnects=0, tools=[lookup], middleware=[_RetryEveryFailure])
+        reply = await client.ask("ping")
+
+        assert reply.body == "mid-end"
 
     async def test_gives_up_after_max_reconnects(self) -> None:
         server = _ScriptedServer(

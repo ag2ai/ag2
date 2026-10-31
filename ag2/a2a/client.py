@@ -5,7 +5,7 @@
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 import httpx
@@ -49,6 +49,7 @@ from ag2.response import ResponseProto
 from ag2.tools.final.function_tool import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
+from ._states import SETTLED_STATES
 from .errors import (
     A2ACardSignatureError,
     A2AClientToolsNotSupportedError,
@@ -112,17 +113,6 @@ logger = logging.getLogger(__name__)
 _PROVIDER = "a2a"
 _CONTEXT_ID_VAR_TEMPLATE = "a2a:context_id:{card_url}"
 
-# States after which nothing more arrives for this turn: the spec's terminal states plus the
-# interrupted ones (§4.1.3), which hand control back to the caller.
-_SETTLED_STATES = frozenset({
-    TaskState.TASK_STATE_COMPLETED,
-    TaskState.TASK_STATE_CANCELED,
-    TaskState.TASK_STATE_FAILED,
-    TaskState.TASK_STATE_REJECTED,
-    TaskState.TASK_STATE_INPUT_REQUIRED,
-    TaskState.TASK_STATE_AUTH_REQUIRED,
-})
-
 # Maps a task-failure terminal state to the ``finish_reason`` we surface
 # in the resulting ``ModelResponse``. Driven from one table so the
 # streaming and polling paths can never disagree on the mapping.
@@ -145,87 +135,96 @@ _FAILURE_ERRORS: dict[str, type[Exception]] = {
 
 
 @dataclass(slots=True)
-class A2ADriveState:
-    """State accumulated across one ``ask`` to its terminal task; survives ``input_required`` continuations."""
+class _ArtifactText:
+    """One artifact of the remote task, reconciled by identity across every turn on that task.
 
-    # Text in order of first appearance; a text artifact owns one slot that later updates extend or replace.
-    text_segments: list[str] = field(default_factory=list)
-    text_slot: dict[str, int] = field(default_factory=dict)
-    # Full text of each artifact as last seen; ``prior_text`` is what earlier tool-result drives consumed.
-    artifact_text: dict[str, str] = field(default_factory=dict)
-    prior_text: Mapping[str, str] = field(default_factory=dict)
-    # Artifacts this drive appended to after their ``prior_text``: the reply is their content past it.
-    continued_artifact_ids: set[str] = field(default_factory=set)
+    ``baseline`` is the content when the current turn began. The turn's reply is the content past
+    it when the content extends it, the whole content otherwise. It depends only on the baseline
+    and the latest content, so live updates and snapshots, and therefore streaming and polling,
+    agree on it.
+
+    So a full re-send that begins with an earlier turn's text continues it, even when the server
+    meant a whole new answer: a polled snapshot of appended text is byte-identical, and telling
+    the two apart only when streaming would make the modes disagree. A server that wants a new
+    answer in a later turn uses a new artifact id, as the AG2 server does. This reading is
+    proposed and awaits maintainer agreement (PR #3494, Open Decision 1), as does the matching
+    paragraph of ``client.mdx``.
+
+    The reply orders artifacts by their first appearance on the task, not in the turn: that is
+    the order of ``task.artifacts``, which is all a polling client sees, so a reused artifact
+    keeps its place ahead of one the current turn added.
+    """
+
+    content: str = ""
+    baseline: str = ""
+    # Reply text already sent as ``ModelMessageChunk`` in this turn; it cannot be retracted.
+    emitted: str = ""
+    # A ``last_chunk`` arrived in the current run: the SDK may replay the artifact on a
+    # ``SubscribeToTask`` reconnect (spec §3.5.2).
+    closed: bool = False
+
+    def reply(self) -> str:
+        baseline = self.baseline
+        return self.content[len(baseline) :] if self.content.startswith(baseline) else self.content
+
+    def update(self, text: str, append: bool) -> str:
+        """Apply a live update or a snapshot (``append=False`` restates the whole artifact); return the new reply text."""
+        self.content = self.content + text if append else text
+        reply = self.reply()
+        delta = reply[len(self.emitted) :] if reply.startswith(self.emitted) else ""
+        self.emitted += delta
+        return delta
+
+    def begin_turn(self) -> None:
+        self.baseline = self.content
+        self.emitted = ""
+
+
+@dataclass(slots=True)
+class A2ADriveState:
+    """State accumulated across one turn to its settled task; survives ``input_required`` continuations."""
+
+    # Every artifact of the task, in order of first appearance on it; the client keeps it across
+    # the turns on that task.
+    artifacts: dict[str, _ArtifactText] = field(default_factory=dict)
+    # ``(artifact_id, call_id)`` of every tool call surfaced so far, this task's earlier turns
+    # included; kept by the client like ``artifacts``.
+    seen_calls: set[tuple[str, str]] = field(default_factory=set)
+    # Text of the messages answering this turn, in arrival order. They end a run, so they follow the artifacts.
+    messages: list[str] = field(default_factory=list)
     pending_calls: list[ToolCallEvent] = field(default_factory=list)
     finish_reason: str = "completed"
     terminal_task: Task | None = None
-    # Completed artifacts (``last_chunk``): the SDK may replay them on a ``SubscribeToTask``
-    # reconnect (spec §3.5.2).
-    closed_artifact_ids: set[str] = field(default_factory=set)
     seen_message_ids: set[str] = field(default_factory=set)
-    # Artifacts absorbed by this drive; polling re-reads cumulative ``task.artifacts`` on every poll.
-    touched_artifact_ids: set[str] = field(default_factory=set)
-    # ``(artifact_id, call_id)`` of every tool call surfaced so far, this ask's earlier drives included.
-    seen_calls: set[tuple[str, str]] = field(default_factory=set)
+    # An update would have changed an artifact closed in this run; only the stored task can say
+    # whether it was a replay or text the server really wrote after ``last_chunk``.
+    closed_artifact_changed: bool = False
 
     def text(self) -> str:
-        return "".join(self.text_segments)
+        return "".join(artifact.reply() for artifact in self.artifacts.values()) + "".join(self.messages)
+
+    def begin_run(self) -> None:
+        """Reopen the task's artifacts for a new run (the first, or a HITL continuation)."""
+        for artifact in self.artifacts.values():
+            artifact.closed = False
+        self.closed_artifact_changed = False
 
     def add_parts(self, text: str, calls: Sequence[ToolCallEvent]) -> None:
-        self.text_segments.append(text)
+        self.messages.append(text)
         self.pending_calls.extend(calls)
 
     def add_call(self, artifact_id: str, call: ToolCallEvent) -> None:
-        """Surface a tool call once; cumulative snapshots re-send calls that earlier drives already surfaced."""
+        """Surface a tool call once; cumulative snapshots re-send calls that earlier turns already surfaced."""
         if (artifact_id, call.id) not in self.seen_calls:
             self.seen_calls.add((artifact_id, call.id))
             self.pending_calls.append(call)
 
-    def absorb_text(self, artifact_id: str, text: str, append: bool) -> str:
-        """Fold a text artifact update into its slot; return the newly arrived text.
-
-        A non-append update, live or a snapshot, restates the whole artifact and replaces what
-        was known, even when it shortens it. Text consumed by an earlier turn is not part of the
-        reply: a restatement that is exactly that text leaves the artifact unchanged and adds nothing,
-        and once this turn has appended to it, a restatement keeps only what follows it.
-        """
-        prior = self.prior_text.get(artifact_id, "")
-        received = self.artifact_text.get(artifact_id, prior)
-        content = received + text if append else text
-        self.artifact_text[artifact_id] = content
-        slot = self.text_slot.get(artifact_id)
-        # What this reply already holds for the artifact, as opposed to its full content.
-        given = self.text_segments[slot] if slot is not None else None
-        if append and given is not None:
-            reply_text = given + text
-        elif append and content.startswith(prior):
-            reply_text = content[len(prior) :]
-            if prior:
-                self.continued_artifact_ids.add(artifact_id)
-        elif artifact_id in self.continued_artifact_ids and content.startswith(prior):
-            # The artifact carries the earlier turn's text, so any restatement of it does too.
-            reply_text = content[len(prior) :]
-        elif given is None and content == prior:
-            reply_text = ""
-        else:
-            self.continued_artifact_ids.discard(artifact_id)
-            reply_text = content
-        # A restatement that does not extend what was already given out cannot be retracted.
-        given = given or ""
-        delta = reply_text[len(given) :] if reply_text.startswith(given) else ""
-        if slot is not None:
-            self.text_segments[slot] = reply_text
-        elif reply_text or artifact_id not in self.prior_text:
-            self.text_slot[artifact_id] = len(self.text_segments)
-            self.text_segments.append(reply_text)
-        return delta
-
     def received_artifacts(self) -> list[Artifact]:
         """Every text artifact as received so far, under its own id; stands in for ``task.artifacts`` when no task was."""
         return [
-            Artifact(artifact_id=artifact_id, parts=[Part(text=text)])
-            for artifact_id, text in self.artifact_text.items()
-            if text
+            Artifact(artifact_id=artifact_id, parts=[Part(text=artifact.content)])
+            for artifact_id, artifact in self.artifacts.items()
+            if artifact.content
         ]
 
 
@@ -298,7 +297,7 @@ class A2AClient(LLMClient):
         self._sdk_client: Client | None = None
         self._agent_card: AgentCard | None = preset_card
         self._task_id: str | None = None
-        self._consumed_text: dict[str, str] = {}
+        self._artifacts: dict[str, _ArtifactText] = {}
         self._consumed_calls: set[tuple[str, str]] = set()
         self._call_context: ClientCallContext | None = None
 
@@ -327,19 +326,27 @@ class A2AClient(LLMClient):
             last = messages[-1] if messages else None
             if not isinstance(last, ToolResultsEvent):
                 self._task_id = None
-                self._consumed_text = {}
+                self._artifacts = {}
                 self._consumed_calls = set()
 
             function_schemas = self._validate_and_extract_tools(tools)
             outgoing = self._build_outgoing(messages, function_schemas, context)
 
-            state = A2ADriveState(prior_text=dict(self._consumed_text), seen_calls=set(self._consumed_calls))
+            # The drive works on a copy that is committed once it ends, so a drive that raises leaves
+            # the task's artifacts and calls as they were, and a retry of this turn starts from them.
+            state = A2ADriveState(
+                artifacts={artifact_id: replace(artifact) for artifact_id, artifact in self._artifacts.items()},
+                seen_calls=set(self._consumed_calls),
+            )
+            # A new turn on the same task: what the task's artifacts hold now was the earlier turns' reply.
+            for artifact in state.artifacts.values():
+                artifact.begin_turn()
             while True:
-                # A HITL continuation is a new turn on the same task: its result replaces
-                # the previous INPUT_REQUIRED reason and may update artifacts closed in that turn.
-                # Keep their content and dedup identities, but reopen them for the new response.
+                # A HITL continuation stays in this turn: its result replaces the previous
+                # INPUT_REQUIRED reason and may update artifacts closed in the previous run.
+                # Keep their content and baselines, but reopen them.
                 state.finish_reason = "completed"
-                state.closed_artifact_ids.clear()
+                state.begin_run()
                 outcome = await self._drive_task(outgoing, context, state)
                 if not outcome.input_required:
                     break
@@ -362,11 +369,7 @@ class A2AClient(LLMClient):
                     context_id=self._read_context_id(context),
                     extra_extensions=self._extensions,
                 )
-
-            for artifact_id in state.touched_artifact_ids:
-                self._consumed_text[artifact_id] = state.artifact_text.get(
-                    artifact_id, self._consumed_text.get(artifact_id, "")
-                )
+            self._artifacts = state.artifacts
             self._consumed_calls = state.seen_calls
 
             if state.terminal_task is not None and (exc_cls := _FAILURE_ERRORS.get(state.finish_reason)):
@@ -380,7 +383,8 @@ class A2AClient(LLMClient):
                 )
                 state.pending_calls.clear()
 
-            message = ModelMessage(state.text()) if state.text() else None
+            text = state.text()
+            message = ModelMessage(text) if text else None
 
             return ModelResponse(
                 message=message,
@@ -438,6 +442,7 @@ class A2AClient(LLMClient):
             card=self._agent_card,
             httpx_client=self._httpx_client,
             streaming=self._streaming,
+            interface=iface,
             transport=transport,
             interceptors=self._interceptors,
             grpc_channel_factory=self._grpc_channel_factory,
@@ -520,8 +525,31 @@ class A2AClient(LLMClient):
     ) -> A2ATurnOutcome:
         assert self._agent_card is not None
         if self._streaming and self._agent_card.capabilities.streaming:
-            return await self._consume_streaming(message, context, state)
-        return await self._consume_polling(message, context, state)
+            outcome = await self._consume_streaming(message, context, state)
+        else:
+            outcome = await self._consume_polling(message, context, state)
+        if state.closed_artifact_changed and self._task_id is not None:
+            await self._read_back_artifacts(context, state)
+        return outcome
+
+    async def _read_back_artifacts(self, context: ConversationContext, state: A2ADriveState) -> None:
+        """Reconcile the artifacts with the stored task, which a polling client would have read.
+
+        Only the artifacts: the run's status and messages are already absorbed, and a message
+        without an id would be counted twice.
+        """
+        assert self._sdk_client is not None
+        task = await self._sdk_client.get_task(
+            GetTaskRequest(**self._maybe_tenant(context, id=self._task_id)),
+            context=self._call_context,
+        )
+        state.begin_run()
+        for artifact in task.artifacts:
+            await self._apply_artifact_update(
+                parse_task_artifact(artifact, task_id=task.id, context_id=task.context_id), context, state
+            )
+        if state.terminal_task is not None:
+            state.terminal_task = task
 
     async def _consume_streaming(
         self,
@@ -622,7 +650,7 @@ class A2AClient(LLMClient):
                 self._save_context_id(context, update.context_id)
                 if update.task_id:
                     self._task_id = update.task_id
-                if update.status.state in _SETTLED_STATES:
+                if update.status.state in SETTLED_STATES:
                     outcome.settled = True
                 stop = await self._handle_status_update(update, context, state, outcome)
                 if stop:
@@ -699,7 +727,7 @@ class A2AClient(LLMClient):
             return
         self._merge_context_update(context, extract_context_update(msg))
         parts: Iterable[Part] = msg.parts
-        if (reply := state.text()) and "".join(part.text for part in msg.parts) == reply:
+        if (reply := state.text()) and _joined_text(msg.parts) == reply:
             parts = [part for part in msg.parts if not part.text]
         text_chunk, calls = await self._handle_artifact_parts(parts, context)
         state.add_parts(text_chunk, calls)
@@ -746,29 +774,28 @@ class A2AClient(LLMClient):
         state: A2ADriveState,
     ) -> None:
         """Apply an artifact update to drive state; typed subclasses route directly, others scan parts."""
-        update = a2a_event.update
-        artifact = update.artifact
+        artifact = a2a_event.update.artifact
         artifact_id = artifact.artifact_id
-        if artifact_id in state.closed_artifact_ids:
+        record = state.artifacts.setdefault(artifact_id, _ArtifactText())
+        text = "" if isinstance(a2a_event, A2AToolCallArtifact) else _artifact_text(a2a_event)
+        if record.closed:
+            if (record.content + text if a2a_event.append else text) != record.content:
+                state.closed_artifact_changed = True
             return
-        state.touched_artifact_ids.add(artifact_id)
 
-        if isinstance(a2a_event, A2ATextArtifact):
-            if fresh := state.absorb_text(artifact_id, a2a_event.text, a2a_event.append):
-                await context.send(ModelMessageChunk(fresh))
-        elif isinstance(a2a_event, A2AToolCallArtifact):
+        if isinstance(a2a_event, A2AToolCallArtifact):
             state.add_call(artifact_id, a2a_event.call)
         else:
-            # Mixed artifact: its text reconciles by identity like a text artifact, its calls by call id.
-            text = "".join(part.text for part in artifact.parts)
-            if fresh := state.absorb_text(artifact_id, text, a2a_event.append):
+            # A mixed artifact's text reconciles like a text artifact's; its calls dedup by call id.
+            if fresh := record.update(text, a2a_event.append):
                 await context.send(ModelMessageChunk(fresh))
-            for part in artifact.parts:
-                if is_data_part_with_mime(part, MIME_TOOL_CALL):
-                    state.add_call(artifact_id, payload_to_call(part_data_to_python(part)))
+            if not isinstance(a2a_event, A2ATextArtifact):
+                for part in artifact.parts:
+                    if is_data_part_with_mime(part, MIME_TOOL_CALL):
+                        state.add_call(artifact_id, payload_to_call(part_data_to_python(part)))
 
         if a2a_event.last_chunk:
-            state.closed_artifact_ids.add(artifact_id)
+            record.closed = True
 
     async def _handle_artifact_parts(
         self,
@@ -833,6 +860,14 @@ def _ensure_stream_response(event: StreamResponse | Task | Message) -> StreamRes
     if isinstance(event, Message):
         return StreamResponse(message=event)
     raise TypeError(f"Unexpected stream event type: {type(event).__name__}")
+
+
+def _joined_text(parts: Iterable[Part]) -> str:
+    return "".join(part.text for part in parts)
+
+
+def _artifact_text(a2a_event: A2ATaskArtifactUpdate) -> str:
+    return a2a_event.text if isinstance(a2a_event, A2ATextArtifact) else _joined_text(a2a_event.update.artifact.parts)
 
 
 def _extract_status_prompt(status: TaskStatus) -> str | None:
