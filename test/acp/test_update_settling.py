@@ -58,7 +58,7 @@ class ChunkingAgent:
         for i in range(CHUNKS):
             await self.conn.session_update(
                 session_id=session_id,
-                update=acp.update_agent_message_text(str(i % 10)),
+                update=schema.AgentMessageChunk(content=schema.TextContentBlock(type="text", text=str(i % 10))),
             )
         return schema.PromptResponse(stop_reason="end_turn")
 

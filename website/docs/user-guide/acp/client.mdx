@@ -30,14 +30,17 @@ launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
 from ag2 import Agent
 from ag2.acp import ClaudeCodeConfig
 
-agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+config = ClaudeCodeConfig(cwd="/path/to/repo")
+agent = Agent("coder", config=config)
 
 reply = await agent.ask("Refactor the auth module and add tests")
 print(reply.body)
 ```
 
 A single `ask()`/`run()` maps to one ACP *prompt turn*: the CLI agent runs its
-own internal tool loop and AG2 streams every step as it happens.
+own internal tool loop and AG2 streams every step as it happens. The config is
+used like any other model config; for when its subprocess ends, see
+[Lifecycle](#lifecycle).
 
 ## Choosing an agent
 
@@ -214,8 +217,6 @@ from ag2.events import ModelMessageChunk, ModelReasoning
 from ag2.events.tool_events import BuiltinToolCallEvent
 from ag2.acp.events import ACPPlan
 
-agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
-
 def observe(event):
     if isinstance(event, ModelReasoning):
         print("💭", event.content)
@@ -226,6 +227,8 @@ def observe(event):
     elif isinstance(event, ACPPlan):
         for step in event.entries:
             print(f"  [{step.status}] {step.content}")
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
 async with agent.run("Add a healthcheck endpoint") as run:
     run.stream.subscribe(observe)  # subscribe before driving
@@ -258,14 +261,14 @@ def get_ticket(ticket_id: str) -> dict:
     """Fetch a ticket from the internal tracker."""
     return {"id": ticket_id, "status": "open"}
 
-async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
-    agent = Agent("dev", config=config, tools=[get_ticket])
-    # Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
-    reply = await agent.ask("Look up ticket ACME-4211.")
+config = ClaudeCodeConfig(cwd="./repo", permission_policy="auto")
+agent = Agent("dev", config=config, tools=[get_ticket])
+# Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
+reply = await agent.ask("Look up ticket ACME-4211.")
 ```
 
-The `async with` matters once tools are exposed: the MCP server serving them
-lives until the config is closed. See [Lifecycle](#lifecycle).
+The MCP server serving the tools lives as long as the session does. See
+[Lifecycle](#lifecycle).
 
 What reaches the CLI agent:
 
@@ -340,7 +343,7 @@ There is deliberately no `"auto"`. A permission request has an allow option AG2
 could pick blind; an arbitrary form has no answer AG2 could invent without
 fabricating data on your behalf.
 
-```python linenums="1" hl_lines="5-7 12"
+```python linenums="1" hl_lines="5-7 10"
 from ag2 import Agent
 from ag2.acp import ClaudeCodeConfig
 from ag2.events import HumanInputRequest
@@ -349,11 +352,8 @@ def answer(event: HumanInputRequest) -> str:
     """Show the agent's question and return the human's answer."""
     return input(f"{event.content}\n> ")
 
-agent = Agent(
-    "coder",
-    config=ClaudeCodeConfig(cwd="/repo"),  # elicitation_policy="ask" by default
-    hitl_hook=answer,
-)
+config = ClaudeCodeConfig(cwd="/repo")  # elicitation_policy="ask" by default
+agent = Agent("coder", config=config, hitl_hook=answer)
 reply = await agent.ask("Split this module up — ask me before choosing a layout.")
 ```
 
@@ -528,8 +528,14 @@ outlives the `agent.run()` that created it — `reply.ask()` continues the same
 session. So the session's lifetime is the *conversation's*, and only you know
 when that ends.
 
-Use the config as an async context manager, and everything it started — the
-subprocess and the tool gateway — is torn down on exit:
+There is nothing to manage in a script: the subprocess and the tool gateway end
+when the event loop does (the end of `asyncio.run`).
+
+A long-lived process, such as a server that handles many conversations, should
+end sessions itself. Nothing ends one before the loop does, so a config used
+across many runs without that accumulates live subprocesses — and, when tools
+are exposed, a listening MCP server per session. Close everything the config
+started with `await config.aclose()`, or scope it with `async with`:
 
 ```python linenums="1"
 from ag2 import Agent
@@ -544,8 +550,3 @@ async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
     follow_up = await reply.ask("What priority is it?")
 # subprocess and gateway are gone here, including if the block raised
 ```
-
-`await config.aclose()` does the same thing explicitly. One or the other is
-required: nothing reclaims a session implicitly, so a config used across many
-runs without it accumulates live subprocesses — and, when tools are exposed,
-a listening MCP server per session.

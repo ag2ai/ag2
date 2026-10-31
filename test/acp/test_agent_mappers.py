@@ -5,7 +5,6 @@
 
 import base64
 
-import acp
 import pytest
 from acp import schema
 
@@ -40,12 +39,15 @@ from ag2.events.types import HumanMessage, ModelMessage
 
 class TestPromptToInputs:
     def test_text_becomes_text_input(self) -> None:
-        [mapped] = prompt_to_inputs([acp.text_block("hello")])
+        [mapped] = prompt_to_inputs([schema.TextContentBlock(type="text", text="hello")])
 
         assert mapped == TextInput("hello")
 
     def test_order_is_preserved(self) -> None:
-        mapped = prompt_to_inputs([acp.text_block("one"), acp.text_block("two")])
+        mapped = prompt_to_inputs([
+            schema.TextContentBlock(type="text", text="one"),
+            schema.TextContentBlock(type="text", text="two"),
+        ])
 
         assert mapped == [TextInput("one"), TextInput("two")]
 
@@ -97,7 +99,7 @@ class TestPromptToInputs:
     def test_an_unmappable_block_does_not_drop_the_rest(self) -> None:
         unmappable = schema.ImageContentBlock(type="image", data="", mime_type="image/png")
 
-        mapped = prompt_to_inputs([unmappable, acp.text_block("kept")])
+        mapped = prompt_to_inputs([unmappable, schema.TextContentBlock(type="text", text="kept")])
 
         assert mapped == [TextInput("kept")]
 
