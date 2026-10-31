@@ -237,7 +237,7 @@ same filters and terminal methods. This example uses the OpenAI Responses API;
 set `OPENAI_API_KEY` before running it, as described in the
 [Quick Start](/docs/user-guide/quick-start):
 
-```python linenums="1"
+```python linenums="1" hl_lines="21"
 import asyncio
 
 from ag2 import Agent, tool
@@ -267,18 +267,33 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-Ask, Run, and their Reply continuations establish user-input boundaries. Tool
-results, summaries, and framework-enqueued updates do not reset the interval,
-including updates delivered after the model has produced its final response.
-The distinction is stored as request provenance, independently of the user role
-used for provider content. Ordinary legacy requests remain user inputs.
+The query is lazy, so the same `calls` object counts the second input after
+`#!python reply.ask("Thanks")` starts a new interval.
 
-Queries can also use `#!python history.where(ToolCallEvent).since_last_user_input()`;
-the boundary is found before filtering. Query construction leaves earlier
-selections unchanged, and each terminal reads one snapshot. If no actual
-user-input boundary remains in retained history, the scoped query returns an
-empty selection. It does not recover that boundary from a summary or archived
-history.
+A new interval starts with:
+
+- `#!python agent.ask()`, `#!python agent.run()`, and their continuations
+  `#!python reply.ask()` and `#!python reply.run()`;
+- a follow-up sent with `#!python run.enqueue(...)`
+  ([feeding the turn while it runs](/docs/user-guide/agents#feeding-the-turn-while-it-runs)),
+  once the running turn consumes it.
+
+Tool results, compaction summaries, and messages queued with
+`#!python context.enqueue(...)` from tools or background tasks do not start a
+new interval, even when they arrive after the model's final response.
+
+Each `ModelRequest` stores this in its `origin` field: `"user"` for input a
+person sent, `"service"` for framework messages. The provider still receives
+both as user-role content. Requests stored before the field existed count as
+`"user"`. Code that forwards a person's message into a running turn, such as a
+chat bridge, marks it explicitly with
+`#!python context.enqueue("Use the March report instead", origin="user")`.
+
+The boundary is found before filters apply, so
+`#!python history.where(ToolCallEvent).since_last_user_input()` selects the same
+events. If compaction or retention has removed the latest user input, the scoped
+query returns an empty selection; it does not recover the boundary from a
+summary.
 
 ## Raise events manually
 
