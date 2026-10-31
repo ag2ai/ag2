@@ -10,9 +10,10 @@ events through observers, and optionally runs the harness primitives
 spawning).
 
 A bare ``Agent(name, config=cfg)`` has zero harness middleware — it behaves
-exactly like a plain LLM loop. Harness features are opt-in: pass ``assembly=``
+exactly like a plain LLM loop. Harness features are opt-in: use ``middleware=``
 for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
-or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
+or use ``Agent.as_tool()`` for explicit subagent delegation. The legacy
+``tasks=TaskConfig(...)`` API is deprecated and will be removed in 1.4.0.
 """
 
 import asyncio
@@ -27,13 +28,14 @@ from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
-from typing import Any, Generic, Literal, TypeVar, overload
+from typing import Any, Generic, Literal, TypeGuard, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
 from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
+from typing_extensions import deprecated
 
 from ag2.events import BinaryResult
 
@@ -75,10 +77,12 @@ from .middleware.base import (
     AgentTurn,
     BaseMiddleware,
     LLMCall,
+    Middleware,
     MiddlewareFactory,
     ToolMiddleware,
 )
 from .middleware.describe import DescribedMiddleware
+from .middleware.halt import HaltCheckMiddleware
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
@@ -102,9 +106,27 @@ TAgent = TypeVar313("TAgent", default=str)
 T2 = TypeVar("T2")
 
 
+TASK_CONFIG_DEPRECATION = (
+    "TaskConfig, Agent(tasks=...) and the auto-injected run_subtask / run_subtasks tools are deprecated "
+    "and will be removed in 1.4.0. Expose explicitly constructed worker Agents through Agent.as_tool() instead."
+)
+
+ASSEMBLY_DEPRECATION = (
+    "Agent(assembly=...) is deprecated and will be removed in 1.4.0. Register "
+    "middleware=[Middleware(AssemblerMiddleware, policies=[...]), Middleware(HaltCheckMiddleware)] instead; "
+    "import AssemblerMiddleware from ag2.assembly and Middleware / HaltCheckMiddleware from ag2.middleware."
+)
+
+
+@deprecated(TASK_CONFIG_DEPRECATION, category=None)
 @dataclass
 class TaskConfig:
     """Groups task-spawning Agent parameters.
+
+    Deprecated; will be removed in 1.4.0 along with ``Agent(tasks=...)`` and
+    the auto-injected ``run_subtask`` / ``run_subtasks`` tools. Construct
+    worker Agents explicitly and pass their ``Agent.as_tool()`` tools to
+    the parent instead.
 
     By default a subtask Agent inherits **all** of the parent's user-supplied
     tools (everything passed via ``tools=``). Subtask Agents never receive the
@@ -687,15 +709,18 @@ class Agent(PluginTarget, Generic[TResult]):
     A bare ``Agent(name, config=cfg)`` has zero harness middleware and
     behaves exactly like a plain LLM loop. Harness features are opt-in:
 
-    * ``assembly=`` — assembly policies (e.g. ``ConversationPolicy``,
-      ``SlidingWindow``, ``AlertPolicy``). When non-empty,
-      ``AssemblerMiddleware`` and ``_HaltCheckMiddleware`` are wired in.
+    * ``middleware=`` — register context policies with
+      ``Middleware(AssemblerMiddleware, policies=[...])``. Add
+      ``Middleware(HaltCheckMiddleware)`` after it when using ``AlertPolicy``.
+      The legacy ``assembly=`` parameter is deprecated and will be removed
+      in 1.4.0; it keeps wiring both middleware automatically until then.
     * ``knowledge=KnowledgeConfig(store=...)`` — persistent knowledge store,
       compaction, aggregation.
     * ``tasks=TaskConfig(...)`` — opt in to the auto-injected ``run_subtask``
       / ``run_subtasks`` tools, and override the LLM config / prompt /
       tool-inheritance rules for sub-task Agents. Defaults to ``False``
-      (sub-task tools disabled).
+      (sub-task tools disabled). Deprecated; will be removed in 1.4.0.
+      Use worker Agents exposed through ``Agent.as_tool()`` instead.
     """
 
     @overload
@@ -715,7 +740,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -735,7 +760,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -755,7 +780,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -775,7 +800,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     def __init__(
@@ -794,7 +819,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | Literal[False] = False,
-        assembly: Iterable[AssemblyPolicy] = (),
+        assembly: Iterable[AssemblyPolicy] | None = None,
     ) -> None:
         self._init_target(
             name,
@@ -821,9 +846,11 @@ class Agent(PluginTarget, Generic[TResult]):
         # Task spawning. ``tasks=False`` (the default) means no auto-injected
         # ``run_subtask`` / ``run_subtasks`` tools. Pass ``tasks=TaskConfig(...)``
         # to opt in.
-        if tasks is False:
+        # ``None`` is treated as disabled: older docs showed it as the default.
+        if tasks is False or tasks is None:
             self._task_config: TaskConfig | None = None
         else:
+            warnings.warn(TASK_CONFIG_DEPRECATION, DeprecationWarning, stacklevel=2)
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
         # One Semaphore per running loop: sharing one raises once a second loop
@@ -853,13 +880,18 @@ class Agent(PluginTarget, Generic[TResult]):
             self._knowledge_context = _FakeKnowledgeContext()
 
         # Assembly policies (empty by default; bare Agent has no harness).
-        self._policies.extend(assembly)
+        if assembly is not None:
+            warnings.warn(ASSEMBLY_DEPRECATION, DeprecationWarning, stacklevel=2)
+            self._policies.extend(assembly)
         if self._policies:
             for w in AssemblerMiddleware.validate_order(self._policies):
                 logger.warning("Assembly policy ordering: %s", w)
 
-            self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
-            self.add_middleware(_HaltCheckMiddlewareFactory())
+            # Policies may come from constructor plugins alone. Keep the implicit
+            # assembler for them unless the user already registered one.
+            if not _has_user_assembler(self._middleware):
+                self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
+                self.add_middleware(Middleware(HaltCheckMiddleware))
 
     # --- Composition -----------------------------------------------------
     # Read-only views of what this agent is made of, for comparing two agents,
@@ -926,13 +958,20 @@ class Agent(PluginTarget, Generic[TResult]):
 
     @property
     def tasks(self) -> TaskConfig | None:
-        """Sub-task configuration, or ``None`` when sub-tasks are not enabled."""
+        """Sub-task configuration, or ``None`` when sub-tasks are not enabled.
+
+        Deprecated; will be removed in 1.4.0 with ``Agent(tasks=...)``.
+        """
 
         return self._task_config
 
     @property
     def assembly(self) -> tuple[AssemblyPolicy, ...]:
-        """Assembly policies, in the order they are applied."""
+        """Policies registered via legacy ``assembly=`` or plugins, in application order.
+
+        Policies registered directly through middleware are not included.
+        The ``assembly=`` constructor parameter will be removed in 1.4.0.
+        """
 
         return tuple(self._policies)
 
@@ -1540,17 +1579,9 @@ class Agent(PluginTarget, Generic[TResult]):
             )
 
             factories = list(self._middleware)
-            policies = list(additional_policies)
-            if policies:
-                policies = [*self._policies, *policies]
-                for warning in AssemblerMiddleware.validate_order(policies):
-                    logger.warning("Assembly policy ordering: %s", warning)
-                for index, factory in enumerate(factories):
-                    if isinstance(factory, _AssemblerMiddlewareFactory):
-                        factories[index] = _AssemblerMiddlewareFactory(policies)
-                        break
-                else:
-                    factories.extend((_AssemblerMiddlewareFactory(policies), _HaltCheckMiddlewareFactory()))
+            turn_policies = list(additional_policies)
+            if self._policies or turn_policies:
+                _attach_policies(factories, self._policies, turn_policies)
 
             for m in reversed(tuple(chain(factories, additional_middleware))):
                 mw = m(event, context)
@@ -2022,59 +2053,44 @@ def _make_knowledge_tool(store: KnowledgeStore) -> Tool:
     return knowledge
 
 
-class _HaltCheckMiddleware(BaseMiddleware):
-    """Catches ``HaltEvent`` on the stream and short-circuits the LLM call.
+def _is_user_assembler(factory: MiddlewareFactory) -> TypeGuard[Middleware]:
+    return isinstance(factory, Middleware) and issubclass(factory.cls, AssemblerMiddleware)
 
-    ``AlertPolicy`` emits ``HaltEvent`` when a FATAL alert is detected.
-    This middleware subscribes in ``on_turn`` (scoped to a single turn so
-    the subscription never outlives the ``_execute`` that created it) and,
-    on any subsequent ``on_llm_call``, returns a synthetic ``HALTED``
-    response instead of invoking the model.
+
+def _has_user_assembler(factories: Iterable[MiddlewareFactory]) -> bool:
+    return any(_is_user_assembler(f) for f in factories)
+
+
+def _attach_policies(
+    factories: list[MiddlewareFactory],
+    agent_policies: Sequence[AssemblyPolicy],
+    turn_policies: Sequence[AssemblyPolicy],
+) -> None:
+    """Hand agent and invocation-plugin policies to the turn's assembler, in place.
+
+    The assembler is the one ``assembly=`` wired implicitly, or else the first
+    ``Middleware(AssemblerMiddleware, ...)`` the user registered; a user
+    assembler's own policies run first. With neither, an assembler and a halt
+    check are appended, as ``assembly=`` would have done.
     """
+    for index, factory in enumerate(factories):
+        if isinstance(factory, _AssemblerMiddlewareFactory):
+            if not turn_policies:
+                # Already runs ``agent_policies``, validated at construction.
+                return
+            policies = [*agent_policies, *turn_policies]
+            factories[index] = _AssemblerMiddlewareFactory(policies)
+            break
+        if _is_user_assembler(factory):
+            policies = [*factory.options.get("policies", ()), *agent_policies, *turn_policies]
+            factories[index] = Middleware(factory.cls, **{**factory.options, "policies": policies})
+            break
+    else:
+        policies = [*agent_policies, *turn_policies]
+        factories.extend((_AssemblerMiddlewareFactory(policies), Middleware(HaltCheckMiddleware)))
 
-    def __init__(self, event: BaseEvent, context: Context) -> None:
-        super().__init__(event, context)
-        self._halted = False
-        self._halt_reason = ""
-
-    async def on_turn(
-        self,
-        call_next: Callable[..., Any],
-        event: BaseEvent,
-        context: Context,
-    ) -> Any:
-        from .events.alert import HaltEvent
-
-        async def _on_halt(evt: HaltEvent) -> None:
-            self._halted = True
-            self._halt_reason = evt.reason
-
-        sub_id = context.stream.where(HaltEvent).subscribe(_on_halt)
-        try:
-            return await call_next(event, context)
-        finally:
-            context.stream.unsubscribe(sub_id)
-
-    async def on_llm_call(
-        self,
-        call_next: Callable[..., Any],
-        events: Any,
-        context: Context,
-    ) -> ModelResponse:
-        if self._halted:
-            from ag2.events import ModelMessage
-
-            return ModelResponse(
-                message=ModelMessage(content=f"HALTED: {self._halt_reason}"),
-            )
-        return await call_next(events, context)
-
-
-class _HaltCheckMiddlewareFactory:
-    """Factory for _HaltCheckMiddleware."""
-
-    def __call__(self, event: BaseEvent, context: Context) -> _HaltCheckMiddleware:
-        return _HaltCheckMiddleware(event, context)
+    for warning in AssemblerMiddleware.validate_order(policies):
+        logger.warning("Assembly policy ordering: %s", warning)
 
 
 class _AssemblerMiddlewareFactory:

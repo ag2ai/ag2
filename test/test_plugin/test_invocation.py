@@ -14,9 +14,10 @@ import pytest
 from dirty_equals import AnyThing, IsPartialDict
 
 from ag2 import Agent, AgentRun, Context, MemoryStream, observer, tool
+from ag2.assembly import AssemblerMiddleware
 from ag2.events import BaseEvent, HumanMessage, ModelRequest, ModelResponse, ToolCallEvent, ToolResultsEvent
 from ag2.exceptions import ToolNotFoundError
-from ag2.middleware import BaseMiddleware, Middleware
+from ag2.middleware import BaseMiddleware, HaltCheckMiddleware, Middleware
 from ag2.middleware.base import LLMCall
 from ag2.plugin import Plugin
 from ag2.testing import ModelCall, TestConfig, TrackingConfig, Turn
@@ -341,6 +342,7 @@ class TestScope:
         assert dict(agent.dependencies) == {}
         assert dict(agent.variables) == {}
 
+    @pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")
     async def test_middleware_observers_and_policies_are_local_to_the_turn(self) -> None:
         config = tracked("done", "again")
         recorder = ResponseRecorder()
@@ -371,6 +373,7 @@ class TestScope:
         await agent.ask("again")
         assert prompts(config) == [("plugin-policy",), ()]
 
+    @pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")
     async def test_plugin_policies_preserve_existing_middleware_order(self) -> None:
         config = tracked("done")
         agent = Agent("a", prompt="base", config=config, assembly=[AppendPolicy("agent-policy")])
@@ -383,6 +386,62 @@ class TestScope:
             ("base", "agent-policy", "middleware"),
             ("base", "agent-policy", "plugin-policy", "middleware"),
         ]
+
+    async def test_plugin_policies_join_a_user_registered_assembler(self) -> None:
+        config = tracked("done")
+        agent = Agent(
+            "a",
+            prompt="base",
+            config=config,
+            middleware=[
+                Middleware(AssemblerMiddleware, policies=[AppendPolicy("agent-policy")]),
+                Middleware(SuffixMiddleware),
+            ],
+        )
+        plugin = Plugin()
+        plugin.add_policy(AppendPolicy("plugin-policy"))
+        await agent.ask("go", plugins=[plugin])
+        # A second assembler would run inside SuffixMiddleware and put
+        # "plugin-policy" after "middleware".
+        assert prompts(config) == [("base", "agent-policy", "plugin-policy", "middleware")]
+
+    async def test_policies_applied_after_construction_reach_a_user_registered_assembler(self) -> None:
+        config = tracked("done")
+        agent = Agent(
+            "a",
+            prompt="base",
+            config=config,
+            middleware=[Middleware(AssemblerMiddleware, policies=[AppendPolicy("agent-policy")])],
+        )
+        # HubClient.register adds NetworkContextPolicy to an already built agent.
+        agent.add_policy(AppendPolicy("late-policy"))
+        await agent.ask("go")
+        assert prompts(config) == [("base", "agent-policy", "late-policy")]
+
+    @pytest.mark.filterwarnings("error::DeprecationWarning")
+    async def test_middleware_registration_does_not_warn(self) -> None:
+        config = tracked("done")
+        agent = Agent(
+            "a",
+            config=config,
+            middleware=[
+                Middleware(AssemblerMiddleware, policies=[AppendPolicy("agent-policy")]),
+                Middleware(HaltCheckMiddleware),
+            ],
+        )
+        await agent.ask("go")
+        assert prompts(config) == [("agent-policy",)]
+
+
+class TestAssemblyDeprecation:
+    def test_assembly_warns_at_the_line_that_builds_the_agent(self) -> None:
+        with pytest.warns(DeprecationWarning, match=r"Agent\(assembly=\.\.\.\) is deprecated") as record:
+            Agent("a", config=tracked("done"), assembly=[AppendPolicy("agent-policy")])
+        assert record[0].filename == __file__
+
+    def test_empty_assembly_still_warns(self) -> None:
+        with pytest.warns(DeprecationWarning, match=r"Agent\(assembly=\.\.\.\)"):
+            Agent("a", config=tracked("done"), assembly=[])
 
 
 @pytest.mark.asyncio

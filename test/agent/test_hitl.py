@@ -412,6 +412,7 @@ async def test_a_delegated_question_nobody_can_answer_ends_the_parent_turn() -> 
 
 @pytest.mark.asyncio()
 @pytest.mark.parametrize("parallel", [True, False], ids=["parallel", "sequential"])
+@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
 async def test_an_unanswerable_subtask_ends_the_parent_turn(parallel: bool) -> None:
     """``run_subtasks`` fans out; the fan-out must not swallow the failure.
 
