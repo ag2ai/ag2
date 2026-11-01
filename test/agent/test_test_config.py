@@ -84,14 +84,16 @@ async def test_tracking_config_preserves_tools_iterable(iterable_type: str) -> N
     else:
         tools = (schema for schema in schemas)
 
+    request = ModelRequest.ensure_request(["go"])
+
     await config.create()(
-        [ModelRequest.ensure_request(["go"])],
+        [request],
         context=context,
         tools=tools,
         response_schema=None,
         serializer=agent.serializer,
     )
 
-    expected = [ModelCall(prompt=(), tools=tuple(schemas), dependencies={}, variables={})]
+    expected = [ModelCall(prompt=(), tools=tuple(schemas), dependencies={}, variables={}, messages=(request,))]
     assert config.calls == expected
     assert wrapped.calls == expected

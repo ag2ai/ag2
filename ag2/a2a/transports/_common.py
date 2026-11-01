@@ -5,17 +5,21 @@
 from collections.abc import Awaitable, Callable
 from typing import TypeAlias
 
+import httpx
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.cluster import TaskEventStream, VersionedTaskStore
 from a2a.server.context import ServerCallContext
 from a2a.server.request_handlers import DefaultRequestHandlerV2
 from a2a.server.tasks import (
+    BasePushNotificationSender,
     InMemoryTaskStore,
     PushNotificationConfigStore,
+    PushNotificationEvent,
     PushNotificationSender,
     TaskStore,
 )
-from a2a.types import AgentCard
+from a2a.types import AgentCard, CancelTaskRequest, Task, TaskState
+from a2a.utils.errors import TaskNotCancelableError
 
 from ..errors import A2AStaleCardSignatureError
 
@@ -23,6 +27,9 @@ CardModifier: TypeAlias = Callable[[AgentCard], Awaitable[AgentCard]]
 ExtendedCardModifier: TypeAlias = Callable[[AgentCard, ServerCallContext], Awaitable[AgentCard]]
 
 CardSigner: TypeAlias = Callable[[AgentCard], AgentCard]
+
+# Spec §4.3.3: webhook requests SHOULD time out, "recommended: 10-30 seconds".
+_WEBHOOK_TIMEOUT = httpx.Timeout(10.0)
 
 
 def copy_card(card: AgentCard, *, drop_signatures: bool = False) -> AgentCard:
@@ -112,6 +119,45 @@ def prepare_public_card(
     return sign_card(prepared, signer)
 
 
+class _RequestHandler(DefaultRequestHandlerV2):
+    """``DefaultRequestHandlerV2`` that refuses a cancel the task outran.
+
+    A task that ends some other way while a cancel is in flight comes back from the SDK in the
+    state that won. It was not cancelable, so answer ``TaskNotCancelableError`` as the spec asks
+    for a terminal task, and as the SDK itself does when a cancel loses on the cross-replica path.
+    """
+
+    async def on_cancel_task(self, params: CancelTaskRequest, context: ServerCallContext) -> Task | None:
+        task: Task | None = await super().on_cancel_task(params, context)
+        if task is not None and task.status.state != TaskState.TASK_STATE_CANCELED:
+            raise TaskNotCancelableError(
+                message=f"Task finished as {TaskState.Name(task.status.state)} before it could be canceled"
+            )
+        return task
+
+
+class _WebhookSender(PushNotificationSender):
+    """The push sender used when the server has a push store but no sender of its own.
+
+    Each notification is sent by the SDK's ``BasePushNotificationSender`` on an HTTP client opened
+    for it and closed after it, so nothing is opened while the server is built and nothing outlives
+    a delivery.
+    """
+
+    def __init__(
+        self,
+        config_store: PushNotificationConfigStore,
+        push_url_validator: Callable[[str], Awaitable[bool]] | None,
+    ) -> None:
+        self._config_store = config_store
+        self._push_url_validator = push_url_validator
+
+    async def send_notification(self, task_id: str, event: PushNotificationEvent) -> None:
+        async with httpx.AsyncClient(timeout=_WEBHOOK_TIMEOUT) as client:
+            sender = BasePushNotificationSender(client, self._config_store, push_url_validator=self._push_url_validator)
+            await sender.send_notification(task_id, event)
+
+
 def build_default_handler(
     *,
     agent_executor: AgentExecutor,
@@ -126,7 +172,11 @@ def build_default_handler(
     validate_input_modes: bool = False,
 ) -> DefaultRequestHandlerV2:
     """Build the SDK request handler shared by all transports."""
-    return DefaultRequestHandlerV2(
+    if push_config_store is not None and push_sender is None:
+        # A store makes the card advertise push, and an advertised webhook must be called (spec §4.3);
+        # the SDK's own default sends nothing. Delivery re-checks each URL with the same policy.
+        push_sender = _WebhookSender(push_config_store, push_url_validator)
+    return _RequestHandler(
         agent_executor=agent_executor,
         task_store=task_store or InMemoryTaskStore(),
         event_stream=event_stream,
