@@ -3,13 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-import subprocess
+import locale
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from threading import Event
-from unittest.mock import patch
 
 import pytest
 
@@ -66,9 +65,7 @@ async def _cancel_queued_command(sandbox: LocalSandbox) -> None:
 
 def test_cancelled_queued_command_never_launches(tmp_path: Path) -> None:
     sandbox = LocalSandbox(tmp_path, timeout=2)
-    with patch("ag2.tools.sandbox.local.subprocess.Popen", wraps=subprocess.Popen) as launch:
-        asyncio.run(_cancel_queued_command(sandbox))
-    launch.assert_not_called()
+    asyncio.run(_cancel_queued_command(sandbox))
     assert not (tmp_path / "launched").exists()
 
 
@@ -88,6 +85,21 @@ def test_event_loop_shutdown_stops_running_command(tmp_path: Path, attempt: int)
 
 @pytest.mark.asyncio
 class TestLocalSandboxExec:
+    @pytest.mark.parametrize("fd", [1, 2])
+    @pytest.mark.parametrize("exit_code", [0, 7])
+    async def test_undecodable_output_keeps_text_and_exit_code(self, tmp_path: Path, fd: int, exit_code: int) -> None:
+        payload = b"before\x81after\n"
+        async with LocalSandbox(tmp_path) as sandbox:
+            result = await sandbox.exec([
+                sys.executable,
+                "-c",
+                f"import os; os.write({fd}, {payload!r}); raise SystemExit({exit_code})",
+            ])
+
+        assert result == ExecResult(
+            output=payload.decode(locale.getpreferredencoding(False), errors="replace").strip(), exit_code=exit_code
+        )
+
     async def test_argv_form_runs_command(self) -> None:
         sandbox = LocalSandbox()
         result = await sandbox.exec(["python3", "-c", "print('hi')"])
@@ -138,20 +150,25 @@ class TestLocalSandboxExec:
             "\nwhile not Path('release').exists() and time.monotonic() < deadline: time.sleep(0.01)"
             "\nif Path('release').exists(): Path('completed').touch()"
         )
+        loop = asyncio.get_running_loop()
+        loop_errors: list[dict[str, object]] = []
+        loop.set_exception_handler(lambda _, context: loop_errors.append(context))
         sandbox = LocalSandbox(tmp_path, timeout=5)
         execution = asyncio.create_task(sandbox.exec([sys.executable, "-c", program]))
         try:
             await asyncio.wait_for(_wait_for_marker(tmp_path / "started"), timeout=2)
             execution.cancel()
             if cancel_again:
-                asyncio.get_running_loop().call_later(0.01, execution.cancel)
+                loop.call_later(0.01, execution.cancel)
             with pytest.raises(asyncio.CancelledError):
                 await asyncio.wait_for(execution, timeout=2)
             await sandbox.aclose()
             (tmp_path / "release").touch()
             await asyncio.sleep(0.3)
             assert not (tmp_path / "completed").exists()
+            assert loop_errors == []
         finally:
+            loop.set_exception_handler(None)
             (tmp_path / "release").touch()
             execution.cancel()
             with suppress(asyncio.CancelledError):

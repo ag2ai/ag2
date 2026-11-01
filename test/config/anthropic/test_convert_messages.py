@@ -25,6 +25,7 @@ from ag2.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicS
 from ag2.config.anthropic.mappers import convert_messages
 from ag2.events import (
     AudioInput,
+    BaseEvent,
     BinaryInput,
     BinaryType,
     DocumentInput,
@@ -1196,3 +1197,27 @@ class TestToolUseVendorMetadata:
             {"role": "assistant", "content": [{"type": "tool_use", "id": "tc_1", "name": "navigate", "input": {}}]},
             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "ok"}]},
         ]
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_messages(final_turn_history, SerializerCls) == [
+        {"role": "user", "content": "first turn"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "tool_use", "id": "final-call", "name": "finish", "input": {}},
+                {"type": "tool_use", "id": "lookup-call", "name": "lookup", "input": {}},
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {"type": "tool_result", "tool_use_id": "final-call", "content": "sent"},
+                {"type": "tool_result", "tool_use_id": "lookup-call", "content": "lookup result"},
+            ],
+        },
+        {"role": "assistant", "content": [{"type": "text", "text": "sent"}]},
+        {"role": "user", "content": "second turn"},
+        {"role": "assistant", "content": [{"type": "text", "text": "second reply"}]},
+    ]

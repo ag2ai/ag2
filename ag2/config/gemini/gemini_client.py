@@ -57,6 +57,7 @@ class CreateConfig(TypedDict, total=False):
     response_modalities: list[str] | None
     image_config: types.ImageConfig | None
     thinking_config: types.ThinkingConfig | None
+    automatic_continuation: bool | None
 
 
 def _credentials_from_file(path: str) -> google.auth.credentials.Credentials:

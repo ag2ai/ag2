@@ -7,7 +7,7 @@ import base64
 import pytest
 from fast_depends.use import SerializerCls
 from xai_sdk.chat import Response as XAIResponse
-from xai_sdk.chat import chat_pb2
+from xai_sdk.chat import assistant, chat_pb2, tool_result, user
 
 from ag2 import Context, ToolResult
 from ag2.compact import CompactionSummary
@@ -15,6 +15,7 @@ from ag2.config.xai.events import XAIAssistantEvent
 from ag2.config.xai.mappers import convert_messages
 from ag2.events import (
     AudioInput,
+    BaseEvent,
     BinaryInput,
     BinaryType,
     DataInput,
@@ -279,3 +280,17 @@ def test_compaction_summary_renders_as_user_turn() -> None:
 
     assert msg.role == chat_pb2.ROLE_USER
     assert _content_texts(msg) == ["[Summary of earlier conversation]\nLooked up Paris and Tokyo."]
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    # Without an XAIAssistantEvent the tool-call turn cannot be rebuilt, so
+    # only its results are replayed.
+    assert convert_messages([], final_turn_history, SerializerCls) == [
+        user("first turn"),
+        tool_result("sent", tool_call_id="final-call"),
+        tool_result("lookup result", tool_call_id="lookup-call"),
+        assistant("sent"),
+        user("second turn"),
+        assistant("second reply"),
+    ]

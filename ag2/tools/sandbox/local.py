@@ -35,6 +35,10 @@ def _resolve_workdir_path(path: PurePosixPath, host_workdir: Path) -> Path:
     return resolved
 
 
+class _ExecCancelledError(Exception):
+    """Signals the worker thread to stop the command it is running."""
+
+
 def _run_subprocess(
     argv: list[str],
     *,
@@ -46,23 +50,24 @@ def _run_subprocess(
 ) -> ExecResult:
     """Run *argv*, observing cancellation while collecting command output."""
     merged_env = {**os.environ, **env} if env is not None else None
-    if cancelled.is_set():
-        raise asyncio.CancelledError
 
     try:
+        if cancelled.is_set():
+            raise _ExecCancelledError
         with subprocess.Popen(
             argv,
             cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            errors="replace",
             env=merged_env,
         ) as process:
             deadline = monotonic() + timeout
             try:
                 while True:
                     if cancelled.is_set():
-                        raise asyncio.CancelledError
+                        raise _ExecCancelledError
                     remaining = deadline - monotonic()
                     if remaining <= 0:
                         raise subprocess.TimeoutExpired(argv, timeout)
@@ -75,6 +80,10 @@ def _run_subprocess(
                 process.kill()
                 process.wait()
                 raise
+    except _ExecCancelledError:
+        # Never seen by callers: ``exec`` re-raises CancelledError. Returning rather
+        # than raising keeps asyncio.shield from logging the worker's exception.
+        return ExecResult(output="Command cancelled", exit_code=130)
     except FileNotFoundError as e:
         return ExecResult(output=f"Command not found: {e}", exit_code=127)
     except subprocess.TimeoutExpired:

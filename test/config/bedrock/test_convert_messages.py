@@ -9,6 +9,7 @@ from ag2 import ToolResult
 from ag2.compact import CompactionSummary
 from ag2.config.bedrock.mappers import convert_messages
 from ag2.events import (
+    BaseEvent,
     BinaryInput,
     BinaryType,
     DataInput,
@@ -345,4 +346,28 @@ def test_compaction_summary_renders_as_user_turn() -> None:
 
     assert result == [
         {"role": "user", "content": [{"text": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]}
+    ]
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_messages(final_turn_history, SerializerCls) == [
+        {"role": "user", "content": [{"text": "first turn"}]},
+        {
+            "role": "assistant",
+            "content": [
+                {"toolUse": {"toolUseId": "final-call", "name": "finish", "input": {}}},
+                {"toolUse": {"toolUseId": "lookup-call", "name": "lookup", "input": {}}},
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {"toolResult": {"toolUseId": "final-call", "content": [{"text": "sent"}]}},
+                {"toolResult": {"toolUseId": "lookup-call", "content": [{"text": "lookup result"}]}},
+            ],
+        },
+        {"role": "assistant", "content": [{"text": "sent"}]},
+        {"role": "user", "content": [{"text": "second turn"}]},
+        {"role": "assistant", "content": [{"text": "second reply"}]},
     ]

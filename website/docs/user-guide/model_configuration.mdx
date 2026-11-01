@@ -483,6 +483,23 @@ For full control (e.g. enabling `include_thoughts`), pass a `google.genai.types.
 
 The number of thinking tokens consumed is reported on `ModelResponse.usage.thinking_tokens` and emitted as the `gen_ai.usage.thinking_tokens` OpenTelemetry attribute by `TelemetryMiddleware`.
 
+### Gemini Responses Cut at the Token Limit
+
+With [long decode](https://ai.google.dev/gemini-api/docs/generate-content/long-decode){.external-link target="_blank"} (Gemini 4 Argon, with `max_output_tokens` above the 64K per-request cap), Gemini stops a long response at that cap before the answer is complete, with the finish reason `CONTINUATION` and a token to resume from. From `google-genai` 2.30, the SDK resumes such a response automatically, request after request, until the model finishes. AG2 then returns the joined answer, and `ModelResponse.usage` is the sum of all those requests, since each one is billed on its own.
+
+Set `automatic_continuation=False` on `GeminiConfig` or `VertexAIConfig` to turn the resumption off, for example to cap the cost of a single call:
+
+```python linenums="1" hl_lines="5"
+from ag2.config import GeminiConfig
+
+config = GeminiConfig(
+    model="gemini-3-flash-preview",
+    automatic_continuation=False,
+)
+```
+
+A response cut short then reports `#!python response.finish_reason == "continuation"`, so it can be told apart from a finished one. With `google-genai` 2.29, which knows the finish reason but cannot resume, every cut response reports it this way.
+
 ### Ollama Configuration
 
 `OllamaConfig` connects to a local or hosted [Ollama](https://docs.ollama.com/api/introduction){.external-link target="_blank"} server through the official `ollama` SDK (`ollama>=0.5.2`). Install the optional dependency with `pip install "ag2[ollama]"`.
