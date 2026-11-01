@@ -165,9 +165,13 @@ def replayable_span(events: Sequence[BaseEvent], cut: int) -> list[BaseEvent]:
     window narrower than the turn it lands in reduces to once its orphans are
     gone. Overshooting a window to reach the turn is recoverable; sending
     nothing is not.
+
+    A span left with only non-conversational events (status views, telemetry)
+    counts as empty too: such events ride along with a turn but cannot stand in
+    for one, and stopping there would silently drop the tool round they follow.
     """
     kept = _prune(events, cut)
-    while not kept and cut > 0:
+    while not any(map(is_conversational, kept)) and cut > 0:
         cut -= 1
         kept = _prune(events, cut)
     return kept

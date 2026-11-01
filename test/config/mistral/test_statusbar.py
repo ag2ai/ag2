@@ -4,21 +4,28 @@
 
 import pytest
 from fast_depends.use import SerializerCls
-from mistralai.client.models import UserMessage
+from mistralai.client.models import AssistantMessage, FunctionCall, ToolCall, ToolMessage, UserMessage
 
 from ag2 import TextInput
 from ag2.config.mistral.mappers import convert_messages
-from ag2.events import ModelRequest
-from test.statusbar_support import status_model_inputs
+from test.config._helpers import status_model_inputs
 
 
 @pytest.mark.asyncio
-async def test_retained_status_parts_use_normal_mistral_conversion() -> None:
-    messages = await status_model_inputs(TextInput("saved"), persist=True)
-    requests = [event for event in messages if isinstance(event, ModelRequest)]
+@pytest.mark.parametrize("persist", [False, True])
+async def test_status_follows_the_tool_result_in_mistral(persist: bool) -> None:
+    messages = await status_model_inputs(TextInput("saved"), persist=persist)
 
-    assert convert_messages([], requests, SerializerCls) == [
+    status = UserMessage(content="saved")
+    assert convert_messages([], list(messages), SerializerCls) == [
         UserMessage(content="start"),
-        UserMessage(content="saved"),
-        UserMessage(content="saved"),
+        *([status] if persist else []),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(function=FunctionCall(name="echo", arguments="{}"), id="call-1", type="function", index=0)
+            ],
+        ),
+        ToolMessage(content="tool output", tool_call_id="call-1"),
+        status,
     ]

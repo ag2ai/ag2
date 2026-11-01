@@ -11,9 +11,9 @@ from typing import Any, TypeAlias, overload
 
 from fast_depends.core import CallModel
 
-from ag2._model_input import _status_input
+from ag2._model_input import observation_request, status_request
 from ag2.annotations import Context
-from ag2.events import BaseEvent, Input, ModelRequest, ModelResponse, StatusObservation
+from ag2.events import BaseEvent, Input, ModelResponse, StatusObservation
 from ag2.utils import CONTEXT_OPTION_NAME, build_model
 
 from .base import BaseMiddleware, LLMCall, MiddlewareFactory
@@ -89,9 +89,9 @@ class _StatusBarMiddleware(BaseMiddleware):
                 if self.persist:
                     observation = StatusObservation(parts, source=self.source)
                     await context.send(observation)
-                    prepared.append(_status_input(observation))
+                    prepared.append(observation_request(observation))
                 else:
-                    prepared.append(ModelRequest(parts))
+                    prepared.append(status_request(parts))
             return await call_next(prepared, context)
 
 
