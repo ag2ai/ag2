@@ -6,10 +6,16 @@ import asyncio
 import atexit
 import os
 import shutil
+import signal
 import subprocess
+import sys
 import tempfile
 from contextlib import suppress
+from contextvars import copy_context
+from functools import partial
 from pathlib import Path, PurePosixPath
+from threading import Event
+from time import monotonic
 
 from ag2.tools.code.environment.base import CodeLanguage
 
@@ -31,6 +37,19 @@ def _resolve_workdir_path(path: PurePosixPath, host_workdir: Path) -> Path:
     return resolved
 
 
+class _ExecCancelledError(Exception):
+    """Signals the worker thread to stop the command it is running."""
+
+
+def _kill(process: subprocess.Popen[str]) -> None:
+    """Kill the command and, on POSIX, every process left in its session."""
+    if sys.platform != "win32":
+        with suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+    process.kill()
+    process.wait()
+
+
 def _run_subprocess(
     argv: list[str],
     *,
@@ -38,20 +57,50 @@ def _run_subprocess(
     env: dict[str, str] | None,
     timeout: float,
     max_output: int,
-) -> ExecResult:
-    """Run *argv* under :func:`subprocess.run` with the project's conventions."""
+    cancelled: Event,
+) -> ExecResult | None:
+    """Run *argv*, observing cancellation while collecting command output.
+
+    Returns ``None`` when *cancelled* stopped the command (or kept it from
+    launching).
+    """
     merged_env = {**os.environ, **env} if env is not None else None
 
     try:
-        result = subprocess.run(
+        if cancelled.is_set():
+            raise _ExecCancelledError
+        # A session of its own lets cancellation and timeouts reach whatever the
+        # command spawned (``sh -c`` children), not only the direct process.
+        with subprocess.Popen(
             argv,
             cwd=cwd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             errors="replace",
-            timeout=timeout,
             env=merged_env,
-        )
+            start_new_session=True,
+        ) as process:
+            deadline = monotonic() + timeout
+            try:
+                while True:
+                    if cancelled.is_set():
+                        raise _ExecCancelledError
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(argv, timeout)
+                    try:
+                        stdout, stderr = process.communicate(timeout=min(remaining, 0.1))
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+            except BaseException:
+                _kill(process)
+                raise
+    except _ExecCancelledError:
+        # Returning rather than raising keeps asyncio.shield from logging the
+        # worker's exception after the awaiting task was cancelled.
+        return None
     except FileNotFoundError as e:
         return ExecResult(output=f"Command not found: {e}", exit_code=127)
     except subprocess.TimeoutExpired:
@@ -60,19 +109,21 @@ def _run_subprocess(
             exit_code=124,
         )
 
-    output = (result.stdout + result.stderr).strip()
+    output = (stdout + stderr).strip()
     if (total := len(output)) > max_output:
         output = output[:max_output]
         output += f"\n[truncated: showing first {max_output} of {total} chars]"
-    return ExecResult(output=output, exit_code=result.returncode or 0)
+    return ExecResult(output=output, exit_code=process.returncode or 0)
 
 
 class LocalSandbox(SandboxBase):
     """Sandbox backed by a local subprocess.
 
-    A thin wrapper around :func:`subprocess.run` with a fixed working
-    directory. ``__aenter__`` / ``__aexit__`` are no-ops — local sandboxes
-    are usable immediately after construction.
+    A thin wrapper around :class:`subprocess.Popen` with a fixed working
+    directory. Cancelling :meth:`exec`, or closing the sandbox while it runs,
+    kills the command before control returns — on POSIX together with every
+    process it spawned in its session. ``__aenter__`` / ``__aexit__`` are
+    no-ops — local sandboxes are usable immediately after construction.
 
     Args:
         path: Working directory. ``None`` (default) creates a temporary
@@ -120,6 +171,8 @@ class LocalSandbox(SandboxBase):
         self._env_vars = dict(env_vars) if env_vars else {}
         self._languages = tuple(languages)
         self._closed = False
+        # Commands in flight, each with the event that stops it; aclose() drains them.
+        self._running: dict[asyncio.Future[ExecResult | None], Event] = {}
 
     def _ensure_workdir(self) -> Path:
         """Materialize the working directory on first use.
@@ -180,14 +233,38 @@ class LocalSandbox(SandboxBase):
             return ExecResult(output="", exit_code=2)
 
         host_workdir = self._ensure_workdir()
-        return await asyncio.to_thread(
-            _run_subprocess,
-            argv,
-            cwd=host_workdir,
-            env=self._merge_env(env),
-            timeout=timeout if timeout is not None else self._default_timeout,
-            max_output=self._max_output,
+        cancelled = Event()
+        # A Future keeps worker completion independent of Tasks cancelled at loop shutdown.
+        execution = asyncio.get_running_loop().run_in_executor(
+            None,
+            partial(
+                copy_context().run,
+                _run_subprocess,
+                argv,
+                cwd=host_workdir,
+                env=self._merge_env(env),
+                timeout=timeout if timeout is not None else self._default_timeout,
+                max_output=self._max_output,
+                cancelled=cancelled,
+            ),
         )
+        self._running[execution] = cancelled
+        try:
+            result = await asyncio.shield(execution)
+        except asyncio.CancelledError:
+            cancelled.set()
+            # Shield cleanup from repeated cancellation as well as the first request.
+            while not execution.done():
+                with suppress(asyncio.CancelledError, Exception):
+                    await asyncio.shield(execution)
+            with suppress(asyncio.CancelledError, Exception):
+                execution.result()
+            raise
+        finally:
+            del self._running[execution]
+        if result is None:
+            raise RuntimeError("LocalSandbox was closed while the command was running.")
+        return result
 
     async def put_file(self, path: PurePosixPath, content: bytes) -> None:
         if self._closed:
@@ -206,6 +283,11 @@ class LocalSandbox(SandboxBase):
         if self._closed:
             return
         self._closed = True
+        if self._running:
+            for cancelled in self._running.values():
+                cancelled.set()
+            # Commands must be dead before their workdir goes away.
+            await asyncio.wait(list(self._running))
         self._cleanup_workdir_now()
 
     def _cleanup_workdir_now(self) -> None:
