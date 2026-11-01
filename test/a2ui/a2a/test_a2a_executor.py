@@ -5,21 +5,34 @@
 import json
 from typing import Annotated
 
+import httpx
 import pytest
-from a2a.types import Part, TaskState
+from a2a.client import ClientCallInterceptor
+from a2a.client.interceptors import BeforeArgs
+from a2a.types import Message, Part, Task, TaskState
+from dirty_equals import IsPartialDict
+from google.protobuf.json_format import MessageToDict, ParseDict
 
 from ag2 import Agent, Depends
+from ag2.a2a import A2AServer
 from ag2.a2a.extension import EXTRA_PARTS_DEPENDENCY_KEY
+from ag2.a2a.mappers import data_part
+from ag2.a2a.mappers.messages import build_tool_result_message, build_user_message
+from ag2.a2a.testing import make_test_client_factory
 from ag2.a2ui import a2ui_action
-from ag2.a2ui.a2a import create_a2ui_parts
+from ag2.a2ui.a2a import A2UIAgentExecutor, create_a2ui_parts
 from ag2.a2ui.a2a.executor import _extract_a2ui_envelopes
+from ag2.a2ui.constants import A2UI_MIME_TYPE
+from ag2.events import TextInput, ToolCallEvent, ToolResultEvent, ToolResultsEvent
 from ag2.stream import MemoryStream
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.final.function_tool import FunctionToolSchema
 
 from ._helpers import (
     FUNCTION_RESULT_MARK,
-    CallFunctionThenComplete,
+    CallRendererFunctionThenComplete,
     CapturingConfig,
+    DropEmptyTextInterceptor,
     MetadataInterceptor,
     client_for,
     subscribe_task_stream,
@@ -55,15 +68,77 @@ ERROR_ENVELOPE = {
 
 FUNCTION_RESPONSE_ENVELOPE = {
     "version": "v1.0",
-    "functionResponse": {"functionCallId": "fc-1", "call": "openUrl", "value": True},
+    "rendererFunctionResponse": {"functionCallId": "fc-1", "value": True},
 }
 
-# A server→client callFunction the LLM may emit inside <a2ui-json>. ``openUrl``
-# is a basic-catalog function, so this validates under v1.0.
-_CALL_FUNCTION_BLOCK = (
-    '[{"version":"v1.0","functionCallId":"fc-1","wantResponse":true,'
-    '"callFunction":{"call":"openUrl","args":{"url":"https://example.com"}}}]'
+CALL_AGENT_FUNCTION_ENVELOPE = {
+    "version": "v1.0",
+    "callAgentFunction": {
+        "surfaceId": "s1",
+        "functionCallId": "fc-7",
+        "callFunction": {"@call": "verify_provider", "args": {"provider_id": "PRV-102"}},
+    },
+}
+
+# A server→client callRendererFunction the LLM may emit inside <a2ui-json>. ``openUrl`` is
+# ``rendererOnly`` in the basic catalog, so tests using this block turn validation off.
+_CALL_RENDERER_FUNCTION_BLOCK = (
+    '[{"version":"v1.0","callRendererFunction":{"functionCallId":"fc-1",'
+    '"callFunction":{"@call":"openUrl","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",'
+    '"args":{"url":"https://example.com"}}}}]'
 )
+
+
+async def _send_a2a_message(http: httpx.AsyncClient, message: Message) -> Task:
+    response = await http.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": message.message_id,
+            "method": "SendMessage",
+            "params": {"message": MessageToDict(message)},
+        },
+        headers={"A2A-Version": "1.0"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "error" not in payload, payload
+    task = Task()
+    ParseDict(payload["result"]["task"], task)
+    return task
+
+
+class _FunctionRoundTrip(ClientCallInterceptor):
+    """Send a server RPC, then answer its renderer RPC on the same task."""
+
+    def __init__(self) -> None:
+        self._sent_call = False
+
+    async def before(self, args: BeforeArgs) -> None:
+        try:
+            message = args.input.message
+        except AttributeError:
+            return
+        if not self._sent_call:
+            envelope = {
+                "version": "v1.0",
+                "callAgentFunction": {
+                    "surfaceId": "s",
+                    "functionCallId": "agent-1",
+                    "callFunction": {"@call": "obtain_location", "args": {}},
+                },
+            }
+            self._sent_call = True
+        else:
+            envelope = {
+                "version": "v1.0",
+                "rendererFunctionResponse": {"functionCallId": "renderer-1", "value": "Berlin"},
+            }
+        del message.parts[:]
+        message.parts.extend(create_a2ui_parts([envelope]))
+
+    async def after(self, args: object) -> None:
+        return None
 
 
 class TestExtractA2UIEnvelopes:
@@ -80,7 +155,7 @@ class TestExtractA2UIEnvelopes:
         [part] = create_a2ui_parts(ACTION_ENVELOPE, legacy_split=True)
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
-    def test_filters_entries_without_action_or_error(self) -> None:
+    def test_filters_entries_the_renderer_does_not_send(self) -> None:
         [part] = create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
@@ -241,25 +316,27 @@ async def test_incoming_function_response_becomes_continuation_prompt() -> None:
     )
 
     synthesized = synthesized_text(config.messages[-1])
-    assert "openUrl" in synthesized
     assert "fc-1" in synthesized
+    assert "returned: true" in synthesized
 
 
 @pytest.mark.asyncio
-class TestCallFunctionPause:
-    """A v1.0 ``callFunction(wantResponse=true)`` pauses the task awaiting the
-    client's ``functionResponse`` instead of completing it, delivering the
-    ``callFunction`` DataPart on the input-required transition."""
+class TestCallRendererFunctionPause:
+    """A v1.0 ``callRendererFunction`` pauses the task awaiting the renderer's
+    ``rendererFunctionResponse`` instead of completing it, delivering the
+    ``callRendererFunction`` DataPart on the input-required transition."""
 
-    async def test_call_function_with_want_response_pauses(self) -> None:
+    async def test_call_renderer_function_pauses(self) -> None:
         hitl_prompts: list[str] = []
 
         async def hitl_hook() -> str:
             hitl_prompts.append("called")
             return FUNCTION_RESULT_MARK
 
-        agent = Agent(name="ui_agent", config=CallFunctionThenComplete(_CALL_FUNCTION_BLOCK))
-        client = client_for(agent, streaming=True, hitl_hook=hitl_hook, protocol_version="v1.0")
+        agent = Agent(name="ui_agent", config=CallRendererFunctionThenComplete(_CALL_RENDERER_FUNCTION_BLOCK))
+        client = client_for(
+            agent, streaming=True, hitl_hook=hitl_hook, protocol_version="v1.0", validate_responses=False
+        )
         stream = MemoryStream()
         payloads, states = subscribe_task_stream(stream)
 
@@ -269,10 +346,10 @@ class TestCallFunctionPause:
         # that pause surfaced to the client as an input request.
         assert TaskState.TASK_STATE_INPUT_REQUIRED in states
         assert hitl_prompts == ["called"]
-        # The callFunction DataPart rode the input-required transition.
-        assert any(payload and "callFunction" in payload[0] for payload in payloads)
+        # The callRendererFunction DataPart rode the input-required transition.
+        assert any(payload and "callRendererFunction" in payload[0] for payload in payloads)
 
-    async def test_no_call_function_completes_normally(self) -> None:
+    async def test_no_renderer_function_call_completes_normally(self) -> None:
         agent = Agent(name="ui_agent", config=TestConfig("Just a plain reply."))
         client = client_for(agent, streaming=True, protocol_version="v1.0")
         stream = MemoryStream()
@@ -283,6 +360,237 @@ class TestCallFunctionPause:
         assert reply.response.content == "Just a plain reply."
         assert TaskState.TASK_STATE_COMPLETED in states
         assert TaskState.TASK_STATE_INPUT_REQUIRED not in states
+
+
+@pytest.mark.asyncio
+class TestCallAgentFunction:
+    """A v1.0 ``callAgentFunction`` is answered on the server with an ``agentFunctionResponse``."""
+
+    async def test_registered_function_returns_its_value(self) -> None:
+        config = TrackingConfig(TestConfig("ok"))
+
+        @a2ui_action(description="Check a provider")
+        def verify_provider(provider_id: str) -> dict[str, object]:
+            return {"valid": True, "id": provider_id}
+
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, streaming=True, actions=[verify_provider], protocol_version="v1.0")
+        stream = MemoryStream()
+        payloads, states = subscribe_task_stream(stream)
+
+        await client.ask(
+            "check",
+            stream=stream,
+            dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])},
+        )
+
+        assert payloads == [
+            [
+                {
+                    "version": "v1.0",
+                    "agentFunctionResponse": {"functionCallId": "fc-7", "value": {"valid": True, "id": "PRV-102"}},
+                }
+            ]
+        ]
+        assert TaskState.TASK_STATE_COMPLETED in states
+        # The call is answered on the server: it never reaches the model's prompt.
+        [sent] = config.mock.call_args.args
+        assert "verify_provider" not in synthesized_text([sent])
+
+    async def test_envelope_only_turn_skips_the_agent(self) -> None:
+        config = TrackingConfig(TestConfig("ok"))
+
+        @a2ui_action(description="Check a provider")
+        def verify_provider(provider_id: str) -> dict[str, object]:
+            return {"valid": True, "id": provider_id}
+
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(
+            agent,
+            streaming=True,
+            interceptors=[DropEmptyTextInterceptor()],
+            actions=[verify_provider],
+            protocol_version="v1.0",
+        )
+        stream = MemoryStream()
+        payloads, states = subscribe_task_stream(stream)
+
+        await client.ask(
+            "",
+            stream=stream,
+            dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])},
+        )
+
+        assert payloads == [
+            [
+                {
+                    "version": "v1.0",
+                    "agentFunctionResponse": {"functionCallId": "fc-7", "value": {"valid": True, "id": "PRV-102"}},
+                }
+            ]
+        ]
+        assert TaskState.TASK_STATE_COMPLETED in states
+        assert config.calls == []
+
+    async def test_unregistered_function_is_answered_unknown(self) -> None:
+        agent = Agent(name="ui_agent", config=TestConfig("never used"))
+        client = client_for(agent, streaming=True, protocol_version="v1.0")
+        stream = MemoryStream()
+        payloads, _states = subscribe_task_stream(stream)
+
+        await client.ask(
+            "check",
+            stream=stream,
+            dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])},
+        )
+
+        assert payloads == [
+            [
+                {
+                    "version": "v1.0",
+                    "agentFunctionResponse": {
+                        "functionCallId": "fc-7",
+                        "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function 'verify_provider'."},
+                    },
+                }
+            ]
+        ]
+
+    async def test_server_function_can_pause_for_a_renderer_response(self) -> None:
+        calls: list[str] = []
+
+        @a2ui_action
+        def obtain_location() -> dict:
+            calls.append("called")
+            return {
+                "version": "v1.0",
+                "callRendererFunction": {
+                    "functionCallId": "renderer-1",
+                    "callFunction": {"@call": "getLocation", "catalogId": "https://example.com/device"},
+                },
+            }
+
+        async def hitl_hook() -> str:
+            return "Continue with the renderer response"
+
+        tracking = TrackingConfig(TestConfig("All done."))
+        client = client_for(
+            Agent("ui", config=tracking),
+            streaming=True,
+            interceptors=[_FunctionRoundTrip()],
+            actions=[obtain_location],
+            protocol_version="v1.0",
+            hitl_hook=hitl_hook,
+        )
+        stream = MemoryStream()
+        payloads, states = subscribe_task_stream(stream)
+
+        reply = await client.ask("", stream=stream)
+
+        assert TaskState.TASK_STATE_INPUT_REQUIRED in states
+        assert states[-1] == TaskState.TASK_STATE_COMPLETED
+        assert reply.body == "All done."
+        assert calls == ["called"]
+        assert len(tracking.calls) == 1
+        [sent] = tracking.mock.call_args.args
+        assert "Berlin" in synthesized_text([sent])
+        assert payloads == [
+            [
+                {
+                    "version": "v1.0",
+                    "callRendererFunction": {
+                        "functionCallId": "renderer-1",
+                        "callFunction": {"@call": "getLocation", "catalogId": "https://example.com/device"},
+                    },
+                },
+                {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "agent-1", "value": None}},
+            ]
+        ]
+
+    @pytest.mark.parametrize("pending", ["renderer_function", "client_tool"])
+    async def test_server_rpc_preserves_an_existing_input_request(self, pending: str) -> None:
+        @a2ui_action
+        def verify_provider(provider_id: str) -> bool:
+            return provider_id == "PRV-102"
+
+        tool_call = ToolCallEvent(id="tool-1", name="lookup", arguments="{}")
+        first_response = (
+            f"<a2ui-json>{_CALL_RENDERER_FUNCTION_BLOCK}</a2ui-json>" if pending == "renderer_function" else tool_call
+        )
+        agent = Agent("ui", config=TestConfig(first_response))
+        executor = A2UIAgentExecutor(
+            agent, actions=[verify_provider], protocol_version="v1.0", validate_responses=False
+        )
+        server = A2AServer(agent, executor=executor)
+        tool_schemas = [
+            FunctionToolSchema.from_dict({"function": {"name": "lookup", "parameters": {"type": "object"}}})
+        ]
+        async with make_test_client_factory(server)() as http:
+            first = await _send_a2a_message(
+                http, build_user_message([TextInput("Look it up")], tool_schemas=tool_schemas)
+            )
+            assert MessageToDict(first) == IsPartialDict({
+                "status": IsPartialDict({"state": "TASK_STATE_INPUT_REQUIRED"}),
+            })
+
+            tracking = TrackingConfig(TestConfig("Resumed."))
+            agent.config = tracking
+            intermediate = await _send_a2a_message(
+                http,
+                build_user_message(
+                    [],
+                    task_id=first.id,
+                    context_id=first.context_id,
+                    extra_parts=[data_part([CALL_AGENT_FUNCTION_ENVELOPE], media_type=A2UI_MIME_TYPE)],
+                ),
+            )
+
+            assert MessageToDict(intermediate) == IsPartialDict({
+                "status": IsPartialDict({
+                    "state": "TASK_STATE_INPUT_REQUIRED",
+                    "message": IsPartialDict({
+                        "parts": [
+                            IsPartialDict({
+                                "data": [
+                                    {
+                                        "version": "v1.0",
+                                        "agentFunctionResponse": {"functionCallId": "fc-7", "value": True},
+                                    },
+                                ],
+                                "mediaType": A2UI_MIME_TYPE,
+                            }),
+                        ],
+                    }),
+                }),
+            })
+            assert tracking.calls == []
+
+            if pending == "renderer_function":
+                continuation = build_user_message(
+                    [],
+                    task_id=first.id,
+                    context_id=first.context_id,
+                    extra_parts=[data_part([FUNCTION_RESPONSE_ENVELOPE], media_type=A2UI_MIME_TYPE)],
+                )
+            else:
+                continuation = build_tool_result_message(
+                    [ToolResultEvent.from_call(tool_call, "Found it")],
+                    task_id=first.id,
+                    context_id=first.context_id,
+                )
+            final = await _send_a2a_message(http, continuation)
+
+        assert MessageToDict(final) == IsPartialDict({
+            "id": first.id,
+            "status": IsPartialDict({
+                "state": "TASK_STATE_COMPLETED",
+                "message": IsPartialDict({"parts": [{"text": "Resumed."}]}),
+            }),
+        })
+        assert len(tracking.calls) == 1
+        if pending == "client_tool":
+            [sent] = tracking.mock.call_args.args
+            assert isinstance(sent, ToolResultsEvent)
 
 
 @pytest.mark.asyncio
@@ -300,6 +608,42 @@ class TestCapabilitiesNegotiation:
         prompt = "\n".join(config.prompts[-1])
         assert "## A2UI Client Capabilities" in prompt
         assert "did NOT list" in prompt  # agent catalog absent from client's advertised list
+
+    async def test_v1_0_renderer_caps_injected_into_prompt(self) -> None:
+        config = TrackingConfig(TestConfig("ok"))
+        agent = Agent(name="ui_agent", config=config)
+        caps = {"a2uiRendererCapabilities": {"v1.0": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
+        client = client_for(
+            agent, interceptors=[MetadataInterceptor(caps)], protocol_version="v1.0", validate_responses=False
+        )
+
+        await client.ask("hi")
+
+        [record] = config.calls
+        assert "did NOT list" in "\n".join(record.prompt)
+
+    async def test_v1_0_renderer_data_model_injected_into_prompt(self) -> None:
+        config = TrackingConfig(TestConfig("ok"))
+        agent = Agent(name="ui_agent", config=config)
+        data_model = {"a2uiRendererDataModel": {"version": "v1.0", "surfaces": {"form": {"name": "Ann"}}}}
+        client = client_for(
+            agent, interceptors=[MetadataInterceptor(data_model)], protocol_version="v1.0", validate_responses=False
+        )
+
+        await client.ask("hi")
+
+        [record] = config.calls
+        assert '{"form": {"name": "Ann"}}' in "\n".join(record.prompt)
+
+    async def test_no_data_model_no_data_model_prompt(self) -> None:
+        config = TrackingConfig(TestConfig("ok"))
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, protocol_version="v1.0", validate_responses=False)
+
+        await client.ask("hi")
+
+        [record] = config.calls
+        assert "not instructions" not in "\n".join(record.prompt)
 
     async def test_no_caps_no_negotiation_prompt(self) -> None:
         config = CapturingConfig()

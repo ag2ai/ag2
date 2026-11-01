@@ -34,6 +34,15 @@ class MCPServerConfig:
     connection_timeout: float = 30.0
     """How long, in seconds, to wait on the server before giving up on a request."""
 
+    max_sse_event_size: int | None = 1_048_576
+    """Largest single server-sent event, in bytes, the client accepts; ``None`` lifts the cap.
+
+    A tool result arrives as one event, so a server returning file contents or a
+    base64 screenshot can exceed the 1 MiB default and fail. Raising it lets the
+    server make the client buffer that much memory per event, so raise it only for
+    a server you trust, and only as far as its results need.
+    """
+
     proxy: str | None = None
     """HTTP proxy to route the connection through."""
 

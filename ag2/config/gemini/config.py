@@ -33,6 +33,7 @@ class GeminiBaseConfigOverrides(TypedDict, total=False):
     thinking_config: types.ThinkingConfig | None
     thinking_level: ThinkingLevel | None
     thinking_budget: int | None
+    automatic_continuation: bool | None
     http_client: httpx.AsyncClient | None
 
 
@@ -64,6 +65,12 @@ class GeminiBaseConfig:
     thinking_config: types.ThinkingConfig | None = None
     thinking_level: ThinkingLevel | None = None
     thinking_budget: int | None = None
+    # A response cut at the per-request token limit ends with finish reason
+    # `CONTINUATION`; google-genai >= 2.30 then resumes it with the returned token
+    # until the model finishes, unless this is False. Each resumed request is
+    # billed on its own, and the usage reported is their sum. When off (or on
+    # google-genai 2.29), the response reports `finish_reason="continuation"`.
+    automatic_continuation: bool | None = None
     http_client: httpx.AsyncClient | None = None
 
     def _build_create_config(self) -> CreateConfig:
@@ -89,6 +96,8 @@ class GeminiBaseConfig:
             config["response_modalities"] = self.response_modalities
         if self.image_config is not None:
             config["image_config"] = self.image_config
+        if self.automatic_continuation is not None:
+            config["automatic_continuation"] = self.automatic_continuation
 
         thinking = self._resolve_thinking_config()
         if thinking is not None:

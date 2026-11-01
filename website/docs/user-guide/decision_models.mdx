@@ -20,9 +20,9 @@ On a decision model the agent's `response_schema` is not a format hint, it **is*
 | [Ranking](#ranking): order candidates by relevance | `bool`, asked once per candidate | the probabilities, sorted |
 | [Verification](#verification): check an artifact against a source | `bool`, one per failure mode | `True` / `False` per check |
 | [Feature extraction](#feature-extraction): signals for a downstream model | `bool`, one per signal | the probabilities as features |
-| [Image inspection](#image-inspection): a question about a photo | `bool` (OpenAI only) | `True` / `False`, plus the raw probability |
+| [Image inspection](#image-inspection): a question about a photo | `bool` (OpenAI), `BoundingBox` (TypeSafe) | `True` / `False` plus the raw probability, or the box |
 
-Anything else (`str`, a dataclass, a Pydantic model) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
+Anything else (`str`, a dataclass, another Pydantic model) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
 
 ## Set up
 
@@ -557,7 +557,7 @@ features = {d.name: r.response.metadata["noul"] for d, r in zip(detectors, repli
 
 ## Image inspection
 
-Damage checks, content moderation, document triage. OpenAI's Decisions API evaluates images together with text; Jev takes text and structured data only.
+Damage checks, content moderation, document triage. OpenAI's Decisions API evaluates images together with text and answers a yes/no question about them. Jev also takes images (experimental) and is built for locating things: its `BoundingBox` answer is described under [TypeSafe (Jev) Configuration](/docs/user-guide/model_configuration#locating-things-in-an-image).
 
 ```python linenums="1" hl_lines="7-8 11"
 from ag2 import Agent, ImageInput, ResponseSchema
@@ -576,6 +576,27 @@ probability = reply.response.metadata["probability"]
 ```
 
 Images are sent inline as base64 data URLs, the only form the endpoint accepts: `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work. A hosted image URL or an uploaded `file_id` raises `UnsupportedInputError`.
+
+With either provider the agent `prompt` is the question, and the images and data being judged go to `ask(...)`. When every request is compared against the same material, such as a reference photo, OpenAI Decisions can attach it to the question itself with `question_instructions`:
+
+```python linenums="1" hl_lines="6-10 14"
+from ag2 import Agent, ImageInput, ResponseSchema
+from ag2.config import OpenAIDecisionsConfig
+
+matcher = Agent(
+    "matcher",
+    prompt="Compare the photo with the reference product.",
+    config=OpenAIDecisionsConfig(question_instructions=[
+        ImageInput("https://cdn.example.com/reference.png"),
+        {"type": "input_json", "data": {"sku": "MUG-RED-350"}},
+    ]),
+    response_schema=ResponseSchema(bool, description="Is this the same product?"),
+)
+
+reply = await matcher.ask(ImageInput(path="photo.png"))
+```
+
+`question_instructions` takes a string, or a list of strings, inputs (`ImageInput`, `DataInput`) and OpenAI parts such as `{"type": "input_json", ...}`, the only way to send real JSON (a `DataInput` goes out as text). They follow the prompt in the question's `instructions`, with the schema description last. Unlike inputs passed to `ask(...)`, an image here may be a hosted `https` URL. TypeSafe's Jev takes text instructions only, so it has no such option: send the reference image with `ask(...)`.
 
 ## Describe every option
 

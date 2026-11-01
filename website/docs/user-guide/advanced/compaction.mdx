@@ -202,3 +202,7 @@ class DropOldToolEvents:
         drop_set = set(tool_indices[: -self._k])
         return [e for i, e in enumerate(events) if i not in drop_set]
 ```
+
+## Measuring a strategy
+
+Every strategy trades context for something the agent may still need. To measure whether a strategy makes your agent's next tool calls fail, repeat work, or stop, see the [Compaction Verifier](/docs/user-guide/extensions/compaction_verifier) extension.

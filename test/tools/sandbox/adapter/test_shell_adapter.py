@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import locale
 from pathlib import Path, PurePosixPath
 from unittest.mock import MagicMock
 
@@ -274,6 +275,13 @@ class TestShellAdapterAsync:
         adapter = ShellAdapter(sandbox)
         result = await adapter.run("exit 7")
         assert "exit code: 7" in result
+
+    async def test_run_keeps_undecodable_output_and_exit_code(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox)
+        result = await adapter.run(r"printf 'error: \201' >&2; exit 7")
+        expected = b"error: \x81".decode(locale.getpreferredencoding(False), errors="replace")
+        assert result == f"{expected}\n[exit code: 7]"
 
 
 @pytest.mark.asyncio

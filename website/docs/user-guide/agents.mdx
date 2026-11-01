@@ -215,5 +215,8 @@ print(await reply.content())
 * **while the turn is running** → consumed by that same turn's next or final model call;
 * **after** the turn finishes → waits for the next turn on this stream.
 
+A message sent with `run.enqueue` counts as user input, so it starts a new
+interval for [history queries scoped to the current user input](/docs/user-guide/advanced/stream#scope-to-the-current-user-input).
+
 !!! tip "Building with an AI coding assistant?"
     See [Coding with AI Assistants](/docs/user-guide/coding_with_ai) to set up Claude Code, Cursor, Copilot, or another assistant with AG2 skills and project rules so it writes against the current `ag2` API.

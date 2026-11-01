@@ -14,7 +14,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | Provider | Configuration Class | Installation Command |
 | :--- | :--- | :--- |
 | **[OpenAI Responses](https://developers.openai.com/api/reference/responses/overview)** | `OpenAIResponsesConfig` | `pip install "ag2[openai]"` |
-| **[OpenAI](https://developers.openai.com/api/reference/overview)** | `OpenAIConfig` | `pip install "ag2[openai]"` |
+| **[OpenAI Chat Completions](https://developers.openai.com/api/reference/overview)** | `OpenAICompletionsConfig` | `pip install "ag2[openai]"` |
 | **[OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions)** | `OpenAIDecisionsConfig` | `pip install "ag2[openai]"` |
 | **[Anthropic](https://platform.claude.com/docs/en/build-with-claude/overview)** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
 | **[Gemini](https://ai.google.dev/gemini-api/docs)** | `GeminiConfig` | `pip install "ag2[gemini]"` |
@@ -27,7 +27,17 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[Mistral](https://docs.mistral.ai)** | `MistralConfig` | `pip install "ag2[mistral]"` |
 | **[TypeSafe (Jev)](https://docs.typesafe.ai)** | `TypeSafeConfig` | `pip install "ag2[typesafe]"` |
 
-*(Note: `OpenAIConfig` is also available for OpenAI-compatible endpoints).*
+Use `OpenAIResponsesConfig` for new OpenAI integrations. Use `OpenAICompletionsConfig` for the Chat Completions API and compatible endpoints.
+
+!!! warning "OpenAIConfig changes in 1.4.0"
+
+    `OpenAIConfig` still uses Chat Completions, but this compatibility name is deprecated.
+    Its `create()` method emits a `DeprecationWarning`; constructing or copying the config does not.
+    Use `OpenAICompletionsConfig` explicitly to preserve Chat Completions behavior, or migrate to
+    `OpenAIResponsesConfig` for the Responses API. In **1.4.0**, the deprecated Chat Completions
+    binding will be removed and `OpenAIConfig` will become an alias for `OpenAIResponsesConfig`.
+    Chat Completions parameters such as `max_completion_tokens` and `reasoning_effort` must be
+    translated to Responses parameters such as `max_output_tokens` and `reasoning` when migrating.
 
 ---
 
@@ -51,12 +61,12 @@ config = OpenAIResponsesConfig(
 ```
   </Tab>
 
-  <Tab title="OpenAI">
+  <Tab title="OpenAI Chat Completions">
 ```python linenums="1"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Configure an OpenAI model
-config = OpenAIConfig(
+config = OpenAICompletionsConfig(
     model="gpt-4o-mini",
     api_key="sk-...",
     temperature=0.2,
@@ -77,7 +87,7 @@ config = AnthropicConfig(
 )
 ```
 
-`ag2[anthropic]` requires `anthropic>=1.6.0,<2`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and the sampling parameters (`temperature`, `top_p`, `top_k`).
+`ag2[anthropic]` requires `anthropic>=1.15.0,<3`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and why `temperature`, `top_p` and `top_k` are deprecated.
   </Tab>
 
   <Tab title="Gemini">
@@ -212,17 +222,17 @@ For security and convenience, you don't need to hardcode your API keys. If `api_
 The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `ZAI_API_KEY`, `TYPESAFE_API_KEY`).
 
 ```python linenums="1"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 
 # Automatically falls back to OPENAI_API_KEY from the environment
-config = OpenAIConfig(model="gpt-5")
+config = OpenAIResponsesConfig(model="gpt-5")
 ```
 
 ### Controlling OpenAI Reasoning
 
 OpenAI reasoning models spend extra tokens thinking before they answer. Both OpenAI configs let you bound that effort, and the Responses config can also request a summary of the thinking. See the [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning){.external-link target="_blank"} for which values each model accepts.
 
-`OpenAIConfig` (Chat Completions) takes `reasoning_effort`. `OpenAIResponsesConfig` takes the Responses API `reasoning` object:
+`OpenAICompletionsConfig` (Chat Completions) takes `reasoning_effort`. `OpenAIResponsesConfig` takes the Responses API `reasoning` object:
 
 <Tabs>
   <Tab title="OpenAI Responses">
@@ -237,12 +247,12 @@ config = OpenAIResponsesConfig(
 ```
   </Tab>
 
-  <Tab title="OpenAI">
+  <Tab title="OpenAI Chat Completions">
 ```python linenums="1"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Auth resolved from OPENAI_API_KEY when omitted
-config = OpenAIConfig(model="gpt-5-mini", reasoning_effort="low")
+config = OpenAICompletionsConfig(model="gpt-5-mini", reasoning_effort="low")
 ```
   </Tab>
 </Tabs>
@@ -253,7 +263,7 @@ The model only returns its thinking when you set `summary`; without it the model
 
 ### Anthropic Configuration
 
-`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview){.external-link target="_blank"} through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.6.0,<2`.
+`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview){.external-link target="_blank"} through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.15.0,<3`.
 
 If `api_key` is not passed explicitly, it is resolved from the `ANTHROPIC_API_KEY` environment variable.
 
@@ -263,6 +273,24 @@ from ag2.config import AnthropicConfig
 # Auth resolved from ANTHROPIC_API_KEY when omitted
 config = AnthropicConfig(model="claude-haiku-4-5-20251001", streaming=True)
 ```
+
+#### Inference Speed
+
+Set `speed="fast"` or `speed="standard"` to select the inference speed on supported models. The default, `None`, omits the parameter and leaves the API's default behavior unchanged. The option works with both streaming and non-streaming requests, including `config.copy(speed="standard")` overrides.
+
+Some models require the `fast-mode-2026-02-01` beta header for **either** explicit value, including `"standard"`. AG2 does not add this model-specific header automatically; set it through `default_headers` when required:
+
+```python linenums="1"
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(
+    model="claude-opus-5",
+    speed="fast",
+    default_headers={"anthropic-beta": "fast-mode-2026-02-01"},
+)
+```
+
+Caller-supplied beta headers are preserved when AG2 adds its own tool-related betas. See [Anthropic's fast-mode guide](https://platform.claude.com/docs/en/build-with-claude/fast-mode){.external-link target="_blank"} for current model availability, header requirements and pricing. Fast mode has premium pricing; enabling it does not make an unsupported model compatible.
 
 #### Custom HTTP Client
 
@@ -285,25 +313,11 @@ config = AnthropicConfig(
 
 #### Sampling Parameters
 
-`temperature`, `top_p` and `top_k` are ordinary fields on `AnthropicConfig`. The 1.x Messages API dropped them from its method signature, so AG2 sends them in the request body, where the API still reads them:
+`temperature`, `top_p` and `top_k` on `AnthropicConfig` are deprecated and are removed in 1.4.0. The Messages API version that `anthropic` 2.x sends (`2026-10-21`) no longer accepts them: a request carrying any of them is answered with HTTP 400 `Extra inputs are not permitted`, on every model, Claude Haiku 4.5 included. With `anthropic` 2.x, AG2 therefore drops the value; with `anthropic` 1.x it is still sent. Either way, `config.create()` emits a `#!python DeprecationWarning`.
 
-```python linenums="1" hl_lines="6"
-from ag2.config import AnthropicConfig
+!!! note "`extra_body`"
 
-config = AnthropicConfig(
-    model="claude-haiku-4-5-20251001",
-    api_key="sk-ant-...",
-    temperature=0.2,
-)
-```
-
-!!! warning "Recent Claude models reject sampling parameters"
-
-    Claude Fable 5, Opus 5, Opus 4.8, Opus 4.7 and Sonnet 5 removed `temperature`, `top_p` and `top_k` from the Messages API — a request carrying any of them is answered with HTTP 400. Leave all three unset (the default) on those models. Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 and earlier still accept them.
-
-!!! note "`extra_body` precedence"
-
-    Pass `extra_body` to forward provider-specific keys that have no dedicated field. A key you write there wins over the same key AG2 derived from a field — an `#!python extra_body={"temperature": 0.9}` overrides `#!python temperature=0.2` — while unrelated keys are merged through untouched.
+    Pass `extra_body` to forward provider-specific keys that have no dedicated field. AG2 does not interpret it, so the API still answers 400 to a sampling key written there.
 
 ### Amazon Bedrock Authentication
 
@@ -469,6 +483,23 @@ For full control (e.g. enabling `include_thoughts`), pass a `google.genai.types.
 
 The number of thinking tokens consumed is reported on `ModelResponse.usage.thinking_tokens` and emitted as the `gen_ai.usage.thinking_tokens` OpenTelemetry attribute by `TelemetryMiddleware`.
 
+### Gemini Responses Cut at the Token Limit
+
+With [long decode](https://ai.google.dev/gemini-api/docs/generate-content/long-decode){.external-link target="_blank"} (Gemini 4 Argon, with `max_output_tokens` above the 64K per-request cap), Gemini stops a long response at that cap before the answer is complete, with the finish reason `CONTINUATION` and a token to resume from. From `google-genai` 2.30, the SDK resumes such a response automatically, request after request, until the model finishes. AG2 then returns the joined answer, and `ModelResponse.usage` is the sum of all those requests, since each one is billed on its own.
+
+Set `automatic_continuation=False` on `GeminiConfig` or `VertexAIConfig` to turn the resumption off, for example to cap the cost of a single call:
+
+```python linenums="1" hl_lines="5"
+from ag2.config import GeminiConfig
+
+config = GeminiConfig(
+    model="gemini-3-flash-preview",
+    automatic_continuation=False,
+)
+```
+
+A response cut short then reports `#!python response.finish_reason == "continuation"`, so it can be told apart from a finished one. With `google-genai` 2.29, which knows the finish reason but cannot resume, every cut response reports it this way.
+
 ### Ollama Configuration
 
 `OllamaConfig` connects to a local or hosted [Ollama](https://docs.ollama.com/api/introduction){.external-link target="_blank"} server through the official `ollama` SDK (`ollama>=0.5.2`). Install the optional dependency with `pip install "ag2[ollama]"`.
@@ -517,7 +548,7 @@ config = OllamaConfig(
 
 !!! warning "`httpx`, not `httpx2`"
 
-    Unlike `OpenAIConfig` and `AnthropicConfig`, which take an `httpx2` client, Ollama's `http_client` is an `httpx` client. Use `proxy=` rather than `proxies=`, which current `httpx` rejects.
+    Unlike `OpenAICompletionsConfig` and `AnthropicConfig`, which take an `httpx2` client, Ollama's `http_client` is an `httpx` client. Use `proxy=` rather than `proxies=`, which current `httpx` rejects.
 
 #### Tool Results
 
@@ -701,7 +732,9 @@ reply.response.metadata["score"]   # e.g. 1.1, before snapping to a level
 
 #### Images
 
-Image inputs are sent inline as base64 data URLs, the only image form the endpoint accepts. `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work, and `vendor_metadata={"detail": ...}` is forwarded. Hosted image URLs, `file_id`s and non-image files raise `UnsupportedInputError`.
+Image inputs are sent inline as base64 data URLs, the only image form the endpoint accepts. `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work, and `vendor_metadata={"detail": ...}` is forwarded. Hosted image URLs, `file_id`s and non-image files raise `UnsupportedInputError`. There is no minimum size, and the cap is on area rather than on a side: a 5500×5500 image passes, while 5600×5600 is answered with `400 ... exceeds the limit of 30000 patches`.
+
+Images that every question should carry, such as a reference photo, go in `question_instructions` on the config: a string, or a list of strings, inputs and OpenAI parts (`input_text` / `input_image` / `input_json`). They follow the agent `prompt` in the question's `instructions`, and a hosted `https` image URL is allowed there. See [Decision Models](/docs/user-guide/decision_models#image-inspection) for an example.
 
 #### Refusals and what the Decisions API does not do
 
@@ -722,7 +755,7 @@ For recipes covering classification, routing, detection, scoring, ranking, verif
 
 For task recipes with Jev, see [Decision Models](/docs/user-guide/decision_models).
 
-Jev is not a text generator. It answers **one typed question** about the conversation so far — yes or no, one label out of several, or a level on a rubric — and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
+Jev is not a text generator. It answers **one typed question** about the conversation so far — yes or no, one label out of several, a level on a rubric, or where something is in an image — and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
 
 If `api_key` and `base_url` are not passed explicitly, the SDK resolves them from the `TYPESAFE_API_KEY` and `TYPESAFE_BASE_URL` environment variables. `model` defaults to `jev-latest`.
 
@@ -755,7 +788,7 @@ reply.response.metadata["probabilities"]  # {"billing": 0.07, "technical": 0.93}
 
 #### The response schema is the question
 
-There is no free-text path, so an agent on `TypeSafeConfig` **must** set `response_schema`, and the schema picks which of Jev's three primitives is asked:
+There is no free-text path, so an agent on `TypeSafeConfig` **must** set `response_schema`, and the schema picks which of Jev's primitives is asked:
 
 | `response_schema` | Jev asks | `#!python await reply.content()` returns |
 | :--- | :--- | :--- |
@@ -763,14 +796,53 @@ There is no free-text path, so an agent on `TypeSafeConfig` **must** set `respon
 | a number schema bounded to `0..1`, e.g. `#!python ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | a yes/no question | the yes-probability as JSON text, unparsed (`from_schema` schemas are not validated); `reply.response.metadata["noul"]` has it as a `float` |
 | an `Enum` of strings | a choice between its members | the selected member |
 | an `IntEnum` numbered `0..n-1` with 2–10 levels | a score on that rubric | the member nearest Jev's expected score |
+| `BoundingBox` | where something is in an image (see [Locating things in an image](#locating-things-in-an-image)) | the `BoundingBox`: each edge as a `0..1` fraction of the image |
 
-Anything else — `str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema` — raises `UnsupportedResponseSchemaError` before any request is sent.
+Anything else — `str`, `int`, a dataclass, another Pydantic model, a `PromptedSchema` — raises `UnsupportedResponseSchemaError` before any request is sent.
 
 The agent `prompt` frames the question; the schema's own description asks it. That is an explicit `ResponseSchema(..., description=...)`, an `Annotated[..., Question("...")]` marker, or an `Enum`'s class docstring, in that order of precedence. The prompt and the question are joined, so the router above asks *"You triage customer support tickets. Which team should handle this ticket?"*.
 
 !!! warning "A yes/no question has to be asked"
 
     `response_schema=bool` with no prompt, no description and no `criteria` raises `ValueError` locally. The API rejects a bare yes/no question, and failing before the request keeps the error actionable.
+
+#### Locating things in an image
+
+`BoundingBox` asks Jev **where** something is in an image. The agent `prompt` says what to find, the image goes in with the question, and the answer is the box around it.
+
+Images and box questions are experimental on TypeSafe's side, so two settings are required: the `jev-preview` model and the opt-in header `TypeSafe-Danger-Zone-Images: true`, sent through `headers`. Without the header the API answers `400 Images are experimental`. Each side of an image must be between 280 and 1568 pixels: a smaller or larger one, such as a 256×256 icon or a 1600×1200 photo, is answered with `400 Invalid image dimensions`, so resize it before sending.
+
+```python linenums="1" hl_lines="7-9 12"
+from ag2 import Agent, ImageInput, ResponseSchema
+from ag2.config import TypeSafeConfig
+from ag2.config.typesafe import BoundingBox
+
+finder = Agent(
+    "finder",
+    prompt="The dog",
+    config=TypeSafeConfig(model="jev-preview", headers={"TypeSafe-Danger-Zone-Images": "true"}),
+    response_schema=ResponseSchema(BoundingBox),
+)
+
+reply = await finder.ask("Where is it?", ImageInput(path="photo.png"))
+box = await reply.content()            # BoundingBox(top=0.2, bottom=0.66, left=0.19, right=0.68)
+reply.response.metadata["confidence"]  # e.g. 0.89, or None when the model gives none
+
+width, height = 1280, 720  # the size of photo.png in pixels
+rectangle = (box.left * width, box.top * height, box.right * width, box.bottom * height)
+```
+
+The edges are fractions of the image, measured from its top-left corner: `top` and `bottom` of its height, `left` and `right` of its width. Multiply them by the image size to get pixels, as in the last line above.
+
+Send the image as `ImageInput(path=...)` or `ImageInput(data=..., media_type=...)`. A URL, an uploaded `file_id` and non-image media raise `UnsupportedInputError`.
+
+!!! warning "A box needs an image"
+
+    `response_schema=ResponseSchema(BoundingBox)` with no image in the request raises `ValueError` locally. Without the check the API would not fail; it would answer with an invented box and a confidence near zero.
+
+!!! note "Treat the box as an estimate"
+
+    `jev-preview` finds the right region, but its edges can be off by 0.1–0.2 of the image, and `confidence` is often low (around 0.3 in our checks). Read `reply.response.metadata["confidence"]` before acting on a box, and leave a margin when you crop or draw it.
 
 #### Describing the options
 
@@ -814,7 +886,7 @@ The SDK answer, minus its `type`, is kept on `reply.response.metadata`. A yes/no
 
 - **Tools.** Passing any tool raises `UnsupportedToolError`; keep tools on the generative agent Jev routes to.
 - **Streaming.** Requests are non-streaming; there is no `streaming` field, and the answer arrives as one `ModelMessage`.
-- **Files and media.** `create_files_client()` raises `NotImplementedError`, and only text and structured `DataInput` parts are sent — anything else raises `UnsupportedInputError`.
+- **Files and media.** `create_files_client()` raises `NotImplementedError`, and only text, structured `DataInput` and image parts (experimental, see [Locating things in an image](#locating-things-in-an-image)) are sent — anything else raises `UnsupportedInputError`.
 - **Free text.** `reply.body` is the answer as JSON, not prose.
 
 `retry` takes a `typesafe_sdk.RetryPolicy` and `http_client` an `#!python httpx2.AsyncClient`; both are forwarded to the SDK untouched. Token counts land on `ModelResponse.usage` as `prompt_tokens` / `completion_tokens` when the API reports them.
@@ -823,13 +895,13 @@ Structured data extraction, one of the decision shapes in [TypeSafe's docs](http
 
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
-If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAIConfig` class and specify a custom `base_url`.
+If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAICompletionsConfig` class and specify a custom `base_url`.
 
 ```python linenums="1" hl_lines="6"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Configure a vLLM or other OpenAI-compatible endpoint
-config = OpenAIConfig(
+config = OpenAICompletionsConfig(
     model="qwen-3",
     base_url="http://localhost:8000/v1",
     # Some endpoints don't require an API key, but the client expects a non-empty string
@@ -842,9 +914,9 @@ config = OpenAIConfig(
 
     ```python linenums="1" hl_lines="8"
     import httpx2
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
-    config = OpenAIConfig(
+    config = OpenAICompletionsConfig(
         model="qwen-3",
         base_url="https://localhost:8000/v1",
         api_key="NotRequired",
@@ -854,7 +926,7 @@ config = OpenAIConfig(
 
 !!! note "`http_client` is an `httpx2` client"
     From `openai>=3` the OpenAI SDK uses [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, which
-    `ag2[openai]` installs for you. `OpenAIConfig` and `OpenAIResponsesConfig` annotate
+    `ag2[openai]` installs for you. `OpenAICompletionsConfig` and `OpenAIResponsesConfig` annotate
     `http_client` accordingly, and ag2 forwards whatever you pass to the SDK untouched.
 
     A legacy `httpx.AsyncClient` still works at runtime: the SDK keeps a compatibility path
@@ -875,9 +947,9 @@ config = OpenAIConfig(
 
     ```python
     import httpx2
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
-    config = OpenAIConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
+    config = OpenAICompletionsConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
     ```
 
     `certifi` remains installed — ag2's own core depends on `httpx` — but the OpenAI client
@@ -885,15 +957,15 @@ config = OpenAIConfig(
 
 ### Extra Body Parameters
 
-Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAIConfig` to pass these through directly to the API call.
+Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAICompletionsConfig` to pass these through directly to the API call.
 
 This is useful for enabling features like extended thinking on self-hosted or third-party models:
 
 ```python linenums="1" hl_lines="7"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # NVIDIA NIM
-nemotron = OpenAIConfig(
+nemotron = OpenAICompletionsConfig(
     model="nvidia/nemotron-3-super-120b-a12b",
     base_url="https://integrate.api.nvidia.com/v1",
     extra_body={"chat_template_kwargs": {"thinking": True}},
@@ -906,9 +978,9 @@ Model configurations are **immutable**. If you need to reuse a configuration for
 
 ```python linenums="1" hl_lines="4 9 15"
 from ag2.agent import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-base_config = OpenAIConfig(model="gpt-5")
+base_config = OpenAICompletionsConfig(model="gpt-5")
 
 agent1 = Agent(
     "Assistant",
@@ -931,7 +1003,7 @@ You can accomplish this by passing the configuration to the `.ask()` method when
 
 ```python linenums="1" hl_lines="15-18"
 from ag2.agent import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Define an agent without an initial model config,
 # or with a default one you plan to override later
@@ -944,7 +1016,7 @@ agent = Agent(
 # Ask the agent, passing the explicit model configuration
 response = await agent.ask(
     "Hello!",
-    config=OpenAIConfig(
+    config=OpenAICompletionsConfig(
         model="gpt-5",
         api_key="sk-user-specific-key"
     )
@@ -956,16 +1028,16 @@ response = await agent.ask(
 
     ```python linenums="1" hl_lines="6 12"
     from ag2.agent import Agent
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
     agent = Agent(
         "Assistant",
-        config=OpenAIConfig(model="gpt-5"),
+        config=OpenAICompletionsConfig(model="gpt-5"),
     )
 
     response = await agent.ask(
         "Hello!",
         # overrides the original model configuration
-        config=OpenAIConfig(model="gpt-5-mini")
+        config=OpenAICompletionsConfig(model="gpt-5-mini")
     )
     ```

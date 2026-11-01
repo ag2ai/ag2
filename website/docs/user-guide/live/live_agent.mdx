@@ -449,7 +449,7 @@ Human-in-the-loop works as it does on an `Agent`: pass `hitl_hook=` to the `Live
 | History | Returned via `AgentReply` | Lives on the session's stream |
 | Turn detection | Application-driven (you call `ask`) | Provider-driven (VAD) |
 | Structured output | Supported | Not supported |
-| `tasks` / `run_subtask` | Supported | Not supported |
+| `tasks` / `run_subtask` | Supported (deprecated, removed in 1.4.0) | Not supported |
 
 If you need both — for example, a realtime voice front-end that hands off to a tasking agent — drive the handoff through a tool on the `LiveAgent` that delegates to a separate `Agent` using `Agent.as_tool()`.
 

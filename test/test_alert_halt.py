@@ -2,10 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for AlertPolicy and _HaltCheckMiddleware.
+"""Unit tests for AlertPolicy and HaltCheckMiddleware.
 
 AlertPolicy is the assembly-chain replacement for the old Signal delivery
-system. _HaltCheckMiddleware catches HaltEvent and short-circuits LLM calls.
+system. HaltCheckMiddleware catches HaltEvent and short-circuits LLM calls.
+
+Most tests wire both through the deprecated ``Agent(assembly=...)``, which
+stays covered until its removal in 1.4.0.
 
 These tests isolate both components from the full Agent stack to verify
 edge cases not covered by Agent integration tests.
@@ -19,6 +22,7 @@ import pytest
 from typing_extensions import Self
 
 from ag2 import Agent, Context
+from ag2.assembly import AssemblerMiddleware
 from ag2.config import LLMClient, ModelConfig
 from ag2.events import (
     BaseEvent,
@@ -30,11 +34,14 @@ from ag2.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from ag2.middleware import HaltCheckMiddleware, Middleware
 from ag2.observers import BaseObserver
 from ag2.policies import AlertPolicy
 from ag2.stream import MemoryStream
 from ag2.tools.final import tool
 from ag2.watch import EventWatch
+
+pytestmark = pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")
 
 
 @tool
@@ -280,7 +287,7 @@ class TestAlertPolicyUnit:
 
 
 class TestHaltCheckMiddleware:
-    """_HaltCheckMiddleware short-circuits LLM on HaltEvent."""
+    """HaltCheckMiddleware short-circuits LLM on HaltEvent."""
 
     @pytest.mark.asyncio
     async def test_no_halt_passes_through(self) -> None:
@@ -299,7 +306,7 @@ class TestHaltCheckMiddleware:
         """FATAL alert after first LLM call prevents second call.
 
         Flow: LLM call 1 returns tool call -> ModelResponse fires FATAL observer
-        -> tool executes -> LLM call 2 intercepted by _HaltCheckMiddleware.
+        -> tool executes -> LLM call 2 intercepted by HaltCheckMiddleware.
         """
         config = _RecordingConfig(
             ToolCallEvent(name="echo_tool", arguments='{"value": "test"}'),
@@ -335,6 +342,37 @@ class TestHaltCheckMiddleware:
         assert reply.body is not None
         assert "HALTED" in reply.body
         # Second LLM call was short-circuited
+        assert config.client is not None
+        assert config.client._call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_registered_as_middleware_halts_the_same_way(self) -> None:
+        """The middleware= replacement for assembly= stops the second LLM call."""
+        config = _RecordingConfig(
+            ToolCallEvent(name="echo_tool", arguments='{"value": "test"}'),
+            "should-not-reach",
+        )
+
+        class _Fatal(BaseObserver):
+            def __init__(self) -> None:
+                super().__init__("fatal", watch=EventWatch(ModelResponse))
+
+            async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
+                return ObserverAlert(source="fatal", severity=Severity.FATAL, message="Stop now")
+
+        agent = Agent(
+            "test",
+            config=config,
+            observers=[_Fatal()],
+            tools=[echo_tool],
+            middleware=[
+                Middleware(AssemblerMiddleware, policies=[AlertPolicy()]),
+                Middleware(HaltCheckMiddleware),
+            ],
+        )
+        reply = await agent.ask("Hi")
+
+        assert reply.body == "HALTED: FATAL: Stop now"
         assert config.client is not None
         assert config.client._call_count == 1
 
@@ -376,7 +414,7 @@ class TestHaltCheckMiddleware:
 
     @pytest.mark.asyncio
     async def test_nonfatal_does_not_halt(self) -> None:
-        """Non-fatal alerts don't trigger _HaltCheckMiddleware."""
+        """Non-fatal alerts don't trigger HaltCheckMiddleware."""
         config = _RecordingConfig(
             ToolCallEvent(name="echo_tool", arguments='{"value": "x"}'),
             "final result",

@@ -9,7 +9,7 @@ import httpx2
 import pytest
 from dirty_equals import IsFloat
 
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.config.openai.files import OpenAIFilesClient
 from ag2.files import FilesAPI
 from ag2.files.types import FileContent, FileProvider, UploadedFile
@@ -48,7 +48,7 @@ async def test_list_follows_sdk_pages(page_count: int) -> None:
         )
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as http_client:
-        files = await FilesAPI(OpenAIConfig(model="test", api_key="test", http_client=http_client)).list()
+        files = await FilesAPI(OpenAICompletionsConfig(model="test", api_key="test", http_client=http_client)).list()
 
     assert files == [
         UploadedFile(

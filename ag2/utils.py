@@ -2,12 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
 from fast_depends import dependency_provider
 from fast_depends.core import CallModel, build_call_model
+from fast_depends.dependencies import Provider
 from fast_depends.pydantic import PydanticSerializer
 from fast_depends.utils import is_coroutine_callable, run_in_threadpool
 
@@ -16,18 +18,25 @@ AGENT_CONTEXT_DEPENDENCY_KEY = "__ag2_agent__"
 MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY = "__ag2_model_config__"
 
 
+def _validate_timeout(timeout: float | None) -> None:
+    if timeout is not None and (not math.isfinite(timeout) or timeout <= 0):
+        raise ValueError("`timeout` must be a finite number > 0 seconds or None.")
+
+
 def build_model(
     f: Callable[..., Any],
     *,
     sync_to_thread: bool = True,
     serialize_result: bool = True,
+    use_fastdepends_errors: bool = False,
+    provider: Provider | None = None,
 ) -> CallModel:
     return build_call_model(
         _to_async(f, sync_to_thread=sync_to_thread),
-        dependency_provider=dependency_provider,
+        dependency_provider=provider if provider is not None else dependency_provider,
         serializer_cls=PydanticSerializer(
             pydantic_config={"arbitrary_types_allowed": True},
-            use_fastdepends_errors=False,
+            use_fastdepends_errors=use_fastdepends_errors,
         ),
         serialize_result=serialize_result,
     )

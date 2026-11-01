@@ -121,6 +121,7 @@ async def _mcp_session(
             streamable_http_client(
                 config.server_url,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 http_client=client,
+                max_sse_event_size=config.max_sse_event_size,
             ) as (read_stream, write_stream),
             ClientSession(read_stream, write_stream, **session_kwargs) as session,
         ):
@@ -290,7 +291,11 @@ class MCPToolkit(Toolkit):
 
     Discovery is reused while the resolved configuration stays the same. A
     changed configuration replaces the cached remote tools; concurrent agent
-    turns retain their own discovered tool snapshots.
+    turns retain their own discovered tool snapshots. Each discovered tool is
+    pinned to the configuration that discovered it, including resolved
+    ``Variable`` values such as arguments, environment and headers, so a call
+    always reaches the server that advertised the tool. A value that changes
+    between turns, like a rotated token, applies from the next discovery.
 
     Set ``tool_name_prefix`` on the config to namespace the agent-visible tool
     names, so that two servers exposing the same generic name (``search``) do
@@ -393,8 +398,10 @@ class MCPToolkit(Toolkit):
                     continue
                 if raw.name in blocked:
                     continue
+                # Pin the proxy to the configuration that advertised the tool: re-resolving
+                # the template per call could reach a different server (default_factory).
                 proxy = _MCPProxyTool(
-                    config=self.config,
+                    config=resolved,
                     raw_tool=raw,
                     tool_name_prefix=prefix,
                     middleware=self._middleware,
