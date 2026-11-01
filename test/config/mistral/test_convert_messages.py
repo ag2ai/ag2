@@ -10,9 +10,11 @@ from mistralai.client.models import (
     AssistantMessage,
     DocumentURLChunk,
     FileChunk,
+    FunctionCall,
     ImageURLChunk,
     SystemMessage,
     TextChunk,
+    ToolCall,
     ToolMessage,
     UserMessage,
 )
@@ -22,6 +24,7 @@ from ag2.compact import CompactionSummary
 from ag2.config.mistral.mappers import convert_messages
 from ag2.events import (
     AudioInput,
+    BaseEvent,
     DataInput,
     DocumentInput,
     FileIdInput,
@@ -191,3 +194,22 @@ def test_audio_input_is_unsupported() -> None:
 
     with pytest.raises(UnsupportedInputError, match="mistral"):
         convert_messages([], [request], SerializerCls)
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_messages([], final_turn_history, SerializerCls) == [
+        UserMessage(content="first turn"),
+        AssistantMessage(
+            content=None,
+            tool_calls=[
+                ToolCall(id="final-call", function=FunctionCall(name="finish", arguments="{}"), index=0),
+                ToolCall(id="lookup-call", function=FunctionCall(name="lookup", arguments="{}"), index=0),
+            ],
+        ),
+        ToolMessage(content="sent", tool_call_id="final-call"),
+        ToolMessage(content="lookup result", tool_call_id="lookup-call"),
+        AssistantMessage(content="sent", tool_calls=None),
+        UserMessage(content="second turn"),
+        AssistantMessage(content="second reply", tool_calls=None),
+    ]

@@ -13,6 +13,7 @@ from ag2.compact import CompactionSummary
 from ag2.config.ollama.mappers import convert_messages
 from ag2.events import (
     AudioInput,
+    BaseEvent,
     BinaryInput,
     DataInput,
     DocumentInput,
@@ -208,3 +209,23 @@ def test_tool_result_parts_stay_separate_valid_ollama_messages(tool_result: Tool
 
     assert [Message.model_validate(m).content for m in messages] == contents
     assert messages == [IsPartialDict({"role": "tool", "content": content}) for content in contents]
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_messages([], final_turn_history, SerializerCls) == [
+        {"role": "user", "content": "first turn"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"function": {"name": "finish", "arguments": {}}},
+                {"function": {"name": "lookup", "arguments": {}}},
+            ],
+        },
+        {"role": "tool", "tool_name": "finish", "content": "sent"},
+        {"role": "tool", "tool_name": "lookup", "content": "lookup result"},
+        {"role": "assistant", "content": "sent"},
+        {"role": "user", "content": "second turn"},
+        {"role": "assistant", "content": "second reply"},
+    ]
