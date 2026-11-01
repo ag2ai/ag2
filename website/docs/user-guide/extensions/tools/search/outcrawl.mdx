@@ -1,0 +1,134 @@
+---
+title: Outcrawl
+sidebarTitle: Outcrawl
+---
+
+`OutcrawlToolkit` gives an agent two related tools powered by [Outcrawl](https://outcrawl.ai){.external-link target="_blank"}, a scrape and search API for AI agents: web search and single-page scrape. Search can also return each result page's markdown in the same call, so an agent finds and reads sources in one step.
+
+!!! note
+    Requires an Outcrawl API key, which you can create at [outcrawl.ai](https://outcrawl.ai){.external-link target="_blank"}. No extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import OutcrawlToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[OutcrawlToolkit(api_key=os.environ["OUTCRAWL_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, the toolkit reads the `OUTCRAWL_API_KEY` environment variable when a tool runs.
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `outcrawl_search` | Search the web and return ranked results with URL, title, and snippet, optionally with each page's markdown |
+| `outcrawl_scrape` | Read one `http` or `https` URL and return its markdown, plus HTML and links when requested |
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default tools:
+
+```python linenums="1"
+toolkit = OutcrawlToolkit(
+    api_key=...,
+    limit=5,                  # max results for outcrawl_search
+    scrape_results=True,      # include page markdown in outcrawl_search results
+    formats=["markdown"],     # output formats for outcrawl_scrape
+    only_main_content=True,   # drop navigation, headers, and footers in outcrawl_scrape
+    max_characters=20_000,    # cap the page content each tool returns
+)
+```
+
+The constructor also accepts `base_url` and `timeout` (seconds, for each HTTP request).
+
+## Limiting result size
+
+A scraped page can be very long, and `outcrawl_search` with `scrape_results=True` returns one page per result. Set `max_characters` to cut each page's markdown (and HTML for `outcrawl_scrape`) to that many characters. For `outcrawl_scrape`, links are kept only while their combined length fits. Results that were cut have `truncated=True`, so the model knows the text is incomplete:
+
+```python linenums="1"
+toolkit = OutcrawlToolkit(api_key=...)
+
+search_tool = toolkit.search(limit=3, scrape_results=True, max_characters=10_000)
+scrape_tool = toolkit.scrape(max_characters=20_000)
+```
+
+`max_characters` is off by default.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.scrape()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = OutcrawlToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.search(limit=3, scrape_results=True)],
+)
+```
+
+## Search configuration
+
+`outcrawl_search` accepts a required `query` at execution time. Configure the other options on `toolkit.search()`:
+
+```python linenums="1"
+search_tool = OutcrawlToolkit(api_key=...).search(
+    limit=5,              # number of results
+    scrape_results=True,  # add each result page's markdown
+)
+```
+
+With `scrape_results=True`, every result also carries the content of its page as markdown, so the agent does not need a separate scrape call for each result. Each result is then a full page, so keep `limit` low. Leave `scrape_results` off when titles and snippets are enough.
+
+## Scrape configuration
+
+`outcrawl_scrape` accepts a single URL at execution time. Configure the output on `toolkit.scrape()`:
+
+```python linenums="1"
+scrape_tool = OutcrawlToolkit(api_key=...).scrape(
+    formats=["markdown", "links"],  # "markdown" | "html" | "links"; defaults to markdown
+    only_main_content=False,        # keep navigation, headers, and footers
+)
+```
+
+The search and scrape options (everything except `api_key`, `base_url` and `timeout`) accept a `Variable` for deferred context resolution.
+
+## Errors
+
+`outcrawl_scrape` returns `{"error": ...}` for a URL that is not `http` or `https`, so the model can try again with a valid one. Everything else is raised:
+
+- a missing API key raises `ValueError`;
+- a non-2xx answer from Outcrawl raises `OutcrawlAPIError`, which carries the HTTP `status_code`, the Outcrawl error `code` and its message.
+
+Errors raised while a tool runs reach the model as tool errors.
+
+## Result
+
+`outcrawl_search` returns an `OutcrawlSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The search query |
+| `results` | List of `OutcrawlSearchResult` (`url`, `title`, `snippet`, `rank`, `markdown`, `truncated`) |
+
+`markdown` is set only when `scrape_results=True`.
+
+`outcrawl_scrape` returns an `OutcrawlScrapeResult`:
+
+| Field | Description |
+| :--- | :--- |
+| `url` | Final URL of the page |
+| `title`, `description`, `language` | Page metadata |
+| `status_code` | HTTP status code of the page |
+| `markdown`, `html`, `links` | Page content in the requested formats |
+| `truncated` | `True` when `max_characters` cut the markdown, the HTML or the links |
+
+!!! tip
+    Use `outcrawl_search` with `scrape_results=True` when the agent needs to read several sources for one question. Use `outcrawl_scrape` when the agent already knows the URL it wants to read.
