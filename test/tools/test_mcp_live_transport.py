@@ -55,6 +55,18 @@ def echo(message: str) -> str:
     return f"echo: {message}"
 
 
+# ``MCPServerConfig.max_sse_event_size``'s default; a result one byte past it
+# arrives as a single event that overflows the cap.
+_DEFAULT_SSE_EVENT_SIZE = 1_048_576
+_OVERSIZED = _DEFAULT_SSE_EVENT_SIZE + 1
+
+
+@mcp_tool
+def oversized() -> str:
+    """Return a result too large for one default-sized SSE event."""
+    return "x" * _OVERSIZED
+
+
 @asynccontextmanager
 async def _live_mcp_server(
     headers_seen: list[Headers] | None = None,
@@ -204,6 +216,35 @@ async def test_a_slashless_url_still_reaches_the_server(context: Context) -> Non
         schemas = list(await MCPToolkit(url.rstrip("/")).schemas(context))
 
     assert sorted(s.function.name for s in schemas) == ["ask", "echo"]
+
+
+async def _call_oversized(context: Context, **config: Any) -> Any:
+    """Serve ``oversized`` alone and call it through a toolkit built with ``config``."""
+    served = MCPServer(Agent("large", config=TestConfig("unused")), tools=[oversized], path="/mcp")
+    async with _serving_mcp(served) as url:
+        toolkit = MCPToolkit(MCPServerConfig(server_url=url, **config))
+        await toolkit.schemas(context)
+        proxy = next(t for t in toolkit.tools if t.name == "oversized")
+        return await proxy(ToolCallEvent(name="oversized", arguments="{}"), context)
+
+
+@pytest.mark.asyncio
+async def test_a_result_over_the_default_sse_event_size_is_refused(context: Context) -> None:
+    """The 1 MiB default holds, so a hostile server cannot make every client buffer more."""
+    result = await _call_oversized(context, connection_timeout=5)
+
+    assert isinstance(result, ToolErrorEvent)
+    assert "byte limit" in str(result.error)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("max_sse_event_size", [2 * _DEFAULT_SSE_EVENT_SIZE, None], ids=["raised", "unlimited"])
+async def test_a_raised_sse_event_size_admits_a_larger_result(context: Context, max_sse_event_size: int | None) -> None:
+    """Raising the cap, or lifting it with ``None``, is what lets a large result through."""
+    result = await _call_oversized(context, max_sse_event_size=max_sse_event_size)
+
+    assert isinstance(result, ToolResultEvent)
+    assert result.result.parts == [TextInput(content="x" * _OVERSIZED)]
 
 
 def _asking_agent(runs: list[str], answers: list[str] | None = None) -> Agent:

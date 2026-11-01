@@ -2,18 +2,31 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import locale
 import shutil
 import sys
 from pathlib import Path
 
 import pytest
 
+from ag2.tools.code.environment.base import CodeRunResult
 from ag2.tools.sandbox import CodeAdapter, LanguageRunner
 from ag2.tools.sandbox.local import LocalSandbox
 
 
 @pytest.mark.asyncio
 class TestCodeAdapterInline:
+    async def test_undecodable_stderr_preserves_code_result(self, tmp_path: Path) -> None:
+        async with LocalSandbox(tmp_path) as sandbox:
+            adapter = CodeAdapter(
+                sandbox, languages=("python",), runners={"python": LanguageRunner(inline_argv=(sys.executable, "-c"))}
+            )
+            result = await adapter.run("import os; os.write(2, b'error: \\x81'); raise SystemExit(7)", "python")
+
+        assert result == CodeRunResult(
+            output=b"error: \x81".decode(locale.getpreferredencoding(False), errors="replace"), exit_code=7
+        )
+
     async def test_python_runs_inline(self, tmp_path: Path) -> None:
         sandbox = LocalSandbox(tmp_path)
         adapter = CodeAdapter(sandbox, languages=("python",))
