@@ -17,8 +17,11 @@ from ag2.events import (
     FileIdInput,
     ImageInput,
     ModelRequest,
+    ModelResponse,
     TextInput,
     ToolCallEvent,
+    ToolCallsEvent,
+    ToolErrorEvent,
     ToolNotFoundEvent,
     ToolResultEvent,
     ToolResultsEvent,
@@ -177,3 +180,15 @@ def test_compaction_summary_renders_as_user_turn() -> None:
     result = convert_messages([], [summary], SerializerCls)
 
     assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]
+
+
+def test_truncated_arguments_preserve_raw_string() -> None:
+    truncated = '{"city": "Par'
+    call = ToolCallEvent(id="tc_1", name="get_weather", arguments=truncated)
+    response = ModelResponse(tool_calls=ToolCallsEvent([call]))
+    error = ToolErrorEvent.from_call(call, ValueError("boom"))
+    result = convert_messages([], [response, ToolResultsEvent([error])], SerializerCls)
+
+    assert result[0]["tool_calls"] == [
+        {"id": "tc_1", "type": "function", "function": {"name": "get_weather", "arguments": truncated}},
+    ]

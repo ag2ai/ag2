@@ -93,6 +93,34 @@ class ToolCallEvent(ToolEvent):
     def serialized_arguments(self, value: dict[str, Any]) -> None:
         self._serialized_arguments = value
 
+    @property
+    def safe_serialized_arguments(self) -> dict[str, Any]:
+        """Parsed arguments that never raises.
+
+        A model cut off mid-JSON (e.g. ``max_tokens``) leaves ``arguments`` as a
+        truncated string. Re-parsing it while building the next provider request
+        must not crash the conversation; return ``{}`` so the tool_use still
+        pairs with its ``ToolErrorEvent``. Non-dict JSON also yields ``{}``
+        since providers need an object here.
+        """
+        try:
+            result = self.serialized_arguments
+        except (ValueError, TypeError, AttributeError):
+            return {}
+        return result if isinstance(result, dict) else {}
+
+    @property
+    def safe_arguments_string(self) -> str:
+        """Arguments string that never raises.
+
+        Valid JSON is re-serialized (identical to before); truncated JSON falls
+        back to the raw stored string so the call still pairs with its error.
+        """
+        try:
+            return json.dumps(self.serialized_arguments)
+        except (ValueError, TypeError, AttributeError):
+            return self.arguments or "{}"
+
     def handled_by(self, source: str) -> "ToolCallEvent":
         """A copy of this call whose :attr:`source` is ``source``."""
         call = copy(self)
@@ -110,7 +138,7 @@ class ToolCallEvent(ToolEvent):
             "id": self.id,
             "type": "function",
             "function": {
-                "arguments": json.dumps(self.serialized_arguments),
+                "arguments": self.safe_arguments_string,
                 "name": self.name,
             },
         }

@@ -458,3 +458,52 @@ async def test_execute_tools_propagates_cancellation() -> None:
 
     history = await stream.history.get_events()
     assert not any(isinstance(e, ToolResultsEvent) for e in history)
+
+
+@pytest.mark.asyncio
+async def test_malformed_tool_call_errors_then_valid_call_runs() -> None:
+    """A truncated payload is a tool error; the next valid call of the same tool runs once.
+
+    Execution has to keep the strict argument decoder. Treating the truncated
+    payload as an empty object would not record a JSON parse error for that call.
+    """
+    seen: list[str] = []
+
+    @tool(name="get_weather")
+    def get_weather(city: str) -> str:
+        seen.append(city)
+        return f"sunny in {city}"
+
+    truncated = '{"city": "Par'
+    malformed = events.ToolCallEvent(name="get_weather", arguments=truncated)
+    valid = events.ToolCallEvent(name="get_weather", arguments=json.dumps({"city": "Paris"}))
+    final = "It is sunny in Paris."
+
+    stream = MemoryStream()
+    agent = Agent(
+        "",
+        config=testing.TestConfig(malformed, valid, final, raise_tool_errors=False),
+        tools=[get_weather],
+    )
+
+    reply = await agent.ask("Weather in Paris?", stream=stream)
+
+    assert seen == ["Paris"]
+    assert reply.body == final
+
+    history = await stream.history.get_events()
+    results_events = [e for e in history if isinstance(e, ToolResultsEvent)]
+    assert len(results_events) == 2
+
+    [error] = results_events[0].results
+    assert isinstance(error, events.ToolErrorEvent)
+    assert error.parent_id == malformed.id
+    assert error.name == "get_weather"
+    assert error.result is not None
+    assert "JSONDecodeError" in error.result.parts[0].content
+
+    [ok] = results_events[1].results
+    assert isinstance(ok, events.ToolResultEvent)
+    assert not isinstance(ok, events.ToolErrorEvent)
+    assert ok.parent_id == valid.id
+    assert ok.result.parts[0].content == "sunny in Paris"

@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
-import json
 from collections.abc import Iterable
 from typing import Any
 
@@ -105,7 +104,7 @@ def convert_messages(
                 {
                     "function": {
                         "name": c.name,
-                        "arguments": json.loads(c.arguments) if c.arguments else {},
+                        "arguments": c.safe_serialized_arguments,
                     },
                 }
                 for c in message.tool_calls.calls
