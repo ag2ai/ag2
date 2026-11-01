@@ -122,6 +122,10 @@ A tool that raises is recorded as a failed tool call and the turn carries on: th
 
 All three are `HumanInputError`, which is the type tool execution refuses to record as a tool result. The same holds one level down: a sub-agent whose question nobody could answer fails the delegating turn rather than reporting a failed sub-task.
 
+!!! note "Served over AG-UI, there is somebody to ask"
+
+    The first row is about a process with nobody in it. An agent served through [`AGUIStream`](/docs/user-guide/ag-ui/overview#asking-the-human-a-question) has a connected client, so a run with no hook puts the question to it as an interrupt rather than raising: the turn is held, and a later run on the same thread answers it. The other two rows are unchanged — a hook that raised, and a deadline that passed, end the turn there too.
+
 The difference matters most under `approval_required()`. An approval that could never be requested is not the same as a tool that broke — reported as a tool failure, it invites the model to look for another route to the same effect, which is the opposite of what the middleware is for. The gated tool does not run in any of the three cases, including the timeout.
 
 Two ways to carry on regardless:

@@ -2,7 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Awaitable, Callable
+
 from a2a.server.agent_execution import AgentExecutor
+from a2a.server.cluster import TaskEventStream, VersionedTaskStore
 from a2a.server.routes.jsonrpc_routes import create_jsonrpc_routes
 from a2a.server.tasks import (
     PushNotificationConfigStore,
@@ -36,12 +39,16 @@ def build_jsonrpc_asgi(
     card_modifier: CardModifier | None = None,
     extended_card_modifier: ExtendedCardModifier | None = None,
     card_signer: CardSigner | None = None,
-    task_store: TaskStore | None = None,
+    task_store: TaskStore | VersionedTaskStore | None = None,
+    event_stream: TaskEventStream | None = None,
     push_config_store: PushNotificationConfigStore | None = None,
     push_sender: PushNotificationSender | None = None,
+    push_url_validator: Callable[[str], Awaitable[bool]] | None = None,
+    validate_input_modes: bool = False,
     rpc_url: str = "/",
     card_url: str = DEFAULT_AGENT_CARD_PATH,
     legacy_card_url: str | None = LEGACY_AGENT_CARD_PATH,
+    card_cache_control: str | None = None,
 ) -> Starlette:
     """Starlette ASGI app exposing JSON-RPC dispatch + agent-card discovery."""
     agent_card = prepare_public_card(
@@ -60,8 +67,11 @@ def build_jsonrpc_asgi(
         extended_agent_card=extended_agent_card,
         extended_card_modifier=extended_card_modifier,
         task_store=task_store,
+        event_stream=event_stream,
         push_config_store=push_config_store,
         push_sender=push_sender,
+        push_url_validator=push_url_validator,
+        validate_input_modes=validate_input_modes,
     )
     routes: list[BaseRoute] = list(create_jsonrpc_routes(handler, rpc_url=rpc_url))
     routes.extend(
@@ -70,6 +80,7 @@ def build_jsonrpc_asgi(
             card_modifier=card_modifier,
             card_url=card_url,
             legacy_card_url=legacy_card_url,
+            cache_control=card_cache_control,
         ),
     )
     return Starlette(routes=routes)

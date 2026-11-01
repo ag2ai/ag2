@@ -14,6 +14,11 @@ from typing import Any
 from .base import ChangeCallback, ChangeSubscription, _normalize
 from .polling import PollingChangeWatcher
 
+# Prefix predicate, bound as ``(len(prefix), prefix)``. Never use ``LIKE`` for
+# this: it treats ``_`` and ``%`` as wildcards and folds ASCII case, while the
+# other stores compare prefixes literally and case-sensitively.
+_PREFIX_MATCH = "substr(path, 1, ?) = ?"
+
 
 class SqliteKnowledgeStore:
     """SQLite-backed :class:`KnowledgeStore`.
@@ -98,8 +103,8 @@ class SqliteKnowledgeStore:
     def _sync_list(self, prefix: str) -> list[str]:
         conn = self._ensure_connected()
         cur = conn.execute(
-            "SELECT path FROM entries WHERE path LIKE ?",
-            (prefix + "%",),
+            f"SELECT path FROM entries WHERE {_PREFIX_MATCH}",
+            (len(prefix), prefix),
         )
         children: set[str] = set()
         for (p,) in cur.fetchall():
@@ -113,7 +118,10 @@ class SqliteKnowledgeStore:
     def _sync_delete(self, normalized: str, prefix: str) -> None:
         conn = self._ensure_connected()
         conn.execute("DELETE FROM entries WHERE path = ?", (normalized,))
-        conn.execute("DELETE FROM entries WHERE path LIKE ?", (prefix + "%",))
+        conn.execute(
+            f"DELETE FROM entries WHERE {_PREFIX_MATCH}",
+            (len(prefix), prefix),
+        )
         conn.commit()
 
     def _sync_exists(self, normalized: str, prefix: str) -> bool:
@@ -122,23 +130,26 @@ class SqliteKnowledgeStore:
         if cur.fetchone() is not None:
             return True
         cur = conn.execute(
-            "SELECT 1 FROM entries WHERE path LIKE ? LIMIT 1",
-            (prefix + "%",),
+            f"SELECT 1 FROM entries WHERE {_PREFIX_MATCH} LIMIT 1",
+            (len(prefix), prefix),
         )
         return cur.fetchone() is not None
 
     def _sync_append(self, normalized: str, payload: bytes, version: int) -> int:
         conn = self._ensure_connected()
-        cur = conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
-        row = cur.fetchone()
-        existing = row[0] if row else b""
-        offset = len(existing)
-        combined = existing + payload
-        conn.execute(
-            "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
-            (normalized, combined, version),
-        )
-        conn.commit()
+        # Reserve the writer before reading: other store instances have their own
+        # asyncio locks and must not append from the same stale content snapshot.
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            cur = conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
+            row = cur.fetchone()
+            existing = row[0] if row else b""
+            offset = len(existing)
+            combined = existing + payload
+            conn.execute(
+                "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
+                (normalized, combined, version),
+            )
         return offset
 
     def _sync_read_range(self, normalized: str, start: int, end: int | None) -> str:
@@ -158,9 +169,10 @@ class SqliteKnowledgeStore:
         if normalized in ("", "/"):
             cur = conn.execute("SELECT path, version FROM entries")
         else:
+            child_prefix = normalized + "/"
             cur = conn.execute(
-                "SELECT path, version FROM entries WHERE path = ? OR path LIKE ?",
-                (normalized, normalized + "/%"),
+                f"SELECT path, version FROM entries WHERE path = ? OR {_PREFIX_MATCH}",
+                (normalized, len(child_prefix), child_prefix),
             )
         return {row[0]: int(row[1]) for row in cur.fetchall()}
 

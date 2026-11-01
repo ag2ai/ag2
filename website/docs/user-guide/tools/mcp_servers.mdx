@@ -168,7 +168,7 @@ toolkit = MCPToolkit(
 ```
 
 !!! warning
-    Namespacing is opt-in. Two servers exposing the same tool name **without** distinct prefixes still collide: both proxies answer the same tool call, so the tool runs twice for one request.
+    Namespacing is opt-in. A tool an MCP server reports never replaces a tool declared in code with the same name, wherever the toolkit sits in the list. The server's tool is dropped with a warning. If two servers expose the same name without distinct prefixes, the first server's tool wins and the others are dropped with a warning. To use a server's tool anyway, remove the local tool or set a `tool_name_prefix`.
 
 ### Declare what a server may ask you for
 
@@ -306,7 +306,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | field | default | what it is for |
 |---|---|---|
 | `server_url` | — | where the server listens, including the MCP endpoint path |
-| `authorization_token` | `None` | bearer token sent on every request |
+| `authorization_token` | `None` | bearer token sent unless `headers` already contains `Authorization` (case-insensitive) |
 | `headers` | `None` | extra HTTP headers |
 | `connection_timeout` | `30.0` | seconds to wait on the server |
 | `proxy` | `None` | HTTP proxy to route through |
@@ -331,6 +331,8 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | `server_label` / `description` / `allowed_tools` / `blocked_tools` / `tool_name_prefix` | as above | as above |
 
 Every field of both configs except `connection_timeout`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime — handy for injecting per-conversation tokens or workspace paths.
+
+`MCPToolkit` reuses tool discovery while the resolved configuration is unchanged. Changing the server address, credentials, stdio launch settings, filters or prefix triggers discovery again. Concurrent agent turns keep separate snapshots of the tools they discovered. Each discovered tool is pinned to the resolved configuration that discovered it, so a call always reaches the server that advertised the tool even when a `Variable` would now resolve differently. A value that changes mid-turn, such as a rotated token, applies from the next discovery. Only the most recent configuration is cached, so alternating configurations can require another discovery request, and turns that resolve different configurations discover one after another rather than in parallel. Changes to a server's tool list alone do not invalidate this cache.
 
 ### `MCPAnswerPolicy`
 
@@ -358,7 +360,7 @@ agent_with_mcp = Agent(
 )
 ```
 
-`MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime.
+`MCPServerTool` also accepts `description`, `allowed_tools`, `blocked_tools`, and `headers`. All constructor parameters can be a `Variable` if the value is only known at runtime. As with `MCPToolkit`, `authorization_token` is sent as a bearer `Authorization` header unless `headers` already contains `Authorization` (case-insensitive). Anthropic does not forward `headers` — only `authorization_token` is sent.
 
 !!! warning "`blocked_tools` is not enforceable on every provider"
 

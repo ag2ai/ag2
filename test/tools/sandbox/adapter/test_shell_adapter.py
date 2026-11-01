@@ -58,10 +58,207 @@ class TestShellAdapterFiltering:
         assert "Command not allowed" in result
 
     async def test_readonly_allows_read_commands(self, tmp_path: Path) -> None:
+        # Not ``echo``: restricted mode runs it from PATH, and nlip-server ships a broken ``echo`` into the venv.
+        (tmp_path / "hello.txt").write_text("hello")
         sandbox = LocalSandbox(tmp_path)
         adapter = ShellAdapter(sandbox, readonly=True)
-        result = await adapter.run("echo hello")
+        result = await adapter.run("cat hello.txt")
         assert "hello" in result
+
+    @pytest.mark.parametrize(
+        ("allowed", "readonly"),
+        [
+            pytest.param(None, True, id="readonly"),
+            pytest.param(["git"], False, id="allowed"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("git status --short\ntouch pwned", id="newline"),
+            pytest.param("git status --short\rtouch pwned", id="carriage-return"),
+            pytest.param("git status --short & touch pwned", id="background"),
+            pytest.param("git diff <(touch pwned)", id="process-substitution"),
+        ],
+    )
+    async def test_restricted_mode_blocks_second_command(
+        self, tmp_path: Path, allowed: list[str] | None, readonly: bool, command: str
+    ) -> None:
+        adapter = ShellAdapter(LocalSandbox(tmp_path), allowed=allowed, readonly=readonly)
+        result = await adapter.run(command)
+        assert "Command not allowed" in result
+        assert not (tmp_path / "pwned").exists()
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("env touch pwned", id="env"),
+            pytest.param("find . -exec touch pwned {} +", id="find"),
+            pytest.param("sort -o pwned /dev/null", id="sort"),
+            pytest.param("uniq /dev/null pwned", id="uniq"),
+            pytest.param("file -C -m pwned", id="file"),
+            pytest.param("git diff --no-index --output=pwned /dev/null /dev/null", id="git"),
+        ],
+    )
+    async def test_readonly_leaves_out_commands_that_can_write_or_execute(self, tmp_path: Path, command: str) -> None:
+        adapter = ShellAdapter(LocalSandbox(tmp_path), readonly=True)
+        result = await adapter.run(command)
+        assert "Command not allowed" in result
+        assert not list(tmp_path.glob("pwned*"))
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("find . -maxdepth 0 {-exec,} touch pwned {} +", id="brace"),
+            pytest.param("find . -maxdepth 0 -e${EMPTY}xec touch pwned {} +", id="variable"),
+        ],
+    )
+    async def test_restricted_mode_does_not_expand_arguments(self, tmp_path: Path, command: str) -> None:
+        adapter = ShellAdapter(LocalSandbox(tmp_path), allowed=["find"])
+        await adapter.run(command)
+        assert not (tmp_path / "pwned").exists()
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("echo x; touch pwned", id="semicolon"),
+            pytest.param("true && touch pwned", id="and"),
+            pytest.param("echo $(touch pwned)", id="substitution"),
+            pytest.param("echo `touch pwned`", id="backtick"),
+            pytest.param("echo x | touch pwned", id="pipe"),
+            pytest.param("echo x\ntouch pwned", id="newline"),
+        ],
+    )
+    async def test_blocked_alone_does_not_run_chained_commands(self, tmp_path: Path, command: str) -> None:
+        adapter = ShellAdapter(LocalSandbox(tmp_path), blocked=["touch"])
+        result = await adapter.run(command)
+        assert "Command not allowed" in result
+        assert not (tmp_path / "pwned").exists()
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("touch pwned", id="plain"),
+            pytest.param("touch  pwned", id="double-space"),
+            pytest.param("/usr/bin/touch pwned", id="absolute-path"),
+            pytest.param("'touch' pwned", id="quoted"),
+        ],
+    )
+    async def test_blocked_matches_the_argv(self, tmp_path: Path, command: str) -> None:
+        adapter = ShellAdapter(LocalSandbox(tmp_path), blocked=["touch"])
+        result = await adapter.run(command)
+        assert "Command not allowed" in result
+        assert not (tmp_path / "pwned").exists()
+
+    @pytest.mark.parametrize(
+        ("pattern", "command"),
+        [
+            pytest.param("/usr/bin/touch", "/usr/bin/touch pwned", id="absolute-path"),
+            pytest.param("./danger.sh", "./danger.sh pwned", id="relative-path"),
+            pytest.param("/usr/bin/touch pwned", "/usr/bin/touch  pwned", id="absolute-path-with-argument"),
+            pytest.param("./danger.sh pwned", "'./danger.sh'  pwned", id="relative-path-with-argument"),
+        ],
+    )
+    async def test_blocked_matches_path_based_prefixes(self, pattern: str, command: str) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, blocked=[pattern])
+        result = await adapter.run(command)
+        assert "Command not allowed" in result
+        assert sandbox.execs == []
+
+    async def test_blocked_path_prefix_allows_other_arguments(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, blocked=["./danger.sh pwned"])
+        await adapter.run("./danger.sh safe")
+        assert sandbox.execs == [["./danger.sh", "safe"]]
+
+    async def test_blocked_applies_on_top_of_allowed(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, allowed=["git"], blocked=["git push"])
+        result = await adapter.run("git  push")
+        assert "Command not allowed" in result
+        assert sandbox.execs == []
+
+    async def test_blocked_runs_other_commands_as_argv(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, blocked=["rm"])
+        await adapter.run("echo 'a; b' \"c | d\"")
+        assert sandbox.execs == [["echo", "a; b", "c | d"]]
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("cat .e$(echo)nv", id="substitution"),
+            pytest.param("cat .en*", id="glob"),
+            pytest.param("e=.env; cat $e", id="variable"),
+        ],
+    )
+    async def test_ignore_alone_does_not_leak_through_shell_expansion(self, tmp_path: Path, command: str) -> None:
+        (tmp_path / ".env").write_text("SECRET")
+        adapter = ShellAdapter(LocalSandbox(tmp_path), ignore=[".env"])
+        result = await adapter.run(command)
+        assert "SECRET" not in result
+
+    @pytest.mark.parametrize("command", ["cat .en*", "cat .e?v", "cat .en[v]", "cat *"])
+    async def test_ignore_denies_a_wildcard_that_matches_an_ignored_file(self, tmp_path: Path, command: str) -> None:
+        # Some programs expand wildcards themselves (MSYS tools on Windows), so the
+        # filter must not rely on the missing shell to keep the ignored file unread.
+        (tmp_path / ".env").write_text("SECRET")
+        adapter = ShellAdapter(LocalSandbox(tmp_path), ignore=[".env"])
+        assert "Access denied" in await adapter.run(command)
+
+    async def test_ignore_allows_a_wildcard_that_matches_nothing_ignored(self, tmp_path: Path) -> None:
+        (tmp_path / "a.txt").write_text("fine")
+        adapter = ShellAdapter(LocalSandbox(tmp_path), ignore=[".env"])
+        assert "Access denied" not in await adapter.run("ls *.txt")
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("dd if=.env of=out.txt", id="dd-read"),
+            pytest.param("dd if=a.txt of=.env", id="dd-write"),
+            pytest.param("git diff --output=.env", id="git-output"),
+            pytest.param("sort a.txt -o.env", id="short-option-attached"),
+            pytest.param("sort a.txt -ro.env", id="short-options-attached"),
+        ],
+    )
+    async def test_ignore_denies_path_embedded_in_a_word(self, command: str) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, ignore=[".env"])
+        result = await adapter.run(command)
+        assert "Access denied" in result
+        assert sandbox.execs == []
+
+    async def test_blocked_or_ignore_alone_switches_on_restricted_mode(self) -> None:
+        assert ShellAdapter(RecordingSandbox(), blocked=["rm"]).restricted
+        assert ShellAdapter(RecordingSandbox(), ignore=[".env"]).restricted
+        assert not ShellAdapter(RecordingSandbox()).restricted
+
+    async def test_restricted_mode_does_not_expand_globs(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, readonly=True)
+        await adapter.run("ls *.py")
+        assert sandbox.execs == [["ls", "*.py"]]
+
+    async def test_allowed_matches_whole_words_of_argv(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, allowed=["git log"])
+        result = await adapter.run("git -c core.pager=touch log")
+        assert "Command not allowed" in result
+        assert sandbox.execs == []
+
+    async def test_restricted_mode_rejects_unbalanced_quotes(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, readonly=True)
+        result = await adapter.run("cat 'README.md")
+        assert "unbalanced quotes" in result
+        assert sandbox.execs == []
+
+    async def test_unrestricted_mode_runs_through_shell(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox)
+        await adapter.run("echo a | cat")
+        assert sandbox.execs == [["sh", "-c", "echo a | cat"]]
 
 
 @pytest.mark.asyncio

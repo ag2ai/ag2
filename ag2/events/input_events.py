@@ -14,6 +14,7 @@ from ag2.types import (
     DocumentMediaType,
     ImageMediaType,
     MediaType,
+    RequestOrigin,
     SendableMessage,
     VideoMediaType,
 )
@@ -36,9 +37,16 @@ class Input(BaseEvent):
 
 
 class ModelRequest(BaseEvent):
-    """Event representing a user turn sent to the model, containing one or more inputs."""
+    """Input sent to the model, from a user or the framework's service inbox."""
 
     parts: "list[Input]" = Field(kw_only=False)
+    origin: RequestOrigin = Field(default="user", compare=False)
+    """Input provenance, independent of the provider's user-content wire role.
+
+    Ordinary requests, including histories written before this field existed,
+    represent user input. Framework inbox messages use ``service``; an inbox
+    drain is ``user`` when any drained message came from ``AgentRun.enqueue``.
+    """
 
     @classmethod
     def ensure_request(cls, msgs: "Iterable[SendableMessage | Input]") -> "ModelRequest":
@@ -55,6 +63,28 @@ class DrainedModelRequest(ModelRequest):
     LLM invocation — without this marker, re-emitting the merged request would
     recursively trigger another LLM call.
     """
+
+    def __init__(
+        self,
+        parts: list[Input],
+        *,
+        origin: RequestOrigin = "service",
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(parts, origin=origin, **kwargs)
+
+
+class MessageEnqueued(BaseEvent):
+    """Announces that ``context.enqueue`` added a message to the stream's inbox.
+
+    Published from a background task one event-loop tick after the append, so
+    a consumer that does not poll the inbox — a live session between two
+    responses — knows to drain it. The agent loop ignores it: it drains the
+    inbox before each model call. ``Stream.enqueue`` has no context to publish
+    with and announces nothing.
+    """
+
+    __transient__ = True
 
 
 class DataInput(Input):
@@ -155,6 +185,8 @@ def ImageInput(  # noqa: N802
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating image input events.
 
+    For local paths, ``media_type`` takes precedence over the filename extension.
+
     Usage:
         ImageInput("https://example.com/img.png")           # URL
         ImageInput(file_id="file-abc123")                   # pre-uploaded file
@@ -170,15 +202,12 @@ def ImageInput(  # noqa: N802
     if path is not None:
         p = Path(path)
         suffix = p.suffix.lower()
-        resolved_type = _EXTENSION_TO_MEDIA_TYPE.get(suffix)
+        resolved_type = media_type or _EXTENSION_TO_MEDIA_TYPE.get(suffix)
 
         if resolved_type is None:
-            if media_type is None:
-                raise ValueError(
-                    f"Cannot infer image media type from extension '{suffix}'. Provide 'media_type' explicitly."
-                )
-
-            resolved_type = media_type
+            raise ValueError(
+                f"Cannot infer image media type from extension '{suffix}'. Provide 'media_type' explicitly."
+            )
 
         return BinaryInput(
             p.read_bytes(),
@@ -226,6 +255,8 @@ def DocumentInput(  # noqa: N802
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating document input events.
 
+    For local paths, ``media_type`` takes precedence over the filename extension.
+
     Usage:
         DocumentInput("https://example.com/doc.pdf")               # URL
         DocumentInput(file_id="file-abc123")                       # pre-uploaded file
@@ -241,15 +272,12 @@ def DocumentInput(  # noqa: N802
     if path is not None:
         p = Path(path)
         suffix = p.suffix.lower()
-        resolved_type = _DOC_EXTENSION_TO_MEDIA_TYPE.get(suffix)
+        resolved_type = media_type or _DOC_EXTENSION_TO_MEDIA_TYPE.get(suffix)
 
         if resolved_type is None:
-            if media_type is None:
-                raise ValueError(
-                    f"Cannot infer document media type from extension '{suffix}'. Provide 'media_type' explicitly."
-                )
-
-            resolved_type = media_type
+            raise ValueError(
+                f"Cannot infer document media type from extension '{suffix}'. Provide 'media_type' explicitly."
+            )
 
         return BinaryInput(
             p.read_bytes(),
@@ -297,6 +325,8 @@ def AudioInput(  # noqa: N802
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating audio input events.
 
+    For local paths, ``media_type`` takes precedence over the filename extension.
+
     Usage:
         AudioInput("https://example.com/audio.wav")            # URL
         AudioInput(file_id="file-abc123")                      # pre-uploaded file
@@ -312,15 +342,12 @@ def AudioInput(  # noqa: N802
     if path is not None:
         p = Path(path)
         suffix = p.suffix.lower()
-        resolved_type = _AUDIO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
+        resolved_type = media_type or _AUDIO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
 
         if resolved_type is None:
-            if media_type is None:
-                raise ValueError(
-                    f"Cannot infer audio media type from extension '{suffix}'. Provide 'media_type' explicitly."
-                )
-
-            resolved_type = media_type
+            raise ValueError(
+                f"Cannot infer audio media type from extension '{suffix}'. Provide 'media_type' explicitly."
+            )
 
         return BinaryInput(
             p.read_bytes(),
@@ -368,6 +395,8 @@ def VideoInput(  # noqa: N802
 ) -> UrlInput | FileIdInput | BinaryInput:
     """Factory for creating video input events.
 
+    For local paths, ``media_type`` takes precedence over the filename extension.
+
     Usage:
         VideoInput("https://example.com/video.mp4")            # URL
         VideoInput(file_id="file-abc123")                      # pre-uploaded file
@@ -383,15 +412,12 @@ def VideoInput(  # noqa: N802
     if path is not None:
         p = Path(path)
         suffix = p.suffix.lower()
-        resolved_type = _VIDEO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
+        resolved_type = media_type or _VIDEO_EXTENSION_TO_MEDIA_TYPE.get(suffix)
 
         if resolved_type is None:
-            if media_type is None:
-                raise ValueError(
-                    f"Cannot infer video media type from extension '{suffix}'. Provide 'media_type' explicitly."
-                )
-
-            resolved_type = media_type
+            raise ValueError(
+                f"Cannot infer video media type from extension '{suffix}'. Provide 'media_type' explicitly."
+            )
 
         return BinaryInput(
             p.read_bytes(),

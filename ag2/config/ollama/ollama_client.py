@@ -7,6 +7,7 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
 
+import httpx
 from fast_depends.library.serializer import SerializerProto
 from ollama import AsyncClient
 
@@ -40,6 +41,18 @@ class CreateOptions(TypedDict, total=False):
     presence_penalty: float | None
 
 
+class _CallerTransport(httpx.AsyncBaseTransport):
+    """Forwards the SDK's requests through the caller's `httpx.AsyncClient`, which stays unmodified."""
+
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        self._client = client
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        for name, value in self._client.headers.items():
+            request.headers.setdefault(name, value)
+        return await self._client.send(request, stream=True)
+
+
 class OllamaClient(LLMClient):
     def __init__(
         self,
@@ -47,12 +60,24 @@ class OllamaClient(LLMClient):
         host: str = OLLAMA_DEFAULT_HOST,
         streaming: bool = False,
         create_options: CreateOptions | None = None,
+        *,
+        api_key: str | None = None,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._model = model
         self._host = host
         self._streaming = streaming
         self._create_options = {k: v for k, v in (create_options or {}).items() if v is not None}
-        self._client = AsyncClient(host=host)
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
+        if http_client is None:
+            self._client = AsyncClient(host=host, headers=headers)
+        else:
+            self._client = AsyncClient(
+                host=host,
+                headers=headers,
+                transport=_CallerTransport(http_client),
+                timeout=http_client.timeout,
+            )
 
     async def __call__(
         self,
@@ -109,11 +134,10 @@ class OllamaClient(LLMClient):
 
         calls = [
             ToolCallEvent(
-                id=f"call_{i}",
                 name=tc.function.name,
                 arguments=json.dumps(tc.function.arguments),
             )
-            for i, tc in enumerate(msg.tool_calls or [])
+            for tc in msg.tool_calls or []
         ]
 
         prompt_n = float(response.prompt_eval_count or 0)
@@ -130,7 +154,7 @@ class OllamaClient(LLMClient):
             usage=usage,
             model=response.model,
             provider="ollama",
-            finish_reason=getattr(response, "done_reason", None),
+            finish_reason=response.done_reason,
         )
 
     async def _call_streaming(
@@ -162,10 +186,9 @@ class OllamaClient(LLMClient):
                 full_content += msg.content
                 await context.send(ModelMessageChunk(msg.content))
 
-            for i, tc in enumerate(msg.tool_calls or []):
+            for tc in msg.tool_calls or []:
                 calls.append(
                     ToolCallEvent(
-                        id=f"call_{len(calls) + i}",
                         name=tc.function.name,
                         arguments=json.dumps(tc.function.arguments),
                     )
@@ -175,7 +198,7 @@ class OllamaClient(LLMClient):
                 p_n = float(chunk.prompt_eval_count or 0)
                 c_n = float(chunk.eval_count or 0)
                 usage = Usage(prompt_tokens=p_n, completion_tokens=c_n, total_tokens=p_n + c_n)
-                finish_reason = getattr(chunk, "done_reason", None)
+                finish_reason = chunk.done_reason
                 resolved_model = chunk.model
 
         message: ModelMessage | None = None

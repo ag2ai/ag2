@@ -14,6 +14,7 @@ from mcp.client import Client
 from mcp.server.lowlevel import Server
 from mcp.shared.memory import MessageStream, create_client_server_memory_streams
 from mcp_types.version import LATEST_MODERN_VERSION
+from starlette.types import Message
 
 from .server import MCPServer
 
@@ -115,13 +116,13 @@ async def serve(server: MCPServer, *, base_url: str = "http://test") -> AsyncGen
     is running, the way ``uvicorn`` would (``httpx.ASGITransport`` does not).
     Use it to exercise the HTTP transport without sockets.
     """
-    receive_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
-    send_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+    receive_queue: asyncio.Queue[Message] = asyncio.Queue()
+    send_queue: asyncio.Queue[Message] = asyncio.Queue()
 
-    async def receive() -> dict[str, object]:
+    async def receive() -> Message:
         return await receive_queue.get()
 
-    async def send(message: dict[str, object]) -> None:
+    async def send(message: Message) -> None:
         await send_queue.put(message)
 
     scope = {"type": "lifespan", "asgi": {"spec_version": "2.0", "version": "3.0"}}

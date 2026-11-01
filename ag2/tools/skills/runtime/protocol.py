@@ -97,7 +97,9 @@ class SkillRuntime(Protocol):
         *args* is a CLI-style positional ``Sequence[str]`` for file-backed scripts
         (``LocalRuntime``) or a named-argument ``dict`` for in-process scripts
         (``MemoryRuntime``). A runtime rejects the form it does not support with a
-        ``TypeError``. *context* is the live conversation context, used for
+        ``TypeError`` — but only after checking it owns *name*, so a foreign skill
+        always raises ``SkillNotFoundError`` and routing can fall through.
+        *context* is the live conversation context, used for
         dependency injection by runtimes that invoke a callable; a filesystem
         runtime ignores it.
 

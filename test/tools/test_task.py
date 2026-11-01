@@ -8,7 +8,7 @@ import gc
 import sys
 import threading
 import weakref
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from typing import Annotated
 from unittest.mock import MagicMock
 
@@ -41,6 +41,9 @@ from ag2.tools.subagents import background_agent_tool, subagent_tool
 from ag2.tools.subagents import run_task as run_task_mod
 from ag2.tools.subagents.run_task import _rollup_usage, run_task
 from ag2.usage import UsageReport
+
+# Exercises the deprecated TaskConfig / run_subtask path on purpose.
+pytestmark = pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
 
 
 @tool
@@ -1061,10 +1064,13 @@ def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
 
     A fresh Agent per round, because the cap can only go missing while its
     semaphore is first provisioned, and a tightened switch interval so CPython
-    interleaves the two threads inside that window.
+    interleaves the two threads inside that window. The interval is left alone
+    under a tracer (coverage): on 3.11 a thread switch landing inside a new
+    thread's ``settrace`` kills that thread, so AnyIO's worker never answers.
     """
     old_interval = sys.getswitchinterval()
-    sys.setswitchinterval(0.00001)
+    if sys.gettrace() is None:
+        sys.setswitchinterval(0.00001)
 
     def make_parent() -> Agent:
         return Agent(
@@ -1634,6 +1640,43 @@ class TestHitlPropagation:
         mock.worker_hitl.assert_called_once_with("Need approval")
         mock.tool_got.assert_called_once_with("worker answer")
         mock.parent_hitl.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_the_parent_hears_which_delegation_asks(self) -> None:
+        worker = Agent("worker", config=TestConfig(ToolCallEvent(name="ask_human", arguments="{}"), "Done."))
+
+        @worker.tool
+        async def ask_human(ctx: Context) -> str:
+            """Ask the human."""
+            return await ctx.input("Need approval", timeout=1.0)
+
+        coordinator = Agent(
+            "coordinator",
+            config=TestConfig(ToolCallEvent(name="task_worker", arguments='{"objective": "Go"}'), "OK."),
+            tools=[worker.as_tool(description="Worker")],
+        )
+        heard: list[HumanInputRequest] = []
+        started: list[TaskStarted] = []
+
+        @coordinator.hitl_hook
+        def parent_hitl(event: HumanInputRequest) -> HumanMessage:
+            heard.append(event)
+            return HumanMessage("yes")
+
+        stream = MemoryStream()
+        stream.where(TaskStarted).subscribe(_append_to(started))
+        await coordinator.ask("Go", stream=stream)
+
+        [request] = heard
+        [task] = started
+        assert request.task_id == task.task_id
+
+
+def _append_to(into: list[BaseEvent]) -> Callable[[BaseEvent], Awaitable[None]]:
+    async def _append(event: BaseEvent) -> None:
+        into.append(event)
+
+    return _append
 
 
 class TestAsToolStreamArgument:

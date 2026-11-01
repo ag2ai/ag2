@@ -176,6 +176,33 @@ the host; pass an API key in `env` to bill against the provider's API instead.
     and whether a plan permits programmatic use are set by each provider, not by
     AG2 — check the provider's terms.
 
+## Sending more than text
+
+Every part of your message reaches the agent as its own ACP content block, so an image or a document travels beside the text instead of being dropped:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.events import ImageInput
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+
+reply = await agent.ask("What is wrong in this screenshot?", ImageInput(path="screenshot.png"))
+```
+
+What the agent accepts is decided by the capabilities it advertises when the session starts:
+
+| Input | Sent as | Needs |
+|---|---|---|
+| text, structured data | text block | always available |
+| URL (image, document, ...) | resource link, not fetched | always available |
+| image bytes | image block | agent advertises `image` |
+| audio bytes | audio block | agent advertises `audio` |
+| document bytes | embedded resource | agent advertises `embedded_context` |
+| pre-uploaded file id | text naming the file | ACP has no equivalent |
+
+A part the agent did not advertise support for is replaced by a placeholder such as `[image]`, and a warning is logged, so the model learns something was sent rather than the part vanishing.
+
 ## Observing the agent's work
 
 Subscribe to the run's stream to see thoughts, tool calls, and plans live:

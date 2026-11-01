@@ -34,3 +34,15 @@ class ProviderTurnState(BaseEvent, ProviderReplay):
 def lookup() -> str:
     """Look something up."""
     return "42"
+
+
+class ScriptedHuman:
+    """A ``hitl_hook`` that gives ``answer`` to every question and counts them."""
+
+    def __init__(self, answer: str) -> None:
+        self.answer = answer
+        self.questions = 0
+
+    def __call__(self, request: object) -> str:
+        self.questions += 1
+        return self.answer

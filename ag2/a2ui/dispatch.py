@@ -8,24 +8,40 @@ followed by one :class:`A2UIMessageFrame` per A2UI message. Shared core under
 the SSE / NDJSON wire encoders.
 """
 
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import Union
 
 from ag2.agent import Agent
-from ag2.context import ConversationContext
-from ag2.events import BaseEvent, ModelRequest, TextInput, UsageEvent
+from ag2.annotations import Context
+from ag2.context import ConversationContext, strip_reserved_variables
+from ag2.events import (
+    BaseEvent,
+    HumanInputRequest,
+    ModelRequest,
+    TaskCancelled,
+    TaskCompleted,
+    TaskExpired,
+    TaskFailed,
+    TaskStarted,
+    TextInput,
+    ToolCallEvent,
+    ToolResultEvent,
+    UsageEvent,
+)
 from ag2.stream import MemoryStream
 from ag2.usage import collect_usage_events
 
 from ._runtime import _A2UIRuntime
 from ._types import ServerToClientMessage
 from .actions import A2UIAction
+from .data_model import data_model_to_prompt
 from .events import A2UIMessageEvent
-from .incoming import A2UIIncomingActionResult
 from .middleware import A2UIInboundMiddleware
 from .request import A2UIServerRequest
-from .server_action import build_server_action_context, run_server_action
+from .server_action import run_client_interactions
 
 
 @dataclass(slots=True)
@@ -44,6 +60,20 @@ class A2UIMessageFrame:
 
 A2UIFrame = A2UIProseFrame | A2UIMessageFrame
 
+# What a transport hands in to answer the agent's ``context.input()`` itself.
+# Spelled structurally rather than imported: the transport that has one is the
+# optional AG-UI one, and this module must import without it.
+Interrupter = Callable[[HumanInputRequest, Context], Awaitable[BaseEvent | None]]
+
+# A delegation starting or ending. ``Union``, not ``|``: on event classes ``|``
+# builds a stream Condition, which is no type for a subscriber's annotation.
+TaskEvent = Union[TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired]  # noqa: UP007
+
+# What a transport hands in to hear of each delegation starting and ending.
+TaskObserver = Callable[[TaskEvent], Awaitable[None]]
+ToolCallObserver = Callable[[ToolCallEvent], Awaitable[None]]
+ToolResultObserver = Callable[[ToolResultEvent], Awaitable[None]]
+
 # Shared immutable default so the keyword arg never aliases a mutable {}.
 _NO_SERVER_ACTIONS: Mapping[str, A2UIAction] = MappingProxyType({})
 
@@ -55,15 +85,20 @@ async def stream_turn(
     *,
     server_actions: Mapping[str, A2UIAction] = _NO_SERVER_ACTIONS,
     usage_records: list[UsageEvent] | None = None,
+    interrupter: Interrupter | None = None,
+    on_task: TaskObserver | None = None,
+    on_tool_call: ToolCallObserver | None = None,
+    on_tool_result: ToolResultObserver | None = None,
 ) -> AsyncIterator[A2UIFrame]:
     """Execute one turn and yield its prose then A2UI message frames.
 
     Server-side actions are handled first and never invoke the agent: each
     incoming click whose name maps to a ``server_actions`` entry runs that
-    action and its result is yielded as A2UI message frames. The agent then
-    runs only if the turn still has input for it (a user message, or a click on
-    a button with no registered action) — a turn carrying *only* server-side
-    clicks skips the agent entirely.
+    action and its result is yielded as A2UI message frames, and each v1.0
+    ``callAgentFunction`` is answered with an ``agentFunctionResponse``. The
+    agent then runs only if the turn still has input for it (a user message, or
+    a click on a button with no registered action) — a turn carrying *only*
+    server-side interactions skips the agent entirely.
 
     Args:
         agent: The plain ``Agent`` to run. Must have ``config`` set (unless the
@@ -79,6 +114,14 @@ async def stream_turn(
             is created here and never leaves, and a caller handed the records
             only on a clean return would have none for a turn that raised —
             which is the turn whose cost most wants reporting.
+        interrupter: Where a question the agent asks goes. Supplied only by a
+            transport that can put it to whoever is connected, and only when the
+            agent has no hook of its own.
+        on_task: Called with each ``TaskStarted`` / ``TaskCompleted`` /
+            ``TaskFailed`` / ``TaskCancelled`` / ``TaskExpired`` on the turn's
+            stream, for a transport that reports delegations.
+        on_tool_call: Called with each tool call on the turn's stream.
+        on_tool_result: Called with each tool result on the turn's stream.
 
     Yields:
         Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
@@ -89,27 +132,19 @@ async def stream_turn(
         RuntimeError: If the agent must run but has no ``config`` to create an
             LLM client.
     """
-    # Run server-side click actions and emit their messages. These never reach
-    # the agent (the prompt rewriter already skipped registered actions).
-    handled_server = False
-    if server_actions:
-        # Server actions resolve their dependencies against the agent's DI
-        # surface (built once for the turn, only when a click actually runs).
-        action_context = build_server_action_context(agent, variables=request.variables)
-        for interaction in request.client_interactions:
-            if not isinstance(interaction, A2UIIncomingActionResult):
-                continue
-            server_action = server_actions.get(interaction.action.name)
-            if server_action is None:
-                continue
-            handled_server = True
-            for message in await run_server_action(
-                server_action,
-                interaction.action,
-                version=runtime.version_string,
-                context=action_context,
-            ):
-                yield A2UIMessageFrame(message)
+    # Answer the interactions the server handles itself (registered clicks and
+    # callAgentFunction calls) and emit their messages. These never reach the
+    # agent (the prompt rewriter already skipped them).
+    server_messages, handled_server = await run_client_interactions(
+        request.client_interactions,
+        server_actions,
+        agent,
+        variables=request.variables,
+        version=runtime.version_string,
+        catalog_id=runtime.catalog_id,
+    )
+    for message in server_messages:
+        yield A2UIMessageFrame(message)
 
     # Run the agent only when the turn has real input for it. A turn whose only
     # content was server-side clicks is complete already; don't fabricate a
@@ -137,15 +172,29 @@ async def stream_turn(
 
     if usage_records is not None:
         stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
+    if on_task is not None:
+        stream.where((TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired)).subscribe(on_task)
+    if on_tool_call is not None:
+        stream.where(ToolCallEvent).subscribe(on_tool_call)
+    if on_tool_result is not None:
+        stream.where(ToolResultEvent).subscribe(on_tool_result)
 
     # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
     # prompt section, fold in negotiated client capabilities so the LLM only
-    # targets components the client can render, and inject the validation
+    # targets components the client can render, add the client's data model, and inject the validation
     # middleware that emits the A2UIMessageEvents collected above.
     caps_prompt = runtime.capabilities_prompt(request.client_capabilities)
-    extra_prompt = [runtime.system_prompt_section, *([caps_prompt] if caps_prompt else [])]
+    data_model_prompt = data_model_to_prompt(request.client_data_model)
+    extra_prompt = [
+        runtime.system_prompt_section,
+        *([caps_prompt] if caps_prompt else []),
+        *([data_model_prompt] if data_model_prompt else []),
+    ]
 
-    merged_variables = {**dict(agent._agent_variables), **request.variables}
+    merged_variables = {
+        **dict(agent._agent_variables),
+        **strip_reserved_variables(request.variables, source="an inbound A2UI request"),
+    }
     ctx = ConversationContext(
         stream,
         prompt=[*agent._system_prompt, *extra_prompt, *request.prompt],
@@ -162,12 +211,16 @@ async def stream_turn(
         extra_middleware.append(A2UIInboundMiddleware(request.client_interactions))
 
     initial_event: BaseEvent = ModelRequest(request.current_inputs or [TextInput("")])
-    reply = await agent._execute(
-        initial_event,
-        context=ctx,
-        client=client,
-        additional_middleware=extra_middleware,
-    )
+    with ExitStack() as stack:
+        if interrupter is not None:
+            stack.enter_context(stream.where(HumanInputRequest).sub_scope(interrupter, interrupt=True))
+
+        reply = await agent._execute(
+            initial_event,
+            context=ctx,
+            client=client,
+            additional_middleware=extra_middleware,
+        )
 
     response = reply.response
     prose = response.message.content if response.message else ""
@@ -197,11 +250,17 @@ class _A2UITurnCore:
         request: A2UIServerRequest,
         *,
         usage_records: list[UsageEvent] | None = None,
+        interrupter: Interrupter | None = None,
+        on_task: TaskObserver | None = None,
+        on_tool_call: ToolCallObserver | None = None,
+        on_tool_result: ToolResultObserver | None = None,
     ) -> AsyncIterator[A2UIFrame]:
         """Run one turn and yield its prose then A2UI message frames.
 
         Pass ``usage_records`` to have the turn's token accounting collected into
-        it; see :func:`stream_turn`.
+        it, ``interrupter`` to answer the agent's questions from wherever the
+        transport can reach a human, and ``on_task`` to hear of its delegations;
+        see :func:`stream_turn`.
         """
         return stream_turn(
             self.agent,
@@ -209,7 +268,21 @@ class _A2UITurnCore:
             request,
             server_actions=self.server_actions,
             usage_records=usage_records,
+            interrupter=interrupter,
+            on_task=on_task,
+            on_tool_call=on_tool_call,
+            on_tool_result=on_tool_result,
         )
 
 
-__all__ = ("A2UIFrame", "A2UIMessageFrame", "A2UIProseFrame", "stream_turn")
+__all__ = (
+    "A2UIFrame",
+    "A2UIMessageFrame",
+    "A2UIProseFrame",
+    "Interrupter",
+    "TaskEvent",
+    "TaskObserver",
+    "ToolCallObserver",
+    "ToolResultObserver",
+    "stream_turn",
+)

@@ -14,7 +14,8 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | Provider | Configuration Class | Installation Command |
 | :--- | :--- | :--- |
 | **[OpenAI Responses](https://developers.openai.com/api/reference/responses/overview)** | `OpenAIResponsesConfig` | `pip install "ag2[openai]"` |
-| **[OpenAI](https://developers.openai.com/api/reference/overview)** | `OpenAIConfig` | `pip install "ag2[openai]"` |
+| **[OpenAI Chat Completions](https://developers.openai.com/api/reference/overview)** | `OpenAICompletionsConfig` | `pip install "ag2[openai]"` |
+| **[OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions)** | `OpenAIDecisionsConfig` | `pip install "ag2[openai]"` |
 | **[Anthropic](https://platform.claude.com/docs/en/build-with-claude/overview)** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
 | **[Gemini](https://ai.google.dev/gemini-api/docs)** | `GeminiConfig` | `pip install "ag2[gemini]"` |
 | **[Gemini on Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs)** | `VertexAIConfig` | `pip install "ag2[gemini]"` |
@@ -24,8 +25,19 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[xAI](https://docs.x.ai/docs/overview)** | `XAIConfig` | `pip install "ag2[xai]"` |
 | **[Z.AI](https://docs.z.ai)** | `ZAIConfig` | `pip install "ag2[zai]"` |
 | **[Mistral](https://docs.mistral.ai)** | `MistralConfig` | `pip install "ag2[mistral]"` |
+| **[TypeSafe (Jev)](https://docs.typesafe.ai)** | `TypeSafeConfig` | `pip install "ag2[typesafe]"` |
 
-*(Note: `OpenAIConfig` is also available for OpenAI-compatible endpoints).*
+Use `OpenAIResponsesConfig` for new OpenAI integrations. Use `OpenAICompletionsConfig` for the Chat Completions API and compatible endpoints.
+
+!!! warning "OpenAIConfig changes in 1.4.0"
+
+    `OpenAIConfig` still uses Chat Completions, but this compatibility name is deprecated.
+    Its `create()` method emits a `DeprecationWarning`; constructing or copying the config does not.
+    Use `OpenAICompletionsConfig` explicitly to preserve Chat Completions behavior, or migrate to
+    `OpenAIResponsesConfig` for the Responses API. In **1.4.0**, the deprecated Chat Completions
+    binding will be removed and `OpenAIConfig` will become an alias for `OpenAIResponsesConfig`.
+    Chat Completions parameters such as `max_completion_tokens` and `reasoning_effort` must be
+    translated to Responses parameters such as `max_output_tokens` and `reasoning` when migrating.
 
 ---
 
@@ -49,12 +61,12 @@ config = OpenAIResponsesConfig(
 ```
   </Tab>
 
-  <Tab title="OpenAI">
+  <Tab title="OpenAI Chat Completions">
 ```python linenums="1"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Configure an OpenAI model
-config = OpenAIConfig(
+config = OpenAICompletionsConfig(
     model="gpt-4o-mini",
     api_key="sk-...",
     temperature=0.2,
@@ -75,7 +87,7 @@ config = AnthropicConfig(
 )
 ```
 
-`ag2[anthropic]` requires `anthropic>=1.6.0,<2`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and the sampling parameters (`temperature`, `top_p`, `top_k`).
+`ag2[anthropic]` requires `anthropic>=1.15.0,<3`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and why `temperature`, `top_p` and `top_k` are deprecated.
   </Tab>
 
   <Tab title="Gemini">
@@ -169,28 +181,89 @@ config = MistralConfig(
 ```
   </Tab>
 
+  <Tab title="OpenAI Decisions">
+```python linenums="1"
+from ag2.config import OpenAIDecisionsConfig
+
+# Configure OpenAI's Decisions API (non-streaming)
+config = OpenAIDecisionsConfig(
+    model="gpt-6-luna",
+    api_key="...",
+)
+```
+
+The Decisions API answers a typed question instead of generating text, so the agent must set a decision `response_schema`. See [OpenAI Decisions Configuration](#openai-decisions-configuration).
+  </Tab>
+
+  <Tab title="TypeSafe">
+```python linenums="1"
+from ag2.config import TypeSafeConfig
+
+# Configure TypeSafe's Jev decision model (non-streaming)
+config = TypeSafeConfig(
+    model="jev-latest",
+    api_key="...",
+)
+```
+
+Jev answers a typed question instead of generating text, so the agent must set a decision `response_schema`. See [TypeSafe (Jev) Configuration](#typesafe-jev-configuration).
+  </Tab>
+
 </Tabs>
 
 !!! tip
 
-    **AG2** is designed to be async and streaming-first, so for the best user experience it is recommended to enable streaming on the model provider configurations for models that support it. As shown above, `Streaming` has been set to `True` in each config.
+    **AG2** is designed to be async and streaming-first, so for the best user experience it is recommended to enable streaming on the model provider configurations for models that support it. As shown above, `Streaming` has been set to `True` in each config that supports it; TypeSafe's Jev and OpenAI's Decisions API answer in a single response and have no streaming option.
 
 ### Using Environment Variables
 
 For security and convenience, you don't need to hardcode your API keys. If `api_key` is not explicitly provided, the configuration will automatically attempt to load it from your environment variables.
 
-The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `ZAI_API_KEY`).
+The system looks for provider-specific keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `ZAI_API_KEY`, `TYPESAFE_API_KEY`).
 
 ```python linenums="1"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 
 # Automatically falls back to OPENAI_API_KEY from the environment
-config = OpenAIConfig(model="gpt-5")
+config = OpenAIResponsesConfig(model="gpt-5")
 ```
+
+### Controlling OpenAI Reasoning
+
+OpenAI reasoning models spend extra tokens thinking before they answer. Both OpenAI configs let you bound that effort, and the Responses config can also request a summary of the thinking. See the [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning){.external-link target="_blank"} for which values each model accepts.
+
+`OpenAICompletionsConfig` (Chat Completions) takes `reasoning_effort`. `OpenAIResponsesConfig` takes the Responses API `reasoning` object:
+
+<Tabs>
+  <Tab title="OpenAI Responses">
+```python linenums="1"
+from ag2.config import OpenAIResponsesConfig
+
+# Auth resolved from OPENAI_API_KEY when omitted
+config = OpenAIResponsesConfig(
+    model="gpt-5-mini",
+    reasoning={"effort": "low", "summary": "auto"},
+)
+```
+  </Tab>
+
+  <Tab title="OpenAI Chat Completions">
+```python linenums="1"
+from ag2.config import OpenAICompletionsConfig
+
+# Auth resolved from OPENAI_API_KEY when omitted
+config = OpenAICompletionsConfig(model="gpt-5-mini", reasoning_effort="low")
+```
+  </Tab>
+</Tabs>
+
+`effort` is one of `none`, `minimal`, `low`, `medium`, `high` or `xhigh`; the models that accept each value differ. `summary` is one of `auto`, `concise` or `detailed`.
+
+The model only returns its thinking when you set `summary`; without it the model still reasons, but no thinking text reaches the stream. The summary is emitted as `ModelReasoning` events (`OpenAIReasoningEvent`, a subclass), and reasoning tokens are reported on `ModelResponse.usage.thinking_tokens`.
 
 ### Anthropic Configuration
 
-`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview){.external-link target="_blank"} through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.6.0,<2`.
+`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview){.external-link target="_blank"} through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.15.0,<3`.
 
 If `api_key` is not passed explicitly, it is resolved from the `ANTHROPIC_API_KEY` environment variable.
 
@@ -200,6 +273,24 @@ from ag2.config import AnthropicConfig
 # Auth resolved from ANTHROPIC_API_KEY when omitted
 config = AnthropicConfig(model="claude-haiku-4-5-20251001", streaming=True)
 ```
+
+#### Inference Speed
+
+Set `speed="fast"` or `speed="standard"` to select the inference speed on supported models. The default, `None`, omits the parameter and leaves the API's default behavior unchanged. The option works with both streaming and non-streaming requests, including `config.copy(speed="standard")` overrides.
+
+Some models require the `fast-mode-2026-02-01` beta header for **either** explicit value, including `"standard"`. AG2 does not add this model-specific header automatically; set it through `default_headers` when required:
+
+```python linenums="1"
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(
+    model="claude-opus-5",
+    speed="fast",
+    default_headers={"anthropic-beta": "fast-mode-2026-02-01"},
+)
+```
+
+Caller-supplied beta headers are preserved when AG2 adds its own tool-related betas. See [Anthropic's fast-mode guide](https://platform.claude.com/docs/en/build-with-claude/fast-mode){.external-link target="_blank"} for current model availability, header requirements and pricing. Fast mode has premium pricing; enabling it does not make an unsupported model compatible.
 
 #### Custom HTTP Client
 
@@ -222,33 +313,19 @@ config = AnthropicConfig(
 
 #### Sampling Parameters
 
-`temperature`, `top_p` and `top_k` are ordinary fields on `AnthropicConfig`. The 1.x Messages API dropped them from its method signature, so AG2 sends them in the request body, where the API still reads them:
+`temperature`, `top_p` and `top_k` on `AnthropicConfig` are deprecated and are removed in 1.4.0. The Messages API version that `anthropic` 2.x sends (`2026-10-21`) no longer accepts them: a request carrying any of them is answered with HTTP 400 `Extra inputs are not permitted`, on every model, Claude Haiku 4.5 included. With `anthropic` 2.x, AG2 therefore drops the value; with `anthropic` 1.x it is still sent. Either way, `config.create()` emits a `#!python DeprecationWarning`.
 
-```python linenums="1" hl_lines="6"
-from ag2.config import AnthropicConfig
+!!! note "`extra_body`"
 
-config = AnthropicConfig(
-    model="claude-haiku-4-5-20251001",
-    api_key="sk-ant-...",
-    temperature=0.2,
-)
-```
-
-!!! warning "Recent Claude models reject sampling parameters"
-
-    Claude Fable 5, Opus 5, Opus 4.8, Opus 4.7 and Sonnet 5 removed `temperature`, `top_p` and `top_k` from the Messages API — a request carrying any of them is answered with HTTP 400. Leave all three unset (the default) on those models. Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 and earlier still accept them.
-
-!!! note "`extra_body` precedence"
-
-    Pass `extra_body` to forward provider-specific keys that have no dedicated field. A key you write there wins over the same key AG2 derived from a field — an `#!python extra_body={"temperature": 0.9}` overrides `#!python temperature=0.2` — while unrelated keys are merged through untouched.
+    Pass `extra_body` to forward provider-specific keys that have no dedicated field. AG2 does not interpret it, so the API still answers 400 to a sampling key written there.
 
 ### Amazon Bedrock Authentication
 
 `BedrockConfig` authenticates in either of two ways, both resolved by the underlying AWS SDK:
 
-**1. AWS credentials (SigV4)** — explicit keys, a `profile_name`, or the standard environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`). Recommended for production; credentials refresh automatically through botocore.
+**1. AWS credentials (SigV4)** — explicit keys, a `profile_name`, or the standard environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`). Recommended for production; credentials refresh automatically through aiobotocore.
 
-**2. Bedrock API keys (bearer token)** — set the [Amazon Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html){.external-link target="_blank"} as an environment variable and boto3 uses bearer-token auth for Bedrock calls automatically (no other credentials needed):
+**2. Bedrock API keys (bearer token)** — set the [Amazon Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html){.external-link target="_blank"} as an environment variable and botocore uses bearer-token auth for Bedrock calls automatically (no other credentials needed):
 
 ```bash
 export AWS_BEARER_TOKEN_BEDROCK=<your-bedrock-api-key>
@@ -267,6 +344,29 @@ A region is always required — pass `region_name=` or set `AWS_DEFAULT_REGION`.
 - **Short-term keys** expire with the console session that minted them (max 12 hours) and are region-bound — generate the key in the same region you call.
 - **Long-term keys** are backed by an auto-created IAM user; AWS recommends them for exploration only.
 - API keys work only for Bedrock / Bedrock Runtime actions. If both a bearer token and AWS credentials are present, the bearer token wins for Bedrock calls.
+
+#### Custom Session
+
+`BedrockConfig` is built on [aiobotocore](https://aiobotocore.aio-libs.org/){.external-link target="_blank"}, so `session` takes an `#!python aiobotocore.session.AioSession` — a `boto3.Session` is not accepted. Sharing one session across configs resolves credentials and loads the Bedrock service model once:
+
+```python linenums="1" hl_lines="4 9 15"
+from aiobotocore.session import AioSession
+from ag2.config import BedrockConfig
+
+session = AioSession()
+
+planner = BedrockConfig(
+    model="global.anthropic.claude-sonnet-5",
+    region_name="us-east-1",
+    session=session,
+)
+writer = BedrockConfig(
+    model="global.anthropic.claude-sonnet-5",
+    region_name="us-east-1",
+    streaming=True,
+    session=session,
+)
+```
 
 ### Google Vertex AI (Gemini)
 
@@ -383,6 +483,60 @@ For full control (e.g. enabling `include_thoughts`), pass a `google.genai.types.
 
 The number of thinking tokens consumed is reported on `ModelResponse.usage.thinking_tokens` and emitted as the `gen_ai.usage.thinking_tokens` OpenTelemetry attribute by `TelemetryMiddleware`.
 
+### Ollama Configuration
+
+`OllamaConfig` connects to a local or hosted [Ollama](https://docs.ollama.com/api/introduction){.external-link target="_blank"} server through the official `ollama` SDK (`ollama>=0.5.2`). Install the optional dependency with `pip install "ag2[ollama]"`.
+
+`host` defaults to `http://localhost:11434`; the SDK fills in the scheme and default port for a bare host such as `gpu-box`.
+
+```python linenums="1"
+from ag2.config import OllamaConfig
+
+config = OllamaConfig(model="qwen3:8b", host="http://gpu-box:11434", streaming=True)
+```
+
+#### API Key
+
+[Ollama Cloud](https://docs.ollama.com/cloud){.external-link target="_blank"} needs a bearer token. Pass `api_key` and it is sent as `Authorization: Bearer <key>` on every request:
+
+```python linenums="1" hl_lines="6"
+from ag2.config import OllamaConfig
+
+config = OllamaConfig(
+    model="gpt-oss:120b",
+    host="https://ollama.com",
+    api_key="...",
+)
+```
+
+#### Custom HTTP Client
+
+Pass `http_client` to route requests through your own client, for a proxy, custom TLS, a transport or tracing. The `ollama` SDK is built on [`httpx`](https://www.python-httpx.org){.external-link target="_blank"}, so `http_client` takes an `#!python httpx.AsyncClient`:
+
+```python linenums="1" hl_lines="6"
+import httpx
+from ag2.config import OllamaConfig
+
+config = OllamaConfig(
+    model="qwen3:8b",
+    http_client=httpx.AsyncClient(proxy="http://proxy.example.com:8080"),
+)
+```
+
+`host` and `api_key` still apply on top of your client: AG2 supplies the URL and the bearer token for each request and leaves the client itself unmodified. Your client's own headers, timeout, proxy and transport are used as given.
+
+!!! note "You own the client's lifetime"
+
+    AG2 never closes a client you pass in. Close it yourself with `#!python await client.aclose()` when you are done with it.
+
+!!! warning "`httpx`, not `httpx2`"
+
+    Unlike `OpenAICompletionsConfig` and `AnthropicConfig`, which take an `httpx2` client, Ollama's `http_client` is an `httpx` client. Use `proxy=` rather than `proxies=`, which current `httpx` rejects.
+
+#### Tool Results
+
+When a tool round is sent back to the model, each result carries the name of the tool it answers as `tool_name`, as Ollama's tool-calling protocol describes. Results are still sent in call order: two parallel calls to the *same* tool are told apart by position only.
+
 ### Z.AI (GLM) Configuration
 
 `ZAIConfig` connects to Z.AI's [GLM models](https://docs.z.ai){.external-link target="_blank"} through the official `zai-sdk`. Install the optional dependency with `pip install "ag2[zai]"`.
@@ -479,15 +633,258 @@ The image URL is a short-lived signed link, so download it promptly if you need 
     pip install "mistralai>=2.8.0" "opentelemetry-api>=1.43" "opentelemetry-sdk>=1.43" "opentelemetry-semantic-conventions>=0.64b0"
     ```
 
+### OpenAI Decisions Configuration
+
+`OpenAIDecisionsConfig` connects to OpenAI's [Decisions API](https://developers.openai.com/api/docs/guides/decisions){.external-link target="_blank"} (`POST /v1/decisions`), which is in public beta. It ships with the `openai` extra (`openai>=3.27.0`), and like the other OpenAI configs reads `OPENAI_API_KEY` when `api_key` is not passed. `model` defaults to `gpt-6-luna`, the only model the endpoint serves today.
+
+Like [TypeSafe's Jev](#typesafe-jev-configuration), the Decisions API does not generate text. It answers **one typed question** about the conversation: the probability that a condition is true, one option out of several, or a score on an ordered rubric, along with the probabilities behind it. Use it to classify, route or grade cheaply, then hand the text work to a generative agent.
+
+```python linenums="1" hl_lines="6-14 18-19"
+from enum import Enum
+
+from ag2 import Agent
+from ag2.config import OpenAIDecisionsConfig
+
+class Department(Enum):
+    """Which department should handle this complaint?"""
+
+    BILLING = "billing"
+    """Payments, invoices, and refunds."""
+    TECHNICAL = "technical"
+    """Problems using the product."""
+    OTHER = "other"
+    """Requests outside these categories."""
+
+router = Agent(
+    "router",
+    config=OpenAIDecisionsConfig(),  # auth resolved from OPENAI_API_KEY
+    response_schema=Department,
+)
+
+reply = await router.ask("I was charged twice for my order.")
+department = await reply.content()        # Department.BILLING
+reply.response.metadata["confidence"]     # e.g. 0.93
+reply.response.metadata["probabilities"]  # [{"value": "billing", "probability": 0.95}, ...]
+```
+
+#### The response schema is the question
+
+An agent on `OpenAIDecisionsConfig` **must** set `response_schema`, and the schema picks the question type:
+
+| `response_schema` | Question type | `#!python await reply.content()` returns |
+| :--- | :--- | :--- |
+| `bool` | `predicate` | `True` once the probability reaches `boolean_threshold` (default `0.5`) |
+| a number schema bounded to `0..1`, e.g. `#!python ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | `predicate` | the probability as JSON text, unparsed; `reply.response.metadata["probability"]` has it as a `float` |
+| an `Enum` of strings | `choice` | the selected member |
+| an `IntEnum` numbered `0..n-1` (at least two levels) | `score` | the member nearest the returned score |
+
+Anything else (`str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema`) raises `UnsupportedResponseSchemaError` before a request is sent.
+
+The agent `prompt` and the schema's description (an explicit `ResponseSchema(..., description=...)`, an `Annotated[..., Question("...")]` marker, or an `Enum`'s class docstring, in that order of precedence) are joined into the question's `instructions`. Every question type requires instructions, so a schema with no description on an agent with no prompt raises `ValueError` locally.
+
+#### Describing options and levels
+
+The string literal under each `Enum` member becomes that choice's `description`. For an `IntEnum`, member names become the level `label`s (`WORKAROUND_AVAILABLE` is sent as `Workaround available`), and the docstrings become level descriptions. Unlike Jev, a level without a docstring is allowed.
+
+```python linenums="1"
+from enum import IntEnum
+
+from ag2 import Agent, ResponseSchema
+from ag2.config import OpenAIDecisionsConfig
+
+class Severity(IntEnum):
+    COSMETIC = 0
+    """Appearance only; no lost functionality."""
+    WORKAROUND_AVAILABLE = 1
+    """A task fails, but another way works."""
+    FULLY_BLOCKED = 2
+    """A task fails with no workaround."""
+
+grader = Agent(
+    "grader",
+    config=OpenAIDecisionsConfig(),
+    response_schema=ResponseSchema(Severity, description="How severe is this issue?"),
+)
+
+reply = await grader.ask("Export fails in Safari but works in Chrome.")
+await reply.content()              # Severity.WORKAROUND_AVAILABLE
+reply.response.metadata["score"]   # e.g. 1.1, before snapping to a level
+```
+
+`descriptions` on the config overrides or supplies descriptions without touching the type, keyed by choice value or by score level as a string (`{"0": "...", "1": "..."}`). `descriptions` outrank `Annotated[..., Question(options=...)]`, which outranks member docstrings (see [Decision Models](/docs/user-guide/decision_models#where-the-question-and-descriptions-come-from)). Member docstrings are read from the source file, so use either for enums defined in a REPL or notebook.
+
+#### Images
+
+Image inputs are sent inline as base64 data URLs, the only image form the endpoint accepts. `ImageInput(path=...)`, `ImageInput(data=..., media_type=...)` and `ImageInput("data:image/png;base64,...")` all work, and `vendor_metadata={"detail": ...}` is forwarded. Hosted image URLs, `file_id`s and non-image files raise `UnsupportedInputError`. There is no minimum size, and the cap is on area rather than on a side: a 5500×5500 image passes, while 5600×5600 is answered with `400 ... exceeds the limit of 30000 patches`.
+
+Images that every question should carry, such as a reference photo, go in `question_instructions` on the config: a string, or a list of strings, inputs and OpenAI parts (`input_text` / `input_image` / `input_json`). They follow the agent `prompt` in the question's `instructions`, and a hosted `https` image URL is allowed there. See [Decision Models](/docs/user-guide/decision_models#image-inspection) for an example.
+
+#### Refusals and what the Decisions API does not do
+
+- **Refusals.** The API may decline a question. That raises `DecisionRefusedError` (from `ag2.config.openai`) rather than returning a made-up answer.
+- **Tools.** Passing any tool raises `UnsupportedToolError`.
+- **Streaming.** There is no `streaming` field; the answer arrives as one `ModelMessage`.
+- **Files API.** `create_files_client()` raises `NotImplementedError`.
+- **History roles.** The endpoint takes only user messages, so earlier assistant replies and tool results are sent as user text tagged `[Assistant]` / `[Tool result]`.
+- **Batching.** The API can answer several independent questions in one request; each `ask()` sends exactly one.
+
+`safety_identifier`, `extra_body` and the usual client options (`base_url`, `organization`, `project`, `timeout`, `max_retries`, `default_headers`, `http_client`) are forwarded to the OpenAI SDK. Usage lands on `ModelResponse.usage`. Decisions bill input tokens only.
+
+For recipes covering classification, routing, detection, scoring, ranking, verification, feature extraction and image inspection, see [Decision Models](/docs/user-guide/decision_models).
+
+### TypeSafe (Jev) Configuration
+
+`TypeSafeConfig` connects to [TypeSafe AI's](https://docs.typesafe.ai){.external-link target="_blank"} Jev decision model through the official `typesafe-sdk`. Install the optional dependency with `pip install "ag2[typesafe]"`.
+
+For task recipes with Jev, see [Decision Models](/docs/user-guide/decision_models).
+
+Jev is not a text generator. It answers **one typed question** about the conversation so far — yes or no, one label out of several, a level on a rubric, or where something is in an image — and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
+
+If `api_key` and `base_url` are not passed explicitly, the SDK resolves them from the `TYPESAFE_API_KEY` and `TYPESAFE_BASE_URL` environment variables. `model` defaults to `jev-latest`.
+
+```python linenums="1" hl_lines="6-12 17-18"
+from enum import Enum
+
+from ag2 import Agent
+from ag2.config import TypeSafeConfig
+
+class Department(Enum):
+    """Which team should handle this ticket?"""
+
+    BILLING = "billing"
+    """Payments, invoicing, refunds."""
+    TECHNICAL = "technical"
+    """Bugs, outages, integrations."""
+
+router = Agent(
+    "router",
+    prompt="You triage customer support tickets.",
+    config=TypeSafeConfig(),  # auth resolved from TYPESAFE_API_KEY
+    response_schema=Department,
+)
+
+reply = await router.ask("My webhook integration has been down for 3 days.")
+department = await reply.content()        # Department.TECHNICAL
+reply.response.metadata["confidence"]     # e.g. 0.93
+reply.response.metadata["probabilities"]  # {"billing": 0.07, "technical": 0.93}
+```
+
+#### The response schema is the question
+
+There is no free-text path, so an agent on `TypeSafeConfig` **must** set `response_schema`, and the schema picks which of Jev's primitives is asked:
+
+| `response_schema` | Jev asks | `#!python await reply.content()` returns |
+| :--- | :--- | :--- |
+| `bool` | a yes/no question | `True` once the yes-probability reaches `boolean_threshold` (default `0.5`) |
+| a number schema bounded to `0..1`, e.g. `#!python ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | a yes/no question | the yes-probability as JSON text, unparsed (`from_schema` schemas are not validated); `reply.response.metadata["noul"]` has it as a `float` |
+| an `Enum` of strings | a choice between its members | the selected member |
+| an `IntEnum` numbered `0..n-1` with 2–10 levels | a score on that rubric | the member nearest Jev's expected score |
+| `BoundingBox` | where something is in an image (see [Locating things in an image](#locating-things-in-an-image)) | the `BoundingBox`: each edge as a `0..1` fraction of the image |
+
+Anything else — `str`, `int`, a dataclass, another Pydantic model, a `PromptedSchema` — raises `UnsupportedResponseSchemaError` before any request is sent.
+
+The agent `prompt` frames the question; the schema's own description asks it. That is an explicit `ResponseSchema(..., description=...)`, an `Annotated[..., Question("...")]` marker, or an `Enum`'s class docstring, in that order of precedence. The prompt and the question are joined, so the router above asks *"You triage customer support tickets. Which team should handle this ticket?"*.
+
+!!! warning "A yes/no question has to be asked"
+
+    `response_schema=bool` with no prompt, no description and no `criteria` raises `ValueError` locally. The API rejects a bare yes/no question, and failing before the request keeps the error actionable.
+
+#### Locating things in an image
+
+`BoundingBox` asks Jev **where** something is in an image. The agent `prompt` says what to find, the image goes in with the question, and the answer is the box around it.
+
+Images and box questions are experimental on TypeSafe's side, so two settings are required: the `jev-preview` model and the opt-in header `TypeSafe-Danger-Zone-Images: true`, sent through `headers`. Without the header the API answers `400 Images are experimental`. Each side of an image must be between 280 and 1568 pixels: a smaller or larger one, such as a 256×256 icon or a 1600×1200 photo, is answered with `400 Invalid image dimensions`, so resize it before sending.
+
+```python linenums="1" hl_lines="7-9 12"
+from ag2 import Agent, ImageInput, ResponseSchema
+from ag2.config import TypeSafeConfig
+from ag2.config.typesafe import BoundingBox
+
+finder = Agent(
+    "finder",
+    prompt="The dog",
+    config=TypeSafeConfig(model="jev-preview", headers={"TypeSafe-Danger-Zone-Images": "true"}),
+    response_schema=ResponseSchema(BoundingBox),
+)
+
+reply = await finder.ask("Where is it?", ImageInput(path="photo.png"))
+box = await reply.content()            # BoundingBox(top=0.2, bottom=0.66, left=0.19, right=0.68)
+reply.response.metadata["confidence"]  # e.g. 0.89, or None when the model gives none
+
+width, height = 1280, 720  # the size of photo.png in pixels
+rectangle = (box.left * width, box.top * height, box.right * width, box.bottom * height)
+```
+
+The edges are fractions of the image, measured from its top-left corner: `top` and `bottom` of its height, `left` and `right` of its width. Multiply them by the image size to get pixels, as in the last line above.
+
+Send the image as `ImageInput(path=...)` or `ImageInput(data=..., media_type=...)`. A URL, an uploaded `file_id` and non-image media raise `UnsupportedInputError`.
+
+!!! warning "A box needs an image"
+
+    `response_schema=ResponseSchema(BoundingBox)` with no image in the request raises `ValueError` locally. Without the check the API would not fail; it would answer with an invented box and a confidence near zero.
+
+!!! note "Treat the box as an estimate"
+
+    `jev-preview` finds the right region, but its edges can be off by 0.1–0.2 of the image, and `confidence` is often low (around 0.3 in our checks). Read `reply.response.metadata["confidence"]` before acting on a box, and leave a margin when you crop or draw it.
+
+#### Describing the options
+
+The string literal under each `Enum` / `IntEnum` member describes that option to Jev. Python discards those strings at runtime, so AG2 reads them back from the class source.
+
+```python linenums="1"
+from enum import IntEnum
+
+class Severity(IntEnum):
+    LOW = 0
+    """Cosmetic; nothing is blocked."""
+    MEDIUM = 1
+    """Degraded but usable."""
+    HIGH = 2
+    """An outage or data loss."""
+```
+
+A score rubric **requires** a description for every level; a choice works without them. `criteria` on the config overrides or supplies descriptions without touching the type (`Annotated[..., Question(options=...)]` does the same beside the type, and `criteria` wins) — keyed by choice label, by score level as a string, or by `"true"` / `"false"` for a yes/no question:
+
+```python linenums="1" hl_lines="4-8"
+from ag2.config import TypeSafeConfig
+
+config = TypeSafeConfig(
+    boolean_threshold=0.8,
+    criteria={
+        "true": "The customer is asking for money back.",
+        "false": "Anything else, including questions about pricing.",
+    },
+)
+```
+
+!!! note "Member docstrings need the source file"
+
+    Docstrings are read with `inspect.getsource`, so an `Enum` defined in a REPL, a notebook cell or a frozen app has none. Pass `criteria` or `Annotated[..., Question(options=...)]` there; `criteria` wins when both are set.
+
+#### Confidence and probabilities
+
+The SDK answer, minus its `type`, is kept on `reply.response.metadata`. A yes/no answer is just `noul`, the yes-probability. A choice carries `choice`, `confidence` and `probabilities` per label. A score carries `score` (the expected value on the rubric, before snapping), `confidence`, the rubric `legend` and `probabilities` per level.
+
+#### What Jev does not do
+
+- **Tools.** Passing any tool raises `UnsupportedToolError`; keep tools on the generative agent Jev routes to.
+- **Streaming.** Requests are non-streaming; there is no `streaming` field, and the answer arrives as one `ModelMessage`.
+- **Files and media.** `create_files_client()` raises `NotImplementedError`, and only text, structured `DataInput` and image parts (experimental, see [Locating things in an image](#locating-things-in-an-image)) are sent — anything else raises `UnsupportedInputError`.
+- **Free text.** `reply.body` is the answer as JSON, not prose.
+
+`retry` takes a `typesafe_sdk.RetryPolicy` and `http_client` an `#!python httpx2.AsyncClient`; both are forwarded to the SDK untouched. Token counts land on `ModelResponse.usage` as `prompt_tokens` / `completion_tokens` when the API reports them.
+
+Structured data extraction, one of the decision shapes in [TypeSafe's docs](https://docs.typesafe.ai){.external-link target="_blank"}, is the one this provider cannot express: an object schema is rejected, since Jev answers one decision per question.
+
 ### Self-Hosted and OpenAI-Compatible Models (vLLM, LM Studio, etc.)
 
-If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAIConfig` class and specify a custom `base_url`.
+If you are using a self-hosted model or an API that is compatible with the OpenAI format (such as **vLLM**, **LM Studio**, **FastChat**, or **Together AI**), you can use the `OpenAICompletionsConfig` class and specify a custom `base_url`.
 
 ```python linenums="1" hl_lines="6"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Configure a vLLM or other OpenAI-compatible endpoint
-config = OpenAIConfig(
+config = OpenAICompletionsConfig(
     model="qwen-3",
     base_url="http://localhost:8000/v1",
     # Some endpoints don't require an API key, but the client expects a non-empty string
@@ -500,9 +897,9 @@ config = OpenAIConfig(
 
     ```python linenums="1" hl_lines="8"
     import httpx2
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
-    config = OpenAIConfig(
+    config = OpenAICompletionsConfig(
         model="qwen-3",
         base_url="https://localhost:8000/v1",
         api_key="NotRequired",
@@ -512,7 +909,7 @@ config = OpenAIConfig(
 
 !!! note "`http_client` is an `httpx2` client"
     From `openai>=3` the OpenAI SDK uses [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, which
-    `ag2[openai]` installs for you. `OpenAIConfig` and `OpenAIResponsesConfig` annotate
+    `ag2[openai]` installs for you. `OpenAICompletionsConfig` and `OpenAIResponsesConfig` annotate
     `http_client` accordingly, and ag2 forwards whatever you pass to the SDK untouched.
 
     A legacy `httpx.AsyncClient` still works at runtime: the SDK keeps a compatibility path
@@ -533,9 +930,9 @@ config = OpenAIConfig(
 
     ```python
     import httpx2
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
-    config = OpenAIConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
+    config = OpenAICompletionsConfig(model="gpt-4o", http_client=httpx2.AsyncClient(verify="/path/to/ca-bundle.crt"))
     ```
 
     `certifi` remains installed — ag2's own core depends on `httpx` — but the OpenAI client
@@ -543,15 +940,15 @@ config = OpenAIConfig(
 
 ### Extra Body Parameters
 
-Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAIConfig` to pass these through directly to the API call.
+Some OpenAI API-compatible providers require additional, provider-specific parameters in the request body. Use the `extra_body` parameter on `OpenAICompletionsConfig` to pass these through directly to the API call.
 
 This is useful for enabling features like extended thinking on self-hosted or third-party models:
 
 ```python linenums="1" hl_lines="7"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # NVIDIA NIM
-nemotron = OpenAIConfig(
+nemotron = OpenAICompletionsConfig(
     model="nvidia/nemotron-3-super-120b-a12b",
     base_url="https://integrate.api.nvidia.com/v1",
     extra_body={"chat_template_kwargs": {"thinking": True}},
@@ -564,9 +961,9 @@ Model configurations are **immutable**. If you need to reuse a configuration for
 
 ```python linenums="1" hl_lines="4 9 15"
 from ag2.agent import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-base_config = OpenAIConfig(model="gpt-5")
+base_config = OpenAICompletionsConfig(model="gpt-5")
 
 agent1 = Agent(
     "Assistant",
@@ -589,7 +986,7 @@ You can accomplish this by passing the configuration to the `.ask()` method when
 
 ```python linenums="1" hl_lines="15-18"
 from ag2.agent import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 # Define an agent without an initial model config,
 # or with a default one you plan to override later
@@ -602,7 +999,7 @@ agent = Agent(
 # Ask the agent, passing the explicit model configuration
 response = await agent.ask(
     "Hello!",
-    config=OpenAIConfig(
+    config=OpenAICompletionsConfig(
         model="gpt-5",
         api_key="sk-user-specific-key"
     )
@@ -614,16 +1011,16 @@ response = await agent.ask(
 
     ```python linenums="1" hl_lines="6 12"
     from ag2.agent import Agent
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
 
     agent = Agent(
         "Assistant",
-        config=OpenAIConfig(model="gpt-5"),
+        config=OpenAICompletionsConfig(model="gpt-5"),
     )
 
     response = await agent.ask(
         "Hello!",
         # overrides the original model configuration
-        config=OpenAIConfig(model="gpt-5-mini")
+        config=OpenAICompletionsConfig(model="gpt-5-mini")
     )
     ```

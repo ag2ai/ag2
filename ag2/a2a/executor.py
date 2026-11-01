@@ -14,7 +14,7 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import Part, Task, TaskState, TaskStatus
 
 from ag2.agent import Agent
-from ag2.context import ConversationContext
+from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.events import (
     BaseEvent,
     ClientToolCallEvent,
@@ -290,11 +290,12 @@ class AgentExecutor(A2AAgentExecutorBase):
         final_text: str,
         final_variables: dict[str, Any],
     ) -> "Any | None":
-        if not final_text and not final_variables:
+        outgoing = strip_reserved_variables(final_variables, source="an outgoing A2A response", warn=False)
+        if not final_text and not outgoing:
             return None
         metadata: dict[str, Any] | None = None
-        if final_variables:
-            metadata = {CONTEXT_UPDATE_METADATA_KEY: final_variables}
+        if outgoing:
+            metadata = {CONTEXT_UPDATE_METADATA_KEY: outgoing}
         parts = [Part(text=final_text)] if final_text else []
         return updater.new_agent_message(parts=parts, metadata=metadata)
 
@@ -335,7 +336,10 @@ class AgentExecutor(A2AAgentExecutorBase):
             raise RuntimeError("Agent.config is not set; cannot serve via A2A")
         client = agent.config.create()
 
-        merged_variables = {**dict(agent._agent_variables), **incoming_variables}
+        merged_variables = {
+            **dict(agent._agent_variables),
+            **strip_reserved_variables(incoming_variables, source="an inbound A2A request"),
+        }
         ctx = ConversationContext(
             stream,
             prompt=[*agent._system_prompt, *extra_prompt],

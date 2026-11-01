@@ -17,13 +17,16 @@ from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult, SpanExporter
 
 from ag2 import Agent, Context
+from ag2.context import ConversationContext
 from ag2.events import TaskCancelled
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     Hub,
     HubBackedCheckpointStore,
+    NotFoundError,
     Passport,
     Resume,
+    Rule,
 )
 from ag2.network.task_mirror import TaskMirror
 from ag2.stream import MemoryStream
@@ -66,8 +69,6 @@ class TestTaskCancel:
         events: list = []
         stream.subscribe(lambda ev: events.append(ev))
 
-        from ag2.context import ConversationContext
-
         task = Task(
             owner_id="alice",
             spec=TaskSpec(title="thing"),
@@ -85,7 +86,6 @@ class TestTaskCancel:
 
     @pytest.mark.asyncio
     async def test_cancel_is_idempotent_on_terminal_task(self) -> None:
-        from ag2.context import ConversationContext
 
         stream = MemoryStream()
         events: list = []
@@ -118,8 +118,6 @@ class TestCheckpointStandalone:
     async def test_checkpoint_writes_via_store_and_resume_reads_it_back(self) -> None:
         store = _InMemoryCheckpointStore()
 
-        from ag2.context import ConversationContext
-
         first = Task(
             owner_id="alice",
             spec=TaskSpec(title="work"),
@@ -145,7 +143,6 @@ class TestCheckpointStandalone:
     async def test_checkpoint_without_store_is_a_silent_noop(self) -> None:
         """Standalone agents that never wire a store can still call
         ``Task.checkpoint`` — the call is just dropped."""
-        from ag2.context import ConversationContext
 
         task = Task(
             owner_id="alice",
@@ -158,7 +155,6 @@ class TestCheckpointStandalone:
     @pytest.mark.asyncio
     async def test_resume_from_unknown_task_yields_none(self) -> None:
         store = _InMemoryCheckpointStore()
-        from ag2.context import ConversationContext
 
         task = Task(
             owner_id="alice",
@@ -173,7 +169,6 @@ class TestCheckpointStandalone:
     @pytest.mark.asyncio
     async def test_checkpoint_after_terminal_is_a_noop(self) -> None:
         store = _InMemoryCheckpointStore()
-        from ag2.context import ConversationContext
 
         task = Task(
             owner_id="alice",
@@ -450,7 +445,6 @@ class TestHubAccessors:
             await hub.close()
 
     async def test_get_rule_returns_default_rule_for_registered_agent(self) -> None:
-        from ag2.network import Rule
 
         hub = await Hub.open(
             MemoryKnowledgeStore(),
@@ -465,7 +459,6 @@ class TestHubAccessors:
             await hub.close()
 
     async def test_get_rule_raises_not_found_for_unknown_agent(self) -> None:
-        from ag2.network import NotFoundError
 
         hub = await Hub.open(
             MemoryKnowledgeStore(),

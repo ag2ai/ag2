@@ -48,7 +48,7 @@ from ag2.network import Hub, serve_ws
 
 async def main() -> None:
     hub = await Hub.open(DiskKnowledgeStore(Path("./hub-data")))
-    async with serve_ws(hub, "0.0.0.0", 8765) as server:
+    async with serve_ws(hub, "127.0.0.1", 8765) as server:
         host, port = server.sockets[0].getsockname()
         print(f"hub listening on ws://{host}:{port}")
         await asyncio.Future()  # run until interrupted

@@ -163,9 +163,7 @@ class TestReceiptCursorAdvance:
         WAL head instead of landing on whichever same-tick envelope drew the
         largest random suffix. Frozen here (the worst case of a coarse clock)
         so the assertion would fail ~always without strict monotonicity."""
-        with mock.patch("ag2.network.ids.time") as fake_time:
-            fake_time.time_ns.return_value = 1_700_000_000_000_000_000
-
+        with mock.patch("time.time_ns", return_value=1_700_000_000_000_000_000):
             hub = await _new_hub()
             alice = await hub.register(_agent("alice"))
             bob = await hub.register(_agent("bob"))

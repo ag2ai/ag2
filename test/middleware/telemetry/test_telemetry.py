@@ -19,6 +19,7 @@ from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
+    FileIdInput,
     ImageInput,
     ModelMessage,
     ModelRequest,
@@ -537,6 +538,21 @@ async def test_tool_span_keeps_every_part_of_a_multi_part_result(otel_setup):
 
     recorded = _tool_span_of(exporter).attributes["gen_ai.tool.call.result"]
     assert recorded.splitlines() == ["headline", '{"rows": 2}', "footnote"]
+
+
+@pytest.mark.asyncio()
+async def test_tool_span_leaves_out_parts_with_no_text(otel_setup):
+    """Nothing is invented in place of an inline image or a provider file."""
+    exporter, provider = otel_setup
+
+    @tool
+    def chart() -> ToolResult:
+        """Draw a chart."""
+        return ToolResult("the chart", ImageInput(data=b"\x89PNG", media_type="image/png"), FileIdInput("file-abc"))
+
+    await _agent_calling(chart, provider).ask("Chart?")
+
+    assert _tool_span_of(exporter).attributes["gen_ai.tool.call.result"] == "the chart"
 
 
 @pytest.mark.asyncio()

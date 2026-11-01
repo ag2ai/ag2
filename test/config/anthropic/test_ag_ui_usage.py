@@ -30,7 +30,7 @@ from ag_ui.core import RunFinishedEvent, TokenUsage, UserMessage  # noqa: E402
 from ag2 import Agent  # noqa: E402
 from ag2.ag_ui import AGUIStream  # noqa: E402
 from ag2.config.anthropic import AnthropicConfig  # noqa: E402
-from test.ag_ui.utils import collect_events, create_run_input  # noqa: E402
+from test.ag_ui.harness import dispatch_run, run_input  # noqa: E402
 
 pytestmark = pytest.mark.asyncio
 
@@ -62,7 +62,7 @@ def _agent(usage: dict[str, Any]) -> Agent:
 
 async def _finished(agent: Agent) -> RunFinishedEvent:
     """The terminating event of a completed run, parsed by the class that sent it."""
-    frames = await collect_events(AGUIStream(agent), create_run_input(UserMessage(id="msg_1", content="go")))
+    frames = await dispatch_run(AGUIStream(agent), run_input(UserMessage(id="msg_1", content="go")))
     return RunFinishedEvent.model_validate(frames[-1])
 
 
@@ -128,5 +128,32 @@ async def test_the_zeros_anthropic_always_sends_reach_the_client_as_zeros() -> N
             total_tokens=305,
             reasoning_tokens=45,
             cached_input_tokens=0,
+            cache_write_input_tokens=0,
+        )
+    ]
+
+
+async def test_the_input_a_client_sees_counts_what_anthropic_read_and_wrote_to_its_cache() -> None:
+    """Anthropic reports its cache counts beside ``input_tokens``, not inside it.
+
+    AG-UI's input is every prompt token the call was charged for, so both cache
+    counts are added in on the way out, and each is still reported on its own.
+    """
+    agent = _agent({
+        "input_tokens": 10,
+        "cache_read_input_tokens": 100,
+        "cache_creation_input_tokens": 5,
+        "output_tokens": 20,
+    })
+
+    assert (await _finished(agent)).usage == [
+        TokenUsage(
+            provider="anthropic",
+            model="claude-haiku-4-5",
+            input_tokens=115,
+            output_tokens=20,
+            total_tokens=135,
+            cached_input_tokens=100,
+            cache_write_input_tokens=5,
         )
     ]

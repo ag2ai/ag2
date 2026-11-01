@@ -6,10 +6,10 @@ import json
 import logging
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import httpx2
-from anthropic import NOT_GIVEN, AsyncAnthropic
+from anthropic import NOT_GIVEN, AsyncAnthropic, OpenTelemetryClientOption
 from anthropic.types import (
     ContainerUploadBlock,
     Message,
@@ -31,6 +31,7 @@ from ag2.events import (
     ModelResponse,
     ToolCallEvent,
     ToolCallsEvent,
+    Usage,
 )
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
@@ -38,6 +39,7 @@ from ag2.tools.builtin.skills import SkillsToolSchema
 from ag2.tools.schemas import ToolSchema
 
 from .events import (
+    AnthropicCacheDiagnostics,
     AnthropicContainerUploadEvent,
     AnthropicRedactedThinkingEvent,
     AnthropicServerToolCallEvent,
@@ -51,37 +53,43 @@ logger = logging.getLogger(__name__)
 def _tool_use_vendor_metadata(block: ToolUseBlock) -> dict[str, Any]:
     """Provider fields ``ToolCallEvent`` has no column for but must replay."""
     meta: dict[str, Any] = {}
-    if (caller := getattr(block, "caller", None)) is not None:
-        meta["caller"] = caller.model_dump(mode="json") if hasattr(caller, "model_dump") else caller
-    if (toolset := getattr(block, "toolset_name", None)) is not None:
-        meta["toolset_name"] = toolset
+    if block.caller is not None:
+        meta["caller"] = block.caller.model_dump(mode="json")
+    if block.toolset_name is not None:
+        meta["toolset_name"] = block.toolset_name
     return meta
 
 
+from ._compat import sampling_extra_body, take_sampling_fields
 from .mappers import (
     convert_messages,
     extract_mcp_servers,
     extract_skills_for_container,
     has_file_id_references,
-    merge_sampling_into_extra_body,
+    inject_cache_breakpoint,
     normalize_usage,
     response_proto_to_output_config,
-    take_sampling_fields,
     tools_to_api,
 )
 
 
+def _message_usage(message: Message) -> Usage:
+    return normalize_usage(message.usage.model_dump() if message.usage else {})
+
+
+Speed = Literal["standard", "fast"]
+
+
 class CreateOptions(TypedDict, total=False):
-    # `temperature`, `top_p` and `top_k` are absent on purpose: `anthropic` 1.x
-    # removed them from the Messages API signature, so passing one here is a
-    # `TypeError`. `AnthropicConfig` forwards them in the request's extra body
-    # instead — see `AnthropicConfig._request_extra_body`.
+    # `temperature`, `top_p` and `top_k` are absent on purpose: the Messages API
+    # version `anthropic` 2.x sends no longer accepts them, and answers 400.
     model: str
     max_tokens: int
     stop_sequences: list[str] | None
     stream: bool
     metadata: dict[str, str] | None
     service_tier: str | None
+    speed: Speed | None
 
 
 class AnthropicClient(LLMClient):
@@ -95,7 +103,9 @@ class AnthropicClient(LLMClient):
         http_client: httpx2.AsyncClient | None = None,
         create_options: CreateOptions | None = None,
         prompt_caching: bool = True,
+        cache_diagnostics: bool = False,
         extra_body: dict[str, Any] | None = None,
+        open_telemetry: OpenTelemetryClientOption = None,
     ) -> None:
         self._client = AsyncAnthropic(
             api_key=api_key,
@@ -104,17 +114,17 @@ class AnthropicClient(LLMClient):
             max_retries=max_retries,
             default_headers=default_headers,
             http_client=http_client,
+            open_telemetry=open_telemetry,
         )
 
         self._create_options = {k: v for k, v in (create_options or {}).items() if k != "stream"}
         self._streaming = (create_options or {}).get("stream", False)
         self._prompt_caching = prompt_caching
+        self._cache_diagnostics = cache_diagnostics
+        self._last_message_id: str | None = None
 
-        # A caller reaching this class directly (rather than through
-        # `AnthropicConfig`) may still be passing the sampling parameters 1.x
-        # removed from the method signature. Route them the same way, instead of
-        # letting them reach the SDK as a bare `TypeError` at request time.
-        self._extra_body = merge_sampling_into_extra_body(take_sampling_fields(self._create_options), extra_body)
+        # Reaching this class directly, not through `AnthropicConfig`, may still pass sampling keys.
+        self._extra_body = sampling_extra_body(take_sampling_fields(self._create_options), extra_body)
 
         self._default_betas = _default_betas(default_headers)
 
@@ -141,7 +151,7 @@ class AnthropicClient(LLMClient):
         )
 
         if self._prompt_caching and anthropic_messages:
-            self._inject_cache_control(anthropic_messages)
+            inject_cache_breakpoint(anthropic_messages)
 
         tools_schemas = list(tools)
         tools_without_skills = [t for t in tools_schemas if not isinstance(t, SkillsToolSchema)]
@@ -192,34 +202,73 @@ class AnthropicClient(LLMClient):
             create_kwargs["extra_body"] = {**existing, **self._extra_body}
 
         max_continuations = 5
+        continuation_usage = Usage()
 
         if self._streaming:
+            if self._cache_diagnostics:
+                create_kwargs["diagnostics"] = {"previous_message_id": self._last_message_id}
             async with self._client.messages.stream(**create_kwargs) as stream:
                 result = await self._process_stream(stream, context)
                 final_msg = await stream.get_final_message()
+            await self._report_cache_diagnostics(final_msg, create_kwargs, context)
 
             for _ in range(max_continuations):
                 if result.finish_reason != "pause_turn":
                     break
+                continuation_usage += result.usage
                 anthropic_messages.append({"role": "assistant", "content": final_msg.content})
                 create_kwargs["messages"] = anthropic_messages
+                if self._cache_diagnostics:
+                    create_kwargs["diagnostics"] = {"previous_message_id": self._last_message_id}
                 async with self._client.messages.stream(**create_kwargs) as stream:
                     result = await self._process_stream(stream, context)
                     final_msg = await stream.get_final_message()
+                await self._report_cache_diagnostics(final_msg, create_kwargs, context)
 
+            result.usage += continuation_usage
             return result
         else:
+            if self._cache_diagnostics:
+                create_kwargs["diagnostics"] = {"previous_message_id": self._last_message_id}
             response = await self._client.messages.create(**create_kwargs)
+            await self._report_cache_diagnostics(response, create_kwargs, context)
 
             for _ in range(max_continuations):
                 if response.stop_reason != "pause_turn":
                     break
+                continuation_usage += _message_usage(response)
                 await self._emit_builtin_tool_events(response.content, context)
                 anthropic_messages.append({"role": "assistant", "content": response.content})
                 create_kwargs["messages"] = anthropic_messages
+                if self._cache_diagnostics:
+                    create_kwargs["diagnostics"] = {"previous_message_id": self._last_message_id}
                 response = await self._client.messages.create(**create_kwargs)
+                await self._report_cache_diagnostics(response, create_kwargs, context)
 
-            return await self._process_response(response, context)
+            result = await self._process_response(response, context)
+            result.usage += continuation_usage
+            return result
+
+    async def _report_cache_diagnostics(
+        self,
+        message: Message,
+        create_kwargs: dict[str, Any],
+        context: "ConversationContext",
+    ) -> None:
+        """Report why `message` missed the cache, and chain the next call to it."""
+        if not self._cache_diagnostics:
+            return
+
+        compared_with = (create_kwargs.get("diagnostics") or {}).get("previous_message_id")
+        if event := AnthropicCacheDiagnostics.from_message(
+            getattr(message, "diagnostics", None), previous_message_id=compared_with
+        ):
+            await context.send(event)
+
+        # A message without an id leaves the previous one standing: a stale comparison
+        # still names a real message, where `None` would silently stop diagnosing.
+        if message.id:
+            self._last_message_id = message.id
 
     async def _emit_builtin_tool_events(
         self,
@@ -241,17 +290,6 @@ class AnthropicClient(LLMClient):
         if self._prompt_caching:
             return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
         return text
-
-    @staticmethod
-    def _inject_cache_control(messages: list[dict[str, Any]]) -> None:
-        for msg in reversed(messages):
-            if msg.get("role") == "user":
-                content = msg.get("content")
-                if isinstance(content, str):
-                    msg["content"] = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
-                elif isinstance(content, list) and content:
-                    content[-1]["cache_control"] = {"type": "ephemeral"}
-                break
 
     async def _process_response(
         self,
@@ -300,16 +338,14 @@ class AnthropicClient(LLMClient):
                 # no event, no warning and no trace in history.
                 logger.warning(
                     "Dropping unhandled Anthropic content block type=%r (%s)",
-                    getattr(block, "type", None),
+                    block.type,
                     type(block).__name__,
                 )
-
-        usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
         return ModelResponse(
             message=model_msg,
             tool_calls=ToolCallsEvent(calls),
-            usage=usage,
+            usage=_message_usage(response),
             model=response.model,
             provider="anthropic",
             finish_reason=response.stop_reason,
@@ -328,11 +364,11 @@ class AnthropicClient(LLMClient):
         current_server: dict[str, Any] | None = None
 
         async for event in stream:
-            event_type = getattr(event, "type", None)
+            event_type = event.type
 
             if event_type == "content_block_start":
                 block = event.content_block
-                block_type = getattr(block, "type", None)
+                block_type = block.type
                 if block_type == "tool_use":
                     current_tool = {
                         "id": block.id,
@@ -361,7 +397,7 @@ class AnthropicClient(LLMClient):
 
             elif event_type == "content_block_delta":
                 delta = event.delta
-                delta_type = getattr(delta, "type", None)
+                delta_type = delta.type
 
                 if delta_type == "text_delta":
                     full_content += delta.text
@@ -414,7 +450,7 @@ class AnthropicClient(LLMClient):
         return ModelResponse(
             message=message,
             tool_calls=ToolCallsEvent(calls),
-            usage=normalize_usage(final_message.usage.model_dump() if final_message.usage else {}),
+            usage=_message_usage(final_message),
             model=final_message.model,
             provider="anthropic",
             finish_reason=final_message.stop_reason,

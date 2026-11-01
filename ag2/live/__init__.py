@@ -41,6 +41,17 @@ except ImportError as e:
     ElevenLabsStreamingTTSConfig = missing_optional_dependency("StreamingTTSConfig", "elevenlabs", e)  # type: ignore[misc]
     ElevenLabsTranscriber = missing_optional_dependency("STTConfig", "elevenlabs", e)  # type: ignore[misc]
 
+try:
+    from .mistral import RealtimeSTTConfig as MistralRealtimeTranscriber
+    from .mistral import STTConfig as MistralTranscriber
+    from .mistral import StreamingTTSConfig as MistralStreamingTTSConfig
+    from .mistral import TTSConfig as MistralTTSConfig
+except ImportError as e:
+    MistralRealtimeTranscriber = missing_optional_dependency("RealtimeSTTConfig", "mistral", e)  # type: ignore[misc]
+    MistralTranscriber = missing_optional_dependency("STTConfig", "mistral", e)  # type: ignore[misc]
+    MistralTTSConfig = missing_optional_dependency("TTSConfig", "mistral", e)  # type: ignore[misc]
+    MistralStreamingTTSConfig = missing_optional_dependency("StreamingTTSConfig", "mistral", e)  # type: ignore[misc]
+
 
 __all__ = (
     "CascadeConfig",
@@ -49,6 +60,10 @@ __all__ = (
     "ElevenLabsTranscriber",
     "GeminiRealTimeConfig",
     "LiveAgent",
+    "MistralRealtimeTranscriber",
+    "MistralStreamingTTSConfig",
+    "MistralTTSConfig",
+    "MistralTranscriber",
     "OpenAIRealTimeConfig",
     "OpenAITTSConfig",
     "OpenAITranscriber",

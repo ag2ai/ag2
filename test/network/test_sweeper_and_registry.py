@@ -42,6 +42,8 @@ from ag2.network.client.tools import (
     make_peers_tool,
     make_tasks_tool,
 )
+from ag2.network.client.tools.delegate import make_delegate_tool
+from ag2.network.client.tools.say import make_say_tool
 from ag2.network.hub.audit import (
     AUDIT_KIND_EXPECTATION_VIOLATED,
 )
@@ -197,8 +199,6 @@ async def test_cross_tool_flow_exercises_all_six_tools() -> None:
     """One alice registers; she uses ``peers(find)``, ``channels(open)``,
     ``say``, ``tasks(list)``, ``context(search)``. The grouped+flat
     surface composes via the same DI wiring."""
-    from ag2.network.client.tools.delegate import make_delegate_tool
-    from ag2.network.client.tools.say import make_say_tool
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)

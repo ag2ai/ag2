@@ -19,10 +19,12 @@ Three layers covered:
 """
 
 import json
+import tempfile
+from pathlib import Path
 
 import pytest
 
-from ag2 import Agent
+from ag2 import Agent, Context
 from ag2.knowledge import DiskKnowledgeStore, MemoryKnowledgeStore
 from ag2.network import (
     Hub,
@@ -35,11 +37,18 @@ from ag2.network.client.skill_render import (
     parse_skill_frontmatter,
     render_fallback_skill,
 )
+from ag2.network.hub.audit import (
+    AUDIT_KIND_RESUME_SET,
+    RESUME_SOURCE_OBSERVED,
+    RESUME_SOURCE_TENANT,
+)
 from ag2.network.hub.layout import by_capability_path
 from ag2.network.identity import (
     ObservedStat,
     Resume,
 )
+from ag2.network.task_mirror import TaskMirror
+from ag2.stream import MemoryStream
 from ag2.task import TaskState
 from ag2.testing import TestConfig
 
@@ -339,9 +348,6 @@ async def test_task_mirror_records_observation_on_capability_tagged_task() -> No
     surface) so this contract is verified independently of the
     end-to-end notify-handler integration covered in test_tools.py.
     """
-    from ag2 import Context
-    from ag2.network.task_mirror import TaskMirror
-    from ag2.stream import MemoryStream
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -380,11 +386,6 @@ async def test_record_observation_writes_audit_with_observed_source() -> None:
     """Hub-side observation mutations are auditable as ``resume_set``
     records with ``source="observed"``, distinct from tenant-driven
     ``set_resume`` calls (``source="tenant"``)."""
-    from ag2.network.hub.audit import (
-        AUDIT_KIND_RESUME_SET,
-        RESUME_SOURCE_OBSERVED,
-        RESUME_SOURCE_TENANT,
-    )
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)
@@ -435,12 +436,6 @@ async def test_task_capability_survives_hub_hydrate() -> None:
     hydrate the spec came back with ``capability=None`` and
     ``record_observation`` wouldn't fire even after the task terminated.
     """
-    import tempfile
-    from pathlib import Path
-
-    from ag2 import Context
-    from ag2.network.task_mirror import TaskMirror
-    from ag2.stream import MemoryStream
 
     with tempfile.TemporaryDirectory() as tmpdir:
         store = DiskKnowledgeStore(Path(tmpdir))
@@ -477,9 +472,6 @@ async def test_task_capability_survives_hub_hydrate() -> None:
 @pytest.mark.asyncio
 async def test_task_mirror_no_observation_when_capability_absent() -> None:
     """Untagged tasks emit lifecycle events but don't touch ``observed``."""
-    from ag2 import Context
-    from ag2.network.task_mirror import TaskMirror
-    from ag2.stream import MemoryStream
 
     store = MemoryKnowledgeStore()
     hub = await Hub.open(store, ttl_sweep_interval=0, expectation_sweep_interval=0)

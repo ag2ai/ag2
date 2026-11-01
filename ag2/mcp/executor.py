@@ -4,7 +4,13 @@
 
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from contextlib import AbstractAsyncContextManager, AbstractContextManager, ExitStack, asynccontextmanager
+from contextlib import (
+    AbstractAsyncContextManager,
+    AbstractContextManager,
+    AsyncExitStack,
+    ExitStack,
+    asynccontextmanager,
+)
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -37,7 +43,7 @@ from ag2.stream import MemoryStream
 
 from .elicitation import ClientElicitor
 from .errors import MCPAgentConfigError, MCPSamplingUnavailableError, UnknownConversationError
-from .info import build_ask_tool, object_output_schema
+from .info import build_ask_tool
 from .mappers import reply_to_content, to_structured_dict, tool_error
 from .pause import PauseState, PausedRuns, SuspendedTurn
 from .sampling import CLIENT_MODEL_MAX_TOKENS, ClientModelConfig, client_can_sample
@@ -83,7 +89,7 @@ class AgentExecutor:
     __slots__ = (
         "_agent",
         "_tool_name",
-        "_tool_description",
+        "_tool",
         "_stream_progress",
         "_context_provider",
         "_session_store",
@@ -107,7 +113,6 @@ class AgentExecutor:
     ) -> None:
         self._agent = agent
         self._tool_name = tool_name
-        self._tool_description = tool_description
         self._stream_progress = stream_progress
         self._context_provider = context_provider
         self._session_store = session_store
@@ -119,6 +124,15 @@ class AgentExecutor:
         # built directly, with no ``requestState`` protection installed) leaves
         # the era without the pause transport: nowhere safe to put the state.
         self._paused = paused_runs
+        # The declaration and the result use the same output contract. Derive it
+        # once, not on every listing or agent reply.
+        self._tool = build_ask_tool(
+            agent,
+            tool_name=tool_name,
+            tool_description=tool_description,
+            response_schema=agent.response_schema,
+            conversation_bounds=session_store.bounds if session_store is not None else None,
+        )
 
     @property
     def context_provider(self) -> "ContextProvider | None":
@@ -126,15 +140,7 @@ class AgentExecutor:
         return self._context_provider
 
     def list_tools(self) -> list[MCPTool]:
-        return [
-            build_ask_tool(
-                self._agent,
-                tool_name=self._tool_name,
-                tool_description=self._tool_description,
-                response_schema=self._agent._response_schema,
-                conversation_bounds=self._session_store.bounds if self._session_store is not None else None,
-            )
-        ]
+        return [self._tool]
 
     async def call(
         self,
@@ -245,23 +251,25 @@ class AgentExecutor:
         if state is None or turn is None:
             # A protocol error, not a tool error: the remedy is to start the call
             # again, which the model cannot reach by rewording.
-            raise MCPError(
-                code=INVALID_PARAMS,
-                message="Invalid or expired requestState",
-                data={"reason": "invalid_request_state"},
-            )
-        # Without this a turn that pauses for longer than the idle TTL is
-        # evicted mid-question, and the eviction reclaims the run being resumed.
-        if self._session_store is not None and turn.conversation is not None:
-            await self._session_store.touch(turn.conversation)
-        answer = (input_responses or {}).get(state.request_key)
-        if answer is not None:
-            # A refused answer consumes nothing and the current question is asked
-            # again below. Whether it is the right *kind* of answer is the
-            # asker's to judge, not this frame's.
-            turn.answer(state.request_key, answer)
+            raise _invalid_request_state()
         try:
-            return await self._advance(turn, turn.stream, request_context)
+            async with AsyncExitStack() as stack:
+                if self._session_store is not None and turn.conversation is not None:
+                    # The run continues without the turn lock it released when it
+                    # paused, so without this a round slower than the idle TTL is
+                    # evicted as it works.
+                    try:
+                        await stack.enter_async_context(self._session_store.resumed(turn.conversation))
+                    except UnknownConversationError:
+                        # Evicted since ``take``: the history the run would continue is gone.
+                        raise _invalid_request_state() from None
+                answer = (input_responses or {}).get(state.request_key)
+                if answer is not None:
+                    # A refused answer consumes nothing and the current question is asked
+                    # again below. Whether it is the right *kind* of answer is the
+                    # asker's to judge, not this frame's.
+                    turn.answer(state.request_key, answer)
+                return await self._advance(turn, turn.stream, request_context)
         except asyncio.CancelledError:
             # The round went away — a disconnect, a cancellation notification —
             # but the run did not, and the client's state still names it. Put it
@@ -435,7 +443,7 @@ class AgentExecutor:
         )
 
     def _has_object_output(self) -> bool:
-        return object_output_schema(self._agent._response_schema) is not None
+        return self._tool.output_schema is not None
 
 
 def _progress_scope(
@@ -486,6 +494,14 @@ class _Counter:
     def next(self) -> float:
         self._value += 1.0
         return self._value
+
+
+def _invalid_request_state() -> MCPError:
+    return MCPError(
+        code=INVALID_PARAMS,
+        message="Invalid or expired requestState",
+        data={"reason": "invalid_request_state"},
+    )
 
 
 @asynccontextmanager

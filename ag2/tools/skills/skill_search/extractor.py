@@ -97,6 +97,8 @@ def extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
                     raise SkillInstallError(f"File too large (>25MB): {rel_path}")
 
                 target_path = skill_content_dir / rel_path
+                if not target_path.resolve().is_relative_to(skill_content_dir.resolve()):
+                    continue
                 if member.isdir():
                     target_path.mkdir(parents=True, exist_ok=True)
                 elif member.isfile():
@@ -104,6 +106,7 @@ def extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
                     file_obj = tar.extractfile(member)
                     if file_obj is not None:
                         target_path.write_bytes(file_obj.read())
+                        target_path.chmod(target_path.stat().st_mode | (member.mode & 0o111))
                     if rel_path == "SKILL.md" and skill_fm is None:
                         skill_fm = parse_frontmatter(target_path.read_text(encoding="utf-8"))
 
@@ -114,10 +117,6 @@ def extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
         fm_str = {k: str(v) for k, v in skill_fm.items()}
 
         final_dest = dest / skill_name
-        if final_dest.exists():
-            shutil.rmtree(final_dest)
-        shutil.copytree(skill_content_dir, final_dest)
-
         meta = SkillMetadata(
             name=skill_name,
             description=fm_str.get("description") or "",
@@ -125,7 +124,12 @@ def extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
             license=fm_str.get("license") or None,
             compatibility=fm_str.get("compatibility") or None,
         )
+        # The name comes from the archive, so validate it before it is used as a path.
         SkillLoader.validate_skill_metadata(final_dest, skill_fm, meta)
+
+        if final_dest.exists():
+            shutil.rmtree(final_dest)
+        shutil.copytree(skill_content_dir, final_dest)
         return meta
 
 

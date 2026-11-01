@@ -11,6 +11,7 @@ The STT → Agent → TTS flow turns any existing `Agent` into a voice agent wit
 |---|---|---|---|---|---|
 | OpenAI | ✅ | ✅ | ✅ | — | ✅ |
 | ElevenLabs | ✅ | — | ✅ | ✅ | — |
+| Mistral | ✅ | — | ✅ | ✅ | — |
 | Gemini | — | — | — | — | ✅ |
 
 
@@ -24,6 +25,30 @@ ElevenLabs classes need the optional dependency and `ELEVENLABS_API_KEY` in the 
 ```bash
 pip install "ag2[elevenlabs] sounddevice[numpy]"
 ```
+
+Mistral classes need the `mistral` extra and `MISTRAL_API_KEY` in the environment (or pass `api_key`):
+
+```bash
+pip install "ag2[mistral]"
+```
+
+`MistralRealtimeTranscriber` also needs the SDK's websocket client:
+
+```bash
+pip install "mistralai[realtime]"
+```
+
+## OpenAI credentials
+
+The OpenAI voice configs (`OpenAIRealTimeConfig`, `OpenAITranscriber`, `OpenAITranslationTranscriber`, `OpenAITTSConfig`) accept a keyword-only `api_key`. Omit it to keep the SDK's `OPENAI_API_KEY` default:
+
+```python linenums="1"
+from ag2.live import OpenAITTSConfig
+
+tts = OpenAITTSConfig("gpt-4o-mini-tts", api_key="sk-...")
+```
+
+For a shared client or other SDK options, pass `client=` instead. Passing both `client` and `api_key` raises `ValueError`.
 
 ## Audio I/O primitives
 
@@ -43,7 +68,7 @@ The recorder produces a `VoiceInput` containing 16-bit PCM bytes plus the sample
 
 ## Speech-to-Text
 
-`OpenAITranscriber` implements the `STTConfig` protocol and exposes a `.pipe(agent)` method that wraps an `Agent` in a `VoicePipeline`. Calling `pipeline.ask(voice)` transcribes the audio and forwards the text to the agent's normal `ask()` flow.
+`OpenAITranscriber` (the OpenAI `STTConfig` class from `ag2.live.openai`) implements the `STTConfig` protocol and exposes a `.pipe(agent)` method that wraps an `Agent` in a `VoicePipeline`. Calling `pipeline.ask(voice)` transcribes the audio and forwards the text to the agent's normal `ask()` flow.
 
 ```python linenums="1" hl_lines="13 18"
 import asyncio
@@ -101,8 +126,45 @@ from ag2.live import ElevenLabsTranscriber
 pipeline = ElevenLabsTranscriber("scribe_v2").pipe(agent)
 ```
 
-`language_code` is only sent when you set it — leave it unset and Scribe auto-detects. `diarize=True` asks for speaker labels.
+Optional settings are only sent when you set them — leave `language_code` unset and Scribe auto-detects. `diarize=True` asks for speaker labels, and `num_speakers` caps how many.
 
+Scribe tags non-speech sounds in the transcript by default (for example `(laughter)`), and the agent sees that text. Pass `tag_audio_events=False` to drop the tags, and `keyterms=[...]` to bias recognition toward names and jargon:
+
+```python linenums="1" hl_lines="5-6"
+from ag2.live import ElevenLabsTranscriber
+
+transcriber = ElevenLabsTranscriber(
+    "scribe_v2",
+    tag_audio_events=False,
+    keyterms=["AG2"],
+)
+pipeline = transcriber.pipe(agent)
+```
+
+### Mistral (Voxtral)
+
+`MistralTranscriber` uploads the clip as WAV to Mistral's offline transcription endpoint and sends a single `TranscriptionCompletedEvent`:
+
+```python linenums="1"
+from ag2.live import MistralTranscriber
+
+pipeline = MistralTranscriber("voxtral-mini-latest").pipe(agent)
+```
+
+`language` and `context_bias` (up to 100 words or phrases to favour) are only sent when you set them — leave `language` unset and the model auto-detects. `diarize=True` requests speaker diarization (segment timestamps are sent automatically, as the API requires); `transcribe()` still returns plain text. Pass `api_key` or a preconfigured `client` to override the `MISTRAL_API_KEY` default.
+
+`MistralRealtimeTranscriber` streams the clip to Voxtral Realtime over a websocket, so the words arrive as they are recognised: a `TranscriptionChunkEvent` per delta, then a closing `TranscriptionCompletedEvent`. It keeps the same `transcribe(voice, context) -> str` contract, so it drops into `.pipe()` and [`CascadeConfig`](/docs/user-guide/live/live_agent#cascadeconfig-a-cascade-that-looks-realtime) unchanged:
+
+```python linenums="1"
+from ag2.live import MistralRealtimeTranscriber
+
+pipeline = MistralRealtimeTranscriber(target_streaming_delay_ms=480).pipe(agent)
+```
+
+The audio is the finished utterance (the turn detector decides where it ends), sent as `pcm_s16le` at the clip's sample rate, and it must be mono. `target_streaming_delay_ms` trades latency for accuracy; leave it unset for the model default.
+
+!!! note
+    `TranscriptionCompletedEvent` is sent only with the final transcript Mistral returns once the clip is processed. If the connection drops first, `transcribe()` raises `RuntimeError` instead of completing on the partial text. Cancelling it (for example, a `CascadeConfig(barge_in=True)` interruption) cancels the stream and sends no completed event, so the agent never runs on a half-heard utterance.
 
 ## Text-to-Speech
 
@@ -166,19 +228,46 @@ config = ElevenLabsTTSConfig(
 )
 ```
   </Tab>
+
+  <Tab title="Mistral">
+```python linenums="1"
+from ag2.live import MistralTTSConfig
+
+config = MistralTTSConfig(
+    "voxtral-mini-tts-2603",
+    voice_id="my-saved-voice",  # or ref_audio="<base64 clip>" for one-off cloning
+)
+```
+  </Tab>
 </Tabs>
 
 `ElevenLabsTTSConfig` is the buffered mode — required by `eleven_v3`, which cannot stream. For the flash and turbo families, prefer streaming (below).
 
+Both ElevenLabs TTS configs also take `voice_settings`, `language_code` and `seed`; each is sent only when set. `voice_settings` is the SDK's `VoiceSettings` (stability, speed, and so on):
+
+```python linenums="1" hl_lines="6-7"
+from elevenlabs.types import VoiceSettings
+from ag2.live import ElevenLabsTTSConfig
+
+config = ElevenLabsTTSConfig(
+    "eleven_v3",
+    voice_settings=VoiceSettings(stability=0.5, speed=1.1),
+    language_code="en",
+)
+```
+
 !!! note
-    `output_format` defaults to `pcm_24000`, matching what `SoundDevicePlayer` and `SoundDeviceRecorder` expect. If you change it, change the player to match.
+    Mistral needs exactly one of `voice_id` (a saved voice) or `ref_audio` (a base64 reference clip); there is no default voice. It needs `MISTRAL_API_KEY` (or `api_key=`) and `pip install "ag2[mistral]"`. Mistral returns float32 PCM; the configs convert it to the int16 PCM that `SoundDevicePlayer` plays.
+
+!!! note
+    `output_format` defaults to `pcm_24000`, matching what `SoundDevicePlayer` and `SoundDeviceRecorder` expect. Use a raw PCM format only — the player does not decode mp3 or other containers — and if you change the sample rate, change the player to match.
 
 ## Streaming TTS
 
 With a buffered config, `TTSObserver` waits for each *sentence* to be fully synthesized before any of it plays. A streaming config removes that wait: audio chunks are forwarded as they are generated, so playback starts at time-to-first-byte.
 
 !!! note
-    **ElevenLabs is currently the only provider with a streaming TTS config.** `OpenAITTSConfig` performs a single buffered read and has no streaming equivalent.
+    **ElevenLabs and Mistral (`MistralStreamingTTSConfig`) have streaming TTS configs.** `OpenAITTSConfig` performs a single buffered read and has no streaming equivalent.
 
 Only the config changes — `TTSObserver` detects that the config can stream and uses that path automatically:
 
@@ -204,6 +293,8 @@ async def main() -> None:
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+The same works with Mistral — swap in `MistralStreamingTTSConfig("voxtral-mini-tts-2603", voice_id="my-saved-voice")`. It converts Mistral's float32 PCM to the int16 PCM `SoundDevicePlayer` expects.
 
 ### Streaming directly to the speaker
 
@@ -365,6 +456,8 @@ Both halves share one stream, so `TranscriptionChunkEvent` (from the transcriber
 
 ## Examples
 
+- `examples/stt_tts.py/stt.py` — transcription only, with a follow-up turn
+- `examples/stt_tts.py/tts.py` — `TTSObserver` speaking an agent's reply
 - `examples/stt_tts.py/stt_tts.py` — the OpenAI round-trip
 - `examples/stt_tts.py/elevenlabs_stt_tts_streaming.py` — streaming TTS, prints time-to-first-byte
 - `examples/stt_tts.py/elevenlabs_stt_tts_sync.py` — buffered TTS with `eleven_v3`

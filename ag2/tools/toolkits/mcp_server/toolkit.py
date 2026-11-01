@@ -4,11 +4,15 @@
 
 import asyncio
 import base64
+import hashlib
 from collections.abc import AsyncGenerator, Iterable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
+from copy import copy, deepcopy
 from dataclasses import replace
 from functools import partial
+from types import EllipsisType
 from typing import Any, TypeAlias, get_args
+from urllib.parse import urlsplit
 
 import httpx2
 from mcp import ClientSession
@@ -176,6 +180,8 @@ class _MCPProxyTool(Tool):
 
     __slots__ = ("name", "schema", "_config", "_middleware", "_answering", "_remote_name")
 
+    declared_in_code = False
+
     def __init__(
         self,
         config: AnyMCPConfig,
@@ -217,7 +223,8 @@ class _MCPProxyTool(Tool):
             execution = _wrap_middleware(mw.on_tool_execution, execution)
 
         async def execute(event: "ToolCallEvent", context: "Context") -> None:
-            result = await execution(event, context)
+            source = f"mcp:{_endpoint(_resolve_config(self._config, context))}:{self._remote_name}"
+            result = await execution(event.handled_by(source), context)
             await context.send(result)
 
         # ``Event.field == value`` builds a Condition at runtime; mypy sees ``bool``.
@@ -281,6 +288,14 @@ class MCPToolkit(Toolkit):
     one. The agent never sees that these are MCP tools — they look and behave
     like ordinary :class:`FunctionTool` instances.
 
+    Discovery is reused while the resolved configuration stays the same. A
+    changed configuration replaces the cached remote tools; concurrent agent
+    turns retain their own discovered tool snapshots. Each discovered tool is
+    pinned to the configuration that discovered it, including resolved
+    ``Variable`` values such as arguments, environment and headers, so a call
+    always reaches the server that advertised the tool. A value that changes
+    between turns, like a rotated token, applies from the next discovery.
+
     Set ``tool_name_prefix`` on the config to namespace the agent-visible tool
     names, so that two servers exposing the same generic name (``search``) do
     not collide locally. The prefix never reaches the server: discovery
@@ -309,7 +324,7 @@ class MCPToolkit(Toolkit):
     answering: MCPAnswerPolicy
     """Which of the operator's own resources this server may use."""
 
-    __slots__ = ("config", "answering", "_discovered", "_discover_lock")
+    __slots__ = ("config", "answering", "_discovered_config", "_discover_lock")
 
     def __init__(
         self,
@@ -322,7 +337,7 @@ class MCPToolkit(Toolkit):
             server = MCPServerConfig(server_url=server)
         self.config: AnyMCPConfig = server
         self.answering = answering if answering is not None else MCPAnswerPolicy()
-        self._discovered = False
+        self._discovered_config: AnyMCPConfig | None = None
         self._discover_lock = asyncio.Lock()
 
         label = server.server_label if isinstance(server.server_label, str) else ""
@@ -332,19 +347,25 @@ class MCPToolkit(Toolkit):
         )
 
     async def schemas(self, context: "Context") -> Iterable[ToolSchema]:
-        await self._discover_tools(context)
-        return await super().schemas(context)
+        # Keep the published members consistent with these schemas even when
+        # a locally added tool yields while producing its own schema.
+        async with self._discover_lock:
+            await self._discover_tools(context)
+            return await super().schemas(context)
+
+    def _snapshot(self) -> "MCPToolkit":
+        snapshot = copy(self)
+        # A default factory may return a different value on the next lookup.
+        # Generating schemas on a pruned copy must not rediscover dropped tools.
+        if self._discovered_config is not None:
+            snapshot.config = self._discovered_config
+        return snapshot
 
     async def _discover_tools(self, context: "Context") -> None:
-        if self._discovered:
-            return
-
-        async with self._discover_lock:
-            if self._discovered:
-                return
-
-            resolved = _resolve_config(self.config, context)
-
+        # Own the mutable lists/dicts too: changing a caller's allowlist or
+        # headers must not also change the configuration we compare against.
+        resolved = deepcopy(_resolve_config(self.config, context))
+        if self._discovered_config != resolved:
             async with _mcp_session(resolved) as session:
                 page = await session.list_tools()
                 raw_tools = list(page.tools)
@@ -368,6 +389,7 @@ class MCPToolkit(Toolkit):
             allowed = resolved.allowed_tools
             blocked = set(resolved.blocked_tools or [])  # type: ignore[arg-type]
             prefix: str = resolved.tool_name_prefix  # type: ignore[assignment]
+            tools = {name: tool for name, tool in self._tools.items() if not isinstance(tool, _MCPProxyTool)}
 
             for raw in raw_tools:
                 # Filters match the server's own names, before any prefixing.
@@ -375,16 +397,20 @@ class MCPToolkit(Toolkit):
                     continue
                 if raw.name in blocked:
                     continue
+                # Pin the proxy to the configuration that advertised the tool: re-resolving
+                # the template per call could reach a different server (default_factory).
                 proxy = _MCPProxyTool(
-                    config=self.config,
+                    config=resolved,
                     raw_tool=raw,
                     tool_name_prefix=prefix,
                     middleware=self._middleware,
                     answering=self.answering,
                 )
-                self._tools[proxy.name] = proxy
+                tools.setdefault(proxy.name, proxy)
 
-            self._discovered = True
+            # Replace the previous remote tools only after discovery succeeds.
+            self._tools = tools
+            self._discovered_config = resolved
 
 
 def _unwrap(error: Exception) -> Exception:
@@ -488,9 +514,25 @@ def _resolve_value(value: Any, context: "Context") -> Any:
         return context.variables[name]
     if value.default is not Ellipsis:
         return value.default
-    if value.default_factory is not Ellipsis:
+    # `is not Ellipsis` is the same test, but only `isinstance` narrows the
+    # `EllipsisType` out of the union for the call below.
+    if not isinstance(value.default_factory, EllipsisType):
         return value.default_factory()
     raise KeyError(f"Context variable {name!r} not found and no default provided")
+
+
+def _endpoint(config: AnyMCPConfig) -> str:
+    """Which server a resolved ``config`` reaches, without the secrets a URL or argv may carry.
+
+    An HTTP server is its URL minus credentials and query; a stdio server is its
+    command plus a digest of its arguments.
+    """
+    if isinstance(config, MCPStdioServerConfig):
+        argv = config.args if isinstance(config.args, list) else []
+        args = hashlib.sha256("\0".join(argv).encode()).hexdigest()[:12]
+        return f"{config.command}#{args}"
+    url = urlsplit(str(config.server_url))
+    return f"{url.scheme}://{url.netloc.rpartition('@')[2]}{url.path}"
 
 
 def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
@@ -510,7 +552,7 @@ def _resolve_config(config: AnyMCPConfig, context: "Context") -> AnyMCPConfig:
 
     headers = dict(_resolve_value(config.headers, context) or {})
     auth = _resolve_value(config.authorization_token, context)
-    if auth and "Authorization" not in headers:
+    if auth and not any(key.lower() == "authorization" for key in headers):
         headers["Authorization"] = f"Bearer {auth}"
 
     return replace(

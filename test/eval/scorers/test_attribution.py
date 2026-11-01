@@ -5,12 +5,13 @@
 """Tests for failure attribution (deterministic detectors + LLM attributor)."""
 
 import pytest
+from dirty_equals import IsPartialDict
 
 from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_traces
 from ag2.eval.dataset.task import Task
 from ag2.eval.scorers import failure_attribution
 from ag2.eval.trace import Trace
-from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent
+from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolErrorEvent, ToolResultEvent
 from ag2.testing import TestConfig
 
 
@@ -48,6 +49,44 @@ async def test_tool_failure_records_decisive_step() -> None:
     [fb] = await _attribute(failure_attribution(), _trace([call, err]))
     assert fb.value == "tool_failure"
     assert fb.detail["decisive_step"] == 1  # index of the error event
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    ("tool_failed", "final_answer", "expected_mode"),
+    [
+        (False, None, "no_answer"),
+        (True, None, "tool_failure"),
+        (False, "", "no_answer"),
+        (True, "", "tool_failure"),
+        (False, "The answer is 42.", "none"),
+        (True, "The answer is 42.", "none"),
+    ],
+)
+async def test_interim_text_does_not_hide_final_answer_state(
+    tool_failed: bool, final_answer: str | None, expected_mode: str
+) -> None:
+    call = ToolCallEvent("lookup", arguments="{}")
+    tool_result = (
+        ToolErrorEvent.from_call(call, RuntimeError("lookup failed"))
+        if tool_failed
+        else ToolResultEvent.from_call(call, result="42")
+    )
+    trace = _trace([
+        ModelResponse(message=ModelMessage("I will look that up.")),
+        call,
+        tool_result,
+        ModelResponse(message=ModelMessage(final_answer) if final_answer is not None else None),
+    ])
+
+    [fb] = await _attribute(failure_attribution(), trace, outputs={"body": final_answer})
+
+    assert fb.value == expected_mode
+    assert fb.detail == IsPartialDict({
+        "failed": not bool(final_answer),
+        "error_mode": expected_mode,
+        "decisive_step": 2 if expected_mode == "tool_failure" else None,
+    })
 
 
 @pytest.mark.asyncio()

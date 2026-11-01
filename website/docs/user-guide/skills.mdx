@@ -100,7 +100,7 @@ plugins=[SkillPlugin("./my-skills")]
 So an agent whose skills are pure instructions never sees a `run_skill_script` tool it can't use. When no skills are found at all, the plugin contributes nothing — no catalog and no tools.
 
 !!! tip
-    `SkillPlugin` is a snapshot taken at construction time: the catalog, the `name` constraint, and the gated tools always describe the same set of skills. Rebuild the agent (or the plugin) after installing new skills.
+    `SkillPlugin` is a snapshot taken at construction time: the catalog, the `name` constraint, and the gated tools always describe the same set of skills. Rebuild the agent (or the plugin) after installing new skills, or pass a fresh plugin to a single call with `#!python agent.ask(..., plugins=[SkillPlugin(runtime)])` — see [Plugins for one invocation](/docs/user-guide/system_prompts#plugins-for-one-invocation).
 
 ## SkillsToolkit
 
@@ -160,7 +160,7 @@ skills = SkillsToolkit(
         "./my-skills",
         extra_paths=["./shared-skills"],   # read-only, also scanned
         timeout=30,                        # per-script timeout (seconds)
-        blocked=["rm -rf"],                # best-effort command blocklist
+        blocked=["rm -rf"],                # command blocklist (matched against argv)
     )
 )
 ```

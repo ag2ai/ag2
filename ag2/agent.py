@@ -10,9 +10,10 @@ events through observers, and optionally runs the harness primitives
 spawning).
 
 A bare ``Agent(name, config=cfg)`` has zero harness middleware — it behaves
-exactly like a plain LLM loop. Harness features are opt-in: pass ``assembly=``
+exactly like a plain LLM loop. Harness features are opt-in: use ``middleware=``
 for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
-or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
+or use ``Agent.as_tool()`` for explicit subagent delegation. The legacy
+``tasks=TaskConfig(...)`` API is deprecated and will be removed in 1.4.0.
 """
 
 import asyncio
@@ -20,18 +21,21 @@ import json
 import logging
 import threading
 import types
+import warnings
 import weakref
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
-from typing import Any, Generic, Literal, TypeVar, overload
+from typing import Any, Generic, Literal, TypeGuard, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
+from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
+from typing_extensions import deprecated
 
 from ag2.events import BinaryResult
 
@@ -73,22 +77,25 @@ from .middleware.base import (
     AgentTurn,
     BaseMiddleware,
     LLMCall,
+    Middleware,
     MiddlewareFactory,
     ToolMiddleware,
 )
 from .middleware.describe import DescribedMiddleware
+from .middleware.halt import HaltCheckMiddleware
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, FunctionToolSchema, Toolkit, tool
+from .tools.final import FunctionTool, Toolkit, tool
+from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents.run_task import run_task as _run_task
-from .tools.subagents.subagent_tool import StreamOrFactory, subagent_tool
+from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
-from .types import Omittable, SendableMessage, omit
+from .types import Omit, Omittable, RequestOrigin, SendableMessage, omit
 from .usage import UsageReport, collect_usage_events
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
@@ -99,9 +106,27 @@ TAgent = TypeVar313("TAgent", default=str)
 T2 = TypeVar("T2")
 
 
+TASK_CONFIG_DEPRECATION = (
+    "TaskConfig, Agent(tasks=...) and the auto-injected run_subtask / run_subtasks tools are deprecated "
+    "and will be removed in 1.4.0. Expose explicitly constructed worker Agents through Agent.as_tool() instead."
+)
+
+ASSEMBLY_DEPRECATION = (
+    "Agent(assembly=...) is deprecated and will be removed in 1.4.0. Register "
+    "middleware=[Middleware(AssemblerMiddleware, policies=[...]), Middleware(HaltCheckMiddleware)] instead; "
+    "import AssemblerMiddleware from ag2.assembly and Middleware / HaltCheckMiddleware from ag2.middleware."
+)
+
+
+@deprecated(TASK_CONFIG_DEPRECATION, category=None)
 @dataclass
 class TaskConfig:
     """Groups task-spawning Agent parameters.
+
+    Deprecated; will be removed in 1.4.0 along with ``Agent(tasks=...)`` and
+    the auto-injected ``run_subtask`` / ``run_subtasks`` tools. Construct
+    worker Agents explicitly and pass their ``Agent.as_tool()`` tools to
+    the parent instead.
 
     By default a subtask Agent inherits **all** of the parent's user-supplied
     tools (everything passed via ``tools=``). Subtask Agents never receive the
@@ -212,6 +237,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -227,6 +253,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -242,6 +269,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -257,6 +285,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -270,6 +299,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -277,22 +307,16 @@ class AgentReply(Generic[TResult, TAgent]):
     ) -> "AgentReply[Any, Any]":
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        context = self.context
-        if dependencies:
-            context.dependencies.update(dependencies)
-        if variables:
-            context.variables.update(variables)
-        if prompt:
-            context.prompt = list(prompt)
-
         client = config.create() if config else self.__client
 
         return await self.__agent._execute(
             initial_event,
-            context=context,
+            context=self.context,
             client=client,
+            context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
             hitl_hook=hitl_hook,
             additional_tools=tools,
+            additional_plugins=plugins,
             additional_middleware=middleware,
             additional_observers=observers,
             response_schema=response_schema,
@@ -307,6 +331,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -322,6 +347,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -337,6 +363,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -352,6 +379,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -365,6 +393,7 @@ class AgentReply(Generic[TResult, TAgent]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -378,27 +407,89 @@ class AgentReply(Generic[TResult, TAgent]):
         """
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        context = self.context
-        if dependencies:
-            context.dependencies.update(dependencies)
-        if variables:
-            context.variables.update(variables)
-        if prompt:
-            context.prompt = list(prompt)
-
         client = config.create() if config else self.__client
 
         return self.__agent._make_run(
             initial_event,
-            context=context,
+            context=self.context,
+            context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
             hitl_hook=hitl_hook,
             client=client,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class _ContextOverrides:
+    """Continuation values applied only after acquiring the stream turn lock."""
+
+    dependencies: Mapping[Any, Any]
+    variables: Mapping[str, Any]
+    prompt: tuple[str, ...]
+
+    def apply(self, context: Context) -> None:
+        context.dependencies.update(self.dependencies)
+        context.variables.update(self.variables)
+        if self.prompt:
+            context.prompt = list(self.prompt)
+
+
+class _PluginPrompt(str):
+    """Give a bound prompt fragment its own identity without changing its text."""
+
+    __slots__ = ()
+
+    def __copy__(self) -> "_PluginPrompt":
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "_PluginPrompt":
+        return self
+
+
+def _remove_plugin_prompts(context: Context, fragments: Sequence[str]) -> None:
+    owned = {id(fragment) for fragment in fragments}
+    context.prompt[:] = [fragment for fragment in context.prompt if id(fragment) not in owned]
+
+
+def _remove_plugin_default(context: Context, attribute: str, key: Any, value: Any) -> None:
+    target: dict[Any, Any] = getattr(context, attribute)
+    if target.get(key) is value:
+        target.pop(key, None)
+
+
+class _TurnPlugins:
+    """Snapshot the contributions of plugins passed to one invocation."""
+
+    def __init__(self, plugins: Iterable[Plugin]) -> None:
+        self.static_prompt: list[str] = []
+        self.dynamic_prompt: list[Callable[..., Awaitable[str]]] = []
+        self.tools: list[Tool] = []
+        self.middleware: list[MiddlewareFactory] = []
+        self.observers: list[Observer] = []
+        self.policies: list[AssemblyPolicy] = []
+        self.dependencies: dict[Any, Any] = {}
+        self.variables: dict[Any, Any] = {}
+        self.hitl_hook: HumanHook | None = None
+        self.has_conflicting_hitl_hooks = False
+        for plugin in plugins:
+            self.static_prompt.extend(plugin._system_prompt)
+            self.dynamic_prompt.extend(plugin._dynamic_prompt)
+            self.tools.extend(FunctionTool.ensure_tool(t) for t in plugin._tools)
+            self.middleware.extend(plugin._middleware)
+            self.observers.extend(plugin._observers)
+            self.policies.extend(plugin._policies)
+            self.dependencies.update(plugin._dependencies)
+            self.variables.update(plugin._variables)
+            if plugin._hitl_hook is not None:
+                if self.hitl_hook is not None:
+                    self.has_conflicting_hitl_hooks = True
+                else:
+                    self.hitl_hook = plugin._hitl_hook
 
 
 class AgentRun(Generic[TResult, TAgent]):
@@ -438,17 +529,21 @@ class AgentRun(Generic[TResult, TAgent]):
         context: Context,
         config: ModelConfig | None,
         tools: Iterable[Tool],
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
+        context_overrides: _ContextOverrides | None = None,
     ) -> None:
         self.__agent = agent
         self.__trigger = trigger
         self.__context = context
+        self.__context_overrides = context_overrides
         self.__config = config
         self.__tools = tools
+        self.__plugins = tuple(plugins)
         self.__middleware = middleware
         self.__observers = observers
         self.__response_schema = response_schema
@@ -478,19 +573,23 @@ class AgentRun(Generic[TResult, TAgent]):
         consumed by that turn; one enqueued before ``result()`` merges into the
         first model call; one enqueued after the turn completes waits for the
         next turn on this stream. Safe to call from a stream subscriber (inline
-        during the drive) or a concurrent task — it only appends.
+        during the drive) or a concurrent task — it appends at once and
+        announces the message with ``MessageEnqueued`` from a background task.
+
+        The message counts as user input: when the turn consumes it, a new
+        ``History.since_last_user_input()`` interval starts.
         """
-        self.__context.enqueue(*content)
+        self.__context.enqueue(*content, origin="user")
 
     async def __aenter__(self) -> "AgentRun[TResult, TAgent]":
-        client = self.__client
-        if client is None:
-            client = await self.__agent._prepare_turn(self.__trigger, self.__context, self.__config)
         self.__driver = await self.__stack.enter_async_context(
             self.__agent._turn_scope(
                 self.__trigger,
                 context=self.__context,
-                client=client,
+                client=self.__client,
+                config=self.__config,
+                context_overrides=self.__context_overrides,
+                additional_plugins=self.__plugins,
                 hitl_hook=self.__hitl_hook,
                 additional_tools=self.__tools,
                 additional_middleware=self.__middleware,
@@ -613,15 +712,18 @@ class Agent(PluginTarget, Generic[TResult]):
     A bare ``Agent(name, config=cfg)`` has zero harness middleware and
     behaves exactly like a plain LLM loop. Harness features are opt-in:
 
-    * ``assembly=`` — assembly policies (e.g. ``ConversationPolicy``,
-      ``SlidingWindow``, ``AlertPolicy``). When non-empty,
-      ``AssemblerMiddleware`` and ``_HaltCheckMiddleware`` are wired in.
+    * ``middleware=`` — register context policies with
+      ``Middleware(AssemblerMiddleware, policies=[...])``. Add
+      ``Middleware(HaltCheckMiddleware)`` after it when using ``AlertPolicy``.
+      The legacy ``assembly=`` parameter is deprecated and will be removed
+      in 1.4.0; it keeps wiring both middleware automatically until then.
     * ``knowledge=KnowledgeConfig(store=...)`` — persistent knowledge store,
       compaction, aggregation.
     * ``tasks=TaskConfig(...)`` — opt in to the auto-injected ``run_subtask``
       / ``run_subtasks`` tools, and override the LLM config / prompt /
       tool-inheritance rules for sub-task Agents. Defaults to ``False``
-      (sub-task tools disabled).
+      (sub-task tools disabled). Deprecated; will be removed in 1.4.0.
+      Use worker Agents exposed through ``Agent.as_tool()`` instead.
     """
 
     @overload
@@ -641,7 +743,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -661,7 +763,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -681,7 +783,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -701,7 +803,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     def __init__(
@@ -720,7 +822,7 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | Literal[False] = False,
-        assembly: Iterable[AssemblyPolicy] = (),
+        assembly: Iterable[AssemblyPolicy] | None = None,
     ) -> None:
         self._init_target(
             name,
@@ -747,9 +849,11 @@ class Agent(PluginTarget, Generic[TResult]):
         # Task spawning. ``tasks=False`` (the default) means no auto-injected
         # ``run_subtask`` / ``run_subtasks`` tools. Pass ``tasks=TaskConfig(...)``
         # to opt in.
-        if tasks is False:
+        # ``None`` is treated as disabled: older docs showed it as the default.
+        if tasks is False or tasks is None:
             self._task_config: TaskConfig | None = None
         else:
+            warnings.warn(TASK_CONFIG_DEPRECATION, DeprecationWarning, stacklevel=2)
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
         # One Semaphore per running loop: sharing one raises once a second loop
@@ -779,13 +883,18 @@ class Agent(PluginTarget, Generic[TResult]):
             self._knowledge_context = _FakeKnowledgeContext()
 
         # Assembly policies (empty by default; bare Agent has no harness).
-        self._policies.extend(assembly)
+        if assembly is not None:
+            warnings.warn(ASSEMBLY_DEPRECATION, DeprecationWarning, stacklevel=2)
+            self._policies.extend(assembly)
         if self._policies:
             for w in AssemblerMiddleware.validate_order(self._policies):
                 logger.warning("Assembly policy ordering: %s", w)
 
-            self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
-            self.add_middleware(_HaltCheckMiddlewareFactory())
+            # Policies may come from constructor plugins alone. Keep the implicit
+            # assembler for them unless the user already registered one.
+            if not _has_user_assembler(self._middleware):
+                self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
+                self.add_middleware(Middleware(HaltCheckMiddleware))
 
     # --- Composition -----------------------------------------------------
     # Read-only views of what this agent is made of, for comparing two agents,
@@ -827,6 +936,18 @@ class Agent(PluginTarget, Generic[TResult]):
         return types.MappingProxyType(self._agent_variables)
 
     @property
+    def has_hitl_hook(self) -> bool:
+        """Whether a hook answers this agent's questions to a human, rather than the caller's."""
+
+        return self._hitl_hook is not None
+
+    @property
+    def serializer(self) -> SerializerProto:
+        """The serializer that encodes this agent's tool results."""
+
+        return self._serializer
+
+    @property
     def response_schema(self) -> ResponseProto[TResult] | None:
         """The response schema, or ``None`` when replies are free text."""
 
@@ -840,13 +961,20 @@ class Agent(PluginTarget, Generic[TResult]):
 
     @property
     def tasks(self) -> TaskConfig | None:
-        """Sub-task configuration, or ``None`` when sub-tasks are not enabled."""
+        """Sub-task configuration, or ``None`` when sub-tasks are not enabled.
+
+        Deprecated; will be removed in 1.4.0 with ``Agent(tasks=...)``.
+        """
 
         return self._task_config
 
     @property
     def assembly(self) -> tuple[AssemblyPolicy, ...]:
-        """Assembly policies, in the order they are applied."""
+        """Policies registered via legacy ``assembly=`` or plugins, in application order.
+
+        Policies registered directly through middleware are not included.
+        The ``assembly=`` constructor parameter will be removed in 1.4.0.
+        """
 
         return tuple(self._policies)
 
@@ -911,6 +1039,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -928,6 +1057,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -945,6 +1075,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -962,6 +1093,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -976,6 +1108,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -991,6 +1124,7 @@ class Agent(PluginTarget, Generic[TResult]):
             prompt=prompt,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1008,6 +1142,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
@@ -1025,6 +1160,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
@@ -1042,6 +1178,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
@@ -1059,6 +1196,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
+        plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         hitl_hook: HumanHook | None = ...,
@@ -1073,6 +1211,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1093,6 +1232,7 @@ class Agent(PluginTarget, Generic[TResult]):
             prompt=prompt,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1108,6 +1248,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str],
         config: ModelConfig | None,
         tools: Iterable[Tool],
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
@@ -1129,6 +1270,7 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1142,11 +1284,13 @@ class Agent(PluginTarget, Generic[TResult]):
         context: Context,
         config: ModelConfig | None,
         tools: Iterable[Tool],
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
+        context_overrides: _ContextOverrides | None = None,
     ) -> "AgentRun[Any, Any]":
         """The launch primitive: wrap a ``(trigger, context)`` turn as an ``AgentRun``.
 
@@ -1161,11 +1305,13 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
             hitl_hook=hitl_hook,
             client=client,
+            context_overrides=context_overrides,
         )
 
     async def resume(
@@ -1177,6 +1323,7 @@ class Agent(PluginTarget, Generic[TResult]):
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1210,6 +1357,7 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1223,6 +1371,7 @@ class Agent(PluginTarget, Generic[TResult]):
         context: Context,
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
+        plugins: Iterable[Plugin] = (),
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1234,6 +1383,7 @@ class Agent(PluginTarget, Generic[TResult]):
             context=context,
             config=config,
             tools=tools,
+            plugins=plugins,
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
@@ -1274,8 +1424,10 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         context: Context,
         client: LLMClient,
+        context_overrides: _ContextOverrides | None = None,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
+        additional_plugins: Iterable[Plugin] = (),
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1291,8 +1443,10 @@ class Agent(PluginTarget, Generic[TResult]):
             event,
             context=context,
             client=client,
+            context_overrides=context_overrides,
             hitl_hook=hitl_hook,
             additional_tools=additional_tools,
+            additional_plugins=additional_plugins,
             additional_middleware=additional_middleware,
             additional_observers=additional_observers,
             response_schema=response_schema,
@@ -1305,9 +1459,70 @@ class Agent(PluginTarget, Generic[TResult]):
         event: BaseEvent,
         *,
         context: Context,
+        client: LLMClient | None = None,
+        config: ModelConfig | None = None,
+        context_overrides: _ContextOverrides | None = None,
+        hitl_hook: HumanHook | None = None,
+        additional_tools: Iterable[Tool] = (),
+        additional_plugins: Iterable[Plugin] = (),
+        additional_middleware: Iterable[MiddlewareFactory] = (),
+        additional_observers: Iterable[Observer] = (),
+        response_schema: ResponseProto[Any] | type | None | Omit = omit,
+    ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
+        """Resolve invocation plugins and bracket their context contributions."""
+        plugins = _TurnPlugins(additional_plugins)
+        async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
+            if context_overrides is not None:
+                context_overrides.apply(context)
+            if plugins.has_conflicting_hitl_hooks:
+                warnings.warn("Multiple invocation plugins set hitl_hook; the first wins.", stacklevel=2)
+            for attribute, defaults in (
+                ("dependencies", plugins.dependencies),
+                ("variables", plugins.variables),
+            ):
+                target = getattr(context, attribute)
+                for key, value in defaults.items():
+                    if key not in target:
+                        target[key] = value
+                        stack.callback(_remove_plugin_default, context, attribute, key, value)
+
+            if client is None:
+                client = await self._prepare_turn(event, context, config)
+
+            if plugins.static_prompt or plugins.dynamic_prompt:
+                fragments: list[str] = [_PluginPrompt(prompt) for prompt in plugins.static_prompt]
+                context.prompt = [*context.prompt, *fragments]
+                stack.callback(_remove_plugin_prompts, context, fragments)
+                for prompt in plugins.dynamic_prompt:
+                    fragment = _PluginPrompt(await prompt(event, context))
+                    fragments.append(fragment)
+                    context.prompt.append(fragment)
+
+            async with self._drive_scope(
+                event,
+                context=context,
+                client=client,
+                hitl_hook=hitl_hook,
+                plugin_hitl_hook=plugins.hitl_hook,
+                additional_tools=(*plugins.tools, *additional_tools),
+                additional_middleware=(*plugins.middleware, *additional_middleware),
+                additional_observers=(*plugins.observers, *additional_observers),
+                additional_policies=plugins.policies,
+                response_schema=response_schema,
+            ) as drive:
+                yield drive
+
+    @asynccontextmanager
+    async def _drive_scope(
+        self,
+        event: BaseEvent,
+        *,
+        context: Context,
         client: LLMClient,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
+        additional_policies: Iterable[AssemblyPolicy] = (),
+        plugin_hitl_hook: HumanHook | None = None,
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
@@ -1335,8 +1550,7 @@ class Agent(PluginTarget, Generic[TResult]):
         no-contention acquire. Sub-tasks spawn on their own stream, so they never
         contend with the parent turn's lock.
         """
-        stream_lock = _get_stream_turn_lock(context.stream)
-        async with stream_lock, self._knowledge_context.enter(context):
+        async with self._knowledge_context.enter(context):
             if response_schema is omit:
                 final_schema = self._response_schema
             else:
@@ -1346,21 +1560,13 @@ class Agent(PluginTarget, Generic[TResult]):
             all_tools: tuple[Tool, ...] = tuple(chain(self.tools, self._additional_tools, additional_tools))
 
             all_schemas: list[ToolSchema] = []
-            known_tools: set[str] = set()
             tool_search_schema: ToolSearchToolSchema | None = None
-            for t in all_tools:
-                schemas = await t.schemas(context)
-
-                for schema in schemas:
-                    if isinstance(schema, FunctionToolSchema):
-                        known_tools.add(schema.function.name)
-                    else:
-                        known_tools.add(schema.type)
-
-                    if isinstance(schema, ToolSearchToolSchema):
-                        tool_search_schema = schema
-                    else:
-                        all_schemas.append(schema)
+            resolved_tools = await resolve_tools(all_tools, context)
+            for schema in resolved_tools.schemas:
+                if isinstance(schema, ToolSearchToolSchema):
+                    tool_search_schema = schema
+                else:
+                    all_schemas.append(schema)
 
             if tool_search_schema is not None:
                 all_schemas.append(tool_search_schema)
@@ -1375,7 +1581,12 @@ class Agent(PluginTarget, Generic[TResult]):
                 serializer=self._serializer,
             )
 
-            for m in reversed(tuple(chain(self._middleware, additional_middleware))):
+            factories = list(self._middleware)
+            turn_policies = list(additional_policies)
+            if self._policies or turn_policies:
+                _attach_policies(factories, self._policies, turn_policies)
+
+            for m in reversed(tuple(chain(factories, additional_middleware))):
                 mw = m(event, context)
                 middleware_instances.append(mw)
 
@@ -1399,7 +1610,7 @@ class Agent(PluginTarget, Generic[TResult]):
                 # instead of issuing a second LLM call.
                 merged = _drain_pending(context)
                 if merged is not None:
-                    await context.send(DrainedModelRequest(merged.parts))
+                    await context.send(DrainedModelRequest(merged.parts, origin=merged.origin))
 
                 messages = await context.stream.history.get_events()
                 result = await llm_call(messages, context)
@@ -1424,6 +1635,8 @@ class Agent(PluginTarget, Generic[TResult]):
                 )
 
                 hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
+                if hitl_hook_maker is None and plugin_hitl_hook is not None:
+                    hitl_hook_maker = wrap_hitl(plugin_hitl_hook)
                 if hitl_hook_maker is not None:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
@@ -1442,8 +1655,8 @@ class Agent(PluginTarget, Generic[TResult]):
                 self._tool_executor.register(
                     stack,
                     context,
-                    tools=all_tools,
-                    known_tools=known_tools,
+                    tools=resolved_tools.tools,
+                    known_tools=resolved_tools.known_tools,
                     middleware=middleware_instances,
                 )
 
@@ -1555,7 +1768,7 @@ class Agent(PluginTarget, Generic[TResult]):
         name: str | None = None,
         stream: StreamOrFactory | None = None,
         middleware: Iterable[ToolMiddleware] = (),
-    ) -> FunctionTool:
+    ) -> SubagentTool:
         """Expose this agent as a delegation tool for another agent.
 
         ``stream=`` accepts ``None`` (a fresh stream per delegation), a
@@ -1633,7 +1846,7 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
     if isinstance(event, ModelRequest):
         leftover = _drain_pending(context)
         if leftover is not None:
-            event = ModelRequest([*leftover.parts, *event.parts])
+            event = ModelRequest([*leftover.parts, *event.parts], origin=event.origin)
 
     # Sending the event triggers _call_client via the stream subscriber,
     # which drains any pending enqueued input before the LLM call.
@@ -1672,14 +1885,16 @@ def _drain_pending(context: Context) -> ModelRequest | None:
 
     Returns ``None`` if the queue was empty (so callers can short-circuit).
     Multiple enqueues are merged because the wire form only cares about the
-    flat list of parts — one merged request keeps history compact.
+    flat list of parts — one merged request keeps history compact. The merged
+    request is user input if any queued message was.
     """
     queue = context.pending_messages
     if not queue:
         return None
     parts: list[Input] = [part for request in queue for part in request.parts]
+    origin: RequestOrigin = "user" if any(request.origin == "user" for request in queue) else "service"
     queue.clear()
-    return ModelRequest(parts)
+    return ModelRequest(parts, origin=origin)
 
 
 @asynccontextmanager
@@ -1843,59 +2058,44 @@ def _make_knowledge_tool(store: KnowledgeStore) -> Tool:
     return knowledge
 
 
-class _HaltCheckMiddleware(BaseMiddleware):
-    """Catches ``HaltEvent`` on the stream and short-circuits the LLM call.
+def _is_user_assembler(factory: MiddlewareFactory) -> TypeGuard[Middleware]:
+    return isinstance(factory, Middleware) and issubclass(factory.cls, AssemblerMiddleware)
 
-    ``AlertPolicy`` emits ``HaltEvent`` when a FATAL alert is detected.
-    This middleware subscribes in ``on_turn`` (scoped to a single turn so
-    the subscription never outlives the ``_execute`` that created it) and,
-    on any subsequent ``on_llm_call``, returns a synthetic ``HALTED``
-    response instead of invoking the model.
+
+def _has_user_assembler(factories: Iterable[MiddlewareFactory]) -> bool:
+    return any(_is_user_assembler(f) for f in factories)
+
+
+def _attach_policies(
+    factories: list[MiddlewareFactory],
+    agent_policies: Sequence[AssemblyPolicy],
+    turn_policies: Sequence[AssemblyPolicy],
+) -> None:
+    """Hand agent and invocation-plugin policies to the turn's assembler, in place.
+
+    The assembler is the one ``assembly=`` wired implicitly, or else the first
+    ``Middleware(AssemblerMiddleware, ...)`` the user registered; a user
+    assembler's own policies run first. With neither, an assembler and a halt
+    check are appended, as ``assembly=`` would have done.
     """
+    for index, factory in enumerate(factories):
+        if isinstance(factory, _AssemblerMiddlewareFactory):
+            if not turn_policies:
+                # Already runs ``agent_policies``, validated at construction.
+                return
+            policies = [*agent_policies, *turn_policies]
+            factories[index] = _AssemblerMiddlewareFactory(policies)
+            break
+        if _is_user_assembler(factory):
+            policies = [*factory.options.get("policies", ()), *agent_policies, *turn_policies]
+            factories[index] = Middleware(factory.cls, **{**factory.options, "policies": policies})
+            break
+    else:
+        policies = [*agent_policies, *turn_policies]
+        factories.extend((_AssemblerMiddlewareFactory(policies), Middleware(HaltCheckMiddleware)))
 
-    def __init__(self, event: BaseEvent, context: Context) -> None:
-        super().__init__(event, context)
-        self._halted = False
-        self._halt_reason = ""
-
-    async def on_turn(
-        self,
-        call_next: Callable[..., Any],
-        event: BaseEvent,
-        context: Context,
-    ) -> Any:
-        from .events.alert import HaltEvent
-
-        async def _on_halt(evt: HaltEvent) -> None:
-            self._halted = True
-            self._halt_reason = evt.reason
-
-        sub_id = context.stream.where(HaltEvent).subscribe(_on_halt)
-        try:
-            return await call_next(event, context)
-        finally:
-            context.stream.unsubscribe(sub_id)
-
-    async def on_llm_call(
-        self,
-        call_next: Callable[..., Any],
-        events: Any,
-        context: Context,
-    ) -> ModelResponse:
-        if self._halted:
-            from ag2.events import ModelMessage
-
-            return ModelResponse(
-                message=ModelMessage(content=f"HALTED: {self._halt_reason}"),
-            )
-        return await call_next(events, context)
-
-
-class _HaltCheckMiddlewareFactory:
-    """Factory for _HaltCheckMiddleware."""
-
-    def __call__(self, event: BaseEvent, context: Context) -> _HaltCheckMiddleware:
-        return _HaltCheckMiddleware(event, context)
+    for warning in AssemblerMiddleware.validate_order(policies):
+        logger.warning("Assembly policy ordering: %s", warning)
 
 
 class _AssemblerMiddlewareFactory:

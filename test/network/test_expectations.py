@@ -21,6 +21,7 @@ disabled (``expectation_sweep_interval=0``); tests call
 ``hub._expectation_tick()`` explicitly.
 """
 
+import asyncio
 from datetime import datetime
 
 import pytest
@@ -62,6 +63,7 @@ from ag2.network.hub import (
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
 )
+from ag2.network.views.builtin import WindowedSummary
 from ag2.testing import TestConfig
 
 from ._helpers import _MockClock
@@ -284,11 +286,10 @@ async def test_auto_close_handler_terminates_channel_with_audit() -> None:
     bob.on_envelope(_silent_handler)
 
     # Open in background; the sweeper auto_closes via ProtocolError on the waiter.
-    import asyncio as _asyncio
 
-    open_task = _asyncio.create_task(alice.open(type=CONSULTING_TYPE, target=bob.agent_id))
+    open_task = asyncio.create_task(alice.open(type=CONSULTING_TYPE, target=bob.agent_id))
     # Let the invite dispatch.
-    await _asyncio.sleep(0.05)
+    await asyncio.sleep(0.05)
 
     # Advance past the 30s acks_within threshold and tick.
     clock.advance(45)
@@ -356,8 +357,6 @@ async def test_notify_channel_handler_broadcasts_envelope() -> None:
 
     # Register a custom adapter with notify_channel on max_silence so we
     # don't have to wait for conversation's 1h default.
-    from ag2.network.adapters.conversation import ConversationAdapter
-    from ag2.network.views.builtin import WindowedSummary
 
     class _NotifyAdapter(ConversationAdapter):
         def __init__(self) -> None:

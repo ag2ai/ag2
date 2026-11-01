@@ -46,11 +46,18 @@ def _echo(arguments: dict[str, Any], _ctx: ToolContext) -> str:
 
 
 class _RecordingStorage(MemoryStorage):
-    """A ``Storage`` that also remembers which streams were written through it."""
+    """A ``Storage`` that also remembers which streams were written through it.
+
+    Sized by those streams, so it is falsy until the first write — the server
+    must still use it rather than mistake it for an absent backend.
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self.stream_ids: list[StreamId] = []
+
+    def __len__(self) -> int:
+        return len(self.stream_ids)
 
     async def save_event(self, event: BaseEvent, context: Context) -> None:
         if context.stream.id not in self.stream_ids:
@@ -475,11 +482,10 @@ class TestAdvertisedConversationArgument:
 
 @pytest.mark.asyncio
 async def test_structured_content_is_exactly_the_output_schema() -> None:
-    """``structuredContent`` is the agent's response schema, and nothing else.
+    """``structuredContent`` is the agent's serialized response, and nothing else.
 
-    It is advertised verbatim as the tool's ``outputSchema``, which MCP requires
-    structured content to conform to, so a server field mixed in would break the
-    tool's own declared contract.
+    It must conform to the tool's ``outputSchema``, so a server field mixed in
+    would break the tool's own declared contract.
     """
     agent = Agent(
         "weather",

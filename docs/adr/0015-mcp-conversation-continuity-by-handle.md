@@ -5,6 +5,10 @@ date: 2026-08-27
 
 # 15. MCP conversation continuity is named by a server-minted handle
 
+Clause 3's verbatim output-schema wording is superseded for Pydantic models by
+[ADR 0021](0021-mcp-output-schemas-describe-serialization.md). The handle's
+placement and all other continuity decisions remain unchanged.
+
 ## Context
 
 `ag2.mcp.MCPServer` exposes an agent as an MCP server whose conversational tool

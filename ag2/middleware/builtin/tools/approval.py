@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from ag2.annotations import Context
-from ag2.events import ToolCallEvent, ToolResultEvent
+from ag2.events import ToolApprovalRequest, ToolCallEvent, ToolResultEvent
 from ag2.middleware.base import ToolExecution, ToolMiddleware, ToolResultType
 from ag2.middleware.describe import MiddlewareDescription
 
@@ -19,6 +19,10 @@ class ApprovalRequired:
 
     Callable, so it satisfies :data:`~ag2.middleware.ToolMiddleware` wherever a
     hook is accepted. Approval state lives in ``context.variables``, not here.
+
+    An "always" answer is granted to the tool implementation handling the call
+    (:attr:`ToolCallEvent.source`), so another tool of the same name is still
+    asked about. A call with no ``source`` is granted by name.
     """
 
     def __init__(
@@ -53,22 +57,22 @@ class ApprovalRequired:
         event: ToolCallEvent,
         context: Context,
     ) -> ToolResultType:
-        if self._allow_always:
-            bypass_dict = context.variables.get(BYPASS_KEY, {})
-            if bypass_dict.get(event.name):
-                return await call_next(event, context)
+        grant = event.source or event.name
+        if self._allow_always and context.variables.get(BYPASS_KEY, {}).get(grant):
+            return await call_next(event, context)
 
-        user_result = (
-            await context.input(
-                self._prompt.format(tool_name=event.name, tool_arguments=event.arguments),
-                timeout=self._timeout,
-            )
-        ).lower()
+        # Asked as a request that names the call, so a transport putting the
+        # question to a remote human can render it as the approval it is. To
+        # everything in between it is an ordinary human-input request.
+        request = ToolApprovalRequest(
+            self._prompt.format(tool_name=event.name, tool_arguments=event.arguments),
+            tool_call_id=event.id,
+            timeout=self._timeout,
+        )
+        user_result = (await context.ask(request)).lower()
 
         if self._allow_always and user_result == "always":
-            bypass_dict = context.variables.get(BYPASS_KEY, {})
-            bypass_dict[event.name] = True
-            context.variables[BYPASS_KEY] = bypass_dict
+            context.variables[BYPASS_KEY] = {**context.variables.get(BYPASS_KEY, {}), grant: True}
             return await call_next(event, context)
 
         elif user_result in ("y", "yes", "1"):
@@ -100,7 +104,8 @@ def approval_required(
             does not run.
         allow_always: When ``True``, the user can respond with ``always`` to
             approve the current and all subsequent calls of the same tool in the
-            same context.
+            same context. The answer covers only the tool implementation that was
+            asked about: a different tool with the same name is still asked.
 
     Returns:
         An :class:`ApprovalRequired` hook that can be passed to the

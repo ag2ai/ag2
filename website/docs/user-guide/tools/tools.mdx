@@ -14,6 +14,9 @@ The easiest way to create a tool is by using the `@tool` decorator. This decorat
 
 For the best results, **always provide clear type hints and a descriptive docstring**. The LLM relies heavily on these to know when and how to invoke your tool.
 
+!!! tip "Set a timeout for tools that may block"
+    Use `#!python @tool(timeout=30.0)` to limit how long AG2 waits for a function tool. The default is `#!python None` (no time limit). See [Tool timeouts](#tool-timeouts) for examples and cancellation behavior.
+
 ```python linenums="1"
 from ag2 import tool
 
@@ -74,22 +77,28 @@ Agent interactions are naturally asynchronous. To support this, tools are execut
 
 To ensure that heavy computational tasks or blocking I/O operations do not freeze the entire application, **synchronous tools are automatically executed in a separate thread** by default.
 
-```python linenums="1"
+```python linenums="1" hl_lines="7 11 14 17"
+import aiohttp
+import requests
+
+from ag2 import Agent, tool
+
 # This synchronous tool runs in a separate thread to prevent blocking
-@tool
+@tool(timeout=30.0)
 def fetch_data_sync(url: str) -> str:
     """Fetches data from a URL using a blocking request library."""
-    import requests
-    return requests.get(url).text
+    # Also limit the request itself: cancelling the await cannot stop its thread.
+    return requests.get(url, timeout=20.0).text
 
 # This native asynchronous tool runs directly in the main event loop
-@tool
+@tool(timeout=30.0)
 async def fetch_data_async(url: str) -> str:
     """Fetches data from a URL using an async request library."""
-    import aiohttp
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20.0)) as session:
         async with session.get(url) as response:
             return await response.text()
+
+agent = Agent(name="WebAssistant", tools=[fetch_data_sync, fetch_data_async])
 ```
 
 ### Disabling Threaded Execution
@@ -108,6 +117,40 @@ def format_name(first_name: str, last_name: str) -> str:
 !!! warning
     When `sync_to_thread=False` is set, the synchronous tool runs directly within the asynchronous context. If the function performs time-consuming operations (like network requests or large loops), **it will block the entire event loop** until it finishes, preventing other agents or asynchronous tasks from making progress.
 
+## Tool timeouts
+
+Set `#!python timeout` in seconds for tools that perform network requests or other potentially slow operations. AG2 waits indefinitely when `#!python timeout=None` (the default). A configured timeout must be a finite number greater than zero.
+
+```python linenums="1" hl_lines="6"
+import httpx
+
+from ag2 import Agent, tool
+from ag2.config import OpenAIConfig
+
+@tool(timeout=30.0)
+async def fetch_page(url: str) -> str:
+    """Fetches the text of a web page."""
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.text
+
+agent = Agent(
+    name="WebAssistant",
+    config=OpenAIConfig("gpt-4o-mini"),
+    tools=[fetch_page],
+)
+```
+
+The same parameter is available on `#!python @agent.tool(timeout=30.0)`, `#!python @toolkit.tool(timeout=30.0)`, and `#!python @plugin.tool(timeout=30.0)`, as well as `#!python tool(function, timeout=30.0)`. It is a local execution setting and is not included in the tool schema sent to the model.
+
+The timeout covers each invocation's dependency resolution, function execution, and dependency cleanup. [Tool middleware](/docs/user-guide/tools/tool_middleware) and agent middleware run outside this limit: an approval hook keeps its own [human-input timeout](/docs/user-guide/tools/approval_required). A timeout produces a `#!python ToolErrorEvent` containing a `#!python TimeoutError` with the tool name and limit. The model receives that error as the tool result and can continue; other tools in the same parallel batch keep running.
+
+!!! warning "Cancellation has limits"
+    Async tools receive cancellation when the deadline expires. AG2 waits for cancellation and cleanup to finish, so a tool that delays or suppresses cancellation can exceed the configured timeout. Do not swallow `#!python asyncio.CancelledError`.
+
+    A synchronous tool running in a worker thread can continue after AG2 stops waiting, including any side effects. Set timeouts on the underlying HTTP client, database driver, or subprocess too. With `#!python sync_to_thread=False`, blocking code prevents the event loop from enforcing the timeout at all.
+
 ## Customizing Tool Schemas
 
 LLMs perform best when they have precise constraints and detailed instructions. The framework automatically generates a tool's schema from its function signature and docstring. For more granular control, you can define minimum/maximum values, enforce specific formats, or override the tool's name.
@@ -125,6 +168,9 @@ def math_op(a: int, b: int) -> int:
 
 !!! note
     Explicitly setting the name and description overrides the automatically generated values.
+
+!!! note
+    An agent exposes one tool per name in a turn. If tools declared in code share a name (the agent's `tools`, toolkits, plugins, plugins passed to `ask()`, or tools passed to `ask()`), the later one replaces the earlier one and a warning names both. For example, `Agent(tools=[toolkit, my_deploy])` uses `my_deploy` instead of the toolkit's `deploy`. Tools a remote peer provides never replace tools declared in code: neither tools an MCP server reports (see [MCP servers](/docs/user-guide/tools/mcp_servers)) nor tools a client sends over AG-UI or A2A.
 
 ### Deep Schema Customization with Pydantic
 

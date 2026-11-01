@@ -14,50 +14,40 @@ deadlock).
 import fnmatch
 import posixpath
 import shlex
+from collections.abc import Sequence
 from pathlib import Path, PurePath, PurePosixPath
 
-# Commands that only read state and never modify the filesystem.
-# Used when ``ShellAdapter.readonly=True`` and no explicit ``allowed``
-# list is provided. Best-effort: ``echo`` can still redirect output
-# (``echo x > file``) because shell processing happens in the OS shell
-# after our prefix check.
+# What ``readonly=True`` allows when no ``allowed`` list is given: commands with
+# no option to write a file or run another program, so the guarantee can be
+# checked by reading this list. ``find`` (``-exec``), ``file`` (``-C``) and
+# ``git`` (``--output``, programs named in ``.git/config``) are left out on
+# purpose; a user who needs them lists them in ``allowed``.
 READONLY_COMMANDS: tuple[str, ...] = (
     "cat",
     "head",
     "tail",
     "ls",
-    "ll",
-    "la",
     "grep",
     "egrep",
     "fgrep",
-    "find",
     "wc",
     "du",
     "df",
     "diff",
     "stat",
-    "file",
     "which",
     "pwd",
     "echo",
-    "env",
     "printenv",
-    "sort",
-    "uniq",
     "cut",
-    "git log",
-    "git diff",
-    "git status",
-    "git show",
-    "git branch",
 )
 
 
-# Shell metacharacters that let a single allowed head-command spawn or
-# redirect to other commands, bypassing the allow-list. Blocked while a
-# restricted ``allowed`` set is active (see :meth:`ShellAdapter._filter`).
-_SHELL_OPERATORS: tuple[str, ...] = (">", ">>", "|", ";", "&&", "||", "`", "$(")
+# Shell syntax a model may try in restricted mode. Restricted mode runs the
+# parsed argv without a shell, so none of it takes effect; rejecting it up
+# front gives the model a clear error instead of a confusing one from the
+# command (``cat: '>': No such file``).
+_SHELL_OPERATORS: tuple[str, ...] = (">", ">>", "<", "|", ";", "&", "&&", "||", "\n", "\r", "`", "$(")
 
 
 def matches(pattern: str, command: str) -> bool:
@@ -73,19 +63,54 @@ def matches(pattern: str, command: str) -> bool:
     return rest == "" or rest[0] == " "
 
 
-def contains_shell_operator(command: str) -> bool:
-    """Return True if *command* contains shell operators that could bypass
-    the allowed-command whitelist (redirection, pipes, chaining, backtick
-    or ``$(...)`` command substitution).
+def matches_argv(pattern: str, argv: Sequence[str]) -> bool:
+    """Return True if ``argv`` starts with the words of ``pattern``.
+
+    ``"git log"`` matches ``["git", "log", "-5"]`` but not ``["git", "-c", "x", "log"]``.
     """
-    return any(op in command for op in _SHELL_OPERATORS)
+    words = pattern.split()
+    return list(argv[: len(words)]) == words
+
+
+def split_command(command: str) -> list[str] | None:
+    """Split ``command`` into argv with POSIX shell quoting, or return None if the quotes do not balance."""
+    try:
+        return shlex.split(command)
+    except ValueError:
+        return None
+
+
+def contains_shell_operator(command: str) -> bool:
+    """Return True if *command* contains any of ``_SHELL_OPERATORS`` outside quotes and escapes."""
+    return any(op in _unquoted(command) for op in _SHELL_OPERATORS)
+
+
+def _unquoted(command: str) -> str:
+    """Return *command* with quoted and backslash-escaped text removed."""
+    kept: list[str] = []
+    quote = ""
+    chars = iter(command)
+    for char in chars:
+        if quote:
+            if char == quote:
+                quote = ""
+            elif char == "\\" and quote == '"':
+                next(chars, "")
+        elif char in "'\"":
+            quote = char
+        elif char == "\\":
+            next(chars, "")
+        else:
+            kept.append(char)
+    return "".join(kept)
 
 
 def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) -> str | None:
-    """Return ``"Access denied: <path>"`` if any literal path in *command* matches *patterns*.
+    """Return ``"Access denied: <path>"`` if any literal path in *command* leaves *workdir* or matches *patterns*.
 
     Tokens are extracted via :func:`shlex.split` to handle quoted paths. Each
-    token is resolved relative to *workdir* and checked against each pattern.
+    token is resolved relative to *workdir* and checked against each pattern;
+    a glob token is checked against the files it matches on a host path.
     Returns ``None`` if no pattern matches.
 
     *workdir* may be a host :class:`~pathlib.Path` (local backend) or a
@@ -99,36 +124,73 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
     except ValueError:
         tokens = command.split()
 
-    host_backed = isinstance(workdir, Path)
-    if host_backed:
+    expanded_tokens = [candidate for token in tokens for candidate in _embedded_paths(token)]
+
+    if isinstance(workdir, Path):
         resolved_workdir: PurePath = workdir.resolve()
     else:
         resolved_workdir = PurePosixPath(posixpath.normpath(str(workdir)))
 
-    for token in tokens:
-        if host_backed:
+    for token in expanded_tokens:
+        if isinstance(workdir, Path):
             try:
-                resolved: PurePath = (workdir / token).resolve()
+                literal: PurePath = (workdir / token).resolve()
             except Exception:
                 continue
+            candidates = [literal, *_glob_matches(workdir, token)]
         else:
-            resolved = PurePosixPath(posixpath.normpath(posixpath.join(str(workdir), token)))
+            candidates = [PurePosixPath(posixpath.normpath(posixpath.join(str(workdir), token)))]
 
-        try:
-            rel = str(resolved.relative_to(resolved_workdir)).replace("\\", "/")
-        except ValueError:
+        for resolved in candidates:
+            denied = _denied(resolved, resolved_workdir, patterns)
+            if denied is not None:
+                return denied
+
+    return None
+
+
+def _embedded_paths(token: str) -> list[str]:
+    """Return *token* plus the paths a program may read out of it.
+
+    A word can carry a path inside it: after ``=`` (``of=.env``,
+    ``--output=.env``) or glued to a short option (``-o.env``, ``-ro.env``).
+    Each tail is checked as well as the whole word, so the filter errs towards
+    refusing (``-ofoo.env`` is refused when ``.env`` is ignored).
+    """
+    found = [token]
+    if "=" in token:
+        found.extend(part for part in token.split("=") if part)
+    if token.startswith("-") and not token.startswith("--"):
+        found.extend(token[i:] for i in range(2, len(token)))
+    return found
+
+
+def _glob_matches(workdir: Path, token: str) -> list[Path]:
+    # The command runs as argv, but a program may expand a glob itself (MSYS
+    # tools do on Windows), so a pattern naming an ignored file must be refused.
+    if not any(c in token for c in "*?["):
+        return []
+    try:
+        return [m.resolve() for m in workdir.glob(token)]
+    except (ValueError, NotImplementedError, OSError):
+        return []
+
+
+def _denied(resolved: PurePath, resolved_workdir: PurePath, patterns: list[str]) -> str | None:
+    try:
+        rel = str(resolved.relative_to(resolved_workdir)).replace("\\", "/")
+    except ValueError:
+        return f"Access denied: {resolved}"
+
+    for pattern in patterns:
+        if any(c in pattern for c in ("*", "?", "[")):
+            if fnmatch.fnmatch(rel, pattern):
+                return f"Access denied: {resolved}"
+            if pattern.startswith("**/") and fnmatch.fnmatch(resolved.name, pattern[3:]):
+                return f"Access denied: {resolved}"
+            if fnmatch.fnmatch(resolved.name, pattern):
+                return f"Access denied: {resolved}"
+        elif resolved.name == pattern or rel == pattern or rel.startswith(pattern + "/"):
             return f"Access denied: {resolved}"
-
-        for pattern in patterns:
-            if any(c in pattern for c in ("*", "?", "[")):
-                if fnmatch.fnmatch(rel, pattern):
-                    return f"Access denied: {resolved}"
-                if pattern.startswith("**/") and fnmatch.fnmatch(resolved.name, pattern[3:]):
-                    return f"Access denied: {resolved}"
-                if fnmatch.fnmatch(resolved.name, pattern):
-                    return f"Access denied: {resolved}"
-            else:
-                if resolved.name == pattern or rel == pattern or rel.startswith(pattern + "/"):
-                    return f"Access denied: {resolved}"
 
     return None

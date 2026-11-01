@@ -24,6 +24,7 @@ from .builtin import (
     approval_required,
 )
 from .describe import DescribableMiddleware, DescribedMiddleware, MiddlewareDescription
+from .halt import HaltCheckMiddleware
 
 __all__ = (
     "AgentTurn",
@@ -32,6 +33,7 @@ __all__ = (
     "ConditionalMiddleware",
     "DescribableMiddleware",
     "DescribedMiddleware",
+    "HaltCheckMiddleware",
     "HistoryLimiter",
     "HumanInputHook",
     "LLMCall",

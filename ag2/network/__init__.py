@@ -26,6 +26,7 @@ from .adapters import (
     DiscussionAdapter,
     DiscussionState,
     ExpectedTurn,
+    Rendered,
     WorkflowAdapter,
     WorkflowState,
     default_build_packet_envelope,
@@ -35,6 +36,7 @@ from .adapters import (
     default_extract_turn_input,
     default_render_envelope,
     default_tools_for,
+    ensure_parts,
 )
 from .auth import ApiKeyAuth, AuthAdapter, AuthRegistry, NoAuth
 from .channel import (
@@ -347,6 +349,7 @@ __all__ = (
     "RateBlock",
     "ReceiptFrame",
     "RemoteAgentProxy",
+    "Rendered",
     "ReplyWithinEvaluator",
     "RequestFrame",
     "ResponseFrame",
@@ -391,6 +394,7 @@ __all__ = (
     "default_render_envelope",
     "default_tools_for",
     "encode_frame",
+    "ensure_parts",
     "make_id",
     "parse_duration",
     "parse_hub_urn",

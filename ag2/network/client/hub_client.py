@@ -46,7 +46,7 @@ from ..adapters.base import ChannelAdapter
 from ..channel import ChannelMetadata, ChannelState
 from ..envelope import Envelope
 from ..errors import AccessDeniedError, AuthError, NetworkError, NotFoundError, ProtocolError
-from ..identity import Passport, Resume
+from ..identity import AuthBlock, Passport, Resume
 from ..ids import make_id
 from ..rule import Rule
 from ..transport.frames import (
@@ -480,6 +480,11 @@ class HubClient:
         has not seen acked, ``None`` skips replay, a specific id replays
         strictly past it. In-process attach ignores it (the endpoint
         re-binds without replay).
+
+        Cross-process, ``passport`` carries this identity's credential
+        (``passport.auth``) for the handshake: the hub does not hand
+        claims back, so an identity registered with a credentialed scheme
+        (e.g. ``api_key``) must pass its passport to re-attach.
         """
         if self._closed:
             raise RuntimeError("HubClient is closed")
@@ -591,8 +596,11 @@ class HubClient:
             agent._apply_plugin(NetworkPlugin(client))
 
         # Reconnect handshake — binds this endpoint to the identity and
-        # replays unacked notifies past the high-water mark.
-        auth = passport.auth if passport is not None else existing_passport.auth
+        # replays unacked notifies past the high-water mark. The hub never
+        # returns a claim, so the credential comes only from the caller's
+        # ``passport``; without one the registered scheme is presented with
+        # an empty claim, which only a claim-less scheme (``NoAuth``) accepts.
+        auth = passport.auth if passport is not None else AuthBlock(scheme=existing_passport.auth.scheme)
         await self._handshake(
             HelloFrame(
                 name=name,

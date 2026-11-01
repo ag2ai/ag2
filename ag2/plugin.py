@@ -19,7 +19,7 @@ from .events import (
     ModelRequest,
 )
 from .events.conditions import Condition
-from .hitl import HumanHook, wrap_hitl
+from .hitl import HitlFactory, HumanHook, wrap_hitl
 from .middleware.base import (
     MiddlewareFactory,
     ToolMiddleware,
@@ -97,21 +97,27 @@ class PromptObserverMixin:
         self,
         condition: ClassInfo | Condition | None,
         callback: Callable[..., Any],
+        *,
+        timeout: float | None = None,
     ) -> Callable[..., Any]: ...
 
     @overload
     def observer(
         self,
         condition: ClassInfo | Condition | None = None,
+        *,
+        timeout: float | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
     def observer(
         self,
         condition: ClassInfo | Condition | None = None,
         callback: Callable[..., Any] | None = None,
+        *,
+        timeout: float | None = None,
     ) -> Callable[..., Any] | Callable[[Callable[..., Any]], Callable[..., Any]]:
         def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
-            obs = observer_factory(condition, func)
+            obs = observer_factory(condition, func, timeout=timeout)
             self._observers.append(obs)
             return func
 
@@ -132,6 +138,7 @@ class PromptObserverMixin:
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool: ...
 
@@ -144,6 +151,7 @@ class PromptObserverMixin:
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
 
@@ -155,6 +163,7 @@ class PromptObserverMixin:
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
         def make_tool(f: Callable[..., Any]) -> FunctionTool:
@@ -164,6 +173,7 @@ class PromptObserverMixin:
                 description=description,
                 schema=schema,
                 sync_to_thread=sync_to_thread,
+                timeout=timeout,
                 middleware=middleware,
             )
             self.add_tool(t)
@@ -195,9 +205,11 @@ class PromptObserverMixin:
         """Append an assembly policy to the chain.
 
         Policies run in order; a newly added policy runs after existing ones.
-        Construction-time ordering validation (warning on suspicious sequences)
-        only runs over policies passed via ``assembly=`` — late additions skip
-        the check, so callers should be confident in the ordering they introduce.
+        On an ``Agent`` they join the first registered
+        ``Middleware(AssemblerMiddleware, ...)``, after its own policies, or an
+        assembler the agent appends when there is none. Ordering is validated
+        (warning on suspicious sequences) at construction and on each turn
+        that brings policies from elsewhere.
         """
         self._policies.append(policy)
         return self
@@ -261,7 +273,7 @@ class PluginTarget(PromptObserverMixin):
     dependency_provider: Provider
     _serializer: SerializerProto
     _tool_executor: ToolExecutor
-    _hitl_hook: HumanHook | None
+    _hitl_hook: HitlFactory | None
     _agent_dependencies: dict[Any, Any]
     _agent_variables: dict[Any, Any]
 

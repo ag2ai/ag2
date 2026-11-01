@@ -33,6 +33,7 @@ from ag2.live import CascadeConfig, LiveAgent, SilenceTurnDetector
 from ag2.live.stt import STTConfig, VoiceInput
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
+from ag2.tools import tool
 
 SAMPLE_RATE = 24000
 
@@ -417,6 +418,30 @@ class TestLiveAgentIntegration:
 
         assert called == ["Berlin"]
         assert tts.spoken == ["It is sunny in Berlin."]
+
+    async def test_run_tool_overrides_an_agent_tool_of_the_same_name(self) -> None:
+        stt, tts = FakeSTT(), FakeTTS()
+        runs: list[str] = []
+
+        @tool(name="deploy")
+        def agent_deploy() -> str:
+            runs.append("agent")
+            return "deployed"
+
+        @tool(name="deploy")
+        def run_deploy() -> str:
+            runs.append("run")
+            return "deployed"
+
+        model = TestConfig(ToolCallEvent(name="deploy", arguments="{}"), "Deployed.")
+        agent = LiveAgent("assistant", config=cascade(model, stt, tts), tools=[agent_deploy])
+
+        async with agent.run(tools=[run_deploy]) as context:
+            await speak_one_turn(context)
+            await asyncio.sleep(0.1)
+
+        assert runs == ["run"]
+        assert tts.spoken == ["Deployed."]
 
     async def test_drives_a_live_agent_like_any_realtime_config(self) -> None:
         """The whole point: `LiveAgent` needs no knowledge that this config is

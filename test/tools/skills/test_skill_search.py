@@ -4,6 +4,8 @@
 
 import io
 import json
+import os
+import stat
 import tarfile
 import textwrap
 from pathlib import Path
@@ -14,6 +16,7 @@ import pytest
 from ag2 import Context
 from ag2.events import ToolCallEvent, ToolErrorEvent
 from ag2.exceptions import InvalidSkillError, SkillInstallError
+from ag2.stream import MemoryStream
 from ag2.tools.skills import LocalRuntime, SkillSearchToolkit
 from ag2.tools.skills.skill_search.client import SkillsClient
 from ag2.tools.skills.skill_search.extractor import extract_skill
@@ -156,6 +159,87 @@ def test_extract_skill_validates_metadata(tmp_path: Path) -> None:
 
     with pytest.raises(InvalidSkillError):
         extract_skill(tar_path, "", dest)
+
+
+@pytest.mark.parametrize("absolute", [False, True], ids=["relative", "absolute"])
+def test_extract_skill_rejects_path_name_before_touching_disk(tmp_path: Path, absolute: bool) -> None:
+    dest = tmp_path / "skills"
+    dest.mkdir()
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep.txt").write_text("keep")
+    name = str(victim) if absolute else "../victim"
+    skill_md = f"---\nname: {name}\ndescription: Bad\n---\n"
+    tar_path = tmp_path / "skill.tar.gz"
+    tar_path.write_bytes(_make_tarball({"owner-repo-abc123/SKILL.md": skill_md}))
+
+    with pytest.raises(InvalidSkillError):
+        extract_skill(tar_path, "", dest)
+
+    assert (victim / "keep.txt").read_text() == "keep"
+    assert not (victim / "SKILL.md").exists()
+
+
+def test_extract_skill_skips_absolute_member_path(tmp_path: Path) -> None:
+    dest = tmp_path / "skills"
+    dest.mkdir()
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    tar_path = tmp_path / "skill.tar.gz"
+    tar_path.write_bytes(
+        _make_tarball({
+            "owner-repo-abc123/SKILL.md": STANDALONE_SKILL_MD,
+            f"owner-repo-abc123/{victim}/pwned.txt": "pwned",
+        })
+    )
+
+    extract_skill(tar_path, "", dest)
+
+    assert not (victim / "pwned.txt").exists()
+    assert (dest / "last30days" / "SKILL.md").exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.name == "nt", reason="POSIX executable permissions")
+@pytest.mark.parametrize("helper_mode", [0o755, 0o4755])
+async def test_extract_skill_keeps_executable_bits_for_bundled_helpers(tmp_path: Path, helper_mode: int) -> None:
+    archive = tmp_path / "skill.tar.gz"
+    entries = [
+        ("SKILL.md", b"---\nname: helper-skill\ndescription: Run a bundled helper\n---\n", 0o644),
+        ("scripts/run.sh", b"#!/bin/sh\n./helper\n", 0o755),
+        ("scripts/helper", b"#!/bin/sh\nprintf 'helper output'\n", helper_mode),
+        ("references/note.txt", b"Not executable", 0o644),
+    ]
+    with tarfile.open(archive, "w:gz") as tar:
+        for name, data, mode in entries:
+            member = tarfile.TarInfo(f"repo-main/{name}")
+            member.size = len(data)
+            member.mode = mode
+            tar.addfile(member, io.BytesIO(data))
+    install_dir = tmp_path / "skills"
+    extract_skill(archive, "", install_dir)
+    runtime = LocalRuntime(install_dir)
+
+    output = await runtime.execute("helper-skill", "run.sh", Context(stream=MemoryStream()))
+
+    assert output == "helper output"
+    skill_dir = install_dir / "helper-skill"
+    helper_mode_installed = stat.S_IMODE((skill_dir / "scripts/helper").stat().st_mode)
+    assert helper_mode_installed & 0o111 == 0o111
+    assert helper_mode_installed & 0o7000 == 0
+    assert (skill_dir / "references/note.txt").stat().st_mode & 0o111 == 0
+
+
+def test_local_runtime_install_path_traversal_blocked(tmp_path: Path) -> None:
+    install_dir = tmp_path / "skills"
+    install_dir.mkdir()
+    source = tmp_path / "source"
+    source.mkdir()
+
+    with pytest.raises(ValueError, match="path traversal"):
+        LocalRuntime(dir=install_dir).install(source, "../outside")
+
+    assert not (tmp_path / "outside").exists()
 
 
 @pytest.mark.asyncio

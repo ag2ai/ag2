@@ -10,7 +10,7 @@ A daily-journal Agent that genuinely remembers across runs — not by replaying 
 - Persistent agent memory backed by a `DiskKnowledgeStore` on disk.
 - `WorkingMemoryAggregate` — an LLM-driven rollup that runs at the end of every conversation and writes `/memory/working.md`.
 - `WorkingMemoryPolicy` — an assembly policy that reads `/memory/working.md` and injects it as context before every LLM call.
-- The full `KnowledgeConfig(store=..., aggregate=..., aggregate_trigger=...)` shape and how it pairs with `assembly=`.
+- The full `KnowledgeConfig(store=..., aggregate=..., aggregate_trigger=...)` shape and how it pairs with `AssemblerMiddleware`.
 - The `AggregateTrigger(on_end=True)` cadence — fire once when the conversation ends.
 
 ## Primitives covered
@@ -53,6 +53,8 @@ from pathlib import Path
 from ag2 import Agent, KnowledgeConfig
 from ag2.aggregate import AggregateTrigger, WorkingMemoryAggregate
 from ag2.config import GeminiConfig
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import Middleware
 from ag2.knowledge import DiskKnowledgeStore
 from ag2.policies import ConversationPolicy, WorkingMemoryPolicy
 
@@ -83,9 +85,14 @@ async def main() -> None:
                     # on_end=True: roll up working memory when each conversation finishes
                     aggregate_trigger=AggregateTrigger(on_end=True),
                 ),
-                assembly=[
-                    WorkingMemoryPolicy(),  # inject /memory/working.md on every LLM call
-                    ConversationPolicy(),  # then filter to conversation events
+                middleware=[
+                    Middleware(
+                        AssemblerMiddleware,
+                        policies=[
+                            WorkingMemoryPolicy(),  # inject /memory/working.md on every LLM call
+                            ConversationPolicy(),  # then filter to conversation events
+                        ],
+                    ),
                 ],
             )
 

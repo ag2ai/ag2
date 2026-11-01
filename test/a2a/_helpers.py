@@ -2,12 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
 import grpc.aio
+import httpx
 from a2a.server.agent_execution import AgentExecutor as A2AAgentExecutorBase
 from a2a.server.agent_execution import RequestContext
 from a2a.server.events import EventQueue
@@ -185,6 +187,41 @@ class PromptThenAckExecutor(A2AAgentExecutorBase):
             return
         updater = TaskUpdater(event_queue, task.id, task.context_id)
         await updater.cancel()
+
+
+class Switchboard(httpx.AsyncBaseTransport):
+    """Send each request to whichever replica is `active` — a load balancer that changes its mind."""
+
+    def __init__(self, *servers: A2AServer, url: str) -> None:
+        self._transports = [httpx.ASGITransport(app=server.build_jsonrpc(url=url)) for server in servers]
+        self.active = 0
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        return await self._transports[self.active].handle_async_request(request)
+
+
+class GatedExecutor(A2AAgentExecutorBase):
+    """Starts a task, then holds it `working` until the test opens the gate."""
+
+    def __init__(self) -> None:
+        self.gate = asyncio.Event()
+        self.working = asyncio.Event()
+        self.task_id = ""
+
+    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        task_id, context_id = request_context.task_id or uuid4().hex, request_context.context_id or uuid4().hex
+        self.task_id = task_id
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        await event_queue.enqueue_event(
+            Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED))
+        )
+        await updater.start_work()
+        self.working.set()
+        await self.gate.wait()
+        await updater.complete(message=updater.new_agent_message(parts=[Part(text="finished")]))
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        raise NotImplementedError
 
 
 def make_pair(

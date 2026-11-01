@@ -56,6 +56,9 @@ class RestTransport:
         endpoint = functools.partial(_endpoint, self, core)
         return [Route(self._path, endpoint, methods=["POST"])]
 
+    async def aclose(self) -> None:
+        """Nothing to release: this transport holds nothing beyond a request."""
+
 
 async def _endpoint(transport: RestTransport, core: "_A2UITurnCore", request: Request) -> Response:
     parsed = await _read_request(core, request)

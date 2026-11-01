@@ -33,7 +33,7 @@ from ag2.events import BaseEvent, ModelMessage, ModelResponse
 from ag2.stream import MemoryStream
 
 # Marker the HITL continuation feeds back so a paused turn can complete instead
-# of pausing forever (see CallFunctionThenComplete).
+# of pausing forever (see CallRendererFunctionThenComplete).
 FUNCTION_RESULT_MARK = "FUNCTION-RESULT-DELIVERED"
 
 
@@ -75,8 +75,8 @@ class CapturingClient(LLMClient):
         return ModelResponse(msg)
 
 
-class CallFunctionThenComplete(ModelConfig):
-    """First turn emits a ``callFunction(wantResponse)``; once the client delivers
+class CallRendererFunctionThenComplete(ModelConfig):
+    """First turn emits a ``callRendererFunction``; once the client delivers
     the function result (via the HITL continuation) the next turn completes.
 
     The A2A executor recreates the LLM client every turn, so the branch keys off
@@ -89,14 +89,14 @@ class CallFunctionThenComplete(ModelConfig):
     def copy(self) -> Self:
         return self
 
-    def create(self) -> "CallFunctionThenCompleteClient":
-        return CallFunctionThenCompleteClient(self._call_block)
+    def create(self) -> "CallRendererFunctionThenCompleteClient":
+        return CallRendererFunctionThenCompleteClient(self._call_block)
 
     def create_files_client(self) -> None:
         raise NotImplementedError
 
 
-class CallFunctionThenCompleteClient(LLMClient):
+class CallRendererFunctionThenCompleteClient(LLMClient):
     def __init__(self, call_block: str) -> None:
         self._call_block = call_block
 
@@ -111,7 +111,7 @@ class CallFunctionThenCompleteClient(LLMClient):
 
 
 class MetadataInterceptor(ClientCallInterceptor):
-    """Splices ``a2uiClientCapabilities`` onto the outgoing message metadata.
+    """Splices ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) onto the outgoing message metadata.
 
     The stock A2A client has no hatch for arbitrary message metadata, so a real
     capability-negotiation round-trip injects it here, mirroring how production
@@ -127,6 +127,26 @@ class MetadataInterceptor(ClientCallInterceptor):
         except AttributeError:
             return  # not a send-message call (e.g. card fetch)
         message.metadata.update(self._metadata)
+
+    async def after(self, args: Any) -> None:
+        return None
+
+
+class DropEmptyTextInterceptor(ClientCallInterceptor):
+    """Drops empty text parts from the outgoing message.
+
+    The stock A2A client always sends a text part, even for ``ask("")``. A renderer
+    answering with an envelope alone sends just the A2UI ``DataPart``.
+    """
+
+    async def before(self, args: BeforeArgs) -> None:
+        try:
+            message = args.input.message
+        except AttributeError:
+            return  # not a send-message call (e.g. card fetch)
+        kept = [part for part in message.parts if part.text or not part.HasField("text")]
+        del message.parts[:]
+        message.parts.extend(kept)
 
     async def after(self, args: Any) -> None:
         return None

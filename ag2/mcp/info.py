@@ -2,11 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any
+from dataclasses import is_dataclass
+from types import GenericAlias
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import Tool as MCPTool
+from pydantic import BaseModel, TypeAdapter
+from pydantic.json_schema import GenerateJsonSchema, JsonSchemaValue
+from pydantic_core import core_schema
 
 from ag2.agent import Agent
+from ag2.response import ResponseSchema
 
 from .sessions import ConversationBounds
 
@@ -83,6 +89,49 @@ def object_output_schema(response_schema: "ResponseProto[Any] | None") -> dict[s
     are not advertised — those replies flow back as plain text content.
     """
     json_schema = response_schema.json_schema if response_schema is not None else None
+    if isinstance(json_schema, dict) and isinstance(response_schema, ResponseSchema):
+        model = response_schema.types
+        if (
+            isinstance(model, type)
+            and not isinstance(model, GenericAlias)
+            and (issubclass(model, BaseModel) or is_dataclass(model))
+        ):
+            # The LLM schema describes validation input; MCP describes the value
+            # after to_structured_dict dumps it in JSON mode.
+            output_schema = TypeAdapter(model).json_schema(mode="serialization", schema_generator=_OutputSchema)
+            # ResponseSchema lifts these into its name/description unless the
+            # caller supplied them explicitly. Keep that presentation unchanged.
+            for key in ("title", "description"):
+                if key not in json_schema:
+                    output_schema.pop(key, None)
+            json_schema = output_schema
     if isinstance(json_schema, dict) and json_schema.get("type") == "object":
         return json_schema
     return None
+
+
+class _OutputSchema(GenerateJsonSchema):
+    """Match model_dump's default, per-type serialize_by_alias policy.
+
+    Passing by_alias=False or True to the generator would override every nested
+    type's policy. Core configs also capture the policy inherited by dataclasses.
+    TypedDicts use the enclosing serializer's policy instead.
+    """
+
+    def generate_inner(
+        self,
+        schema: core_schema.CoreSchema
+        | core_schema.ModelField
+        | core_schema.DataclassField
+        | core_schema.TypedDictField
+        | core_schema.ComputedField,
+    ) -> JsonSchemaValue:
+        if schema["type"] not in ("model", "dataclass"):
+            return super().generate_inner(schema)
+        previous = self.by_alias
+        config = cast(core_schema.CoreConfig, schema.get("config", {}))
+        self.by_alias = config.get("serialize_by_alias", False)
+        try:
+            return super().generate_inner(schema)
+        finally:
+            self.by_alias = previous

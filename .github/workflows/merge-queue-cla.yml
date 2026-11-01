@@ -1,0 +1,28 @@
+# cla-assistant.io does not reliably report `license/cla` on merge-group commits,
+# so the required check times out in the merge queue. A merge group only contains
+# commits whose PR already passed `license/cla`, so the status is set here directly.
+name: Merge queue CLA
+
+on:
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+jobs:
+  license-cla:
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Report license/cla for merge group
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          gh api "repos/$REPO/statuses/$SHA" \
+            -f state=success \
+            -f context=license/cla \
+            -f description="CLA verified on the pull requests in this merge group."

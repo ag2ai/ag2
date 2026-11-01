@@ -45,18 +45,13 @@ class AssemblyPolicy(Protocol):
 class AssemblerMiddleware(BaseMiddleware):
     """Runs assembly policies before each LLM call.
 
-    Sits at the outermost position in the middleware chain. Runs all
-    policies in order, transforming (prompts, events) before they
-    reach the LLM client.
+    Register with ``Middleware(AssemblerMiddleware, policies=[...])`` in
+    ``Agent(middleware=[...])``. Policies run in order before the inner
+    middleware and LLM client. Position in the middleware list determines
+    which middleware sees the assembled context.
 
-    Middleware ordering in Agent._execute()::
-
-        1. AssemblerMiddleware(policies)     -- outermost: assembles context
-        2. AlertPolicy (in assembly chain)   -- injects observer alerts
-        3. CompactionMiddleware              -- triggers compaction after turns
-        4. AggregationMiddleware             -- triggers aggregation after turns
-        5. User-provided middleware           -- logging, retry, etc.
-        6. LLM client call                    -- innermost: sends to model
+    When using ``AlertPolicy``, register ``Middleware(HaltCheckMiddleware)``
+    immediately after this middleware to stop model calls on FATAL alerts.
     """
 
     def __init__(

@@ -16,7 +16,25 @@ from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultE
 from ag2.testing import TestConfig
 from ag2.tools import LocalEnvironment, SandboxShellTool
 from ag2.tools.sandbox import ExecResult, SandboxFactory
-from ag2.tools.sandbox.filter import check_ignore, matches
+from ag2.tools.sandbox.filter import check_ignore, contains_shell_operator, matches
+
+
+class TestContainsShellOperator:
+    def test_unquoted_operator_is_found(self) -> None:
+        assert contains_shell_operator("echo x; id") is True
+
+    def test_quoted_operator_is_literal(self) -> None:
+        assert contains_shell_operator("grep 'a|b' f") is False
+        assert contains_shell_operator('echo "a && b" "$(c)"') is False
+
+    def test_escaped_operator_is_literal(self) -> None:
+        assert contains_shell_operator("echo a\\;b") is False
+
+    def test_operator_after_a_closed_quote_is_found(self) -> None:
+        assert contains_shell_operator("echo 'a'; id") is True
+
+    def test_unbalanced_quote_hides_the_rest(self) -> None:
+        assert contains_shell_operator("echo 'a; id") is False
 
 
 class TestMatches:
@@ -380,6 +398,22 @@ class TestShellExecution:
         schemas = await shell.schemas(None)  # type: ignore[arg-type]
         description = schemas[0].function.description
         assert str(tmp_path) in description, f"workdir not in description: {description!r}"
+
+    @pytest.mark.asyncio
+    async def test_restricted_description_says_there_is_no_shell(self, tmp_path: Path) -> None:
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), readonly=True)
+
+        schemas = await shell.schemas(None)  # type: ignore[arg-type]
+        description = schemas[0].function.description
+        assert "without a shell" in description
+        assert str(tmp_path) in description
+
+    @pytest.mark.asyncio
+    async def test_custom_description_is_kept_in_restricted_mode(self, tmp_path: Path) -> None:
+        shell = SandboxShellTool(LocalEnvironment(tmp_path), readonly=True, description="Inspect {workdir}")
+
+        schemas = await shell.schemas(None)  # type: ignore[arg-type]
+        assert schemas[0].function.description == f"Inspect {tmp_path}"
 
 
 class _LoopRecordingSandbox:

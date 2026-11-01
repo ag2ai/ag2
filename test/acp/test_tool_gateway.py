@@ -67,6 +67,17 @@ def test_partition_translates_mcp_server_tool() -> None:
     assert header_map["Authorization"] == "Bearer tok123"
 
 
+def test_partition_sends_one_authorization_header() -> None:
+    tool = MCPServerToolSchema(
+        server_url="https://mcp.example.com/mcp",
+        server_label="ext",
+        authorization_token="fallback",
+        headers={"authorization": "Bearer explicit"},
+    )
+    _, (server,) = partition_tools([tool])
+    assert [(h.name, h.value) for h in server.headers] == [("authorization", "Bearer explicit")]
+
+
 @pytest.mark.parametrize(
     "filters",
     [

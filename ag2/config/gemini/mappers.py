@@ -25,7 +25,7 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
-from ag2.files.types import FileProvider
+from ag2.files.types import FileProvider, UploadedFile
 from ag2.response import ResponseProto
 from ag2.tools.builtin.code_execution import CodeExecutionToolSchema
 from ag2.tools.builtin.file_search import FILE_SEARCH_TOOL_NAME, FileSearchToolSchema
@@ -273,9 +273,12 @@ def convert_messages(
             if message.message:
                 parts.append(types.Part.from_text(text=message.message.content))
             for call in message.tool_calls.calls:
-                fc_part = types.Part.from_function_call(
-                    name=call.name,
-                    args=json.loads(call.arguments or "{}"),
+                fc_part = types.Part(
+                    function_call=types.FunctionCall(
+                        id=call.id,
+                        name=call.name,
+                        args=json.loads(call.arguments or "{}"),
+                    ),
                 )
                 if isinstance(call, GeminiToolCallEvent) and call.thought_signature is not None:
                     fc_part.thought_signature = call.thought_signature
@@ -320,10 +323,13 @@ def convert_messages(
                     response_dict = {}
 
                 parts_list.append(
-                    types.Part.from_function_response(
-                        name=r.name or "",
-                        response=response_dict,
-                        parts=media_parts or None,
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            id=r.parent_id,
+                            name=r.name or "",
+                            response=response_dict,
+                            parts=media_parts or None,
+                        ),
                     )
                 )
             result.append(types.Content(role="user", parts=parts_list))
@@ -345,9 +351,13 @@ def convert_messages(
                         request_parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
 
                 elif isinstance(inp, FileIdInput):
-                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.GEMINI:
+                    if (
+                        isinstance(inp, UploadedFile)
+                        and inp.provider is not None
+                        and inp.provider is not FileProvider.GEMINI
+                    ):
                         raise UnsupportedInputError(
-                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
+                            f"file uploaded via '{inp.provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
                             "gemini",
                         )
                     file_uri = f"https://generativelanguage.googleapis.com/v1beta/{inp.file_id}"
@@ -379,9 +389,22 @@ def normalize_usage(metadata: types.GenerateContentResponseUsageMetadata) -> Usa
     # Read through getattr although the annotation declares the field: test_gemini_usage pins
     # the behaviour for a google-genai below the declared floor, where it is absent.
     thinking = _to_float(getattr(metadata, "thoughts_token_count", None)) or None
+    # Tokens a tool's output put into the prompt (grounding, code execution) are
+    # billed as prompt but counted apart, and the total counts them: leaving
+    # them out would put prompt plus completion below it. Absent before
+    # google-genai added the field, like `thoughts_token_count`.
+    prompt = _to_float(metadata.prompt_token_count)
+    tool_use_prompt = _to_float(getattr(metadata, "tool_use_prompt_token_count", None))
+    if tool_use_prompt is not None:
+        prompt = (prompt or 0.0) + tool_use_prompt
+    completion = _to_float(metadata.candidates_token_count)
+    # Gemini reports thoughts beside candidates; completion includes both,
+    # with thinking_tokens retained as the reasoning breakdown.
+    if thinking is not None:
+        completion = (completion or 0.0) + thinking
     return Usage(
-        prompt_tokens=_to_float(metadata.prompt_token_count),
-        completion_tokens=_to_float(metadata.candidates_token_count),
+        prompt_tokens=prompt,
+        completion_tokens=completion,
         total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,
         thinking_tokens=thinking,

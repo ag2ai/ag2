@@ -23,7 +23,7 @@ import logging
 import math
 import os
 import time
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import partial
@@ -428,7 +428,7 @@ def _wilson_ci(phat: float, n: int, z: float = _Z_95) -> tuple[float, float]:
     return (max(0.0, center - margin), min(1.0, center + margin))
 
 
-def _cohen_kappa(pairs: list[tuple[str, str]]) -> float:
+def _cohen_kappa(pairs: Sequence[tuple[str, str]]) -> float:
     """Chance-corrected agreement between two raters over labels a/b/tie."""
     n = len(pairs)
     if n == 0:

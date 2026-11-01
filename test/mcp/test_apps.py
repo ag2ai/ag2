@@ -507,6 +507,17 @@ class TestDegradation:
 
         assert _body(read.contents[0]) == "<p>north:mug:True</p>"
 
+    async def test_document_provider_keeps_a_defaulted_parameter(self) -> None:
+        async def body(limit: int = 5) -> str:
+            return f"<p>{limit}</p>"
+
+        app = MCPApp("ui://shop/card", body, inject_runtime=False)
+
+        async with connect(MCPServer(make_agent(), apps=[app])) as session:
+            read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == "<p>5</p>"
+
     async def test_a_modern_client_that_advertised_sees_the_binding(self) -> None:
         server = MCPServer(make_agent(), apps=[_card_app()])
 

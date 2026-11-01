@@ -74,6 +74,8 @@ VideoMediaType: TypeAlias = Literal[
 
 MediaType: TypeAlias = AudioMediaType | ImageMediaType | DocumentMediaType | VideoMediaType
 
+RequestOrigin: TypeAlias = Literal["user", "service"]
+
 ClassInfo: TypeAlias = type | types.UnionType | tuple["ClassInfo", ...]
 
 

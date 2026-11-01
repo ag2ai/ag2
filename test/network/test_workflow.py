@@ -18,6 +18,9 @@ Two layers:
   adapter and recovers ``expected_next_speaker`` deterministically.
 """
 
+from dataclasses import dataclass
+from typing import ClassVar
+
 import pytest
 
 from ag2 import Agent
@@ -225,11 +228,45 @@ class TestTransitionGraphSerialization:
         with pytest.raises(WorkflowGraphError, match="no transition condition"):
             TransitionGraph.loads(bad)
 
+    def test_transitions_null_loads_as_empty(self) -> None:
+        data = {
+            "initial_speaker": "alice",
+            "transitions": None,
+            "default_target": {"name": "terminate", "args": {"reason": "x"}},
+            "max_turns": None,
+        }
+        restored = TransitionGraph.loads(data)
+        assert restored.transitions == []
+
+    def test_target_args_null_loads_defaults(self) -> None:
+        data = {
+            "initial_speaker": "alice",
+            "transitions": [],
+            "default_target": {"name": "round_robin", "args": None},
+            "max_turns": None,
+        }
+        restored = TransitionGraph.loads(data)
+        assert restored.default_target == RoundRobinTarget()
+
+    def test_condition_args_null_loads_defaults(self) -> None:
+        data = {
+            "initial_speaker": "alice",
+            "transitions": [
+                {
+                    "when": {"name": "always", "args": None},
+                    "then": {"name": "stay", "args": {}},
+                    "priority": 0,
+                }
+            ],
+            "default_target": {"name": "terminate", "args": {"reason": "x"}},
+            "max_turns": None,
+        }
+        restored = TransitionGraph.loads(data)
+        assert restored.transitions[0].when == Always()
+
 
 class TestRegistry:
     def test_register_custom_target_extends_serialization(self) -> None:
-        from dataclasses import dataclass
-        from typing import ClassVar
 
         @dataclass(slots=True)
         class WhenIdle:

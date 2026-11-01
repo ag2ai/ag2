@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, TypeAlias, overload
 
 from fast_depends.core import CallModel
@@ -23,7 +24,7 @@ from ag2.middleware import (
 )
 from ag2.tools.schemas import ToolSchema
 from ag2.tools.tool import Tool
-from ag2.utils import CONTEXT_OPTION_NAME, build_model
+from ag2.utils import CONTEXT_OPTION_NAME, _validate_timeout, build_model
 
 FunctionParameters: TypeAlias = dict[str, Any]
 
@@ -55,6 +56,7 @@ class FunctionTool(Tool):
         "model",
         "name",
         "schema",
+        "timeout",
         "_middleware",
     )
 
@@ -65,8 +67,11 @@ class FunctionTool(Tool):
         name: str,
         description: str,
         schema: FunctionParameters,
+        timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
+        _validate_timeout(timeout)
+        self.timeout = timeout
         self.model = model
         self._middleware: tuple[ToolMiddleware, ...] = tuple(middleware)
 
@@ -79,6 +84,14 @@ class FunctionTool(Tool):
         )
 
         self.name = name
+
+    @property
+    def source(self) -> str:
+        """The implementation behind this tool: its function and the name it is called by."""
+        call = self.model.call
+        module = getattr(call, "__module__", None) or type(call).__module__
+        qualname = getattr(call, "__qualname__", None) or type(call).__qualname__
+        return f"function:{module}:{qualname}:{self.name}"
 
     @property
     def middleware(self) -> tuple[DescribedMiddleware, ...]:
@@ -125,16 +138,25 @@ class FunctionTool(Tool):
             execution = _wrap_middleware(mw.on_tool_execution, execution)
 
         async def execute(event: "ToolCallEvent", context: "Context") -> None:
-            result = await execution(event, context)
+            result = await execution(event.handled_by(self.source), context)
             await context.send(result)
 
         stack.enter_context(context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(execute))
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent":
+        # _execute converts the tool's own TimeoutError into a result, so only
+        # expiry of this invocation's deadline gets the message below.
+        try:
+            return await asyncio.wait_for(self._execute(event, context), timeout=self.timeout)
+        except asyncio.TimeoutError:
+            error = TimeoutError(f"Tool {self.name!r} timed out after {self.timeout} seconds")
+            return ToolErrorEvent.from_call(event, error=error)
+
+    async def _execute(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent":
         try:
             async with AsyncExitStack() as stack:
                 result = await self.model.asolve(
-                    **(event.serialized_arguments | {CONTEXT_OPTION_NAME: context}),
+                    **(event.serialized_arguments | {CONTEXT_OPTION_NAME: replace(context, tool_call_id=event.id)}),
                     stack=stack,
                     cache_dependencies={},
                     dependency_provider=context.dependency_provider,
@@ -160,6 +182,7 @@ def tool(
     description: str | None = None,
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
+    timeout: float | None = None,
     middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool: ...
 
@@ -172,6 +195,7 @@ def tool(
     description: str | None = None,
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
+    timeout: float | None = None,
     middleware: Iterable[ToolMiddleware] = (),
 ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
 
@@ -183,8 +207,17 @@ def tool(
     description: str | None = None,
     schema: FunctionParameters | None = None,
     sync_to_thread: bool = True,
+    timeout: float | None = None,
     middleware: Iterable[ToolMiddleware] = (),
 ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
+    """Expose a function as a tool, with an optional per-invocation timeout.
+
+    ``timeout`` is a finite positive number of seconds, or ``None`` to wait
+    indefinitely. It covers the function and its dependencies, outside middleware.
+    Expiry returns a ``ToolErrorEvent``; cancelling a synchronous tool's await
+    does not stop the worker thread.
+    """
+
     def make_tool(f: Callable[..., Any]) -> FunctionTool:
         call_model = build_model(
             f,
@@ -197,6 +230,7 @@ def tool(
             name=name or f.__name__,
             description=description or f.__doc__ or "",
             schema=_normalize_parameters(schema, call_model),
+            timeout=timeout,
             middleware=middleware,
         )
 

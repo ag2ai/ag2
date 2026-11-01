@@ -5,6 +5,7 @@
 import base64
 import os
 import shutil
+import stat
 import sys
 from collections.abc import Iterable
 from pathlib import Path
@@ -110,7 +111,10 @@ class FilesystemToolkit(Toolkit):
         base_path: str | os.PathLike[str] | None = None,
         *,
         name: str = "find_files",
-        description: str = "Search for files matching a glob pattern. Use recursive patterns like '**/*.py' to search subdirectories.",
+        description: str = (
+            "Search for files matching a glob pattern. Use recursive patterns like '**/*.py' to search subdirectories. "
+            "Symlinks are listed by their own path, even when they point to a directory, outside the workspace, or nowhere."
+        ),
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         base_dir = _resolve_dir(base_path, self.base_dir)
@@ -127,7 +131,8 @@ class FilesystemToolkit(Toolkit):
             ),
         ) -> list[str]:
             target = _resolve_path(base_dir, path)
-            return sorted(str(p.relative_to(base_dir)) for p in _glob(target, pattern))
+            _check_pattern(pattern)
+            return sorted(str(p.relative_to(base_dir)) for p in _glob(target, pattern) if _is_within(base_dir, p))
 
         return _find_files
 
@@ -196,6 +201,11 @@ class FilesystemToolkit(Toolkit):
             # Without this, the read/write pair on Windows would silently
             # transcode the file into cp1252 every time the model edits it.
             text = target.read_text(encoding="utf-8")
+            # "" matches at index 0 of any text, so on a non-empty file it would
+            # silently prepend new_content. On an empty file it is the valid way
+            # to fill a freshly created file.
+            if not old_content and text:
+                raise ValueError("old_content must not be empty unless the file is empty")
             if old_content not in text:
                 raise ValueError(f"old_content not found in {path}")
             target.write_text(text.replace(old_content, new_content, 1), encoding="utf-8")
@@ -208,7 +218,7 @@ class FilesystemToolkit(Toolkit):
         base_path: str | os.PathLike[str] | None = None,
         *,
         name: str = "delete_file",
-        description: str = "Delete a file or directory.",
+        description: str = "Delete a file or directory. A symlink is removed itself; its target is left untouched.",
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool:
         base_dir = _resolve_dir(base_path, self.base_dir)
@@ -220,7 +230,17 @@ class FilesystemToolkit(Toolkit):
                 Field(description="Relative path to the file or directory to delete."),
             ],
         ) -> str:
+            entry = base_dir / path
+            if _is_link(entry):
+                # Unlinking touches only the link itself, so it is the link's
+                # location that must stay within the base, not its target.
+                _check_within(base_dir, entry.parent.resolve(), path)
+                entry.unlink()
+                return f"Successfully deleted {path}"
+
             target = _resolve_path(base_dir, path)
+            if target == base_dir:
+                raise PermissionError(f"Path '{path}' refers to the base directory itself")
             if target.is_dir():
                 shutil.rmtree(target)
             else:
@@ -243,16 +263,52 @@ def _resolve_dir(
 def _resolve_path(base: Path, path: str) -> Path:
     """Resolve *path* relative to *base* and verify it stays within *base*."""
     resolved = (base / path).resolve()
-    if not resolved.is_relative_to(base):
-        raise PermissionError(f"Path '{path}' escapes base directory '{base}'")
+    _check_within(base, resolved, path)
     return resolved
+
+
+def _check_within(base: Path, resolved: Path, path: str) -> None:
+    """Reject *resolved* (the resolution of the requested *path*) if it lies outside *base*."""
+    # The message reaches the model, so it names only the requested path, not the host location of *base*.
+    if not resolved.is_relative_to(base):
+        raise PermissionError(f"Path '{path}' escapes base directory")
+
+
+def _is_within(base: Path, path: Path) -> bool:
+    """Return True if *path* stays within *base*: a link by its own location, anything else by its target."""
+    resolved = path.parent.resolve() if _is_link(path) else path.resolve()
+    return resolved.is_relative_to(base)
+
+
+def _is_listed(path: Path) -> bool:
+    """Return True for the entries ``find_files`` reports: regular files and links of any kind."""
+    return path.is_file() or _is_link(path)
+
+
+def _is_link(path: Path) -> bool:
+    """Return True for a symlink or a Windows directory junction, without following it."""
+    if path.is_symlink():
+        return True
+    if sys.platform != "win32":
+        return False
+    try:
+        return path.lstat().st_reparse_tag == stat.IO_REPARSE_TAG_MOUNT_POINT
+    except OSError:
+        return False
+
+
+def _check_pattern(pattern: str) -> None:
+    """Reject a glob *pattern* that could walk outside the search directory."""
+    parts = Path(pattern)
+    if parts.anchor or ".." in parts.parts:
+        raise PermissionError(f"Pattern '{pattern}' escapes base directory")
 
 
 if sys.version_info >= (3, 13):
 
     def _glob(target: Path, pattern: str) -> Iterable[Path]:
         """Yield files matching *pattern* under *target* with consistent behavior across Python versions."""
-        return (p for p in target.glob(pattern) if p.is_file())
+        return (p for p in target.glob(pattern) if _is_listed(p))
 
 else:
 
@@ -263,14 +319,14 @@ else:
         - ``**`` matches zero directory segments (e.g. ``**/*.py`` matches root-level ``.py`` files).
         - A trailing ``**`` matches files, not only directories.
         """
-        results = {p for p in target.glob(pattern) if p.is_file()}
+        results = {p for p in target.glob(pattern) if _is_listed(p)}
         if "**" in pattern:
             prefix, suffix = pattern.split("**", 1)
             suffix = suffix.lstrip("/")
             prefix_dir = target / prefix if prefix else target
             if prefix_dir.is_dir():
                 if suffix:
-                    results.update(p for p in prefix_dir.glob(suffix) if p.is_file())
+                    results.update(p for p in prefix_dir.glob(suffix) if _is_listed(p))
                 else:
-                    results.update(p for p in prefix_dir.rglob("*") if p.is_file())
+                    results.update(p for p in prefix_dir.rglob("*") if _is_listed(p))
         return results

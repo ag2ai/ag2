@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable
 from copy import copy
 from types import EllipsisType
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, get_args
 
 from typing_extensions import dataclass_transform
 
@@ -17,7 +17,7 @@ from .conditions import Condition, NotCondition, OpCondition, OrCondition, TypeC
 try:
     import annotationlib as _annotationlib
 except ImportError:
-    _annotationlib = None  # type: ignore[assignment]
+    _annotationlib = None
 
 
 _REPR_MAX_LEN = 80
@@ -50,7 +50,8 @@ def is_conversational(event: Any) -> bool:
     return not getattr(cls, "__transient__", False) and getattr(cls, "__conversational__", True)
 
 
-_REPLAY_ROLES = frozenset({"anchor", "turn"})
+_ReplayRole: TypeAlias = Literal["anchor", "turn"]
+_REPLAY_ROLES = frozenset(get_args(_ReplayRole))
 
 
 class ProviderReplay:
@@ -66,6 +67,9 @@ class ProviderReplay:
     assistant turn. Declared rather than inferred from the bases, so a turn carrier
     that happens to subclass ``ModelReasoning`` is not filed as an anchor.
     """
+
+    # Annotation only, so a subclass that forgets it still fails the check below.
+    __replay_role__: ClassVar[_ReplayRole]
 
     # No ``__transient__`` here on purpose: ``ModelReasoning`` is transient and would
     # shadow it under the natural base order, so subclasses declare their own.
@@ -83,7 +87,7 @@ class ProviderReplay:
             )
 
 
-class Field:
+class FieldInfo:
     # Set only on the copies ``__get__`` binds to an owner class.
     event_class: type
 
@@ -127,9 +131,11 @@ class Field:
     def __set__(self, instance: Any, value: Any) -> None:
         instance.__dict__[self.name] = value
 
+    # On the class a field compares into a condition (the DSL); `object` promises a `bool`.
     def __eq__(self, other: Any) -> Condition:  # type: ignore[override]
         return OpCondition(check_eq, self.name, other, self.event_class)
 
+    # On the class a field compares into a condition (the DSL); `object` promises a `bool`.
     def __ne__(self, other: Any) -> Condition:  # type: ignore[override]
         return OpCondition(operator.ne, self.name, other, self.event_class)
 
@@ -149,6 +155,38 @@ class Field:
         return OpCondition(operator.is_, self.name, other, self.event_class)
 
 
+if TYPE_CHECKING:
+    # A field's declared type is the type of its *value*, not of the descriptor
+    # that stands in for it, so a checker that saw ``FieldInfo`` here would reject
+    # every declaration. Declaring the specifier as a function returning ``Any`` is
+    # the shape ``dataclasses.field`` and pydantic's ``Field`` use in their stubs,
+    # for the same reason. ``default`` is keyword-only here although the runtime
+    # takes it positionally: a checker reads a field specifier's default by name
+    # only, so ``Field("")`` would silently make the field required.
+    def Field(  # noqa: N802 - the public name of the specifier; lowercase would rename the API
+        *,
+        default: Any = Ellipsis,
+        default_factory: Callable[[], Any] | EllipsisType = Ellipsis,
+        init: bool = True,
+        repr: bool = True,
+        compare: bool = True,
+        hash: bool | None = None,
+        kw_only: bool = True,
+    ) -> Any: ...
+
+else:
+    Field = FieldInfo
+
+
+# On the metaclass rather than on ``BaseEvent``: the decorator applied to a class
+# transforms that class's *subclasses*, so ``BaseEvent``'s own fields — ``created_at``
+# — never reached a subclass's synthesised ``__init__`` and every ``created_at=`` was
+# read as an unexpected keyword. Applied to the metaclass it transforms every class
+# built from it, ``BaseEvent`` included.
+@dataclass_transform(
+    kw_only_default=True,
+    field_specifiers=(Field,),
+)
 class _ConditionMeta(type):
     """Metaclass providing class-level condition operators (~, |, or_, not_)."""
 
@@ -174,7 +212,7 @@ _MISSING = object()
 
 def _process_fields(cls: type) -> None:
     """Process annotations and set up Field descriptors for a class."""
-    fields: dict[str, Field] = {}
+    fields: dict[str, FieldInfo] = {}
 
     # Get annotations in a Python 3.14+ compatible way (PEP 649: lazy annotation evaluation
     # means __annotations__ is no longer eagerly populated in the class namespace dict).
@@ -187,11 +225,11 @@ def _process_fields(cls: type) -> None:
     for field_name in annotations:
         raw = own_namespace.get(field_name, _MISSING)
         if raw is _MISSING:
-            field = Field()
-        elif isinstance(raw, Field):
+            field = FieldInfo()
+        elif isinstance(raw, FieldInfo):
             field = raw
         else:
-            field = Field(raw)
+            field = FieldInfo(raw)
 
         if not field.name:
             field.name = field_name
@@ -199,13 +237,10 @@ def _process_fields(cls: type) -> None:
         fields[field_name] = field
         setattr(cls, field_name, field)
 
+    # Stamped on every event class here and read back with `getattr`; `type` does not declare it.
     cls._event_fields_ = fields  # type: ignore[attr-defined]
 
 
-@dataclass_transform(
-    kw_only_default=True,
-    field_specifiers=(Field,),
-)
 class BaseEvent(metaclass=_ConditionMeta):
     # Subclasses may set ``__transient__ = True`` to mark themselves as
     # ephemeral streaming / lifecycle artifacts that should NOT be persisted

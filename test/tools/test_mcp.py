@@ -221,7 +221,7 @@ async def test_prefixes_keep_two_servers_exposing_the_same_tool_name_apart(
     patch_mcp_session: MCPSessionPatch,
     context: Context,
 ) -> None:
-    """Without prefixes both proxies answer one call; with them, only the addressed one does."""
+    """With prefixes, only the addressed proxy answers a call."""
     session = patch_mcp_session([MCPTool(name="search", description="", inputSchema={"type": "object"})])
     github = MCPToolkit(MCPStdioServerConfig(command="github-mcp", tool_name_prefix="github_"))
     docs = MCPToolkit(MCPStdioServerConfig(command="docs-mcp", tool_name_prefix="docs_"))

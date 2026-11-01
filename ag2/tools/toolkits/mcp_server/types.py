@@ -26,7 +26,7 @@ class MCPServerConfig:
     """Where the server listens, as a full URL including the MCP endpoint path."""
 
     authorization_token: str | Variable | None = None
-    """Bearer token sent on every request to the server."""
+    """Bearer token sent unless ``headers`` already contains ``Authorization`` (case-insensitive)."""
 
     headers: dict[str, str] | Variable | None = None
     """Extra HTTP headers sent on every request, for anything a bearer token cannot carry."""

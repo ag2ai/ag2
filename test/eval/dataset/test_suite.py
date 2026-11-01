@@ -89,6 +89,38 @@ class TestFromList:
         assert suite.name == "weather-mini"
         assert suite.source == "inline"
 
+    def test_null_tags_and_metadata_default_to_empty(self) -> None:
+        suite = Suite.from_list([{"inputs": {"q": "x"}, "tags": None, "metadata": None}])
+
+        [task] = list(suite)
+        assert task.tags == ()
+        assert task.metadata == {}
+
+    def test_single_string_tag_is_not_split_into_characters(self) -> None:
+        suite = Suite.from_list([{"inputs": {"q": "x"}, "tags": "smoke"}])
+
+        [task] = list(suite)
+        assert task.tags == ("smoke",)
+
+    def test_invalid_tags_type_raises_with_task_index(self) -> None:
+        with pytest.raises(ValueError, match=r"task at index 1 has invalid 'tags'"):
+            Suite.from_list([{"inputs": {"q": "x"}}, {"inputs": {"q": "y"}, "tags": 5}])
+
+    @pytest.mark.parametrize("tags", [[1], ["valid", 2], [None], ["valid", False], ("valid", 3)])
+    def test_tags_with_non_string_elements_are_rejected(self, tags: list[object] | tuple[object, ...]) -> None:
+        with pytest.raises(ValueError, match=r"task at index 0 has invalid 'tags'"):
+            Suite.from_list([{"inputs": {"input": "hi"}, "tags": tags}])
+
+    def test_string_tuple_tags_are_allowed(self) -> None:
+        suite = Suite.from_list([{"inputs": {"input": "hi"}, "tags": ("smoke", "fast")}])
+
+        [task] = list(suite)
+        assert task.tags == ("smoke", "fast")
+
+    def test_invalid_metadata_type_raises_with_task_index(self) -> None:
+        with pytest.raises(ValueError, match=r"task at index 0 has invalid 'metadata'"):
+            Suite.from_list([{"inputs": {"q": "x"}, "metadata": "abc"}])
+
 
 class TestFromJsonl:
     def test_loads_one_task_per_line(self, tmp_path: Path) -> None:
@@ -155,6 +187,55 @@ class TestFromJsonl:
         path.write_text("[1, 2, 3]\n", encoding="utf-8")
 
         with pytest.raises(ValueError, match="must be a JSON object"):
+            Suite.from_jsonl(path)
+
+    def test_null_tags_and_metadata_in_jsonl(self, tmp_path: Path) -> None:
+        path = tmp_path / "dataset.jsonl"
+        path.write_text(
+            json.dumps({"inputs": {"q": "x"}, "tags": None, "metadata": None}) + "\n",
+            encoding="utf-8",
+        )
+
+        suite = Suite.from_jsonl(path)
+
+        [task] = list(suite)
+        assert task.tags == ()
+        assert task.metadata == {}
+
+    def test_jsonl_rejects_non_string_tags(self, tmp_path: Path) -> None:
+        path = tmp_path / "dataset.jsonl"
+        path.write_text(
+            json.dumps({"inputs": {"input": "hi"}, "tags": ["valid", 2]}) + "\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match=r"task at index 0 has invalid 'tags'"):
+            Suite.from_jsonl(path)
+
+    def test_leading_bom_is_stripped(self, tmp_path: Path) -> None:
+        path = tmp_path / "bom.jsonl"
+        path.write_text(
+            "\ufeff"
+            + "\n".join([
+                json.dumps({"task_id": "a", "inputs": {"input": "1"}}),
+                json.dumps({"task_id": "b", "inputs": {"input": "2"}}),
+            ])
+            + "\n",
+            encoding="utf-8",
+        )
+
+        suite = Suite.from_jsonl(path)
+
+        assert [(t.task_id, t.inputs) for t in suite] == [("a", {"input": "1"}), ("b", {"input": "2"})]
+
+    def test_bom_after_the_first_line_is_still_invalid(self, tmp_path: Path) -> None:
+        path = tmp_path / "dataset.jsonl"
+        path.write_text(
+            json.dumps({"inputs": {"input": "1"}}) + "\n\ufeff" + json.dumps({"inputs": {"input": "2"}}) + "\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="line 2"):
             Suite.from_jsonl(path)
 
 

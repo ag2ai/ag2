@@ -8,10 +8,20 @@ from .client import LLMClient
 from .config import ModelConfig, ModelProvider
 
 try:
-    from .openai import ContainerInfo, ContainerManager, ExpiresAfter, OpenAIConfig, OpenAIResponsesConfig
+    from .openai import (
+        ContainerInfo,
+        ContainerManager,
+        ExpiresAfter,
+        OpenAICompletionsConfig,
+        OpenAIConfig,
+        OpenAIDecisionsConfig,
+        OpenAIResponsesConfig,
+    )
 except ImportError as e:
+    OpenAICompletionsConfig = missing_optional_dependency("OpenAICompletionsConfig", "openai", e)  # type: ignore[misc]
     OpenAIConfig = missing_optional_dependency("OpenAIConfig", "openai", e)  # type: ignore[misc]
     OpenAIResponsesConfig = missing_optional_dependency("OpenAIResponsesConfig", "openai", e)  # type: ignore[misc]
+    OpenAIDecisionsConfig = missing_optional_dependency("OpenAIDecisionsConfig", "openai", e)  # type: ignore[misc]
     ContainerManager = missing_optional_dependency("ContainerManager", "openai", e)  # type: ignore[misc]
     ContainerInfo = missing_optional_dependency("ContainerInfo", "openai", e)  # type: ignore[misc]
     ExpiresAfter = missing_optional_dependency("ExpiresAfter", "openai", e)  # type: ignore[misc]
@@ -48,6 +58,11 @@ except ImportError as e:
     OllamaConfig = missing_optional_dependency("OllamaConfig", "ollama", e)  # type: ignore[misc]
 
 try:
+    from .typesafe import TypeSafeConfig
+except ImportError as e:
+    TypeSafeConfig = missing_optional_dependency("TypeSafeConfig", "typesafe", e)  # type: ignore[misc]
+
+try:
     from .xai import XAIConfig
 except ImportError as e:
     XAIConfig = missing_optional_dependency("XAIConfig", "xai", e)  # type: ignore[misc]
@@ -70,8 +85,11 @@ __all__ = (
     "ModelConfig",
     "ModelProvider",
     "OllamaConfig",
+    "OpenAICompletionsConfig",
     "OpenAIConfig",
+    "OpenAIDecisionsConfig",
     "OpenAIResponsesConfig",
+    "TypeSafeConfig",
     "VertexAIConfig",
     "XAIConfig",
     "ZAIConfig",

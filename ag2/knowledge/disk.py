@@ -82,8 +82,10 @@ class _DiskChangeHandler:
     def on_moved(self, event: Any) -> None:
         if getattr(event, "is_directory", False):
             return
+        self._dispatch(event.src_path)
         dest = getattr(event, "dest_path", None) or event.src_path
-        self._dispatch(dest)
+        if dest != event.src_path:
+            self._dispatch(dest)
 
     def dispatch(self, event: Any) -> None:
         """watchdog's entry point. Delegates to the per-type hooks above."""
@@ -148,7 +150,7 @@ class DiskKnowledgeStore:
         """Map virtual path to real filesystem path."""
         normalized = _normalize(path).lstrip("/")
         resolved = (self._root / normalized).resolve() if normalized else self._root.resolve()
-        if not str(resolved).startswith(str(self._root.resolve())):
+        if not resolved.is_relative_to(self._root.resolve()):
             raise ValueError(f"Path traversal blocked: {path}")
         return resolved
 
@@ -175,12 +177,25 @@ class DiskKnowledgeStore:
                 children.append(entry.name)
         return children
 
+    def _prune_empty_parents(self, start: Path, root: Path) -> None:
+        """Remove empty directories from ``start`` up to, but never including, ``root``."""
+        current = start
+        while current != root and current.is_relative_to(root):
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     async def delete(self, path: str) -> None:
         target = self._resolve(path)
         if target.is_file():
             target.unlink()
         elif target.is_dir():
             shutil.rmtree(target)
+        else:
+            return
+        self._prune_empty_parents(target.parent, self._root.resolve())
 
     async def exists(self, path: str) -> bool:
         return self._resolve(path).exists()
@@ -214,12 +229,17 @@ class DiskKnowledgeStore:
         (inotify on Linux, FSEvents on macOS, ReadDirectoryChangesW on
         Windows). Falls back to :class:`PollingObserver` if the native
         backend cannot be initialized, and to :class:`NoopChangeSubscription`
-        if ``watchdog`` is not installed at all.
+        if ``watchdog`` is not installed at all. File paths are supported
+        by watching the parent directory and filtering events to the file.
         """
 
         virtual_path = _normalize(path)
         physical_target = self._resolve(virtual_path)
-        physical_target.mkdir(parents=True, exist_ok=True)
+        if physical_target.is_dir():
+            watch_root = physical_target
+        else:
+            physical_target.parent.mkdir(parents=True, exist_ok=True)
+            watch_root = physical_target.parent
 
         try:
             loop = asyncio.get_running_loop()
@@ -236,11 +256,11 @@ class DiskKnowledgeStore:
         observer: Any
         try:
             observer = Observer()
-            observer.schedule(handler, str(physical_target), recursive=True)
+            observer.schedule(handler, str(watch_root), recursive=True)
             observer.start()
         except Exception:
             observer = PollingObserver()
-            observer.schedule(handler, str(physical_target), recursive=True)
+            observer.schedule(handler, str(watch_root), recursive=True)
             observer.start()
 
         return _DiskChangeSubscription(observer)

@@ -6,11 +6,12 @@ from io import BytesIO
 from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
+from openai.types import FilePurpose
 
 from ag2.files.types import FileContent, FileProvider, UploadedFile, _created_at_to_float
 
 if TYPE_CHECKING:
-    from ag2.config.openai.config import OpenAIConfig, OpenAIResponsesConfig
+    from ag2.config.openai.config import OpenAICompletionsConfig, OpenAIResponsesConfig
 
 
 class OpenAIFilesClient:
@@ -18,7 +19,7 @@ class OpenAIFilesClient:
 
     __slots__ = ("_client",)
 
-    def __init__(self, config: "OpenAIConfig | OpenAIResponsesConfig") -> None:
+    def __init__(self, config: "OpenAICompletionsConfig | OpenAIResponsesConfig") -> None:
         self._client = AsyncOpenAI(
             api_key=config.api_key,
             organization=config.organization,
@@ -31,7 +32,7 @@ class OpenAIFilesClient:
             http_client=config.http_client,
         )
 
-    async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:
+    async def upload(self, data: bytes, filename: str, purpose: FilePurpose | None = None) -> UploadedFile:
         result = await self._client.files.create(
             file=(filename, BytesIO(data)),
             purpose=purpose or "assistants",
@@ -64,7 +65,7 @@ class OpenAIFilesClient:
                 purpose=f.purpose,
                 created_at=_created_at_to_float(f.created_at),
             )
-            for f in result.data
+            async for f in result
         ]
 
     async def delete(self, file_id: str) -> None:
