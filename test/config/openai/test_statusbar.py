@@ -8,16 +8,17 @@ from fast_depends.use import SerializerCls
 from ag2 import DataInput, ImageInput, TextInput, VideoInput
 from ag2.config.openai.mappers import convert_messages, events_to_responses_input
 from ag2.exceptions import UnsupportedInputError
-from test.statusbar_support import status_model_inputs
+from test.config._helpers import status_model_inputs
 
 
 @pytest.mark.asyncio
-async def test_dynamic_status_uses_completions_input_parts_and_preserves_tool_links() -> None:
+@pytest.mark.parametrize("persist", [False, True])
+async def test_status_uses_completions_input_parts_and_preserves_tool_links(persist: bool) -> None:
     messages = await status_model_inputs(
-        TextInput("status"), DataInput({"step": 1}), ImageInput("https://host/image.png")
+        TextInput("status"), DataInput({"step": 1}), ImageInput("https://host/image.png"), persist=persist
     )
 
-    assert convert_messages([], messages, SerializerCls) == [
+    expected = [
         {"role": "system", "content": ""},
         {"role": "user", "content": "start"},
         {
@@ -35,15 +36,19 @@ async def test_dynamic_status_uses_completions_input_parts_and_preserves_tool_li
             ],
         },
     ]
+    if persist:
+        expected.insert(2, expected[-1])
+    assert convert_messages([], messages, SerializerCls) == expected
 
 
 @pytest.mark.asyncio
-async def test_dynamic_status_uses_responses_input_parts_and_preserves_tool_links() -> None:
+@pytest.mark.parametrize("persist", [False, True])
+async def test_status_uses_responses_input_parts_and_preserves_tool_links(persist: bool) -> None:
     messages = await status_model_inputs(
-        TextInput("status"), DataInput({"step": 1}), ImageInput("https://host/image.png")
+        TextInput("status"), DataInput({"step": 1}), ImageInput("https://host/image.png"), persist=persist
     )
 
-    assert events_to_responses_input(messages, SerializerCls) == [
+    expected = [
         {"role": "user", "content": [{"type": "input_text", "text": "start"}]},
         {"type": "function_call", "call_id": "call-1", "name": "echo", "arguments": "{}"},
         {"type": "function_call_output", "call_id": "call-1", "output": "tool output"},
@@ -51,6 +56,9 @@ async def test_dynamic_status_uses_responses_input_parts_and_preserves_tool_link
         {"role": "user", "content": [{"type": "input_text", "text": '{"step":1}'}]},
         {"role": "user", "content": [{"type": "input_image", "image_url": "https://host/image.png"}]},
     ]
+    if persist:
+        expected[1:1] = expected[-3:]
+    assert events_to_responses_input(messages, SerializerCls) == expected
 
 
 @pytest.mark.asyncio

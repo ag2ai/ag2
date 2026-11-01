@@ -10,12 +10,22 @@ from typing import Annotated, Any
 import pytest
 
 from ag2 import Agent, Context, DataInput, Depends, Inject, MemoryStream, TextInput, Variable
-from ag2.events import BaseEvent, Input, ModelRequest, ModelResponse, ToolCallEvent
+from ag2.events import (
+    BaseEvent,
+    Input,
+    ModelRequest,
+    ModelResponse,
+    ToolCallEvent,
+    ToolResultsEvent,
+    is_conversational,
+)
 from ag2.middleware import (
     BaseMiddleware,
+    HistoryLimiter,
     LLMCall,
     MiddlewareDescription,
     RetryMiddleware,
+    TokenLimiter,
     statusbar_middleware,
 )
 from ag2.plugin import Plugin
@@ -40,6 +50,14 @@ def request_texts(events: Sequence[BaseEvent]) -> list[str]:
         for part in event.parts
         if isinstance(part, TextInput)
     ]
+
+
+def status_parts(events: Sequence[BaseEvent]) -> list[Input]:
+    status = events[-1]
+    assert isinstance(status, ModelRequest)
+    assert status.origin == "service"
+    assert not is_conversational(status)
+    return status.parts
 
 
 @pytest.mark.asyncio
@@ -85,9 +103,9 @@ async def test_async_status_resolves_injected_variables_and_composed_dependencie
 
     await agent.ask("start", dependencies={"label": "job"})
 
-    assert [call.messages[-1] for call in config.calls] == [
-        ModelRequest([TextInput("job:0"), DataInput({"value": "job:0"})]),
-        ModelRequest([TextInput("job:1"), DataInput({"value": "job:1"})]),
+    assert [status_parts(call.messages) for call in config.calls] == [
+        [TextInput("job:0"), DataInput({"value": "job:0"})],
+        [TextInput("job:1"), DataInput({"value": "job:1"})],
     ]
 
 
@@ -99,7 +117,7 @@ async def test_status_uses_agent_dependency_overrides() -> None:
 
     await agent.ask("start", dependencies={"label": "job"})
 
-    assert config.calls[0].messages[-1] == ModelRequest([TextInput("job:0"), DataInput({"value": "override:job"})])
+    assert status_parts(config.calls[0].messages) == [TextInput("job:0"), DataInput({"value": "override:job"})]
 
 
 @statusbar_middleware
@@ -425,7 +443,7 @@ async def test_downstream_request_changes_do_not_mutate_callback_source_payload(
     reply = await agent.ask("start", dependencies={"value": value})
 
     assert value == DataInput({"steps": ["queued"]})
-    assert config.calls[0].messages[-1] == ModelRequest([DataInput({"steps": ["queued", "changed by downstream"]})])
+    assert status_parts(config.calls[0].messages) == [DataInput({"steps": ["queued", "changed by downstream"]})]
     assert request_texts(await reply.context.stream.history.get_events()) == ["start"]
 
 
@@ -450,3 +468,18 @@ async def test_callable_instance_uses_type_identity_in_description() -> None:
         config={"persist": False, "callback": f"{__name__}.CallableStatus"},
     )
     assert request_texts(config.calls[0].messages) == ["start", "instance"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("persist", [False, True])
+@pytest.mark.parametrize("limiter", [HistoryLimiter(max_events=3), TokenLimiter(max_tokens=1)])
+async def test_status_outside_history_limiter_keeps_the_tool_round_it_follows(persist: bool, limiter: Any) -> None:
+    config = TrackingConfig(TestConfig(ToolCallEvent("advance"), "done"))
+    status = statusbar_middleware(persist=persist)(lambda: TextInput("status"))
+    agent = Agent("status", config=config, middleware=[status, limiter], tools=[advance])
+
+    await agent.ask("start")
+
+    after_tool = config.calls[1].messages
+    assert any(isinstance(event, ToolResultsEvent) for event in after_tool)
+    assert request_texts(after_tool)[-1] == "status"

@@ -8,16 +8,17 @@ from fast_depends.use import SerializerCls
 from ag2 import DataInput, ImageInput, TextInput, VideoInput
 from ag2.config.anthropic.mappers import convert_messages
 from ag2.exceptions import UnsupportedInputError
-from test.statusbar_support import status_model_inputs
+from test.config._helpers import status_model_inputs
 
 
 @pytest.mark.asyncio
-async def test_dynamic_status_uses_anthropic_input_parts_and_preserves_tool_links() -> None:
+@pytest.mark.parametrize("persist", [False, True])
+async def test_status_uses_anthropic_input_parts_and_preserves_tool_links(persist: bool) -> None:
     messages = await status_model_inputs(
-        TextInput("status"), DataInput({"step": 1}), ImageInput(data=b"png", media_type="image/png")
+        TextInput("status"), DataInput({"step": 1}), ImageInput(data=b"png", media_type="image/png"), persist=persist
     )
 
-    assert convert_messages(messages, SerializerCls) == [
+    expected = [
         {"role": "user", "content": "start"},
         {"role": "assistant", "content": [{"type": "tool_use", "id": "call-1", "name": "echo", "input": {}}]},
         {
@@ -33,6 +34,9 @@ async def test_dynamic_status_uses_anthropic_input_parts_and_preserves_tool_link
             ],
         },
     ]
+    if persist:
+        expected.insert(1, expected[-1])
+    assert convert_messages(messages, SerializerCls) == expected
 
 
 @pytest.mark.asyncio

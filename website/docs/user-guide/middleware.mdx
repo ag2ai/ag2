@@ -33,7 +33,7 @@ In practice, you use middleware to:
 - normalize tool inputs or outputs
 - short-circuit or reshape a response
 
-## Dynamic status bars
+## Status bars
 
 Use `@statusbar_middleware` to append current application state to every model
 request, including the requests made after tools finish. The callback supports
@@ -81,7 +81,11 @@ media use the same provider conversion as ordinary input parts.
 
 Register status before `RetryMiddleware` to compute one snapshot for all attempts
 of that logical call. Putting retry first uses ordinary wrapper semantics and
-may compute status again for each attempt. Multiple status callbacks append in
+computes dynamic status again for each attempt. Never put a persistent status
+inside `RetryMiddleware`: its observation is published before the model call, so
+retry's publication guard sees output from the failed attempt and re-raises
+instead of retrying. With `persist=True`, retry effectively stops working in that
+order. Multiple status callbacks append in
 registration order; downstream middleware can still transform their input.
 
 DI is resolved on each logical call, and generator dependencies remain open
@@ -95,6 +99,58 @@ shared by concurrent conversations.
 Register the decorated callback through the existing `middleware` argument on
 an Agent, a Plugin, or an invocation. Invocation contributions apply to that
 turn; pass them again for a continuation that needs them.
+
+### Retain progress observations
+
+Set `persist=True` to preserve every nonempty result for later model calls.
+Equal results create separate records; return `None` or an empty sequence when
+no new observation is needed. Skipping an update keeps earlier records visible.
+
+```python linenums="1"
+import asyncio
+from typing import Annotated
+
+from ag2 import Agent, TextInput, Variable
+from ag2.config import OpenAIResponsesConfig
+from ag2.middleware import statusbar_middleware
+
+@statusbar_middleware(persist=True)
+def progress(phase: Annotated[str, Variable()]) -> TextInput:
+    return TextInput(f"Current phase: {phase}")
+
+agent = Agent("assistant", config=OpenAIResponsesConfig(model="gpt-5"))
+
+async def main():
+    reply = await agent.ask(
+        "Start the task", middleware=[progress], variables={"phase": "planning"}
+    )
+    return await reply.ask("Continue")
+
+asyncio.run(main())
+```
+
+The continuation still receives the saved planning observation, even though the
+invocation middleware no longer runs. Retained status lives in `StatusObservation`
+events, available from `ag2.events`, with ordered `parts` and callback `source`
+identity. These are service observations, not user requests or usage records.
+The model receives their parts through the normal user-content conversion, in
+their original history position. A new conversation starts with a fresh trail.
+
+Observations copy the callback's supported data when they are created. Changing
+the original container later cannot rewrite an earlier snapshot. They are
+published before calling the model: failed persistence stops that call, while a
+later provider failure or cancellation leaves an already committed observation
+in history. Retrying inside the middleware reuses that record.
+
+Persistent and dynamic callbacks can share one middleware list. Only persistent
+observations accumulate; current insertions follow registration order. Normal
+history reducers and compaction may remove observations. They do not count
+toward event-count compaction limits or enter summarization input, and no
+automatic refresh after removal is provided. Their tokens do count: every
+retained observation is resent on each call, so token limiters and
+`CompactTrigger(max_tokens=...)` include them. When a limiter trims history,
+status never stands in for a turn on its own, so the tool round it follows is
+kept with it.
 
 ## Middleware Hooks
 
