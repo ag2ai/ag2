@@ -231,6 +231,90 @@ async def test_update_file(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+async def test_update_file_preserves_line_endings(tmp_path: Path, newline: str) -> None:
+    target = tmp_path / "data.txt"
+    content = f"before{newline}old{newline}old{newline}after{newline}"
+    target.write_bytes(content.encode("utf-8"))
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(
+                name="update_file",
+                arguments=json.dumps({"path": "data.txt", "old_content": "old", "new_content": "新"}),
+            ),
+            "done",
+        ),
+        tools=[FilesystemToolkit(base_path=tmp_path)],
+    )
+
+    await agent.ask("update it")
+
+    assert target.read_bytes() == content.replace("old", "新", 1).encode("utf-8")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("newline", ["\r\n", "\r"])
+async def test_update_file_matches_exact_multiline_content(tmp_path: Path, newline: str) -> None:
+    target = tmp_path / "data.txt"
+    old = f"first{newline}second"
+    content = f"before\n{old}\r\nafter\r"
+    target.write_bytes(content.encode("utf-8"))
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(
+                name="update_file",
+                arguments=json.dumps({"path": "data.txt", "old_content": old, "new_content": "new\nline"}),
+            ),
+            "done",
+        ),
+        tools=[FilesystemToolkit(base_path=tmp_path)],
+    )
+
+    await agent.ask("update it")
+
+    assert target.read_bytes() == content.replace(old, "new\nline", 1).encode("utf-8")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+async def test_read_file_preserves_line_endings(tmp_path: Path, newline: str) -> None:
+    content = f"first{newline}second{newline}"
+    (tmp_path / "data.txt").write_bytes(content.encode("utf-8"))
+    tracking = TrackingConfig(
+        TestConfig(
+            ToolCallEvent(name="read_file", arguments=json.dumps({"path": "data.txt"})),
+            "done",
+        )
+    )
+    agent = Agent("", config=tracking, tools=[FilesystemToolkit(base_path=tmp_path)])
+
+    await agent.ask("read it")
+
+    result: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
+    assert result.results[0].result.parts[0].content == content
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+async def test_write_file_preserves_explicit_line_endings(tmp_path: Path, newline: str) -> None:
+    content = f"first{newline}second{newline}"
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="write_file", arguments=json.dumps({"path": "data.txt", "content": content})),
+            "done",
+        ),
+        tools=[FilesystemToolkit(base_path=tmp_path)],
+    )
+
+    await agent.ask("write it")
+
+    assert (tmp_path / "data.txt").read_bytes() == content.encode("utf-8")
+
+
+@pytest.mark.asyncio
 async def test_update_file_rejects_empty_old_content_on_non_empty_file(tmp_path: Path) -> None:
     target = tmp_path / "data.txt"
     target.write_text("original", encoding="utf-8")
