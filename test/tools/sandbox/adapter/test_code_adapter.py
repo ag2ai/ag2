@@ -21,10 +21,10 @@ class TestCodeAdapterInline:
             adapter = CodeAdapter(
                 sandbox, languages=("python",), runners={"python": LanguageRunner(inline_argv=(sys.executable, "-c"))}
             )
-            result = await adapter.run("import os; os.write(2, b'error: \\xff'); raise SystemExit(7)", "python")
+            result = await adapter.run("import os; os.write(2, b'error: \\x81'); raise SystemExit(7)", "python")
 
         assert result == CodeRunResult(
-            output=b"error: \xff".decode(locale.getpreferredencoding(False), errors="replace"), exit_code=7
+            output=b"error: \x81".decode(locale.getpreferredencoding(False), errors="replace"), exit_code=7
         )
 
     async def test_python_runs_inline(self, tmp_path: Path) -> None:

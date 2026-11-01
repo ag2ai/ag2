@@ -17,7 +17,7 @@ class TestLocalSandboxExec:
     @pytest.mark.parametrize("fd", [1, 2])
     @pytest.mark.parametrize("exit_code", [0, 7])
     async def test_undecodable_output_keeps_text_and_exit_code(self, tmp_path: Path, fd: int, exit_code: int) -> None:
-        payload = b"before\xffafter\n"
+        payload = b"before\x81after\n"
         async with LocalSandbox(tmp_path) as sandbox:
             result = await sandbox.exec([
                 sys.executable,
