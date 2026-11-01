@@ -18,6 +18,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 import acp
+from acp import schema
 
 from ag2.agent import Agent
 from ag2.context import ConversationContext
@@ -240,7 +241,11 @@ class AgentExecutor:
         final = getattr(message, "content", "") or ""
         if not final or final == "".join(delivered):
             return
-        await self._deliver(acp.update_agent_message_text(final), client=client, session_id=session_id)
+        await self._deliver(
+            schema.AgentMessageChunk(content=schema.TextContentBlock(type="text", text=final)),
+            client=client,
+            session_id=session_id,
+        )
 
     async def deliver(self, updates: "Iterable[SessionUpdate]", *, client: acp.Client, session_id: str) -> None:
         """Push ``updates`` to the Client in order, stopping at the first that fails.

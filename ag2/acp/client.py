@@ -12,7 +12,8 @@ Lifecycle: the framework calls ``config.create()`` once per ``AgentRun``, so the
 live ACP session is keyed by ``context.stream.id`` in a per-config registry and
 reused across the run's internal model-turns. A ``weakref.finalize`` on the
 stream terminates the subprocess if the run is dropped without an explicit
-``config.aclose()``. When the run's tools include function tools, a per-session
+``config.aclose()``, and the subprocess of a session still open when the event loop shuts
+down exits with it. When the run's tools include function tools, a per-session
 :class:`~.tool_gateway.ToolGateway` serves them to the agent over HTTP MCP; it
 lives and dies with the session.
 """
@@ -22,6 +23,7 @@ import logging
 import weakref
 from asyncio.subprocess import Process
 from collections.abc import Awaitable, Callable, Iterable, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import acp
@@ -140,10 +142,10 @@ class ACPClient:
             await session.ensure(
                 session.bridge,
                 connect=self.config._open_connection,
-                cwd=self.config.cwd,
+                cwd=str(Path(self.config.cwd).resolve()),
                 protocol_version=acp.PROTOCOL_VERSION,
                 client_capabilities=self._client_capabilities(),
-                additional_directories=self.config.additional_directories,
+                additional_directories=[str(Path(d).resolve()) for d in self.config.additional_directories],
                 model=self.config.model,
                 mcp_servers=mcp_servers or None,
                 agent_label=self.config._agent_label,
@@ -188,7 +190,7 @@ class ACPClient:
                 # ACP 0.11 dropped PromptRequest.message_id; extra kwargs would only
                 # end up in the request's `_meta`, so send none.
                 return await conn.prompt(
-                    prompt=blocks or [acp.text_block("")],
+                    prompt=blocks or [schema.TextContentBlock(type="text", text="")],
                     session_id=session_id,
                 )
             except self.config._transport_errors as e:
@@ -233,7 +235,11 @@ class ACPClient:
         # that cannot answer at all — exactly the case the warning below is for.
         model = session.model or self.config.model
 
-        if finish_reason == "end_turn" and not state.turn_text and not state.turn_files and not state.turn_worked:
+        replies = [ModelMessage(text) for text in state.turn_messages]
+        for reply in replies:
+            await context.send(reply)
+
+        if finish_reason == "end_turn" and not replies and not state.turn_files and not state.turn_worked:
             # The agent reported a clean finish yet emitted nothing at all. Some
             # CLI agents end a turn this way when the provider call failed on
             # their side (an unauthorized model, or one that cannot do text) —
@@ -248,7 +254,7 @@ class ACPClient:
             )
 
         return ModelResponse(
-            message=ModelMessage(state.turn_text),
+            message=replies[-1] if replies else None,
             usage=map_usage(response.usage if response is not None else None),
             files=state.turn_files,
             finish_reason=finish_reason,
