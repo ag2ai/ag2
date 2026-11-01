@@ -11,7 +11,16 @@ text verbatim, non-text parts by a flat per-modality token budget.
 from collections.abc import Iterator
 
 from .base import BaseEvent, is_conversational
-from .input_events import BinaryInput, BinaryType, DataInput, FileIdInput, ModelRequest, TextInput, UrlInput
+from .input_events import (
+    BinaryInput,
+    BinaryType,
+    DataInput,
+    FileIdInput,
+    ModelRequest,
+    StatusObservation,
+    TextInput,
+    UrlInput,
+)
 from .tool_events import ToolResultsEvent
 from .types import ModelResponse
 
@@ -57,7 +66,7 @@ def _part_pieces(parts: list) -> Iterator[_Piece]:
 
 
 def _content_pieces(event: BaseEvent) -> Iterator[_Piece]:
-    if isinstance(event, ModelRequest):
+    if isinstance(event, (ModelRequest, StatusObservation)):
         yield from _part_pieces(event.parts)
     elif isinstance(event, ToolResultsEvent):
         for r in event.results:
@@ -87,7 +96,9 @@ def estimated_tokens(event: BaseEvent, chars_per_token: int = 4) -> int:
     flat per-modality budget. A size heuristic, not an exact tokenizer.
     """
     # Telemetry never reaches the model, so it occupies no context budget.
-    if not is_conversational(event):
+    # Status does, though it is not conversation: stored observations and
+    # their request views count like any other input.
+    if not is_conversational(event) and not isinstance(event, (ModelRequest, StatusObservation)):
         return 0
     total = 0
     for kind, payload in _content_pieces(event):
