@@ -78,7 +78,7 @@ agent.task(
 | `payload` | `dict[str, Any] \| None` | Initial payload merged into `#!python TaskSpec`. |
 | `capability` | `str \| None` | Tags the task with a capability name; used by network mirrors. |
 | `ttl_seconds` | `int \| None` | Sets `#!python metadata.expires_at`. The Task does not self-expire — an external observer must call `#!python task.expire()` when the TTL elapses. |
-| `context` | `ConversationContext \| None` | If supplied, events flow on `#!python context.stream` and `#!python ag2.task` is stamped into `#!python context.dependencies` for the duration of the block. If omitted, the Task creates a private `#!python MemoryStream` on entry. |
+| `context` | `ConversationContext \| None` | If supplied, events flow on `#!python context.stream` and `#!python TaskInject` resolves to this task for the duration of the block. If omitted, the Task creates a private `#!python MemoryStream` on entry. |
 
 Returns an unentered `#!python Task`. Use as `#!python async with agent.task(...) as task:`.
 
@@ -158,19 +158,11 @@ async with agent.task("watched", context=ctx) as task:
 
 ## Reading the Active Task with `#!python TaskInject`
 
-Inside an `#!python async with agent.task(...)` block, the framework stamps the active Task into `#!python context.dependencies["ag2.task"]`. Two ways to read it:
-
-### Direct access
-
-```python linenums="1"
-async with agent.task("work", context=ctx) as task:
-    active = ctx.dependencies["ag2.task"]
-    assert active is task
-```
+Inside an `#!python async with agent.task(...)` block, `#!python TaskInject` resolves to the block's own task — per conversation and per asyncio task. Sibling tool calls that each open a task on the same conversation (one turn, several calls gathered concurrently) each resolve their **own** task, whatever the others do; a nested block resolves to the innermost enclosing task and restores the outer one on exit; a task opened on one conversation is not visible to `#!python TaskInject` on an unrelated conversation started inside its block. Two ways to read it:
 
 ### `#!python TaskInject` annotation
 
-`#!python TaskInject` is a fast_depends-resolvable annotation that injects the active Task into any function the dependency-injection machinery resolves — most usefully a `#!python @tool` body.
+`#!python TaskInject` is a fast_depends-resolvable annotation that injects the enclosing task into any function the dependency-injection machinery resolves — most usefully a `#!python @tool` body.
 
 ```python linenums="1" hl_lines="2 5"
 from ag2 import tool
@@ -184,7 +176,19 @@ async def report(message: str, task: TaskInject) -> str:
     return f"reported on task {task.task_id}"
 ```
 
-The injection has `#!python default=None`, so always treat `task` as possibly `#!python None` and null-check before use.
+The injection has `#!python default=None`, so always treat `task` as possibly `#!python None` and null-check before use. Code that is not a descendant of the block — a handler on another asyncio task, or an unrelated conversation — resolves `#!python None`, not the wrong task.
+
+### Direct access
+
+For direct readers of the dict, `#!python context.dependencies["ag2.task"]` also holds a task for the duration of the block:
+
+```python linenums="1"
+async with agent.task("work", context=ctx) as task:
+    active = ctx.dependencies["ag2.task"]
+    assert active is task
+```
+
+The slot is best-effort when tasks overlap: with sibling tool calls each opening a task on one conversation it can only name the most recently entered task still running. `#!python TaskInject` does not read it — prefer the annotation inside blocks.
 
 ## TTL and Expiry
 
