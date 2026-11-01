@@ -944,3 +944,28 @@ async def test_closed_artifact_id_can_be_reused_after_human_input(streaming: boo
     assert prompts == ["asked"]
     results = [e for e in await stream.history.get_events() if isinstance(e, ToolResultEvent)]
     assert [r.name for r in results] == (["step"] if with_tool else [])
+
+
+async def _text_then_same_artifact_call(updater: TaskUpdater, *, append: bool) -> None:
+    await updater.add_artifact(parts=[Part(text="old")], artifact_id="art")
+    await updater.add_artifact(parts=[_call_part("step")], artifact_id="art", append=append)
+    await updater.requires_input()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("streaming", [True, False], ids=["streaming", "polling"])
+@pytest.mark.parametrize(("append", "expected"), [(False, "old answer"), (True, " answer")], ids=["replace", "append"])
+async def test_tool_only_update_reconciles_the_previous_text(streaming: bool, append: bool, expected: str) -> None:
+    executor = ToolRoundTripExecutor(
+        partial(_text_then_same_artifact_call, append=append),
+        partial(_answer_in_reused_artifact, answer="old answer", append=False),
+    )
+    pair = make_executor_pair(executor, streaming=streaming)
+    client = Agent("client", config=pair.client.config, tools=[step])
+    stream = MemoryStream()
+
+    reply = await client.ask("go", stream=stream)
+
+    assert reply.response.content == expected
+    results = [event for event in await stream.history.get_events() if isinstance(event, ToolResultEvent)]
+    assert [result.name for result in results] == ["step"]

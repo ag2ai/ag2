@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-30
 ---
 
-# 0027. An A2A cancel that races the task's completion keeps the first terminal state
+# 0029. An A2A cancel that races the task's completion keeps the first terminal state
 
 ## Context
 

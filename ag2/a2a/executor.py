@@ -86,7 +86,7 @@ class _TaskWriter:
     lock is needed. The turn's own transitions and ``cancel`` both arrive as commands, since the
     SDK does not order ``cancel`` against ``execute``. Whichever terminal state is written first
     ends the task. A later transition is a no-op instead of the ``RuntimeError`` a ``TaskUpdater``
-    raises, which the SDK would turn into a FAILED written over the winner (ADR 0027). A poster
+    raises, which the SDK would turn into a FAILED written over the winner (ADR 0029). A poster
     waits until its command is written, even when it is cancelled meanwhile, because the SDK
     closes the event queue once ``execute`` returns. Once the writer has stopped, by shutdown or
     by cancellation, commands still queued and later ones are dropped, so no poster waits for it.
@@ -463,7 +463,7 @@ class AgentExecutor(A2AAgentExecutorBase):
         if writer := self._running.get(request_context.task_id or ""):
             await writer.cancel()
         # A request counts as running until its notifications are delivered, unless ``execute`` is
-        # cancelled, so a cancel after its ``INPUT_REQUIRED`` is still written above (ADR 0027).
+        # cancelled, so a cancel after its ``INPUT_REQUIRED`` is still written above (ADR 0029).
         # No request running: the task waits for input, or its turn just ended and the SDK has not yet
         # consumed that terminal event. Writing CANCELED here would land over the latter; the SDK
         # closes a task still open once ``cancel`` returns, after re-reading it, so leave it to that.

@@ -790,7 +790,7 @@ class A2AClient(LLMClient):
             return
 
         # A mixed artifact's text reconciles like a text artifact's; its calls dedup by call id.
-        if not isinstance(a2a_event, A2AToolCallArtifact) and (fresh := record.update(text, a2a_event.append)):
+        if fresh := record.update(text, a2a_event.append):
             await context.send(ModelMessageChunk(fresh))
         for call in calls:
             state.add_call(artifact_id, call)
