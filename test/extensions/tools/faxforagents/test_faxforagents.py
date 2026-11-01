@@ -13,9 +13,16 @@ from dirty_equals import IsPartialDict
 
 from ag2 import Agent, Context, DataInput
 from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
+from ag2.extensions.tools.faxforagents import (
+    FaxForAgentsError,
+    FaxForAgentsToolkit,
+    FaxQuote,
+    FaxStatus,
+    InboundFax,
+    InboxItem,
+    InboxPage,
+)
 from ag2.testing import TestConfig, TrackingConfig
-from ag2.tools import FaxForAgentsError, FaxForAgentsToolkit
-from ag2.tools.toolkits.faxforagents import FaxQuote, FaxStatus, InboundFax, InboxItem, InboxPage
 
 BASE = "https://api.faxforagents.com"
 KEY = "ffa_test_" + "a" * 43

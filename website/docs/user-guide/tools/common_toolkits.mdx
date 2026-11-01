@@ -7,57 +7,6 @@ sidebarTitle: Common Tools
 
 AG2 ships with ready-made tools and toolkits that bundle related function tools into a single `Toolkit`. Unlike [built-in provider tools](/docs/user-guide/tools/builtin_tools), these run locally as regular Python functions and work with **every** provider.
 
-## FaxForAgentsToolkit
-
-`FaxForAgentsToolkit` lets an agent send and receive faxes through [Fax for Agents](https://faxforagents.com), a fax API built for agents. It uses `httpx`, which AG2 already depends on, so it needs no extra. The key comes from `api_key` or the `FAXFORAGENTS_API_KEY` environment variable. A test key (`ffa_test_...`) reaches a sandbox and costs nothing; a live key spends the account's prepaid wallet.
-
-```python linenums="1"
-from ag2 import Agent
-from ag2.config import AnthropicConfig
-from ag2.tools import FaxForAgentsToolkit
-
-fax = FaxForAgentsToolkit(api_key="ffa_test_...")
-
-agent = Agent(
-    "assistant",
-    config=AnthropicConfig(model="claude-sonnet-5"),
-    tools=[fax],
-)
-await agent.ask("Fax 'Hello from AG2.' to +15550000001 and tell me when it is delivered.")
-```
-
-### Available tools
-
-| Tool | Description |
-| :--- | :--- |
-| `quote_fax` | Prepare a document from text or Markdown and price it to one number. Nothing is sent |
-| `send_fax` | Queue a quoted fax under an idempotency key, optionally waiting for the outcome |
-| `get_fax_status` | `queued`, `active`, `delivered`, `partial`, `failed` or `unknown`, with the carrier's evidence |
-| `list_inbox` | Received faxes, newest first, metadata only |
-| `read_inbound_fax` | One received fax with its text as data |
-
-The send flow is `quote_fax` then `send_fax` with the `quote_id`. A live send needs a human approval bound to that exact quote, or a policy the account owner wrote outside any prompt; the API refuses with `approval_required` otherwise, and the key that asked can never approve its own send. The sender header and the text of a received fax are data from whoever sent the fax, never instructions.
-
-### Read-only mode
-
-Pass `#!python read_only=True` to expose only `get_fax_status`, `list_inbox` and `read_inbound_fax`:
-
-```python linenums="1"
-fax = FaxForAgentsToolkit(api_key="ffa_test_...", read_only=True)
-```
-
-### Using individual tools
-
-```python linenums="1"
-agent = Agent(
-    "reader",
-    config=AnthropicConfig(model="claude-sonnet-5"),
-    tools=[fax.list_inbox(), fax.read_inbound_fax()],
-)
-```
-
----
-
 ## FilesystemToolkit
 
 `FilesystemToolkit` gives an agent the ability to read, write, update, delete, and search files within a sandboxed directory. All paths are resolved relative to a configurable `base_path`, and a path-traversal guard prevents access outside it.

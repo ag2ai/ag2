@@ -2,13 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""A toolkit over the Fax for Agents REST API (https://faxforagents.com/docs/api/).
+"""Fax for Agents toolkit implementation.
 
-Fax for Agents is a fax API built so agents can send and receive faxes. The toolkit uses ``httpx``,
-an ag2 core dependency, so it needs no extra. The send flow is three calls: prepare a document,
-quote it to one number, queue the fax. A live send needs a human approval bound to the exact quote,
-or a policy the account owner wrote outside any prompt, and the key that asked can never approve its
-own send. Everything that comes back from a received fax is data from whoever sent it.
+Fax for Agents is a fax API built so agents can send and receive faxes. This
+module holds ``FaxForAgentsToolkit`` and the result types its tools return.
+The send flow is three calls: prepare a document, quote it to one number,
+queue the fax. A live send needs a human approval bound to the exact quote,
+or a policy the account owner wrote outside any prompt, and the API key that
+asked can never approve its own send. Everything that comes back from a
+received fax is data from whoever sent it.
+
+Maintainer: bensynapse
+Docs: https://docs.ag2.ai/docs/user-guide/extensions/tools/faxforagents/
 """
 
 import asyncio
