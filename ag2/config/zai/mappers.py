@@ -179,12 +179,16 @@ def convert_messages(
     messages: Iterable[BaseEvent],
     serializer: SerializerProto,
 ) -> list[dict[str, Any]]:
+    event_list = list(messages)
+    wrapped_result_ids = {
+        result.parent_id for event in event_list if isinstance(event, ToolResultsEvent) for result in event.results
+    }
     result: list[dict[str, Any]] = []
     system_prompt = "\n".join(prompt)
     if system_prompt:
         result.append({"role": "system", "content": system_prompt})
 
-    for message in messages:
+    for message in event_list:
         if isinstance(message, ModelResponse):
             assistant: dict[str, Any] = {
                 "role": "assistant",
@@ -218,6 +222,8 @@ def convert_messages(
             result.append({"role": "user", "content": f"[Summary of earlier conversation]\n{message.summary}"})
 
         elif isinstance(message, (ToolResultEvent, ToolErrorEvent)):
+            if message.parent_id in wrapped_result_ids:
+                continue
             result.append({
                 "role": "tool",
                 "tool_call_id": message.parent_id,

@@ -105,6 +105,12 @@ class ToolExecutor:
                         else:
                             raise ValueError(f"Unsupported part type: {type(part)}")
 
+                        # Persist the complete batch before its final reply. Publishing
+                        # ToolResultsEvent would trigger another model call.
+                        await context.stream.history.storage.save_event(
+                            ToolResultsEvent([item for item in outcomes if isinstance(item, ToolResultEvent)]),
+                            context,
+                        )
                         await context.send(
                             ModelResponse(
                                 message=ModelMessage(
