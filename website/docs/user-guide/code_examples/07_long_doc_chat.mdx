@@ -16,7 +16,7 @@ A "remember the last words" chat exercise that stress-tests the assembly chain. 
 
 ## Primitives covered
 
-- `assembly=[ConversationPolicy(), SlidingWindowPolicy(...), TokenBudgetPolicy(...)]`
+- `Middleware(AssemblerMiddleware, policies=[ConversationPolicy(), SlidingWindowPolicy(...), TokenBudgetPolicy(...)])`
 - `KnowledgeConfig` with `compact=TailWindowCompact(...)` + `compact_trigger=CompactTrigger(...)`
 - `MemoryKnowledgeStore` (in-memory variant of the knowledge store)
 - `CompactionCompleted` lifecycle event
@@ -48,6 +48,8 @@ import asyncio
 from ag2 import Agent, KnowledgeConfig
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.config import GeminiConfig
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import Middleware
 from ag2.events import CompactionCompleted
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.policies import (
@@ -84,10 +86,15 @@ async def main() -> None:
             "Answer directly without calling any tools."
         ),
         config=config,
-        assembly=[
-            ConversationPolicy(),
-            SlidingWindowPolicy(max_events=6, transparent=True),
-            TokenBudgetPolicy(max_tokens=2000),
+        middleware=[
+            Middleware(
+                AssemblerMiddleware,
+                policies=[
+                    ConversationPolicy(),
+                    SlidingWindowPolicy(max_events=6, transparent=True),
+                    TokenBudgetPolicy(max_tokens=2000),
+                ],
+            ),
         ],
         knowledge=KnowledgeConfig(
             store=store,

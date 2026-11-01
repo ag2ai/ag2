@@ -44,10 +44,15 @@ A policy receives the current `prompts` and `events`, returns modified copies. P
 
 ## Wiring policies onto an Agent
 
-Pass your policy list via the `assembly=` keyword when constructing an Agent. The Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain automatically.
+Register `AssemblerMiddleware` through `middleware=`. Put `HaltCheckMiddleware` immediately after it when using `AlertPolicy`, so a FATAL alert stops the model call. Middleware runs in list order, from outermost to innermost.
 
-```python linenums="1" hl_lines="12-16"
+!!! warning "`assembly=` is deprecated"
+    `Agent(assembly=...)` will be removed in **1.4.0**. Until then it keeps its existing behavior and emits a `DeprecationWarning` where the agent is constructed, including when an empty iterable was explicitly supplied. Use the middleware configuration below instead; `AssemblyPolicy` and the built-in policies remain supported.
+
+```python linenums="1" hl_lines="14-24"
 from ag2 import Agent
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import HaltCheckMiddleware, Middleware
 from ag2.policies import (
     AlertPolicy,
     WorkingMemoryPolicy,
@@ -58,10 +63,16 @@ from ag2.config import OpenAIConfig
 agent = Agent(
     "assistant",
     config=OpenAIConfig(model="gpt-5"),
-    assembly=[
-        WorkingMemoryPolicy(),
-        AlertPolicy(),
-        SlidingWindowPolicy(max_events=50),
+    middleware=[
+        Middleware(
+            AssemblerMiddleware,
+            policies=[
+                WorkingMemoryPolicy(),
+                AlertPolicy(),
+                SlidingWindowPolicy(max_events=50),
+            ],
+        ),
+        Middleware(HaltCheckMiddleware),
     ],
 )
 ```
@@ -74,7 +85,7 @@ Inside each turn the `AssemblerMiddleware`:
 4. Restores the original prompt afterward.
 
 !!! tip
-    `AssemblerMiddleware` and `AssemblyPolicy` live in `#!python ag2.assembly` if you need to wire the middleware manually (for example, inside a custom harness that isn't built on `Agent`).
+    `AssemblerMiddleware` and `AssemblyPolicy` live in `#!python ag2.assembly`; `Middleware` and `HaltCheckMiddleware` are imported from `#!python ag2.middleware`. If you also use the legacy `assembly=` parameter, both policy chains run; migrate the policies rather than registering them twice. `agent.assembly` reports only legacy and plugin policies, not policies registered through middleware.
 
 ## Ordering matters
 
@@ -161,8 +172,10 @@ Takes no arguments. Dedup state lives on the instance — give each Agent its ow
 
 Reads `/memory/working.md` from the [KnowledgeStore](/docs/user-guide/advanced/knowledge_store) and injects it into the prompt. Working memory is the agent's persistent state — written between conversations by an aggregation strategy and read on every turn.
 
-```python linenums="1" hl_lines="6 11 12"
+```python linenums="1" hl_lines="8 13 14"
+from ag2 import Agent
 from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import Middleware
 from ag2.policies import WorkingMemoryPolicy
 from ag2.knowledge import KnowledgeStore, MemoryKnowledgeStore
 
@@ -173,7 +186,7 @@ agent = Agent(
     "assistant",
     config=config,
     dependencies={KnowledgeStore: store},
-    middleware=[lambda e, c: AssemblerMiddleware(e, c, policies=[WorkingMemoryPolicy()])],
+    middleware=[Middleware(AssemblerMiddleware, policies=[WorkingMemoryPolicy()])],
 )
 ```
 

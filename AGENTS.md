@@ -103,7 +103,7 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 | `config/` | LLM provider clients (see [below](#llm-provider-clients)) | `ModelConfig`, `LLMClient`, `AnthropicConfig`, `OpenAIConfig`, `GeminiConfig`, … |
 | `tools/` | Ready-to-use tools | `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
 | `tools/types.py` | Tool abstractions & schema types | `Tool`, `FunctionTool`, `ClientTool`, `Toolkit`, `ToolSchema`, … |
-| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `run_task`, `persistent_stream`, `StreamFactory` |
+| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `persistent_stream`, `StreamFactory` |
 | `eval/` | Offline evaluation framework | `run`, `scorer`, `EvalTarget`, `Suite`, `Task`, `Trace`, `RunResult`, `Feedback`, `BudgetThresholds`, plus prebuilts under `eval.scorers` |
 | `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, `MiddlewareDescription`, … |
 | `response/` | Structured output validation | `ResponseSchema`, `PromptedSchema`, `ResponseProto`, `response_schema` |
@@ -175,7 +175,7 @@ Subagent tools live in `ag2/tools/subagents/` and are imported from `ag2.tools.s
 
 | File | Purpose |
 |------|---------|
-| `run_task.py` | `run_task()`, `TaskResult` — execute an agent as a sub-task |
+| `run_task.py` | `run_task()`, `TaskResult` — execute an agent as a sub-task. Internal: the primitive behind `as_tool`, not re-exported |
 | `subagent_tool.py` | `subagent_tool()`, `StreamFactory` — wrap an agent as a callable tool |
 | `persistent_stream.py` | `persistent_stream()` — `StreamFactory` that reuses a stream across calls |
 
@@ -183,15 +183,25 @@ Subagent tools live in `ag2/tools/subagents/` and are imported from `ag2.tools.s
 
 `Agent.as_tool(description, name?, stream?, middleware?)` is a convenience method that delegates to `subagent_tool()`. It creates a tool named `task_{agent.name}` with parameters `objective` (required) and `context` (optional).
 
-### Auto-injected `run_subtask` / `run_subtasks`
+Delegation is explicit: build each worker `Agent` with its own `config`, `prompt` and `tools`, then pass `worker.as_tool(...)` to the parent's `tools`. Nothing is inherited from the parent.
 
-Sub-task delegation is **off by default** (`tasks=False`). Pass `tasks=TaskConfig(...)` to opt in, and the `Agent` gains a `run_subtask(task)` and a `run_subtasks(tasks=[...], parallel=True)` tool. Each call spawns a **subtask Agent** that:
+- **Recursion** is bounded only by what you hand the worker: do not give a worker delegate tools unless recursion is intended.
+- **Concurrency**: the LLM fans out by issuing several delegate calls in one response; they run concurrently. To cap them, pass the same tool middleware to every delegate. It must be a function closing over the `asyncio.Semaphore`, not a middleware object: tool middleware is deep-copied on registration, so an object gets one copy per delegate and the cap silently splits.
+- **Ad-hoc workers** composed by the LLM per objective: `dynamic_agent()` (`ag2.tools.dynamic`).
 
-- Inherits the parent's user-supplied tools by default (filterable via `TaskConfig.include_tools` / `exclude_tools`, extendable via `extra_tools`).
-- Is itself constructed with `tasks=False` (the default), so the subtask has **no** `run_subtask` tools — recursive delegation is structurally impossible. No depth limiting required.
-- Runs on its own `MemoryStream`; child events do not leak into the parent's stream beyond `TaskStarted` / `TaskCompleted` / `TaskFailed` lifecycle events.
+### Deprecated: `TaskConfig` / auto-injected `run_subtask` (removed in 1.4.0)
 
-The LLM is told (via the tool description) that `run_subtask` may be invoked multiple times in parallel within a single response, encouraging the parallel-tool-use pattern Anthropic recommends.
+Do not use `TaskConfig`, `Agent(tasks=...)` or `run_subtask` / `run_subtasks` in new code, docs or examples. The legacy path still ships in `ag2/agent.py` until removal.
+
+- Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
+- Removal in 1.4.0 covers: `TaskConfig` and its re-export from `ag2`, the `tasks=` parameter and `Agent.tasks`, `_build_subtask_toolkit` / `_spawn_subtask` / `_run_subtask` / `_task_slots_for`, the `agent.tasks` check in `ag2/ag_ui/capabilities.py`, those tests, and the deprecation notes in `website/docs/`.
+
+### Deprecated: `Agent(assembly=...)` (removed in 1.4.0)
+
+Register `Middleware(AssemblerMiddleware, policies=[...])` (plus `Middleware(HaltCheckMiddleware)` with `AlertPolicy`) in `middleware=` instead. Plugin, `add_policy()` and invocation-plugin policies join that assembler each turn.
+
+- Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
+- Removal in 1.4.0 covers: the `assembly=` parameter and `ASSEMBLY_DEPRECATION`, the warning-filtered tests, and the deprecation notes in `website/docs/`. Keep `_attach_policies`: plugin policies still need it.
 
 ### persistent_stream
 
@@ -210,7 +220,7 @@ agent.as_tool(description="...", stream=persistent_stream())
 | Dependencies | Shallow-copied (`dict.copy()`) | Isolated at the top level; mutable values are still shared by reference. Treat dependencies as read-only inside subtasks. |
 | Variables | Copied (new dict); **not** synced back | Concurrent siblings via `asyncio.gather` would race-clobber a shared dict — last-writer-wins is silent data loss. Each subtask's mutations stay scoped to it. |
 | History | Fresh stream per call | Clean context; LLM passes relevant info via `context` parameter |
-| Tool inheritance | Parent's user-supplied tools (filtered by `TaskConfig`) | Subtasks need real capabilities to do work; child has no `run_subtask` tools so recursion is impossible |
+| Tools | The worker's own `tools=`; nothing is inherited from the parent | The worker's capabilities are explicit and reviewable at construction |
 
 ## LLM Provider Clients
 

@@ -37,7 +37,7 @@ from ag2.policies import (
 )
 from ag2.stream import MemoryStream
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")]
 
 
 async def test_conversation_policy_basic(provider_config) -> None:

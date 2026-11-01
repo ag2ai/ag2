@@ -154,6 +154,26 @@ class TestSdkToA2A:
 
         assert ev == A2ATextArtifact(update=update, append=True, last_chunk=False, text="streamed")
 
+    @pytest.mark.parametrize(
+        ("parts", "text"),
+        [
+            ([Part(text="")], ""),
+            ([Part(text=""), Part(text="body")], "body"),
+            ([Part(text="body"), Part(text="")], "body"),
+            ([Part(text=""), Part(text="body"), Part(text="")], "body"),
+        ],
+    )
+    def test_empty_text_parts_are_still_text_artifacts(self, parts: list[Part], text: str) -> None:
+        update = TaskArtifactUpdateEvent(
+            task_id="t",
+            context_id="c",
+            artifact=Artifact(artifact_id="a", parts=parts),
+        )
+
+        ev = parse_stream_response(StreamResponse(artifact_update=update))
+
+        assert ev == A2ATextArtifact(update=update, append=False, last_chunk=False, text=text)
+
     def test_tool_call_artifact(self) -> None:
         payload = {"id": "c-1", "name": "lookup", "arguments": json.dumps({"q": "x"})}
         update = TaskArtifactUpdateEvent(
