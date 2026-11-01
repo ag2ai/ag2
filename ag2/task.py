@@ -213,6 +213,11 @@ class Task:
     task). With no context, the Task creates a private ``MemoryStream`` —
     standalone use; events still fire but only observers attached to that
     private stream see them.
+
+    ``context.dependencies`` holds a single ``ag2.task`` slot. When sibling
+    tasks overlap on one context (e.g. parallel tool calls in one turn),
+    the slot holds the most recently entered task that is still running,
+    so ``TaskInject`` inside an earlier sibling resolves to a later one.
     """
 
     def __init__(
@@ -232,7 +237,7 @@ class Task:
         self._context = context
         self._owns_context = False
         self._metadata: TaskMetadata | None = None
-        self._previous_dep: Any = None
+        self._previous_dep: Task | None = None
         self._exited = False
         self._checkpoint_store = checkpoint_store
         self._resume_from = resume_from
@@ -435,14 +440,7 @@ class Task:
             expires_at=_expires_iso(self._ttl_seconds, now),
         )
 
-        self._exited = False
-        existing = self._context.dependencies.get(_TASK_DEP_KEY)
-        # Walk past already-exited siblings to the nearest still-active task
-        # so the chain survives when middle siblings exit first.
-        while existing is not None and existing._exited:
-            existing = existing._previous_dep
-        if existing is not None:
-            self._previous_dep = existing
+        self._previous_dep = _nearest_active(self._context.dependencies.get(_TASK_DEP_KEY))
         self._context.dependencies[_TASK_DEP_KEY] = self
 
         await self._context.send(
@@ -471,19 +469,24 @@ class Task:
                 await self.complete()
         finally:
             self._exited = True
-            # Only restore the dependency entry if we still own it. Sibling
-            # tasks can enter the same context concurrently; restoring
-            # unconditionally would pop or overwrite another task's entry.
-            # The chain is kept intact after exit: a later sibling exit walks
-            # it to the nearest still-active task.
+            # A sibling that entered later owns the slot; leave it alone.
             if self._context is not None and self._context.dependencies.get(_TASK_DEP_KEY) is self:
-                prev = self._previous_dep
-                while prev is not None and prev._exited:
-                    prev = prev._previous_dep
+                prev = _nearest_active(self._previous_dep)
                 if prev is not None:
                     self._context.dependencies[_TASK_DEP_KEY] = prev
                 else:
                     self._context.dependencies.pop(_TASK_DEP_KEY, None)
+
+
+def _nearest_active(task: Task | None) -> Task | None:
+    """Walk ``_previous_dep`` past siblings that already exited.
+
+    Exited tasks keep their link so a later sibling's exit can still reach
+    the nearest task that is running.
+    """
+    while task is not None and task._exited:
+        task = task._previous_dep
+    return task
 
 
 TaskInject = Annotated[Task | None, Inject(_TASK_DEP_KEY, default=None)]

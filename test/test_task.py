@@ -10,23 +10,29 @@ for ``TaskInject``, and TTL field population.
 """
 
 import asyncio
-from typing import Any
+from itertools import permutations
 
 import pytest
 
-from ag2 import Agent, TaskSpec
+from ag2 import Agent, Context, TaskInject, TaskSpec
 from ag2.config import AnthropicConfig
 from ag2.context import ConversationContext
 from ag2.events import (
     BaseEvent,
+    ModelResponse,
     TaskCompleted,
     TaskExpired,
     TaskFailed,
     TaskProgress,
     TaskStarted,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
+from ag2.middleware import ToolExecution, ToolResultType
 from ag2.stream import MemoryStream
-from ag2.task import TERMINAL_TASK_STATES, TaskState
+from ag2.task import TERMINAL_TASK_STATES, Task, TaskState
+from ag2.testing import TestConfig
+from ag2.tools import tool
 
 
 def _agent() -> Agent:
@@ -319,73 +325,72 @@ class TestMetadata:
             assert task.metadata.spec.payload == {"capability": "search"}
 
 
-class TestConcurrentSiblingTasks:
-    @pytest.mark.asyncio
-    async def test_sibling_exit_keeps_active_task_dependency(self) -> None:
-        """A exits while B is active: the entry must be B's task, and B's exit
-        must remove the entry rather than resurrect the exited A."""
-        agent = _agent()
-        ctx = ConversationContext(stream=MemoryStream())
-        ts: dict[str, Any] = {}
-        entered = {n: asyncio.Event() for n in "AB"}
-        proceed = {n: asyncio.Event() for n in "AB"}
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exit_order",
+    [*permutations("AB"), *permutations("ABC")],
+    ids="".join,
+)
+async def test_parallel_tool_tasks_inject_latest_running_task(exit_order: tuple[str, ...]) -> None:
+    """Sibling tool calls in one turn each open a task on the shared context.
+    A tool resolving ``TaskInject`` after each exit gets the latest-entered
+    task still running — never an exited one — and ``None`` after the last."""
+    names = sorted(exit_order)
+    # One `step_X` call opens task X; one `probe_X` call injects the task once X exited.
+    gates = {f"{kind}_{n}": asyncio.Event() for kind in ("step", "probe") for n in names}
+    done = {call_id: asyncio.Event() for call_id in gates}
+    entered = {n: asyncio.Event() for n in names}
+    # Steps enter one after another, so entry order is ``names``.
+    entered_before = dict(zip(names[1:], names))
+    tasks: dict[str, Task] = {}
+    injected: dict[str, Task | None] = {}
 
-        async def run(name: str) -> None:
-            async with agent.task(name, context=ctx) as task:
-                ts[name] = task
-                entered[name].set()
-                await proceed[name].wait()
+    async def hold_until_released(call_next: ToolExecution, event: ToolCallEvent, ctx: Context) -> ToolResultType:
+        await gates[event.id].wait()
+        return await call_next(event, ctx)
 
-        a = asyncio.create_task(run("A"))
-        b = asyncio.create_task(run("B"))
-        await asyncio.gather(entered["A"].wait(), entered["B"].wait())
+    @tool
+    async def step(name: str, ctx: Context) -> str:
+        if name in entered_before:
+            await entered[entered_before[name]].wait()
+        async with agent.task(name, context=ctx) as task:
+            tasks[name] = task
+            entered[name].set()
+            await gates[f"step_{name}"].wait()
+        done[f"step_{name}"].set()
+        return name
 
-        proceed["A"].set()
-        await a
-        assert ctx.dependencies.get("ag2.task") is ts["B"]
+    @tool(middleware=[hold_until_released])
+    async def probe(after: str, task: TaskInject) -> str:
+        injected[after] = task
+        done[f"probe_{after}"].set()
+        return after
 
-        proceed["B"].set()
-        await b
-        assert ctx.dependencies.get("ag2.task") is None
+    agent = Agent(
+        "researcher",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent([
+                    *(ToolCallEvent(id=f"step_{n}", name="step", arguments=f'{{"name": "{n}"}}') for n in names),
+                    *(ToolCallEvent(id=f"probe_{n}", name="probe", arguments=f'{{"after": "{n}"}}') for n in names),
+                ]),
+            ),
+            "Done",
+        ),
+        tools=[step, probe],
+    )
 
-    @pytest.mark.asyncio
-    async def test_three_overlapping_middle_exits_first(self) -> None:
-        """A→B→C entered, B then C exit first: the entry must walk the chain
-        back to the still-running A."""
-        agent = _agent()
-        ctx = ConversationContext(stream=MemoryStream())
-        ts: dict[str, Any] = {}
-        entered = {n: asyncio.Event() for n in "ABC"}
-        proceed = {n: asyncio.Event() for n in "ABC"}
+    reply = asyncio.create_task(agent.ask("Run the steps."))
+    await asyncio.gather(*(e.wait() for e in entered.values()))
 
-        async def run(name: str) -> None:
-            async with agent.task(name, context=ctx) as task:
-                ts[name] = task
-                entered[name].set()
-                await proceed[name].wait()
+    running = list(names)
+    expected: dict[str, Task | None] = {}
+    for name in exit_order:
+        for call_id in (f"step_{name}", f"probe_{name}"):
+            gates[call_id].set()
+            await done[call_id].wait()
+        running.remove(name)
+        expected[name] = tasks[running[-1]] if running else None
 
-        runners: dict[str, asyncio.Task] = {}
-        for n in "ABC":
-            runners[n] = asyncio.create_task(run(n))
-            await entered[n].wait()
-
-        proceed["B"].set()
-        await runners["B"]
-        proceed["C"].set()
-        await runners["C"]
-        assert ctx.dependencies.get("ag2.task") is ts["A"]
-
-        proceed["A"].set()
-        await runners["A"]
-        assert ctx.dependencies.get("ag2.task") is None
-
-    @pytest.mark.asyncio
-    async def test_sequential_nested_task_dependency_restored(self) -> None:
-        agent = _agent()
-        ctx = ConversationContext(stream=MemoryStream())
-
-        async with agent.task("outer", context=ctx) as outer:
-            async with agent.task("inner", context=ctx) as inner:
-                assert ctx.dependencies.get("ag2.task") is inner
-            # inner's exit restores the still-active outer task
-            assert ctx.dependencies.get("ag2.task") is outer
+    assert (await reply).body == "Done"
+    assert injected == expected
