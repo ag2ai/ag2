@@ -32,7 +32,7 @@ Mistral classes need the `mistral` extra and `MISTRAL_API_KEY` in the environmen
 pip install "ag2[mistral]"
 ```
 
-`MistralRealtimeTranscriber` also needs the SDK's websocket client:
+`MistralRealtimeTranscriber` and `MistralRealtimeTTSConfig` also need the SDK's websocket client:
 
 ```bash
 pip install "mistralai[realtime]"
@@ -295,6 +295,28 @@ if __name__ == "__main__":
 ```
 
 The same works with Mistral — swap in `MistralStreamingTTSConfig("voxtral-mini-tts-2603", voice_id="my-saved-voice")`. It converts Mistral's float32 PCM to the int16 PCM `SoundDevicePlayer` expects.
+
+### Streaming the reply's text (Mistral realtime)
+
+A streaming config still waits for a whole sentence: `TTSObserver` cuts the reply at sentence boundaries (`min_chars`, default 60) and sends one request per sentence. `MistralRealtimeTTSConfig` takes the reply's text instead, as the model streams it, over one realtime connection per reply. Mistral decides where to cut the audio, so speech starts before the first sentence is finished and the voice keeps its context across sentences:
+
+```python linenums="1"
+from ag2.live import MistralRealtimeTTSConfig, TTSObserver
+
+tts = MistralRealtimeTTSConfig(
+    "voxtral-mini-tts-2603",
+    voice_id="my-saved-voice",  # or ref_audio="<base64 clip>"
+    streaming_mode="responsive",  # or "long_form"; omit for the server default
+    expressiveness=0.5,  # omit for the server default
+)
+
+observer = TTSObserver(tts)  # min_chars does not apply to this config
+```
+
+It works anywhere a TTS config does, including `CascadeConfig(tts=...)`. Each model response is its own reply: when the model says something before calling a tool, that text is spoken on its own connection before the tool runs, and the answer after the tool opens a new one. A non-streaming model config (no message chunks) gets its completed reply spoken. A server `error` event raises `RuntimeError`, and a `CascadeConfig` barge-in closes the connection.
+
+!!! note
+    `TTSObserver` only sees a reply end through its `ModelMessage`. If a reply fails mid-stream, its open connection carries over into the next reply.
 
 ### Streaming directly to the speaker
 
