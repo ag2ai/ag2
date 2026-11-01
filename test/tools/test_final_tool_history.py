@@ -5,7 +5,13 @@
 import pytest
 
 from ag2 import Agent, DataInput, MemoryStream, TextInput, ToolResult, events, testing, tool
-from ag2.history import MemoryStorage, close_unanswered_tool_calls
+from ag2.history import (
+    FINAL_TURN_SKIPPED_TOOL_RESULT,
+    MemoryStorage,
+    close_unanswered_tool_calls,
+    unanswered_tool_calls,
+)
+from ag2.tools.final.client_tool import ClientTool
 
 
 @pytest.mark.asyncio
@@ -115,3 +121,37 @@ async def test_final_tool_history_preserves_first_final_reply() -> None:
             events.ToolResultEvent.from_call(calls[1], ToolResult("second", final=True)),
         ])
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("final_first", [False, True])
+async def test_final_tool_history_closes_client_calls(final_first: bool) -> None:
+    @tool
+    def finish() -> ToolResult:
+        return ToolResult("sent", final=True)
+
+    client_tool = ClientTool(schema={"function": {"name": "pick_file", "description": "desc", "parameters": {}}})
+
+    calls = [events.ToolCallEvent("finish", id="final-call"), events.ToolCallEvent("pick_file", id="client-call")]
+    if not final_first:
+        calls.reverse()
+    stream = MemoryStream()
+    config = testing.TrackingConfig(testing.TestConfig(calls, "second reply"))
+    agent = Agent("assistant", config=config, tools=[finish, client_tool])
+
+    reply = await agent.ask("first turn", stream=stream)
+
+    assert reply.body == "sent"
+    assert config.mock.call_count == 1
+    expected = [
+        events.ToolResultEvent.from_call(call, ToolResult("sent", final=True))
+        if call.name == "finish"
+        else events.ToolResultEvent.from_call(call, FINAL_TURN_SKIPPED_TOOL_RESULT)
+        for call in calls
+    ]
+    assert await stream.history.where(events.ToolResultsEvent).all() == [events.ToolResultsEvent(expected)]
+    assert unanswered_tool_calls(list(await stream.history.get_events())) == set()
+
+    await reply.ask("second turn")
+
+    assert config.mock.call_count == 2

@@ -5,10 +5,11 @@
 import pytest
 from fast_depends.use import SerializerCls
 
-from ag2 import Agent, MemoryStream, ToolResult, testing, tool
+from ag2 import ToolResult
 from ag2.compact import CompactionSummary
 from ag2.config.zai.mappers import convert_messages
 from ag2.events import (
+    BaseEvent,
     DataInput,
     ImageInput,
     ModelMessage,
@@ -100,28 +101,27 @@ def test_loose_tool_result() -> None:
     assert result == [{"role": "tool", "tool_call_id": "tc_1", "content": "ok"}]
 
 
-@pytest.mark.asyncio
-async def test_final_tool_history_replays_each_result_once() -> None:
-    @tool
-    def finish() -> ToolResult:
-        return ToolResult("sent", final=True)
+def test_wrapped_tool_result_replaces_its_loose_copy() -> None:
+    """A finished turn records each result loose and again inside its wrapper."""
+    result = ToolResultEvent(parent_id="tc_1", name="list_items", result=ToolResult("ok"))
 
-    @tool
-    def lookup() -> str:
-        return "lookup result"
+    assert convert_messages([], [result, ToolResultsEvent([result])], SerializerCls) == [
+        {"role": "tool", "tool_call_id": "tc_1", "content": "ok"},
+    ]
 
-    calls = [ToolCallEvent("finish", id="final-call"), ToolCallEvent("lookup", id="lookup-call")]
-    config = testing.TrackingConfig(testing.TestConfig(calls, "second reply"))
-    stream = MemoryStream()
-    agent = Agent("assistant", config=config, tools=[finish, lookup])
 
-    reply = await agent.ask("first turn", stream=stream)
-    await reply.ask("second turn")
-
-    assert config.mock.call_count == 2
-    assert convert_messages([], iter(await stream.history.get_events()), SerializerCls) == [
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_messages([], iter(final_turn_history), SerializerCls) == [
         {"role": "user", "content": "first turn"},
-        {"role": "assistant", "content": None, "tool_calls": [call.to_api() for call in calls]},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {"id": "final-call", "type": "function", "function": {"name": "finish", "arguments": "{}"}},
+                {"id": "lookup-call", "type": "function", "function": {"name": "lookup", "arguments": "{}"}},
+            ],
+        },
         {"role": "tool", "tool_call_id": "final-call", "content": "sent"},
         {"role": "tool", "tool_call_id": "lookup-call", "content": "lookup result"},
         {"role": "assistant", "content": "sent"},

@@ -12,6 +12,7 @@ from ag2.compact import CompactionSummary
 from ag2.config.dashscope.mappers import convert_messages
 from ag2.events import (
     AudioInput,
+    BaseEvent,
     BinaryInput,
     DocumentInput,
     FileIdInput,
@@ -177,3 +178,23 @@ def test_compaction_summary_renders_as_user_turn() -> None:
     result = convert_messages([], [summary], SerializerCls)
 
     assert result == [{"role": "user", "content": "[Summary of earlier conversation]\nLooked up Paris and Tokyo."}]
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_messages([], final_turn_history, SerializerCls) == [
+        {"role": "user", "content": "first turn"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {"id": "final-call", "type": "function", "function": {"name": "finish", "arguments": "{}"}},
+                {"id": "lookup-call", "type": "function", "function": {"name": "lookup", "arguments": "{}"}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "final-call", "content": "sent"},
+        {"role": "tool", "tool_call_id": "lookup-call", "content": "lookup result"},
+        {"role": "assistant", "content": "sent"},
+        {"role": "user", "content": "second turn"},
+        {"role": "assistant", "content": "second reply"},
+    ]
