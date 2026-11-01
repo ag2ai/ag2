@@ -86,6 +86,7 @@ from .middleware.halt import HaltCheckMiddleware
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
+from .scopes import merge_variables, overlay_variables
 from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
@@ -233,7 +234,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -249,7 +250,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -265,7 +266,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -281,7 +282,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -295,7 +296,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -327,7 +328,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -343,7 +344,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -359,7 +360,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -375,7 +376,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -389,7 +390,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -434,7 +435,7 @@ class _ContextOverrides:
 
     def apply(self, context: Context) -> None:
         context.dependencies.update(self.dependencies)
-        context.variables.update(self.variables)
+        context.variables = overlay_variables(context.variables, self.variables)
         if self.prompt:
             context.prompt = list(self.prompt)
 
@@ -473,7 +474,7 @@ class _TurnPlugins:
         self.observers: list[Observer] = []
         self.policies: list[AssemblyPolicy] = []
         self.dependencies: dict[Any, Any] = {}
-        self.variables: dict[Any, Any] = {}
+        self.variables: Mapping[str, Any] = {}
         self.hitl_hook: HumanHook | None = None
         self.has_conflicting_hitl_hooks = False
         for plugin in plugins:
@@ -738,7 +739,7 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         response_schema: type[TResult],
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
@@ -758,7 +759,7 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         response_schema: ResponseProto[TResult],
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
@@ -778,7 +779,7 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         response_schema: types.UnionType,
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
@@ -798,7 +799,7 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         response_schema: None = ...,
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
@@ -817,7 +818,7 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         response_schema: (ResponseProto[TResult] | type[TResult] | types.UnionType | None) = None,
         plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
@@ -1035,7 +1036,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1053,7 +1054,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1071,7 +1072,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1089,7 +1090,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1104,7 +1105,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -1138,7 +1139,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1156,7 +1157,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1174,7 +1175,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1192,7 +1193,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1207,7 +1208,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -1244,7 +1245,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None,
         dependencies: dict[Any, Any] | None,
-        variables: dict[Any, Any] | None,
+        variables: Mapping[str, Any] | None,
         prompt: Iterable[str],
         config: ModelConfig | None,
         tools: Iterable[Tool],
@@ -1319,7 +1320,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *events: BaseEvent,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -1483,8 +1484,12 @@ class Agent(PluginTarget, Generic[TResult]):
                 target = getattr(context, attribute)
                 for key, value in defaults.items():
                     if key not in target:
-                        target[key] = value
-                        stack.callback(_remove_plugin_default, context, attribute, key, value)
+                        if attribute == "variables":
+                            context.variables = overlay_variables(context.variables, {key: value})
+                            target = context.variables
+                        else:
+                            target[key] = value
+                        stack.callback(_remove_plugin_default, context, attribute, key, target[key])
 
             if client is None:
                 client = await self._prepare_turn(event, context, config)
@@ -1749,13 +1754,13 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         prompt: Iterable[str] = (),
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
     ) -> Context:
         context = Context(
             stream,
             prompt=list(prompt),
             dependencies=self._agent_dependencies | (dependencies or {}),
-            variables=self._agent_variables | (variables or {}),
+            variables=merge_variables(self._agent_variables, variables),
             dependency_provider=self.dependency_provider,
         )
         context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY] = self

@@ -18,7 +18,7 @@ from ag2.events import (
     UsageEvent,
 )
 from ag2.exceptions import HumanInputError
-from ag2.middleware.builtin.tools.approval import BYPASS_KEY
+from ag2.scopes import derive_child_variables
 from ag2.stream import MemoryStream, Stream
 from ag2.usage import UsageReport, collect_usage_events
 
@@ -191,13 +191,9 @@ async def run_task(
             prompt,
             stream=task_stream,
             dependencies=parent_context.dependencies.copy(),
-            # Copy variables so concurrent sibling tasks don't interfere.
-            # Mutations made by the child are intentionally not synced back —
-            # with concurrent siblings via asyncio.gather, last-writer-wins
-            # would silently clobber values, so we keep child mutations
-            # scoped to the child run by design. Tool approvals are not
-            # inherited: the sub-task asks again.
-            variables={k: v for k, v in parent_context.variables.items() if k != BYPASS_KEY},
+            # Inherit branch-owned values and shared bindings; reserved
+            # control-plane values, including approval grants, stay local.
+            variables=derive_child_variables(parent_context.variables),
         )
 
         usage = (await reply.usage()).total
