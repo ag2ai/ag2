@@ -4,6 +4,7 @@
 
 import asyncio
 import json
+import logging
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -12,11 +13,35 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from ag2 import Agent, MemoryStream
-from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent
-from ag2.testing import TestConfig
+from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultEvent, ToolResultsEvent
+from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools import LocalEnvironment, SandboxShellTool
 from ag2.tools.sandbox import ExecResult, SandboxFactory
 from ag2.tools.sandbox.filter import check_ignore, contains_shell_operator, matches
+
+
+def _blocking_command(workdir: Path) -> str:
+    """Write a script that marks its start and writes ``completed`` once released.
+
+    Returns the shell command that runs it. ``; true`` keeps ``sh`` from
+    exec-ing into Python, so the script runs as a grandchild of the sandbox.
+    """
+    (workdir / "blocking.py").write_text(
+        "import time\n"
+        "from pathlib import Path\n"
+        "Path('started').touch()\n"
+        "deadline = time.monotonic() + 5\n"
+        "while not Path('release').exists() and time.monotonic() < deadline:\n"
+        "    time.sleep(0.01)\n"
+        "if Path('release').exists():\n"
+        "    Path('completed').touch()\n"
+    )
+    return f'"{sys.executable}" blocking.py; true'
+
+
+async def _wait_until_exists(path: Path) -> None:
+    while not path.exists():  # noqa: ASYNC110 - the command signals through the filesystem
+        await asyncio.sleep(0.01)
 
 
 class TestContainsShellOperator:
@@ -137,6 +162,7 @@ class TestCheckIgnore:
 class TestSandboxShellToolConstruction:
     def test_auto_tempdir_created(self) -> None:
         shell = SandboxShellTool()
+        assert isinstance(shell.workdir, Path)
         assert shell.workdir.exists()
         assert shell.workdir.is_dir()
 
@@ -354,6 +380,56 @@ class TestShellExecution:
 
         assert tool_results, "No tool result received"
         assert "exit code: 124" in tool_results[0], f"Expected exit code 124 but got: {tool_results[0]!r}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.skipif(sys.platform == "win32", reason="process groups are POSIX-only")
+    async def test_timeout_stops_everything_the_command_started(self, tmp_path: Path) -> None:
+        call = self._make_tool_call(_blocking_command(tmp_path))
+        config = TrackingConfig(TestConfig(ModelResponse(tool_calls=ToolCallsEvent([call])), "done"))
+        shell = SandboxShellTool(LocalEnvironment(tmp_path, timeout=1))
+        agent = Agent("a", config=config, tools=[shell])
+
+        await agent.ask("run it")
+
+        (tmp_path / "release").touch()
+        await asyncio.sleep(0.3)
+        assert not (tmp_path / "completed").exists()
+        config.mock.assert_called_with(
+            ToolResultsEvent([ToolResultEvent.from_call(call, "Command timed out after 1s\n[exit code: 124]")])
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.skipif(sys.platform == "win32", reason="process groups are POSIX-only")
+    async def test_cancelled_ask_stops_running_command(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        shell = SandboxShellTool(LocalEnvironment(tmp_path))
+        agent = Agent("a", config=self._make_config(_blocking_command(tmp_path)), tools=[shell])
+
+        ask = asyncio.create_task(agent.ask("run it"))
+        await asyncio.wait_for(_wait_until_exists(tmp_path / "started"), timeout=5)
+        ask.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await ask
+
+        (tmp_path / "release").touch()
+        await asyncio.sleep(0.3)
+        assert not (tmp_path / "completed").exists()
+        assert [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR] == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.skipif(sys.platform == "win32", reason="process groups are POSIX-only")
+    async def test_closing_environment_stops_running_command(self, tmp_path: Path) -> None:
+        environment = LocalEnvironment(tmp_path)
+        agent = Agent("a", config=self._make_config(_blocking_command(tmp_path)), tools=[SandboxShellTool(environment)])
+
+        ask = asyncio.create_task(agent.ask("run it"))
+        await asyncio.wait_for(_wait_until_exists(tmp_path / "started"), timeout=5)
+        await environment.aclose()
+        (tmp_path / "release").touch()
+
+        with pytest.raises(RuntimeError, match="closed while the command was running"):
+            await ask
+        await asyncio.sleep(0.3)
+        assert not (tmp_path / "completed").exists()
 
     @pytest.mark.asyncio
     async def test_readonly_blocks_write_commands(self, tmp_path: Path) -> None:

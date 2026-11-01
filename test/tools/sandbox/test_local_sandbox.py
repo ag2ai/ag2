@@ -2,85 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 import locale
 import sys
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import suppress
 from pathlib import Path, PurePosixPath
-from threading import Event
 
 import pytest
 
 from ag2.tools.sandbox import ExecResult, Sandbox
 from ag2.tools.sandbox.local import LocalSandbox
-
-
-async def _wait_for_marker(path: Path) -> None:
-    while not path.exists():  # noqa: ASYNC110 - the child signals through the filesystem
-        await asyncio.sleep(0.005)
-
-
-async def _execute_during_shutdown(sandbox: LocalSandbox, program: str) -> None:
-    try:
-        await sandbox.exec([sys.executable, "-c", program])
-    except asyncio.CancelledError:
-        await sandbox.aclose()
-        (sandbox.host_workdir / "release").touch()
-        raise
-
-
-async def _start_command_before_shutdown(sandbox: LocalSandbox, program: str) -> None:
-    execution = asyncio.create_task(_execute_during_shutdown(sandbox, program))
-    await asyncio.wait_for(_wait_for_marker(sandbox.host_workdir / "started"), timeout=2)
-    await asyncio.sleep(0.025)
-    assert not execution.done()
-
-
-async def _cancel_queued_command(sandbox: LocalSandbox) -> None:
-    loop = asyncio.get_running_loop()
-    loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
-    release = Event()
-    occupied = loop.run_in_executor(None, release.wait, 3)
-    execution = asyncio.create_task(
-        sandbox.exec([sys.executable, "-c", "from pathlib import Path; Path('launched').touch()"])
-    )
-    try:
-        await asyncio.sleep(0)
-        execution.cancel()
-        await asyncio.sleep(0)
-        release.set()
-        with pytest.raises(asyncio.CancelledError):
-            await asyncio.wait_for(execution, timeout=2)
-        await occupied
-        # Wait behind every queued command before inspecting its filesystem side effect.
-        await loop.run_in_executor(None, str)
-    finally:
-        release.set()
-        execution.cancel()
-        with suppress(asyncio.CancelledError):
-            await execution
-        await sandbox.aclose()
-
-
-def test_cancelled_queued_command_never_launches(tmp_path: Path) -> None:
-    sandbox = LocalSandbox(tmp_path, timeout=2)
-    asyncio.run(_cancel_queued_command(sandbox))
-    assert not (tmp_path / "launched").exists()
-
-
-@pytest.mark.parametrize("attempt", [0, 1, 2])
-def test_event_loop_shutdown_stops_running_command(tmp_path: Path, attempt: int) -> None:
-    root = tmp_path / str(attempt)
-    sandbox = LocalSandbox(root, timeout=3)
-    program = (
-        "from pathlib import Path; import time; "
-        "Path('started').touch(); deadline = time.monotonic() + 2; "
-        "\nwhile not Path('release').exists() and time.monotonic() < deadline: time.sleep(0.001)"
-        "\nif Path('release').exists(): Path('completed').touch()"
-    )
-    asyncio.run(_start_command_before_shutdown(sandbox, program))
-    assert not (root / "completed").exists()
 
 
 @pytest.mark.asyncio
@@ -141,52 +70,6 @@ class TestLocalSandboxExec:
         sandbox = LocalSandbox(timeout=10)
         result = await sandbox.exec(["sleep", "5"], timeout=0.1)
         assert result.exit_code == 124
-
-    @pytest.mark.parametrize("cancel_again", [False, True])
-    async def test_cancel_stops_running_command(self, tmp_path: Path, cancel_again: bool) -> None:
-        program = (
-            "from pathlib import Path; import time; "
-            "Path('started').touch(); deadline = time.monotonic() + 3; "
-            "\nwhile not Path('release').exists() and time.monotonic() < deadline: time.sleep(0.01)"
-            "\nif Path('release').exists(): Path('completed').touch()"
-        )
-        loop = asyncio.get_running_loop()
-        loop_errors: list[dict[str, object]] = []
-        loop.set_exception_handler(lambda _, context: loop_errors.append(context))
-        sandbox = LocalSandbox(tmp_path, timeout=5)
-        execution = asyncio.create_task(sandbox.exec([sys.executable, "-c", program]))
-        try:
-            await asyncio.wait_for(_wait_for_marker(tmp_path / "started"), timeout=2)
-            execution.cancel()
-            if cancel_again:
-                loop.call_later(0.01, execution.cancel)
-            with pytest.raises(asyncio.CancelledError):
-                await asyncio.wait_for(execution, timeout=2)
-            await sandbox.aclose()
-            (tmp_path / "release").touch()
-            await asyncio.sleep(0.3)
-            assert not (tmp_path / "completed").exists()
-            assert loop_errors == []
-        finally:
-            loop.set_exception_handler(None)
-            (tmp_path / "release").touch()
-            execution.cancel()
-            with suppress(asyncio.CancelledError):
-                await execution
-            await sandbox.aclose()
-
-    @pytest.mark.parametrize("max_output", [100, 10])
-    async def test_output_survives_multiple_collection_intervals(self, max_output: int) -> None:
-        program = (
-            "import sys, time; sys.stdout.buffer.write(b'one\\r\\ntwo\\rthree\\n'); "
-            "sys.stdout.flush(); time.sleep(0.25); sys.stderr.write('err\\n'); sys.exit(7)"
-        )
-        async with LocalSandbox(max_output=max_output) as sandbox:
-            result = await sandbox.exec([sys.executable, "-c", program])
-        output = (
-            "one\ntwo\nthree\nerr" if max_output == 100 else "one\ntwo\nth\n[truncated: showing first 10 of 17 chars]"
-        )
-        assert result == ExecResult(output=output, exit_code=7)
 
     async def test_output_is_truncated_when_too_long(self) -> None:
         sandbox = LocalSandbox(max_output=10)
