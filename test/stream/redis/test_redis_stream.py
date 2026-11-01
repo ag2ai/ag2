@@ -10,9 +10,11 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from ag2 import Context
 from ag2.events import ImageInput, ModelMessage, TextInput, ToolCallEvent
+from ag2.streams.redis import RedisStream
 from ag2.streams.redis.serializer import Serializer
 
 pytestmark = [
@@ -108,6 +110,45 @@ class MockPubSub:
         pass
 
 
+class StartupRedis(MockRedis):
+    """Redis boundary with controllable subscription startup and cleanup."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.starting = asyncio.Event()
+        self.release = asyncio.Event()
+        self.error: Exception | None = None
+        self.unsubscribe_error: Exception | None = None
+        self.pubsubs: list[StartupPubSub] = []
+
+    def pubsub(self) -> "StartupPubSub":
+        pubsub = StartupPubSub(self)
+        self.pubsubs.append(pubsub)
+        return pubsub
+
+
+class StartupPubSub(MockPubSub):
+    def __init__(self, redis: StartupRedis) -> None:
+        super().__init__(redis)
+        self.server = redis
+        self.closed = False
+
+    async def subscribe(self, channel: str) -> None:
+        self.server.starting.set()
+        await self.server.release.wait()
+        if self.server.error is not None:
+            raise self.server.error
+        await super().subscribe(channel)
+
+    async def unsubscribe(self, channel: str) -> None:
+        if self.server.unsubscribe_error is not None:
+            raise self.server.unsubscribe_error
+        await super().unsubscribe(channel)
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
 # Shared fake Redis instance per test — all RedisStream instances in the same
 # test connect to the same "server" so cross-instance pub/sub works.
 @pytest.fixture()
@@ -117,8 +158,6 @@ def mock_redis():
 
 @pytest_asyncio.fixture(params=[Serializer.JSON, Serializer.PICKLE], ids=["json", "pickle"])
 async def redis_stream(mock_redis, request):
-    from ag2.streams.redis import RedisStream
-
     serializer = request.param
     streams: list = []
 
@@ -409,6 +448,102 @@ class TestRedisStream:
         assert len(received) == 1
         assert received[0].name == "post_crash"
         assert stream._listener_task is dead_task and dead_task.done()
+
+
+class TestRedisStartup:
+    @pytest.fixture()
+    def mock_redis(self):
+        return StartupRedis()
+
+    async def test_subscription_failure_reaches_sender(self, redis_stream, mock_redis):
+        stream = redis_stream()
+        mock_redis.error = RedisConnectionError("subscription unavailable")
+        mock_redis.release.set()
+
+        with pytest.raises(RedisConnectionError, match="subscription unavailable"):
+            await asyncio.wait_for(stream.send(ModelMessage("hello"), Context(stream)), timeout=1)
+
+        assert mock_redis.pubsubs[0].closed
+        assert await stream.history.get_events() == []
+
+    async def test_subscription_failure_releases_all_senders(self, redis_stream, mock_redis):
+        stream = redis_stream()
+        error = mock_redis.error = RedisConnectionError("subscription unavailable")
+        sends = [asyncio.create_task(stream.send(ModelMessage(text), Context(stream))) for text in ("a", "b")]
+        try:
+            await mock_redis.starting.wait()
+            mock_redis.release.set()
+            outcomes = await asyncio.wait_for(asyncio.gather(*sends, return_exceptions=True), timeout=1)
+        finally:
+            for send in sends:
+                send.cancel()
+            await asyncio.gather(*sends, return_exceptions=True)
+
+        assert outcomes == [error, error]
+        assert mock_redis.pubsubs[0].closed
+        assert await stream.history.get_events() == []
+
+    async def test_send_retries_subscription_after_startup_failure(self, redis_stream, mock_redis):
+        stream = redis_stream()
+        mock_redis.error = RedisConnectionError("subscription unavailable")
+        mock_redis.release.set()
+        with pytest.raises(RedisConnectionError):
+            await asyncio.wait_for(stream.send(ModelMessage("failed"), Context(stream)), timeout=1)
+
+        mock_redis.error = None
+        event = ModelMessage("recovered")
+        received = []
+        stream.subscribe(lambda ev: received.append(ev))
+        await asyncio.wait_for(stream.send(event, Context(stream)), timeout=1)
+
+        assert received == [event]
+        assert await stream.history.get_events() == [event]
+        assert mock_redis.pubsubs[0].closed
+        await stream.close()
+        await stream.close()
+        assert all(pubsub.closed for pubsub in mock_redis.pubsubs)
+
+    async def test_cancelling_one_sender_keeps_subscription_for_others(self, redis_stream, mock_redis):
+        stream = redis_stream()
+        first = asyncio.create_task(stream.send(ModelMessage("cancelled"), Context(stream)))
+        await mock_redis.starting.wait()
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+
+        mock_redis.release.set()
+        event = ModelMessage("remaining")
+        await asyncio.wait_for(stream.send(event, Context(stream)), timeout=1)
+
+        assert await stream.history.get_events() == [event]
+        await stream.close()
+        assert all(pubsub.closed for pubsub in mock_redis.pubsubs)
+
+    async def test_close_during_startup_releases_sender_and_pubsub(self, redis_stream, mock_redis):
+        stream = redis_stream()
+        send = asyncio.create_task(stream.send(ModelMessage("cancelled"), Context(stream)))
+        try:
+            await mock_redis.starting.wait()
+            await stream.close()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(asyncio.shield(send), timeout=1)
+        finally:
+            send.cancel()
+            await asyncio.gather(send, return_exceptions=True)
+
+        assert mock_redis.pubsubs[0].closed
+        assert await stream.history.get_events() == []
+
+    async def test_unsubscribe_failure_still_closes_pubsub(self, redis_stream, mock_redis):
+        stream = redis_stream()
+        mock_redis.release.set()
+        await stream.send(ModelMessage("hello"), Context(stream))
+        mock_redis.unsubscribe_error = RedisConnectionError("unsubscribe unavailable")
+
+        with pytest.raises(RedisConnectionError, match="unsubscribe unavailable"):
+            await stream.close()
+
+        assert mock_redis.pubsubs[0].closed
 
 
 class TestBinaryRoundTrip:

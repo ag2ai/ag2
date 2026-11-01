@@ -69,7 +69,7 @@ class RedisStream(MemoryStream):
         self._serializer = serializer
         self._channel = f"{prefix}:pubsub:{self.id}"
         self._instance_id = str(uuid4())
-        self._listener_task: asyncio.Task | None = None
+        self._listener_task: asyncio.Task[None] | None = None
         self._listener_ready = asyncio.Event()
         self._pubsub_redis = aioredis.from_url(redis_url)
         self._publish_redis = aioredis.from_url(redis_url)
@@ -78,18 +78,21 @@ class RedisStream(MemoryStream):
         # subscribers processing events from remote instances.
         self._base_context: Context | None = None
 
-    def _ensure_listener(self) -> None:
+    def _ensure_listener(self) -> asyncio.Task[None]:
         """Start the Redis Pub/Sub listener if not already running."""
         if self._listener_task is None or self._listener_task.done():
             self._listener_ready.clear()
             self._listener_task = asyncio.create_task(self._listen())
+        return self._listener_task
 
     async def _listen(self) -> None:
         """Listen for events on the Redis Pub/Sub channel and dispatch to local subscribers."""
         pubsub = self._pubsub_redis.pubsub()
-        await pubsub.subscribe(self._channel)
-        self._listener_ready.set()
+        subscribed = False
         try:
+            await pubsub.subscribe(self._channel)
+            subscribed = True
+            self._listener_ready.set()
             async for message in pubsub.listen():
                 if message["type"] != "message":
                     continue
@@ -106,8 +109,11 @@ class RedisStream(MemoryStream):
             # CancelledError (and any other exception) propagates out of the
             # try; this cleanup still runs on cancellation so the pub/sub
             # subscription is always released.
-            await pubsub.unsubscribe(self._channel)
-            await pubsub.aclose()
+            try:
+                if subscribed:
+                    await pubsub.unsubscribe(self._channel)
+            finally:
+                await pubsub.aclose()
 
     @staticmethod
     def _split_origin(raw: bytes) -> tuple[str | None, bytes]:
@@ -123,8 +129,9 @@ class RedisStream(MemoryStream):
 
     async def send(self, event: BaseEvent, context: Context) -> None:
         """Persist the event, dispatch locally, and publish to Redis for remote listeners."""
-        self._ensure_listener()
-        await self._listener_ready.wait()
+        listener = self._ensure_listener()
+        if not self._listener_ready.is_set():
+            await _wait_for_listener(listener, self._listener_ready)
         # Capture the first caller's context so the listener can reuse its
         # dependency_provider and dependencies for remotely-received events.
         if self._base_context is None:
@@ -147,3 +154,15 @@ class RedisStream(MemoryStream):
         await self._pubsub_redis.aclose()
         await self._publish_redis.aclose()
         await self._redis_storage.close()
+
+
+async def _wait_for_listener(listener: asyncio.Task[None], ready: asyncio.Event) -> None:
+    """Wait for startup or propagate its failure without cancelling the shared listener."""
+    waiter = asyncio.create_task(ready.wait())
+    try:
+        done, _ = await asyncio.wait((waiter, listener), return_when=asyncio.FIRST_COMPLETED)
+        if listener in done:
+            await listener
+    finally:
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
