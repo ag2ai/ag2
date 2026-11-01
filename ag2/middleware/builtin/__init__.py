@@ -4,6 +4,7 @@
 
 from ag2.exceptions import missing_optional_dependency
 
+from .call_limiter import CallCounter, CallLimiter
 from .history_limiter import HistoryLimiter
 from .llm_retry import RetryMiddleware
 from .logging import LoggingMiddleware
@@ -22,6 +23,8 @@ except ImportError as e:
 
 __all__ = (
     "ApprovalRequired",
+    "CallCounter",
+    "CallLimiter",
     "HistoryLimiter",
     "LoggingMiddleware",
     "MetricsMiddleware",

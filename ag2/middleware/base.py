@@ -86,6 +86,9 @@ ToolMiddleware: TypeAlias = Callable[[ToolExecution, "ToolCallEvent", "Context"]
 
 
 class BaseMiddleware:
+    # Stateful policies can require all hooks to participate in the same turn.
+    _requires_turn_scope = False
+
     def __init__(
         self,
         event: "BaseEvent",
@@ -204,4 +207,6 @@ class ConditionalMiddleware:
         context: "Context",
     ) -> "BaseMiddleware":
         inner = self._middleware(event, context)
+        if inner._requires_turn_scope:
+            raise ValueError(f"{type(inner).__name__} requires the full turn and cannot use ConditionalMiddleware")
         return _ConditionalWrapper(event, context, inner=inner, condition=self._condition)
