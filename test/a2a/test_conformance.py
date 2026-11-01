@@ -21,6 +21,7 @@ from a2a.utils.errors import TaskNotCancelableError
 from ag2 import Agent, Context
 from ag2.a2a import A2AConfig, A2AServer
 from ag2.a2a.errors import (
+    A2ATaskAuthRequiredError,
     A2ATaskCancelledError,
     A2ATaskFailedError,
     A2ATaskRejectedError,
@@ -969,3 +970,110 @@ async def test_tool_only_update_reconciles_the_previous_text(streaming: bool, ap
     assert reply.response.content == expected
     results = [event for event in await stream.history.get_events() if isinstance(event, ToolResultEvent)]
     assert [result.name for result in results] == ["step"]
+
+
+def _complete_partial_artifacts() -> list[Artifact]:
+    image = Part(url="https://test/image.png", media_type="image/png")
+    return [
+        Artifact(artifact_id="image", name="preview", parts=[image], metadata={"kind": "image"}),
+        Artifact(artifact_id="blank", parts=[Part(text="")]),
+        Artifact(
+            artifact_id="mixed",
+            name="result",
+            parts=[Part(text="partial"), image, data_part({"value": 1}, media_type="application/json")],
+            metadata={"phase": "done", "extra": True},
+            extensions=["urn:test"],
+        ),
+        Artifact(artifact_id="replaced", parts=[image], metadata={"replacement": True}),
+    ]
+
+
+async def _partial_artifacts_then_error(updater: TaskUpdater, release: asyncio.Event, *, state: TaskState) -> None:
+    image, blank, mixed, replaced = _complete_partial_artifacts()
+    await updater.add_artifact(
+        parts=list(image.parts),
+        artifact_id=image.artifact_id,
+        name=image.name,
+        metadata={"kind": "image"},
+        last_chunk=True,
+    )
+    await updater.add_artifact(parts=list(blank.parts), artifact_id=blank.artifact_id, last_chunk=True)
+    await updater.add_artifact(
+        parts=[mixed.parts[0]],
+        artifact_id=mixed.artifact_id,
+        name=mixed.name,
+        metadata={"phase": "working"},
+        extensions=list(mixed.extensions),
+    )
+    await updater.add_artifact(
+        parts=list(mixed.parts[1:]),
+        artifact_id=mixed.artifact_id,
+        metadata={"phase": "done", "extra": True},
+        append=True,
+        last_chunk=True,
+    )
+    await updater.add_artifact(parts=[Part(text="obsolete")], artifact_id=replaced.artifact_id)
+    await updater.add_artifact(
+        parts=list(replaced.parts),
+        artifact_id=replaced.artifact_id,
+        metadata={"replacement": True},
+        last_chunk=True,
+    )
+    await updater.update_status(state)
+
+
+@pytest.mark.asyncio
+@_both_modes
+@pytest.mark.parametrize(
+    ("state", "error"),
+    [
+        (TaskState.TASK_STATE_CANCELED, A2ATaskCancelledError),
+        (TaskState.TASK_STATE_FAILED, A2ATaskFailedError),
+        (TaskState.TASK_STATE_REJECTED, A2ATaskRejectedError),
+        (TaskState.TASK_STATE_AUTH_REQUIRED, A2ATaskAuthRequiredError),
+    ],
+    ids=["cancelled", "failed", "rejected", "auth-required"],
+)
+async def test_task_errors_preserve_complete_received_artifacts(
+    streaming: bool, state: TaskState, error: type[A2ATaskTerminalError]
+) -> None:
+    pair = make_executor_pair(
+        ScriptedExecutor(partial(_partial_artifacts_then_error, state=state)), streaming=streaming
+    )
+
+    with pytest.raises(error) as exc_info:
+        await pair.client.ask("go")
+
+    assert list(exc_info.value.task.artifacts) == _complete_partial_artifacts()
+
+
+async def _closed_image_then_cancelled(updater: TaskUpdater, release: asyncio.Event, *, append: bool) -> None:
+    await updater.add_artifact(
+        parts=[Part(url="https://test/first.png", media_type="image/png")], artifact_id="image", last_chunk=True
+    )
+    await updater.add_artifact(
+        parts=[Part(url="https://test/second.png", media_type="image/png")],
+        artifact_id="image",
+        metadata={"updated": True},
+        append=append,
+        last_chunk=True,
+    )
+    await updater.cancel()
+
+
+@pytest.mark.asyncio
+@_both_modes
+@pytest.mark.parametrize("append", [False, True], ids=["replace", "append"])
+async def test_task_error_reads_back_nontext_updates_after_last_chunk(streaming: bool, append: bool) -> None:
+    pair = make_executor_pair(
+        ScriptedExecutor(partial(_closed_image_then_cancelled, append=append)), streaming=streaming
+    )
+
+    with pytest.raises(A2ATaskCancelledError) as exc_info:
+        await pair.client.ask("go")
+
+    parts = [Part(url="https://test/first.png", media_type="image/png")] if append else []
+    parts.append(Part(url="https://test/second.png", media_type="image/png"))
+    assert list(exc_info.value.task.artifacts) == [
+        Artifact(artifact_id="image", parts=parts, metadata={"updated": True})
+    ]

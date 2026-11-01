@@ -155,6 +155,8 @@ class _ArtifactText:
     keeps its place ahead of one the current turn added.
     """
 
+    # Complete received parts/metadata, used when a terminal status has no task snapshot.
+    received: Artifact | None = None
     content: str = ""
     baseline: str = ""
     # Reply text already sent as ``ModelMessageChunk`` in this turn; it cannot be retracted.
@@ -167,9 +169,21 @@ class _ArtifactText:
         baseline = self.baseline
         return self.content[len(baseline) :] if self.content.startswith(baseline) else self.content
 
-    def update(self, text: str, append: bool) -> str:
+    def merged_artifact(self, artifact: Artifact, append: bool) -> Artifact:
+        """Build the updated snapshot without mutating the prior turn's shared snapshot."""
+        snapshot = Artifact()
+        if append and self.received is not None:
+            snapshot.CopyFrom(self.received)
+            snapshot.parts.extend(artifact.parts)
+            snapshot.metadata.update(dict(artifact.metadata.items()))
+        else:
+            snapshot.CopyFrom(artifact)
+        return snapshot
+
+    def update(self, artifact: Artifact, append: bool) -> str:
         """Apply a live update or a snapshot (``append=False`` restates the whole artifact); return the new reply text."""
-        self.content = self.content + text if append else text
+        self.received = self.merged_artifact(artifact, append)
+        self.content = _joined_text(self.received.parts)
         reply = self.reply()
         delta = reply[len(self.emitted) :] if reply.startswith(self.emitted) else ""
         self.emitted += delta
@@ -220,12 +234,8 @@ class A2ADriveState:
             self.pending_calls.append(call)
 
     def received_artifacts(self) -> list[Artifact]:
-        """Every text artifact as received so far, under its own id; stands in for ``task.artifacts`` when no task was."""
-        return [
-            Artifact(artifact_id=artifact_id, parts=[Part(text=artifact.content)])
-            for artifact_id, artifact in self.artifacts.items()
-            if artifact.content
-        ]
+        """Every artifact as received so far, including empty parts and nontext content."""
+        return [artifact.received for artifact in self.artifacts.values() if artifact.received is not None]
 
 
 @dataclass(slots=True)
@@ -781,16 +791,14 @@ class A2AClient(LLMClient):
         artifact = a2a_event.update.artifact
         artifact_id = artifact.artifact_id
         record = state.artifacts.setdefault(artifact_id, _ArtifactText())
-        text = "" if isinstance(a2a_event, A2AToolCallArtifact) else _artifact_text(a2a_event)
         calls = _artifact_calls(a2a_event)
         if record.closed:
-            changed_text = (record.content + text if a2a_event.append else text) != record.content
-            if changed_text or any((artifact_id, call.id) not in state.seen_calls for call in calls):
+            if record.merged_artifact(artifact, a2a_event.append) != record.received:
                 state.closed_artifact_changed = True
             return
 
         # A mixed artifact's text reconciles like a text artifact's; its calls dedup by call id.
-        if fresh := record.update(text, a2a_event.append):
+        if fresh := record.update(artifact, a2a_event.append):
             await context.send(ModelMessageChunk(fresh))
         for call in calls:
             state.add_call(artifact_id, call)
@@ -865,10 +873,6 @@ def _ensure_stream_response(event: StreamResponse | Task | Message) -> StreamRes
 
 def _joined_text(parts: Iterable[Part]) -> str:
     return "".join(part.text for part in parts)
-
-
-def _artifact_text(a2a_event: A2ATaskArtifactUpdate) -> str:
-    return a2a_event.text if isinstance(a2a_event, A2ATextArtifact) else _joined_text(a2a_event.update.artifact.parts)
 
 
 def _artifact_calls(a2a_event: A2ATaskArtifactUpdate) -> list[ToolCallEvent]:

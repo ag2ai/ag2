@@ -117,7 +117,7 @@ class A2ATaskRejectedError(A2ATaskTerminalError):
 
 
 class A2ATaskCancelledError(A2ATaskTerminalError):
-    """Task ended in TASK_STATE_CANCELED; ``task.artifacts`` holds the partial text received."""
+    """Task ended in TASK_STATE_CANCELED; ``task.artifacts`` holds the complete partial artifacts received."""
 
 
 class A2ATaskAuthRequiredError(A2ATaskTerminalError):
