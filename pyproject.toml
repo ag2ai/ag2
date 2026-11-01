@@ -123,8 +123,8 @@ perplexity = ["perplexityai>=0.30.0,<1"]
 
 # === MCP (ag2.mcp) ===
 mcp = [
-    "mcp>=2.2.0,<3",
-    "mcp-types>=2.2.0,<3",
+    "mcp>=2.3.0,<3",
+    "mcp-types>=2.3.0,<3",
     # imported directly to validate tool arguments; `mcp` requires it too, so this
     # only pins what is already installed
     "jsonschema>=4.20.0,<5",
@@ -132,7 +132,7 @@ mcp = [
 # MCP-UI resources (ag2.mcp_ui) — return renderable UI blobs from tool results
 mcp-ui = [
     "mcp-ui-server>=1.0.0",
-    "mcp>=2.2.0,<3",
+    "mcp>=2.3.0,<3",
 ]
 
 [dependency-groups]
@@ -160,8 +160,9 @@ test = [
     "python-dotenv", # provider smoke tests load repo-root .env
     "respx>=0.23.0,<0.24.0", # search tests
     # starlette >=1.0 drives `starlette.testclient.TestClient` with httpx2 and warns
-    # (StarletteDeprecationWarning) when it has to fall back to httpx 0.x
-    "httpx2>=2.9.1,<3",
+    # (StarletteDeprecationWarning) when it has to fall back to httpx 0.x; the 2.10
+    # floor is what mcp>=2.3 requires
+    "httpx2>=2.10.0,<3",
 ]
 
 # All optional feature deps needed so the full (non-LLM) test suite can be
@@ -248,7 +249,7 @@ docs = [
     "mkdocs-redirects==1.2.3",                          # required for handling redirects natively
     "jinja2==3.1.6",
     "pyyaml==6.0.3",
-    "mcp>=2.2.0,<3",
+    "mcp>=2.3.0,<3",
 ]
 
 types = [
