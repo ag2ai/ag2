@@ -9,7 +9,7 @@ The default notify handler (``handlers.py``) stamps the active
 under the qualified keys defined in ``policies.py``. These ``Annotated``
 aliases give tool authors a typed handle to those bindings.
 
-``TaskInject`` lives in framework-core (``ag2.annotations``)
+``TaskInject`` lives in framework-core (``ag2.task``)
 because ``Task`` itself is framework-core; it is re-exported here for
 symmetry with the network-only injects so users can ``from
 ag2.network.client.inject import TaskInject`` alongside the
@@ -19,6 +19,7 @@ others.
 from typing import Annotated, Any
 
 from ag2.annotations import Inject
+from ag2.task import TaskInject
 
 from ..policies import AGENT_CLIENT_DEP, CHANNEL_DEP, CHANNEL_STATE_DEP, HUB_DEP
 
@@ -47,6 +48,6 @@ ChannelStateInject = Annotated[Any, Inject(CHANNEL_STATE_DEP, default=None)]
 AgentClientInject = Annotated[Any, Inject(AGENT_CLIENT_DEP, default=None)]
 HubInject = Annotated[Any, Inject(HUB_DEP, default=None)]
 
-# Framework-core re-export for symmetry. Same definition as
-# ``ag2.task.TaskInject`` — both resolve to ``ag2.task``.
-TaskInject = Annotated[Any, Inject("ag2.task", default=None)]
+# Framework-core re-export for symmetry. The same annotation as
+# ``ag2.task.TaskInject`` — resolves to the enclosing ``agent.task(...)``
+# block on the same conversation.

@@ -10,6 +10,7 @@ for ``TaskInject``, and TTL field population.
 """
 
 import asyncio
+from contextlib import ExitStack
 from itertools import permutations
 
 import pytest
@@ -28,7 +29,7 @@ from ag2.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
-from ag2.middleware import ToolExecution, ToolResultType
+from ag2.observers import observer
 from ag2.stream import MemoryStream
 from ag2.task import TERMINAL_TASK_STATES, Task, TaskState
 from ag2.testing import TestConfig
@@ -325,29 +326,114 @@ class TestMetadata:
             assert task.metadata.spec.payload == {"capability": "search"}
 
 
+class _ProbeEvent(BaseEvent):
+    """Published from inside a task block; the observer callback resolves ``TaskInject``."""
+
+    tag: str
+
+
+@pytest.mark.asyncio
+async def test_task_inject_none_outside_any_block() -> None:
+    """A tool resolving ``TaskInject`` outside any ``agent.task(...)`` block gets ``None``."""
+    resolved: dict[str, Task | None] = {}
+
+    @tool
+    async def probe(task: TaskInject) -> str:
+        resolved["probe"] = task
+        return "probed"
+
+    agent = Agent(
+        "researcher",
+        config=TestConfig(
+            ModelResponse(tool_calls=ToolCallsEvent([ToolCallEvent(id="probe_1", name="probe", arguments="{}")])),
+            "Done",
+        ),
+        tools=[probe],
+    )
+
+    reply = await agent.ask("Probe.")
+    assert reply.body == "Done"
+    assert resolved["probe"] is None
+
+
+@pytest.mark.asyncio
+async def test_task_inject_sequential_nesting() -> None:
+    """Sequential nesting: inside inner → inner; after it exits → outer; after both → None."""
+    agent = _agent()
+    stream = MemoryStream()
+    ctx = ConversationContext(stream=stream)
+    seen: dict[str, Task | None] = {}
+
+    async def probe(event: _ProbeEvent, task: TaskInject) -> None:
+        seen[event.tag] = task
+
+    with ExitStack() as stack:
+        observer(_ProbeEvent, probe, sync_to_thread=False).register(stack, ctx)
+
+        async with agent.task("outer", context=ctx) as outer:
+            await ctx.send(_ProbeEvent(tag="inside-outer"))
+            async with agent.task("inner", context=ctx) as inner:
+                await ctx.send(_ProbeEvent(tag="inside-inner"))
+            await ctx.send(_ProbeEvent(tag="after-inner"))
+        await ctx.send(_ProbeEvent(tag="after-outer"))
+
+    assert seen == {
+        "inside-outer": outer,
+        "inside-inner": inner,
+        "after-inner": outer,
+        "after-outer": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_task_inject_does_not_leak_across_conversations() -> None:
+    """A task opened on one conversation is not visible to ``TaskInject`` on an
+    unrelated conversation started inside its block."""
+    resolved: dict[str, Task | None] = {}
+
+    @tool
+    async def report(task: TaskInject) -> str:
+        resolved["worker"] = task
+        return "reported"
+
+    worker = Agent(
+        "worker",
+        config=TestConfig(
+            ModelResponse(tool_calls=ToolCallsEvent([ToolCallEvent(id="report_1", name="report", arguments="{}")])),
+            "Done",
+        ),
+        tools=[report],
+    )
+
+    outer_stream = MemoryStream()
+    ctx = ConversationContext(stream=outer_stream)
+    async with _agent().task("outer", context=ctx):
+        await worker.ask("Report.", stream=MemoryStream())
+
+    assert resolved["worker"] is None
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "exit_order",
     [*permutations("AB"), *permutations("ABC")],
     ids="".join,
 )
-async def test_parallel_tool_tasks_inject_latest_running_task(exit_order: tuple[str, ...]) -> None:
+async def test_parallel_sibling_tasks_inject_own_task(exit_order: tuple[str, ...]) -> None:
     """Sibling tool calls in one turn each open a task on the shared context.
-    A tool resolving ``TaskInject`` after each exit gets the latest-entered
-    task still running — never an exited one — and ``None`` after the last."""
+    Code resolving ``TaskInject`` inside a block gets *its own* task, for any
+    entry/exit interleaving — not whichever sibling entered last."""
     names = sorted(exit_order)
-    # One `step_X` call opens task X; one `probe_X` call injects the task once X exited.
-    gates = {f"{kind}_{n}": asyncio.Event() for kind in ("step", "probe") for n in names}
-    done = {call_id: asyncio.Event() for call_id in gates}
+    gates = {n: asyncio.Event() for n in names}
+    released = {n: asyncio.Event() for n in names}
     entered = {n: asyncio.Event() for n in names}
     # Steps enter one after another, so entry order is ``names``.
     entered_before = dict(zip(names[1:], names))
     tasks: dict[str, Task] = {}
-    injected: dict[str, Task | None] = {}
+    seen: dict[str, Task | None] = {}
 
-    async def hold_until_released(call_next: ToolExecution, event: ToolCallEvent, ctx: Context) -> ToolResultType:
-        await gates[event.id].wait()
-        return await call_next(event, ctx)
+    async def probe(event: _ProbeEvent, task: TaskInject) -> None:
+        seen[event.tag] = task
 
     @tool
     async def step(name: str, ctx: Context) -> str:
@@ -356,41 +442,35 @@ async def test_parallel_tool_tasks_inject_latest_running_task(exit_order: tuple[
         async with agent.task(name, context=ctx) as task:
             tasks[name] = task
             entered[name].set()
-            await gates[f"step_{name}"].wait()
-        done[f"step_{name}"].set()
+            await ctx.send(_ProbeEvent(tag=f"{name}:inside"))
+            await gates[name].wait()
+            await ctx.send(_ProbeEvent(tag=f"{name}:before-exit"))
+        released[name].set()
         return name
-
-    @tool(middleware=[hold_until_released])
-    async def probe(after: str, task: TaskInject) -> str:
-        injected[after] = task
-        done[f"probe_{after}"].set()
-        return after
 
     agent = Agent(
         "researcher",
         config=TestConfig(
             ModelResponse(
                 tool_calls=ToolCallsEvent([
-                    *(ToolCallEvent(id=f"step_{n}", name="step", arguments=f'{{"name": "{n}"}}') for n in names),
-                    *(ToolCallEvent(id=f"probe_{n}", name="probe", arguments=f'{{"after": "{n}"}}') for n in names),
+                    ToolCallEvent(id=f"step_{n}", name="step", arguments=f'{{"name": "{n}"}}') for n in names
                 ]),
             ),
             "Done",
         ),
-        tools=[step, probe],
+        tools=[step],
+        observers=[observer(_ProbeEvent, probe, sync_to_thread=False)],
     )
 
     reply = asyncio.create_task(agent.ask("Run the steps."))
     await asyncio.gather(*(e.wait() for e in entered.values()))
 
-    running = list(names)
-    expected: dict[str, Task | None] = {}
     for name in exit_order:
-        for call_id in (f"step_{name}", f"probe_{name}"):
-            gates[call_id].set()
-            await done[call_id].wait()
-        running.remove(name)
-        expected[name] = tasks[running[-1]] if running else None
+        gates[name].set()
+        await released[name].wait()
 
     assert (await reply).body == "Done"
-    assert injected == expected
+    assert seen == {
+        **{f"{n}:inside": tasks[n] for n in names},
+        **{f"{n}:before-exit": tasks[n] for n in names},
+    }

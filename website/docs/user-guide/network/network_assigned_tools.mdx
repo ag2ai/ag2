@@ -109,7 +109,7 @@ If you write a custom adapter, override `#!python tools_for` to offer your chann
 
 ## What gets injected, automatically
 
-Every grouped tool accepts `#!python AgentClientInject`, `#!python ChannelInject`, and (for `#!python tasks`) `#!python TaskInject` parameters that the framework resolves from `#!python context.dependencies` when the tool runs inside a notify handler. Your code does not need to wire them up — the default handler stamps them via `#!python stamp_dependencies` before invoking the agent's turn.
+Every grouped tool accepts `#!python AgentClientInject`, `#!python ChannelInject`, and (for `#!python tasks`) `#!python TaskInject` parameters that the framework resolves from the context when the tool runs inside a notify handler (`#!python TaskInject` resolves to the enclosing `#!python agent.task(...)` block on the same conversation). Your code does not need to wire them up — the default handler stamps them via `#!python stamp_dependencies` before invoking the agent's turn.
 
 If you are testing a tool *outside* the notify-handler context, pass them yourself:
 

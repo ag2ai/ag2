@@ -999,9 +999,12 @@ class Agent(PluginTarget, Generic[TResult]):
         and events fire on it (only observers attached to that private
         stream see them).
 
-        Inside the ``async with`` block, ``ag2.task`` is stamped into
-        ``context.dependencies`` so any tool annotated with ``TaskInject``
-        resolves to this Task.
+        Inside the ``async with`` block, tools annotated with ``TaskInject``
+        resolve to this Task — per asyncio task, so sibling tool calls that
+        each open a task resolve their own, and a nested block resolves to
+        the innermost enclosing task. ``context.dependencies`` also carries
+        an ``ag2.task`` slot for the block (best-effort under overlapping
+        siblings; kept for direct readers of the dict).
 
         ``capability`` tags the task with a capability name. When the
         agent is registered with the network, the ``TaskMirror`` calls
