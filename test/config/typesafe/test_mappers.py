@@ -32,6 +32,7 @@ from ag2.config.typesafe.mappers import (
     response_proto_to_question,
 )
 from ag2.events import (
+    BaseEvent,
     DataInput,
     FileIdInput,
     ModelMessage,
@@ -312,3 +313,15 @@ def test_bool_with_instructions_keeps_only_described_outcomes(criteria: dict[str
     question = response_proto_to_question(ResponseSchema(bool), instructions="Triage.", criteria=criteria)
 
     assert question.model_dump(mode="json") == {"type": "noul", "instructions": "Triage.", "criteria": criteria}
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_state(final_turn_history, PydanticSerializer) == [
+        {"role": "user", "content": "first turn"},
+        {"role": "tool", "content": "sent"},
+        {"role": "tool", "content": "lookup result"},
+        {"role": "assistant", "content": "sent"},
+        {"role": "user", "content": "second turn"},
+        {"role": "assistant", "content": "second reply"},
+    ]

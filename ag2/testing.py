@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeAlias
 from unittest.mock import MagicMock
 
@@ -99,13 +100,18 @@ class TestClient(LLMClient):
 
 @dataclass(frozen=True, slots=True)
 class ModelCall:
-    """What the framework handed the LLM for one call: the history, prompt, tools and context at that moment."""
+    """What the framework handed the LLM for one attempt.
+
+    ``messages`` is a detached snapshot of the complete ordered input, including
+    mutable event payloads. It does not participate in equality, preserving
+    comparisons with settings-only ``ModelCall`` values constructed by callers.
+    """
 
     prompt: tuple[str, ...]
     tools: tuple[ToolSchema, ...]
     dependencies: Mapping[Any, Any]
     variables: Mapping[Any, Any]
-    messages: tuple[BaseEvent, ...] = ()
+    messages: tuple[BaseEvent, ...] = field(default=(), compare=False)
 
 
 class TrackingClient(LLMClient):
@@ -130,7 +136,7 @@ class TrackingClient(LLMClient):
                 tools=tools,
                 dependencies=dict(context.dependencies),
                 variables=dict(context.variables),
-                messages=tuple(messages),
+                messages=deepcopy(tuple(messages)),
             )
         )
         return await self.client(messages, context=context, **kwargs)

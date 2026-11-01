@@ -110,7 +110,8 @@ elevenlabs = [
 ]
 gemini = [
     { name = "google-auth" },
-    { name = "google-genai" },
+    { name = "google-genai", version = "2.33.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "google-genai", version = "2.34.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 mcp = [
     { name = "jsonschema" },
@@ -314,9 +315,9 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "jsonschema", marker = "extra == 'a2ui'", specifier = ">=4.18.0,<5" },
     { name = "jsonschema", marker = "extra == 'mcp'", specifier = ">=4.20.0,<5" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.2.0,<3" },
-    { name = "mcp", marker = "extra == 'mcp-ui'", specifier = ">=2.2.0,<3" },
-    { name = "mcp-types", marker = "extra == 'mcp'", specifier = ">=2.2.0,<3" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.3.0,<3" },
+    { name = "mcp", marker = "extra == 'mcp-ui'", specifier = ">=2.3.0,<3" },
+    { name = "mcp-types", marker = "extra == 'mcp'", specifier = ">=2.3.0,<3" },
     { name = "mcp-ui-server", marker = "extra == 'mcp-ui'", specifier = ">=1.0.0" },
     { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=3.6.0,<4" },
     { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.5.2,<1" },
@@ -363,9 +364,9 @@ dev = [
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "firecrawl-py", specifier = ">=4.53,<5" },
     { name = "freezegun", specifier = ">=1.5,<2" },
-    { name = "httpx2", specifier = ">=2.9.1,<3" },
+    { name = "httpx2", specifier = ">=2.10.0,<3" },
     { name = "jinja2", specifier = "==3.1.6" },
-    { name = "mcp", specifier = ">=2.2.0,<3" },
+    { name = "mcp", specifier = ">=2.3.0,<3" },
     { name = "mdx-include", specifier = "==1.4.2" },
     { name = "mkdocs-git-revision-date-localized-plugin", specifier = "==1.6.0" },
     { name = "mkdocs-glightbox", specifier = "==0.5.2" },
@@ -419,7 +420,7 @@ docs = [
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "firecrawl-py", specifier = ">=4.53,<5" },
     { name = "jinja2", specifier = "==3.1.6" },
-    { name = "mcp", specifier = ">=2.2.0,<3" },
+    { name = "mcp", specifier = ">=2.3.0,<3" },
     { name = "mdx-include", specifier = "==1.4.2" },
     { name = "mkdocs-git-revision-date-localized-plugin", specifier = "==1.6.0" },
     { name = "mkdocs-glightbox", specifier = "==0.5.2" },
@@ -489,7 +490,7 @@ test = [
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "freezegun", specifier = ">=1.5,<2" },
-    { name = "httpx2", specifier = ">=2.9.1,<3" },
+    { name = "httpx2", specifier = ">=2.10.0,<3" },
     { name = "pillow" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-asyncio", specifier = "==1.4.0" },
@@ -514,7 +515,7 @@ types = [
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "freezegun", specifier = ">=1.5,<2" },
-    { name = "httpx2", specifier = ">=2.9.1,<3" },
+    { name = "httpx2", specifier = ">=2.10.0,<3" },
     { name = "mypy", specifier = "==2.4.0" },
     { name = "pillow" },
     { name = "pytest", specifier = "==9.1.1" },
@@ -2396,8 +2397,12 @@ requests = [
 
 [[package]]
 name = "google-genai"
-version = "2.28.0"
+version = "2.33.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.11' and sys_platform == 'linux'",
+    "python_full_version < '3.11' and sys_platform != 'linux'",
+]
 dependencies = [
     { name = "anyio" },
     { name = "distro" },
@@ -2410,9 +2415,48 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/59/16/4af15d65cb72ebc21a99c5e64f09072e97334c05a48d4cede19c347e6ad2/google_genai-2.28.0.tar.gz", hash = "sha256:970cb2eaf1951949851c3e0a5b70265cfea8a408fb7361c7c980a84d90672bf2", size = 707359, upload-time = "2026-10-02T17:58:14.454Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/a4/b83b378b4a2fbbfb300c3fde0ff9f443f049c33e2accedf06bc0ad9bf393/google_genai-2.33.0.tar.gz", hash = "sha256:fced7f746da45264b34bcf6044a6fcdb91ebad1825e95c324ee48addb6e557ae", size = 758627, upload-time = "2026-10-23T00:06:28.332Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ad/4b/47278c34757293ba8d9156090d38e1c45fac9a47c50176acff7f77ae9a66/google_genai-2.28.0-py3-none-any.whl", hash = "sha256:cdee15e2fbfea08ea61bce6e5bfbb3301db4bd13a52dccfa8c8d1167e37ca1cc", size = 1168554, upload-time = "2026-10-02T17:58:12.585Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/3b/9ae8e16c5b2177bfdec1c64769a93eea9093de684e0bbb95c10c77645fef/google_genai-2.33.0-py3-none-any.whl", hash = "sha256:f3f8ab696b35caf95c222e05268740c1ccd6934257890506be73b126150d3b14", size = 1222487, upload-time = "2026-10-23T00:06:26.528Z" },
+]
+
+[[package]]
+name = "google-genai"
+version = "2.34.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15' and sys_platform == 'linux'",
+    "python_full_version >= '3.15' and sys_platform != 'linux'",
+    "python_full_version == '3.14.*' and sys_platform == 'win32'",
+    "python_full_version == '3.14.*' and sys_platform == 'linux'",
+    "python_full_version == '3.14.*' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.13.*' and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'linux'",
+    "python_full_version == '3.11.*' and sys_platform != 'linux' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "google-auth", extra = ["requests"] },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "sniffio" },
+    { name = "tenacity" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/22/89/4621aee9cb183efa5b8a187f0e315c49fddcfb8cd7f238b4a3bf4946dcd0/google_genai-2.34.0.tar.gz", hash = "sha256:8e182cf3f73384167b96861cf0aef5102b5070f2db1ea11002879e913806ef37", size = 791853, upload-time = "2026-10-29T06:43:23.706Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/42/c24db865d9231b1c672ea26242a4dcf340e200bb1a9823dce4aa9c4c07a4/google_genai-2.34.0-py3-none-any.whl", hash = "sha256:a4cb02aebc4c357f863d2938132f0e3f7967fc5e00b8a4078673f68aad340665", size = 1258155, upload-time = "2026-10-29T06:43:21.121Z" },
 ]
 
 [[package]]
