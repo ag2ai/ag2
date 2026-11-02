@@ -273,7 +273,7 @@ endpoint on both routes as shown in the simpler example above.
 | `transport` | `streaming: true` | Always |
 | `tools` | `supported: true`, `clientProvided: true` | `clientProvided` on `AGUIStream` only: the A2UI transport ignores `RunAgentInput.tools` |
 | `state` | `snapshots: true` | `AGUIStream` only |
-| `multiAgent` | `supported: true`, `delegation: true`; named `subagents` for `as_tool` | The agent is built with `tasks=TaskConfig(...)` or has delegation tools |
+| `multiAgent` | `supported: true`, `delegation: true`; named `subagents` for `as_tool` | The agent has delegation tools or uses the deprecated `tasks=TaskConfig(...)` API (removed in 1.4.0) |
 | `reasoning` | `encrypted: true` for Gemini function-call signatures | Gemini agents only |
 | `multimodal` | `input`: media the configured provider mapper accepts | Always |
 | `humanInTheLoop` | `supported: true`, `interrupts` | `interrupts` is `false` when the agent has its own `hitl_hook` |
@@ -398,6 +398,9 @@ answers its call: the model sees the empty string.
 Each delegation to a sub-agent (`agent.as_tool(...)`, `run_subtask`) reaches the
 client as a subagent invocation with its own `subagentRunId`, so two parallel
 delegations to the same agent can be told apart:
+
+!!! warning "Legacy automatic subtask tools"
+    `run_subtask` / `run_subtasks` enabled by `TaskConfig` are deprecated and will be removed in **1.4.0**. Use [explicit delegation](/docs/user-guide/subagents#migrating-from-taskconfig) through `Agent.as_tool()`; its AG-UI capabilities and lifecycle reporting remain supported.
 
 ```text
 SUBAGENT_STARTED  {"subagentRunId":"4f1c...","name":"researcher","description":"<the objective>"}

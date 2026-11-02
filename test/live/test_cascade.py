@@ -24,7 +24,9 @@ from ag2.events import (
     ModelRequest,
     ModelResponse,
     RecordedAudioEvent,
+    StatusObservation,
     SynthesizedAudioEvent,
+    TextInput,
     ToolCallEvent,
     TranscriptionCompletedEvent,
     Usage,
@@ -210,6 +212,24 @@ class TestCascadeSession:
         assert model.seen
         for messages in model.seen:
             assert not any(isinstance(e, (RecordedAudioEvent, SynthesizedAudioEvent)) for e in messages)
+
+    async def test_retained_status_on_a_shared_stream_reaches_the_model(self) -> None:
+        """A status observation saved by an agent on the same stream is projected
+        to a request view, as the agent loop does, rather than passed raw."""
+        stt, tts = FakeSTT(), FakeTTS()
+        model = RecordingConfig(TestConfig("Understood."))
+        stream = MemoryStream()
+        await stream.history.replace([StatusObservation([TextInput("progress:1")], source="fixture")])
+        context = ConversationContext(stream=stream)
+
+        async with cascade(model, stt, tts).session(context, serializer=None):  # type: ignore[arg-type]
+            await speak_one_turn(context)
+            await asyncio.sleep(0.05)
+
+        [status, *_] = model.seen[0]
+        assert not isinstance(status, StatusObservation)
+        assert isinstance(status, ModelRequest)
+        assert status.parts == [TextInput("progress:1")]
 
     async def test_instructions_reach_the_prompt(self) -> None:
         """`LiveAgent` hands the agent prompt to the session rather than the

@@ -6,11 +6,11 @@ from typing import Any
 
 import httpx
 import pytest
+from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 
 from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer
 from ag2.a2a.testing import make_test_client_factory
-from ag2.a2a.transports._common import DEFAULT_AGENT_CARD_PATH
 from ag2.testing import TestConfig
 
 from ._http_server import serve_over_http
@@ -53,7 +53,7 @@ async def test_configured_headers_reach_the_server() -> None:
     assert reply.body == "hi"
     assert spy is not None
     # The card fetch carries the headers too, not just the RPC call.
-    assert DEFAULT_AGENT_CARD_PATH in spy.seen
+    assert AGENT_CARD_WELL_KNOWN_PATH in spy.seen
     assert set(spy.seen.values()) == {"alpha"}
 
 

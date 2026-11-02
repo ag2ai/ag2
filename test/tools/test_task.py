@@ -42,6 +42,9 @@ from ag2.tools.subagents import run_task as run_task_mod
 from ag2.tools.subagents.run_task import _rollup_usage, run_task
 from ag2.usage import UsageReport
 
+# Exercises the deprecated TaskConfig / run_subtask path on purpose.
+pytestmark = pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
+
 
 @tool
 def noop() -> str:

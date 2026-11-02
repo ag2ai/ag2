@@ -205,9 +205,11 @@ class PromptObserverMixin:
         """Append an assembly policy to the chain.
 
         Policies run in order; a newly added policy runs after existing ones.
-        Construction-time ordering validation (warning on suspicious sequences)
-        only runs over policies passed via ``assembly=`` — late additions skip
-        the check, so callers should be confident in the ordering they introduce.
+        On an ``Agent`` they join the first registered
+        ``Middleware(AssemblerMiddleware, ...)``, after its own policies, or an
+        assembler the agent appends when there is none. Ordering is validated
+        (warning on suspicious sequences) at construction and on each turn
+        that brings policies from elsewhere.
         """
         self._policies.append(policy)
         return self

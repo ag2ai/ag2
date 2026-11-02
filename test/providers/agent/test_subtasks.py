@@ -17,7 +17,11 @@ from ag2.stream import MemoryStream
 from ag2.tools.subagents import persistent_stream
 from ag2.tools.subagents import run_task as run_task_mod
 
-pytestmark = pytest.mark.asyncio
+# Exercises the deprecated TaskConfig / run_subtask path on purpose.
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning"),
+]
 
 
 async def test_run_subtask_auto_injected(provider_config) -> None:

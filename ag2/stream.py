@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from fast_depends.core import CallModel
 
-from ag2.types import ClassInfo, SendableMessage
+from ag2.types import ClassInfo, RequestOrigin, SendableMessage
 
 from .annotations import Context as AnnotatedContext
 from .context import ConversationContext, Stream, StreamId, SubId, drop_background_task
@@ -182,11 +182,11 @@ class MemoryStream(ABCStream):
             # These are real-time streaming artifacts superseded by their final counterparts.
             self.subscribe(_FilteredStorage(storage).save_event)
 
-    def enqueue(self, *content: "SendableMessage | Input") -> None:
+    def enqueue(self, *content: "SendableMessage | Input", origin: RequestOrigin = "service") -> None:
         if not content:
             return
         parts = [Input.ensure_input(item) for item in content]
-        self.pending_messages.append(ModelRequest(parts))
+        self.pending_messages.append(ModelRequest(parts, origin=origin))
 
     def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         task = asyncio.create_task(coro)
@@ -352,8 +352,8 @@ class SubStream(ABCStream):
     def pending_messages(self) -> list[ModelRequest]:
         return self._parent.pending_messages
 
-    def enqueue(self, *content: "SendableMessage | Input") -> None:
-        self._parent.enqueue(*content)
+    def enqueue(self, *content: "SendableMessage | Input", origin: RequestOrigin = "service") -> None:
+        self._parent.enqueue(*content, origin=origin)
 
     def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         return self._parent.spawn_background(coro)

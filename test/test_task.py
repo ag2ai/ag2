@@ -9,21 +9,30 @@ Covers standalone usage with no hub or network — pure
 for ``TaskInject``, and TTL field population.
 """
 
+import asyncio
+from itertools import permutations
+
 import pytest
 
-from ag2 import Agent, TaskSpec
+from ag2 import Agent, Context, TaskInject, TaskSpec
 from ag2.config import AnthropicConfig
 from ag2.context import ConversationContext
 from ag2.events import (
     BaseEvent,
+    ModelResponse,
     TaskCompleted,
     TaskExpired,
     TaskFailed,
     TaskProgress,
     TaskStarted,
+    ToolCallEvent,
+    ToolCallsEvent,
 )
+from ag2.middleware import ToolExecution, ToolResultType
 from ag2.stream import MemoryStream
-from ag2.task import TERMINAL_TASK_STATES, TaskState
+from ag2.task import TERMINAL_TASK_STATES, Task, TaskState
+from ag2.testing import TestConfig
+from ag2.tools import tool
 
 
 def _agent() -> Agent:
@@ -314,3 +323,74 @@ class TestMetadata:
         agent = _agent()
         async with agent.task("payload-test", payload={"capability": "search"}) as task:
             assert task.metadata.spec.payload == {"capability": "search"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exit_order",
+    [*permutations("AB"), *permutations("ABC")],
+    ids="".join,
+)
+async def test_parallel_tool_tasks_inject_latest_running_task(exit_order: tuple[str, ...]) -> None:
+    """Sibling tool calls in one turn each open a task on the shared context.
+    A tool resolving ``TaskInject`` after each exit gets the latest-entered
+    task still running — never an exited one — and ``None`` after the last."""
+    names = sorted(exit_order)
+    # One `step_X` call opens task X; one `probe_X` call injects the task once X exited.
+    gates = {f"{kind}_{n}": asyncio.Event() for kind in ("step", "probe") for n in names}
+    done = {call_id: asyncio.Event() for call_id in gates}
+    entered = {n: asyncio.Event() for n in names}
+    # Steps enter one after another, so entry order is ``names``.
+    entered_before = dict(zip(names[1:], names))
+    tasks: dict[str, Task] = {}
+    injected: dict[str, Task | None] = {}
+
+    async def hold_until_released(call_next: ToolExecution, event: ToolCallEvent, ctx: Context) -> ToolResultType:
+        await gates[event.id].wait()
+        return await call_next(event, ctx)
+
+    @tool
+    async def step(name: str, ctx: Context) -> str:
+        if name in entered_before:
+            await entered[entered_before[name]].wait()
+        async with agent.task(name, context=ctx) as task:
+            tasks[name] = task
+            entered[name].set()
+            await gates[f"step_{name}"].wait()
+        done[f"step_{name}"].set()
+        return name
+
+    @tool(middleware=[hold_until_released])
+    async def probe(after: str, task: TaskInject) -> str:
+        injected[after] = task
+        done[f"probe_{after}"].set()
+        return after
+
+    agent = Agent(
+        "researcher",
+        config=TestConfig(
+            ModelResponse(
+                tool_calls=ToolCallsEvent([
+                    *(ToolCallEvent(id=f"step_{n}", name="step", arguments=f'{{"name": "{n}"}}') for n in names),
+                    *(ToolCallEvent(id=f"probe_{n}", name="probe", arguments=f'{{"after": "{n}"}}') for n in names),
+                ]),
+            ),
+            "Done",
+        ),
+        tools=[step, probe],
+    )
+
+    reply = asyncio.create_task(agent.ask("Run the steps."))
+    await asyncio.gather(*(e.wait() for e in entered.values()))
+
+    running = list(names)
+    expected: dict[str, Task | None] = {}
+    for name in exit_order:
+        for call_id in (f"step_{name}", f"probe_{name}"):
+            gates[call_id].set()
+            await done[call_id].wait()
+        running.remove(name)
+        expected[name] = tasks[running[-1]] if running else None
+
+    assert (await reply).body == "Done"
+    assert injected == expected

@@ -3,22 +3,22 @@ title: "Safety Guard"
 sidebarTitle: "08 · Safety Guard"
 ---
 
-A custom `BaseObserver` (`PathGuardian`) watches every tool call and emits a `Severity.FATAL` `ObserverAlert` when an Agent tries to write to a forbidden path like `/etc/`. The alert routes through `AlertPolicy` → `HaltEvent` → `_HaltCheckMiddleware`, which short-circuits the next LLM call with a synthetic `HALTED: ...` response. The first ask (writing to `/tmp/...`) succeeds; the second (writing to `/etc/passwd`) is blocked end-to-end.
+A custom `BaseObserver` (`PathGuardian`) watches every tool call and emits a `Severity.FATAL` `ObserverAlert` when an Agent tries to write to a forbidden path like `/etc/`. The alert routes through `AlertPolicy` → `HaltEvent` → `HaltCheckMiddleware`, which short-circuits the next LLM call with a synthetic `HALTED: ...` response. The first ask (writing to `/tmp/...`) succeeds; the second (writing to `/etc/passwd`) is blocked end-to-end.
 
 ## What it covers
 
 - Building a `BaseObserver` that watches a specific event type (here `ToolCallEvent`) via `EventWatch`.
 - Returning an `ObserverAlert(severity=Severity.FATAL, ...)` from an observer to signal a hard-stop condition.
-- How `AlertPolicy` (in the `assembly` chain) translates a FATAL alert into a `HaltEvent` and appends a halt notice to the system prompt.
-- How `_HaltCheckMiddleware` (auto-wired when `assembly` is non-empty) sees the `HaltEvent` and short-circuits the next LLM call.
+- How `AlertPolicy` (in the `AssemblerMiddleware` policy chain) translates a FATAL alert into a `HaltEvent` and appends a halt notice to the system prompt.
+- How `HaltCheckMiddleware` (registered after `AssemblerMiddleware`) sees the `HaltEvent` and short-circuits the next LLM call.
 - Subscribing to `HaltEvent` and `ObserverAlert` from outside the Agent to verify the halt fired.
 
 ## Primitives covered
 
 - `BaseObserver` + `EventWatch(ToolCallEvent)`
 - `ObserverAlert` with `Severity.FATAL`
-- `AlertPolicy` in the `assembly=` chain
-- Auto-wired `_HaltCheckMiddleware` (no explicit middleware setup needed)
+- `AlertPolicy` in `Middleware(AssemblerMiddleware, policies=[...])`
+- `Middleware(HaltCheckMiddleware)` after the assembler
 - `HaltEvent` lifecycle event
 
 ## Source
@@ -35,8 +35,7 @@ there is fully wired by the framework:
 2. ``AlertPolicy`` (an assembly policy) picks it up before the next LLM
    call, emits a ``HaltEvent`` on the stream, and appends a halt notice
    to the system prompt.
-3. ``_HaltCheckMiddleware`` (wired in automatically when ``assembly`` is
-   non-empty) sees the ``HaltEvent`` and short-circuits the LLM call with
+3. ``HaltCheckMiddleware`` (registered after ``AssemblerMiddleware``) sees the ``HaltEvent`` and short-circuits the LLM call with
    a synthetic ``HALTED: ...`` response.
 
 Run::
@@ -49,6 +48,8 @@ import asyncio
 from ag2 import Agent
 from ag2 import Context
 from ag2.config import GeminiConfig
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import HaltCheckMiddleware, Middleware
 from ag2.events import BaseEvent, ToolCallEvent, HaltEvent, ObserverAlert, Severity
 from ag2.observers import BaseObserver
 from ag2.policies import AlertPolicy
@@ -105,7 +106,10 @@ async def main() -> None:
         config=config,
         tools=[write_file],
         observers=[PathGuardian()],
-        assembly=[AlertPolicy()],  # routes FATAL alerts to HaltEvent
+        middleware=[
+            Middleware(AssemblerMiddleware, policies=[AlertPolicy()]),
+            Middleware(HaltCheckMiddleware),  # stops the model call on HaltEvent
+        ],
     )
 
     section("Safe request — observer stays silent")

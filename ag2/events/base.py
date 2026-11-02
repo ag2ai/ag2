@@ -42,9 +42,10 @@ def truncate_repr(value: Any, max_len: int = _REPR_MAX_LEN) -> str:
 def is_conversational(event: Any) -> bool:
     """True for events that drive history management (compaction, summary input).
 
-    "Conversational" means the durable transcript replayed to the model — model
-    and human turns, tool calls/results, summaries — not transient artifacts
-    (chunks) or persisted telemetry (``UsageEvent``).
+    "Conversational" covers model and human turns, tool calls/results, and
+    summaries, excluding transient artifacts, persisted telemetry, and service
+    observations. Model visibility is independent: retained status observations
+    can be replayed without counting as conversation.
     """
     cls = type(event)
     return not getattr(cls, "__transient__", False) and getattr(cls, "__conversational__", True)
@@ -250,8 +251,8 @@ class BaseEvent(metaclass=_ConditionMeta):
     # NOTE: no type annotation — must NOT be processed as an event Field.
     __transient__ = False
 
-    # True = durable transcript replayed to the model (drives history management).
-    # Persisted telemetry sets False (e.g. UsageEvent). No type annotation.
+    # True = conversation that drives history management, independent of model
+    # visibility. Telemetry and status observations set False. No type annotation.
     __conversational__ = True
 
     # Auto-populated Unix timestamp (seconds since epoch) for every event.

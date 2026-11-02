@@ -42,6 +42,8 @@ class ConversationPolicy:
     Opt-in policy that re-creates plain-loop semantics: only conversation
     and tool events reach the LLM, everything else is filtered out.
     CompactionSummary is included so compacted summaries remain visible.
+    Retained status has already been projected to request views; those remain
+    model-visible without changing the stored service record's classification.
     """
 
     name = "conversation"

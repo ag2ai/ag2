@@ -33,7 +33,6 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.routing import BaseRoute, Mount, Route
 
 from ag2.agent import Agent
-from ag2.history import MemoryStorage
 from ag2.hitl import ElicitationPolicy
 
 from .apps import EXTENSION_ID, MCPApp, binds_ui, client_supports_apps, collect_apps, visible_meta
@@ -76,7 +75,7 @@ def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | Non
     return SessionStore(
         max_sessions=cfg.max_sessions,
         ttl=cfg.ttl,
-        storage=cfg.storage or MemoryStorage(),
+        storage=cfg.storage,
     )
 
 

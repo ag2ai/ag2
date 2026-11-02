@@ -106,6 +106,7 @@ def extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
                     file_obj = tar.extractfile(member)
                     if file_obj is not None:
                         target_path.write_bytes(file_obj.read())
+                        target_path.chmod(target_path.stat().st_mode | (member.mode & 0o111))
                     if rel_path == "SKILL.md" and skill_fm is None:
                         skill_fm = parse_frontmatter(target_path.read_text(encoding="utf-8"))
 

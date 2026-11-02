@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager, suppress
 
 from fast_depends.library.serializer import SerializerProto
 
+from ag2._model_input import model_inputs
 from ag2.config.config import ModelConfig
 from ag2.context import ConversationContext
 from ag2.events import (
@@ -229,8 +230,11 @@ def _conversation(events: "Iterable[BaseEvent]") -> "list[BaseEvent]":
     them, but they would still be walked (and held) on every model call, so a
     long conversation pays for the whole recording on each turn. Transcripts
     carry the meaning; the bytes are for the recorder and the speaker.
+
+    Retained status observations on a shared stream are projected to request
+    views, as the agent loop does, so the model sees them here too.
     """
-    return [e for e in events if not isinstance(e, (RecordedAudioEvent, SynthesizedAudioEvent))]
+    return model_inputs(e for e in events if not isinstance(e, (RecordedAudioEvent, SynthesizedAudioEvent)))
 
 
 def _running(task: "asyncio.Task[None] | None") -> bool:

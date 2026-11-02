@@ -46,11 +46,18 @@ def _echo(arguments: dict[str, Any], _ctx: ToolContext) -> str:
 
 
 class _RecordingStorage(MemoryStorage):
-    """A ``Storage`` that also remembers which streams were written through it."""
+    """A ``Storage`` that also remembers which streams were written through it.
+
+    Sized by those streams, so it is falsy until the first write — the server
+    must still use it rather than mistake it for an absent backend.
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self.stream_ids: list[StreamId] = []
+
+    def __len__(self) -> int:
+        return len(self.stream_ids)
 
     async def save_event(self, event: BaseEvent, context: Context) -> None:
         if context.stream.id not in self.stream_ids:
