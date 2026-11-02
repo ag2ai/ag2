@@ -259,3 +259,9 @@ class TestMergeOrder:
         )
         assert payload["temperature"] == 0.5
         assert payload["seed"] == 42
+
+
+def test_model_name_includes_current_live_model() -> None:
+    from typing import get_args
+
+    assert "gemini-3.8-live" in get_args(gemini.ModelName)

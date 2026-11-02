@@ -25,7 +25,7 @@ agent = LiveAgent(
     prompt="You are a helpful voice assistant. Always respond in English.",
     tools=[sum_numbers],
     config=gemini.RealTimeConfig(
-        "gemini-3.1-flash-live-preview",
+        "gemini-3.8-live",
         output=gemini.AudioOutput(voice="Puck", language_code="en-US"),
         input=gemini.InputConfig(transcribe=True),
     ),
