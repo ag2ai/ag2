@@ -12,7 +12,7 @@ from ag2.config.gemini import GeminiClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
-    config = GeminiConfig(model="gemini-3.5-flash", temperature=0.2, streaming=True)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0.2, streaming=True)
 
     copied = config.copy()
 
@@ -21,37 +21,37 @@ def test_copy_without_overrides_returns_new_equal_instance() -> None:
 
 
 def test_copy_applies_overrides_without_mutating_original() -> None:
-    config = GeminiConfig(model="gemini-3.5-flash", api_key="key", temperature=0.2, streaming=False)
+    config = GeminiConfig(model="gemini-3.6-flash", api_key="key", temperature=0.2, streaming=False)
 
-    copied = config.copy(model="gemini-2.5-flash", temperature=0.8, streaming=True, api_key=None)
+    copied = config.copy(model="gemini-2.5-flash-lite", temperature=0.8, streaming=True, api_key=None)
 
-    assert copied.model == "gemini-2.5-flash"
+    assert copied.model == "gemini-2.5-flash-lite"
     assert copied.temperature == 0.8
     assert copied.streaming is True
     assert copied.api_key is None
 
-    assert config.model == "gemini-3.5-flash"
+    assert config.model == "gemini-3.6-flash"
     assert config.temperature == 0.2
     assert config.streaming is False
     assert config.api_key == "key"
 
 
 def test_create_returns_gemini_client() -> None:
-    config = GeminiConfig(model="gemini-3.5-flash", api_key="test-key")
+    config = GeminiConfig(model="gemini-3.6-flash", api_key="test-key")
     client = config.create()
 
     assert isinstance(client, GeminiClient)
 
 
 def test_vertex_config_create_returns_gemini_client() -> None:
-    config = VertexAIConfig(model="gemini-2.5-pro", project="proj", location="us-central1")
+    config = VertexAIConfig(model="gemini-2.5-flash-lite", project="proj", location="us-central1")
     client = config.create()
 
     assert isinstance(client, GeminiClient)
 
 
 def test_defaults() -> None:
-    config = GeminiConfig(model="gemini-3.5-flash")
+    config = GeminiConfig(model="gemini-3.6-flash")
     assert config.streaming is False
     assert config.temperature is None
     assert config.max_output_tokens is None
@@ -59,7 +59,7 @@ def test_defaults() -> None:
 
 
 def test_vertex_config_defaults() -> None:
-    config = VertexAIConfig(model="gemini-2.5-pro")
+    config = VertexAIConfig(model="gemini-2.5-flash-lite")
     assert config.streaming is False
     assert config.project is None
     assert config.location is None
@@ -67,18 +67,18 @@ def test_vertex_config_defaults() -> None:
 
 
 def test_provider_labels() -> None:
-    assert GeminiConfig(model="gemini-2.0-flash").provider is ModelProvider.GEMINI
-    assert VertexAIConfig(model="gemini-2.5-pro").provider is ModelProvider.VERTEXAI
+    assert GeminiConfig(model="gemini-3.6-flash").provider is ModelProvider.GEMINI
+    assert VertexAIConfig(model="gemini-2.5-flash-lite").provider is ModelProvider.VERTEXAI
 
 
 def test_max_output_tokens_can_be_set() -> None:
-    config = GeminiConfig(model="gemini-3.5-flash", max_output_tokens=8192)
+    config = GeminiConfig(model="gemini-3.6-flash", max_output_tokens=8192)
     assert config.max_output_tokens == 8192
 
 
 @patch("ag2.config.gemini.gemini_client.genai.Client")
 def test_gemini_config_forces_vertexai_false(mock_client) -> None:
-    GeminiConfig(model="gemini-2.5-flash", api_key="key").create()
+    GeminiConfig(model="gemini-2.5-flash-lite", api_key="key").create()
 
     _, kwargs = mock_client.call_args
     assert kwargs["vertexai"] is False
@@ -91,7 +91,7 @@ def test_gemini_config_forces_vertexai_false(mock_client) -> None:
 @patch("ag2.config.gemini.gemini_client.genai.Client")
 def test_vertex_config_forces_vertexai_true(mock_client) -> None:
     VertexAIConfig(
-        model="gemini-2.5-pro",
+        model="gemini-2.5-flash-lite",
         project="proj",
         location="us-central1",
     ).create()
@@ -110,7 +110,7 @@ def test_credentials_string_loads_service_account_file(mock_from_file, mock_clie
     mock_from_file.return_value = loaded
 
     VertexAIConfig(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-lite",
         project="proj",
         location="us-central1",
         credentials="/fake/key.json",
@@ -130,7 +130,7 @@ def test_credentials_object_passed_through_unchanged(mock_from_file, mock_client
     creds = MagicMock(spec=service_account.Credentials)
 
     VertexAIConfig(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-lite",
         project="proj",
         location="us-central1",
         credentials=creds,
@@ -144,7 +144,7 @@ def test_credentials_object_passed_through_unchanged(mock_from_file, mock_client
 @patch("ag2.config.gemini.gemini_client.genai.Client")
 @patch("ag2.config.gemini.gemini_client.service_account.Credentials.from_service_account_file")
 def test_credentials_none_passes_through(mock_from_file, mock_client) -> None:
-    VertexAIConfig(model="gemini-2.5-flash", project="proj", location="us-central1").create()
+    VertexAIConfig(model="gemini-2.5-flash-lite", project="proj", location="us-central1").create()
 
     mock_from_file.assert_not_called()
     _, kwargs = mock_client.call_args
@@ -224,7 +224,7 @@ class TestThinkingConfig:
         assert built.thinking_budget is None
 
     def test_thinking_budget_shorthand_builds_config(self) -> None:
-        config = GeminiConfig(model="gemini-2.5-pro", thinking_budget=1024)
+        config = GeminiConfig(model="gemini-2.5-flash-lite", thinking_budget=1024)
         built = config._build_create_config()["thinking_config"]
         assert isinstance(built, types.ThinkingConfig)
         assert built.thinking_budget == 1024
@@ -232,7 +232,7 @@ class TestThinkingConfig:
 
     def test_thinking_level_and_budget_combined(self) -> None:
         config = GeminiConfig(
-            model="gemini-2.5-pro",
+            model="gemini-2.5-flash-lite",
             thinking_level="medium",
             thinking_budget=2048,
         )
@@ -264,7 +264,7 @@ class TestThinkingConfig:
     def test_vertex_ai_explicit_thinking_config_passes_through(self) -> None:
         thinking = types.ThinkingConfig(thinking_budget=512)
         config = VertexAIConfig(
-            model="gemini-2.5-pro",
+            model="gemini-2.5-flash-lite",
             project="proj",
             location="us-central1",
             thinking_config=thinking,

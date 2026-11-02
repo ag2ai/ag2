@@ -96,7 +96,7 @@ from ag2.config import GeminiConfig
 
 # Configure a Gemini model
 config = GeminiConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     api_key="...",
     streaming=True
 )
@@ -380,7 +380,7 @@ Authentication accepts any of the following:
 from ag2.config import VertexAIConfig
 
 config = VertexAIConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     project="my-gcp-project",
     location="us-central1",
     credentials="/path/to/service-account-key.json",
@@ -400,7 +400,7 @@ from ag2.config import VertexAIConfig
 # GOOGLE_APPLICATION_CREDENTIALS points to a key file. With nothing
 # passed to `credentials`, google-genai resolves ADC automatically.
 config = VertexAIConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     project="my-gcp-project",
     location="us-central1",
 )
@@ -417,7 +417,7 @@ creds, _ = google.auth.default(
 )
 
 config = VertexAIConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     project="my-gcp-project",
     location="us-central1",
     credentials=creds,
@@ -452,7 +452,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 from ag2.config import VertexAIConfig
 
 # All Vertex auth parameters resolved from the environment.
-config = VertexAIConfig(model="gemini-3-flash-preview")
+config = VertexAIConfig(model="gemini-3.6-flash")
 ```
 
 ### Controlling Gemini Thinking
@@ -466,13 +466,13 @@ from ag2.config import GeminiConfig, VertexAIConfig
 
 # Gemini 3 — bound thinking with a level
 gemini3 = GeminiConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     thinking_level="low",  # "low" | "medium" | "high"
 )
 
 # Gemini 2.5 — bound thinking with an explicit token budget
 gemini25 = VertexAIConfig(
-    model="gemini-2.5-pro",
+    model="gemini-2.5-flash-lite",
     project="my-gcp-project",
     location="us-central1",
     thinking_budget=512,  # 0 disables thinking entirely
@@ -493,7 +493,7 @@ Set `automatic_continuation=False` on `GeminiConfig` or `VertexAIConfig` to turn
 from ag2.config import GeminiConfig
 
 config = GeminiConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     automatic_continuation=False,
 )
 ```

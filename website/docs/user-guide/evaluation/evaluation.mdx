@@ -59,7 +59,7 @@ async def get_weather(city: str) -> str:
 
 agent = Agent(
     "weather",
-    config=GeminiConfig(model="gemini-3-flash-preview"),
+    config=GeminiConfig(model="gemini-3.6-flash"),
     tools=[get_weather],
 )
 

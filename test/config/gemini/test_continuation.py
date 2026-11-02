@@ -73,7 +73,7 @@ async def test_automatic_continuation_joins_the_hops(streaming: bool, automatic_
 
     response = await _call(
         GeminiConfig(
-            model="gemini-3-flash", api_key="test", streaming=streaming, automatic_continuation=automatic_continuation
+            model="gemini-3.6-flash", api_key="test", streaming=streaming, automatic_continuation=automatic_continuation
         ),
         server,
     )
@@ -92,7 +92,7 @@ async def test_disabled_continuation_reports_the_truncation(streaming: bool) -> 
     server = _Server()
 
     response = await _call(
-        GeminiConfig(model="gemini-3-flash", api_key="test", streaming=streaming, automatic_continuation=False),
+        GeminiConfig(model="gemini-3.6-flash", api_key="test", streaming=streaming, automatic_continuation=False),
         server,
     )
 

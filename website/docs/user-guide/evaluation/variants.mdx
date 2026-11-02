@@ -18,7 +18,7 @@ board = await run_variants(
     suite,
     variants=Variants({
         "gpt-4o": Agent("weather", config=OpenAIConfig("gpt-4o"), tools=[get_weather]),
-        "flash":  Agent("weather", config=GeminiConfig("gemini-3-flash-preview"), tools=[get_weather]),
+        "flash":  Agent("weather", config=GeminiConfig("gemini-3.6-flash"), tools=[get_weather]),
     }, axis="config"),
     scorers=[...],
     store_dir="runs",
