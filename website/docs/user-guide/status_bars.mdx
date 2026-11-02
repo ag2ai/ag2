@@ -1,0 +1,415 @@
+---
+title: Status Bars
+sidebarTitle: Status Bars
+---
+
+A status bar gives the model an explicit view of task progress, remaining attempts,
+and the current environment before its next decision. Use it when those facts
+would otherwise be scattered across tool results or change while the agent works.
+
+Your application computes the facts; the model receives a concise observation
+alongside the conversation. In AG2, `@statusbar_middleware` runs before each model
+call, including calls after tools finish, and appends the returned `Input` parts
+at its position in the middleware chain. The static system prompt stays unchanged.
+
+## Use a structured status prompt
+
+Prefer a structured prompt with stable, named sections for the goal, progress,
+constraints, and next step. Keep computed observations separate from guidance
+about what to do next. Use explicit units and limits, and include the current
+values the model needs for its decision.
+
+For example, a support agent can receive this observation after a phone call:
+
+```xml
+<agent_status>
+  <goal>Negotiate a lower subscription price.</goal>
+  <progress>Offers collected; comparison pending.</progress>
+  <constraints>Merchant: Xfinity; phone calls: 2 used, 3 allowed, 1 remaining.</constraints>
+  <next_step>Compare the offers before making another call.</next_step>
+</agent_status>
+```
+
+Choose a consistent format for each callback: Markdown headings, labeled fields,
+or XML tags can organize a `TextInput`. Use `DataInput` for structured values such
+as counters and TODO items, optionally preceded by a short `TextInput` explaining
+their purpose. AG2 accepts these as ordinary input parts; it does not require or
+parse a particular status template. Keep the observation concise and omit fields
+that do not help with the current task.
+
+The examples use `OpenAIResponsesConfig` to call a real model. Install
+`ag2[openai]` and set `OPENAI_API_KEY` as described in the
+[Quick Start](/docs/user-guide/quick-start). Each example prints the agent's reply;
+the model chooses its tool calls from the task and the current observations.
+
+## Count attempts and remaining budget
+
+A phone-call history contains individual attempts. The next decision usually
+needs a smaller fact: how many attempts remain for this merchant. Compute that
+fact in code instead of asking the model to recount the transcript.
+
+```python linenums="1"
+import asyncio
+from typing import Annotated
+
+from ag2 import Agent, Context, DataInput, Variable, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ToolCallEvent
+from ag2.middleware import statusbar_middleware
+
+@statusbar_middleware
+async def call_budget(context: Context, merchant: Annotated[str, Variable()]) -> DataInput:
+    calls = await context.stream.history.where(ToolCallEvent.name == "phone_call").all()
+    used = sum(call.serialized_arguments["merchant"] == merchant for call in calls)
+    return DataInput({"merchant": merchant, "calls_used": used, "calls_remaining": max(0, 3 - used)})
+
+@tool
+def phone_call(merchant: str) -> str:
+    """Ask a merchant about its available subscription offers."""
+    return f"{merchant} offered a 10% discount on the current subscription."
+
+async def main():
+    agent = Agent(
+        "negotiator",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        tools=[phone_call],
+        middleware=[call_budget],
+        prompt="Negotiate a better price. Use at most three calls per merchant.",
+    )
+    reply = await agent.ask("Negotiate my subscription.", variables={"merchant": "Xfinity"})
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The phone-call tool returns a sample offer; connect its body to your calling
+service in an application. The observation starts with zero calls used and
+refreshes after each completed tool round. A status bar explains
+the allowance; enforce a hard limit in the tool or execution middleware when the
+allowance must also constrain execution.
+
+Choose the counting interval to match the task. `history.where(...)` reads the
+retained conversation, including earlier user inputs. For an allowance that resets
+with each user input, start with `history.since_last_user_input().where(...)`.
+Tool rounds, background inbox messages, and saved status observations do not reset
+that interval. A genuine `agent.ask(...)` or Reply continuation does.
+
+[History queries](/docs/user-guide/advanced/stream#query-retained-history) select
+top-level stored occurrences; they do not expand nested batches or deduplicate
+repeated publications. They are retained-history queries, not lifetime counters
+after compaction. Keep a separate application accumulator if the count must
+outlive the retained records.
+
+## Keep the goal and the next step visible
+
+During a long task, a local action can become more prominent than the original
+goal. A useful status pairs that goal with the remaining work: what is complete,
+what is next, and what still needs review.
+
+Keep the plan in conversation variables and let tools update it. The status
+callback presents the current view; it does not own a second copy of the plan.
+
+```python linenums="1"
+import asyncio
+from typing import Annotated
+
+from ag2 import Agent, Context, DataInput, TextInput, Variable, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import Input
+from ag2.middleware import statusbar_middleware
+
+@statusbar_middleware
+def task_progress(
+    goal: Annotated[str, Variable()],
+    steps: Annotated[list[str], Variable()],
+) -> list[Input] | None:
+    if not steps:
+        return None
+    return [TextInput(f"Original task: {goal}"), DataInput({"remaining_steps": steps})]
+
+@tool
+def save_draft(content: str, context: Context, steps: Annotated[list[str], Variable()]) -> str:
+    """Save the release-note draft and mark the drafting step complete."""
+    context.variables["draft"] = content
+    if "Draft release notes" in steps:
+        steps.remove("Draft release notes")
+    return "Draft saved. Review is still pending."
+
+async def main():
+    agent = Agent(
+        "writer",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        tools=[save_draft],
+        middleware=[task_progress],
+        prompt="Use save_draft to save your draft, then pause so the user can review it.",
+    )
+    reply = await agent.ask(
+        "Draft release notes for version 1.2: faster search and improved export. Pause before review.",
+        variables={
+            "goal": "Draft and review the release notes",
+            "steps": ["Draft release notes", "Review release notes"],
+        },
+    )
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+After `save_draft` saves the generated text, the next model request shows only
+the review step as remaining. The agent can explain what has been completed and
+what still needs the user's attention.
+
+Use the same pattern for targeted reminders: return a short next-action hint
+when the agent enters a review phase, approaches an allowance, or repeats an
+unsuccessful operation. Return `None` when that condition no longer holds. In the
+example, an empty plan stops producing a reminder. Returning an empty sequence
+also skips the insertion.
+
+Keep instructions that must apply throughout the task in the
+[system prompt](/docs/user-guide/system_prompts). A conditional reminder adds
+relevant guidance to the current decision; it appears only when its callback
+returns content. AG2 calls the function on each logical model call; any cadence
+or suppression of unchanged values belongs in the callback's application state.
+
+## Recover from repeated failures
+
+A useful recovery observation combines the failed operation, its arguments, and
+a concrete next action. It can help the model choose a different strategy instead
+of repeating the same request. Clear the current warning after a successful
+retry so it does not describe an error that has already been resolved.
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent, Context, DataInput, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
+from ag2.middleware import statusbar_middleware
+
+@statusbar_middleware
+async def recovery_hint(context: Context) -> DataInput | None:
+    history = context.stream.history
+    latest = await history.since_last_user_input().where(ToolResultEvent.name == "read_report").last()
+    if not isinstance(latest, ToolErrorEvent):
+        return None
+    call = await history.where(ToolCallEvent.id == latest.parent_id).first()
+    return DataInput({
+        "error": str(latest.error),
+        "arguments": call.serialized_arguments if call is not None else {},
+        "next_action": "List the reports and choose an existing name before reading again.",
+    })
+
+@tool
+def read_report(name: str) -> str:
+    """Read a report from the example's available reports."""
+    if name != "report.txt":
+        raise FileNotFoundError(name)
+    return "Quarterly revenue increased."
+
+@tool
+def list_reports() -> list[str]:
+    """List the reports available in this example."""
+    return ["report.txt"]
+
+async def main():
+    agent = Agent(
+        "reader",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        tools=[read_report, list_reports],
+        middleware=[recovery_hint],
+        prompt="If a report cannot be read, investigate the available names before trying again.",
+    )
+    reply = await agent.ask("Read missing.txt; locate the quarterly report if that name is wrong.")
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The callback inspects the latest read result, including its error subtype. After
+the successful read, it returns `None`, and the next input ends in the actual tool
+results. Correlation uses the call ID rather than inferring the operation from
+its text. The model receives the failure through the normal tool-result path
+and can use `list_reports` to choose an existing name.
+
+## Observe time, workspace, and external state
+
+Use a status bar for facts that can change independently of the conversation:
+current time, elapsed time since a user input, available files, or a project's
+latest external state. Read them through dependencies so each conversation can
+have its own workspace and clients.
+
+```python linenums="1"
+import asyncio
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Annotated
+
+from ag2 import Agent, Context, DataInput, Depends, Inject, TextInput
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import Input, ModelRequest
+from ag2.middleware import statusbar_middleware
+
+async def read_project_state(directory: Annotated[Path, Inject()]) -> dict:
+    path = directory / "project-status.json"
+    if not path.exists():
+        return {"status": "No project status file is available."}
+    return json.loads(await asyncio.to_thread(path.read_text))
+
+@statusbar_middleware
+async def environment(
+    context: Context,
+    directory: Annotated[Path, Inject()],
+    project_state: Annotated[dict, Depends(read_project_state)],
+) -> list[Input]:
+    now = datetime.now(timezone.utc)
+    latest_input = await context.stream.history.where(ModelRequest.origin == "user").last()
+    elapsed = now.timestamp() - latest_input.created_at if latest_input is not None else None
+    return [
+        TextInput(f"Current UTC time: {now.isoformat()}; workspace: {directory}"),
+        DataInput({
+            "seconds_since_input": elapsed,
+            "files": sorted(path.name for path in directory.iterdir()),
+            "project_state": project_state,
+        }),
+    ]
+
+async def main():
+    agent = Agent(
+        "analyst",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        middleware=[environment],
+        dependencies={"directory": Path.cwd()},
+    )
+    reply = await agent.ask("Summarize the current workspace and project state.")
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+`Inject` supplies the workspace, while `Depends` reads its current
+`project-status.json` before the callback runs. The file is optional and can hold
+application state such as the current phase and outstanding incidents. For a
+service-backed project, replace that dependency with your application's async
+SDK call. The workspace is a path owned by this conversation; the example does
+not change the process's working directory. Event timestamps also support
+comparisons such as time since the latest tool result or activity across days.
+
+The ordered result can contain text, structured data, and supported media such
+as an `ImageInput` dashboard snapshot. Normal
+[input conversion](/docs/user-guide/multimodal/inputs) applies; a status bar does
+not add media capabilities to a provider that lacks them. See
+[dependency injection](/docs/user-guide/context/inject) and
+[composed dependencies](/docs/user-guide/depends) for application resource setup.
+
+## Choose current state or a progress trail
+
+Use dynamic observations for facts where the latest value is what matters. Keep
+a trail when the sequence of progress updates is itself useful to the task.
+
+| Mode | What the next model call receives | Useful cases |
+| --- | --- | --- |
+| `persist=False` (default) | A fresh observation; previous dynamic observations are absent | Current TODO, remaining attempts, clock, workspace, recovery hint |
+| `persist=True` | Retained earlier observations, then a new nonempty observation | Completed milestones, progress review, a sequence of state changes |
+
+This example retains progress after each tool round:
+
+```python linenums="1"
+import asyncio
+from typing import Annotated
+
+from ag2 import Agent, Context, DataInput, Variable, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.middleware import statusbar_middleware
+
+@statusbar_middleware(persist=True)
+def progress(completed: Annotated[int, Variable(default=0)]) -> DataInput:
+    return DataInput({"completed_steps": completed})
+
+@tool
+def record_milestone(summary: str, context: Context) -> str:
+    """Record a milestone after completing a useful step of the task."""
+    context.variables["completed"] += 1
+    return f"Milestone {context.variables['completed']}: {summary}"
+
+async def main():
+    agent = Agent(
+        "planner",
+        config=OpenAIResponsesConfig(model="gpt-5", parallel_tool_calls=False),
+        tools=[record_milestone],
+        middleware=[progress],
+        prompt="Plan the work in stages and record a milestone after completing each stage.",
+    )
+    reply = await agent.ask("Design a two-stage rollout plan for a new search feature.")
+    reply = await reply.ask("Explain how the plan progressed through its milestones.")
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Each nonempty callback result creates one saved observation, even if its value
+matches the preceding one. Return `None` or an empty sequence to skip a new record;
+this leaves earlier records available. Saved parts are snapshots, so later
+application mutations do not rewrite them. They remain visible on a Reply
+continuation even when the middleware ran only on an earlier invocation.
+
+Saved observations are service records, not new user inputs. Their parts use the
+normal user-content representation for the provider; they do not modify the
+system prompt or create a new conversational turn. Publication happens before
+the model call: failed persistence prevents that call, while a later provider
+failure or cancellation leaves the committed observation in history.
+
+Dynamic and persistent callbacks can be combined, for example with
+`middleware=[progress, environment]` using the callbacks and dependencies above.
+Earlier progress stays in chronological order; only the current environment
+observation is added to the new request. A fresh conversation on the same Agent
+starts with a fresh trail.
+
+Persistent observations grow the retained context and can include outdated
+values. Dynamic observations avoid that accumulation, but removing previous
+request-only content can affect provider caching. Choose based on the task and
+measure with your provider; neither mode promises prompt-cache hits or preserved
+reasoning compatibility. Status blocks already present when `HistoryLimiter`
+or `SlidingWindowPolicy` runs count toward its event window. Their content also
+counts toward token budgets. Compaction excludes status from its conversational
+event count but includes retained status in its token estimate. Normal reducers
+and compaction can remove retained observations; there is no automatic refresh
+or archive lookup after removal.
+
+## Register, compose, and inspect
+
+Register the decorated callback in the Agent's `middleware` list, as above, or
+pass it through an invocation or Plugin. Invocation contributions apply to that
+turn; register them again on a continuation if you need fresh computations there.
+
+Callbacks can be sync or async and use `Context`, `Variable`, `Inject`, and
+`Depends`. Return one `Input`, an ordered sequence of `Input` parts, or `None`.
+Strings, mappings, generators, and sequences containing non-Input values are
+rejected before the provider call and before that callback saves a new record.
+DI is resolved afresh for each logical model call; generator dependencies stay
+open through the wrapped call and are cleaned up on success, error, or cancellation.
+Keep mutable conversation state in variables or conversation-scoped dependencies.
+Clients deliberately shared by the application remain shared.
+
+Multiple callbacks append in registration order, and downstream middleware can
+still transform their inputs. To reuse one prepared observation across retries,
+put status outside retry: `middleware=[progress, RetryMiddleware(...)]`.
+`RetryMiddleware` is imported from `ag2.middleware`. Retries inside status reuse
+the same observation and do not save it again. A new tool round computes another
+observation. Reversing the wrappers follows normal retry semantics, including
+its publication guard. With `persist=True` inside retry, publishing the status
+causes the guard to refuse retries after a failed attempt. The framework does
+not reorder the middleware automatically.
+
+See [middleware ordering](/docs/user-guide/middleware#middleware-ordering) for
+composition details and [testing model inputs](/docs/user-guide/testing#inspect-complete-model-inputs)
+for dedicated automated checks of status delivery.
+
+For offline automated scenarios covering these cases, conditional updates,
+multimodal state, and retries, see the
+[eleven executable status bar scenarios](https://github.com/ag2ai/ag2/tree/main/examples/status_middleware_usecases){.external-link target="_blank"}.
