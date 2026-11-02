@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-27
 ---
 
-# 0028. The root declares shared variable names
+# 0031. The root declares shared variable names
 
 ## Context
 

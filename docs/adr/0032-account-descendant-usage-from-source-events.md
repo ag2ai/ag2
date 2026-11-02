@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-27
 ---
 
-# 0029. Account for descendant usage from source events
+# 0032. Account for descendant usage from source events
 
 ## Context
 
@@ -43,7 +43,7 @@ ADR 0014's rule that token accumulators read `UsageEvent` rather than snapshot
 fields remains valid.
 
 All descendant events are forwarded unconditionally, including Usage, per
-ADR 0027. Accounting has no separate delivery switch or opt-in requirement.
+ADR 0030. Accounting has no separate delivery switch or opt-in requirement.
 
 ## Consequences
 

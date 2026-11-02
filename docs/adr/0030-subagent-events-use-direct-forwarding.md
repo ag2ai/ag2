@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-27
 ---
 
-# 0027. Subagent events use direct forwarding with the original source
+# 0030. Subagent events use direct forwarding with the original source
 
 ## Context
 
@@ -36,7 +36,7 @@ source identity and accounting fields. Existing `UsageEvent` subscriptions
 must continue to receive all descendant spend without changing their filters.
 Usage is non-conversational telemetry and does not activate operational
 handlers. No replacement rollup is generated; see
-[ADR 0029](0029-account-descendant-usage-from-source-events.md).
+[ADR 0032](0032-account-descendant-usage-from-source-events.md).
 
 Downlink accepts any event through the recipient's normal pipeline. The caller
 chooses the event and is responsible for its effects, including reentrant model

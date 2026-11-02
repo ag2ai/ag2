@@ -6,7 +6,7 @@ date: 2026-08-15
 # Anything that adds up tokens reads `UsageEvent`
 
 > Subagents v2 update (2026-10-29):
-> [ADR 0029](0029-account-descendant-usage-from-source-events.md) supersedes the
+> [ADR 0032](0032-account-descendant-usage-from-source-events.md) supersedes the
 > original rollup mechanism with direct consumption of source descendant events.
 > The decision below reflects that implementation. Rollup matching is retained
 > only for reading archived traces.
@@ -143,5 +143,5 @@ Non-obvious choices, each of which looks like a bug until you know why:
 - **In-process accounting is not a network usage protocol.**
   `ag2/network/task_mirror.py` consumes lifecycle observations and forwards task
   metadata, not source accounting records. Direct descendant accounting in
-  [ADR 0029](0029-account-descendant-usage-from-source-events.md) does not imply
+  [ADR 0032](0032-account-descendant-usage-from-source-events.md) does not imply
   that a remote task mirror transports its complete usage history.

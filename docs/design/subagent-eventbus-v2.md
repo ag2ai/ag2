@@ -171,6 +171,6 @@ inspect `event.inner`, or use `event.source_event` in a consumer that
 accepts both local events and observations. AG-UI, A2UI, and the network task
 mirror consume these lifecycle observations directly.
 
-See ADRs [0027](../adr/0027-subagent-events-use-direct-forwarding.md),
-[0028](../adr/0028-root-declares-shared-variable-names.md) and
-[0029](../adr/0029-account-descendant-usage-from-source-events.md).
+See ADRs [0030](../adr/0030-subagent-events-use-direct-forwarding.md),
+[0031](../adr/0031-root-declares-shared-variable-names.md) and
+[0032](../adr/0032-account-descendant-usage-from-source-events.md).

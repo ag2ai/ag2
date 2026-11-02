@@ -79,7 +79,7 @@ deleted rather than maintained.
   is shared within that invocation's delegation tree, not between independent
   calls or with the caller's input object. Variables hold serializable state;
   runtime objects such as locks and clients belong in `dependencies`.
-  See [ADR 0028](0028-root-declares-shared-variable-names.md).
+  See [ADR 0031](0031-root-declares-shared-variable-names.md).
 - Applying rule 1 elsewhere: a new public function that needs a built thing
   should take the built thing, and offer a separate explicit constructor for the
   path/dict/recipe form — not fold the I/O into itself. Reserve the `str`-style

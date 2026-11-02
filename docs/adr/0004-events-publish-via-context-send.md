@@ -77,7 +77,7 @@ the context, and it's the single obvious seam.
   `HumanInputRequest` under the requester's context; a local hook takes
   priority. This preserves one answer channel while still making both the
   question and answer observable. See
-  [ADR 0027](0027-subagent-events-use-direct-forwarding.md).
+  [ADR 0030](0030-subagent-events-use-direct-forwarding.md).
 
 - **Tests under `test/stream/` keep using `stream.send(event, context)`.**
   They exist to exercise the `Stream` API directly, and at least one
