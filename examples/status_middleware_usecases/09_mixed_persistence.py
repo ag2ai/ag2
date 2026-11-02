@@ -46,7 +46,8 @@ async def main() -> None:
     config = TrackingConfig(
         TestConfig(ToolCallEvent("start_review"), "Review started.", "We are reviewing the project.")
     )
-    workspace = Workspace(Path("/project"))
+    initial_cwd = Path("/project")
+    workspace = Workspace(initial_cwd)
     agent = Agent(
         "reviewer",
         config=config,
@@ -67,10 +68,12 @@ async def main() -> None:
         )
         for call in config.calls
     ]
+    initial_directory = str(initial_cwd)
+    review_directory = str(initial_cwd / "review")
     assert snapshots == [
-        (("progress", "draft"), ("cwd", "/project")),
-        (("progress", "draft"), ("progress", "review"), ("cwd", "/project/review")),
-        (("progress", "draft"), ("progress", "review"), ("progress", "review"), ("cwd", "/project/review")),
+        (("progress", "draft"), ("cwd", initial_directory)),
+        (("progress", "draft"), ("progress", "review"), ("cwd", review_directory)),
+        (("progress", "draft"), ("progress", "review"), ("progress", "review"), ("cwd", review_directory)),
     ]
     assert await reply.history.where(ModelRequest).count() == 2
     assert await reply.history.since_last_user_input().where(ToolCallEvent).count() == 0
