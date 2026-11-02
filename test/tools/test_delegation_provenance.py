@@ -4,6 +4,7 @@
 
 import asyncio
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import pytest
@@ -15,6 +16,7 @@ from ag2.events import (
     ChildEvent,
     HaltEvent,
     HumanInputRequest,
+    InertEvent,
     ModelMessage,
     ModelResponse,
     TaskCancelled,
@@ -25,7 +27,7 @@ from ag2.events import (
     UsageEvent,
 )
 from ag2.events.task_events import TaskEvent
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgeStore, MemoryKnowledgeStore
 from ag2.observers import BaseObserver
 from ag2.testing import TestConfig
 from ag2.usage import UsageReport
@@ -38,6 +40,44 @@ class Journal:
 
     async def record(self, event: BaseEvent) -> None:
         self.events.append(event)
+
+
+class Diagnostic(InertEvent):
+    text: str
+
+
+@dataclass
+class CompactionProbe:
+    calls: int = 0
+
+    async def compact(
+        self, events: Sequence[BaseEvent], context: Context, store: KnowledgeStore | None
+    ) -> list[BaseEvent]:
+        self.calls += 1
+        return list(events)
+
+
+@pytest.mark.asyncio
+async def test_custom_inert_event_does_not_trigger_ancestor_compaction() -> None:
+    compaction = CompactionProbe()
+    child = Agent("child", config=TestConfig(Diagnostic(text="diagnostic"), "done"))
+    root = Agent(
+        "root",
+        config=TestConfig(ToolCallEvent(name="task_child", arguments='{"objective":"work"}'), "done"),
+        tools=[child.as_tool(description="Work")],
+        knowledge=KnowledgeConfig(
+            store=MemoryKnowledgeStore(),
+            compact=compaction,
+            compact_trigger=CompactTrigger(max_events=7),
+            expose_tool=False,
+            write_event_log=False,
+        ),
+    )
+
+    reply = await root.ask("start")
+
+    assert any(isinstance(event, Diagnostic) for event in await reply.history.get_events())
+    assert compaction.calls == 0
 
 
 def spending(name: str, tokens: int, *calls: ToolCallEvent, tools: list | None = None) -> Agent:
