@@ -189,7 +189,7 @@ lifecycle directly. The first forwarding hop stamps their `path` (and
 keeps its source `event_id`. All other events arrive as inert `ChildEvent`
 observations, which never trigger the ancestor's tools, model loop or HITL.
 Accounting uses no generated rollups. See `docs/design/subagent-eventbus-v2.md`
-and ADRs 0027–0029.
+and ADRs 0030–0032.
 
 | File | Purpose |
 |------|---------|
