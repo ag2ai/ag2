@@ -69,8 +69,11 @@ PYTHONPATH=. python -m pytest test/middleware/test_statusbar_usecases.py
   retained progress before the dynamic environment.
 - To reuse a snapshot on retry, place status outside RetryMiddleware:
   `middleware=[status, RetryMiddleware(...)]`. Reversing those wrappers follows
-  normal middleware behavior and may reevaluate the callback. Once committed,
-  a persistent observation remains if the later provider call fails.
+  normal middleware behavior and reevaluates a dynamic callback per attempt.
+  A persistent status inside RetryMiddleware is unsupported: its published
+  observation trips retry's publication guard, so the failed attempt re-raises
+  instead of retrying. Once committed, a persistent observation remains if the
+  later provider call fails.
 - Keep conversation state in variables/dependencies. Dependencies deliberately
   shared by the application remain shared; AG2 does not isolate arbitrary
   external clients or roll back callback side effects.

@@ -377,9 +377,11 @@ measure with your provider; neither mode promises prompt-cache hits or preserved
 reasoning compatibility. Status blocks already present when `HistoryLimiter`
 or `SlidingWindowPolicy` runs count toward its event window. Their content also
 counts toward token budgets. Compaction excludes status from its conversational
-event count but includes retained status in its token estimate. Normal reducers
-and compaction can remove retained observations; there is no automatic refresh
-or archive lookup after removal.
+event count and from summarization input, but includes retained status in its
+token estimate. When a limiter trims history, status never stands in for a turn
+on its own: the trim widens past it, so the tool round it follows is kept with
+it. Normal reducers and compaction can remove retained observations; there is no
+automatic refresh or archive lookup after removal.
 
 ## Register, compose, and inspect
 
@@ -402,9 +404,27 @@ put status outside retry: `middleware=[progress, RetryMiddleware(...)]`.
 `RetryMiddleware` is imported from `ag2.middleware`. Retries inside status reuse
 the same observation and do not save it again. A new tool round computes another
 observation. Reversing the wrappers follows normal retry semantics, including
-its publication guard. With `persist=True` inside retry, publishing the status
-causes the guard to refuse retries after a failed attempt. The framework does
-not reorder the middleware automatically.
+its publication guard: dynamic status is computed again for each attempt.
+
+!!! warning "Persistent status inside retry is unsupported"
+
+    Do not place a persistent status (`persist=True`) inside `RetryMiddleware`.
+    The observation is published before the model call, so retry's publication
+    guard sees output from the failed attempt and re-raises instead of retrying.
+    The framework does not reorder the middleware automatically.
+
+Retained observations are `StatusObservation` events, available from
+`ag2.events`. Each one carries its ordered `parts` and the callback's `source`
+identity, and can be read back with
+[history queries](/docs/user-guide/advanced/stream#query-retained-history):
+
+```python linenums="1"
+from ag2.events import StatusObservation
+
+observations = await reply.context.stream.history.where(StatusObservation).all()
+for observation in observations:
+    print(observation.source, observation.parts)
+```
 
 See [middleware ordering](/docs/user-guide/middleware#middleware-ordering) for
 composition details and [testing model inputs](/docs/user-guide/testing#inspect-complete-model-inputs)
