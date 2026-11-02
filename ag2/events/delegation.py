@@ -21,6 +21,8 @@ class InertEvent(BaseEvent):
     forwarding hop stamps where the event came from; later hops keep it.
     """
 
+    __conversational__ = False
+
     path: tuple[str, ...] = Field(default=(), compare=False)
     """Task ids of the delegations the event came through, outermost first; empty for a local event."""
     _origin: Any = Field(default=None, compare=False, repr=False)
