@@ -17,7 +17,7 @@ mocked tests can't reproduce reliably:
   mid-turn does not corrupt state — the late reply attempt fails
   cleanly and the WAL stays consistent.
 
-Each test runs a small handful of ``gemini-3-flash-preview`` turns.
+Each test runs a small handful of ``gemini-3.6-flash`` turns.
 """
 
 import asyncio
@@ -50,7 +50,7 @@ def gemini_config() -> GeminiConfig:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         pytest.skip("GEMINI_API_KEY not set")
-    return GeminiConfig(model="gemini-3-flash-preview", api_key=api_key, temperature=0)
+    return GeminiConfig(model="gemini-3.6-flash", api_key=api_key, temperature=0)
 
 
 def _agent(name: str, prompt: str, config: GeminiConfig) -> Agent:

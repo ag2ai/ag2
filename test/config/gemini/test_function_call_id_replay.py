@@ -39,9 +39,7 @@ async def test_provider_function_call_ids_survive_the_next_request(streaming: bo
     context = Context(stream=MemoryStream())
     initial = ModelRequest([TextInput("Check the weather.")])
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        client = GeminiClient(
-            model="gemini-3-flash-preview", api_key="test", http_client=http_client, streaming=streaming
-        )
+        client = GeminiClient(model="gemini-3.6-flash", api_key="test", http_client=http_client, streaming=streaming)
         response = await client(
             messages=[initial], context=context, tools=[], response_schema=None, serializer=SerializerCls
         )

@@ -55,7 +55,7 @@ def section(title: str) -> None:
     print(f"\n── {title} ───")
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     section("Parallel subtasks — fan out three lookups through a delegate")
 
