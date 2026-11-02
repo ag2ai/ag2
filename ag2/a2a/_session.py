@@ -56,6 +56,7 @@ async def open_session(config: A2AConfig) -> AsyncGenerator[tuple[Client, Client
             card=card,
             httpx_client=httpx_client,
             streaming=False,
+            interface=iface,
             transport=transport,
             interceptors=tuple(config.interceptors),
             grpc_channel_factory=config.grpc_channel_factory,
