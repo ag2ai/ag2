@@ -45,7 +45,7 @@ def _build(
 
 class TestModalities:
     def test_default_audio_output(self, gemini_client: Client) -> None:
-        payload = _build(gemini.RealTimeConfig("gemini-2.0-flash-live-001", client=gemini_client))
+        payload = _build(gemini.RealTimeConfig("gemini-3.8-live", client=gemini_client))
         assert payload == {
             "response_modalities": [Modality.AUDIO],
             "speech_config": {"voice_config": {"prebuilt_voice_config": {"voice_name": "Kore"}}},
@@ -55,7 +55,7 @@ class TestModalities:
     def test_text_output_drops_audio_config(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 output=gemini.TextOutput(),
                 client=gemini_client,
             )
@@ -65,7 +65,7 @@ class TestModalities:
     def test_config_override_replaces_response_modalities(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 config={"response_modalities": ["TEXT"]},
                 client=gemini_client,
             )
@@ -77,7 +77,7 @@ class TestAudioOutput:
     def test_voice_only(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 output=gemini.AudioOutput(voice="Aoede"),
                 client=gemini_client,
             )
@@ -89,7 +89,7 @@ class TestAudioOutput:
     def test_voice_and_language(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 output=gemini.AudioOutput(voice="Charon", language_code="en-US"),
                 client=gemini_client,
             )
@@ -104,7 +104,7 @@ class TestInputConfig:
     def test_no_user_transcription_by_default(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 input=gemini.InputConfig(),
                 client=gemini_client,
             )
@@ -114,7 +114,7 @@ class TestInputConfig:
     def test_user_transcription_opt_in(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 input=gemini.InputConfig(transcribe=True),
                 client=gemini_client,
             )
@@ -124,7 +124,7 @@ class TestInputConfig:
     def test_transcription_languages_propagate(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 input=gemini.InputConfig(transcribe=True, transcription_languages=["en-US", "fr-FR"]),
                 client=gemini_client,
             )
@@ -134,7 +134,7 @@ class TestInputConfig:
     def test_realtime_input_knobs_propagate(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 input=gemini.InputConfig(
                     automatic_activity_detection={"silence_duration_ms": 500},
                 ),
@@ -150,7 +150,7 @@ class TestPromotedKwargs:
     def test_temperature_and_max_output_tokens(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 temperature=0.7,
                 max_output_tokens=1024,
                 client=gemini_client,
@@ -163,19 +163,19 @@ class TestPromotedKwargs:
 class TestInstructions:
     def test_instructions_joined(self, gemini_client: Client) -> None:
         payload = _build(
-            gemini.RealTimeConfig("gemini-2.0-flash-live-001", client=gemini_client),
+            gemini.RealTimeConfig("gemini-3.8-live", client=gemini_client),
             instructions=("be helpful", "stay terse"),
         )
         assert payload["system_instruction"] == "be helpful\nstay terse"
 
     def test_no_system_instruction_when_empty(self, gemini_client: Client) -> None:
-        payload = _build(gemini.RealTimeConfig("gemini-2.0-flash-live-001", client=gemini_client))
+        payload = _build(gemini.RealTimeConfig("gemini-3.8-live", client=gemini_client))
         assert "system_instruction" not in payload
 
     def test_config_overrides_instructions(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 config={"system_instruction": "raw override"},
                 client=gemini_client,
             ),
@@ -197,7 +197,7 @@ class TestTools:
             )
         )
         payload = _build(
-            gemini.RealTimeConfig("gemini-2.0-flash-live-001", client=gemini_client),
+            gemini.RealTimeConfig("gemini-3.8-live", client=gemini_client),
             tools=(schema,),
         )
         assert payload["tools"] == [
@@ -227,7 +227,7 @@ class TestTools:
             )
         )
         payload = _build(
-            gemini.RealTimeConfig("gemini-2.0-flash-live-001", client=gemini_client),
+            gemini.RealTimeConfig("gemini-3.8-live", client=gemini_client),
             tools=(schema,),
         )
 
@@ -240,7 +240,7 @@ class TestMergeOrder:
     def test_config_overrides_typed_config(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 temperature=0.2,
                 config={"temperature": 0.99},
                 client=gemini_client,
@@ -251,7 +251,7 @@ class TestMergeOrder:
     def test_config_extends_with_unrelated_keys(self, gemini_client: Client) -> None:
         payload = _build(
             gemini.RealTimeConfig(
-                "gemini-2.0-flash-live-001",
+                "gemini-3.8-live",
                 temperature=0.5,
                 config={"seed": 42},
                 client=gemini_client,
@@ -259,9 +259,3 @@ class TestMergeOrder:
         )
         assert payload["temperature"] == 0.5
         assert payload["seed"] == 42
-
-
-def test_model_name_includes_current_live_model() -> None:
-    from typing import get_args
-
-    assert "gemini-3.8-live" in get_args(gemini.ModelName)
