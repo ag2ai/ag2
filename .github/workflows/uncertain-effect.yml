@@ -1,0 +1,42 @@
+name: Uncertain effect
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "ag2/**"
+      - "test/uncertain_effect/**"
+      - ".github/workflows/uncertain-effect.yml"
+      - "pyproject.toml"
+  workflow_dispatch: # allows manual triggering of the workflow
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  uncertain-effect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "latest"
+      - name: Install AG2
+        run: |
+          uv venv --python 3.12 .venv-uncertain-effect
+          uv pip install --python .venv-uncertain-effect/bin/python -e .
+      # Drives the adapter through the eight uncertain-effect scenarios against a
+      # counting effect owner. The adapter runs a tool through Agent.ask and checks
+      # that nothing in AG2's tool execution sends the effect twice or settles an
+      # unknown outcome.
+      - uses: probityai/agent-evidence-vectors@ab72f6d69e9a544aebcae1f0ea47b7672558a908 # v0.35.0
+        with:
+          corpus: vectors-uncertain-effect
+          runtime: .venv-uncertain-effect/bin/python test/uncertain_effect/adapter.py --variant reconcile
