@@ -31,7 +31,7 @@ call the ordinary context publication method that allocates a fresh usage ID.
 Preserve the original usage kind, provider and model, and record which
 delegation spent the tokens. A forwarded `UsageEvent` carries serializable
 `task_id`, `agent_name` and `path` fields, stamped once by the delegation that
-published it and kept by every later hop (see ADR 0027). A local record leaves
+published it and kept by every later hop (see ADR 0030). A local record leaves
 them empty. These are new fields rather than a reuse of `label`: `label` is the
 agent name on archived `kind="subtask"` rollups, and giving it a second meaning
 would make an archived rollup and a source record look alike to a reader that

@@ -232,9 +232,10 @@ What an ancestor receives from a descendant:
 
 These apply to every agent, including agents that never delegate:
 
-- The model input is the history filtered to conversational events plus
-  `ModelReasoning` and `ProviderReplay`. Before, every event in the window was
-  passed. This keeps `ChildEvent` observations out of the transcript.
+- The model input includes conversational events, `ModelReasoning`,
+  `ProviderReplay`, and retained `StatusObservation` records. Status observations
+  keep their explicit model projection (ADR 0028); `ChildEvent` observations
+  stay out of the transcript.
 - `TaskEvent` is non-conversational, so lifecycle events never reach the model
   or move the compaction trigger.
 - `ConversationContext.send` starts a new publication for an inert event: a
