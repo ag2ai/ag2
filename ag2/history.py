@@ -23,6 +23,7 @@ from .events import (
 from .events.conditions import Condition, TypeCondition
 
 __all__ = (
+    "FINAL_TURN_SKIPPED_TOOL_RESULT",
     "HUMAN_INPUT_ABANDONED_TOOL_RESULT",
     "History",
     "HistoryQuery",
@@ -73,6 +74,10 @@ class History:
 
     async def replace(self, events: Iterable["BaseEvent"]) -> None:
         await self.storage.set_history(self.stream_id, events)
+
+    async def append(self, event: "BaseEvent", context: "Context") -> None:
+        """Record ``event`` in history without publishing it on the stream."""
+        await self.storage.save_event(event, context)
 
     @overload
     def where(self, condition: type[EventT]) -> "HistoryQuery[EventT]": ...
@@ -157,6 +162,11 @@ HUMAN_INPUT_ABANDONED_TOOL_RESULT = (
     "This tool call was not completed: the turn ended because a human-input request could not be answered."
 )
 
+# Stands in for the result of a client tool call batched with a ``final=True``
+# tool: the turn ended on the final result before the call was handed to the
+# client, so nothing will ever answer it.
+FINAL_TURN_SKIPPED_TOOL_RESULT = "This tool call was not executed: another tool in the same batch ended the turn."
+
 
 def _tool_call_batches(events: "Sequence[BaseEvent]") -> "list[ToolCallsEvent]":
     """Every batch of tool calls in ``events``, from either place they appear.
@@ -194,11 +204,13 @@ def unanswered_tool_calls(events: "Sequence[BaseEvent]") -> set[str]:
     The question :func:`close_unanswered_tool_calls` does not ask, because a
     repair does not need it: it settles a batch only once a ``ToolResultsEvent``
     wraps it, which is right when closing a stopped turn — a partially completed
-    batch has to be rebuilt whole. But a turn that ended *cleanly* through a
-    ``final=True`` tool never gets that wrapper: it sends its forced
-    ``ModelResponse`` and stops. Repairing such a history would append a fresh
-    wrapper every time it was asked, rewriting a transcript that was already
-    valid.
+    batch has to be rebuilt whole.
+
+    A turn that ends through a ``final=True`` tool records that wrapper itself,
+    before its forced ``ModelResponse``. Histories written before it did hold
+    only loose results for such a turn, and repairing one would append a fresh
+    wrapper every time it was asked — after the forced reply, rewriting a
+    transcript that was already complete.
 
     So a caller that repairs speculatively — resuming a session it did not
     write, with no way to know how the last turn ended — asks this first. A

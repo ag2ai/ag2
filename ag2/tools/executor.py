@@ -21,10 +21,12 @@ from ag2.events import (
     ToolCallsEvent,
     ToolErrorEvent,
     ToolNotFoundEvent,
+    ToolResult,
     ToolResultEvent,
     ToolResultsEvent,
 )
 from ag2.exceptions import HumanInputError, ToolNotFoundError
+from ag2.history import FINAL_TURN_SKIPPED_TOOL_RESULT
 from ag2.middleware import BaseMiddleware
 
 from .tool import Tool
@@ -105,6 +107,13 @@ class ToolExecutor:
                         else:
                             raise ValueError(f"Unsupported part type: {type(part)}")
 
+                        # Record the whole batch before its final reply, so a later
+                        # turn replays every call with its result. Publishing the
+                        # ToolResultsEvent would trigger another model call.
+                        await context.stream.history.append(
+                            ToolResultsEvent([_settle_for_final_turn(item) for item in outcomes]),
+                            context,
+                        )
                         await context.send(
                             ModelResponse(
                                 message=ModelMessage(
@@ -136,6 +145,17 @@ class ToolExecutor:
 
         else:
             await context.send(ToolResultsEvent(results))
+
+
+def _settle_for_final_turn(outcome: ToolErrorEvent | ToolResultEvent | ClientToolCallEvent) -> ToolResultEvent:
+    # A final result ends the turn before client calls are handed to the client,
+    # so nothing will ever answer them. Close them off here rather than leave the
+    # replayed transcript with a call that has no result.
+    if isinstance(outcome, ClientToolCallEvent):
+        return ToolResultEvent(
+            parent_id=outcome.id, name=outcome.name, result=ToolResult(FINAL_TURN_SKIPPED_TOOL_RESULT)
+        )
+    return outcome
 
 
 def _client_call_for_response(call: ToolCallEvent, outcome: ClientToolCallEvent) -> ToolCallEvent:

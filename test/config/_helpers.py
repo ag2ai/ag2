@@ -2,8 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Annotated
 
+from ag2 import Agent, Inject, TextInput
+from ag2.events import BaseEvent, Input, ToolCallEvent
+from ag2.middleware import statusbar_middleware
+from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.final import FunctionDefinition, FunctionToolSchema
 
 
@@ -44,3 +50,21 @@ def make_tool() -> ToolStub:
             )
         ),
     )
+
+
+def supplied_parts(parts: Annotated[Sequence[Input], Inject()]) -> Sequence[Input]:
+    return parts
+
+
+def echo() -> str:
+    return "tool output"
+
+
+async def status_model_inputs(*parts: Input, persist: bool = False) -> tuple[BaseEvent, ...]:
+    """Model input of the call after one tool round, with status supplied as ``parts``."""
+    config = TrackingConfig(TestConfig(ToolCallEvent("echo", id="call-1"), "done"))
+    agent = Agent(
+        "status", config=config, middleware=[statusbar_middleware(supplied_parts, persist=persist)], tools=[echo]
+    )
+    await agent.ask(TextInput("start"), dependencies={"parts": parts})
+    return config.calls[-1].messages

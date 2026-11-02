@@ -149,7 +149,7 @@ async def test_agent_usage_counts_thinking_as_completion(streaming: bool) -> Non
     async with httpx.AsyncClient(transport=httpx.MockTransport(_usage_response)) as http_client:
         agent = Agent(
             "test_agent",
-            config=GeminiConfig(model="gemini-3-flash", api_key="test", http_client=http_client, streaming=streaming),
+            config=GeminiConfig(model="gemini-3.6-flash", api_key="test", http_client=http_client, streaming=streaming),
         )
         reply = await agent.ask("Hello")
 

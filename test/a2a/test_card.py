@@ -14,6 +14,7 @@ from a2a.types import (
     OAuthFlows,
     SecurityScheme,
 )
+from a2a.utils.proto_utils import validate_proto_required_fields
 
 from ag2 import Agent
 from ag2.a2a import build_card
@@ -144,7 +145,7 @@ class TestSkills:
         card = build_card(_agent(), url="http://test")
 
         assert list(card.skills) == [
-            AgentSkill(id="agent-x", name="agent-x", description="agent-x"),
+            AgentSkill(id="agent-x", name="agent-x", description="agent-x", tags=["agent-x"]),
         ]
 
     def test_custom_skills_replace_default(self) -> None:
@@ -170,6 +171,25 @@ class TestSkills:
         assert list(card.skills) == []
 
 
+class TestRequiredFields:
+    def test_default_card_sets_every_required_field(self) -> None:
+        # Spec §5.7 / a2a.proto: AgentCard.description and AgentSkill.tags are REQUIRED.
+        card = build_card(_agent(), url="http://test")
+
+        validate_proto_required_fields(card)
+
+    def test_card_from_skills_toolkit_sets_every_required_field(self, local_skills_dir: Path) -> None:
+        agent = Agent(
+            "agent-x",
+            config=TestConfig("ok"),
+            tools=[SkillsToolkit(LocalRuntime(str(local_skills_dir)))],
+        )
+
+        card = build_card(agent, url="http://test")
+
+        validate_proto_required_fields(card)
+
+
 class TestSkillsAutoDiscovery:
     def test_skills_picked_up_from_skills_toolkit(self, local_skills_dir: Path) -> None:
         agent = Agent(
@@ -181,8 +201,15 @@ class TestSkillsAutoDiscovery:
         card = build_card(agent, url="http://test")
 
         assert list(card.skills) == [
-            AgentSkill(id="code-review", name="code-review", description="Review code for bugs and style"),
-            AgentSkill(id="data-analysis", name="data-analysis", description="Analyse CSV/JSON datasets"),
+            AgentSkill(
+                id="code-review", name="code-review", description="Review code for bugs and style", tags=["code-review"]
+            ),
+            AgentSkill(
+                id="data-analysis",
+                name="data-analysis",
+                description="Analyse CSV/JSON datasets",
+                tags=["data-analysis"],
+            ),
         ]
 
     def test_explicit_skills_override_auto_discovery(self, local_skills_dir: Path) -> None:
@@ -203,7 +230,7 @@ class TestSkillsAutoDiscovery:
         card = build_card(agent, url="http://test")
 
         assert list(card.skills) == [
-            AgentSkill(id="agent-x", name="agent-x", description="agent-x"),
+            AgentSkill(id="agent-x", name="agent-x", description="agent-x", tags=["agent-x"]),
         ]
 
     def test_falls_back_when_toolkit_has_no_skills(self, tmp_path: Path) -> None:
@@ -216,7 +243,7 @@ class TestSkillsAutoDiscovery:
         card = build_card(agent, url="http://test")
 
         assert list(card.skills) == [
-            AgentSkill(id="agent-x", name="agent-x", description="agent-x"),
+            AgentSkill(id="agent-x", name="agent-x", description="agent-x", tags=["agent-x"]),
         ]
 
 

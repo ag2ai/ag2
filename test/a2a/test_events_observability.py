@@ -3,12 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from a2a.types import Part, TaskState
+from a2a.types import TaskState
 
 from ag2.a2a.events import (
     A2AEvent,
     A2ATaskSnapshot,
     A2ATaskStatusUpdate,
+    A2ATextArtifact,
 )
 from ag2.events import BaseEvent
 from ag2.stream import MemoryStream
@@ -43,6 +44,8 @@ class TestA2AEventsReachClientStream:
         assert [type(ev) for ev in captured] == [
             A2ATaskSnapshot,
             A2ATaskStatusUpdate,
+            A2ATextArtifact,
+            A2ATextArtifact,
             A2ATaskStatusUpdate,
         ]
         assert _states(captured) == [
@@ -50,21 +53,21 @@ class TestA2AEventsReachClientStream:
             TaskState.TASK_STATE_COMPLETED,
         ]
 
-    async def test_streaming_carries_final_text_on_completion_status(self) -> None:
-        # ``StatelessScript`` emits a complete ``ModelMessage`` rather than
-        # per-token ``ModelMessageChunk``s, so the server finalises via
-        # ``updater.complete(message=...)`` and the wire surfaces the text on
-        # the COMPLETED ``status.message``, not as a separate message payload.
+    async def test_streaming_carries_unstreamed_final_text_in_an_artifact(self) -> None:
+        # The script emits a complete ``ModelMessage`` rather than per-token ``ModelMessageChunk``s.
+        # Results are artifacts (spec §3.7), so the text arrives as the text artifact, and the
+        # COMPLETED status carries no message.
         pair = make_pair("final reply", streaming=True)
         stream, captured = _collect_a2a_events()
 
         reply = await pair.client.ask("ping", stream=stream)
 
         assert reply.body == "final reply"
+        assert [ev.text for ev in captured if isinstance(ev, A2ATextArtifact)] == ["final reply", ""]
         [final] = [
             ev for ev in captured if isinstance(ev, A2ATaskStatusUpdate) and ev.state == TaskState.TASK_STATE_COMPLETED
         ]
-        assert list(final.update.status.message.parts) == [Part(text="final reply")]
+        assert not final.update.status.HasField("message")
 
     async def test_polling_publishes_only_the_bootstrap_snapshot(self) -> None:
         # Polling drains just the bootstrap send-message response through the

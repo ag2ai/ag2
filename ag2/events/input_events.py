@@ -53,6 +53,19 @@ class ModelRequest(BaseEvent):
         return cls([Input.ensure_input(m) for m in msgs])
 
 
+class StatusObservation(BaseEvent):
+    """Retained status snapshot, visible to the model without creating a turn.
+
+    Published by status middleware. Parts and callback identity survive the
+    ordinary event storage round trip; retention follows the history policy.
+    """
+
+    __conversational__ = False
+
+    parts: list[Input] = Field(kw_only=False)
+    source: str
+
+
 class DrainedModelRequest(ModelRequest):
     """``ModelRequest`` re-emitted by the agent loop after draining
     ``context.pending_messages``.

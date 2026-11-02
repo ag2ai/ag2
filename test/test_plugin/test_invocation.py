@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from dirty_equals import IsPartialDict
+from dirty_equals import AnyThing, IsPartialDict
 
 from ag2 import Agent, AgentRun, Context, MemoryStream, observer, tool
 from ag2.assembly import AssemblerMiddleware
@@ -565,6 +565,7 @@ class TestContinuations:
                 tools=(),
                 dependencies=IsPartialDict({"source": "explicit-two"}),
                 variables={"label": "explicit-two"},
+                messages=AnyThing,
             )
         ]
         assert reply.context.prompt == ["override-two"]

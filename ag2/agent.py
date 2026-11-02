@@ -39,6 +39,7 @@ from typing_extensions import deprecated
 
 from ag2.events import BinaryResult
 
+from ._model_input import model_inputs
 from .aggregate import AggregateStrategy, AggregateTrigger
 from .annotations import Context
 from .assembly import AssemblerMiddleware, AssemblyPolicy
@@ -1613,7 +1614,7 @@ class Agent(PluginTarget, Generic[TResult]):
                     await context.send(DrainedModelRequest(merged.parts, origin=merged.origin))
 
                 messages = await context.stream.history.get_events()
-                result = await llm_call(messages, context)
+                result = await llm_call(model_inputs(messages), context)
                 # Emit usage at the point it is spent, decoupled from the
                 # response, so token accounting never depends on a response
                 # being produced. UsageReport reads these events alone.
@@ -2150,7 +2151,9 @@ class _CompactionMiddleware(BaseMiddleware):
         if self._trigger.max_events > 0 and event_count > self._trigger.max_events:
             should_compact = True
         if self._trigger.max_tokens > 0:
-            estimated = sum(estimated_tokens(e, self._trigger.chars_per_token) for e in conversation_events)
+            # Sized over every event: telemetry weighs nothing, but retained
+            # status is resent on each call and must count toward the budget.
+            estimated = sum(estimated_tokens(e, self._trigger.chars_per_token) for e in events)
             if estimated > self._trigger.max_tokens:
                 should_compact = True
 
