@@ -59,6 +59,11 @@ __all__ = (
 
 
 _TASK_DEP_KEY = "ag2.task"
+# Tasks whose block stamped ``_TASK_DEP_KEY`` into this dict and is still open.
+# Immutable, so a copied dict (``ask(dependencies=...)``, a subagent's
+# dependencies) keeps the snapshot and ``TaskInject`` still recognises the
+# copied slot as a block's stamp rather than a caller-provided task.
+_TASK_STAMPS_KEY = "ag2.task.stamps"
 
 
 class TaskState(str, Enum):
@@ -219,18 +224,21 @@ class Task:
     ``MemoryStream`` — standalone use; events still fire but only observers
     attached to that private stream see them.
 
-    ``TaskInject`` is scoped per conversation and per asyncio task: sibling
-    tool calls that each open a task on the same context (one turn, several
-    calls gathered concurrently) each resolve their *own* task, whatever the
-    others do, and a task opened on one conversation is not visible to
-    ``TaskInject`` resolving on another. A nested block resolves to the
-    innermost enclosing task and restores the outer one on exit.
+    ``TaskInject`` is scoped per conversation (stream) and per asyncio task:
+    sibling tool calls that each open a task on the same context (one turn,
+    several calls gathered concurrently) each resolve their *own* task,
+    whatever the others do, and a task opened on one conversation is not
+    visible to ``TaskInject`` resolving on another. A turn run on the block's
+    own stream (``agent.ask(..., stream=ctx.stream)`` inside the block) does
+    see it. A nested block resolves to the innermost enclosing task and
+    restores the outer one on exit.
 
     ``context.dependencies`` also holds an ``ag2.task`` slot for the duration
-    of the block, kept for direct readers of the dict (see
-    ``docs/adr/0029-task-inject-follows-the-calling-asyncio-task.md``); it
-    can only name the most recently entered task still running, so it is
-    best-effort under overlapping siblings. ``TaskInject`` does not read it.
+    of the block, kept for direct readers of the dict; it can only name the
+    most recently entered task still running, so it is best-effort under
+    overlapping siblings. ``TaskInject`` ignores that slot,
+    but still honours an ``ag2.task`` dependency the caller provided when no
+    block encloses the call.
     """
 
     def __init__(
@@ -456,6 +464,9 @@ class Task:
 
         self._previous_dep = _nearest_active(self._context.dependencies.get(_TASK_DEP_KEY))
         self._context.dependencies[_TASK_DEP_KEY] = self
+        self._context.dependencies[_TASK_STAMPS_KEY] = self._context.dependencies.get(_TASK_STAMPS_KEY, frozenset()) | {
+            self
+        }
         # ``TaskInject`` reads this chain, not the slot above: each asyncio task
         # (every gathered tool call) copies the context at creation, so siblings
         # that enter a task block see only their own node.
@@ -497,6 +508,12 @@ class Task:
                 # exited tasks.
                 with suppress(ValueError):
                     _active_task_node.reset(token)
+            if self._context is not None:
+                stamps = self._context.dependencies.get(_TASK_STAMPS_KEY, frozenset()) - {self}
+                if stamps:
+                    self._context.dependencies[_TASK_STAMPS_KEY] = stamps
+                else:
+                    self._context.dependencies.pop(_TASK_STAMPS_KEY, None)
             # A sibling that entered later owns the slot; leave it alone.
             if self._context is not None and self._context.dependencies.get(_TASK_DEP_KEY) is self:
                 prev = _nearest_active(self._previous_dep)
@@ -543,19 +560,30 @@ def _resolve_injected_task(context: ConversationContext) -> "Task | None":
     """The task whose ``async with`` block encloses this call, or ``None``.
 
     Walks the chain from the innermost node and returns the first task that
-    is still running on *this* conversation. ``context`` is the conversation
-    the resolving function was handed, so a task block on one conversation
-    stays invisible to an unrelated conversation started inside it. Exited
-    nodes are walked past for descendants that outlive their block: a
-    background task spawned inside a nested block still reaches the outer
-    task while it runs, and ``None`` once nothing above it is running.
+    is still running on *this* conversation — the same stream, since every
+    ``ask`` builds a fresh ``ConversationContext`` for its turn. A task block
+    on one conversation therefore stays invisible to an unrelated conversation
+    started inside it, but reaches a turn run on its own stream. Exited nodes
+    are walked past for descendants that outlive their block: a background
+    task spawned inside a nested block still reaches the outer task while it
+    runs, and ``None`` once nothing above it is running.
+
+    With no enclosing block, an ``ag2.task`` dependency the caller provided
+    (``ask(dependencies=...)``, ``Context(dependencies=...)``) is returned. A
+    slot a block stamped is not, here or in a copy of its dict: siblings share
+    that slot, so it may name another sibling's task.
     """
+    stream_id = context.stream.id
     node = _active_task_node.get()
     while node is not None:
-        if node.context is context and not node.task._exited:
+        if node.context.stream.id == stream_id and not node.task._exited:
             return node.task
         node = node.previous
-    return None
+
+    provided = context.dependencies.get(_TASK_DEP_KEY)
+    if any(provided is stamped for stamped in context.dependencies.get(_TASK_STAMPS_KEY, ())):
+        return None
+    return provided
 
 
 class _TaskInjectField(CustomField):
@@ -563,13 +591,12 @@ class _TaskInjectField(CustomField):
 
     ``Inject`` reads ``context.dependencies``, which is one slot per
     conversation — wrong whenever sibling tool calls overlap there. This
-    field resolves from the calling asyncio task's chain instead (see
+    field resolves from the calling asyncio task's chain first (see
     :class:`_ActiveTaskNode`).
     """
 
-    def __init__(self, *, default: Any = Ellipsis) -> None:
-        self.default = default
-        super().__init__(cast=False, required=(default is Ellipsis))
+    def __init__(self) -> None:
+        super().__init__(cast=False, required=False)
 
     def use(self, /, **kwargs: Any) -> dict[str, Any]:
         if ctx := kwargs.get(CONTEXT_OPTION_NAME):
@@ -578,4 +605,4 @@ class _TaskInjectField(CustomField):
         return kwargs
 
 
-TaskInject = Annotated[Task | None, _TaskInjectField(default=None)]
+TaskInject = Annotated[Task | None, _TaskInjectField()]
