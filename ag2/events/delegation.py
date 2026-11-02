@@ -17,7 +17,7 @@ class InertEvent(BaseEvent):
     """An event that triggers nothing, so ancestors receive it as itself.
 
     Accounting and task lifecycle events are forwarded without a ``ChildEvent``
-    envelope (ADR 0027), so typed subscriptions keep receiving them. The first
+    envelope (ADR 0030), so typed subscriptions keep receiving them. The first
     forwarding hop stamps where the event came from; later hops keep it.
     """
 
