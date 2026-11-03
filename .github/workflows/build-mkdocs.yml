@@ -6,7 +6,7 @@ on:
       python-version:
         description: 'Python version to use'
         required: true
-        default: '3.10'
+        default: '3.11'
         type: string
       deploy:
         description: 'Whether to publish the built docs to the gh-pages branch'

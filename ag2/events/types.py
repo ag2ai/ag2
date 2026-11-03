@@ -5,10 +5,8 @@
 from copy import copy
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from typing import Any
+from typing import Any, Self
 from uuid import uuid4
-
-from typing_extensions import Self
 
 from .base import BaseEvent, Field
 from .delegation import InertEvent

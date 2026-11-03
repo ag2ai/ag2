@@ -7,7 +7,7 @@ import logging
 from collections.abc import Iterable, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, TypeAlias
 from uuid import uuid4
 
@@ -282,7 +282,7 @@ class _TaskWriter:
                 task_id=self._updater.task_id,
                 context_id=self._updater.context_id,
                 message=transition.message,
-                timestamp=datetime.now(tz=timezone.utc),
+                timestamp=datetime.now(tz=UTC),
             )
         )
 

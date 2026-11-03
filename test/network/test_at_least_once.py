@@ -725,7 +725,7 @@ class TestReplayOnReconnect:
                 while True:
                     try:
                         frame = await _drain_frame(raw2, timeout=0.5)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         break
                     if isinstance(frame, NotifyFrame) and frame.envelope.event_type == "ag2.task.progress":
                         steps.append(frame.envelope.event_data.get("step"))

@@ -6,10 +6,9 @@ import asyncio
 import math
 import struct
 from collections.abc import AsyncIterator, Sequence
-from typing import Any
+from typing import Any, Self
 
 import pytest
-from typing_extensions import Self
 
 from ag2.annotations import Context
 from ag2.config import LLMClient, ModelConfig, ModelProvider

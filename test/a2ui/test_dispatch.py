@@ -4,12 +4,11 @@
 
 import json
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 import httpx
 import pytest
 from pydantic import BaseModel
-from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.a2ui import A2UIAction, A2UIClientCapabilities, A2UIServer, a2ui_action

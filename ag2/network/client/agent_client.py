@@ -286,7 +286,7 @@ class AgentClient:
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
             envelope = await asyncio.wait_for(inbox.get(), timeout=remaining)
             if predicate(envelope):
                 return envelope

@@ -4,10 +4,9 @@
 
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Required, TypedDict
 
 from fast_depends.library.serializer import SerializerProto
-from typing_extensions import Required
 from xai_sdk import AsyncClient
 from xai_sdk.aio.chat import Chat as XAIChat
 from xai_sdk.chat import Response as XAIResponse

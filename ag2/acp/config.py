@@ -16,9 +16,7 @@ Claude Code, Codex, OpenCode and Kilo Code ACP adapters respectively.
 """
 
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, ClassVar, Literal
-
-from typing_extensions import Self
+from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
 from ag2.hitl import ElicitationPolicy
 

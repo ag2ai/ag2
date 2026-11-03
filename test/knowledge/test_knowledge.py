@@ -501,7 +501,7 @@ class TestDiskKnowledgeStore:
             # watchdog delivers asynchronously via a background thread
             try:
                 await asyncio.wait_for(event.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pytest.skip("watchdog backend did not deliver event in time")
             assert any("file.txt" in p for p in received)
         finally:

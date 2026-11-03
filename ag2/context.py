@@ -232,7 +232,7 @@ class ConversationContext:
             except HumanInputError:
                 raise  # classified already, by _ask_human or by the hook itself
 
-            except asyncio.TimeoutError as exc:
+            except TimeoutError as exc:
                 # Only ``wait_for`` can reach this: anything the channel raised,
                 # timeouts included, left _ask_human as a HumanInputError.
                 raise HumanInputTimeoutError(request.timeout) from exc  # type: ignore[arg-type]

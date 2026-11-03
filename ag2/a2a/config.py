@@ -4,12 +4,12 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, Self, TypedDict
 
 import httpx
 from a2a.client import ClientCallInterceptor
 from a2a.types import AgentCard
-from typing_extensions import Self, Unpack
+from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig
 
