@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable
 from copy import copy
-from typing import TYPE_CHECKING, Any, cast
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from typing_extensions import Self
 
@@ -11,6 +13,36 @@ if TYPE_CHECKING:
     from ag2.tools.subagents._forwarding import StreamHandle
 
 from .base import BaseEvent, Field
+
+_E = TypeVar("_E", bound=BaseEvent)
+
+# Kept out of the event's fields: a delivery is never serialized or compared.
+_DELIVERY_ATTRIBUTE = "_delivery"
+
+
+@dataclass(frozen=True, slots=True)
+class Delivery:
+    """How a copy entered a stream it was not published on.
+
+    A routed copy is never forwarded back to the stream it came from. A stream
+    calls ``validate`` before each handler; it raises once the addressed
+    invocation has ended, so a delivery cannot reach a later turn.
+    """
+
+    validate: Callable[[], None] | None = None
+
+
+def routed(event: _E, delivery: Delivery) -> _E:
+    """A copy of ``event`` marked as delivered from another stream."""
+    marked = copy(event)
+    marked.__dict__[_DELIVERY_ATTRIBUTE] = delivery
+    return marked
+
+
+def delivery_of(event: BaseEvent) -> Delivery | None:
+    """The delivery of a routed copy; ``None`` for an event published on its stream."""
+    delivery = event.__dict__.get(_DELIVERY_ATTRIBUTE)
+    return delivery if isinstance(delivery, Delivery) else None
 
 
 class InertEvent(BaseEvent):
