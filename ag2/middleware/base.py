@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager
 from types import MappingProxyType
-from typing import Any, Protocol, TypeAlias
+from typing import Any, Protocol, TypeAlias, runtime_checkable
 
 from ag2.annotations import Context
 from ag2.events import (
@@ -24,6 +25,18 @@ from ag2.middleware.describe import MiddlewareDescription, _describe
 
 class MiddlewareFactory(Protocol):
     def __call__(self, event: "BaseEvent", context: "Context") -> "BaseMiddleware": ...
+
+
+@runtime_checkable
+class ScopedMiddlewareFactory(MiddlewareFactory, Protocol):
+    """Optionally bracket the whole execution scope, including setup and observers.
+
+    Scopes enter in factory registration order before tool schema resolution
+    and middleware instantiation, and exit in reverse order after observers.
+    Factory-owned state survives turns; each scope must keep its context local.
+    """
+
+    def scope(self, event: BaseEvent, context: Context) -> AbstractAsyncContextManager[None]: ...
 
 
 class Middleware(MiddlewareFactory):

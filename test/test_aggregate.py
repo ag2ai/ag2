@@ -10,7 +10,6 @@ import pytest
 
 from ag2 import Agent
 from ag2 import Context as Context
-from ag2.agent import KnowledgeConfig
 from ag2.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
@@ -26,7 +25,7 @@ from ag2.events import (
     TextInput,
     Usage,
 )
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig
 
@@ -297,11 +296,13 @@ class TestAggregationWiredOnAgent:
         agent = Agent(
             "roller",
             config=TestConfig(ModelResponse(ModelMessage("done"))),
-            knowledge=KnowledgeConfig(
-                store=store,
-                aggregate=strategy,
-                aggregate_trigger=AggregateTrigger(on_end=True),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    aggregate=strategy,
+                    aggregate_trigger=AggregateTrigger(on_end=True),
+                )
+            ],
         )
         await agent.ask("go", stream=stream)
 
@@ -317,11 +318,13 @@ class TestAggregationWiredOnAgent:
         agent = Agent(
             "once",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(
-                store=store,
-                aggregate=strategy,
-                aggregate_trigger=AggregateTrigger(every_n_turns=1, on_end=True),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    aggregate=strategy,
+                    aggregate_trigger=AggregateTrigger(every_n_turns=1, on_end=True),
+                )
+            ],
         )
         await agent.ask("go")
 
@@ -345,11 +348,13 @@ class TestAggregationWiredOnAgent:
         agent = Agent(
             "counter",
             config=TestConfig(*(ModelResponse(ModelMessage("ok"), usage=usage) for _ in range(4))),
-            knowledge=KnowledgeConfig(
-                store=store,
-                aggregate=strategy,
-                aggregate_trigger=AggregateTrigger(every_n_events=3, on_end=False),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    aggregate=strategy,
+                    aggregate_trigger=AggregateTrigger(every_n_events=3, on_end=False),
+                )
+            ],
         )
 
         r = await agent.ask("a", stream=stream)
@@ -372,11 +377,13 @@ class TestAggregationWiredOnAgent:
         agent = Agent(
             "boom",
             config=TestConfig(),
-            knowledge=KnowledgeConfig(
-                store=store,
-                aggregate=strategy,
-                aggregate_trigger=AggregateTrigger(on_end=True),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    aggregate=strategy,
+                    aggregate_trigger=AggregateTrigger(on_end=True),
+                )
+            ],
         )
 
         with pytest.raises(Exception):
@@ -408,11 +415,13 @@ class TestAggregationLifecycleEvents:
         agent = Agent(
             "lifecycle",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(
-                store=store,
-                aggregate=_RecordingAggregate(),
-                aggregate_trigger=AggregateTrigger(on_end=True),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    aggregate=_RecordingAggregate(),
+                    aggregate_trigger=AggregateTrigger(on_end=True),
+                )
+            ],
         )
         await agent.ask("go", stream=stream)
 
@@ -431,11 +440,13 @@ class TestAggregationLifecycleEvents:
         agent = Agent(
             "broken-aggregator",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(
-                store=store,
-                aggregate=_RaisingAggregate(),
-                aggregate_trigger=AggregateTrigger(on_end=True),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    aggregate=_RaisingAggregate(),
+                    aggregate_trigger=AggregateTrigger(on_end=True),
+                )
+            ],
         )
 
         # The turn itself must succeed — only the aggregation failed.

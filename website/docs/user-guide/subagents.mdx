@@ -98,17 +98,17 @@ Create a worker explicitly, then add its delegate tool to the parent's `tools` l
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 
 worker = Agent(
     "worker",
     prompt="Complete the assigned task concisely. Return only the result.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
 )
 coordinator = Agent(
     "coordinator",
     prompt="Delegate independent work to task_worker, then combine the results.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
     tools=[worker.as_tool(description="Complete a focused sub-task.")],
 )
 
@@ -131,11 +131,11 @@ Omit `tasks=` from the parent and update prompts that mention `run_subtask` or `
 A few behaviours differ:
 
 - **One worker, many calls.** `run_subtask` built a fresh Agent per call; a delegate reuses the same worker Agent. Each call still runs on a fresh stream, so history does not leak between calls. Don't use a [persistent or shared stream](/docs/user-guide/subagents#sub-task-streams) for a worker meant to run in parallel — calls on one stream run one turn at a time.
-- **Fan-out is up to the model.** `run_subtasks(tasks=[...], parallel=True)` dispatched every task from a single tool call. With delegates, the calling LLM requests several calls in one response and the framework runs them concurrently; prompt for it explicitly. Where order matters, have the LLM call the delegate one step at a time.
+- **Fan-out is up to the model.** `run_subtasks` dispatched the whole batch from a single tool call when parallel execution was enabled. With delegates, the calling LLM requests several calls in one response and the framework runs them concurrently; prompt for it explicitly. Where order matters, have the LLM call the delegate one step at a time.
 - **No built-in recursion guard.** Subtasks could never spawn subtasks. A worker can delegate only through the tools you give it, so keep delegate tools off the worker (avoid [self-delegation](/docs/user-guide/subagents#self-delegation) here).
 - **Workers composed per task.** If you relied on `run_subtask` to spin up a generic worker for arbitrary work, [`dynamic_agent()`](/docs/user-guide/subagents#dynamic-agents) is the closer fit: the LLM composes a focused worker per objective, and spawned workers cannot spawn further.
 
-`TaskStarted`, `TaskCompleted` and `TaskFailed` lifecycle events, HITL bridging, and usage roll-up work the same for delegates.
+`TaskStarted`, `TaskCompleted` and `TaskFailed` lifecycle events, HITL bridging, and forwarding of source `UsageEvent` records work with delegates.
 
 ### Limiting concurrency
 
@@ -248,9 +248,9 @@ The analyst's LLM may call `sub_task` multiple times — one per aspect — then
 ```python linenums="1" hl_lines="2 17"
 from ag2 import Agent
 from ag2.tools.dynamic import dynamic_agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 
-config = OpenAIConfig(model="gpt-4o-mini")
+config = OpenAIResponsesConfig(model="gpt-4o-mini")
 
 orchestrator = Agent(
     "orchestrator",

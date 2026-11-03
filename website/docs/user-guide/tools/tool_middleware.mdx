@@ -42,7 +42,7 @@ A hook is an **async** callable with the same parameters as `BaseMiddleware.on_t
 from typing import Annotated
 
 from ag2 import Agent, Context, tool, Variable
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 from ag2.events import ToolCallEvent, ToolResultEvent
 from ag2.middleware import ToolExecution
 
@@ -59,7 +59,7 @@ def search(query: str, request_id: Annotated[str, Variable()]) -> str:
     """Runs a search. request_id may be injected by middleware."""
     return f"results-for-{query}-{request_id}"
 
-agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
+agent = Agent("assistant", config=OpenAIResponsesConfig("gpt-4o-mini"))
 ```
 
 !!! note
@@ -140,7 +140,7 @@ Do not rely on either. Put the shared state in `#!python context.dependencies` a
 
 ```python linenums="1" hl_lines="24 43"
 from ag2 import Agent, Context, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 from ag2.events import ToolCallEvent, ToolResultEvent
 from ag2.middleware import MiddlewareDescription, ToolExecution, ToolResultType
 
@@ -179,7 +179,7 @@ def fetch(url: str) -> str:
 budget = CallBudget(limit=3, key="web")
 agent = Agent(
     "assistant",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAIResponsesConfig("gpt-4o-mini"),
     tools=[tool(search, middleware=[budget]), tool(fetch, middleware=[budget])],
     dependencies={("budget", "web"): Counter()},
 )

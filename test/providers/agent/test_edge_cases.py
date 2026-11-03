@@ -13,10 +13,10 @@ import pytest
 from pydantic import BaseModel, Field
 
 from ag2 import Agent
-from ag2.agent import KnowledgeConfig, TaskConfig
+from ag2.agent import TaskConfig
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.events import CompactionCompleted
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.middleware import BaseMiddleware
 from ag2.middleware.builtin import HistoryLimiter, RetryMiddleware
 from ag2.stream import MemoryStream
@@ -40,11 +40,13 @@ async def test_long_conversation_with_compaction(provider_config) -> None:
         "long-talker",
         prompt="Be very brief — 1 sentence answers.",
         config=provider_config,
-        knowledge=KnowledgeConfig(
-            store=store,
-            compact=TailWindowCompact(target=4),
-            compact_trigger=CompactTrigger(max_events=8),
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=store,
+                compact=TailWindowCompact(target=4),
+                compact_trigger=CompactTrigger(max_events=8),
+            )
+        ],
     )
 
     questions = [

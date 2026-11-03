@@ -126,7 +126,7 @@ Resulting layout:
 | Path | Purpose |
 |---|---|
 | `/SKILL.md` | Top-level store description |
-| `/log/` | Conversation logs — auto-populated by `EventLogWriter` after each `ask()` unless `KnowledgeConfig.write_event_log=False` |
+| `/log/` | Conversation logs — auto-populated by `EventLogWriter` after each `ask()` unless `KnowledgePlugin(store, write_event_log=False)` |
 | `/artifacts/` | User files, downloads, reference material |
 | `/memory/` | Working memory and conversation summaries |
 
@@ -138,11 +138,11 @@ Implement your own `StoreBootstrap` if you need a different layout.
 
 ```python linenums="1"
 from ag2 import Agent, MemoryStream
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 from ag2.knowledge import EventLogWriter, MemoryKnowledgeStore
 
 stream = MemoryStream()
-agent = Agent("assistant", config=OpenAIConfig(model="gpt-5"))
+agent = Agent("assistant", config=OpenAIResponsesConfig(model="gpt-5"))
 await agent.ask("Hello!", stream=stream)
 
 # Persist all events from this stream
@@ -157,10 +157,10 @@ loaded = await writer.load(stream.id)  # -> list[BaseEvent]
 
 Persisted events land at `/log/{stream_id}.jsonl`. Events of types that cannot be deserialized (e.g. a removed class) come back as `UnknownEvent` — no data is lost.
 
-When an `Agent` is given a `KnowledgeConfig`, it runs this `persist(...)` step for you at the end of every `ask()` — so you only call `EventLogWriter` directly in a custom harness. Set `KnowledgeConfig.write_event_log=False` to turn the automatic write off (e.g. when the store is purely user-facing memory rather than a transcript archive); if the writer raises, the turn still returns its reply and an `EventLogFailed` event is emitted on the stream.
+When an `Agent` is given a `KnowledgePlugin`, it runs this `persist(...)` step for you at the end of every `ask()` — so you only call `EventLogWriter` directly in a custom harness. Set `KnowledgePlugin(store, write_event_log=False)` to turn the automatic write off (e.g. when the store is purely user-facing memory rather than a transcript archive); if the writer raises, the turn still returns its reply and an `EventLogFailed` event is emitted on the stream.
 
 !!! tip
-    Pair `EventLogWriter` with `DefaultBootstrap` to get a ready-to-use persistent agent state. The writer targets `/log/` which the bootstrap has already described via `SKILL.md`. If you set `KnowledgeConfig.expose_tool=False`, the `Agent` passes `DefaultBootstrap(mention_tool=False)` so the generated `SKILL.md` doesn't tell the LLM about a `knowledge` tool it can't call.
+    Pair `EventLogWriter` with `DefaultBootstrap` to get a ready-to-use persistent agent state. The writer targets `/log/` which the bootstrap has already described via `SKILL.md`. If you set `KnowledgePlugin(store, expose_tool=False)`, the `Agent` passes `DefaultBootstrap(mention_tool=False)` so the generated `SKILL.md` doesn't tell the LLM about a `knowledge` tool it can't call.
 
 ## LockedKnowledgeStore — serialize writers
 

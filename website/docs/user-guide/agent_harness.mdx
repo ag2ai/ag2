@@ -23,13 +23,10 @@ Agent(
     response_schema: ResponseProto | type | None = None,
     hitl_hook: HumanHook | None = None,
     plugins: Iterable[Plugin] = (),
-    assembly: Iterable[AssemblyPolicy] | None = None,  # deprecated; removed in 1.4.0
-    knowledge: KnowledgeConfig | None = None,
-    tasks: TaskConfig | Literal[False] = False,  # deprecated; removed in 1.4.0
 )
 ```
 
-The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. Context policies use `middleware=`; the other harness hooks are `knowledge=` and `tasks=`, each documented below. The legacy `assembly=` parameter is deprecated and will be removed in 1.4.0.
+The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. Context policies use `middleware=`; persistent knowledge is configured through `plugins=[KnowledgePlugin(...)]`. Legacy `knowledge=` and `tasks=` remain available during their deprecation period. The legacy `assembly=` parameter is deprecated and will be removed in 1.4.0.
 
 ## Context policies through `middleware=`
 
@@ -67,41 +64,43 @@ agent = Agent(
 
 Order matters — see the [ordering rule in the assembly doc](/docs/user-guide/advanced/assembly#ordering-matters). `AssemblerMiddleware.validate_order()` will flag known problematic compositions.
 
-## `knowledge=` — KnowledgeConfig
+## KnowledgePlugin
 
 Groups everything that involves the [`KnowledgeStore`](/docs/user-guide/advanced/knowledge_store): the store itself, optional bootstrap, and optional compaction + aggregation strategies.
 
-```python linenums="1"
-from dataclasses import dataclass
+```python
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
-@dataclass
-class KnowledgeConfig:
-    store: KnowledgeStore
-    expose_tool: bool = True
-    write_event_log: bool = True
-    compact: CompactStrategy | None = None
-    compact_trigger: CompactTrigger | None = None
-    aggregate: AggregateStrategy | None = None
-    aggregate_trigger: AggregateTrigger | None = None
-    bootstrap: StoreBootstrap | None = None
+store = MemoryKnowledgeStore()
+
+plugin = KnowledgePlugin(
+    store,                         # required KnowledgeStore
+    expose_tool=True,
+    write_event_log=True,
+    bootstrap=None,
+    compact=None,
+    compact_trigger=None,
+    aggregate=None,
+    aggregate_trigger=None,
+)
 ```
 
-| Field | What it does |
+| Option | What it does |
 |---|---|
 | `store` | Registered in `#!python context.dependencies[KnowledgeStore]` so policies like `WorkingMemoryPolicy` / `EpisodicMemoryPolicy` can read it. |
-| `expose_tool` | When `True` (default), the agent gets an auto-injected `knowledge` action-group tool that lets the LLM call `read` / `write` / `list` / `delete` on the store. Set to `False` when the store should be policy-only — the model never sees the tool, and the bootstrap SKILL.md text drops its "use the `knowledge` tool" sentence. |
+| `expose_tool` | When `True` (default), the agent gets a plugin-provided `knowledge` action-group tool that lets the LLM call `read` / `write` / `list` / `delete` on the store. Set to `False` when the store should be policy-only — the model never sees the tool, and the bootstrap SKILL.md text drops its "use the `knowledge` tool" sentence. |
 | `write_event_log` | When `True` (default), the agent persists its stream history to `/log/{stream_id}.jsonl` at the end of each `#!python ask()`. Set to `False` to keep the store free of stream logs (e.g. when the store is purely user-facing memory). |
 | `compact` / `compact_trigger` | Wires a compaction middleware that fires [`compact()`](/docs/user-guide/advanced/compaction) between turns when the trigger thresholds are exceeded. |
 | `aggregate` / `aggregate_trigger` | Wires an aggregation middleware that fires [`aggregate()`](/docs/user-guide/advanced/aggregation) on the configured cadence. Failures emit `AggregationFailed` on the stream — see [Aggregation › Wiring onto an Agent](/docs/user-guide/advanced/aggregation#wiring-onto-an-agent) for the full lifecycle event triple. |
 | `bootstrap` | Runs once on first use to seed the store. `None` falls back to `#!python DefaultBootstrap(mention_tool=expose_tool)`, so the generated SKILL.md text matches whether the LLM can actually call the `knowledge` tool. |
 
 ```python linenums="1" hl_lines="15-21"
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
 from ag2.assembly import AssemblerMiddleware
 from ag2.middleware import Middleware
 from ag2.compact import CompactTrigger, TailWindowCompact
-from ag2.knowledge import DiskKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, DiskKnowledgeStore
 from ag2.policies import WorkingMemoryPolicy
 from pathlib import Path
 
@@ -110,117 +109,112 @@ store = DiskKnowledgeStore(Path("./knowledge"))
 agent = Agent(
     "assistant",
     config=main_config,
-    knowledge=KnowledgeConfig(
+    plugins=[KnowledgePlugin(
         store=store,
         compact=TailWindowCompact(target=100),
         compact_trigger=CompactTrigger(max_events=200),
         aggregate=ConversationSummaryAggregate(config=summarizer_config),
         aggregate_trigger=AggregateTrigger(every_n_turns=10, on_end=True),
-    ),
+    )],
     middleware=[Middleware(AssemblerMiddleware, policies=[WorkingMemoryPolicy()])],
 )
 ```
 
-The compaction and aggregation middleware are opt-in per field: passing `compact=` without `compact_trigger=` still works (a default `CompactTrigger()` with all thresholds disabled is used). Omit a strategy entirely and the corresponding middleware is not wired.
+Provide each strategy together with its trigger. Omit compaction or aggregation to leave that maintenance disabled.
 
-## `tasks=` — TaskConfig
+### Migrating from `knowledge=`
 
-!!! warning "Deprecated — removal in 1.4.0"
-    `TaskConfig`, `Agent(tasks=...)`, the `Agent.tasks` property, and the auto-injected `run_subtask` / `run_subtasks` tools are deprecated. They remain functional until removal in **1.4.0**. Construct worker Agents and pass their `Agent.as_tool()` tools to the parent instead; see [Migrating from TaskConfig](/docs/user-guide/subagents#migrating-from-taskconfig).
-
-Sub-task delegation is **off by default** — a bare Agent has no `run_subtask` / `run_subtasks` tools. Pass `tasks=TaskConfig(...)` to opt in, and the Agent will auto-inject the pair of sub-task tools that let the LLM spawn isolated child Agents to handle self-contained work. `TaskConfig` configures how those children are built.
+`Agent(knowledge=...)` emits one `DeprecationWarning` at construction in 1.3
+and will be removed in **1.4.0**. Move the same settings into a plugin:
 
 ```python linenums="1"
-from dataclasses import dataclass
-
-@dataclass
-class TaskConfig:
-    config: ModelConfig | None = None
-    prompt: str = (
-        "You are a task agent. Complete the assigned task thoroughly and "
-        "concisely. Return only the result."
-    )
-    include_tools: Iterable[str] | None = None
-    exclude_tools: Iterable[str] = ()
-    extra_tools: Iterable[Callable | Tool] = ()
-    max_concurrency: int | None = None
-```
-
-| Field | What it does |
-|---|---|
-| `config` | The `ModelConfig` used for sub-task Agents. Falls back to the parent Agent's `config`. |
-| `prompt` | Default system prompt for sub-task Agents. |
-| `include_tools` | Allowlist of parent-tool names to inherit. `None` means "inherit all". |
-| `exclude_tools` | Blocklist of parent-tool names to drop. Applied after `include_tools`. |
-| `extra_tools` | Additional tools given to sub-tasks that the parent does not have. |
-| `max_concurrency` | Optional cap shared by all sub-tasks spawned by this Agent. Extra work waits for a slot. `None` keeps concurrency unbounded. |
-
-By default a sub-task Agent inherits **all** of the parent's user-supplied tools. Sub-tasks are themselves constructed with `tasks=False` (the Agent default), so they have no `run_subtask` / `run_subtasks` tools — recursive delegation is structurally impossible and no depth limit is needed.
-
-```python linenums="1" hl_lines="7-12"
-from ag2 import Agent, TaskConfig
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 agent = Agent(
-    "orchestrator",
-    config=main_config,
-    tools=[search, fetch_url, summarize],
-    tasks=TaskConfig(
-        config=worker_config,                 # cheaper model for sub-tasks
-        prompt="You are a focused worker; one step only.",
-        include_tools=["search", "fetch_url"],  # don't expose summarize to children
-        max_concurrency=4,                    # bound model/API fan-out
-    ),
+    "assistant",
+    config=OpenAIResponsesConfig(model="gpt-5"),
+    plugins=[KnowledgePlugin(store=MemoryKnowledgeStore())],
 )
 ```
 
-### `tasks=False` — the default
+Move `expose_tool`, `write_event_log`, `bootstrap`, `compact`, `compact_trigger`,
+`aggregate`, and `aggregate_trigger` unchanged into `KnowledgePlugin`.
+`KnowledgeConfig` and its current imports remain available; only the Agent
+parameter is deprecated. Supplying both configurations raises `ValueError`
+before bootstrap. For policy-only memory, use
+`KnowledgePlugin(store, expose_tool=False)`. Custom `StoreBootstrap`,
+`CompactStrategy`, and `AggregateStrategy` implementations keep their protocols.
 
-`tasks=False` is the Agent default, so a bare Agent never spawns children. You only need to pass it explicitly to be self-documenting; otherwise just omit `tasks=` entirely.
+Construction performs no store I/O. Bootstrap precedes tool schema resolution
+and middleware/observer setup, uses the existing `/.initialized` sentinel, and
+coordinates concurrent calls on the configured plugin. On completion,
+aggregation runs before compaction; logging follows observer completion.
+Aggregation retains its trigger-driven cleanup on failures and cancellation.
+Final logging runs only when the enclosing execution scope exits normally:
+run handles (including `Agent.ask`) close that scope normally even when their
+background turn failed; a failing `AgentReply.ask` propagates through the scope
+and skips logging, as before migration.
 
-```python linenums="1"
-focused = Agent(
-    "summarizer",
-    prompt="Summarise the input. Do not delegate.",
-    config=main_config,
-    # tasks=False is the default — no run_subtask / run_subtasks tools.
-)
-```
+The store is a plugin dependency default. Explicit Agent or invocation
+`dependencies={KnowledgeStore: other_store}` overrides it for policies, tools,
+bootstrap, and maintenance together. Legacy `knowledge=` retains its previous
+precedence during the compatibility period. An invocation-only plugin is
+removed after that invocation, including its tools and dependency default.
+A worker needs its own plugin; delegation does not inherit the parent's tools.
 
-## `run_subtask` / `run_subtasks` — auto-injected tools
+### Tool approval and automatic writes
+
+The `knowledge` tool uses ordinary tool middleware and tool precedence.
+Attach the existing `approval_required()` middleware to gate model-requested
+reads, writes, lists, and deletes. Denying a call prevents that tool action.
+Bootstrap, aggregation, compaction archives, and event logs are automatic
+maintenance; an individual tool approval does not gate those writes. Approval
+is never enabled automatically. Set `write_event_log=False` to opt out of
+conversation logs independently of tool exposure and other maintenance.
+
+## Subagent delegation
+
+Build each worker as an Agent with its own config, prompt and tools, then expose
+it to the parent through `Agent.as_tool()`. A worker receives only the tools you
+configure on it. Give it delegate tools only when further delegation is intended.
+The model can request several delegates in one response to run them concurrently.
+
+To cap concurrency, share a tool middleware function that closes over one
+semaphore across the delegates. See [Limiting concurrency](/docs/user-guide/subagents#limiting-concurrency).
+To let the model compose a worker per objective, use
+[`dynamic_agent()`](/docs/user-guide/subagents#dynamic-agents).
+
+### Migrating from TaskConfig
 
 !!! warning "Deprecated — removal in 1.4.0"
-    These tools remain available through the deprecated `tasks=TaskConfig(...)` API. For new code, use [explicit delegation](/docs/user-guide/subagents#subagents-api) with `Agent.as_tool()`.
-
-When you opt in via `tasks=TaskConfig(...)`, the Agent exposes two tools to the LLM:
-
-- `run_subtask(task: str)` — spawn one sub-task Agent. Useful when the LLM has a single self-contained piece of work to delegate.
-- `run_subtasks(tasks: list[str], parallel: bool = True)` — spawn multiple sub-tasks in one tool call. Defaults to running them concurrently with `asyncio.gather`; pass `parallel=False` only when later tasks depend on earlier results.
-
-The LLM is told (via the tool descriptions) that it can call `run_subtask` multiple times in parallel within a single response, and that `run_subtasks` is the deliberate fan-out form. Each child gets a fresh `MemoryStream` and the parent's tools (filtered by `TaskConfig`).
-
-Set `TaskConfig(max_concurrency=N)` when that fan-out needs a model, API, or
-resource limit. The cap is shared by both tools on the Agent, so several
-parallel `run_subtask` calls and a concurrent `run_subtasks` call cannot
-bypass one another.
-
-Use [`Agent.as_tool()`](#agentas_tool) to expose a named delegate such as `task_researcher`. Existing coordinators can keep both patterns during migration.
-
-See [Subagents](/docs/user-guide/subagents) for the full sub-task delegation guide — context flow and custom streams for self-delegation via `as_tool()`.
+    `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the auto-injected
+    `run_subtask` / `run_subtasks` tools remain available during the deprecation
+    period and will be removed in **1.4.0**. Move the worker's config, prompt and
+    tools onto an explicit Agent, then register its `Agent.as_tool()` on the
+    parent. See the [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig)
+    for the field mapping and concurrency changes.
 
 ## Agent.as_tool()
 
 Expose any Agent as a `FunctionTool` so another Agent can invoke it like any other tool:
 
-```python linenums="1" hl_lines="10 13"
+```python linenums="1" hl_lines="15 18"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+
+config = OpenAIResponsesConfig(model="gpt-4o-mini")
+
 child = Agent(
     "researcher",
     prompt="Answer the objective concisely.",
-    config=main_config,
+    config=config,
 )
 
 parent = Agent(
     "lead",
-    config=main_config,
+    config=config,
     tools=[child.as_tool(description="Delegate fact-finding to a researcher.")],
 )
 
@@ -286,6 +280,6 @@ first.middleware[0].middleware is second.middleware[0].middleware
 
 Each `await agent.ask(...)` enters middleware in registration order (outermost → innermost), then reaches the LLM client. Register `AssemblerMiddleware` before `HaltCheckMiddleware` so alerts can halt the current call. Place retry, logging, or other middleware according to whether they should see the original or assembled context.
 
-Knowledge compaction and aggregation middleware are appended after constructor-supplied middleware when their strategies are configured. The deprecated `assembly=` parameter appends its assembler and halt checker after those; migration to an explicit list lets you choose their position.
+`KnowledgePlugin` contributes compaction and aggregation middleware through ordinary plugin composition. Keep the context assembler and halt checker in your explicit `middleware` list; plugin and invocation contributions follow their registration order.
 
 Lifecycle events emitted during a turn include `ObserverStarted` / `ObserverCompleted`, `CompactionCompleted`, `AggregationCompleted`, and `HaltEvent`. Subscribe to any of them via an [Observer](/docs/user-guide/advanced/observers) or a stream subscriber.

@@ -25,7 +25,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 from ag2.middleware.builtin import TelemetryMiddleware
 
 # 1. Configure OpenTelemetry
@@ -38,7 +38,7 @@ trace.set_tracer_provider(tracer_provider)
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
     middleware=[
         TelemetryMiddleware(
             tracer_provider=tracer_provider,
@@ -209,7 +209,7 @@ TelemetryMiddleware(
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 from ag2.middleware.builtin import TelemetryMiddleware
 from ag2.tools import tool
 
@@ -221,7 +221,7 @@ def get_weather(city: str) -> str:
 agent = Agent(
     "weather_agent",
     prompt="Use the get_weather tool to answer weather questions.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
     tools=[get_weather],
     middleware=[
         TelemetryMiddleware(

@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from dirty_equals import IsPartialDict
 
-from ag2 import Agent, Context, KnowledgeConfig, MemoryStream, Scope, ScopedValue, observer
+from ag2 import Agent, Context, MemoryStream, Scope, ScopedValue, observer
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.events import (
     BaseEvent,
@@ -28,7 +28,7 @@ from ag2.events import (
     Usage,
     UsageEvent,
 )
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.testing import TestConfig
 from ag2.tools.subagents import DeliveryError, background_agent_tool
 from ag2.tools.subagents.run_task import run_task
@@ -340,13 +340,15 @@ async def test_descendant_accounting_survives_compaction_and_serialized_replay()
         "root",
         config=TestConfig(ToolCallEvent(name="task_child", arguments='{"objective":"work"}'), "done"),
         tools=[child.as_tool(description="Work")],
-        knowledge=KnowledgeConfig(
-            store=MemoryKnowledgeStore(),
-            compact=TailWindowCompact(target=1),
-            compact_trigger=CompactTrigger(max_events=1),
-            expose_tool=False,
-            write_event_log=False,
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=MemoryKnowledgeStore(),
+                compact=TailWindowCompact(target=1),
+                compact_trigger=CompactTrigger(max_events=1),
+                expose_tool=False,
+                write_event_log=False,
+            )
+        ],
     )
     reply = await root.ask("start")
     history = list(await reply.history.get_events())

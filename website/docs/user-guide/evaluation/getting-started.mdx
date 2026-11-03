@@ -24,7 +24,7 @@ Start as small as possible: two questions, an agent, one check. This calls a rea
 import asyncio
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 from ag2.eval import Suite, run_agent
 from ag2.eval.scorers import final_answer_matches
 
@@ -35,7 +35,7 @@ suite = Suite.from_list([
 ])
 
 # 2. the agent under test
-agent = Agent("geographer", prompt="Answer with the capital city.", config=OpenAIConfig(model="gpt-4o-mini"))
+agent = Agent("geographer", prompt="Answer with the capital city.", config=OpenAIResponsesConfig(model="gpt-4o-mini"))
 
 async def main():
     # 3 + 4. score each answer against its expected value, and run

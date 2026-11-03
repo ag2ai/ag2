@@ -85,13 +85,13 @@ Summarizes the dropped portion via one LLM call, inserts a `CompactionSummary` e
 
 ```python linenums="1" hl_lines="6-9 11"
 from ag2.compact import SummarizeCompact
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 compact = SummarizeCompact(
     target=50,
-    config=OpenAIConfig(model="gpt-5-mini"),  # cheap model recommended for summaries
+    config=OpenAIResponsesConfig(model="gpt-5-mini"),  # cheap model recommended for summaries
 )
 
 retained = await compact.compact(events, ctx, store)
@@ -122,23 +122,23 @@ summary = CompactionSummary(
 
 ## Wiring onto an Agent
 
-Pass the strategy + trigger through [`KnowledgeConfig`](/docs/user-guide/agent_harness#knowledge-knowledgeconfig). The Agent wires a `_CompactionMiddleware` that fires the strategy automatically after each turn when the trigger threshold is crossed.
+Pass the strategy + trigger through [`KnowledgePlugin`](/docs/user-guide/agent_harness#knowledgeplugin). The plugin contributes middleware that fires the strategy automatically after each turn when the trigger threshold is crossed.
 
 ```python linenums="1" hl_lines="10-14"
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.compact import CompactTrigger, TailWindowCompact
-from ag2.config import OpenAIConfig
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.config import OpenAIResponsesConfig
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 agent = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-5"),
-    knowledge=KnowledgeConfig(
+    config=OpenAIResponsesConfig(model="gpt-5"),
+    plugins=[KnowledgePlugin(
         store=store,
         compact=TailWindowCompact(target=100),
         compact_trigger=CompactTrigger(max_events=200),
-    ),
+    )],
 )
 ```
 

@@ -45,13 +45,13 @@ The most common use is multi-turn that outlives the process: persist a conversat
 
 ```python linenums="1" hl_lines="12 15-16"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 from ag2.events import ModelRequest, TextInput
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful travel assistant.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAIResponsesConfig("gpt-4o-mini"),
 )
 
 # A conversation you stored earlier and just loaded back from your database.
@@ -71,7 +71,7 @@ A turn can also stop **mid-loop** — the model asked to run a tool whose result
 
 ```python linenums="1" hl_lines="18 25 28"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 from ag2.events import (
     ModelMessage,
     ModelRequest,
@@ -83,7 +83,7 @@ from ag2.events import (
     ToolResultsEvent,
 )
 
-agent = Agent("support", prompt="Answer using the tool result.", config=OpenAIConfig("gpt-4o-mini"))
+agent = Agent("support", prompt="Answer using the tool result.", config=OpenAIResponsesConfig("gpt-4o-mini"))
 
 # The trajectory recorded earlier: the user asked, and the model responded
 # by requesting a tool call (whose result is not yet known).
@@ -119,7 +119,7 @@ print(reply.body)
 ```
 
 !!! note "Reading back the event log"
-    `resume` reads only the events you pass in — it does not load history from a store on its own. The [event log](/docs/user-guide/advanced/knowledge_store) written by `KnowledgeConfig(write_event_log=True)` is one place these trajectories can come from: it persists each turn to `/log/{stream_id}.jsonl`, and `EventLogWriter(store).load(stream_id)` reads it back as typed events ready to pass straight to `resume`.
+    `resume` reads only the events you pass in — it does not load history from a store on its own. The [event log](/docs/user-guide/advanced/knowledge_store) written by `KnowledgePlugin(store, write_event_log=True)` is one place these trajectories can come from: it persists each turn to `/log/{stream_id}.jsonl`, and `EventLogWriter(store).load(stream_id)` reads it back as typed events ready to pass straight to `resume`.
 
     ```python linenums="1"
     from ag2.knowledge import EventLogWriter

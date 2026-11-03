@@ -15,12 +15,12 @@ import pytest
 pytest.importorskip("watchdog")
 
 from ag2 import Agent
-from ag2.agent import KnowledgeConfig
 from ag2.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TextInput, UnknownEvent
 from ag2.knowledge import (
     DefaultBootstrap,
     DiskKnowledgeStore,
     EventLogWriter,
+    KnowledgePlugin,
     LockedKnowledgeStore,
     MemoryKnowledgeStore,
     SqliteKnowledgeStore,
@@ -318,7 +318,7 @@ class TestAgentBootstrapsOnce:
                 ModelResponse(ModelMessage("ok-2")),
                 ModelResponse(ModelMessage("ok-3")),
             ),
-            knowledge=KnowledgeConfig(store=store, bootstrap=counter),
+            plugins=[KnowledgePlugin(store=store, bootstrap=counter)],
         )
 
         await asyncio.gather(
@@ -345,7 +345,7 @@ class TestAgentBootstrapsOnce:
         agent = Agent(
             "later",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(store=store, bootstrap=counter),
+            plugins=[KnowledgePlugin(store=store, bootstrap=counter)],
         )
         await agent.ask("hi")
 

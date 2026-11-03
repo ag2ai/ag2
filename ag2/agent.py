@@ -11,7 +11,7 @@ spawning).
 
 A bare ``Agent(name, config=cfg)`` has zero harness middleware — it behaves
 exactly like a plain LLM loop. Harness features are opt-in: use ``middleware=``
-for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
+for context policies, ``plugins=[KnowledgePlugin(...)]`` for a knowledge store,
 or use ``Agent.as_tool()`` for explicit subagent delegation. The legacy
 ``tasks=TaskConfig(...)`` API is deprecated and will be removed in 1.4.0.
 """
@@ -40,10 +40,8 @@ from typing_extensions import deprecated
 from ag2.events import BinaryResult
 
 from ._model_input import model_inputs
-from .aggregate import AggregateStrategy, AggregateTrigger
 from .annotations import Context
 from .assembly import AssemblerMiddleware, AssemblyPolicy
-from .compact import CompactStrategy, CompactTrigger
 from .config import LLMClient, ModelConfig
 from .events import (
     BaseEvent,
@@ -55,27 +53,18 @@ from .events import (
     ModelResponse,
     ProviderReplay,
     StatusObservation,
-    ToolCallsEvent,
     ToolResultsEvent,
     UsageEvent,
-    estimated_tokens,
     is_conversational,
 )
 from .events.lifecycle import (
-    AggregationCompleted,
-    AggregationFailed,
-    AggregationStarted,
-    CompactionCompleted,
-    CompactionFailed,
-    CompactionStarted,
-    EventLogFailed,
     ObserverCompleted,
     ObserverStarted,
 )
 from .exceptions import ConfigNotProvidedError, HumanInputError
 from .history import CANCELLED_TOOL_RESULT, HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
-from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore
+from .knowledge._legacy import LegacyKnowledgeAdapter
 from .knowledge.config import KnowledgeConfig
 from .middleware.base import (
     AgentTurn,
@@ -83,6 +72,7 @@ from .middleware.base import (
     LLMCall,
     Middleware,
     MiddlewareFactory,
+    ScopedMiddlewareFactory,
     ToolMiddleware,
 )
 from .middleware.describe import DescribedMiddleware
@@ -94,7 +84,7 @@ from .scopes import merge_variables, overlay_variables
 from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, Toolkit, tool
+from .tools.final import FunctionTool, Toolkit
 from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents._forwarding import DelegationRegistry, Forwarder
@@ -102,7 +92,7 @@ from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
 from .types import Omit, Omittable, RequestOrigin, SendableMessage, omit
-from .usage import UsageReport, collect_usage_events, usage_event_from
+from .usage import UsageReport
 from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
 
 logger = logging.getLogger(__name__)
@@ -121,6 +111,12 @@ ASSEMBLY_DEPRECATION = (
     "Agent(assembly=...) is deprecated and will be removed in 1.4.0. Register "
     "middleware=[Middleware(AssemblerMiddleware, policies=[...]), Middleware(HaltCheckMiddleware)] instead; "
     "import AssemblerMiddleware from ag2.assembly and Middleware / HaltCheckMiddleware from ag2.middleware."
+)
+
+
+KNOWLEDGE_DEPRECATION = (
+    "Agent(knowledge=...) is deprecated and will be removed in 1.4.0. "
+    "Use plugins=[KnowledgePlugin(store=..., ...)] instead; import KnowledgePlugin from ag2.knowledge."
 )
 
 
@@ -723,7 +719,7 @@ class Agent(PluginTarget, Generic[TResult]):
       ``Middleware(HaltCheckMiddleware)`` after it when using ``AlertPolicy``.
       The legacy ``assembly=`` parameter is deprecated and will be removed
       in 1.4.0; it keeps wiring both middleware automatically until then.
-    * ``knowledge=KnowledgeConfig(store=...)`` — persistent knowledge store,
+    * ``plugins=[KnowledgePlugin(store=...)]`` — persistent knowledge store,
       compaction, aggregation.
     * ``tasks=TaskConfig(...)`` — opt in to the auto-injected ``run_subtask``
       / ``run_subtasks`` tools, and override the LLM config / prompt /
@@ -870,23 +866,15 @@ class Agent(PluginTarget, Generic[TResult]):
         )
         self._task_slots_lock = threading.Lock()
 
-        # Knowledge store + compaction/aggregation strategies
-        if knowledge:
-            self._agent_dependencies[KnowledgeStore] = knowledge.store
-            self._knowledge_context = _KnowledgeContext(knowledge, self.name)
-
-            if knowledge.expose_tool:
-                self._additional_tools.append(_make_knowledge_tool(knowledge.store))
-
-            if knowledge.compact:
-                self.add_middleware(_CompactionMiddlewareFactory(self.name, knowledge))
-
-            if (trigger := knowledge.aggregate_trigger) and (
-                trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end
-            ):
-                self.add_middleware(_AggregationMiddlewareFactory(self.name, knowledge))
-        else:
-            self._knowledge_context = _FakeKnowledgeContext()
+        # Temporary compatibility adapter; remove with knowledge= in 1.4.0.
+        self._legacy_knowledge = LegacyKnowledgeAdapter(knowledge) if knowledge is not None else None
+        if self._legacy_knowledge is not None:
+            warnings.warn(KNOWLEDGE_DEPRECATION, DeprecationWarning, stacklevel=2)
+            self._legacy_knowledge.validate(self._middleware)
+            self._apply_plugin(self._legacy_knowledge.plugin)
+            # Legacy knowledge overrides constructor dependencies, unlike plugin defaults.
+            self._agent_dependencies.update(self._legacy_knowledge.plugin._dependencies)
+            self._additional_tools.extend(self._legacy_knowledge.tools)
 
         # Assembly policies (empty by default; bare Agent has no harness).
         if assembly is not None:
@@ -1477,6 +1465,9 @@ class Agent(PluginTarget, Generic[TResult]):
     ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
         """Resolve invocation plugins and bracket their context contributions."""
         plugins = _TurnPlugins(additional_plugins)
+        additional_middleware = tuple(additional_middleware)
+        if self._legacy_knowledge is not None:
+            self._legacy_knowledge.validate(chain(self._middleware, plugins.middleware, additional_middleware))
         async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
             delegation = context.dependencies.get(Forwarder)
             if delegation is not None and delegation.stream.id == context.stream.id:
@@ -1543,7 +1534,7 @@ class Agent(PluginTarget, Generic[TResult]):
         """Open a turn scope and yield a ``drive`` callable that runs it once.
 
         Sets up everything a turn needs and keeps it live across the ``yield``:
-        the per-stream lock (serialisation), the knowledge context, the resolved
+        the per-stream lock (serialisation), middleware scopes, the resolved
         tool schemas, the instantiated middlewares, the turn's subscribers (LLM
         callback, HITL, tool executor) and the observer lifecycle. The yielded
         ``drive`` advances the turn from ``event`` and returns the ``AgentReply``.
@@ -1563,7 +1554,12 @@ class Agent(PluginTarget, Generic[TResult]):
         no-contention acquire. Sub-tasks spawn on their own stream, so they never
         contend with the parent turn's lock.
         """
-        async with self._knowledge_context.enter(context):
+        additional_middleware = tuple(additional_middleware)
+        async with AsyncExitStack() as scope_stack:
+            scoped_factories = tuple(chain(self._middleware, additional_middleware))
+            for factory in scoped_factories:
+                if isinstance(factory, ScopedMiddlewareFactory):
+                    await scope_stack.enter_async_context(factory.scope(event, context))
             if response_schema is omit:
                 final_schema = self._response_schema
             else:
@@ -1834,60 +1830,6 @@ class Agent(PluginTarget, Generic[TResult]):
         )
 
 
-class _KnowledgeContext:
-    def __init__(
-        self,
-        config: "KnowledgeConfig",
-        agent_name: str,
-    ) -> None:
-        self.config = config
-        self._agent_name = agent_name
-
-        self.__lock: asyncio.Lock | None = None
-        self.__bootstrapped = None
-
-    @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncGenerator[None]:
-        store = self.config.store
-
-        if not self.__bootstrapped:
-            if self.__lock is None:
-                self.__lock = asyncio.Lock()
-
-            async with self.__lock:
-                if not self.__bootstrapped:
-                    if not await store.exists("/.initialized"):
-                        await store.write("/.initialized", self._agent_name)
-                        bootstrap = self.config.bootstrap or DefaultBootstrap(mention_tool=self.config.expose_tool)
-                        await bootstrap.bootstrap(store, self._agent_name)
-
-                    self.__bootstrapped = True
-
-        yield None
-
-        if self.config.write_event_log:
-            try:
-                events = list(await context.stream.history.get_events())
-                await EventLogWriter(store).persist(context.stream.id, events)
-
-            except Exception as exc:
-                logger.exception("Event log persistence failed for %s", self._agent_name)
-                with suppress(Exception):
-                    await context.send(
-                        EventLogFailed(
-                            agent=self._agent_name,
-                            error_type=type(exc).__name__,
-                            error=str(exc),
-                        )
-                    )
-
-
-class _FakeKnowledgeContext:
-    @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncGenerator[None]:
-        yield
-
-
 async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
     # Drain stream-level inbox before the first model call: any messages
     # enqueued by background tasks from a previous ``ask`` (or any other
@@ -2060,54 +2002,6 @@ def _filter_subtask_tools(
     return result
 
 
-def _make_knowledge_tool(store: KnowledgeStore) -> Tool:
-    """Build the ``knowledge`` action-group tool bound to ``store``.
-
-    Called once at Agent ``__init__`` so the LLM-visible tool definition is
-    stable across turns and we don't re-allocate the closure per turn.
-    """
-
-    @tool
-    async def knowledge(action: str, path: str = "/", content: str = "") -> str:
-        """Manage your knowledge store.
-
-        Actions:
-            read   - Read file at path.
-            write  - Write content to path.
-            list   - List entries at path.
-            delete - Delete file at path.
-        """
-        if action == "read":
-            result = await store.read(path)
-            return result if result is not None else f"Not found: {path}"
-
-        elif action == "write":
-            if not content:
-                return "Error: content is required for write action."
-            await store.write(path, content)
-            return f"Written to {path}"
-
-        elif action == "list":
-            entries = await store.list(path)
-            if not entries:
-                return f"Empty: {path}"
-            skill_path = f"{path.rstrip('/')}/SKILL.md"
-            skill = await store.read(skill_path)
-            listing = "\n".join(entries)
-            if skill:
-                listing = f"{skill}\n---\n{listing}"
-            return listing
-
-        elif action == "delete":
-            await store.delete(path)
-            return f"Deleted: {path}"
-
-        else:
-            return f"Unknown action: {action}. Available: read, write, list, delete."
-
-    return knowledge
-
-
 def _is_user_assembler(factory: MiddlewareFactory) -> TypeGuard[Middleware]:
     return isinstance(factory, Middleware) and issubclass(factory.cls, AssemblerMiddleware)
 
@@ -2156,293 +2050,3 @@ class _AssemblerMiddlewareFactory:
 
     def __call__(self, event: BaseEvent, context: Context) -> AssemblerMiddleware:
         return AssemblerMiddleware(event, context, policies=self._policies)
-
-
-class _CompactionMiddleware(BaseMiddleware):
-    """Triggers compaction after agent turns when thresholds are exceeded."""
-
-    def __init__(
-        self,
-        event: BaseEvent,
-        context: Context,
-        *,
-        actor_name: str,
-        strategy: CompactStrategy,
-        store: KnowledgeStore | None,
-        trigger: CompactTrigger,
-    ) -> None:
-        super().__init__(event, context)
-        self._actor_name = actor_name
-        self._strategy = strategy
-        self._store = store
-        self._trigger = trigger
-        self._last_compact_event_count = 0
-
-    async def on_turn(
-        self,
-        call_next: Callable[..., Any],
-        event: BaseEvent,
-        context: Context,
-    ) -> Any:
-        result = await call_next(event, context)
-
-        events = list(await context.stream.history.get_events())
-        # Count only conversational events — transient artifacts and persisted
-        # telemetry (UsageEvent) must not drive compaction, even if persist_all.
-        conversation_events = [e for e in events if is_conversational(e)]
-        event_count = len(conversation_events)
-
-        # Prevent double compaction — skip if count hasn't grown since last
-        if event_count <= self._last_compact_event_count:
-            return result
-
-        should_compact = False
-        if self._trigger.max_events > 0 and event_count > self._trigger.max_events:
-            should_compact = True
-        if self._trigger.max_tokens > 0:
-            # Sized over every event: telemetry weighs nothing, but retained
-            # status is resent on each call and must count toward the budget.
-            estimated = sum(estimated_tokens(e, self._trigger.chars_per_token) for e in events)
-            if estimated > self._trigger.max_tokens:
-                should_compact = True
-
-        if should_compact:
-            strategy_name = type(self._strategy).__name__
-            await context.send(
-                CompactionStarted(
-                    agent=self._actor_name,
-                    strategy=strategy_name,
-                    event_count=len(events),
-                )
-            )
-            # Collected live rather than re-read from history afterwards: the
-            # summarization call's own record is sent *while* the strategy runs,
-            # so it is in neither ``events`` nor what the strategy returns. A
-            # subscriber sees it as it is sent, which needs no assumption about
-            # how history grew in the meantime and no second full read of it.
-            spent_during: list[UsageEvent] = []
-            try:
-                with context.stream.where(UsageEvent).sub_scope(collect_usage_events(spent_during)):
-                    compacted = await self._strategy.compact(events, context, self._store)
-            except Exception as exc:
-                logger.exception("Compaction failed for %s", self._actor_name)
-                with suppress(Exception):
-                    await context.send(
-                        CompactionFailed(
-                            agent=self._actor_name,
-                            strategy=strategy_name,
-                            error_type=type(exc).__name__,
-                            error=str(exc),
-                        )
-                    )
-                return result
-
-            await context.stream.history.replace(
-                _with_usage_events(before=events, compacted=compacted, spent_during=spent_during)
-            )
-            self._last_compact_event_count = len([e for e in compacted if is_conversational(e)])
-
-            usage = getattr(self._strategy, "last_usage", {})
-            await context.send(
-                CompactionCompleted(
-                    agent=self._actor_name,
-                    strategy=strategy_name,
-                    events_before=len(events),
-                    events_after=len(compacted),
-                    llm_calls=1 if usage else 0,
-                    usage=usage,
-                )
-            )
-
-        return result
-
-
-def _with_usage_events(
-    *,
-    before: list[BaseEvent],
-    compacted: list[BaseEvent],
-    spent_during: list[UsageEvent],
-) -> list[BaseEvent]:
-    """``compacted``, with every token record of the run put back around it.
-
-    Compaction replaces stream history with what its strategy retained, and
-    ``UsageEvent`` is the only thing ``UsageReport`` reads (`ADR 0014`), so
-    without this a run that compacted under-reports what it cost — on
-    ``AgentReply.usage()`` and on every transport that reports spend. Two
-    records are lost, for two different reasons: those outside the retained
-    window, which the strategy drops along with the conversation, and the
-    summarization call's own, which is emitted *while* the strategy runs and is
-    therefore absent from the snapshot the strategy returns. ``spent_during``
-    carries the second kind, collected from the stream as they were sent.
-
-    The records are rebuilt from ``before`` rather than from ``compacted``, so a
-    strategy that retained a record and one that dropped it read the same: each
-    record of the run appears exactly once, whatever the strategy did with it.
-    The one case this does not cover is a strategy that *synthesises* a new
-    ``UsageEvent`` into its returned list without sending it — that record is
-    dropped here because it was never published as a source accounting record.
-    A strategy that ``context.send``s its spend, as the built-in ones do, is
-    accounted correctly. Source ``event_id`` values survive serialization, so
-    retained or replayed representations of a publication count once.
-
-    Order is telemetry from before the compaction, then the retained
-    conversation, then what was spent during it. That is not the chronological
-    order of the run — records from inside the retained window are hoisted ahead
-    of the conversation they were interleaved with — but the token records keep
-    their order relative to each other, which is what consumers that group by
-    first appearance need (AG-UI's per-``(provider, model)`` list among them).
-
-    None of this feeds the model or moves the compaction trigger: ``UsageEvent``
-    is not conversational (`ADR 0010`).
-
-    Note that the kept records accumulate: every compaction carries forward
-    every record the stream has seen, so a long-lived stream keeps one event per
-    model call for its whole life and each compaction rewrites all of them. That
-    is the cost of `ADR 0014`'s decision to keep spend in the event log; bounding
-    it belongs with that decision, not here.
-    """
-    return [
-        *(e for e in before if usage_event_from(e) is not None),
-        *(e for e in compacted if usage_event_from(e) is None),
-        *spent_during,
-    ]
-
-
-class _CompactionMiddlewareFactory:
-    """Factory for _CompactionMiddleware."""
-
-    def __init__(self, actor_name: str, config: KnowledgeConfig) -> None:
-        self._actor_name = actor_name
-        self.config = config
-
-    def __call__(self, event: BaseEvent, context: Context) -> _CompactionMiddleware:
-        return _CompactionMiddleware(
-            event,
-            context,
-            actor_name=self._actor_name,
-            strategy=self.config.compact,
-            store=self.config.store,
-            trigger=self.config.compact_trigger,
-        )
-
-
-class _AggregationMiddleware(BaseMiddleware):
-    """Triggers aggregation after agent turns when thresholds are exceeded.
-
-    Counts are derived from stream history — this middleware holds no
-    state of its own. That matters because ``_execute`` builds a fresh
-    middleware instance on every ``ask()``; any per-instance counter
-    would reset between turns and make ``every_n_turns=N`` for ``N>1``
-    effectively dead.
-
-    ``every_n_turns`` counts :class:`ModelRequest` events in history
-    (one per user ask). ``every_n_events`` fires when the total history
-    count crosses a multiple of the threshold during the current turn,
-    which handles non-uniform growth (e.g. tool-heavy turns). ``on_end``
-    fires unconditionally once the turn completes.
-    """
-
-    def __init__(
-        self,
-        event: BaseEvent,
-        context: Context,
-        *,
-        actor_name: str,
-        strategy: AggregateStrategy,
-        store: KnowledgeStore,
-        trigger: AggregateTrigger,
-    ) -> None:
-        super().__init__(event, context)
-        self._actor_name = actor_name
-        self._strategy = strategy
-        self._store = store
-        self._trigger = trigger
-
-    async def on_turn(
-        self,
-        call_next: Callable[..., Any],
-        event: BaseEvent,
-        context: Context,
-    ) -> Any:
-        events_before = list(await context.stream.history.get_events())
-
-        try:
-            result = await call_next(event, context)
-        finally:
-            events_after = list(await context.stream.history.get_events())
-            count_after = len(events_after)
-
-            should_aggregate = False
-
-            if self._trigger.on_end:
-                should_aggregate = True
-
-            if self._trigger.every_n_turns > 0:
-                turn_count = sum(1 for e in events_after if isinstance(e, ModelRequest))
-                if turn_count > 0 and turn_count % self._trigger.every_n_turns == 0:
-                    should_aggregate = True
-
-            if self._trigger.every_n_events > 0:
-                threshold = self._trigger.every_n_events
-                # Count conversational/work events only, not telemetry (e.g. UsageEvent).
-                _countable = (ModelRequest, ModelResponse, ToolCallsEvent, ToolResultsEvent)
-                n_before = sum(1 for e in events_before if isinstance(e, _countable))
-                n_after = sum(1 for e in events_after if isinstance(e, _countable))
-                if n_after // threshold > n_before // threshold:
-                    should_aggregate = True
-
-            if should_aggregate:
-                strategy_name = type(self._strategy).__name__
-                with suppress(Exception):
-                    await context.send(
-                        AggregationStarted(
-                            agent=self._actor_name,
-                            strategy=strategy_name,
-                            event_count=count_after,
-                        )
-                    )
-                try:
-                    await self._strategy.aggregate(events_after, context, self._store)
-                    usage = getattr(self._strategy, "last_usage", {})
-                    await context.send(
-                        AggregationCompleted(
-                            agent=self._actor_name,
-                            strategy=strategy_name,
-                            event_count=count_after,
-                            llm_calls=1 if usage else 0,
-                            usage=usage,
-                        )
-                    )
-                except Exception as exc:
-                    logger.exception("Aggregation failed for %s", self._actor_name)
-                    with suppress(Exception):
-                        await context.send(
-                            AggregationFailed(
-                                agent=self._actor_name,
-                                strategy=strategy_name,
-                                error_type=type(exc).__name__,
-                                error=str(exc),
-                            )
-                        )
-
-        return result
-
-
-class _AggregationMiddlewareFactory:
-    """Factory for _AggregationMiddleware."""
-
-    def __init__(self, actor_name: str, config: "KnowledgeConfig") -> None:
-        self._actor_name = actor_name
-        self._strategy = config.aggregate
-        self._store = config.store
-        self._trigger = config.aggregate_trigger
-
-    def __call__(self, event: BaseEvent, context: Context) -> _AggregationMiddleware:
-        return _AggregationMiddleware(
-            event,
-            context,
-            actor_name=self._actor_name,
-            strategy=self._strategy,
-            store=self._store,
-            trigger=self._trigger,
-        )

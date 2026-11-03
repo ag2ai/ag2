@@ -4,15 +4,19 @@
 
 from dataclasses import dataclass
 
-from ..aggregate import AggregateStrategy, AggregateTrigger
-from ..compact import CompactStrategy, CompactTrigger
+from ag2 import aggregate as aggregation
+from ag2 import compact as compaction
+
 from .base import KnowledgeStore
 from .bootstrap import StoreBootstrap
 
 
 @dataclass(slots=True)
 class KnowledgeConfig:
-    """Groups knowledge-related Agent parameters.
+    """Compatibility configuration for the deprecated Agent ``knowledge=`` parameter.
+
+    New applications use ``ag2.knowledge.KnowledgePlugin`` in ``plugins=``.
+    The Agent parameter is removed in 1.4.0; this class remains available.
 
     The ``store`` is registered into ``context.dependencies[KnowledgeStore]``
     so policies (e.g. ``WorkingMemoryPolicy``, ``EpisodicMemoryPolicy``) can
@@ -27,8 +31,7 @@ class KnowledgeConfig:
             to False when policies are the only consumer of the store and
             the LLM should not see it.
         write_event_log: If True (default), the agent persists its stream
-            history to ``/log/{stream_id}.jsonl`` at the end of each
-            ``ask`` call. Set to False to keep the store free of stream
+            history to ``/log/{stream_id}.jsonl`` at normal completion of the enclosing execution scope. Set to False to keep the store free of stream
             logs (useful when the store is purely user-facing memory).
         compact, compact_trigger: Optional compaction strategy and its
             firing rules.
@@ -44,8 +47,8 @@ class KnowledgeConfig:
     store: KnowledgeStore
     expose_tool: bool = True
     write_event_log: bool = True
-    compact: CompactStrategy | None = None
-    compact_trigger: CompactTrigger | None = None
-    aggregate: AggregateStrategy | None = None
-    aggregate_trigger: AggregateTrigger | None = None
+    compact: "compaction.CompactStrategy | None" = None
+    compact_trigger: "compaction.CompactTrigger | None" = None
+    aggregate: "aggregation.AggregateStrategy | None" = None
+    aggregate_trigger: "aggregation.AggregateTrigger | None" = None
     bootstrap: StoreBootstrap | None = None

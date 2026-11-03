@@ -125,7 +125,7 @@ Set `#!python timeout` in seconds for tools that perform network requests or oth
 import httpx
 
 from ag2 import Agent, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 
 @tool(timeout=30.0)
 async def fetch_page(url: str) -> str:
@@ -137,7 +137,7 @@ async def fetch_page(url: str) -> str:
 
 agent = Agent(
     name="WebAssistant",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAIResponsesConfig("gpt-4o-mini"),
     tools=[fetch_page],
 )
 ```
