@@ -364,6 +364,44 @@ class TestCascadeSession:
         assert tts.replies == [["Let me "]]
         assert tts.closed == 1
 
+    async def test_slow_close_after_barge_in_does_not_hold_up_the_next_turn(self) -> None:
+        """A realtime connection can take seconds to close: the user's next
+        utterance must still be heard, and the abandoned reply's cancellation
+        must not reach whoever is sending the microphone audio."""
+        stt = FakeSTT()
+        started = asyncio.Event()
+
+        class SlowClosingTTS(FakeTextStreamingTTS):
+            async def stream_text(self, text: AsyncIterator[str]) -> AsyncIterator[bytes]:
+                try:
+                    async for chunk in super().stream_text(text):
+                        yield chunk
+                finally:
+                    await asyncio.sleep(10)  # the server is slow to finish the closing handshake
+
+        class StallingConfig(ChunkingConfig):
+            def create(self) -> LLMClient:
+                async def client(messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+                    await context.send(ModelMessageChunk("Let me "))
+                    started.set()
+                    await asyncio.sleep(10)  # outlives the barge-in
+                    raise AssertionError("an interrupted turn must not finish")
+
+                return client  # type: ignore[return-value]
+
+        context = ConversationContext(stream=MemoryStream())
+
+        config = cascade(StallingConfig(), stt, SlowClosingTTS(), barge_in=True)
+        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+            await speak_one_turn(context)
+            await asyncio.wait_for(started.wait(), timeout=1)
+            await asyncio.sleep(0.01)
+
+            await asyncio.wait_for(speak_one_turn(context), timeout=1)
+            await asyncio.sleep(0.05)
+
+            assert len(stt.calls) == 2
+
     async def test_model_failure_closes_the_reply_being_streamed(self) -> None:
         stt, tts = FakeSTT(), FakeTextStreamingTTS()
 

@@ -19,22 +19,25 @@ from mistralai.client.models import (
 # this module is kept apart from `mistral.py` so the other Mistral configs work without it.
 from mistralai.extra.realtime import RealtimeSpeechConnection
 
-from .mistral import DEFAULT_MODEL, SpeechModel, _int16_chunks
+from .mistral import DEFAULT_REALTIME_MODEL, SpeechModel, _int16_chunks
 from .protocols import TextStreamingTTSConfig as TextStreamingTTSConfigProtocol
 
 
 class RealtimeTTSConfig(TextStreamingTTSConfigProtocol[bytes]):
     """Mistral realtime TTS: one websocket per reply, fed the reply's text as the model streams it.
 
-    Mistral decides where to cut the audio, so speech starts before the first
-    sentence is complete and the voice keeps its context across sentences.
-    Yields int16 PCM, converted from Mistral's float32 PCM like the other
-    Mistral configs. An `error` event from the server raises `RuntimeError`.
+    Mistral decides where to cut the audio, so the voice keeps its context
+    across sentences. It still holds a short sentence back until the text after
+    it arrives. Yields int16 PCM, converted from Mistral's float32 PCM like the
+    other Mistral configs. An `error` event from the server raises
+    `RuntimeError`; a refused connection raises the SDK's
+    `RealtimeSpeechException`.
 
-    Exactly one of `voice_id` (a saved voice) or `ref_audio` (a base64
-    reference clip for one-off cloning) is required; an empty string counts as
-    not given. `streaming_mode` ("responsive" or "long_form") and
-    `expressiveness` are sent only when set.
+    The realtime endpoint accepts `voxtral-mini-tts-3` (the default), not
+    `voxtral-mini-tts-2603`. Exactly one of `voice_id` (a saved voice) or
+    `ref_audio` (a base64 reference clip for one-off cloning) is required; an
+    empty string counts as not given. `streaming_mode` ("responsive" or
+    "long_form") and `expressiveness` (1 or above) are sent only when set.
 
     Needs `pip install "mistralai[realtime]"` and an api key in
     MISTRAL_API_KEY env var, or pass `api_key` / a preconfigured `client`.
@@ -42,7 +45,7 @@ class RealtimeTTSConfig(TextStreamingTTSConfigProtocol[bytes]):
 
     def __init__(
         self,
-        model: SpeechModel | str = DEFAULT_MODEL,
+        model: SpeechModel | str = DEFAULT_REALTIME_MODEL,
         *,
         voice_id: str | None = None,
         ref_audio: str | None = None,

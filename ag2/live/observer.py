@@ -5,7 +5,6 @@
 import asyncio
 import re
 from collections.abc import AsyncIterator
-from contextlib import suppress
 
 from ag2 import events
 from ag2.annotations import Context
@@ -132,14 +131,16 @@ class Speech:
         await self._emit(text, context)
 
     async def aclose(self) -> None:
-        """Abandon the reply being spoken, closing its text-streaming request."""
-        speaking, self._speaking, self._text = self._speaking, None, None
-        if speaking is None:
-            return
+        """Abandon the reply being spoken, closing its text-streaming request.
 
-        speaking.cancel()
-        with suppress(asyncio.CancelledError):
-            await speaking
+        Does not wait for the request to close: a realtime connection can take
+        seconds to finish its closing handshake, and the turn that abandoned
+        the reply (a barge-in) must not be held up by it. The cancelled task
+        sends no more audio and closes the connection on its own.
+        """
+        speaking, self._speaking, self._text = self._speaking, None, None
+        if speaking is not None:
+            speaking.cancel()
 
     def _push(self, text: str, context: Context) -> None:
         # A request that already failed keeps taking (and dropping) text, so its

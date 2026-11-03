@@ -25,7 +25,6 @@ from mistralai.client.models import (
 from ag2 import MemoryStream, events
 from ag2.context import ConversationContext
 from ag2.live import MistralRealtimeTTSConfig, TTSObserver
-from ag2.live.mistral import DEFAULT_MODEL
 from ag2.live.protocols import StreamingTTSConfig, TextStreamingTTSConfig
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.mistral]
@@ -145,7 +144,7 @@ class TestVoiceSelection:
 
         assert client.audio.realtime_speech.connects == [
             {
-                "model": DEFAULT_MODEL,
+                "model": "voxtral-mini-tts-3",
                 "response_format": "pcm",
                 "streaming_mode": None,
                 "expressiveness": None,

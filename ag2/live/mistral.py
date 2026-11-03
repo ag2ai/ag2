@@ -161,11 +161,16 @@ async def _frames(voice: VoiceInput) -> AsyncIterator[bytes]:
         yield voice.content[start : start + size]
 
 
-# Not exhaustive — any model id string is accepted. Only the model named in
-# Mistral's speech docs is listed.
-SpeechModel = Literal["voxtral-mini-tts-2603",]
+# Not exhaustive — any model id string is accepted. Only models checked against
+# the live API are listed: the realtime speech endpoint accepts only
+# `voxtral-mini-tts-3` (`voxtral-mini-tts-2603` fails the websocket handshake).
+SpeechModel = Literal[
+    "voxtral-mini-tts-2603",
+    "voxtral-mini-tts-3",
+]
 
 DEFAULT_MODEL: SpeechModel = "voxtral-mini-tts-2603"
+DEFAULT_REALTIME_MODEL: SpeechModel = "voxtral-mini-tts-3"
 
 _FLOAT32_SIZE = 4
 _INT16_MAX = 32767

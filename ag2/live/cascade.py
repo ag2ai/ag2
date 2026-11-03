@@ -137,7 +137,10 @@ class CascadeConfig(RealtimeConfig):
 
             if _running(turn):
                 assert turn is not None
-                await turn
+                # `wait`, not `await turn`: a turn cancelled by a barge-in may still
+                # be unwinding, and its cancellation must not reach the sender of
+                # the microphone audio. A failed turn is logged by `spawn_background`.
+                await asyncio.wait([turn])
 
             # `spawn_background` (not a bare `create_task`) so a turn that
             # raises is logged rather than vanishing into an unretrieved task.
