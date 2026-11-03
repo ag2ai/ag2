@@ -129,12 +129,12 @@ and will be removed in **1.4.0**. Move the same settings into a plugin:
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 agent = Agent(
     "assistant",
-    config=OpenAIResponsesConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     plugins=[KnowledgePlugin(store=MemoryKnowledgeStore())],
 )
 ```
@@ -202,9 +202,9 @@ Expose any Agent as a `FunctionTool` so another Agent can invoke it like any oth
 
 ```python linenums="1" hl_lines="15 18"
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
-config = OpenAIResponsesConfig(model="gpt-4o-mini")
+config = OpenAICompletionsConfig(model="gpt-4o-mini")
 
 child = Agent(
     "researcher",

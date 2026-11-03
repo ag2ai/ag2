@@ -78,7 +78,7 @@ from ag2.live import OpenAITranscriber, SoundDeviceRecorder
 
 agent = Agent(
     "assistant",
-    config=config.OpenAIResponsesConfig("gpt-5", streaming=True),
+    config=config.OpenAICompletionsConfig("gpt-5", streaming=True),
 )
 
 async def main():
@@ -282,7 +282,7 @@ tts = ElevenLabsStreamingTTSConfig("eleven_flash_v2_5", voice_id="21m00Tcm4TlvDq
 agent = Agent(
     "assistant",
     prompt="You are a helpful voice assistant. Keep answers to a few sentences.",
-    config=config.OpenAIResponsesConfig("gpt-5-mini", streaming=True),
+    config=config.OpenAICompletionsConfig("gpt-5-mini", streaming=True),
     observers=[TTSObserver(tts)],
 )
 
@@ -428,7 +428,7 @@ SAMPLE_RATE = 24000  # pcm_24000, what the player and recorder use
 agent = Agent(
     "assistant",
     prompt="You are a helpful voice assistant. Keep answers to a few sentences.",
-    config=config.OpenAIResponsesConfig("gpt-5-mini", streaming=True),
+    config=config.OpenAICompletionsConfig("gpt-5-mini", streaming=True),
     observers=[TTSObserver(ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"))],
 )
 

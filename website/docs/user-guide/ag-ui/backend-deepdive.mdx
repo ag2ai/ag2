@@ -22,12 +22,12 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream, read_run_input
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     name="support_bot",
     prompt="You help users with billing questions.",
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 stream = AGUIStream(agent)
@@ -70,7 +70,7 @@ AG2 supports this through injected `Context` and `dispatch(variables=...)`. Your
 ```python title="tools_context.py" linenums="1"
 from ag2 import Agent, Context, tool
 from ag2.ag_ui import AGUIStream, RunAgentInput
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 @tool
 def get_user_profile(context: Context) -> str:
@@ -80,7 +80,7 @@ def get_user_profile(context: Context) -> str:
 agent = Agent(
     name="profile_bot",
     prompt="You can look up a user profile when needed.",
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[get_user_profile],
 )
 
@@ -106,7 +106,7 @@ Example backend tool:
 
 ```python title="backend_tools.py" linenums="1"
 from ag2 import Agent, tool
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 @tool
 def calculate_sum(a: int, b: int) -> int:
@@ -116,7 +116,7 @@ def calculate_sum(a: int, b: int) -> int:
 agent = Agent(
     name="calculator",
     tools=[calculate_sum],
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 ```
 

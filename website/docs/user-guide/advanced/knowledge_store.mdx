@@ -138,11 +138,11 @@ Implement your own `StoreBootstrap` if you need a different layout.
 
 ```python linenums="1"
 from ag2 import Agent, MemoryStream
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import EventLogWriter, MemoryKnowledgeStore
 
 stream = MemoryStream()
-agent = Agent("assistant", config=OpenAIResponsesConfig(model="gpt-5"))
+agent = Agent("assistant", config=OpenAICompletionsConfig(model="gpt-5"))
 await agent.ask("Hello!", stream=stream)
 
 # Persist all events from this stream

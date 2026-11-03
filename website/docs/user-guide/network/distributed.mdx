@@ -90,7 +90,7 @@ Agents backed by different providers can share the same hub and the same channel
 import asyncio
 
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.network import EV_TEXT, HubClient, WsLink
 from ag2.network.adapters.consulting import CONSULTING_TYPE
 
@@ -99,7 +99,7 @@ async def main() -> None:
     await hub_client.open()
 
     alice = await hub_client.register(
-        Agent("alice", prompt="You are a coordinator.", config=OpenAIResponsesConfig(model="gpt-4o-mini")),
+        Agent("alice", prompt="You are a coordinator.", config=OpenAICompletionsConfig(model="gpt-4o-mini")),
     )
 
     # open() and send() travel to the hub over the wire;

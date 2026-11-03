@@ -98,17 +98,17 @@ Create a worker explicitly, then add its delegate tool to the parent's `tools` l
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 worker = Agent(
     "worker",
     prompt="Complete the assigned task concisely. Return only the result.",
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 coordinator = Agent(
     "coordinator",
     prompt="Delegate independent work to task_worker, then combine the results.",
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[worker.as_tool(description="Complete a focused sub-task.")],
 )
 
@@ -248,9 +248,9 @@ The analyst's LLM may call `sub_task` multiple times — one per aspect — then
 ```python linenums="1" hl_lines="2 17"
 from ag2 import Agent
 from ag2.tools.dynamic import dynamic_agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
-config = OpenAIResponsesConfig(model="gpt-4o-mini")
+config = OpenAICompletionsConfig(model="gpt-4o-mini")
 
 orchestrator = Agent(
     "orchestrator",

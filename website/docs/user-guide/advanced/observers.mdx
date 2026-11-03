@@ -27,7 +27,7 @@ Pass observers when creating the agent. These observers are active for every `#!
 
 ```python linenums="1" hl_lines="12"
 from ag2 import Agent, observer
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ModelResponse, ToolCallEvent
 
 @observer(ModelResponse)
@@ -36,7 +36,7 @@ def on_response(event: ModelResponse) -> None:
 
 agent = Agent(
     "assistant",
-    config=OpenAIResponsesConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     observers=[on_response],
 )
 
@@ -52,7 +52,7 @@ from ag2 import Agent
 
 agent = Agent(
     "assistant",
-    config=OpenAIResponsesConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 @agent.observer(ModelResponse)
@@ -209,11 +209,11 @@ Detects repetitive tool-call patterns. Maintains a sliding window of recent tool
 ```python linenums="1"
 from ag2 import Agent
 from ag2.observers import LoopDetector
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "poller",
-    config=OpenAIResponsesConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     observers=[LoopDetector(window_size=10, repeat_threshold=3)],
 )
 ```
@@ -225,11 +225,11 @@ Tracks cumulative token usage across `UsageEvent` — the framework's accounting
 ```python linenums="1"
 from ag2 import Agent
 from ag2.observers import TokenMonitor
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
-    config=OpenAIResponsesConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     observers=[TokenMonitor(warn_threshold=50_000, alert_threshold=100_000)],
 )
 ```
@@ -286,11 +286,11 @@ Register it like any other observer:
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
-    config=OpenAIResponsesConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     observers=[AvgCompletionObserver(window=5, timeout=5.0)],
 )
 ```

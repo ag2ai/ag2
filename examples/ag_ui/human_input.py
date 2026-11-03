@@ -23,7 +23,7 @@ from starlette.routing import Route
 
 from ag2 import Agent, Context
 from ag2.ag_ui import AGUIStream
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 QUESTION = "Book LH441 (dep 09:40, arr 11:05)? Reply yes or no."
 THREAD = "thread-1"
@@ -33,7 +33,7 @@ def booking_agent() -> Agent:
     agent = Agent(
         "travel_desk",
         prompt="You book flights. Always use book_flight; never claim to have booked anything yourself.",
-        config=OpenAIResponsesConfig(model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"]),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"]),
     )
 
     @agent.tool

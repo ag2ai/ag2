@@ -348,14 +348,14 @@ pip install "ag2[redis]"
 ```python linenums="1" hl_lines="2 5 13"
 from ag2 import Agent
 from ag2.streams.redis import RedisStream
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 stream = RedisStream("redis://localhost:6379")
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIResponsesConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 reply = await agent.ask("Hello!", stream=stream)

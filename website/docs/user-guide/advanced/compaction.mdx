@@ -85,13 +85,13 @@ Summarizes the dropped portion via one LLM call, inserts a `CompactionSummary` e
 
 ```python linenums="1" hl_lines="6-9 11"
 from ag2.compact import SummarizeCompact
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 compact = SummarizeCompact(
     target=50,
-    config=OpenAIResponsesConfig(model="gpt-5-mini"),  # cheap model recommended for summaries
+    config=OpenAICompletionsConfig(model="gpt-5-mini"),  # cheap model recommended for summaries
 )
 
 retained = await compact.compact(events, ctx, store)
@@ -127,13 +127,13 @@ Pass the strategy + trigger through [`KnowledgePlugin`](/docs/user-guide/agent_h
 ```python linenums="1" hl_lines="10-14"
 from ag2 import Agent
 from ag2.compact import CompactTrigger, TailWindowCompact
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 agent = Agent(
     "assistant",
-    config=OpenAIResponsesConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     plugins=[KnowledgePlugin(
         store=store,
         compact=TailWindowCompact(target=100),

@@ -58,12 +58,12 @@ AG2 is async throughout, so the example runs inside an `async` function driven b
 ```python linenums="1" hl_lines="5-9 12 13"
 import asyncio
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIResponsesConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 async def main() -> None:
@@ -89,7 +89,7 @@ Decorate a plain Python function with `@tool` and pass it to the agent. AG2 mana
 ```python linenums="1" hl_lines="5-8 14"
 import asyncio
 from ag2 import Agent, tool
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 @tool
 async def get_weather(city: str) -> str:
@@ -99,7 +99,7 @@ async def get_weather(city: str) -> str:
 agent = Agent(
     "assistant",
     prompt="Use tools when helpful.",
-    config=OpenAIResponsesConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     tools=[get_weather],
 )
 

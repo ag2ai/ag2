@@ -45,13 +45,13 @@ The most common use is multi-turn that outlives the process: persist a conversat
 
 ```python linenums="1" hl_lines="12 15-16"
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ModelRequest, TextInput
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful travel assistant.",
-    config=OpenAIResponsesConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 # A conversation you stored earlier and just loaded back from your database.
@@ -71,7 +71,7 @@ A turn can also stop **mid-loop** — the model asked to run a tool whose result
 
 ```python linenums="1" hl_lines="18 25 28"
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import (
     ModelMessage,
     ModelRequest,
@@ -83,7 +83,7 @@ from ag2.events import (
     ToolResultsEvent,
 )
 
-agent = Agent("support", prompt="Answer using the tool result.", config=OpenAIResponsesConfig("gpt-4o-mini"))
+agent = Agent("support", prompt="Answer using the tool result.", config=OpenAICompletionsConfig("gpt-4o-mini"))
 
 # The trajectory recorded earlier: the user asked, and the model responded
 # by requesting a tool call (whose result is not yet known).

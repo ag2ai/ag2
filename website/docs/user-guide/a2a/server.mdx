@@ -157,9 +157,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from ag2 import Agent
 from ag2.a2a import A2AServer
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
-agent = Agent("assistant", config=OpenAIResponsesConfig("gpt-5"))
+agent = Agent("assistant", config=OpenAICompletionsConfig("gpt-5"))
 
 async def main() -> None:
     engine = create_async_engine("postgresql+asyncpg://user:password@db/a2a")

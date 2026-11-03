@@ -38,7 +38,7 @@ def current_time() -> str:
 def build_agent() -> LiveAgent:
     cascade = CascadeConfig(
         stt=OpenAITranscriber("gpt-4o-mini-transcribe"),
-        model=config.OpenAIResponsesConfig("gpt-5-mini", streaming=True),
+        model=config.OpenAICompletionsConfig("gpt-5-mini", streaming=True),
         tts=ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"),
         turn_detector=lambda: SilenceTurnDetector(),
         # barge_in=True, # enables interrupts, care for speakers.

@@ -50,7 +50,7 @@ import asyncio
 
 from ag2 import Agent, MemoryStream, tool
 from ag2.compact import SummarizeCompact, TailWindowCompact
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.extensions.compaction_verifier import (
     CompactionVerifier,
     IdentityCompact,
@@ -58,7 +58,7 @@ from ag2.extensions.compaction_verifier import (
     ReplayEnvironment,
 )
 
-config = OpenAIResponsesConfig(model="gpt-4.1-mini", temperature=0.7)
+config = OpenAICompletionsConfig(model="gpt-4.1-mini", temperature=0.7)
 
 
 class Shop:

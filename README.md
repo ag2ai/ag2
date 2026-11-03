@@ -139,7 +139,7 @@ Each provider config reads its standard environment variable, so keys never need
 export OPENAI_API_KEY="<your-api-key>"     # or ANTHROPIC_API_KEY, GEMINI_API_KEY, ...
 ```
 
-You can also pass a key explicitly with `OpenAIResponsesConfig(model="gpt-4o-mini", api_key=...)` — useful when each request brings its own key.
+You can also pass a key explicitly with `OpenAICompletionsConfig(model="gpt-4o-mini", api_key=...)` — useful when each request brings its own key.
 
 ### Run your first agent
 
@@ -149,12 +149,12 @@ AG2 is async throughout. `Agent.ask(...)` starts a turn and returns an `AgentRep
 import asyncio
 
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 
@@ -193,7 +193,7 @@ The `Agent` is the fundamental building block of AG2. `ask()` runs a turn; calli
 import asyncio
 
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 reviewer = Agent(
     "reviewer",
@@ -201,7 +201,7 @@ reviewer = Agent(
         "You are a code reviewer. Analyze the provided code and suggest improvements. "
         "Do not generate code, only suggest improvements."
     ),
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 
@@ -228,7 +228,7 @@ import asyncio
 from datetime import datetime
 
 from ag2 import Agent, tool
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 
 @tool
@@ -240,7 +240,7 @@ async def get_weekday(date_string: str) -> str:
 date_agent = Agent(
     "date_agent",
     prompt="You find the day of the week for a given date.",
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[get_weekday],
 )
 
@@ -263,7 +263,7 @@ Human oversight is often essential for validating or guiding AI outputs. Call `c
 import asyncio
 
 from ag2 import Agent, Context, tool
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import HumanInputRequest, HumanMessage
 
 
@@ -287,7 +287,7 @@ teacher = Agent(
         "Draft a short lesson plan, then call the publish_lesson_plan tool to have it published. "
         "Approval is collected by the tool — never ask for approval in plain text."
     ),
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[publish_lesson_plan],
     hitl_hook=hitl_hook,
 )
@@ -313,7 +313,7 @@ Here a `conversation` channel — a free-form two-party session where either sid
 import asyncio
 
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import EV_TEXT, Hub
 
@@ -332,7 +332,7 @@ async def wait_for_messages(hub: Hub, channel_id: str, expected: int, timeout: f
 
 
 async def main() -> None:
-    config = OpenAIResponsesConfig(model="gpt-4o-mini")
+    config = OpenAICompletionsConfig(model="gpt-4o-mini")
     hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
 
     planner = await hub.register(
@@ -381,13 +381,13 @@ from pathlib import Path
 from ag2 import Agent, MemoryStream
 from ag2.assembly import AssemblerMiddleware
 from ag2.compact import CompactTrigger, SummarizeCompact
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import CompactionCompleted, CompactionFailed
 from ag2.knowledge import KnowledgePlugin, DiskKnowledgeStore
 from ag2.middleware import Middleware
 from ag2.policies import WorkingMemoryPolicy
 
-config = OpenAIResponsesConfig(model="gpt-4o-mini")
+config = OpenAICompletionsConfig(model="gpt-4o-mini")
 
 # Disk-backed, so anything the agent remembers survives the process exiting.
 STORE_DIR = Path("./knowledge_demo")

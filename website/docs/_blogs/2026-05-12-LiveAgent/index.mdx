@@ -106,13 +106,13 @@ More detail: [Tools in a realtime session](/docs/user-guide/live/live_agent#tool
 
 ```python linenums="1" hl_lines="11-13 19"
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.live import LiveAgent, OpenAIRealTimeConfig, SoundDevicePlayer, SoundDeviceRecorder
 
 researcher = Agent(
     name="researcher",
     prompt="You research topics thoroughly and return concise bullet facts.",
-    config=OpenAIResponsesConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 research_tool = researcher.as_tool(

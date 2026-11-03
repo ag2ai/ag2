@@ -29,7 +29,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import DiskKnowledgeStore
 from ag2.middleware.builtin import TelemetryMiddleware
 from ag2.network import Hub, HubClient, LocalLink, Passport, Resume
@@ -63,7 +63,7 @@ async def main() -> None:
     #    spans link back to the envelope that triggered them.
     alice = Agent(
         "alice",
-        config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="alice")],
     )
 

@@ -15,7 +15,7 @@ This is useful for tools that perform **irreversible**, **expensive**, or **sens
 import asyncio
 
 from ag2 import Agent, tool
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import approval_required
 
 @tool(
@@ -27,7 +27,7 @@ def delete_account(user_id: str) -> str:
 
 agent = Agent(
     "assistant",
-    config=OpenAIResponsesConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     tools=[delete_account],
     hitl_hook=lambda event: input(event.content),
 )

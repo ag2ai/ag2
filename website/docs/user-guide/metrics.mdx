@@ -33,7 +33,7 @@ import asyncio
 from prometheus_client import CollectorRegistry, start_http_server
 
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import MetricsMiddleware
 
 
@@ -46,7 +46,7 @@ async def main() -> None:
     agent = Agent(
         "assistant",
         prompt="You are a helpful assistant.",
-        config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
         middleware=[metrics],
     )
 
@@ -120,7 +120,7 @@ Create one `MetricsMiddleware` per `CollectorRegistry`, then share that middlewa
 from prometheus_client import CollectorRegistry
 
 from ag2 import Agent
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import MetricsMiddleware
 
 
@@ -129,13 +129,13 @@ metrics = MetricsMiddleware(registry=registry)
 
 assistant = Agent(
     "assistant",
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     middleware=[metrics],
 )
 
 reviewer = Agent(
     "reviewer",
-    config=OpenAIResponsesConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     middleware=[metrics],
 )
 ```

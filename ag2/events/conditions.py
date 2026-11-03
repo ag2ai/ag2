@@ -60,7 +60,10 @@ class AndCondition(Condition):
         self.conditions = conditions
 
     def __call__(self, event: Any) -> bool:
-        return all(condition(event) for condition in self.conditions)
+        for condition in self.conditions:
+            if not condition(event):
+                return False
+        return True
 
     def __repr__(self) -> str:
         flattened: list[Condition] = []
@@ -78,7 +81,10 @@ class OrCondition(Condition):
         self.conditions = conditions
 
     def __call__(self, event: Any) -> bool:
-        return any(condition(event) for condition in self.conditions)
+        for condition in self.conditions:
+            if condition(event):
+                return True
+        return False
 
     def __repr__(self) -> str:
         flattened: list[Condition] = []

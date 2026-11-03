@@ -58,11 +58,11 @@ from ag2.policies import (
     WorkingMemoryPolicy,
     SlidingWindowPolicy,
 )
-from ag2.config import OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
-    config=OpenAIResponsesConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     middleware=[
         Middleware(
             AssemblerMiddleware,
