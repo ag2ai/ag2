@@ -45,7 +45,7 @@ class EventLogWriter:
     async def persist_dropped(self, stream_id: StreamId, events: Iterable[BaseEvent]) -> None:
         """Write compaction-dropped events to /log/{stream_id}.dropped-{n}.jsonl.
 
-        Discovers existing segments in the store to avoid overwriting.
+        Concurrent writers may share a segment; atomic appends preserve both batches.
         """
         prefix = f"{stream_id}.dropped-"
         entries = await self._store.list(LOG_PREFIX)
@@ -55,7 +55,7 @@ class EventLogWriter:
         n = (segments[-1][0] if segments else 0) + 1
         path = f"{LOG_PREFIX}{stream_id}.dropped-{n}.jsonl"
         lines = self._serialize_events(events)
-        await self._store.write(path, "\n".join(lines))
+        await self._store.append(path, "\n".join(lines) + "\n")
 
     async def load(self, stream_id: StreamId) -> list[BaseEvent]:
         """Load events from WAL files: all dropped segments in order, then final.
