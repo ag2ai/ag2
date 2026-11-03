@@ -15,6 +15,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
+from ag2.context import RESERVED_VARIABLE_PREFIXES
+
 
 class Scope(str, Enum):
     LOCAL = "local"
@@ -92,7 +94,7 @@ class ScopedVariables(MutableMapping[str, Any]):
 
     def _declare(self, key: str, scope: Scope) -> None:
         current = self._declared.get(key)
-        if scope == Scope.SHARED and key.startswith(("ag:", "a2a:")):
+        if scope == Scope.SHARED and key.startswith(RESERVED_VARIABLE_PREFIXES):
             raise ScopeError(f"Reserved variable {key!r} cannot be shared")
         if current is not None and current != scope:
             raise ScopeError(f"Variable {key!r} cannot be redeclared differently: {current.value} -> {scope.value}")
@@ -151,7 +153,7 @@ def derive_child_variables(variables: Mapping[str, Any]) -> ScopedVariables:
     own = {
         key: value
         for key, value in variables.items()
-        if declared.get(key) not in (Scope.LOCAL, Scope.SHARED) and not key.startswith(("ag:", "a2a:"))
+        if declared.get(key) not in (Scope.LOCAL, Scope.SHARED) and not key.startswith(RESERVED_VARIABLE_PREFIXES)
     }
     child_declarations = {key: scope for key, scope in declared.items() if scope == Scope.SHARED or key in own}
     return ScopedVariables(deepcopy(own), shared, child_declarations, root=False)
