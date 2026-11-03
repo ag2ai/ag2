@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable, Coroutine, Mapping
+from collections.abc import AsyncIterator, Callable, Coroutine, Mapping, MutableMapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
@@ -15,7 +15,7 @@ from fast_depends import Provider
 
 from ag2.types import ClassInfo, RequestOrigin, SendableMessage
 
-from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, MessageEnqueued, ModelRequest
+from .events import BaseEvent, HumanInputRequest, HumanMessage, InertEvent, Input, MessageEnqueued, ModelRequest
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
@@ -135,7 +135,7 @@ class ConversationContext:
     # store Context Variables as separated serializable field. Keys under
     # ``RESERVED_VARIABLE_PREFIXES`` are the framework's own control-plane state
     # and are never authored by a remote peer — see ``strip_reserved_variables``.
-    variables: dict[str, Any] = field(default_factory=dict)
+    variables: MutableMapping[str, Any] = field(default_factory=dict)
 
     dependencies: dict[Any, Any] = field(default_factory=dict)
 
@@ -240,6 +240,8 @@ class ConversationContext:
         return result.content
 
     async def send(self, event: BaseEvent) -> None:
+        if isinstance(event, InertEvent):
+            event = event.as_local()
         await self.stream.send(event, self)
 
 

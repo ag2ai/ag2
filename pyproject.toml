@@ -35,7 +35,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.10"
 
-version = "1.2.2"
+version = "1.3.0"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -418,6 +418,10 @@ python_version = "3.10"
 # (re)introduced module-by-module; until then mypy is scoped to modules
 # that already pass under `strict = true`.
 files = [
+    "ag2/scopes.py",
+    "ag2/events/delegation.py",
+    "ag2/tools/subagents/_forwarding.py",
+    "ag2/usage.py",
     "ag2/_import_utils.py",
     "ag2/__init__.py",
     "ag2/acp/client.py",

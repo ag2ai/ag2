@@ -18,6 +18,7 @@ from .annotations import Context as AnnotatedContext
 from .context import ConversationContext, Stream, StreamId, SubId, drop_background_task
 from .events import BaseEvent, Input, ModelRequest
 from .events.conditions import Condition, TypeCondition
+from .events.delegation import delivery_of
 from .history import History, MemoryStorage, Storage
 from .utils import CONTEXT_OPTION_NAME, _validate_timeout, build_model
 
@@ -252,8 +253,12 @@ class MemoryStream(ABCStream):
         self._interrupters.pop(sub_id, None)
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
+        delivery = delivery_of(event)
+        validate = delivery.validate if delivery is not None else None
         # interrupters should follow registration order
         for interrupter in tuple(self._interrupters.values()):
+            if validate is not None:
+                validate()
             if interrupter.condition and not interrupter.condition(event):
                 continue
 
@@ -265,6 +270,8 @@ class MemoryStream(ABCStream):
         # TODO: we need to publish under RWLock to prevent
         # subscribers dictionary mutation. Now it is protected by copy
         for subscriber in tuple(self._subscribers.values()):
+            if validate is not None:
+                validate()
             if subscriber.condition and not subscriber.condition(event):
                 continue
 

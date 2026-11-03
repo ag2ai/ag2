@@ -103,11 +103,12 @@ Cross-cutting and hard-to-reverse design decisions are recorded in `docs/adr/`, 
 | `config/` | LLM provider clients (see [below](#llm-provider-clients)) | `ModelConfig`, `LLMClient`, `AnthropicConfig`, `OpenAIConfig`, `GeminiConfig`, … |
 | `tools/` | Ready-to-use tools | `tool`, `Toolkit`, `ToolResult`, `CodeExecutionTool`, `ShellTool`, `WebSearchTool`, … |
 | `tools/types.py` | Tool abstractions & schema types | `Tool`, `FunctionTool`, `ClientTool`, `Toolkit`, `ToolSchema`, … |
-| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `persistent_stream`, `StreamFactory` |
+| `tools/subagents/` | Agent-to-agent delegation | `subagent_tool`, `persistent_stream`, `StreamFactory`, `StreamHandle`, `DeliveryError` |
 | `eval/` | Offline evaluation framework | `run`, `scorer`, `EvalTarget`, `Suite`, `Task`, `Trace`, `RunResult`, `Feedback`, `BudgetThresholds`, plus prebuilts under `eval.scorers` |
 | `middleware/` | Request/response interception | `BaseMiddleware`, `Middleware`, `LoggingMiddleware`, `RetryMiddleware`, `TokenLimiter`, `HistoryLimiter`, `MiddlewareDescription`, … |
 | `response/` | Structured output validation | `ResponseSchema`, `PromptedSchema`, `ResponseProto`, `response_schema` |
 | `history.py` | Conversation history storage | `History`, `Storage`, `MemoryStorage` |
+| `scopes.py` | Variable scopes across a delegation tree | `ScopedValue`, `Scope`, `ScopeError` |
 | `hitl.py` | Human-in-the-loop hooks | — |
 | `streams/` | Persistent stream backends (e.g. Redis) | — |
 
@@ -173,9 +174,26 @@ Builtin tools live in `ag2/tools/builtin/`. Each tool has:
 
 Subagent tools live in `ag2/tools/subagents/` and are imported from `ag2.tools.subagents` (not re-exported from `ag2.tools`).
 
+Application code delegates through `Agent.as_tool()` / `subagent_tool()` and
+addresses an observed event's author through `event.origin.send()`.
+This is the single public addressed-delivery entry point; each handle belongs
+to one invocation. `run_task`, `TaskResult`, and `DelegationRegistry` remain internal;
+framework code and tests import them from their implementation modules, not the
+package's public exports.
+
+Every descendant event reaches every ancestor. Inert events (`InertEvent`:
+`UsageEvent` and every `TaskEvent`) arrive as themselves, so existing
+type-based observer and stream subscriptions receive descendant costs and task
+lifecycle directly. The first forwarding hop stamps their `path` (and
+`task_id` / `agent_name` on `UsageEvent`); later hops keep it, and `UsageEvent`
+keeps its source `event_id`. All other events arrive as inert `ChildEvent`
+observations, which never trigger the ancestor's tools, model loop or HITL.
+Accounting uses no generated rollups. See `docs/design/subagent-eventbus-v2.md`
+and ADRs 0030–0032.
+
 | File | Purpose |
 |------|---------|
-| `run_task.py` | `run_task()`, `TaskResult` — execute an agent as a sub-task. Internal: the primitive behind `as_tool`, not re-exported |
+| `run_task.py` | Internal `run_task()`, `TaskResult` — execute an agent as a sub-task |
 | `subagent_tool.py` | `subagent_tool()`, `StreamFactory` — wrap an agent as a callable tool |
 | `persistent_stream.py` | `persistent_stream()` — `StreamFactory` that reuses a stream across calls |
 
@@ -188,6 +206,10 @@ Delegation is explicit: build each worker `Agent` with its own `config`, `prompt
 - **Recursion** is bounded only by what you hand the worker: do not give a worker delegate tools unless recursion is intended.
 - **Concurrency**: the LLM fans out by issuing several delegate calls in one response; they run concurrently. To cap them, pass the same tool middleware to every delegate. It must be a function closing over the `asyncio.Semaphore`, not a middleware object: tool middleware is deep-copied on registration, so an object gets one copy per delegate and the cap silently splits.
 - **Ad-hoc workers** composed by the LLM per objective: `dynamic_agent()` (`ag2.tools.dynamic`).
+
+Each delegation runs on its own stream. Operational events reach ancestors as
+`ChildEvent` observations; usage and lifecycle events reach every ancestor as
+themselves, including events from grandchildren.
 
 ### Deprecated: `TaskConfig` / auto-injected `run_subtask` (removed in 1.4.0)
 
@@ -218,7 +240,7 @@ agent.as_tool(description="...", stream=persistent_stream())
 | What | Behavior | Why |
 |------|----------|-----|
 | Dependencies | Shallow-copied (`dict.copy()`) | Isolated at the top level; mutable values are still shared by reference. Treat dependencies as read-only inside subtasks. |
-| Variables | Copied (new dict); **not** synced back | Concurrent siblings via `asyncio.gather` would race-clobber a shared dict — last-writer-wins is silent data loss. Each subtask's mutations stay scoped to it. |
+| Variables | Serializable values: plain/copied values are deep-copied, local values are excluded, and root-declared shared bindings remain shared | Copied values stay branch-local; shared mutations require application-supplied locks in `dependencies`. `ask` copies the caller's mapping, so read results from `reply.context.variables`. |
 | History | Fresh stream per call | Clean context; LLM passes relevant info via `context` parameter |
 | Tools | The worker's own `tools=`; nothing is inherited from the parent | The worker's capabilities are explicit and reviewable at construction |
 
