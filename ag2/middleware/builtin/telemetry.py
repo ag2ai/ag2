@@ -4,7 +4,7 @@
 
 import contextlib
 import json
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import asdict, is_dataclass
 from typing import Any
 from uuid import UUID
@@ -58,6 +58,7 @@ from ag2.middleware.base import (
     ToolResultType,
 )
 from ag2.middleware.describe import MiddlewareDescription
+from ag2.usage import usage_event_from
 
 try:
     from opentelemetry import trace
@@ -200,32 +201,23 @@ def _build_input_messages(events: Sequence[BaseEvent], max_tool_result_chars: in
 _usage_watchers: "WeakKeyDictionary[Any, UUID]" = WeakKeyDictionary()
 
 
-def _make_usage_recorder(
-    owner: "ReferenceType[_TelemetryMiddlewareInstance]",
-    stream: Any,
-) -> Callable[[UsageEvent], Awaitable[None]]:
-    """Route accounting events to the run that installed this watcher.
+class _UsageRecorder:
+    """Keep a weak run owner while accepting local and forwarded accounting."""
 
-    Holds the middleware **weakly**, which is what bounds the subscription to
-    one run. The instance lives exactly as long as the ``ask`` that built it —
-    the agent keeps its middleware instances alive for the duration of the run
-    and drops them when the run's ``ExitStack`` closes — so a strong reference
-    here would keep a finished run's recorder alive and let the *next* run on a
-    shared stream record into a trace that was already complete. Once the owner
-    is gone the watcher retires itself.
+    def __init__(self, owner: "ReferenceType[_TelemetryMiddlewareInstance]", stream: Any) -> None:
+        self.owner = owner
+        self.stream = stream
+        self.seen: set[str] = set()
 
-    A module-level factory rather than a nested function, per the repository
-    rule against nested functions in runtime execution paths.
-    """
-
-    async def _record(event: UsageEvent) -> None:
-        middleware = owner()
+    async def __call__(self, event: BaseEvent) -> None:
+        middleware = self.owner()
         if middleware is None:
-            _retire_usage_watcher(stream)
+            _retire_usage_watcher(self.stream)
             return
-        await middleware.record_usage_span(event)
-
-    return _record
+        record = usage_event_from(event)
+        if record is not None and record.event_id not in self.seen:
+            self.seen.add(record.event_id)
+            await middleware.record_usage_span(record)
 
 
 def _retire_usage_watcher(stream: Any) -> None:
@@ -377,8 +369,8 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         """Watch the stream for accounting events, replacing this stream's previous watcher.
 
         ``UsageEvent`` is the framework's accounting record and the only route by
-        which spend that never becomes an LLM span reaches a trace: a sub-task
-        rollup (the worker is not instrumented), history compaction and memory
+        which spend that never becomes an LLM span reaches a trace: descendant
+        source records (even when the worker is not instrumented), history compaction and memory
         aggregation (they call the model outside these hooks), and the
         live-session clients.
 
@@ -404,7 +396,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
         previous = _usage_watchers.pop(stream, None)
         if previous is not None:
             stream.unsubscribe(previous)
-        recorder = _make_usage_recorder(ref(self), stream)
+        recorder = _UsageRecorder(ref(self), stream)
         _usage_watchers[stream] = stream.where(UsageEvent).subscribe(recorder)
 
     async def record_usage_span(self, event: UsageEvent) -> None:
@@ -425,6 +417,7 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
             for k, v in self._span_attributes.items():
                 span.set_attribute(k, v)
             span.set_attribute(ATTR_SPAN_TYPE, SPAN_TYPE_USAGE)
+            span.set_attribute("ag2.usage.event_id", event.event_id)
             span.set_attribute(ATTR_USAGE_KIND, event.kind)
             if event.label:
                 span.set_attribute(ATTR_USAGE_LABEL, event.label)

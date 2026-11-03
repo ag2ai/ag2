@@ -104,7 +104,7 @@ class Trace:
         maintaining a parallel summation.
 
         Deliberately *not* :class:`ModelResponse`. Most spend never produces
-        one: a delegating agent's workers report through a ``"subtask"`` rollup,
+        one: a delegating agent's workers report original UsageEvent records,
         history compaction and memory aggregation report usage alone, and live
         sessions map realtime usage straight to the accounting event. Counting
         responses *as well* would double every main-loop call, which emits both.
@@ -137,5 +137,9 @@ class Trace:
             A tuple preserving original event order.
         """
         if name is None:
-            return tuple(e for e in self._events if isinstance(e, event_type))
-        return tuple(e for e in self._events if isinstance(e, event_type) and getattr(e, "name", None) == name)
+            return tuple(e for e in (event.source_event for event in self._events) if isinstance(e, event_type))
+        return tuple(
+            e
+            for e in (event.source_event for event in self._events)
+            if isinstance(e, event_type) and getattr(e, "name", None) == name
+        )

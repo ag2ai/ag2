@@ -15,7 +15,7 @@ from fast_depends import Provider
 
 from ag2.types import ClassInfo, RequestOrigin, SendableMessage
 
-from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, MessageEnqueued, ModelRequest
+from .events import BaseEvent, HumanInputRequest, HumanMessage, InertEvent, Input, MessageEnqueued, ModelRequest
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
@@ -240,6 +240,8 @@ class ConversationContext:
         return result.content
 
     async def send(self, event: BaseEvent) -> None:
+        if isinstance(event, InertEvent):
+            event = event.as_local()
         await self.stream.send(event, self)
 
 
