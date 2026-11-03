@@ -26,9 +26,8 @@ class TaskEvent(InertEvent):
 
 class TaskStarted(TaskEvent):
     parent_tool_call_id: str | None = None
-    # Optional ``TaskSpec`` describing what the task is doing. Set by the
-    # framework-core ``Task`` primitive (``ag2.task``); legacy
-    # ``run_task`` callers leave it ``None``.
+    # TaskSpec is populated by standalone Tasks and model-run lifecycle.
+    # None remains readable for archived events without a spec.
     spec: "TaskSpec | None" = Field(default=None)
     # Absolute ISO deadline (start + ttl_seconds) if the task was created
     # with a TTL, else ``None``. Carried on the event so the network's

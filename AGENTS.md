@@ -232,6 +232,13 @@ Use `plugins=[KnowledgePlugin(store, ...)]` (`ag2.knowledge`) instead. At most o
 - Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:Agent\\(knowledge=:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
 - Removal in 1.4.0 covers: the `knowledge=` parameter and `KNOWLEDGE_DEPRECATION`, the `LegacyKnowledgeAdapter` block in `Agent.__init__`, the `knowledge=` branch of `validate_knowledge_middleware`, `ag2/knowledge/_legacy.py`, the bound-store (`legacy_store`) branches in knowledge tools and middleware factories, the warning-filtered tests, and the deprecation notes in `website/docs/`. Keep `KnowledgeConfig` and its exports, `ScopedMiddlewareFactory`, and `_additional_tools` (legacy task tools still use it until `TaskConfig` is removed).
 
+### Deprecated: `Agent.task()` (removed in 1.4.0)
+
+Construct `Task(owner_id=agent.name, spec=TaskSpec(title=..., description=..., payload=..., capability=...), ...)` from `ag2.task` instead; pass `context`, `ttl_seconds`, `checkpoint_store` and `resume_from` directly to `Task`. For model runs, pass `capability=` / `ttl_seconds=` to `ask` / `run` / `resume`. See ADRs 0034 and 0035.
+
+- Tests that exercise it on purpose assert the warning with `pytest.warns(DeprecationWarning)` (see `test/agent/test_task_deprecation.py`); new tests must not depend on it.
+- Removal in 1.4.0 covers: `Agent.task` and `AGENT_TASK_DEPRECATION`, the `deprecated-factory` parametrisations and `test_deprecated_factory_still_fails_the_task_on_error` in `test/agent/test_task_deprecation.py`, and the deprecation notes in `website/docs/`. Keep `Task`, `TaskSpec` and `TaskInject`.
+
 ### persistent_stream
 
 `persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It stores the stream ID in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.

@@ -14,7 +14,7 @@ Three layers covered:
   ``Hub.hydrate()``; the on-disk JSON cache reflects the in-memory state.
 * **AgentClient mutation** — ``set_resume`` / ``add_example`` go through
   the hub and refresh the local cache.
-* **TaskMirror end-to-end** — ``Agent.task(..., capability="X")`` inside
+* **TaskMirror end-to-end** — ``Task(spec=TaskSpec(title="...", capability="X"), ...)`` inside
   a notify-handler turn drives ``Hub.record_observation`` automatically.
 """
 
@@ -49,7 +49,7 @@ from ag2.network.identity import (
 )
 from ag2.network.task_mirror import TaskMirror
 from ag2.stream import MemoryStream
-from ag2.task import TaskState
+from ag2.task import Task, TaskSpec, TaskState
 from ag2.testing import TestConfig
 
 from ._helpers import ScriptedConfig
@@ -341,7 +341,7 @@ async def test_agent_client_add_example_appends() -> None:
 
 @pytest.mark.asyncio
 async def test_task_mirror_records_observation_on_capability_tagged_task() -> None:
-    """Running ``agent.task(capability=X)`` to completion through a mirror
+    """Running ``Task(spec=TaskSpec(title="...", capability=X), ...)`` to completion through a mirror
     auto-calls ``Hub.record_observation`` and updates ``Resume.observed[X]``.
 
     Exercises the mirror plumbing directly (without the LLM tool
@@ -362,9 +362,9 @@ async def test_task_mirror_records_observation_on_capability_tagged_task() -> No
     mirror = TaskMirror(hub=hub, owner_id=bob.agent_id)
     sub_ids = mirror.attach(stream)
     try:
-        async with bob_agent.task(
-            "analysing alice's question",
-            capability="analysis",
+        async with Task(
+            owner_id=bob_agent.name,
+            spec=TaskSpec(title="analysing alice's question", capability="analysis"),
             context=Context(stream=stream),
         ) as task:
             await task.complete(result="done")
@@ -450,9 +450,9 @@ async def test_task_capability_survives_hub_hydrate() -> None:
         stream = MemoryStream()
         mirror = TaskMirror(hub=hub, owner_id=bob.agent_id)
         sub_ids = mirror.attach(stream)
-        async with bob_agent.task(
-            "analysing",
-            capability="analysis",
+        async with Task(
+            owner_id=bob_agent.name,
+            spec=TaskSpec(title="analysing", capability="analysis"),
             context=Context(stream=stream),
         ) as task:
             task_id = task.task_id
@@ -483,9 +483,8 @@ async def test_task_mirror_no_observation_when_capability_absent() -> None:
     mirror = TaskMirror(hub=hub, owner_id=bob.agent_id)
     sub_ids = mirror.attach(stream)
     try:
-        async with bob_agent.task(
-            "untagged work",
-            context=Context(stream=stream),
+        async with Task(
+            owner_id=bob_agent.name, spec=TaskSpec(title="untagged work"), context=Context(stream=stream)
         ) as task:
             await task.complete(result="ok")
     finally:

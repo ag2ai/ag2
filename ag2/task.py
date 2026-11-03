@@ -25,6 +25,8 @@ back the prior checkpoint and exposes it via :attr:`resumed_state` so
 the owner can pick up mid-flow after a restart.
 """
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
@@ -32,15 +34,18 @@ from typing import Annotated, Any, Protocol, runtime_checkable
 from uuid import uuid4
 
 from .annotations import Inject
-from .context import ConversationContext
+from .context import ConversationContext, SubId
 from .events import (
+    BaseEvent,
     TaskCancelled,
     TaskCompleted,
     TaskExpired,
     TaskFailed,
     TaskProgress,
     TaskStarted,
+    Usage,
 )
+from .events.task_events import TaskEvent
 from .stream import MemoryStream
 
 __all__ = (
@@ -195,17 +200,19 @@ def _expires_iso(ttl_seconds: int | None, base: datetime) -> str | None:
 class Task:
     """Lifecycle handle for a unit of work.
 
-    Created via ``Agent.task(...)`` or directly. Use as an async context
-    manager::
+    Construct directly and use as an async context manager::
 
-        async with agent.task("research framework X") as task:
+        from ag2.task import Task, TaskSpec
+
+        async with Task(owner_id=agent.name, spec=TaskSpec(title="research framework X")) as task:
             await task.progress({"step": "search"})
             findings = await search(...)
             await task.complete(findings)
 
     On clean exit, auto-completes with ``result=None`` if the user did not
     call ``complete()`` or ``fail()``. On exception, auto-fails with the
-    raised exception (the exception still propagates).
+    raised exception (the exception still propagates). Coroutine cancellation
+    auto-cancels with ``TaskCancelled`` and also propagates.
 
     If a ``ConversationContext`` is passed, events flow on that stream and
     ``ag2.task`` is stamped into ``context.dependencies`` for the duration
@@ -245,6 +252,9 @@ class Task:
         # when ``resume_from`` is set; ``None`` otherwise (including the
         # case where the resume target has no checkpoint on file).
         self._resumed_state: dict[str, Any] | None = None
+        self._emit_events = True
+        self._publisher: Callable[[BaseEvent], Awaitable[Any]] | None = None
+        self._terminal_subscription: SubId | None = None
 
     @property
     def task_id(self) -> str:
@@ -292,7 +302,7 @@ class Task:
             return
         self._metadata.progress.update(payload)
         self._metadata.last_progress_at = _now_iso()
-        await self.context.send(
+        await self._send(
             TaskProgress(
                 task_id=self._metadata.task_id,
                 agent_name=self._owner_id,
@@ -307,6 +317,9 @@ class Task:
 
         No-op if already terminal.
         """
+        await self._complete(result)
+
+    async def _complete(self, result: Any = None, *, usage: Usage | None = None) -> None:
         if self._metadata is None:
             raise RuntimeError("Task.complete() called before __aenter__")
         if self._metadata.state in TERMINAL_TASK_STATES:
@@ -314,13 +327,14 @@ class Task:
         self._metadata.state = TaskState.COMPLETED
         self._metadata.result = result
         self._metadata.completed_at = _now_iso()
-        await self.context.send(
+        await self._send(
             TaskCompleted(
                 task_id=self._metadata.task_id,
                 agent_name=self._owner_id,
                 objective=self._spec.title,
                 result=result,
                 task_stream=self.context.stream.id,
+                usage=usage or Usage(),
             )
         )
 
@@ -341,12 +355,12 @@ class Task:
         self._metadata.state = TaskState.FAILED
         self._metadata.error = str(exc)
         self._metadata.completed_at = _now_iso()
-        await self.context.send(
+        await self._send(
             TaskFailed(
                 task_id=self._metadata.task_id,
                 agent_name=self._owner_id,
                 objective=self._spec.title,
-                error=exc,
+                error=exc if isinstance(exc, Exception) else RuntimeError(str(exc)),
             )
         )
 
@@ -363,7 +377,7 @@ class Task:
             return
         self._metadata.state = TaskState.EXPIRED
         self._metadata.completed_at = _now_iso()
-        await self.context.send(
+        await self._send(
             TaskExpired(
                 task_id=self._metadata.task_id,
                 agent_name=self._owner_id,
@@ -389,7 +403,7 @@ class Task:
         self._metadata.completed_at = _now_iso()
         if reason:
             self._metadata.error = reason
-        await self.context.send(
+        await self._send(
             TaskCancelled(
                 task_id=self._metadata.task_id,
                 agent_name=self._owner_id,
@@ -420,6 +434,26 @@ class Task:
     async def __aenter__(self) -> "Task":
         if self._metadata is not None:
             raise RuntimeError(f"Task already entered (state={self._metadata.state})")
+        try:
+            return await self._start()
+        except BaseException as exc:
+            try:
+                await self._finish(exc)
+            finally:
+                self._unbind()
+            raise
+
+    async def _start(
+        self,
+        *,
+        task_id: str | None = None,
+        parent_tool_call_id: str | None = None,
+        emit_events: bool = True,
+        inject: bool = True,
+        publisher: Callable[[BaseEvent], Awaitable[Any]] | None = None,
+    ) -> "Task":
+        if self._metadata is not None:
+            raise RuntimeError(f"Task already entered (state={self._metadata.state})")
 
         if self._context is None:
             self._context = ConversationContext(stream=MemoryStream())
@@ -428,10 +462,12 @@ class Task:
         if self._resume_from is not None and self._checkpoint_store is not None:
             self._resumed_state = await self._checkpoint_store.read(self._resume_from)
 
+        self._emit_events = emit_events
+        self._publisher = publisher
         now = datetime.now(UTC)
         now_iso = now.isoformat()
         self._metadata = TaskMetadata(
-            task_id=uuid4().hex,
+            task_id=task_id or uuid4().hex,
             owner_id=self._owner_id,
             spec=self._spec,
             state=TaskState.RUNNING,
@@ -440,16 +476,22 @@ class Task:
             expires_at=_expires_iso(self._ttl_seconds, now),
         )
 
-        self._previous_dep = _nearest_active(self._context.dependencies.get(_TASK_DEP_KEY))
-        self._context.dependencies[_TASK_DEP_KEY] = self
+        if inject:
+            self._previous_dep = _nearest_active(self._context.dependencies.get(_TASK_DEP_KEY))
+            self._context.dependencies[_TASK_DEP_KEY] = self
+        if publisher is None:
+            self._terminal_subscription = self._context.stream.where(TaskEvent).subscribe(
+                self._observe_terminal, interrupt=True, sync_to_thread=False
+            )
 
-        await self._context.send(
+        await self._send(
             TaskStarted(
                 task_id=self._metadata.task_id,
                 agent_name=self._owner_id,
                 objective=self._spec.title,
                 spec=self._spec,
                 expires_at=self._metadata.expires_at,
+                parent_tool_call_id=parent_tool_call_id,
             )
         )
         return self
@@ -461,21 +503,69 @@ class Task:
         tb: Any,
     ) -> None:
         try:
-            if self._metadata is None:
-                return
-            if exc is not None and self._metadata.state not in TERMINAL_TASK_STATES:
-                await self.fail(exc)
-            elif self._metadata.state == TaskState.RUNNING:
-                await self.complete()
+            await self._finish(exc)
         finally:
-            self._exited = True
-            # A sibling that entered later owns the slot; leave it alone.
-            if self._context is not None and self._context.dependencies.get(_TASK_DEP_KEY) is self:
-                prev = _nearest_active(self._previous_dep)
-                if prev is not None:
-                    self._context.dependencies[_TASK_DEP_KEY] = prev
-                else:
-                    self._context.dependencies.pop(_TASK_DEP_KEY, None)
+            self._unbind()
+
+    async def _finish(
+        self,
+        failure: BaseException | None,
+        *,
+        result: Any = None,
+        usage: Usage | None = None,
+        cancel_reason: str = "cancelled",
+    ) -> None:
+        if self._metadata is None or self._metadata.state in TERMINAL_TASK_STATES:
+            return
+        if isinstance(failure, asyncio.CancelledError):
+            await self.cancel(cancel_reason)
+        elif failure is not None:
+            await self.fail(failure)
+        else:
+            await self._complete(result, usage=usage)
+
+    async def _send(self, event: BaseEvent) -> None:
+        if self._emit_events:
+            if self._publisher is None:
+                await self.context.send(event)
+            else:
+                await self._publisher(event)
+
+    def _observe_terminal(self, event: TaskEvent) -> TaskEvent:
+        """Adopt an external terminal without generating a second transition."""
+        metadata = self._metadata
+        if metadata is None or event.task_id != metadata.task_id or metadata.state in TERMINAL_TASK_STATES:
+            return event
+        if isinstance(event, TaskCompleted):
+            metadata.state = TaskState.COMPLETED
+            metadata.result = event.result
+        elif isinstance(event, TaskFailed):
+            metadata.state = TaskState.FAILED
+            metadata.error = str(event.error)
+        elif isinstance(event, TaskExpired):
+            metadata.state = TaskState.EXPIRED
+        elif isinstance(event, TaskCancelled):
+            metadata.state = TaskState.CANCELLED
+            metadata.error = event.reason
+        else:
+            return event
+        metadata.completed_at = _now_iso()
+        return event
+
+    def _unbind(self) -> None:
+        self._exited = True
+        if self._context is None:
+            return
+        if self._terminal_subscription is not None:
+            self._context.stream.unsubscribe(self._terminal_subscription)
+            self._terminal_subscription = None
+        # A sibling that entered later owns the slot; leave it alone.
+        if self._context.dependencies.get(_TASK_DEP_KEY) is self:
+            prev = _nearest_active(self._previous_dep)
+            if prev is not None:
+                self._context.dependencies[_TASK_DEP_KEY] = prev
+            else:
+                self._context.dependencies.pop(_TASK_DEP_KEY, None)
 
 
 def _nearest_active(task: Task | None) -> Task | None:

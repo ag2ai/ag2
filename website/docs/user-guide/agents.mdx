@@ -15,6 +15,26 @@ The API is built around a few simple methods:
 
 The final result of any turn is safely stored in `reply.response`; use `reply.body` for the text.
 
+## Task Lifecycle
+
+`#!python ask()` and `#!python run()` accept `#!python capability` and
+`#!python ttl_seconds` per invocation. Supplying either enables `#!python TaskStarted`
+and a terminal event: completed, failed, cancelled, or externally expired.
+The same lifecycle is used by subagent delegations. Without either option,
+ordinary invocations emit no task lifecycle events.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+
+agent = Agent("analyst", config=OpenAIResponsesConfig(model="gpt-5"))
+reply = await agent.ask("Analyse the report", capability="analysis", ttl_seconds=60)
+```
+
+`#!python AgentReply.ask()`, `#!python AgentReply.run()`, and `#!python Agent.resume()`
+accept these options too. See [Tasks](/docs/user-guide/tasks) for lifecycle,
+cancellation, TTL, and standalone work.
+
 ## Basic Communication Example
 
 Here's how easily you can start and continue a conversation:

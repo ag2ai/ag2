@@ -111,8 +111,10 @@ awaiting coroutine cannot stop the Python thread.
 
 Lifecycle and forwarding are scoped under the stream turn lock. A queued
 invocation cannot capture another invocation's events, even when they reuse
-the same stream object. The terminal follows its source events and observer
-cleanup. Descendants owned by a delegated run settle before its completion.
+the same stream object. The terminal follows its source events, settled
+tools/descendants, and observer cleanup. Cleanup failures are reflected in the
+terminal and the returned result. Descendants owned by a delegated run settle
+before its completion.
 
 ## Variables
 

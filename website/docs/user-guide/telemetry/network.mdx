@@ -97,7 +97,7 @@ The hub and listener emit five span types. Each carries an `ag2.span.type` attri
 Agents instrumented with `#!python TelemetryMiddleware` add their own `agent` / `llm` / `tool` / `human_input` spans (see [Agent Telemetry](/docs/user-guide/telemetry/agent)), linked to the triggering envelope.
 
 !!! note
-    `#!python network.task` spans cover capability-tagged tasks — the same `#!python agent.task(..., capability="X")` mechanism described in [Task Observation](/docs/user-guide/network/task_observation). The span records the task's `capability`, `outcome`, and latency, which is what feeds task-level evaluation views.
+    `#!python network.task` spans cover capability-tagged tasks — the same `#!python Task(spec=TaskSpec(title="...", capability="X"), ...)` mechanism described in [Task Observation](/docs/user-guide/network/task_observation). The span records the task's `capability`, `outcome`, and latency, which is what feeds task-level evaluation views.
 
 ### Checkpoint events
 

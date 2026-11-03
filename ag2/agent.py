@@ -40,6 +40,7 @@ from typing_extensions import deprecated
 from ag2.events import BinaryResult
 
 from ._model_input import model_inputs
+from ._run_lifecycle import RunLifecycle
 from .annotations import Context
 from .assembly import AssemblerMiddleware, AssemblyPolicy
 from .config import LLMClient, ModelConfig
@@ -88,7 +89,7 @@ from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, Toolkit
 from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
-from .tools.subagents._forwarding import DelegationRegistry, Forwarder
+from .tools.subagents._forwarding import PARENT_CANCELLED, DelegationRegistry, Forwarder
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
@@ -122,6 +123,14 @@ ASSEMBLY_DEPRECATION = (
 KNOWLEDGE_DEPRECATION = (
     "Agent(knowledge=...) is deprecated and will be removed in 1.4.0. "
     "Use plugins=[KnowledgePlugin(store=..., ...)] instead; import KnowledgePlugin from ag2.knowledge."
+)
+
+
+AGENT_TASK_DEPRECATION = (
+    "Agent.task() is deprecated and will be removed in 1.4.0. "
+    "Use Task(owner_id=agent.name, spec=TaskSpec(title=..., description=..., payload=..., capability=...), ...) "
+    "instead; import Task and TaskSpec from ag2.task. Pass context, ttl_seconds, checkpoint_store and resume_from "
+    "directly to Task."
 )
 
 
@@ -248,6 +257,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TAgent]": ...
 
@@ -264,6 +275,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TAgent]": ...
 
@@ -280,6 +293,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[str, TAgent]": ...
 
@@ -295,6 +310,8 @@ class AgentReply(Generic[TResult, TAgent]):
         plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[TAgent, TAgent]": ...
 
@@ -310,17 +327,18 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
-        initial_event = ModelRequest.ensure_request(list(msg))
-
-        client = config.create() if config else self.__client
-
         return await self.__agent._execute(
-            initial_event,
+            ModelRequest.ensure_request(list(msg)),
             context=self.context,
-            client=client,
+            client=None if config else self.__client,
+            config=config,
             context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
             additional_tools=tools,
             additional_plugins=plugins,
@@ -342,6 +360,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[T2, TAgent]": ...
 
@@ -358,6 +378,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[T2, TAgent]": ...
 
@@ -374,6 +396,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[str, TAgent]": ...
 
@@ -389,6 +413,8 @@ class AgentReply(Generic[TResult, TAgent]):
         plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[TAgent, TAgent]": ...
 
@@ -404,6 +430,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentRun[Any, Any]":
         """Observable, non-blocking continuation of this reply (counterpart to ``ask``).
@@ -414,7 +442,7 @@ class AgentReply(Generic[TResult, TAgent]):
         """
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        client = config.create() if config else self.__client
+        client = None if config else self.__client
 
         return self.__agent._make_run(
             initial_event,
@@ -426,9 +454,19 @@ class AgentReply(Generic[TResult, TAgent]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
             client=client,
         )
+
+
+def _owned_delegation(context: Context) -> Forwarder | None:
+    """The delegation executing on this context's own stream, if any."""
+    delegation: Forwarder | None = context.dependencies.get(Forwarder)
+    if delegation is not None and delegation.stream.id != context.stream.id:
+        return None
+    return delegation
 
 
 @dataclass(frozen=True, slots=True)
@@ -549,6 +587,8 @@ class AgentRun(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
         context_overrides: _ContextOverrides | None = None,
@@ -564,6 +604,8 @@ class AgentRun(Generic[TResult, TAgent]):
         self.__observers = observers
         self.__response_schema = response_schema
         self.__hitl_hook = hitl_hook
+        self.__capability = capability
+        self.__ttl_seconds = ttl_seconds
         # A continuation (``AgentReply.run``) supplies the original turn's client
         # so it keeps using the same provider; a fresh run leaves it None and the
         # client is resolved from config on enter.
@@ -571,6 +613,7 @@ class AgentRun(Generic[TResult, TAgent]):
 
         self.__stack = AsyncExitStack()
         self.__driver: Callable[[], Awaitable[AgentReply[TResult, TAgent]]] | None = None
+        self.__lifecycle: RunLifecycle | None = None
         # The single task driving the turn, created lazily by ``start()`` or
         # ``result()``. It holds the turn's outcome, so awaiting it again is
         # idempotent; ``__aexit__`` cancels it if it is still running.
@@ -598,12 +641,14 @@ class AgentRun(Generic[TResult, TAgent]):
         self.__context.enqueue(*content, origin="user")
 
     async def __aenter__(self) -> "AgentRun[TResult, TAgent]":
-        self.__driver = await self.__stack.enter_async_context(
+        self.__driver, self.__lifecycle = await self.__stack.enter_async_context(
             self.__agent._turn_scope(
                 self.__trigger,
                 context=self.__context,
                 client=self.__client,
                 config=self.__config,
+                capability=self.__capability,
+                ttl_seconds=self.__ttl_seconds,
                 context_overrides=self.__context_overrides,
                 additional_plugins=self.__plugins,
                 hitl_hook=self.__hitl_hook,
@@ -653,18 +698,26 @@ class AgentRun(Generic[TResult, TAgent]):
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
         tb: Any,
-    ) -> bool:
+    ) -> Literal[False]:
         task = self.__task
-        if task is not None:
-            if not task.done():
-                task.cancel()
-            # Retrieve the outcome so a cancelled/failed background turn does not
-            # surface as an unretrieved-task warning. The caller opted out of the
-            # result by leaving the block without awaiting ``result()``, so its
-            # cancellation or failure is swallowed here.
-            with suppress(asyncio.CancelledError, Exception):
-                await task
-        await self.__stack.aclose()
+        failure: BaseException | None = None
+        try:
+            if task is not None:
+                if not task.done():
+                    task.cancel()
+                # Retrieve the outcome even when the caller opted out of result().
+                # A task cancelled before its first coroutine step still needs a
+                # terminal lifecycle; middleware scope teardown retains its contract.
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception) as error:
+                    failure = error
+            if failure is not None and self.__lifecycle is not None:
+                await self.__lifecycle.reject(failure)
+        finally:
+            # Always release the stream turn lock, including when the driver
+            # raised KeyboardInterrupt / SystemExit.
+            await self.__stack.aclose()
         return False
 
 
@@ -985,6 +1038,7 @@ class Agent(PluginTarget, Generic[TResult]):
 
         return tuple(self._policies)
 
+    @deprecated(AGENT_TASK_DEPRECATION)
     def task(
         self,
         title: str,
@@ -999,7 +1053,11 @@ class Agent(PluginTarget, Generic[TResult]):
     ) -> Task:
         """Create a ``Task`` whose lifecycle this Agent owns.
 
-        Returns an unentered ``Task``; use as ``async with agent.task(...)``.
+        Deprecated; will be removed in 1.4.0. Construct
+        ``Task(owner_id=self.name, spec=TaskSpec(title=title, ...), ...)``
+        directly instead. The remaining Task parameters are unchanged.
+
+        Returns an unentered ``Task``, used as an async context manager.
         Events flow on ``context.stream`` if a ``ConversationContext`` is
         supplied; else the Task creates a private ``MemoryStream`` on entry
         and events fire on it (only observers attached to that private
@@ -1050,6 +1108,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TResult]": ...
 
@@ -1068,6 +1128,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TResult]": ...
 
@@ -1086,6 +1148,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[str, TResult]": ...
 
@@ -1103,6 +1167,8 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[TResult, TResult]": ...
 
@@ -1119,8 +1185,15 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
+        """Run a turn to completion.
+
+        ``capability`` or ``ttl_seconds`` enables the task lifecycle for this
+        invocation. TTL is an externally observed deadline, not a local timeout.
+        """
         # ``ask`` is the blocking degenerate case of ``run``: open a run, drive
         # it to its result, and let the scope close.
         async with self._open_run(
@@ -1135,6 +1208,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         ) as handle:
             return await handle.result()
@@ -1153,6 +1228,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[T2, TResult]": ...
 
@@ -1171,6 +1248,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[T2, TResult]": ...
 
@@ -1189,6 +1268,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[str, TResult]": ...
 
@@ -1206,6 +1287,8 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[TResult, TResult]": ...
 
@@ -1222,6 +1305,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentRun[Any, Any]":
         """Observable counterpart to ``ask``: open a turn scope you can watch.
@@ -1229,7 +1314,9 @@ class Agent(PluginTarget, Generic[TResult]):
         Returns an :class:`AgentRun` async context manager. Entering it opens the
         turn scope (subscribers live) and yields a handle; the turn advances when
         ``result()`` is awaited, with events flowing through ``run.stream`` as it
-        runs. Mirrors ``ask``'s signature.
+        runs. Mirrors ``ask``'s signature. ``capability`` or ``ttl_seconds``
+        enables task lifecycle events; an undriven run emits none. The terminal
+        is published after scope cleanup. TTL is externally observed.
         """
         return self._open_run(
             *msg,
@@ -1243,6 +1330,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         )
 
@@ -1259,6 +1348,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None,
     ) -> "AgentRun[Any, Any]":
         """Build a context from public kwargs and open a run over a fresh request.
@@ -1281,6 +1372,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         )
 
@@ -1295,6 +1388,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
         context_overrides: _ContextOverrides | None = None,
@@ -1316,6 +1411,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
             client=client,
             context_overrides=context_overrides,
@@ -1334,6 +1431,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
         """Resume a turn from a recorded trajectory, driven by an arbitrary event.
@@ -1368,6 +1467,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         ) as handle:
             return await handle.result()
@@ -1382,6 +1483,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
         """`Agent.ask()` alternative method to call agent with prebuild `context`."""
@@ -1394,6 +1497,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         ) as handle:
             return await handle.result()
@@ -1430,8 +1535,11 @@ class Agent(PluginTarget, Generic[TResult]):
         event: BaseEvent,
         *,
         context: Context,
-        client: LLMClient,
+        client: LLMClient | None,
+        config: ModelConfig | None = None,
         context_overrides: _ContextOverrides | None = None,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
         additional_plugins: Iterable[Plugin] = (),
@@ -1441,8 +1549,8 @@ class Agent(PluginTarget, Generic[TResult]):
     ) -> "AgentReply[Any, Any]":
         """Blocking turn: open the scope and immediately drive it to completion.
 
-        The shared entry for callers that already hold a ``client`` (notably
-        ``AgentReply.ask`` and the A2A executor). ``run`` / ``ask`` route through
+        The shared entry for adapters that already hold a ``client`` (such as
+        the A2A executor). ``run`` / ``ask`` route through
         ``AgentRun``, which enters the *same* ``_turn_scope`` but defers the drive
         to ``result()``.
         """
@@ -1450,14 +1558,17 @@ class Agent(PluginTarget, Generic[TResult]):
             event,
             context=context,
             client=client,
+            config=config,
             context_overrides=context_overrides,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
             additional_tools=additional_tools,
             additional_plugins=additional_plugins,
             additional_middleware=additional_middleware,
             additional_observers=additional_observers,
             response_schema=response_schema,
-        ) as drive:
+        ) as (drive, _):
             return await drive()
 
     @asynccontextmanager
@@ -1469,13 +1580,15 @@ class Agent(PluginTarget, Generic[TResult]):
         client: LLMClient | None = None,
         config: ModelConfig | None = None,
         context_overrides: _ContextOverrides | None = None,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
         additional_plugins: Iterable[Plugin] = (),
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: ResponseProto[Any] | type | None | Omit = omit,
-    ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
+    ) -> AsyncGenerator[tuple[Callable[[], Awaitable[AgentReply[Any, Any]]], RunLifecycle | None]]:
         """Resolve invocation plugins and bracket their context contributions."""
         plugins = _TurnPlugins(additional_plugins)
         additional_middleware = tuple(additional_middleware)
@@ -1488,9 +1601,24 @@ class Agent(PluginTarget, Generic[TResult]):
             # apart from values the caller supplied for this request.
             configured = context.dependencies.get(CONFIGURED_DEPENDENCIES_CONTEXT_KEY, {}) | self._agent_dependencies
             _set_for_turn(stack, context.dependencies, CONFIGURED_DEPENDENCIES_CONTEXT_KEY, configured)
-            delegation = context.dependencies.get(Forwarder)
-            if delegation is not None and delegation.stream.id == context.stream.id:
+            delegation = _owned_delegation(context)
+            lifecycle: RunLifecycle | None = None
+            if delegation is not None:
                 await stack.enter_async_context(delegation.execution(context))
+                lifecycle = delegation.lifecycle(context, capability=capability, ttl_seconds=ttl_seconds)
+            elif capability is not None or ttl_seconds is not None:
+                # The title is published to observers and mirrored to the hub,
+                # so it must not carry the caller's prompt.
+                lifecycle = RunLifecycle(
+                    self.name,
+                    TaskSpec(title=self.name, capability=capability),
+                    context,
+                    ttl_seconds=ttl_seconds,
+                )
+            if lifecycle is not None:
+                # Entered before any further setup so a setup failure still
+                # publishes a terminal.
+                await stack.enter_async_context(lifecycle.scope())
             if context_overrides is not None:
                 context_overrides.apply(context)
             if plugins.has_conflicting_hitl_hooks:
@@ -1533,8 +1661,9 @@ class Agent(PluginTarget, Generic[TResult]):
                 additional_observers=(*plugins.observers, *additional_observers),
                 additional_policies=plugins.policies,
                 response_schema=response_schema,
+                lifecycle=lifecycle,
             ) as drive:
-                yield drive
+                yield drive, lifecycle
 
     @asynccontextmanager
     async def _drive_scope(
@@ -1550,6 +1679,7 @@ class Agent(PluginTarget, Generic[TResult]):
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        lifecycle: RunLifecycle | None = None,
     ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
         """Open a turn scope and yield a ``drive`` callable that runs it once.
 
@@ -1679,9 +1809,7 @@ class Agent(PluginTarget, Generic[TResult]):
                         ),
                     )
 
-                elif (
-                    delegation := context.dependencies.get(Forwarder)
-                ) is not None and delegation.stream.id == context.stream.id:
+                elif (delegation := _owned_delegation(context)) is not None:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
                             delegation.bridge, interrupt=True, sync_to_thread=False
@@ -1709,8 +1837,7 @@ class Agent(PluginTarget, Generic[TResult]):
                 ):
 
                     async def drive() -> "AgentReply[Any, Any]":
-                        delegation = context.dependencies.get(Forwarder)
-                        owns_delegation = delegation is not None and delegation.stream.id == context.stream.id
+                        delegation = _owned_delegation(context)
                         try:
                             if (
                                 delegation is not None
@@ -1718,18 +1845,33 @@ class Agent(PluginTarget, Generic[TResult]):
                                 and delegation.origin.context is context
                             ):
                                 await delegation.start(context)
+                            if lifecycle is not None:
+                                await lifecycle.start()
                             message = await agent_turn(event, context)
-                            if owns_delegation:
+                            registry = context.dependencies.get(DelegationRegistry)
+                            if delegation is not None:
                                 await context.dependencies[DelegationRegistry].settle_descendants(delegation.path)
+                            elif (
+                                lifecycle is not None
+                                and registry is not None
+                                and registry.context.stream.id == context.stream.id
+                            ):
+                                await registry.settle_descendants(())
                         except BaseException as exc:
-                            if owns_delegation:
-                                delegation.failure = exc
+                            if lifecycle is not None:
+                                lifecycle.failure = exc
+                                if (
+                                    delegation is not None
+                                    and delegation.origin is not None
+                                    and delegation.origin.halted
+                                ):
+                                    lifecycle.cancel_reason = delegation.origin.reason
                             registry = context.dependencies.get(DelegationRegistry)
                             if registry is not None and (
-                                owns_delegation or registry.context.stream.id == context.stream.id
+                                delegation is not None or registry.context.stream.id == context.stream.id
                             ):
-                                path = delegation.path if owns_delegation else ()
-                                registry.cancel_descendants(path, str(exc) or "parent cancelled")
+                                path = delegation.path if delegation is not None else ()
+                                registry.cancel_descendants(path, str(exc) or PARENT_CANCELLED)
                                 await registry.settle_descendants(path)
                             if isinstance(exc, (HumanInputError, asyncio.CancelledError)):
                                 await close_unanswered_tool_calls(
@@ -1739,8 +1881,8 @@ class Agent(PluginTarget, Generic[TResult]):
                                     else CANCELLED_TOOL_RESULT,
                                 )
                             raise
-                        if owns_delegation:
-                            delegation.result = message.content
+                        if lifecycle is not None:
+                            lifecycle.result = message.content
                         return AgentReply(
                             message,
                             context=context,
@@ -1759,10 +1901,9 @@ class Agent(PluginTarget, Generic[TResult]):
         ``TaskConfig.include_tools`` / ``exclude_tools``) plus
         ``TaskConfig.extra_tools``. It is constructed with ``tasks=False``
         (the default) so the child has **no** ``run_subtask`` tools —
-        recursive delegation is impossible by construction. ``run_task``
-        emits the ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed``
-        lifecycle events and handles dependency/variable copy and HITL
-        bridging.
+        recursive delegation is impossible by construction. The delegated run
+        uses the common task lifecycle; ``run_task`` handles dependency/variable
+        copying and HITL bridging.
         """
         tc = self._task_config
         if tc is None:

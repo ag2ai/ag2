@@ -15,7 +15,7 @@ from ag2.scopes import derive_child_variables
 from ag2.stream import MemoryStream, Stream
 from ag2.utils import CONFIGURED_DEPENDENCIES_CONTEXT_KEY
 
-from ._forwarding import DelegationRegistry, Forwarder
+from ._forwarding import PARENT_CANCELLED, DelegationRegistry, Forwarder
 
 if TYPE_CHECKING:
     from ag2.agent import Agent
@@ -90,7 +90,7 @@ async def run_task(
     except asyncio.CancelledError as exc:
         await forwarder.reject(exc)
         origin = forwarder.origin
-        reason = origin.reason if origin is not None and origin.halted else "parent cancelled"
+        reason = origin.reason if origin is not None and origin.halted else PARENT_CANCELLED
         usage = await forwarder.usage()
         task = asyncio.current_task()
         cancelling = getattr(task, "cancelling", None)
