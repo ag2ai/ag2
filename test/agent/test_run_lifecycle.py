@@ -4,7 +4,7 @@
 
 import asyncio
 from contextlib import AsyncExitStack, ExitStack
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from dirty_equals import HasAttributes, IsInstance
@@ -220,7 +220,7 @@ async def test_ttl_publishes_a_deadline() -> None:
 
     [started, _] = task_events(await reply.history.get_events())
     assert started == HasAttributes(spec=TaskSpec(title="analyst"))
-    assert datetime.fromisoformat(started.expires_at) > datetime.now(timezone.utc)
+    assert datetime.fromisoformat(started.expires_at) > datetime.now(UTC)
 
 
 @pytest.mark.asyncio
