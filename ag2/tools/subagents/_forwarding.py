@@ -28,6 +28,7 @@ from ag2.events import (
     Usage,
     UsageEvent,
 )
+from ag2.events.delegation import Delivery, delivery_of, routed
 from ag2.stream import Stream
 from ag2.usage import UsageReport, usage_event_from
 
@@ -154,15 +155,10 @@ class _Endpoint:
         )
         await sender.send(audit)
         self.validate_delivery()
-        child_audit = copy(audit)
-        setattr(child_audit, "_downlink", True)
-        setattr(child_audit, "_validate_delivery", self.validate_delivery)
-        await self.context.send(child_audit)
+        delivery = Delivery(validate=self.validate_delivery)
+        await self.context.send(routed(audit, delivery))
         self.validate_delivery()
-        down = copy(event)
-        setattr(down, "_downlink", True)
-        setattr(down, "_validate_delivery", self.validate_delivery)
-        await self.context.send(down)
+        await self.context.send(routed(event, delivery))
 
 
 class StreamHandle:
@@ -227,9 +223,8 @@ class Forwarder:
             await context.send(self.started_event())
 
     async def bridge(self, event: HumanInputRequest, ctx: Context) -> None:
-        forwarded = copy(event)
+        forwarded = routed(event, Delivery())
         forwarded.task_id = self.task_id
-        setattr(forwarded, "_bridged", True)
         # Dispatch deliberately under the requester's context: the parent's hook
         # must reply on the child's stream (ADR 0004).
         await self.parent.stream.send(forwarded, ctx)
@@ -317,7 +312,7 @@ class Forwarder:
         return forwarded
 
     async def forward(self, event: BaseEvent) -> BaseEvent:
-        if getattr(event, "_downlink", False) or getattr(event, "_bridged", False):
+        if delivery_of(event) is not None:
             return event
         if usage_event_from(event) is not None:
             self.accounting.append(event)
