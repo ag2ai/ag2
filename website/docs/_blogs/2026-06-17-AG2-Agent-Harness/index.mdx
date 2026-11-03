@@ -43,12 +43,12 @@ Every turn starts here. The `MemoryStream` is a typed, append-only log of `BaseE
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 reply = await agent.ask("What is 2 + 2?")
@@ -71,23 +71,23 @@ Assembly is what happens before the LLM call. An `AssemblyPolicy` reads the even
 
 ### Compaction: drop history, keep the gist
 
-Compaction strategies live on the `KnowledgeConfig` and fire when a `CompactTrigger` threshold is crossed. The cheapest strategy, `TailWindowCompact(target=N)`, keeps the last *N* events and drops the rest — zero LLM cost:
+Compaction strategies live on the `KnowledgePlugin` and fire when a `CompactTrigger` threshold is crossed. The cheapest strategy, `TailWindowCompact(target=N)`, keeps the last *N* events and drops the rest — zero LLM cost:
 
 ```python
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.compact import CompactTrigger, TailWindowCompact
-from ag2.config import OpenAIConfig
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.config import OpenAICompletionsConfig
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
-    knowledge=KnowledgeConfig(
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
+    plugins=[KnowledgePlugin(
         store=MemoryKnowledgeStore(),
         compact=TailWindowCompact(target=10),           # keep the last 10 events
         compact_trigger=CompactTrigger(max_events=40),  # fire once history passes 40 events
-    ),
+    )],
 )
 ```
 
@@ -100,23 +100,23 @@ Once the stream passes 40 events, compaction fires: the history is trimmed to th
 Where compaction *discards* history in favour of a gist, aggregation *accumulates* structured knowledge to a persistent store. `ConversationSummaryAggregate` extracts a running summary; `WorkingMemoryAggregate` maintains a key/value memory the agent consults on every turn:
 
 ```python
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.aggregate import AggregateTrigger, WorkingMemoryAggregate
 from ag2.assembly import AssemblerMiddleware
-from ag2.config import OpenAIConfig
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.config import OpenAICompletionsConfig
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.middleware import Middleware
 from ag2.policies import WorkingMemoryPolicy
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful research assistant. Consult your working memory before answering.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
-    knowledge=KnowledgeConfig(
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
+    plugins=[KnowledgePlugin(
         store=MemoryKnowledgeStore(),
-        aggregate=WorkingMemoryAggregate(config=OpenAIConfig(model="gpt-4o-mini")),
+        aggregate=WorkingMemoryAggregate(config=OpenAICompletionsConfig(model="gpt-4o-mini")),
         aggregate_trigger=AggregateTrigger(every_n_turns=5),
-    ),
+    )],
     middleware=[Middleware(AssemblerMiddleware, policies=[WorkingMemoryPolicy()])],
 )
 ```
@@ -176,12 +176,12 @@ Register middleware at construction time:
 
 ```python
 from ag2 import Agent, Middleware
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     middleware=[Middleware(TracingMiddleware)],
 )
 ```
@@ -204,7 +204,7 @@ Tools are the primary way agents extend their capabilities. The `@tool` decorato
 
 ```python
 from ag2 import Agent, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 
 @tool
@@ -216,7 +216,7 @@ def get_weather(city: str) -> str:
 agent = Agent(
     "weather_bot",
     prompt="Answer weather questions. Use the provided tool.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[get_weather],
 )
 
@@ -231,7 +231,7 @@ reply = await agent.ask("What's the weather in Tokyo?")
 
 ```python
 from ag2 import Agent, Toolkit, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 
 def calendar_toolkit(user_id: str) -> Toolkit:
@@ -251,7 +251,7 @@ def calendar_toolkit(user_id: str) -> Toolkit:
 agent = Agent(
     "calendar_bot",
     prompt="Help the user manage their calendar.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[calendar_toolkit(user_id="u123")],
 )
 ```
@@ -264,18 +264,18 @@ For tasks that need a separate conversation thread — a research pass, a code r
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 researcher = Agent(
     "researcher",
     prompt="You are a thorough research assistant. Synthesise in 3 bullet points.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 orchestrator = Agent(
     "orchestrator",
     prompt="Answer questions by delegating research to the researcher tool.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[
         researcher.as_tool(description="Research a topic and synthesise the findings"),
     ],
@@ -299,13 +299,13 @@ Emit a warning at 50k tokens and a critical alert at 100k:
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.observers import TokenMonitor
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     observers=[TokenMonitor(warn_threshold=50_000, alert_threshold=100_000)],
 )
 ```
@@ -328,7 +328,7 @@ Fire an alert when the same tool is called with the same arguments three times i
 
 ```python
 from ag2 import Agent, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.observers import LoopDetector
 
 
@@ -341,7 +341,7 @@ def search(query: str) -> str:
 agent = Agent(
     "tool_agent",
     prompt="Complete the task using the provided tools.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[search],
     observers=[LoopDetector(window_size=10, repeat_threshold=3)],
 )
@@ -367,7 +367,7 @@ Human approval checkpoints interrupt the turn at a predictable point — after t
 
 ```python
 from ag2 import Agent, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import approval_required
 
 
@@ -385,7 +385,7 @@ def approve(request) -> str:
 agent = Agent(
     "admin_bot",
     prompt="You are an admin assistant. Confirm destructive operations.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[delete_record],
     hitl_hook=approve,
 )
@@ -407,20 +407,20 @@ Agents write to a `KnowledgeStore` for anything that should outlive a process re
 Swap the store without touching the agent:
 
 ```python
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.aggregate import AggregateTrigger, WorkingMemoryAggregate
-from ag2.config import OpenAIConfig
-from ag2.knowledge import SqliteKnowledgeStore
+from ag2.config import OpenAICompletionsConfig
+from ag2.knowledge import KnowledgePlugin, SqliteKnowledgeStore
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant with persistent memory.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
-    knowledge=KnowledgeConfig(
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
+    plugins=[KnowledgePlugin(
         store=SqliteKnowledgeStore("./agent_memory.db"),
-        aggregate=WorkingMemoryAggregate(config=OpenAIConfig(model="gpt-4o-mini")),
+        aggregate=WorkingMemoryAggregate(config=OpenAICompletionsConfig(model="gpt-4o-mini")),
         aggregate_trigger=AggregateTrigger(every_n_turns=5),
-    ),
+    )],
 )
 ```
 
@@ -434,12 +434,12 @@ A minimal production-ready agent with token monitoring, loop detection, compacti
 
 ```python
 import asyncio
-from ag2 import Agent, KnowledgeConfig, observer, tool
+from ag2 import Agent, observer, tool
 from ag2.aggregate import AggregateTrigger, WorkingMemoryAggregate
 from ag2.compact import CompactTrigger, TailWindowCompact
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ToolCallEvent
-from ag2.knowledge import SqliteKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, SqliteKnowledgeStore
 from ag2.observers import LoopDetector, TokenMonitor
 
 
@@ -458,9 +458,9 @@ async def main():
     agent = Agent(
         "prod_assistant",
         prompt="You are a helpful assistant with long-term memory.",
-        config=OpenAIConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
         tools=[search_docs],
-        knowledge=KnowledgeConfig(
+        plugins=[KnowledgePlugin(
             # Persistent store — survives process restarts
             store=SqliteKnowledgeStore("./memory.db"),
             # Compaction strategy: keep the last 10 events verbatim
@@ -468,10 +468,10 @@ async def main():
             # Run compaction once history passes 40 events
             compact_trigger=CompactTrigger(max_events=40),
             # Aggregation strategy: distil the session into working memory
-            aggregate=WorkingMemoryAggregate(config=OpenAIConfig(model="gpt-4o-mini")),
+            aggregate=WorkingMemoryAggregate(config=OpenAICompletionsConfig(model="gpt-4o-mini")),
             # Run aggregation every 5 turns
             aggregate_trigger=AggregateTrigger(every_n_turns=5),
-        ),
+        )],
         observers=[
             # Warn at 30k tokens in context, alert at 80k
             TokenMonitor(warn_threshold=30_000, alert_threshold=80_000),

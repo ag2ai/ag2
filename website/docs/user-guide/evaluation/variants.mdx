@@ -11,13 +11,13 @@ A `Variants` is a mapping of name → `Agent` instance, plus an `axis` label tha
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import GeminiConfig, OpenAIConfig
+from ag2.config import GeminiConfig, OpenAICompletionsConfig
 from ag2.eval import Variants, run_variants
 
 board = await run_variants(
     suite,
     variants=Variants({
-        "gpt-4o": Agent("weather", config=OpenAIConfig("gpt-4o"), tools=[get_weather]),
+        "gpt-4o": Agent("weather", config=OpenAICompletionsConfig("gpt-4o"), tools=[get_weather]),
         "flash":  Agent("weather", config=GeminiConfig("gemini-3.6-flash"), tools=[get_weather]),
     }, axis="config"),
     scorers=[...],

@@ -320,7 +320,7 @@ agent = LiveAgent(
     prompt="You are a voice assistant. Answer in one or two short sentences.",
     config=CascadeConfig(
         stt=OpenAITranscriber("gpt-4o-mini-transcribe"),
-        model=config.OpenAIConfig("gpt-5-mini", streaming=True),
+        model=config.OpenAICompletionsConfig("gpt-5-mini", streaming=True),
         tts=ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"),
     ),
 )

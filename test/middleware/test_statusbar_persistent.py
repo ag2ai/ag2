@@ -10,7 +10,7 @@ from typing import Annotated, Any
 
 import pytest
 
-from ag2 import Agent, Context, DataInput, ImageInput, Inject, KnowledgeConfig, MemoryStream, TextInput
+from ag2 import Agent, Context, DataInput, ImageInput, Inject, MemoryStream, TextInput
 from ag2.assembly import AssemblerMiddleware
 from ag2.compact import CompactTrigger, SummarizeCompact, TailWindowCompact
 from ag2.events import (
@@ -32,7 +32,7 @@ from ag2.events import (
     is_conversational,
 )
 from ag2.history import MemoryStorage
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.middleware import (
     BaseMiddleware,
     LLMCall,
@@ -409,11 +409,13 @@ async def test_retained_status_tokens_count_toward_compaction_trigger() -> None:
         "status",
         config=TestConfig("done"),
         middleware=[large_status],
-        knowledge=KnowledgeConfig(
-            store=MemoryKnowledgeStore(),
-            compact=SummarizeCompact(target=1, config=summary),
-            compact_trigger=CompactTrigger(max_tokens=50),
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=MemoryKnowledgeStore(),
+                compact=SummarizeCompact(target=1, config=summary),
+                compact_trigger=CompactTrigger(max_tokens=50),
+            )
+        ],
     )
 
     await agent.ask("start")
@@ -447,11 +449,13 @@ async def test_status_records_do_not_advance_conversational_compaction_trigger()
         "status",
         config=TestConfig("done"),
         middleware=[progress],
-        knowledge=KnowledgeConfig(
-            store=MemoryKnowledgeStore(),
-            compact=SummarizeCompact(target=1, config=summary),
-            compact_trigger=CompactTrigger(max_events=2),
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=MemoryKnowledgeStore(),
+                compact=SummarizeCompact(target=1, config=summary),
+                compact_trigger=CompactTrigger(max_events=2),
+            )
+        ],
     )
 
     reply = await agent.ask("start")

@@ -2,116 +2,69 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the auto-injected ``knowledge`` tool.
+"""KnowledgePlugin actions, exposure, bootstrap, and logging through Agent."""
 
-When an Agent is configured with a ``KnowledgeConfig`` carrying a store,
-a ``knowledge`` tool with read/write/list/delete actions is auto-attached.
-These tests exercise each action of that tool.
-"""
+import json
 
 import pytest
 
 from ag2 import Agent
-from ag2.agent import KnowledgeConfig
-from ag2.events import EventLogFailed, ModelMessage, ModelResponse
-from ag2.knowledge import LOG_PREFIX, DefaultBootstrap, MemoryKnowledgeStore
+from ag2.events import EventLogFailed, ModelMessage, ModelResponse, ToolCallEvent, ToolResultsEvent
+from ag2.knowledge import LOG_PREFIX, DefaultBootstrap, KnowledgePlugin, KnowledgeStore, MemoryKnowledgeStore
 from ag2.stream import MemoryStream
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 
 
-def _knowledge_tool_call(agent: Agent):
-    """Extract the underlying async function from the auto-injected tool.
-
-    Auto-injected tools (the knowledge tool) live in ``_additional_tools``,
-    not the public ``agent.tools`` (which holds only user-supplied tools).
-    """
-    return agent._additional_tools[0].model.call
+async def knowledge_result(store: MemoryKnowledgeStore, **arguments: str) -> str:
+    config = TrackingConfig(TestConfig(ToolCallEvent(name="knowledge", arguments=json.dumps(arguments)), "done"))
+    reply = await Agent("test", config=config, plugins=[KnowledgePlugin(store)]).ask("Use knowledge")
+    results = [e for e in await reply.history.get_events() if isinstance(e, ToolResultsEvent)]
+    return results[0].results[0].result.parts[0].content
 
 
 @pytest.mark.asyncio
 class TestKnowledgeTool:
-    async def test_read_returns_content(self) -> None:
+    @pytest.mark.parametrize(
+        ("arguments", "expected"),
+        [
+            ({"action": "read", "path": "/test.txt"}, "hello world"),
+            ({"action": "read", "path": "/missing"}, "Not found: /missing"),
+            ({"action": "write", "path": "/note", "content": "my note"}, "Written to /note"),
+            ({"action": "write", "path": "/note"}, "Error: content is required for write action."),
+            ({"action": "list", "path": "/empty/"}, "Empty: /empty/"),
+            ({"action": "delete", "path": "/test.txt"}, "Deleted: /test.txt"),
+            ({"action": "bogus"}, "Unknown action: bogus. Available: read, write, list, delete."),
+        ],
+    )
+    async def test_actions(self, arguments: dict[str, str], expected: str) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/test.txt", "hello world")
-        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
-
-        result = await _knowledge_tool_call(agent)(action="read", path="/test.txt")
-        assert result == "hello world"
-
-    async def test_read_missing_path_reports_not_found(self) -> None:
-        store = MemoryKnowledgeStore()
-        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
-
-        result = await _knowledge_tool_call(agent)(action="read", path="/missing.txt")
-        assert "Not found" in result
-
-    async def test_write_persists_content(self) -> None:
-        store = MemoryKnowledgeStore()
-        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
-
-        result = await _knowledge_tool_call(agent)(action="write", path="/note.txt", content="my note")
-        assert "Written" in result
-        assert await store.read("/note.txt") == "my note"
-
-    async def test_write_without_content_reports_error(self) -> None:
-        store = MemoryKnowledgeStore()
-        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
-
-        result = await _knowledge_tool_call(agent)(action="write", path="/note.txt")
-        assert "Error" in result
+        assert await knowledge_result(store, **arguments) == expected
+        if arguments["action"] == "delete":
+            assert await store.read("/test.txt") is None
+        if arguments.get("content"):
+            assert await store.read("/note") == "my note"
 
     async def test_list_includes_skill_md_and_entries(self) -> None:
         store = MemoryKnowledgeStore()
         await store.write("/dir/SKILL.md", "This directory stores artifacts.")
         await store.write("/dir/file1.txt", "data")
-        await store.write("/dir/file2.txt", "data")
-        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
-
-        result = await _knowledge_tool_call(agent)(action="list", path="/dir/")
-        assert "This directory stores artifacts." in result
-        assert "file1.txt" in result
-        assert "file2.txt" in result
-
-    async def test_list_empty_directory(self) -> None:
-        store = MemoryKnowledgeStore()
-        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
-
-        result = await _knowledge_tool_call(agent)(action="list", path="/empty/")
-        assert "Empty" in result
-
-    async def test_delete_removes_path(self) -> None:
-        store = MemoryKnowledgeStore()
-        await store.write("/test.txt", "data")
-        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
-
-        result = await _knowledge_tool_call(agent)(action="delete", path="/test.txt")
-        assert "Deleted" in result
-        assert await store.read("/test.txt") is None
-
-    async def test_unknown_action_reports_error(self) -> None:
-        store = MemoryKnowledgeStore()
-        agent = Agent("test", knowledge=KnowledgeConfig(store=store))
-
-        result = await _knowledge_tool_call(agent)(action="bogus")
-        assert "Unknown action" in result
+        result = await knowledge_result(store, action="list", path="/dir/")
+        assert result == "This directory stores artifacts.\n---\nSKILL.md\nfile1.txt"
 
 
 @pytest.mark.asyncio
 class TestExposeToolFlag:
     """``expose_tool=False`` registers the store but withholds the LLM tool."""
 
-    async def test_expose_tool_false_skips_auto_tool(self) -> None:
+    @pytest.mark.parametrize("expose", [True, False])
+    async def test_tool_exposure_and_store_dependency(self, expose: bool) -> None:
         store = MemoryKnowledgeStore()
-        agent = Agent(
-            "policy-only",
-            knowledge=KnowledgeConfig(store=store, expose_tool=False),
-        )
-        assert not agent._additional_tools
-
-    async def test_expose_tool_true_is_default(self) -> None:
-        store = MemoryKnowledgeStore()
-        agent = Agent("with-tool", knowledge=KnowledgeConfig(store=store))
-        assert len(agent._additional_tools) == 1
+        config = TrackingConfig(TestConfig("ok"))
+        agent = Agent("test", config=config, plugins=[KnowledgePlugin(store, expose_tool=expose)])
+        await agent.ask("hi")
+        assert [s.function.name for s in config.calls[0].tools] == (["knowledge"] if expose else [])
+        assert config.calls[0].dependencies[KnowledgeStore] is store
 
     async def test_default_bootstrap_omits_tool_instruction_when_unexposed(self) -> None:
         """The root SKILL.md should not tell the model about a tool that does not exist."""
@@ -119,7 +72,7 @@ class TestExposeToolFlag:
         agent = Agent(
             "policy-only",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(store=store, expose_tool=False),
+            plugins=[KnowledgePlugin(store=store, expose_tool=False)],
         )
         await agent.ask("hi")
 
@@ -132,7 +85,7 @@ class TestExposeToolFlag:
         agent = Agent(
             "with-tool",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(store=store),
+            plugins=[KnowledgePlugin(store=store)],
         )
         await agent.ask("hi")
 
@@ -151,7 +104,7 @@ class TestWriteEventLogFlag:
         agent = Agent(
             "logger",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(store=store),
+            plugins=[KnowledgePlugin(store=store)],
         )
         await agent.ask("hi", stream=stream)
 
@@ -164,7 +117,7 @@ class TestWriteEventLogFlag:
         agent = Agent(
             "quiet",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(store=store, write_event_log=False),
+            plugins=[KnowledgePlugin(store=store, write_event_log=False)],
         )
         await agent.ask("hi", stream=stream)
 
@@ -200,7 +153,7 @@ class TestEventLogFailedLifecycle:
         agent = Agent(
             "log-fails",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(store=store),
+            plugins=[KnowledgePlugin(store=store)],
         )
         # Turn must still succeed even if log persistence fails.
         await agent.ask("hi", stream=stream)
