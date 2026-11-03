@@ -403,12 +403,14 @@ agent = Agent(
         "Keep every reply to one or two sentences."
     ),
     config=config,
-    plugins=[KnowledgePlugin(
-        store=store,
-        # Summarize the dropped history instead of forgetting it outright.
-        compact=SummarizeCompact(target=4, config=config),
-        compact_trigger=CompactTrigger(max_events=8),
-    )],
+    plugins=[
+        KnowledgePlugin(
+            store=store,
+            # Summarize the dropped history instead of forgetting it outright.
+            compact=SummarizeCompact(target=4, config=config),
+            compact_trigger=CompactTrigger(max_events=8),
+        )
+    ],
     # Injects memory/working.md into the system prompt on every turn, so recall
     # does not depend on the model choosing to call the knowledge tool.
     middleware=[Middleware(AssemblerMiddleware, policies=[WorkingMemoryPolicy()])],
