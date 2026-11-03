@@ -572,7 +572,7 @@ class TestReplayOnReconnect:
                 welcome = await _drain_frame(raw_client)
                 assert isinstance(welcome, WelcomeFrame)
 
-                with pytest.raises(asyncio.TimeoutError):
+                with pytest.raises(TimeoutError):
                     await _drain_frame(raw_client, timeout=0.25)
             finally:
                 await raw_client.close()
@@ -614,7 +614,7 @@ class TestReplayOnReconnect:
 
                 # Cursor wins over the empty since_envelope_id, so no
                 # replay frames arrive.
-                with pytest.raises(asyncio.TimeoutError):
+                with pytest.raises(TimeoutError):
                     await _drain_frame(raw_client, timeout=0.25)
             finally:
                 await raw_client.close()
@@ -646,7 +646,7 @@ class TestReplayOnReconnect:
                 welcome = await _drain_frame(raw_client)
                 assert isinstance(welcome, WelcomeFrame)
 
-                with pytest.raises(asyncio.TimeoutError):
+                with pytest.raises(TimeoutError):
                     await _drain_frame(raw_client, timeout=0.25)
             finally:
                 await raw_client.close()

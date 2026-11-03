@@ -237,7 +237,7 @@ class HumanClient:
         """Block until the next matching envelope arrives.
 
         ``predicate=None`` returns the very next envelope. ``timeout``
-        in seconds; raises ``asyncio.TimeoutError`` if exceeded.
+        in seconds; raises ``TimeoutError`` if exceeded.
         Envelopes that don't match the predicate are discarded — pass
         them via ``on_envelope`` if you want both behaviors at once.
 
