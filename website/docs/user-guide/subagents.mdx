@@ -92,6 +92,20 @@ coordinator = Agent(
 )
 ```
 
+## Delegation Lifecycle
+
+Each delegation uses the same [task lifecycle](/docs/user-guide/tasks) as an
+opted-in `#!python ask()` or `#!python run()`: one `#!python TaskStarted` and one
+terminal event for that invocation. `#!python TaskCancelled` identifies cancellation;
+`#!python TaskFailed` identifies an execution error. The start carries a
+`#!python TaskSpec` and the parent tool-call ID. Ancestors receive task events
+with the original delegation path, alongside source `#!python UsageEvent` records.
+
+Lifecycle is automatic for delegates. A capability-tagged parent run has its
+own lifecycle in addition to each child's, with a distinct task ID.
+`#!python TaskCompleted.usage` is a cumulative stream snapshot for inspection;
+accounting reads source usage records rather than summing these snapshots.
+
 ## Migrating from TaskConfig
 
 Create a worker explicitly, then add its delegate tool to the parent's `tools` list. This replaces `tasks=TaskConfig(...)` without adding a new configuration API:

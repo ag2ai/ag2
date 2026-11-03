@@ -9,6 +9,7 @@ from copy import copy
 from typing import Any
 from uuid import uuid4
 
+from ag2._run_lifecycle import RunLifecycle, _persist_accounting, _snapshot_usage
 from ag2.annotations import Context
 from ag2.context import ConversationContext
 from ag2.events import (
@@ -22,7 +23,6 @@ from ag2.events import (
     TaskCancelled,
     TaskCompleted,
     TaskFailed,
-    TaskStarted,
     TransientChildEvent,
     TransientDownEvent,
     Usage,
@@ -30,27 +30,12 @@ from ag2.events import (
 )
 from ag2.events.delegation import Delivery, delivery_of, routed
 from ag2.stream import Stream
-from ag2.usage import UsageReport, usage_event_from
+from ag2.task import TaskSpec
+from ag2.usage import usage_event_from
 
 
 class DeliveryError(RuntimeError):
     """The addressed delegation is not executing or no longer exists."""
-
-
-async def _persist_accounting(context: Context, events: list[BaseEvent]) -> None:
-    """Retain source records when cancellation interrupts ordinary delivery."""
-    try:
-        history = await context.stream.history.get_events()
-    except Exception:
-        return  # Preserve the original storage failure and the captured usage.
-    seen = {record.event_id for event in history if (record := usage_event_from(event)) is not None}
-    for event in events:
-        record = usage_event_from(event)
-        if record is not None and record.event_id not in seen:
-            # Append rather than replacing the parent's history: siblings can
-            # publish concurrently. Readers deduplicate by source identity.
-            await context.stream.history.storage.save_event(event, context)
-            seen.add(record.event_id)
 
 
 class DelegationRegistry:
@@ -196,10 +181,7 @@ class Forwarder:
         self.stream = stream
         self.objective = objective
         self.emit_events = emit_events
-        self.started = False
         self.bound = False
-        self.failure: BaseException | None = None
-        self.result: str | None = None
         self.accounting: list[BaseEvent] = []
         self.caller_task: asyncio.Task[Any] | None = None
         ancestor = parent.dependencies.get(Forwarder)
@@ -209,18 +191,20 @@ class Forwarder:
     def register(self, stack: ExitStack | AsyncExitStack, context: Context) -> None:
         self.origin = _Endpoint(context, self.task_id, self.path, self.agent_name, self.parent)
         stack.callback(self.origin.close)
+        stack.callback(self._release_context, context)
         context.dependencies[Forwarder] = self
         stack.enter_context(context.stream.sub_scope(self.forward, interrupt=True, sync_to_thread=False))
         stack.enter_context(context.stream.where(HaltEvent).sub_scope(self.origin.halt, sync_to_thread=False))
+
+    def _release_context(self, context: Context) -> None:
+        if context.dependencies.get(Forwarder) is self:
+            context.dependencies.pop(Forwarder)
 
     async def start(self, context: Context) -> None:
         if self.origin is None:
             self.origin = _Endpoint(context, self.task_id, self.path, self.agent_name, self.parent)
         self.origin.task = asyncio.current_task()
         self.origin.alive = True
-        self.started = True
-        if self.emit_events:
-            await context.send(self.started_event())
 
     async def bridge(self, event: HumanInputRequest, ctx: Context) -> None:
         forwarded = routed(event, Delivery())
@@ -231,66 +215,39 @@ class Forwarder:
 
     @asynccontextmanager
     async def execution(self, context: Context) -> AsyncGenerator[None]:
-        """Keep forwarding and the terminal inside the stream's turn lock."""
+        """Keep forwarding and source accounting inside the stream's turn lock."""
         with ExitStack() as stack:
             self.register(stack, context)
             self.bound = True
             try:
                 yield
-            except BaseException as exc:
-                self.failure = exc
-                raise
             finally:
                 if self.origin is not None:
                     self.origin.close()
-                await _persist_accounting(context, self.accounting)
-                if self.emit_events:
-                    if not self.started:
-                        await context.send(self.started_event())
-                    await context.send(await self.terminal_event())
-
-    def started_event(self) -> TaskStarted:
-        return TaskStarted(
-            task_id=self.task_id,
-            agent_name=self.agent_name,
-            objective=self.objective,
-            parent_tool_call_id=self.parent.tool_call_id,
-        )
 
     async def usage(self) -> Usage:
-        try:
-            history = await self.stream.history.get_events()
-        except Exception:
-            return UsageReport.from_events(self.accounting).total
-        return UsageReport.from_events([*history, *self.accounting]).total
-
-    async def terminal_event(self) -> BaseEvent:
-        if isinstance(self.failure, asyncio.CancelledError):
-            reason = self.origin.reason if self.origin is not None and self.origin.halted else "parent cancelled"
-            return TaskCancelled(
-                task_id=self.task_id, agent_name=self.agent_name, objective=self.objective, reason=reason
-            )
-        if self.failure is not None:
-            error = self.failure if isinstance(self.failure, Exception) else RuntimeError(str(self.failure))
-            return TaskFailed(task_id=self.task_id, agent_name=self.agent_name, objective=self.objective, error=error)
-        return TaskCompleted(
-            task_id=self.task_id,
-            agent_name=self.agent_name,
-            objective=self.objective,
-            result=self.result,
-            task_stream=self.stream.id,
-            usage=await self.usage(),
-        )
+        return await _snapshot_usage(self.stream, self.accounting)
 
     async def reject(self, failure: BaseException) -> None:
-        """Report a delegation that never entered its turn, without touching a busy stream."""
+        """Use the common lifecycle for work rejected before acquiring its stream."""
         if self.bound:
             return
-        self.failure = failure
-        self.origin = _Endpoint(ConversationContext(self.stream), self.task_id, self.path, self.agent_name, self.parent)
-        if self.emit_events:
-            await self.forward(self.started_event())
-            await self.forward(await self.terminal_event())
+        context = ConversationContext(self.stream)
+        self.origin = _Endpoint(context, self.task_id, self.path, self.agent_name, self.parent)
+        lifecycle = RunLifecycle(
+            self.agent_name,
+            TaskSpec(title=self.objective),
+            context,
+            task_id=self.task_id,
+            parent_tool_call_id=self.parent.tool_call_id,
+            emit_events=self.emit_events,
+            accounting=self.accounting,
+            publisher=self.forward,
+        )
+        lifecycle.failure = failure
+        lifecycle.cancel_reason = "parent cancelled"
+        async with lifecycle.scope():
+            await lifecycle.start()
 
     def close(self) -> None:
         if self.origin is not None:
@@ -316,6 +273,12 @@ class Forwarder:
             return event
         if usage_event_from(event) is not None:
             self.accounting.append(event)
+        if (
+            isinstance(event, (TaskCompleted, TaskFailed, TaskCancelled))
+            and event.task_id == self.task_id
+            and self.origin is not None
+        ):
+            self.origin.close()
         forwarded: BaseEvent
         if isinstance(event, InertEvent):
             forwarded = self.stamp(event)

@@ -287,6 +287,10 @@ class TaskMirror:
             now_iso = datetime.now(timezone.utc).isoformat()
         if task_meta is None or task_meta.spec.capability is None:
             return
+        # A hub-owned expiry may win before a late owner terminal arrives.
+        # Record the accepted state, not the later event's proposed outcome.
+        if task_meta.state in TERMINAL_TASK_STATES:
+            outcome = task_meta.state
         latency_ms: int | None = None
         if task_meta.started_at and now_iso is not None:
             try:

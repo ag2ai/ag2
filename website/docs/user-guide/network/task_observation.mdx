@@ -3,7 +3,12 @@ title: Task Observation
 sidebarTitle: Task Observation
 ---
 
-The bridge between the [`#!python Task` lifecycle primitive](/docs/user-guide/tasks) and the network's per-agent track record. When an Agent runs an `#!python agent.task(..., capability="X")` inside a network turn, a `#!python TaskMirror` forwards the lifecycle events to the hub. On terminal events with a `capability` tag, the hub updates the worker's `#!python Resume.observed[capability]`.
+The bridge between the [task lifecycle](/docs/user-guide/tasks) and the network's
+per-agent track record. An `#!python agent.ask(..., capability="X")` or
+`#!python agent.run(..., capability="X")` emits task events directly. Standalone
+work can also use `#!python Task` with `#!python TaskSpec(capability="X", ...)`.
+The turn's `#!python TaskMirror` forwards these events to the hub, which updates
+`#!python Resume.observed[capability]` on the accepted terminal state.
 
 In short: agents earn a **track record on the network** by completing capability-tagged tasks. Other agents (and operators) read that track record off the worker's `#!python Resume`.
 
@@ -36,12 +41,32 @@ finally:
 
 ## Capability Tagging
 
-`#!python agent.task(...)` accepts a `#!python capability` keyword:
+For model work, pass the capability on the invocation:
 
 ```python linenums="1"
-async with agent.task(
-    "survey: deployment patterns",
-    capability="research",
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+
+agent = Agent("researcher", config=OpenAIResponsesConfig(model="gpt-5"))
+
+reply = await agent.ask("Survey deployment patterns", capability="research", ttl_seconds=60)
+```
+
+Use `stream=ctx.stream` when running inside a context whose stream already has
+a mirror attached. A `ttl_seconds` deadline is observed by the hub's sweeper;
+it does not create a local model-call timeout. If hub expiry wins before a
+late completion, the hub retains `EXPIRED` and records that outcome once.
+
+For standalone work, construct a Task on the observed context:
+
+Set `#!python capability` on the task's `#!python TaskSpec`:
+
+```python linenums="1"
+from ag2.task import Task, TaskSpec
+
+async with Task(
+    owner_id=agent.name,
+    spec=TaskSpec(title="survey: deployment patterns", capability="research"),
     context=ctx,
 ) as task:
     await task.progress({"step": "gather"})
@@ -116,7 +141,7 @@ Notably:
 
 ## When to Skip Capability Tagging
 
-Not every `#!python agent.task(...)` deserves a capability tag. Tag only when:
+Not every `#!python Task` deserves a capability tag. Tag only when:
 
 - The task represents a **capability you want to track** in the agent's resume.
 - Failure / latency signals are **operationally meaningful** (driving routing, alerting, or peer ranking).
@@ -128,16 +153,26 @@ Untagged tasks still get full lifecycle observation in the audit log — just no
 A common pattern: an agent has multiple capability roles. Tag each tool's task with the right capability and inspect the resume to see which capabilities are well-exercised.
 
 ```python linenums="1"
+from ag2.task import Task, TaskSpec
+
 @worker.tool
 async def research(topic: str, ctx: Context) -> str:
-    async with worker.task(f"research: {topic}", capability="research", context=ctx) as t:
-        # ...
+    async with Task(
+        owner_id=worker.name,
+        spec=TaskSpec(title=f"research: {topic}", capability="research"),
+        context=ctx,
+    ) as t:
+        ...
     return f"researched {topic}"
 
 @worker.tool
 async def summarise(text: str, ctx: Context) -> str:
-    async with worker.task("summarise", capability="summarisation", context=ctx) as t:
-        # ...
+    async with Task(
+        owner_id=worker.name,
+        spec=TaskSpec(title="summarise", capability="summarisation"),
+        context=ctx,
+    ) as t:
+        ...
     return f"summary: ..."
 ```
 
