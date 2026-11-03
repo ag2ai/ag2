@@ -28,6 +28,14 @@ ID, parent tool-call ID, and forwarding path. `emit_events=False` suppresses
 that delegation's lifecycle only; source accounting and descendants still flow.
 `Forwarder` owns addressing and forwarding, not a second set of transitions.
 
+A model run's task title is the agent name, never the prompt: `TaskStarted`
+reaches every observer and is mirrored to the hub. A delegation keeps its
+objective as the title. Delegated `TaskStarted` now carries a `TaskSpec`.
+
+An opted-in run settles its background descendants before its terminal, so the
+terminal usage snapshot covers them. Opting in therefore also delays the
+return of `ask()` until those descendants finish; untagged runs do not wait.
+
 A run starts its lifecycle when driven, not merely on scope entry. An undriven
 scope emits nothing; setup failure emits start/failure. Complete, failed,
 cancelled and expired are immutable terminals. Cancellation propagates after

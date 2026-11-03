@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 import pytest
 
 from ag2 import Agent
-from ag2.events import TaskCompleted, TaskStarted
+from ag2.events import TaskCompleted, TaskStarted, ToolCallEvent
 from ag2.knowledge import MemoryKnowledgeStore
-from ag2.network import Hub, Resume
+from ag2.network import EV_CHANNEL_CLOSED, Hub, Resume
 from ag2.network.task_mirror import TaskMirror
 from ag2.stream import MemoryStream
 from ag2.task import TaskState
@@ -63,5 +63,35 @@ async def test_model_run_mirrors_capability_and_preserves_first_terminal(entry: 
         assert stat.n == 1
         assert stat.expired == int(expire)
         assert stat.completed == int(not expire)
+    finally:
+        await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_delegation_inside_a_network_turn_is_visible_on_the_hub() -> None:
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+    try:
+        worker = Agent("worker", config=TestConfig("summary"))
+        bob = Agent(
+            "bob",
+            config=TestConfig(
+                ToolCallEvent(name="task_worker", arguments='{"objective": "summarise the report"}'),
+                "here is the summary",
+            ),
+            tools=[worker.as_tool(description="Summarise documents")],
+        )
+        alice = await hub.register(Agent("alice"))
+        bob_client = await hub.register(bob)
+
+        channel = await alice.open(type="consulting", target="bob")
+        await channel.send("Please summarise the report", audience=[bob_client.agent_id])
+        await alice.wait_for_channel_event(
+            channel_id=channel.channel_id,
+            predicate=lambda envelope: envelope.event_type == EV_CHANNEL_CLOSED,
+            timeout=5.0,
+        )
+
+        tasks = await hub.list_tasks(agent_id=bob_client.agent_id)
+        assert [(task.spec.title, task.state) for task in tasks] == [("summarise the report", TaskState.COMPLETED)]
     finally:
         await hub.close()

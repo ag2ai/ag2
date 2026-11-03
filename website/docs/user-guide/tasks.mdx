@@ -26,7 +26,9 @@ reply = await agent.ask(
 )
 ```
 
-`#!python capability` tags the work for network observations.
+`#!python capability` tags the work for network observations. The task title
+(`#!python TaskStarted.objective`) is the agent's name, never the prompt, because
+task events are mirrored to the network hub; a delegation uses its objective.
 `#!python ttl_seconds` carries an absolute expiry deadline on `#!python TaskStarted`;
 an external observer owns expiry. It does not set a local execution timeout.
 Omitting both options leaves ordinary runs without task lifecycle events.
@@ -60,8 +62,11 @@ A model or tool exception produces `#!python TaskFailed` and propagates to the
 caller. Cancelling the turn or leaving a running scope produces
 `#!python TaskCancelled` after running tools and descendants have settled.
 Setup errors produce a start/failure pair even if the model never runs.
-Cleanup errors produce a failure terminal and propagate to the caller;
-cleanup cancellation produces `#!python TaskCancelled`.
+Cleanup errors, including a storage failure while usage is recorded, produce a
+failure terminal and propagate to the caller; cleanup cancellation produces
+`#!python TaskCancelled`. Before publishing its terminal, an opted-in run waits
+for delegations it left running in the background, so `#!python ask()` returns
+once they have settled.
 
 Waiting for a shared stream's turn lock happens before the run scope opens.
 Cancelling an ordinary invocation during that wait emits no task events.

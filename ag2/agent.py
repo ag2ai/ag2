@@ -54,7 +54,6 @@ from .events import (
     ModelResponse,
     ProviderReplay,
     StatusObservation,
-    TextInput,
     ToolResultsEvent,
     UsageEvent,
     is_conversational,
@@ -90,7 +89,7 @@ from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, Toolkit
 from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
-from .tools.subagents._forwarding import DelegationRegistry, Forwarder
+from .tools.subagents._forwarding import PARENT_CANCELLED, DelegationRegistry, Forwarder
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
@@ -462,12 +461,12 @@ class AgentReply(Generic[TResult, TAgent]):
         )
 
 
-def _run_objective(event: BaseEvent, agent_name: str) -> str:
-    if isinstance(event, ModelRequest):
-        text = "\n".join(part.content for part in event.parts if isinstance(part, TextInput))
-        if text:
-            return text
-    return f"{agent_name}: {type(event).__name__}"
+def _owned_delegation(context: Context) -> Forwarder | None:
+    """The delegation executing on this context's own stream, if any."""
+    delegation: Forwarder | None = context.dependencies.get(Forwarder)
+    if delegation is not None and delegation.stream.id != context.stream.id:
+        return None
+    return delegation
 
 
 @dataclass(frozen=True, slots=True)
@@ -702,20 +701,22 @@ class AgentRun(Generic[TResult, TAgent]):
     ) -> Literal[False]:
         task = self.__task
         failure: BaseException | None = None
-        if task is not None:
-            if not task.done():
-                task.cancel()
-            # Retrieve the outcome even when the caller opted out of result().
-            # A task cancelled before its first coroutine step still needs a
-            # terminal lifecycle; middleware scope teardown retains its contract.
-            try:
-                await task
-            except (asyncio.CancelledError, Exception) as error:
-                failure = error
         try:
+            if task is not None:
+                if not task.done():
+                    task.cancel()
+                # Retrieve the outcome even when the caller opted out of result().
+                # A task cancelled before its first coroutine step still needs a
+                # terminal lifecycle; middleware scope teardown retains its contract.
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception) as error:
+                    failure = error
             if failure is not None and self.__lifecycle is not None:
                 await self.__lifecycle.reject(failure)
         finally:
+            # Always release the stream turn lock, including when the driver
+            # raised KeyboardInterrupt / SystemExit.
             await self.__stack.aclose()
         return False
 
@@ -1056,7 +1057,7 @@ class Agent(PluginTarget, Generic[TResult]):
         ``Task(owner_id=self.name, spec=TaskSpec(title=title, ...), ...)``
         directly instead. The remaining Task parameters are unchanged.
 
-        Returns an unentered ``Task``; use as ``async with agent.task(...)``.
+        Returns an unentered ``Task``, used as an async context manager.
         Events flow on ``context.stream`` if a ``ConversationContext`` is
         supplied; else the Task creates a private ``MemoryStream`` on entry
         and events fire on it (only observers attached to that private
@@ -1600,30 +1601,26 @@ class Agent(PluginTarget, Generic[TResult]):
             # apart from values the caller supplied for this request.
             configured = context.dependencies.get(CONFIGURED_DEPENDENCIES_CONTEXT_KEY, {}) | self._agent_dependencies
             _set_for_turn(stack, context.dependencies, CONFIGURED_DEPENDENCIES_CONTEXT_KEY, configured)
-            delegation: Forwarder | None = context.dependencies.get(Forwarder)
-            if delegation is not None and delegation.stream.id != context.stream.id:
-                delegation = None
+            delegation = _owned_delegation(context)
+            lifecycle: RunLifecycle | None = None
             if delegation is not None:
                 await stack.enter_async_context(delegation.execution(context))
-            if context_overrides is not None:
-                context_overrides.apply(context)
-            lifecycle = None
-            if delegation is not None or capability is not None or ttl_seconds is not None:
+                lifecycle = delegation.lifecycle(context, capability=capability, ttl_seconds=ttl_seconds)
+            elif capability is not None or ttl_seconds is not None:
+                # The title is published to observers and mirrored to the hub,
+                # so it must not carry the caller's prompt.
                 lifecycle = RunLifecycle(
                     self.name,
-                    TaskSpec(
-                        title=delegation.objective if delegation is not None else _run_objective(event, self.name),
-                        capability=capability,
-                    ),
+                    TaskSpec(title=self.name, capability=capability),
                     context,
                     ttl_seconds=ttl_seconds,
-                    task_id=delegation.task_id if delegation is not None else None,
-                    parent_tool_call_id=delegation.parent.tool_call_id if delegation is not None else None,
-                    emit_events=delegation.emit_events if delegation is not None else True,
-                    accounting=delegation.accounting if delegation is not None else None,
                 )
-                lifecycle.cancel_reason = "parent cancelled" if delegation is not None else "cancelled"
+            if lifecycle is not None:
+                # Entered before any further setup so a setup failure still
+                # publishes a terminal.
                 await stack.enter_async_context(lifecycle.scope())
+            if context_overrides is not None:
+                context_overrides.apply(context)
             if plugins.has_conflicting_hitl_hooks:
                 warnings.warn("Multiple invocation plugins set hitl_hook; the first wins.", stacklevel=2)
             for attribute, defaults in (
@@ -1812,9 +1809,7 @@ class Agent(PluginTarget, Generic[TResult]):
                         ),
                     )
 
-                elif (
-                    delegation := context.dependencies.get(Forwarder)
-                ) is not None and delegation.stream.id == context.stream.id:
+                elif (delegation := _owned_delegation(context)) is not None:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
                             delegation.bridge, interrupt=True, sync_to_thread=False
@@ -1842,9 +1837,7 @@ class Agent(PluginTarget, Generic[TResult]):
                 ):
 
                     async def drive() -> "AgentReply[Any, Any]":
-                        delegation: Forwarder | None = context.dependencies.get(Forwarder)
-                        if delegation is not None and delegation.stream.id != context.stream.id:
-                            delegation = None
+                        delegation = _owned_delegation(context)
                         try:
                             if (
                                 delegation is not None
@@ -1878,7 +1871,7 @@ class Agent(PluginTarget, Generic[TResult]):
                                 delegation is not None or registry.context.stream.id == context.stream.id
                             ):
                                 path = delegation.path if delegation is not None else ()
-                                registry.cancel_descendants(path, str(exc) or "parent cancelled")
+                                registry.cancel_descendants(path, str(exc) or PARENT_CANCELLED)
                                 await registry.settle_descendants(path)
                             if isinstance(exc, (HumanInputError, asyncio.CancelledError)):
                                 await close_unanswered_tool_calls(

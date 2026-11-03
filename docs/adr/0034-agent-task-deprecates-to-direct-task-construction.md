@@ -28,6 +28,5 @@ spec, preserving the factory's shallow payload copy. Pass `context`,
 Existing code keeps its behavior during the migration window. Direct
 construction retains lifecycle events, dependency injection, external TTL
 ownership, and checkpoint/recovery. `Task`, `TaskSpec`, and `TaskInject` remain
-supported. This migration does not add lifecycle events to ordinary model
-runs or change delegation forwarding; integrating run lifecycle is a separate
-design decision.
+supported. The deprecation by itself does not add lifecycle events to model
+runs; that is decided in 0035.

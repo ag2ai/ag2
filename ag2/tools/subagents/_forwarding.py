@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from copy import copy
 from typing import Any
 from uuid import uuid4
 
-from ag2._run_lifecycle import RunLifecycle, _persist_accounting, _snapshot_usage
+from ag2._run_lifecycle import RunLifecycle, persist_accounting, snapshot_usage
 from ag2.annotations import Context
 from ag2.context import ConversationContext
 from ag2.events import (
@@ -32,6 +32,9 @@ from ag2.events.delegation import Delivery, delivery_of, routed
 from ag2.stream import Stream
 from ag2.task import TaskSpec
 from ag2.usage import usage_event_from
+
+PARENT_CANCELLED = "parent cancelled"
+"""Cancellation reason of a delegation stopped by its caller."""
 
 
 class DeliveryError(RuntimeError):
@@ -226,7 +229,7 @@ class Forwarder:
                     self.origin.close()
 
     async def usage(self) -> Usage:
-        return await _snapshot_usage(self.stream, self.accounting)
+        return await snapshot_usage(self.stream, self.accounting)
 
     async def reject(self, failure: BaseException) -> None:
         """Use the common lifecycle for work rejected before acquiring its stream."""
@@ -234,20 +237,31 @@ class Forwarder:
             return
         context = ConversationContext(self.stream)
         self.origin = _Endpoint(context, self.task_id, self.path, self.agent_name, self.parent)
-        lifecycle = RunLifecycle(
+        lifecycle = self.lifecycle(context, publisher=self.forward)
+        async with lifecycle.scope():
+            await lifecycle.reject(failure)
+
+    def lifecycle(
+        self,
+        context: ConversationContext,
+        *,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
+        publisher: Callable[[BaseEvent], Awaitable[Any]] | None = None,
+    ) -> RunLifecycle:
+        """The task lifecycle this delegation reports to its parent."""
+        return RunLifecycle(
             self.agent_name,
-            TaskSpec(title=self.objective),
+            TaskSpec(title=self.objective, capability=capability),
             context,
+            ttl_seconds=ttl_seconds,
             task_id=self.task_id,
             parent_tool_call_id=self.parent.tool_call_id,
             emit_events=self.emit_events,
             accounting=self.accounting,
-            publisher=self.forward,
+            publisher=publisher,
+            cancel_reason=PARENT_CANCELLED,
         )
-        lifecycle.failure = failure
-        lifecycle.cancel_reason = "parent cancelled"
-        async with lifecycle.scope():
-            await lifecycle.start()
 
     def close(self) -> None:
         if self.origin is not None:
@@ -305,6 +319,6 @@ class Forwarder:
                 await self.parent.send(forwarded)
         except BaseException:
             if usage_event_from(forwarded) is not None:
-                await _persist_accounting(self.parent, [forwarded])
+                await persist_accounting(self.parent, [forwarded])
             raise
         return event

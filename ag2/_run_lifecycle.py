@@ -4,6 +4,7 @@
 
 """Invocation lifecycle shared by model runs and delegations."""
 
+import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
@@ -13,8 +14,10 @@ from .events import BaseEvent, Usage
 from .task import TERMINAL_TASK_STATES, Task, TaskSpec, TaskState
 from .usage import UsageReport, usage_event_from
 
+logger = logging.getLogger(__name__)
 
-async def _persist_accounting(context: ConversationContext, events: list[BaseEvent]) -> None:
+
+async def persist_accounting(context: ConversationContext, events: list[BaseEvent]) -> None:
     """Retain source records when cancellation interrupts ordinary delivery."""
     try:
         history = await context.stream.history.get_events()
@@ -30,7 +33,7 @@ async def _persist_accounting(context: ConversationContext, events: list[BaseEve
             seen.add(record.event_id)
 
 
-async def _snapshot_usage(stream: Stream, accounting: list[BaseEvent]) -> Usage:
+async def snapshot_usage(stream: Stream, accounting: list[BaseEvent]) -> Usage:
     """Read a cumulative stream snapshot, retaining captured records on storage failure."""
     try:
         history = await stream.history.get_events()
@@ -40,6 +43,13 @@ async def _snapshot_usage(stream: Stream, accounting: list[BaseEvent]) -> Usage:
 
 
 class RunLifecycle:
+    """Task lifecycle of one model run or delegation.
+
+    Wraps a ``Task`` without injecting it. ``start`` publishes ``TaskStarted``
+    when the run is driven; ``scope`` publishes the terminal on exit, chosen
+    from ``failure`` / ``result``. An undriven scope publishes nothing.
+    """
+
     def __init__(
         self,
         owner_id: str,
@@ -52,6 +62,7 @@ class RunLifecycle:
         emit_events: bool = True,
         accounting: list[BaseEvent] | None = None,
         publisher: Callable[[BaseEvent], Awaitable[Any]] | None = None,
+        cancel_reason: str = "cancelled",
     ) -> None:
         self.task = Task(owner_id=owner_id, spec=spec, context=context, ttl_seconds=ttl_seconds)
         self.task_id = task_id
@@ -61,7 +72,7 @@ class RunLifecycle:
         self.publisher = publisher
         self.failure: BaseException | None = None
         self.result: str | None = None
-        self.cancel_reason = "cancelled"
+        self.cancel_reason = cancel_reason
 
     async def start(self) -> None:
         if self.task.state == TaskState.CREATED:
@@ -84,16 +95,39 @@ class RunLifecycle:
             await self.start()
 
     async def finish(self) -> None:
-        if self.accounting:
-            await _persist_accounting(self.task.context, self.accounting)
-        if self.task.state == TaskState.CREATED or self.task.state in TERMINAL_TASK_STATES:
-            return
-        await self.task._finish(
-            self.failure,
-            result=self.result,
-            usage=await _snapshot_usage(self.task.context.stream, self.accounting) if self.failure is None else None,
-            cancel_reason=self.cancel_reason,
-        )
+        """Publish the terminal, even when reading or retaining usage fails.
+
+        A storage error or a cancellation that arrives while usage is read
+        decides the terminal unless the run already failed; otherwise the
+        task would stay RUNNING forever. An earlier failure keeps the
+        terminal. The cleanup error propagates once the terminal is
+        published, except a storage error behind an earlier failure, which
+        is logged so it does not replace that failure.
+        """
+        driven = self.task.state != TaskState.CREATED and self.task.state not in TERMINAL_TASK_STATES
+        usage: Usage | None = None
+        cleanup_error: BaseException | None = None
+        try:
+            if self.accounting:
+                await persist_accounting(self.task.context, self.accounting)
+            if driven and self.failure is None:
+                usage = await snapshot_usage(self.task.context.stream, self.accounting)
+        except BaseException as exc:
+            if self.failure is None:
+                self.failure = cleanup_error = exc
+            elif isinstance(exc, Exception):
+                logger.warning("Retaining usage failed after the run failed with %r", self.failure, exc_info=exc)
+            else:
+                cleanup_error = exc
+        if driven and self.task.state not in TERMINAL_TASK_STATES:
+            await self.task._finish(
+                self.failure,
+                result=self.result,
+                usage=usage,
+                cancel_reason=self.cancel_reason,
+            )
+        if cleanup_error is not None:
+            raise cleanup_error
 
     @asynccontextmanager
     async def scope(self) -> AsyncGenerator[None]:
