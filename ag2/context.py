@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable, Coroutine, Mapping
+from collections.abc import AsyncIterator, Callable, Coroutine, Mapping, MutableMapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
@@ -135,7 +135,7 @@ class ConversationContext:
     # store Context Variables as separated serializable field. Keys under
     # ``RESERVED_VARIABLE_PREFIXES`` are the framework's own control-plane state
     # and are never authored by a remote peer — see ``strip_reserved_variables``.
-    variables: dict[str, Any] = field(default_factory=dict)
+    variables: MutableMapping[str, Any] = field(default_factory=dict)
 
     dependencies: dict[Any, Any] = field(default_factory=dict)
 
