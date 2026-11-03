@@ -8,12 +8,14 @@ import shutil
 import subprocess
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 
 redis = pytest.importorskip("redis")
 
@@ -84,12 +86,24 @@ def redis_url() -> Iterator[str]:
                 process.wait()
 
 
+@pytest_asyncio.fixture
+async def key_prefix(redis_url: str) -> AsyncIterator[str]:
+    # A unique prefix instead of FLUSHDB, so AG2_TEST_REDIS_URL never loses unrelated keys.
+    prefix = f"ag2:test:{uuid4().hex}"
+    yield prefix
+    async with Redis.from_url(redis_url) as client:
+        keys = [key async for key in client.scan_iter(match=f"{prefix}:*")]
+        if keys:
+            await client.delete(*keys)
+
+
 @pytest.mark.parametrize("initial", ["", "snow☃\n"])
-async def test_independent_connections_append_without_losing_entries(redis_url: str, initial: str) -> None:
+async def test_independent_connections_append_without_losing_entries(
+    redis_url: str, key_prefix: str, initial: str
+) -> None:
     clients = [Redis.from_url(redis_url) for _ in range(_CONNECTIONS)]
     try:
-        await clients[0].flushdb()
-        stores = [RedisKnowledgeStore(client) for client in clients]
+        stores = [RedisKnowledgeStore(client, key_prefix=key_prefix) for client in clients]
         if initial:
             await stores[0].write("/log.jsonl", initial)
         payloads = [f"entry-{i}-雪\n" for i in range(_CONNECTIONS)]
@@ -108,10 +122,9 @@ async def test_independent_connections_append_without_losing_entries(redis_url: 
             await client.aclose()
 
 
-async def test_append_keeps_empty_and_utf8_byte_offset_semantics(redis_url: str) -> None:
+async def test_append_keeps_empty_and_utf8_byte_offset_semantics(redis_url: str, key_prefix: str) -> None:
     async with Redis.from_url(redis_url) as client:
-        await client.flushdb()
-        store = RedisKnowledgeStore(client)
+        store = RedisKnowledgeStore(client, key_prefix=key_prefix)
         assert await store.append("/log.jsonl", "") == 0
         assert await store.exists("/log.jsonl")
         assert await store.append("/log.jsonl", "雪") == 0
@@ -123,10 +136,11 @@ async def test_append_keeps_empty_and_utf8_byte_offset_semantics(redis_url: str)
 
 
 @pytest.mark.parametrize("content", ["", "snow☃雪"])
-async def test_cancelled_write_keeps_content_and_index_consistent(redis_url: str, content: str) -> None:
+async def test_cancelled_write_keeps_content_and_index_consistent(
+    redis_url: str, key_prefix: str, content: str
+) -> None:
     async with PausedRedis.from_url(redis_url) as client:
-        await client.flushdb()
-        store = RedisKnowledgeStore(client)
+        store = RedisKnowledgeStore(client, key_prefix=key_prefix)
         execution = asyncio.create_task(store.write("notes//entry.txt/", content))
         try:
             await asyncio.wait_for(client.mutated.wait(), timeout=5)
@@ -141,11 +155,12 @@ async def test_cancelled_write_keeps_content_and_index_consistent(redis_url: str
 
 
 @pytest.mark.parametrize("operation", ["write", "append"])
-async def test_independent_mutation_does_not_regress_write_version(redis_url: str, operation: str) -> None:
+async def test_independent_mutation_does_not_regress_write_version(
+    redis_url: str, key_prefix: str, operation: str
+) -> None:
     async with PausedRedis.from_url(redis_url) as paused, Redis.from_url(redis_url) as other:
-        await other.flushdb()
-        first = RedisKnowledgeStore(paused)
-        second = RedisKnowledgeStore(other)
+        first = RedisKnowledgeStore(paused, key_prefix=key_prefix)
+        second = RedisKnowledgeStore(other, key_prefix=key_prefix)
         execution = asyncio.create_task(first.write("/note.txt", "first雪"))
         try:
             await asyncio.wait_for(paused.mutated.wait(), timeout=5)
