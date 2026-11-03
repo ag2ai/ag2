@@ -277,7 +277,7 @@ class AgentClient:
         callers should not hold multiple concurrent waits on the same
         channel.
 
-        Raises ``asyncio.TimeoutError`` on timeout.
+        Raises ``TimeoutError`` on timeout.
         """
         inbox = self.ensure_channel_inbox(channel_id)
 
@@ -286,7 +286,7 @@ class AgentClient:
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
             envelope = await asyncio.wait_for(inbox.get(), timeout=remaining)
             if predicate(envelope):
                 return envelope

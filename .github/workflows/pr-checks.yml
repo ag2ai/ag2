@@ -33,7 +33,7 @@ jobs:
           version: "latest"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - uses: j178/prek-action@44924fe9ef4a6f88253c4b6b1bf11c689d3ce53d # v3.1.0
 
   type-check:
@@ -53,7 +53,7 @@ jobs:
           version: "latest"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - run: uv pip install --system --group types .
       # Any additional configuration for mypy should be defined in pyproject.toml under the [tool.mypy] section
       - run: |
@@ -95,7 +95,7 @@ jobs:
       contents: write
     uses: $/.github/workflows/build-mkdocs.yml
     with:
-      python-version: "3.10"
+      python-version: "3.11"
 
   pr-check:
     permissions:

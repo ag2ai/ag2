@@ -16,7 +16,7 @@ Docs: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/keenable/
 import os
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import httpx
@@ -83,7 +83,7 @@ def _timestamp(value: Any) -> str:
         return value
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         try:
-            return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
+            return datetime.fromtimestamp(value, tz=UTC).isoformat()
         except (OverflowError, OSError, ValueError):
             return ""
     return ""

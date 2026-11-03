@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -32,7 +32,7 @@ class Expiry:
 @pytest.mark.parametrize("entry", ["ask", "run"])
 @pytest.mark.parametrize("expire", [False, True])
 async def test_model_run_mirrors_capability_and_preserves_first_terminal(entry: str, expire: bool) -> None:
-    clock = _MockClock(datetime.now(timezone.utc).isoformat())
+    clock = _MockClock(datetime.now(UTC).isoformat())
     hub = await Hub.open(MemoryKnowledgeStore(), clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
     try:
         agent = Agent("analyst", config=TestConfig("done"))

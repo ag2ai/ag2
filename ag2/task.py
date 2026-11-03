@@ -28,7 +28,7 @@ the owner can pick up mid-flow after a restart.
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Annotated, Any, Protocol, runtime_checkable
 from uuid import uuid4
@@ -188,7 +188,7 @@ class TaskMetadata:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _expires_iso(ttl_seconds: int | None, base: datetime) -> str | None:
@@ -464,7 +464,7 @@ class Task:
 
         self._emit_events = emit_events
         self._publisher = publisher
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         now_iso = now.isoformat()
         self._metadata = TaskMetadata(
             task_id=task_id or uuid4().hex,

@@ -15,11 +15,10 @@ edge cases not covered by Agent integration tests.
 """
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Self
 from unittest.mock import MagicMock
 
 import pytest
-from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.assembly import AssemblerMiddleware

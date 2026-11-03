@@ -130,7 +130,7 @@ async def test_concurrent_tool_execution() -> None:
             all_started.set()
         try:
             await asyncio.wait_for(all_started.wait(), timeout=2.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return "not-concurrent"
         finished.append(name)
         return f"result_{name}"

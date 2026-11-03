@@ -16,9 +16,9 @@ import secrets
 import time
 from collections.abc import AsyncIterator, Callable, Coroutine
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from math import inf
-from typing import Any
+from typing import Any, assert_never
 
 from ag_ui.core import (
     PROTOCOL_VERSION,
@@ -53,7 +53,6 @@ from ag_ui.core import (
 from ag_ui.encoder import EventEncoder
 from anyio import BrokenResourceError, ClosedResourceError, create_memory_object_stream
 from anyio.streams.memory import MemoryObjectSendStream
-from typing_extensions import assert_never
 
 from ag2.annotations import Context
 from ag2.events import BaseEvent as AG2Event
@@ -118,7 +117,7 @@ _PROOF_BYTES = 32
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def timestamp_ms() -> int:
@@ -600,7 +599,7 @@ class ServedTurns:
             # a registry swept only by later traffic would hold an unanswered
             # question for as long as the process stayed quiet.
             return await asyncio.wait_for(answer, seconds)
-        except asyncio.TimeoutError as error:  # a separate class from the builtin on Python 3.10
+        except TimeoutError as error:
             # The same exception `context.input(timeout=)` raises, because it is
             # the same event: `deadline()` advertised whichever bound fell first,
             # and the caller should not have to tell them apart.

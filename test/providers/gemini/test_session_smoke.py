@@ -64,7 +64,7 @@ async def _wait_text_count(hub: Hub, channel_id: str, expected: int, *, timeout:
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return wal
         await asyncio.sleep(0.1)
-    raise asyncio.TimeoutError(f"channel {channel_id!r} did not reach {expected} EV_TEXT envelopes")
+    raise TimeoutError(f"channel {channel_id!r} did not reach {expected} EV_TEXT envelopes")
 
 
 async def _wait_for_terminal(channel, *, timeout: float = 10.0) -> None:
@@ -74,7 +74,7 @@ async def _wait_for_terminal(channel, *, timeout: float = 10.0) -> None:
         if info.is_terminal():
             return
         await asyncio.sleep(0.05)
-    raise asyncio.TimeoutError("channel did not reach terminal state in time")
+    raise TimeoutError("channel did not reach terminal state in time")
 
 
 @pytest.mark.gemini

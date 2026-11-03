@@ -6,11 +6,10 @@ import asyncio
 import socket
 from collections.abc import Callable, Sequence
 from contextlib import AsyncExitStack, ExitStack
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 import httpx
 from a2a.types import AgentCard, TaskState
-from typing_extensions import Self
 
 from ag2.agent import Agent
 from ag2.annotations import Context

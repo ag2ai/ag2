@@ -25,7 +25,7 @@ import os
 import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
@@ -315,7 +315,7 @@ async def evaluate_pairwise(
 
     semaphore = asyncio.Semaphore(max(1, concurrency))
     actual_run_id = run_id if run_id is not None else uuid4().hex
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     started = time.perf_counter()
 
     if stream is not None:
