@@ -225,6 +225,13 @@ Register `Middleware(AssemblerMiddleware, policies=[...])` (plus `Middleware(Hal
 - Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
 - Removal in 1.4.0 covers: the `assembly=` parameter and `ASSEMBLY_DEPRECATION`, the warning-filtered tests, and the deprecation notes in `website/docs/`. Keep `_attach_policies`: plugin policies still need it.
 
+### Deprecated: `Agent(knowledge=...)` (removed in 1.4.0)
+
+Use `plugins=[KnowledgePlugin(store, ...)]` (`ag2.knowledge`) instead. At most one `KnowledgePlugin` applies to an invocation; combining it with `knowledge=` is rejected. See ADR 0033.
+
+- Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:Agent\\(knowledge=:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
+- Removal in 1.4.0 covers: the `knowledge=` parameter and `KNOWLEDGE_DEPRECATION`, the `LegacyKnowledgeAdapter` block in `Agent.__init__`, the `knowledge=` branch of `validate_knowledge_middleware`, `ag2/knowledge/_legacy.py`, the bound-store (`legacy_store`) branches in knowledge tools and middleware factories, the warning-filtered tests, and the deprecation notes in `website/docs/`. Keep `KnowledgeConfig` and its exports, `ScopedMiddlewareFactory`, and `_additional_tools` (legacy task tools still use it until `TaskConfig` is removed).
+
 ### persistent_stream
 
 `persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It stores the stream ID in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.
@@ -239,7 +246,7 @@ agent.as_tool(description="...", stream=persistent_stream())
 
 | What | Behavior | Why |
 |------|----------|-----|
-| Dependencies | Shallow-copied (`dict.copy()`) | Isolated at the top level; mutable values are still shared by reference. Treat dependencies as read-only inside subtasks. |
+| Dependencies | Shallow-copied from the parent. Request values (`ask(dependencies=...)`, set at runtime) override the worker's own; the parent's configuration (constructor, plugin defaults) only fills keys the worker lacks | Isolated at the top level; mutable values are still shared by reference. Configuration vs request is tracked by identity under `CONFIGURED_DEPENDENCIES_CONTEXT_KEY`, published per turn by `_turn_scope`, so a worker's `KnowledgePlugin` store is not replaced by the parent's while a per-request store still reaches it. Treat dependencies as read-only inside subtasks. |
 | Variables | Serializable values: plain/copied values are deep-copied, local values are excluded, and root-declared shared bindings remain shared | Copied values stay branch-local; shared mutations require application-supplied locks in `dependencies`. `ask` copies the caller's mapping, so read results from `reply.context.variables`. |
 | History | Fresh stream per call | Clean context; LLM passes relevant info via `context` parameter |
 | Tools | The worker's own `tools=`; nothing is inherited from the parent | The worker's capabilities are explicit and reviewable at construction |

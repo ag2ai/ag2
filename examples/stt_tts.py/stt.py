@@ -5,7 +5,7 @@ from ag2.live import OpenAITranscriber, SoundDeviceRecorder
 
 agent = Agent(
     "test",
-    config=config.OpenAIConfig("gpt-5", streaming=True),
+    config=config.OpenAICompletionsConfig("gpt-5", streaming=True),
 )
 
 

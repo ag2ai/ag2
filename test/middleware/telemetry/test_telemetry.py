@@ -13,7 +13,6 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult
 from pydantic import BaseModel
 
 from ag2 import Agent, Context
-from ag2.agent import KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact
 from ag2.events import (
     BaseEvent,
@@ -33,7 +32,7 @@ from ag2.events import (
     Usage,
     UsageEvent,
 )
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.middleware import BaseMiddleware, Middleware
 from ag2.middleware.builtin.telemetry import MAX_TOOL_RESULT_CHARS, TelemetryMiddleware, _build_input_messages
 from ag2.stream import MemoryStream
@@ -1118,13 +1117,15 @@ async def test_compacted_history_reaches_the_span(otel_setup):
             ModelResponse(ModelMessage("Second answer")),
             ModelResponse(ModelMessage("Third answer")),
         ),
-        knowledge=KnowledgeConfig(
-            store=MemoryKnowledgeStore(),
-            compact=SummarizeCompact(target=1, config=summarizer),
-            compact_trigger=CompactTrigger(max_events=2),
-            expose_tool=False,
-            write_event_log=False,
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=MemoryKnowledgeStore(),
+                compact=SummarizeCompact(target=1, config=summarizer),
+                compact_trigger=CompactTrigger(max_events=2),
+                expose_tool=False,
+                write_event_log=False,
+            )
+        ],
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
     )
 

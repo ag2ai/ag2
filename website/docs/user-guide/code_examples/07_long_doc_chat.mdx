@@ -11,13 +11,13 @@ A "remember the last words" chat exercise that stress-tests the assembly chain. 
 - `ConversationPolicy` to drop lifecycle/internal events from the LLM's view.
 - `SlidingWindowPolicy(max_events=N, transparent=True)` for a hard event-count cap.
 - `TokenBudgetPolicy(max_tokens=N)` as a belt-and-braces secondary cap.
-- Combining the assembly chain with a `KnowledgeConfig` that wires `TailWindowCompact` for stream-history compaction (different from assembly!).
+- Combining the assembly chain with a `KnowledgePlugin` that wires `TailWindowCompact` for stream-history compaction (different from assembly!).
 - Watching `CompactionCompleted` events fire from outside the Agent.
 
 ## Primitives covered
 
 - `Middleware(AssemblerMiddleware, policies=[ConversationPolicy(), SlidingWindowPolicy(...), TokenBudgetPolicy(...)])`
-- `KnowledgeConfig` with `compact=TailWindowCompact(...)` + `compact_trigger=CompactTrigger(...)`
+- `KnowledgePlugin` with `compact=TailWindowCompact(...)` + `compact_trigger=CompactTrigger(...)`
 - `MemoryKnowledgeStore` (in-memory variant of the knowledge store)
 - `CompactionCompleted` lifecycle event
 
@@ -45,13 +45,13 @@ Run::
 
 import asyncio
 
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.config import GeminiConfig
 from ag2.assembly import AssemblerMiddleware
 from ag2.middleware import Middleware
 from ag2.events import CompactionCompleted
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.policies import (
     ConversationPolicy,
     SlidingWindowPolicy,
@@ -96,11 +96,11 @@ async def main() -> None:
                 ],
             ),
         ],
-        knowledge=KnowledgeConfig(
+        plugins=[KnowledgePlugin(
             store=store,
             compact=TailWindowCompact(target=4),
             compact_trigger=CompactTrigger(max_events=8),
-        ),
+        )],
     )
 
     section("Long-doc chat — assembly policies trim what the LLM actually sees")

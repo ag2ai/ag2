@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from ag2 import Agent, Context, KnowledgeConfig, MemoryStream, observer
+from ag2 import Agent, Context, MemoryStream, observer
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.events import (
     BaseEvent,
@@ -27,7 +27,7 @@ from ag2.events import (
     UsageEvent,
 )
 from ag2.events.task_events import TaskEvent
-from ag2.knowledge import KnowledgeStore, MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, KnowledgeStore, MemoryKnowledgeStore
 from ag2.observers import BaseObserver
 from ag2.testing import TestConfig
 from ag2.usage import UsageReport
@@ -65,13 +65,15 @@ async def test_custom_inert_event_does_not_trigger_ancestor_compaction() -> None
         "root",
         config=TestConfig(ToolCallEvent(name="task_child", arguments='{"objective":"work"}'), "done"),
         tools=[child.as_tool(description="Work")],
-        knowledge=KnowledgeConfig(
-            store=MemoryKnowledgeStore(),
-            compact=compaction,
-            compact_trigger=CompactTrigger(max_events=7),
-            expose_tool=False,
-            write_event_log=False,
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=MemoryKnowledgeStore(),
+                compact=compaction,
+                compact_trigger=CompactTrigger(max_events=7),
+                expose_tool=False,
+                write_event_log=False,
+            )
+        ],
     )
 
     reply = await root.ask("start")
@@ -138,7 +140,7 @@ async def test_stored_usage_names_its_spender_at_every_level() -> None:
 
 @pytest.mark.asyncio
 async def test_descendant_usage_keeps_its_spender_through_compaction() -> None:
-    compaction = KnowledgeConfig(
+    compaction = KnowledgePlugin(
         store=MemoryKnowledgeStore(),
         compact=TailWindowCompact(target=1),
         compact_trigger=CompactTrigger(max_events=1),
@@ -150,13 +152,13 @@ async def test_descendant_usage_keeps_its_spender_through_compaction() -> None:
         "worker",
         config=TestConfig(ToolCallEvent(name="task_leaf", arguments='{"objective": "dig"}'), "worker done"),
         tools=[leaf.as_tool(description="Dig")],
-        knowledge=compaction,
+        plugins=[compaction],
     )
     root = Agent(
         "root",
         config=TestConfig(ToolCallEvent(name="task_worker", arguments='{"objective": "organize"}'), "root done"),
         tools=[worker.as_tool(description="Organize")],
-        knowledge=compaction,
+        plugins=[compaction],
     )
 
     reply = await root.ask("start")
