@@ -38,6 +38,8 @@ class LocalRuntime(SkillRuntime):
                      ``None`` → ``.agents/skills`` (default).
                      A leading ``~`` is expanded to the user's home directory.
         cleanup:     If ``True``, the install directory is deleted at process exit.
+                     With a ``~`` path this is the expanded directory, e.g. the
+                     shared ``~/.agents/skills``; use a dedicated directory instead.
         timeout:     Per-command timeout in seconds. Defaults to 60.
         max_output:  Maximum characters returned from a script run. Defaults to 100,000.
         blocked:     Command prefixes that are not allowed to run. Empty list → nothing blocked.
