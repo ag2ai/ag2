@@ -9,7 +9,7 @@ The plan belongs to conversation variables; status is only its current view.
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from ag2 import Agent, Context, DataInput, TextInput, Variable, tool
@@ -29,7 +29,7 @@ def plan_status(todos: Annotated[list[dict[str, str]], Variable(default_factory=
 @tool
 def rewrite_todo_list(items: list[str], context: Context) -> str:
     """Replace the plan with ordered items having stable IDs and timestamps."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     context.variables["todos"] = [
         {"id": f"step-{index}", "content": content, "status": "pending", "updated_at": now}
         for index, content in enumerate(items, start=1)
@@ -46,7 +46,7 @@ def update_todo_status(
     """Change one existing plan item's status."""
     item = next(item for item in todos if item["id"] == item_id)
     item["status"] = status
-    item["updated_at"] = datetime.now(timezone.utc).isoformat()
+    item["updated_at"] = datetime.now(UTC).isoformat()
     return f"{item_id}: {status}"
 
 

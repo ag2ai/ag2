@@ -229,7 +229,7 @@ class MemoryStream(ABCStream):
         """Subscribe with an optional finite positive per-call timeout in seconds.
 
         ``None`` waits indefinitely. The limit covers dependency resolution,
-        handler execution, and dependency cleanup. Expiry raises ``asyncio.TimeoutError``
+        handler execution, and dependency cleanup. Expiry raises ``TimeoutError``
         to ``send`` and stops delivery of that event to subsequent handlers.
         Cancellation is cooperative; worker threads can continue after expiry.
         """

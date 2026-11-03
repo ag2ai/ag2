@@ -62,7 +62,7 @@ async def _wait_for_notify(client, text: str, timeout: float = 2.0) -> NotifyFra
     while asyncio.get_event_loop().time() < deadline:
         try:
             frame = await asyncio.wait_for(_next_frame(client), 0.5)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             break
         if isinstance(frame, NotifyFrame) and frame.envelope.event_data.get("text") == text:
             return frame
@@ -310,7 +310,7 @@ class TestReplayOverWire:
                 while asyncio.get_event_loop().time() < deadline:
                     try:
                         frame = await asyncio.wait_for(_next_frame(client), 0.5)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         break
                     if (
                         isinstance(frame, NotifyFrame)

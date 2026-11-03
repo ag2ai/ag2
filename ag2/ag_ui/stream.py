@@ -9,7 +9,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, assert_never
 from uuid import uuid4
 
 from ag_ui.core import (
@@ -56,7 +56,6 @@ from ag_ui.core import (
 from ag_ui.encoder import EventEncoder
 from fast_depends.library.serializer import SerializerProto
 from pydantic_core import PydanticSerializationError, to_jsonable_python
-from typing_extensions import assert_never
 
 from ag2 import Agent, Context, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig, ModelProvider

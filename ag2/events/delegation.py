@@ -5,9 +5,7 @@
 from collections.abc import Callable
 from copy import copy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeVar, cast
-
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Any, Self, TypeVar, cast
 
 if TYPE_CHECKING:
     from ag2.tools.subagents._forwarding import StreamHandle

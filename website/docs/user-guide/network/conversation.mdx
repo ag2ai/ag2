@@ -79,7 +79,7 @@ async def wait_for_text_count(hub, channel_id, expected, *, timeout=120.0):
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return
         await asyncio.sleep(0.05)
-    raise asyncio.TimeoutError("did not reach expected count")
+    raise TimeoutError("did not reach expected count")
 
 await wait_for_text_count(hub, channel.channel_id, expected=6)
 await channel.close()

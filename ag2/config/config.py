@@ -3,9 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Protocol
-
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Any, Protocol, Self
 
 from .client import LLMClient
 

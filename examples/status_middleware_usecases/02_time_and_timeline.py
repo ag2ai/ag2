@@ -10,7 +10,7 @@ Event metadata carries timestamps without rewriting old conversation text.
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from ag2 import Agent, Context, DataInput, Inject, TextInput, ToolResult, tool
@@ -47,7 +47,7 @@ def find_recent_files(clock: Annotated[Clock, Inject()]) -> ToolResult:
 
 
 async def main() -> None:
-    clock = Clock(datetime(2026, 10, 20, 10, 0, tzinfo=timezone.utc))
+    clock = Clock(datetime(2026, 10, 20, 10, 0, tzinfo=UTC))
     config = TrackingConfig(TestConfig(ToolCallEvent("find_recent_files"), "Found the report.", "It is a new day."))
     agent = Agent(
         "file_assistant",

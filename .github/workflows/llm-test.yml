@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         llm: ["openai", "gemini", "anthropic", "zai", "typesafe"]
-        python-version: ["3.10"]
+        python-version: ["3.11"]
         os: [ubuntu-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -84,7 +84,7 @@ jobs:
   test-mixed-provider:
     strategy:
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.11"]
         os: [ubuntu-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}

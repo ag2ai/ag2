@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from a2a.types import (
@@ -310,7 +310,7 @@ def test_chunk_artifact_roundtrip() -> None:
 
 class TestWireMetadata:
     def test_status_update_timestamp_propagates(self) -> None:
-        ts = datetime(2026, 5, 11, 12, 30, 45, tzinfo=timezone.utc)
+        ts = datetime(2026, 5, 11, 12, 30, 45, tzinfo=UTC)
         ev = task_state_to_status_update(
             TaskState.TASK_STATE_COMPLETED,
             task_id="t",

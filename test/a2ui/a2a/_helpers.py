@@ -14,12 +14,11 @@ cannot expose.
 """
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Self
 
 from a2a.client import ClientCallInterceptor
 from a2a.client.interceptors import BeforeArgs
 from a2a.types import TaskState
-from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.a2a import A2AConfig, A2AServer

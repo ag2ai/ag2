@@ -225,7 +225,7 @@ async def stream_until_closed(hub, channel_id, name_by_id, *, timeout=180.0):
             if env.event_type == EV_CHANNEL_CLOSED:
                 return env.event_data
         await asyncio.sleep(0.05)
-    raise asyncio.TimeoutError(...)
+    raise TimeoutError(...)
 ```
 
 `#!python ChannelMetadata.close_reason` is also stored, so post-mortem inspection via `#!python hub.get_channel(channel_id)` returns the reason string without re-reading the WAL.

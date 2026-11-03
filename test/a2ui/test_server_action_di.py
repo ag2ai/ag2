@@ -4,7 +4,7 @@
 
 import json
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import httpx
@@ -223,7 +223,7 @@ async def test_handler_result_is_serialized_for_wire() -> None:
     # A handler may return a message whose value is a non-JSON-native object
     # (here a datetime). It must be coerced through the serializer before the
     # wire, mirroring how a tool result is encoded — not crash json.dumps.
-    when = datetime(2026, 6, 23, 12, 0, tzinfo=timezone.utc)
+    when = datetime(2026, 6, 23, 12, 0, tzinfo=UTC)
 
     @a2ui_action
     async def stamp() -> dict:

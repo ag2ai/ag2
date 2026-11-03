@@ -5,12 +5,11 @@
 import json
 from collections.abc import AsyncIterator, Iterable, Sequence
 from itertools import chain
-from typing import TYPE_CHECKING, Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Required, TypedDict, cast
 
 from aiobotocore.session import AioSession
 from botocore.config import Config as BotocoreConfig
 from fast_depends.library.serializer import SerializerProto
-from typing_extensions import Required
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext

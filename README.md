@@ -117,7 +117,7 @@ For a step-by-step walk through of AG2 concepts and code, see the [Quick Start](
 
 ### Installation
 
-AG2 requires **Python version >= 3.10**. AG2 is available as `ag2` on PyPI.
+AG2 requires **Python version >= 3.11**. AG2 is available as `ag2` on PyPI.
 
 **Windows/Linux:**
 ```bash
