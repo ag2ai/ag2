@@ -31,12 +31,15 @@ class KnowledgeConfig:
             to False when policies are the only consumer of the store and
             the LLM should not see it.
         write_event_log: If True (default), the agent persists its stream
-            history to ``/log/{stream_id}.jsonl`` at normal completion of the enclosing execution scope. Set to False to keep the store free of stream
-            logs (useful when the store is purely user-facing memory).
+            history to ``/log/{stream_id}.jsonl`` at normal completion of
+            the enclosing execution scope. Set to False to keep the store
+            free of stream logs (useful when the store is purely
+            user-facing memory).
         compact, compact_trigger: Optional compaction strategy and its
-            firing rules.
+            firing rules; ``compact`` requires ``compact_trigger``.
         aggregate, aggregate_trigger: Optional aggregation strategy and
-            its firing rules. Strategy failures emit ``AggregationFailed``
+            its firing rules; an active ``aggregate_trigger`` requires
+            ``aggregate``. Strategy failures emit ``AggregationFailed``
             on the stream — subscribe to that event for observability.
         bootstrap: Optional custom bootstrap. None falls back to
             ``DefaultBootstrap(mention_tool=expose_tool)``, so the

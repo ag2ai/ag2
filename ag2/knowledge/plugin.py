@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager, suppress
 from weakref import WeakValueDictionary
 
@@ -17,7 +17,7 @@ from ag2.plugin import Plugin
 from ag2.tools.final import tool
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
-from ._maintenance import _AggregationMiddlewareFactory, _CompactionMiddlewareFactory
+from ._maintenance import _AggregationMiddlewareFactory, _CompactionMiddlewareFactory, _effective_store
 from .base import KnowledgeStore
 from .bootstrap import DefaultBootstrap, StoreBootstrap
 from .config import KnowledgeConfig
@@ -37,7 +37,7 @@ class _KnowledgeTool:
             list   - List entries at path.
             delete - Delete file at path.
         """
-        store = self.store if self.store is not None else ctx.dependencies[KnowledgeStore]
+        store = _effective_store(self.store, ctx)
         if action == "read":
             result = await store.read(path)
             return result if result is not None else f"Not found: {path}"
@@ -64,7 +64,7 @@ class _KnowledgeTool:
 class _KnowledgeMiddlewareFactory:
     def __init__(self, config: KnowledgeConfig, legacy_store: KnowledgeStore | None = None) -> None:
         self.config = config
-        self.legacy_store = legacy_store
+        self._legacy_store = legacy_store
         # Active callers own the locks; custom stores need no weakref/hash support.
         self._locks: WeakValueDictionary[int, asyncio.Lock] = WeakValueDictionary()
         self._configured_store_initialized = False
@@ -74,9 +74,9 @@ class _KnowledgeMiddlewareFactory:
 
     @asynccontextmanager
     async def scope(self, event: BaseEvent, context: Context) -> AsyncGenerator[None]:
-        store = self.legacy_store if self.legacy_store is not None else context.dependencies[KnowledgeStore]
+        store = _effective_store(self._legacy_store, context)
         actor = context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY].name
-        configured_store = self.legacy_store if self.legacy_store is not None else self.config.store
+        configured_store = self.config.store
         uses_configured_store = store is configured_store
         if not uses_configured_store or not self._configured_store_initialized:
             lock = self._locks.get(id(store))
@@ -116,9 +116,16 @@ class KnowledgePlugin(Plugin):
         write_event_log: Persist the final stream log (default True).
         bootstrap: Custom store initialization, or the default layout when None.
         compact: Optional history compaction strategy.
-        compact_trigger: Firing rules for the compaction strategy.
-        aggregate: Optional memory aggregation strategy.
+        compact_trigger: Firing rules for the compaction strategy; required with ``compact``.
+        aggregate: Optional memory aggregation strategy; required by an active ``aggregate_trigger``.
         aggregate_trigger: Firing rules for the aggregation strategy.
+
+    Raises:
+        ValueError: If a strategy and its trigger are not configured together.
+
+    At most one KnowledgePlugin may apply to an agent invocation (constructor
+    and invocation plugins combined). A delegated worker's own KnowledgePlugin
+    takes precedence over the store inherited from its parent.
     """
 
     def __init__(
@@ -154,10 +161,30 @@ def _knowledge_middleware(
     config: KnowledgeConfig, legacy_store: KnowledgeStore | None = None
 ) -> list[MiddlewareFactory]:
     factories: list[MiddlewareFactory] = [_KnowledgeMiddlewareFactory(config, legacy_store)]
-    if config.compact:
-        factories.append(_CompactionMiddlewareFactory(config, legacy_store))
+    if config.compact is not None:
+        if config.compact_trigger is None:
+            raise ValueError("Knowledge compaction requires compact_trigger alongside compact.")
+        factories.append(_CompactionMiddlewareFactory(config.compact, config.compact_trigger, legacy_store))
     if (trigger := config.aggregate_trigger) and (
         trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end
     ):
-        factories.append(_AggregationMiddlewareFactory(config, legacy_store))
+        if config.aggregate is None:
+            raise ValueError("Knowledge aggregate_trigger requires an aggregate strategy.")
+        factories.append(_AggregationMiddlewareFactory(config.aggregate, trigger, legacy_store))
     return factories
+
+
+def validate_knowledge_middleware(factories: Iterable[MiddlewareFactory]) -> None:
+    """Reject more than one knowledge configuration in one execution scope.
+
+    Every KnowledgePlugin contributes a store default and a ``knowledge`` tool;
+    a second one would silently lose both to the first, so it is an error.
+    """
+    knowledge = [f for f in factories if isinstance(f, _KnowledgeMiddlewareFactory)]
+    if len(knowledge) < 2:
+        return
+    if any(f._legacy_store is not None for f in knowledge):
+        raise ValueError("Agent(knowledge=...) cannot be combined with KnowledgePlugin; migrate to plugins only.")
+    raise ValueError(
+        "Only one KnowledgePlugin may apply to an agent invocation; combine stores in one KnowledgeStore instead."
+    )

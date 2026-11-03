@@ -66,6 +66,7 @@ from .history import CANCELLED_TOOL_RESULT, HUMAN_INPUT_ABANDONED_TOOL_RESULT, H
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .knowledge._legacy import LegacyKnowledgeAdapter
 from .knowledge.config import KnowledgeConfig
+from .knowledge.plugin import validate_knowledge_middleware
 from .middleware.base import (
     AgentTurn,
     BaseMiddleware,
@@ -93,7 +94,11 @@ from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subage
 from .tools.tool import Tool
 from .types import Omit, Omittable, RequestOrigin, SendableMessage, omit
 from .usage import UsageReport
-from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
+from .utils import (
+    AGENT_CONTEXT_DEPENDENCY_KEY,
+    CONFIGURED_DEPENDENCIES_CONTEXT_KEY,
+    MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -456,6 +461,15 @@ class _PluginPrompt(str):
 def _remove_plugin_prompts(context: Context, fragments: Sequence[str]) -> None:
     owned = {id(fragment) for fragment in fragments}
     context.prompt[:] = [fragment for fragment in context.prompt if id(fragment) not in owned]
+
+
+def _set_for_turn(stack: AsyncExitStack, dependencies: dict[Any, Any], key: Any, value: Any) -> None:
+    """Set a framework dependency for one turn and restore what was there after it."""
+    if (previous := dependencies.get(key)) is None:
+        stack.callback(dependencies.pop, key, None)
+    else:
+        stack.callback(dependencies.__setitem__, key, previous)
+    dependencies[key] = value
 
 
 def _remove_plugin_default(context: Context, attribute: str, key: Any, value: Any) -> None:
@@ -867,14 +881,13 @@ class Agent(PluginTarget, Generic[TResult]):
         self._task_slots_lock = threading.Lock()
 
         # Temporary compatibility adapter; remove with knowledge= in 1.4.0.
-        self._legacy_knowledge = LegacyKnowledgeAdapter(knowledge) if knowledge is not None else None
-        if self._legacy_knowledge is not None:
+        legacy_knowledge = LegacyKnowledgeAdapter(knowledge) if knowledge is not None else None
+        if legacy_knowledge is not None:
             warnings.warn(KNOWLEDGE_DEPRECATION, DeprecationWarning, stacklevel=2)
-            self._legacy_knowledge.validate(self._middleware)
-            self._apply_plugin(self._legacy_knowledge.plugin)
-            # Legacy knowledge overrides constructor dependencies, unlike plugin defaults.
-            self._agent_dependencies.update(self._legacy_knowledge.plugin._dependencies)
-            self._additional_tools.extend(self._legacy_knowledge.tools)
+            self._apply_plugin(legacy_knowledge.plugin)
+            self._agent_dependencies.update(legacy_knowledge.dependencies)
+            self._additional_tools.extend(legacy_knowledge.tools)
+        validate_knowledge_middleware(self._middleware)
 
         # Assembly policies (empty by default; bare Agent has no harness).
         if assembly is not None:
@@ -1466,9 +1479,15 @@ class Agent(PluginTarget, Generic[TResult]):
         """Resolve invocation plugins and bracket their context contributions."""
         plugins = _TurnPlugins(additional_plugins)
         additional_middleware = tuple(additional_middleware)
-        if self._legacy_knowledge is not None:
-            self._legacy_knowledge.validate(chain(self._middleware, plugins.middleware, additional_middleware))
+        validate_knowledge_middleware(chain(self._middleware, plugins.middleware, additional_middleware))
         async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
+            # Served entry points (A2A, A2UI, NLIP) build their own context; the
+            # running agent is always this one for the duration of the turn.
+            _set_for_turn(stack, context.dependencies, AGENT_CONTEXT_DEPENDENCY_KEY, self)
+            # What this agent is configured with, so a delegation can tell it
+            # apart from values the caller supplied for this request.
+            configured = context.dependencies.get(CONFIGURED_DEPENDENCIES_CONTEXT_KEY, {}) | self._agent_dependencies
+            _set_for_turn(stack, context.dependencies, CONFIGURED_DEPENDENCIES_CONTEXT_KEY, configured)
             delegation = context.dependencies.get(Forwarder)
             if delegation is not None and delegation.stream.id == context.stream.id:
                 await stack.enter_async_context(delegation.execution(context))
@@ -1488,6 +1507,7 @@ class Agent(PluginTarget, Generic[TResult]):
                             target = context.variables
                         else:
                             target[key] = value
+                            configured[key] = value
                         stack.callback(_remove_plugin_default, context, attribute, key, target[key])
 
             if client is None:

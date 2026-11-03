@@ -6,7 +6,7 @@
 
 import pytest
 
-from ag2 import Agent, Context
+from ag2 import Agent, Context, KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact, TailWindowCompact
 from ag2.events import (
     BuiltinToolCallEvent,
@@ -401,6 +401,37 @@ class TestCompactionWiredOnAgent:
         )
 
         # Four turns on the same stream — history grows past max_events=3
+        reply = await agent.ask("turn-1", stream=stream)
+        for q in ("turn-2", "turn-3", "turn-4"):
+            reply = await reply.ask(q)
+
+        assert len(completions) >= 1
+        assert completions[0].agent == "compactor"
+        assert completions[0].strategy == "TailWindowCompact"
+        assert completions[0].events_after <= 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.filterwarnings(r"ignore:Agent\(knowledge=:DeprecationWarning")
+    async def test_legacy_knowledge_config_fires_when_threshold_crossed(self) -> None:
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "compactor",
+            config=TestConfig(
+                ModelResponse(ModelMessage("a")),
+                ModelResponse(ModelMessage("b")),
+                ModelResponse(ModelMessage("c")),
+                ModelResponse(ModelMessage("d")),
+            ),
+            knowledge=KnowledgeConfig(
+                store=MemoryKnowledgeStore(),
+                compact=TailWindowCompact(target=2),
+                compact_trigger=CompactTrigger(max_events=3),
+            ),
+        )
+
         reply = await agent.ask("turn-1", stream=stream)
         for q in ("turn-2", "turn-3", "turn-4"):
             reply = await reply.ask(q)

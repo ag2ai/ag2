@@ -29,7 +29,6 @@ from ag2.usage import collect_usage_events, usage_event_from
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 from .base import KnowledgeStore
-from .config import KnowledgeConfig
 
 if TYPE_CHECKING:
     from ag2.aggregate import AggregateStrategy, AggregateTrigger
@@ -189,19 +188,24 @@ def _with_usage_events(
 class _CompactionMiddlewareFactory:
     """Factory for _CompactionMiddleware."""
 
-    def __init__(self, config: KnowledgeConfig, legacy_store: KnowledgeStore | None = None) -> None:
-        self.config = config
+    def __init__(
+        self,
+        strategy: "CompactStrategy",
+        trigger: "CompactTrigger",
+        legacy_store: KnowledgeStore | None = None,
+    ) -> None:
+        self._strategy = strategy
+        self._trigger = trigger
         self._legacy_store = legacy_store
 
     def __call__(self, event: BaseEvent, context: Context) -> _CompactionMiddleware:
-        assert self.config.compact is not None
         return _CompactionMiddleware(
             event,
             context,
             actor_name=context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY].name,
-            strategy=self.config.compact,
-            store=self._legacy_store if self._legacy_store is not None else context.dependencies[KnowledgeStore],
-            trigger=self.config.compact_trigger,  # type: ignore[arg-type]
+            strategy=self._strategy,
+            store=_effective_store(self._legacy_store, context),
+            trigger=self._trigger,
         )
 
 
@@ -310,8 +314,14 @@ class _AggregationMiddleware(BaseMiddleware):
 class _AggregationMiddlewareFactory:
     """Factory for _AggregationMiddleware."""
 
-    def __init__(self, config: KnowledgeConfig, legacy_store: KnowledgeStore | None = None) -> None:
-        self.config = config
+    def __init__(
+        self,
+        strategy: "AggregateStrategy",
+        trigger: "AggregateTrigger",
+        legacy_store: KnowledgeStore | None = None,
+    ) -> None:
+        self._strategy = strategy
+        self._trigger = trigger
         self._legacy_store = legacy_store
 
     def __call__(self, event: BaseEvent, context: Context) -> _AggregationMiddleware:
@@ -319,7 +329,15 @@ class _AggregationMiddlewareFactory:
             event,
             context,
             actor_name=context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY].name,
-            strategy=self.config.aggregate,  # type: ignore[arg-type]
-            store=self._legacy_store if self._legacy_store is not None else context.dependencies[KnowledgeStore],
-            trigger=self.config.aggregate_trigger,  # type: ignore[arg-type]
+            strategy=self._strategy,
+            store=_effective_store(self._legacy_store, context),
+            trigger=self._trigger,
         )
+
+
+def _effective_store(bound: KnowledgeStore | None, context: Context) -> KnowledgeStore:
+    """The legacy-bound store, or the invocation's effective ``KnowledgeStore`` dependency."""
+    if bound is not None:
+        return bound
+    store: KnowledgeStore = context.dependencies[KnowledgeStore]
+    return store

@@ -39,8 +39,22 @@ All new-plugin capabilities resolve the effective KnowledgeStore dependency.
 Tools use ordinary precedence (ADR 0020) and approval middleware; automatic
 maintenance is outside individual tool approvals. The compatibility adapter
 preserves legacy dependency precedence and hidden-tool exclusion from legacy
-subtask inheritance. Mixed legacy/new knowledge configuration is rejected
-before store I/O.
+subtask inheritance. Mixed legacy/new knowledge configuration, and more than
+one KnowledgePlugin in one invocation, are rejected before store I/O; a
+strategy configured without its trigger (or an active aggregate trigger
+without a strategy) is rejected at construction.
+
+Delegation separates configuration from request values. The parent's
+configuration (its constructor dependencies and plugin defaults) only fills
+keys the worker does not configure, so a worker's KnowledgePlugin keeps its
+own store instead of the parent's. Values supplied for the request
+(`ask(dependencies=...)` or set at runtime) still override the worker's
+configuration, so a per-request store reaches every worker. Inherited
+configuration stays configuration for grandchildren. Before this, every
+inherited value won; a parent's constructor dependency now loses to a
+worker's own. The running Agent is published under
+the agent context key for every turn, including served entry points (A2A,
+A2UI, NLIP) that build their own context.
 
 Ship the replacement and a constructor-only DeprecationWarning in 1.3;
 remove `Agent(knowledge=...)` in 1.4.0. Keep KnowledgeConfig and its existing
@@ -57,8 +71,9 @@ background-turn failure, while a failing reply.ask propagates through its
 scope. The migration preserves this entry-point distinction.
 
 For 1.4.0 remove the `knowledge` constructor parameter from all overloads and
-the implementation, `KNOWLEDGE_DEPRECATION`, `_legacy_knowledge` initialization
-and validation, `ag2/knowledge/_legacy.py`, and the bound-store compatibility
+the implementation, `KNOWLEDGE_DEPRECATION`, the `LegacyKnowledgeAdapter` block
+in `Agent.__init__`, the `knowledge=` branch of `validate_knowledge_middleware`,
+`ag2/knowledge/_legacy.py`, and the bound-store compatibility
 branches in knowledge tools and middleware factories. Delete focused legacy
 compatibility tests and the migration/deprecation notes once obsolete. Keep
 KnowledgePlugin's runtime implementation, KnowledgeConfig and its exports,

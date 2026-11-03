@@ -12,8 +12,8 @@ from weakref import ref
 import pytest
 from dirty_equals import AnyThing, IsPartialDataclass, IsPartialDict
 
-from ag2 import Agent, Context, MemoryStream, observer, tool
-from ag2.agent import KnowledgeConfig, TaskConfig
+from ag2 import Agent, Context, KnowledgeConfig, MemoryStream, observer, tool
+from ag2.agent import TaskConfig
 from ag2.aggregate import AggregateTrigger
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.events import (
@@ -198,13 +198,26 @@ async def test_mixed_configuration_rejected_before_dynamic_prompts(invocation_pr
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("legacy", [False, True])
-async def test_disabled_knowledge_does_not_warn_or_do_maintenance(legacy: bool) -> None:
+@pytest.mark.filterwarnings("error::DeprecationWarning")
+async def test_agent_without_knowledge_gets_no_store_or_tool() -> None:
     config = TrackingConfig(TestConfig("ok"))
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        agent = Agent("bare", config=config, **({"knowledge": None} if legacy else {}))
-        await agent.ask("hi")
+    agent = Agent("bare", config=config)
+
+    await agent.ask("hi")
+
+    [call] = config.calls
+    assert call == IsPartialDataclass(tools=())
+    assert KnowledgeStore not in call.dependencies
+
+
+@pytest.mark.asyncio
+@pytest.mark.filterwarnings("error::DeprecationWarning")
+async def test_knowledge_none_does_not_warn_or_add_store() -> None:
+    config = TrackingConfig(TestConfig("ok"))
+    agent = Agent("bare", config=config, knowledge=None)
+
+    await agent.ask("hi")
+
     [call] = config.calls
     assert call == IsPartialDataclass(tools=())
     assert KnowledgeStore not in call.dependencies
@@ -388,21 +401,34 @@ async def test_parent_plugin_does_not_equip_explicit_worker() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("legacy", [True, False])
-async def test_run_failure_retains_existing_scope_logging_behavior(legacy: bool) -> None:
+async def test_failed_run_still_writes_event_log() -> None:
     store = MemoryKnowledgeStore()
     stream = MemoryStream()
-    options = {"knowledge": KnowledgeConfig(store)} if legacy else {"plugins": [KnowledgePlugin(store)]}
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=r"Agent\(knowledge=", category=DeprecationWarning)
-        agent = Agent("failing", config=TestConfig(RuntimeError("failed")), **options)
+    agent = Agent("failing", config=TestConfig(RuntimeError("failed")), plugins=[KnowledgePlugin(store)])
+
     with pytest.raises(RuntimeError, match="failed"):
         async with agent.run("failed attempt", stream=stream) as run:
             await run.result()
+
     assert await store.read(f"/log/{stream.id}.jsonl") is not None
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings(r"ignore:Agent\(knowledge=:DeprecationWarning")
+async def test_legacy_knowledge_failed_run_still_writes_event_log() -> None:
+    store = MemoryKnowledgeStore()
+    stream = MemoryStream()
+    agent = Agent("failing", config=TestConfig(RuntimeError("failed")), knowledge=KnowledgeConfig(store))
+
+    with pytest.raises(RuntimeError, match="failed"):
+        async with agent.run("failed attempt", stream=stream) as run:
+            await run.result()
+
+    assert await store.read(f"/log/{stream.id}.jsonl") is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
 async def test_legacy_precedence_and_hidden_tool_are_preserved() -> None:
     configured = MemoryKnowledgeStore()
     constructor_override = MemoryKnowledgeStore()
@@ -415,16 +441,14 @@ async def test_legacy_precedence_and_hidden_tool_are_preserved() -> None:
             "done",
         )
     )
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="TaskConfig, Agent", category=DeprecationWarning)
-        with pytest.warns(DeprecationWarning, match=r"Agent\(knowledge="):
-            agent = Agent(
-                "legacy",
-                config=config,
-                knowledge=KnowledgeConfig(configured),
-                dependencies={KnowledgeStore: constructor_override},
-                tasks=TaskConfig(config=worker_config),
-            )
+    with pytest.warns(DeprecationWarning, match=r"Agent\(knowledge="):
+        agent = Agent(
+            "legacy",
+            config=config,
+            knowledge=KnowledgeConfig(configured),
+            dependencies={KnowledgeStore: constructor_override},
+            tasks=TaskConfig(config=worker_config),
+        )
     assert agent.dependencies == IsPartialDict({KnowledgeStore: configured})
     await agent.ask("use legacy", dependencies={KnowledgeStore: invocation_override})
     assert config.calls[0] == IsPartialDataclass(dependencies=IsPartialDict({KnowledgeStore: invocation_override}))
@@ -485,3 +509,82 @@ async def test_bootstrap_failure_propagates_before_model_execution() -> None:
         await agent.ask("start")
     assert config.calls == []
     assert await store.list("/log") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invocation", [False, True])
+async def test_second_plugin_rejected_before_store_io(invocation: bool) -> None:
+    first = MemoryKnowledgeStore()
+    second = MemoryKnowledgeStore()
+    with pytest.raises(ValueError, match="Only one KnowledgePlugin"):
+        agent = Agent(
+            "doubled",
+            config=TestConfig("unreachable"),
+            plugins=[KnowledgePlugin(first)] if invocation else [KnowledgePlugin(first), KnowledgePlugin(second)],
+        )
+        await agent.ask("hello", plugins=[KnowledgePlugin(second)])
+    assert await first.list("/") == []
+    assert await second.list("/") == []
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"compact": TailWindowCompact(1)},
+        {"aggregate_trigger": AggregateTrigger(on_end=True)},
+    ],
+)
+def test_strategy_without_its_counterpart_is_rejected(options: dict[str, object]) -> None:
+    with pytest.raises(ValueError, match="requires"):
+        KnowledgePlugin(MemoryKnowledgeStore(), **options)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_worker_plugin_store_wins_over_inherited_parent_store() -> None:
+    parent_store = MemoryKnowledgeStore()
+    worker_store = MemoryKnowledgeStore()
+    worker = Agent(
+        "worker",
+        config=TestConfig(
+            ToolCallEvent(name="knowledge", arguments='{"action":"write","path":"/note","content":"worker"}'),
+            "worker done",
+        ),
+        plugins=[KnowledgePlugin(worker_store)],
+    )
+    parent = Agent(
+        "parent",
+        config=TestConfig(ToolCallEvent(name="task_worker", arguments='{"objective":"work"}'), "done"),
+        plugins=[KnowledgePlugin(parent_store)],
+        tools=[worker.as_tool(description="Work")],
+    )
+
+    await parent.ask("delegate")
+
+    assert await worker_store.read("/note") == "worker"
+    assert "worker" in await worker_store.read("/SKILL.md")
+    assert await parent_store.read("/note") is None
+
+
+@pytest.mark.asyncio
+async def test_request_store_overrides_worker_plugin_store() -> None:
+    tenant_store = MemoryKnowledgeStore()
+    shared_store = MemoryKnowledgeStore()
+    worker = Agent(
+        "worker",
+        config=TestConfig(
+            ToolCallEvent(name="knowledge", arguments='{"action":"write","path":"/note","content":"tenant"}'),
+            "worker done",
+        ),
+        plugins=[KnowledgePlugin(shared_store)],
+    )
+    parent = Agent(
+        "parent",
+        config=TestConfig(ToolCallEvent(name="task_worker", arguments='{"objective":"work"}'), "done"),
+        plugins=[KnowledgePlugin(MemoryKnowledgeStore())],
+        tools=[worker.as_tool(description="Work")],
+    )
+
+    await parent.ask("delegate", dependencies={KnowledgeStore: tenant_store})
+
+    assert await tenant_store.read("/note") == "tenant"
+    assert await shared_store.read("/note") is None

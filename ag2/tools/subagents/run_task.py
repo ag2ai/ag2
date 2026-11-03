@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from ag2.annotations import Context
@@ -12,6 +13,7 @@ from ag2.events import Usage
 from ag2.exceptions import HumanInputError
 from ag2.scopes import derive_child_variables
 from ag2.stream import MemoryStream, Stream
+from ag2.utils import CONFIGURED_DEPENDENCIES_CONTEXT_KEY
 
 from ._forwarding import DelegationRegistry, Forwarder
 
@@ -30,6 +32,29 @@ class TaskResult:
     """Cumulative stream snapshot for inspection, never an additive record."""
     error: Exception | None = None
     cancelled: bool = False
+
+
+def _inherited_dependencies(parent: Mapping[Any, Any], worker_keys: Collection[Any]) -> dict[Any, Any]:
+    """Select the parent's dependencies a worker receives as invocation dependencies.
+
+    Values the caller supplied for the request (``ask(dependencies=...)`` or set
+    at runtime) override the worker's own. The parent's configuration (its
+    constructor dependencies and plugin defaults) only fills keys the worker
+    does not configure itself, and stays marked as configuration downstream.
+    """
+    configured: Mapping[Any, Any] = parent.get(CONFIGURED_DEPENDENCIES_CONTEXT_KEY, {})
+    inherited: dict[Any, Any] = {}
+    inherited_configuration: dict[Any, Any] = {}
+    for key, value in parent.items():
+        if key == CONFIGURED_DEPENDENCIES_CONTEXT_KEY:
+            continue
+        if key in configured and configured[key] is value:
+            if key in worker_keys:
+                continue
+            inherited_configuration[key] = value
+        inherited[key] = value
+    inherited[CONFIGURED_DEPENDENCIES_CONTEXT_KEY] = inherited_configuration
+    return inherited
 
 
 async def run_task(
@@ -53,7 +78,7 @@ async def run_task(
     forwarder = Forwarder(parent_context, task_id, agent.name, task_stream, objective, emit_events)
     registry = DelegationRegistry.for_context(parent_context)
     registry.register(forwarder)
-    dependencies = parent_context.dependencies.copy()
+    dependencies = _inherited_dependencies(parent_context.dependencies, agent.dependencies.keys())
     dependencies[Forwarder] = forwarder
     try:
         reply = await agent.ask(

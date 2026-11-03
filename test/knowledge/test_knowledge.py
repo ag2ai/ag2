@@ -286,8 +286,8 @@ class TestDefaultBootstrap:
     async def test_does_not_write_sentinel(self) -> None:
         """``DefaultBootstrap`` writes SKILL.md files but not ``/.initialized``.
 
-        The sentinel is owned by ``Agent`` (it writes it before calling
-        bootstrap, see ``Agent._bootstrap_store_once``).
+        The sentinel is owned by the knowledge scope (it writes it before
+        calling bootstrap, see ``ag2.knowledge._maintenance``).
         """
         store = MemoryKnowledgeStore()
         await DefaultBootstrap().bootstrap(store, "test-agent")

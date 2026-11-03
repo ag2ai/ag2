@@ -325,6 +325,33 @@ agent = Agent(
 )
 ```
 
+### Bracketing the Whole Execution Scope
+
+`on_turn()` starts after tool schemas are resolved and ends before observers complete. When setup must happen before tool resolution, or teardown after observers (for example, `KnowledgePlugin` bootstraps its store first and writes the final event log last), give your middleware factory a `scope(event, context)` method returning an async context manager. A factory with that method satisfies `ScopedMiddlewareFactory` from `ag2.middleware`:
+
+```python linenums="1"
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
+from ag2 import Agent, Context
+from ag2.events import BaseEvent
+from ag2.middleware import BaseMiddleware
+
+class AuditScope:
+    def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
+        return BaseMiddleware(event, context)
+
+    @asynccontextmanager
+    async def scope(self, event: BaseEvent, context: Context) -> AsyncGenerator[None]:
+        print("before tool resolution")
+        yield
+        print("after observers completed")
+
+agent = Agent("assistant", middleware=[AuditScope()])
+```
+
+Scopes enter in registration order and exit in reverse order. The factory outlives turns, so keep per-invocation state inside the scope rather than on the factory. The `Middleware(...)` wrapper does not forward `scope`; write the factory class directly.
+
 ### Guidelines for Custom Middleware
 
 - Keep hook behavior focused. Middleware that does one job well is easier to reason about than one that handles, for example, logging, retries, mutation, and policy checks together.

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ag2 import Agent
+from ag2 import Agent, KnowledgeConfig
 from ag2 import Context as Context
 from ag2.aggregate import (
     AggregateTrigger,
@@ -303,6 +303,29 @@ class TestAggregationWiredOnAgent:
                     aggregate_trigger=AggregateTrigger(on_end=True),
                 )
             ],
+        )
+        await agent.ask("go", stream=stream)
+
+        assert strategy.calls == 1
+        assert len(completions) == 1
+        assert completions[0].agent == "roller"
+
+    @pytest.mark.asyncio
+    @pytest.mark.filterwarnings(r"ignore:Agent\(knowledge=:DeprecationWarning")
+    async def test_legacy_knowledge_config_aggregates_once_per_ask(self) -> None:
+        strategy = _RecordingAggregate()
+        stream = MemoryStream()
+        completions: list[AggregationCompleted] = []
+        stream.where(AggregationCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "roller",
+            config=TestConfig(ModelResponse(ModelMessage("done"))),
+            knowledge=KnowledgeConfig(
+                store=MemoryKnowledgeStore(),
+                aggregate=strategy,
+                aggregate_trigger=AggregateTrigger(on_end=True),
+            ),
         )
         await agent.ask("go", stream=stream)
 
