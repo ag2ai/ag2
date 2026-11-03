@@ -97,12 +97,9 @@ class RunLifecycle:
     async def finish(self) -> None:
         """Publish the terminal, even when reading or retaining usage fails.
 
-        A storage error or a cancellation that arrives while usage is read
-        decides the terminal unless the run already failed; otherwise the
-        task would stay RUNNING forever. An earlier failure keeps the
-        terminal. The cleanup error propagates once the terminal is
-        published, except a storage error behind an earlier failure, which
-        is logged so it does not replace that failure.
+        A propagating cleanup error decides the terminal, replacing any
+        earlier failure. A storage error behind an earlier failure is
+        logged and suppressed so it does not replace that failure.
         """
         driven = self.task.state != TaskState.CREATED and self.task.state not in TERMINAL_TASK_STATES
         usage: Usage | None = None
@@ -118,7 +115,7 @@ class RunLifecycle:
             elif isinstance(exc, Exception):
                 logger.warning("Retaining usage failed after the run failed with %r", self.failure, exc_info=exc)
             else:
-                cleanup_error = exc
+                self.failure = cleanup_error = exc
         if driven and self.task.state not in TERMINAL_TASK_STATES:
             await self.task._finish(
                 self.failure,

@@ -5,6 +5,7 @@
 import asyncio
 from contextlib import AsyncExitStack, ExitStack
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 from dirty_equals import HasAttributes, IsInstance
@@ -116,6 +117,34 @@ class UsageWritesFail(MemoryStorage):
         if isinstance(event, UsageEvent):
             raise ConnectionError("usage store unavailable")
         await super().save_event(event, context)
+
+
+class BeforeFailure(BaseEvent):
+    """Mark the last model event before an execution failure."""
+
+
+class StallingRetentionStorage(MemoryStorage):
+    """Lose source usage, then stall its retention after the model fails."""
+
+    def __init__(self, source_id: StreamId) -> None:
+        super().__init__()
+        self.source_id = source_id
+        self.armed = False
+        self.stalled = asyncio.Event()
+
+    async def save_event(self, event: BaseEvent, context: Context) -> None:
+        if context.stream.id == self.source_id:
+            if isinstance(event, UsageEvent):
+                return
+            if isinstance(event, BeforeFailure):
+                self.armed = True
+        await super().save_event(event, context)
+
+    async def get_history(self, stream_id: StreamId) -> list[BaseEvent]:
+        if stream_id == self.source_id and self.armed and not self.stalled.is_set():
+            self.stalled.set()
+            await asyncio.Event().wait()
+        return list(await super().get_history(stream_id))
 
 
 class LosesThenFailsUsage(MemoryStorage):
@@ -500,6 +529,58 @@ async def test_cancellation_while_the_store_reads_usage_is_still_reported() -> N
     with pytest.raises(asyncio.CancelledError):
         await driver
     assert [type(event) for event in task_events(await stream.history.get_events())] == [TaskStarted, TaskCancelled]
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(5)
+async def test_cancellation_during_failed_worker_usage_retention_overrides_the_failure() -> None:
+    source_id = uuid4()
+    storage = StallingRetentionStorage(source_id)
+    stream = MemoryStream(storage=storage)
+    worker = Agent(
+        "worker",
+        config=TestConfig(UsageEvent(Usage(total_tokens=30)), BeforeFailure(), ValueError("model failed")),
+    )
+    lead = Agent(
+        "lead",
+        config=TestConfig(ToolCallEvent(name="task_worker", arguments='{"objective": "work"}'), "done"),
+        tools=[worker.as_tool(description="Work", stream=MemoryStream(id=source_id, storage=storage))],
+    )
+
+    driver = asyncio.create_task(lead.ask("work", stream=stream, capability="lead"))
+    await asyncio.wait_for(storage.stalled.wait(), 1)
+    driver.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await driver
+    assert task_events(await stream.history.get_events()) == [
+        IsInstance(TaskStarted) & HasAttributes(agent_name="lead"),
+        IsInstance(TaskStarted) & HasAttributes(agent_name="worker"),
+        IsInstance(TaskCancelled) & HasAttributes(agent_name="worker"),
+        IsInstance(TaskCancelled) & HasAttributes(agent_name="lead"),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(5)
+async def test_usage_retention_storage_failure_preserves_worker_cancellation() -> None:
+    stream = MemoryStream()
+    worker = Agent("worker", config=TestConfig(UsageEvent(Usage(total_tokens=30)), asyncio.CancelledError()))
+    lead = Agent(
+        "lead",
+        config=TestConfig(ToolCallEvent(name="task_worker", arguments='{"objective": "work"}'), "done"),
+        tools=[worker.as_tool(description="Work", stream=MemoryStream(storage=LosesThenFailsUsage()))],
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await lead.ask("work", stream=stream, capability="lead")
+
+    assert task_events(await stream.history.get_events()) == [
+        IsInstance(TaskStarted) & HasAttributes(agent_name="lead"),
+        IsInstance(TaskStarted) & HasAttributes(agent_name="worker"),
+        IsInstance(TaskCancelled) & HasAttributes(agent_name="worker"),
+        IsInstance(TaskCancelled) & HasAttributes(agent_name="lead"),
+    ]
 
 
 @pytest.mark.asyncio
