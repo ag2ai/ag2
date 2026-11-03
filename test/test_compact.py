@@ -28,7 +28,7 @@ from ag2.events import (
     UsageEvent,
 )
 from ag2.events.base import is_conversational
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import EventLogWriter, MemoryKnowledgeStore
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
 from test._helpers import DurableReasoning, lookup
@@ -74,6 +74,48 @@ class TestTailWindowCompact:
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 3
+
+
+@pytest.mark.asyncio
+class TestSummarizeCompactPersistence:
+    async def test_failed_summary_does_not_duplicate_event_log(self) -> None:
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        events = [
+            ModelRequest([TextInput("old")]),
+            ModelRequest([TextInput("recent")]),
+        ]
+        compact = SummarizeCompact(target=1, config=TestConfig(RuntimeError("summary unavailable")))
+
+        with pytest.raises(RuntimeError, match="summary unavailable"):
+            await compact.compact(events, Context(stream=stream), store)
+
+        assert await store.list("/log/") == []
+        writer = EventLogWriter(store)
+        await writer.persist(stream.id, events)
+        restored = await writer.load(stream.id)
+        assert [event.parts[0].content for event in restored if isinstance(event, ModelRequest)] == [
+            "old",
+            "recent",
+        ]
+
+    async def test_successful_summary_archives_dropped_events(self) -> None:
+        store = MemoryKnowledgeStore()
+        stream = MemoryStream()
+        events = [
+            ModelRequest([TextInput("old")]),
+            ModelRequest([TextInput("recent")]),
+        ]
+        compact = SummarizeCompact(target=1, config=TestConfig("summary"))
+
+        compacted = await compact.compact(events, Context(stream=stream), store)
+
+        assert len(compacted) == 2
+        assert isinstance(compacted[0], CompactionSummary)
+        assert compacted[0].summary == "summary"
+        assert compacted[1] == events[1]
+        archived = await EventLogWriter(store).load(stream.id)
+        assert [event.parts[0].content for event in archived if isinstance(event, ModelRequest)] == ["old"]
 
 
 def _cycle(cid: str, name: str = "t") -> tuple[ModelResponse, ToolResultsEvent]:

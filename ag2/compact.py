@@ -165,17 +165,17 @@ class SummarizeCompact:
         if not recent:
             return events
 
-        # Persist full old events before dropping
-        if store:
-            writer = EventLogWriter(store)
-            await writer.persist_dropped(context.stream.id, old)
-
-        # Summarize via LLM
+        # Do not archive a failed compaction: the original events are still in history.
         summary_text = await self._summarize(old, context)
         summary_event = CompactionSummary(
             summary=summary_text,
             event_count=len(old),
         )
+
+        if store:
+            writer = EventLogWriter(store)
+            await writer.persist_dropped(context.stream.id, old)
+
         return [summary_event] + recent
 
     async def _summarize(self, events: list[BaseEvent], context: Context) -> str:
