@@ -224,8 +224,10 @@ class OpenAIClient(LLMClient):
                     full_content += c
                     await context.send(ModelMessageChunk(c))
 
-                for tc in delta.tool_calls or []:
-                    ix = tc.index
+                known_calls = len(full_tool_calls)
+                for position, tc in enumerate(delta.tool_calls or []):
+                    # OpenAI-compatible endpoints may leave out `index`: each such call is a whole call of its own
+                    ix = tc.index if isinstance(tc.index, int) else known_calls + position
                     if ix >= len(full_tool_calls):
                         full_tool_calls.extend(
                             {
