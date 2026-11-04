@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from dataclasses import asdict
 from typing import Any
 
 import httpx
@@ -15,7 +16,7 @@ pytest.importorskip("tavily")
 from ag2 import Agent, Context, DataInput, Variable
 from ag2.events import ModelResponse, ToolCallEvent, ToolCallsEvent, ToolResultsEvent
 from ag2.testing import TestConfig, TrackingConfig
-from ag2.tools.search.tavily import SearchResponse, SearchResult, TavilySearchTool
+from ag2.tools.search.tavily import IncludeRawContent, SearchResponse, SearchResult, TavilySearchTool
 
 TAVILY_BASE_URL = "https://api.tavily.com"
 
@@ -77,6 +78,25 @@ class TestSchema:
 
 @pytest.mark.asyncio
 class TestSearchExecution:
+    @pytest.mark.parametrize("include_raw_content", [True, "markdown"])
+    @respx.mock
+    async def test_optional_result_fields_reach_the_agent(self, include_raw_content: IncludeRawContent) -> None:
+        route = respx.post(f"{TAVILY_BASE_URL}/search").mock(return_value=httpx.Response(200, json=SAMPLE_RAW))
+        tavily = TavilySearchTool(api_key="test", include_raw_content=include_raw_content, include_favicon=True)
+        config = TrackingConfig(_make_config("AG2 framework"))
+        agent = Agent("a", config=config, tools=[tavily])
+
+        await agent.ask("search")
+
+        assert json.loads(route.calls.last.request.content) == IsPartialDict({
+            "include_raw_content": include_raw_content,
+            "include_favicon": True,
+        })
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        part = tool_results_event.results[0].result.parts[0]
+        assert isinstance(part, DataInput)
+        assert asdict(part.data)["results"] == SAMPLE_RAW["results"]
+
     @respx.mock
     async def test_search_returns_structured_results(self) -> None:
         respx.post(f"{TAVILY_BASE_URL}/search").mock(return_value=httpx.Response(200, json=SAMPLE_RAW))
@@ -96,6 +116,8 @@ class TestSearchExecution:
                         url="https://ag2.ai",
                         content="AG2 is an agent framework.",
                         score=0.95,
+                        raw_content="# AG2\nFull text",
+                        favicon="https://ag2.ai/favicon.ico",
                     ),
                     SearchResult(
                         title="GitHub - AG2",
