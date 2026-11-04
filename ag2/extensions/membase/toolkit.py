@@ -10,7 +10,7 @@ account: search it, save a note to it when the user asks, and read the user's
 profile. Every search passage names the Memory it came from, so the agent can
 cite it. There is deliberately no delete tool.
 
-Maintainer: unibaseio
+Maintainer: parasyte-x
 Docs: https://docs.ag2.ai/docs/user-guide/extensions/membase/
 """
 

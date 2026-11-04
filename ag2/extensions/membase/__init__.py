@@ -4,7 +4,7 @@
 
 """Membase long-term memory extension for AG2.
 
-Maintainer: unibaseio
+Maintainer: parasyte-x
 """
 
 from ag2.exceptions import missing_additional_dependency
