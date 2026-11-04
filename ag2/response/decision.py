@@ -28,9 +28,6 @@ __all__ = ("DecisionKind", "DecisionOption", "DecisionSpec", "NotADecisionError"
 
 DecisionKind = Literal["predicate", "choice", "score"]
 
-# Python 3.10 gives an undocumented ``Enum`` this docstring; later versions give ``None``.
-_PY310_ENUM_DOC = "An enumeration."
-
 
 class NotADecisionError(AG2Error):
     """Raised when a ``response_schema`` is not a yes/no, choice or score question."""
@@ -154,7 +151,7 @@ def _question(
         # An ``Enum`` docstring is the question; other types' docstrings are not, but a description
         # Pydantic lifted out of the schema (``RootModel`` + ``Field(description=)``) is.
         type_doc = None if enum_type else getattr(strip_annotated(response.types), "__doc__", None)
-        docstring = None if response.description in (_PY310_ENUM_DOC, type_doc) else response.description
+        docstring = None if response.description == type_doc else response.description
     else:
         explicit, docstring = response.description, None
     marked = next((m.question for m in reversed(markers) if m.question), None)

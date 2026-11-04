@@ -148,7 +148,7 @@ class FunctionTool(Tool):
         # expiry of this invocation's deadline gets the message below.
         try:
             return await asyncio.wait_for(self._execute(event, context), timeout=self.timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             error = TimeoutError(f"Tool {self.name!r} timed out after {self.timeout} seconds")
             return ToolErrorEvent.from_call(event, error=error)
 

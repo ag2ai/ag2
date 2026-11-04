@@ -88,7 +88,7 @@ class PathGuardian(BaseObserver):
         return None
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     halt_events: list[HaltEvent] = []
     alerts: list[ObserverAlert] = []

@@ -8,7 +8,7 @@ Wraps a ``TaskMetadata`` snapshot from the hub and provides refresh
 helpers without exposing the full hub surface.
 
 The framework-core ``ag2.task.Task`` is the *owner-side*
-lifecycle (the one constructed inside ``async with agent.task(...)``).
+lifecycle (the one constructed inside ``async with Task(...)``).
 This handle is *observer-side* — held by an agent that delegated work
 to a peer.
 """

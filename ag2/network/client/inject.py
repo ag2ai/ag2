@@ -49,5 +49,5 @@ AgentClientInject = Annotated[Any, Inject(AGENT_CLIENT_DEP, default=None)]
 HubInject = Annotated[Any, Inject(HUB_DEP, default=None)]
 
 # Framework-core re-export for symmetry. The same annotation as
-# ``ag2.task.TaskInject`` — resolves to the enclosing ``agent.task(...)``
+# ``ag2.task.TaskInject`` — resolves to the enclosing ``Task(...)``
 # block on the same conversation, else to a caller-provided ``TASK_DEP``.

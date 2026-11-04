@@ -16,6 +16,10 @@ from fast_depends.utils import is_coroutine_callable, run_in_threadpool
 CONTEXT_OPTION_NAME = "__ctx__"
 AGENT_CONTEXT_DEPENDENCY_KEY = "__ag2_agent__"
 MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY = "__ag2_model_config__"
+# Maps each dependency key to the value the running agent was configured with
+# (constructor, plugin defaults, or configuration inherited by a delegation).
+# A context value that is not that same object was supplied for the request.
+CONFIGURED_DEPENDENCIES_CONTEXT_KEY = "__ag2_configured_dependencies__"
 
 
 def _validate_timeout(timeout: float | None) -> None:

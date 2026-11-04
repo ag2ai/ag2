@@ -191,8 +191,6 @@ agent = Agent(
             ),
             answering=MCPAnswerPolicy(
                 elicitation="ask",          # route questions to this agent's human
-                sampling=True,              # let the server borrow this agent's model
-                roots=["/srv/project"],     # directories to report
                 max_rounds=10,              # how often it may come back for more
             ),
         )
@@ -201,6 +199,10 @@ agent = Agent(
 ```
 
 `MCPToolkit` answers what you have enabled and retries the call — the whole loop happens inside the one operation, so nothing is held between calls: the pause is on the remote server and your end is simply waiting.
+
+Keep deprecated MCP sampling and roots disabled in new integrations. Configure
+the server's own LLM provider, and pass filesystem scope through its tool
+arguments, resource URIs or configuration instead.
 
 With no human-input hook configured, a question surfaces the usual "human input was requested but not provided" failure rather than a silent decline: an absent channel is not a refusal, and reporting it as one would hand the server a decline you never made.
 
@@ -237,8 +239,8 @@ A server may declare a **resolved parameter** — a tool parameter whose value c
 | field | what it hands over | default |
 |---|---|---|
 | `elicitation` | your user's attention — the question goes to `context.input()`, and so to the agent's `hitl_hook` | `"decline"` |
-| `sampling` | **your model budget** — the completion runs on this agent's own model, and you pay for it | `False` |
-| `roots` | your filesystem layout — plain paths only, no `Variable`, since these are deployment configuration rather than a runtime value | `()` |
+| `sampling` | Deprecated MCP capability: lends **your model budget** to the server | `False` |
+| `roots` | Deprecated MCP capability: reports your filesystem layout as plain paths, without `Variable` resolution | `()` |
 | `max_rounds` | nothing; it bounds how many times a server may come back before the call is abandoned | `10` |
 
 `elicitation` reuses the same two-valued `ElicitationPolicy` as `ACPConfig.elicitation_policy`, so the word means one thing across AG2's protocol integrations. `sampling` is named for the protocol operation rather than "model" on purpose: this side **lends** your model, while [serving](/docs/user-guide/tools/serving_mcp)'s `client_model=` **borrows** the caller's — opposite directions that must not share a word.

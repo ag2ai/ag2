@@ -17,9 +17,7 @@ compaction observable without a real LLM:
 import json
 import re
 from collections.abc import Callable, Sequence
-from typing import Any
-
-from typing_extensions import Self
+from typing import Any, Self
 
 from ag2 import Agent, Context, MemoryStream, tool
 from ag2.compact import CompactionSummary

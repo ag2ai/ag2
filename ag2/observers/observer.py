@@ -204,7 +204,7 @@ def observer(
 
     ``timeout`` is a finite positive number of seconds or ``None`` (no limit).
     It covers dependency resolution, the callback, and dependency cleanup.
-    Expiry raises ``asyncio.TimeoutError`` to the event publisher. Cancellation is
+    Expiry raises ``TimeoutError`` to the event publisher. Cancellation is
     cooperative and cannot stop a synchronous callback's worker thread.
     """
     if condition is None:

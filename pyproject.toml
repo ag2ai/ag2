@@ -33,9 +33,9 @@ authors = [{ name = "Chi Wang & Qingyun Wu", email = "support@ag2.ai" }]
 
 keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
-version = "1.2.2"
+version = "1.3.0"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -43,7 +43,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -188,7 +187,7 @@ optionals = [
     "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",
-    "tinyfish>=0.5,<0.6; python_version>='3.11'",
+    "tinyfish>=0.5,<0.6",
     "exa-py>=2.12.1,<3",
     "firecrawl-py>=4.53,<5",
     "torch>=2.5,<3",
@@ -214,7 +213,7 @@ docs = [
     "ag2[metrics]", # Metrics is exposed in the public API by the optional `ag2.middleware` module
     "ag2[ag-ui]",   # AG-UI is exposed in the public API by the optional `ag2.ag_ui` module
     # Extensions are not shipped as extras; install their packages directly so docs can import the modules
-    "tinyfish>=0.5,<0.6; python_version>='3.11'",
+    "tinyfish>=0.5,<0.6",
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",
     "exa-py>=2.12.1,<3",
@@ -339,7 +338,7 @@ relative_files = true
 [tool.ruff]
 fix = true
 line-length = 120
-target-version = 'py310'
+target-version = 'py311'
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".eggs",
@@ -395,6 +394,7 @@ ignore = [
     "C901",     # too complex
     "ASYNC109",
     "ASYNC240",
+    "UP042", # Preserve the str() behavior of existing public str/Enum types.
 ]
 
 [tool.ruff.lint.mccabe]
@@ -411,12 +411,16 @@ docstring-code-format = true
 convention = "google"
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 
 # The `ag2` tree is not yet strict-clean. Strict mypy coverage is being
 # (re)introduced module-by-module; until then mypy is scoped to modules
 # that already pass under `strict = true`.
 files = [
+    "ag2/scopes.py",
+    "ag2/events/delegation.py",
+    "ag2/tools/subagents/_forwarding.py",
+    "ag2/usage.py",
     "ag2/_import_utils.py",
     "ag2/__init__.py",
     "ag2/acp/client.py",
@@ -667,7 +671,7 @@ module = "ag2.live.sound_device"
 disable_error_code = ["no-any-unimported"]
 
 # numpy's bundled stubs use 3.12-only `type` syntax, which mypy cannot parse
-# under python_version = "3.10"; skip analysing numpy entirely (it is not our code).
+# under python_version = "3.11"; skip analysing numpy entirely (it is not our code).
 [[tool.mypy.overrides]]
 module = "numpy.*"
 follow_imports = "skip"

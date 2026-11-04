@@ -5,7 +5,8 @@
 import traceback
 from typing import TYPE_CHECKING, Any
 
-from .base import BaseEvent, Field
+from .base import Field
+from .delegation import InertEvent
 from .types import Usage
 
 if TYPE_CHECKING:
@@ -13,7 +14,11 @@ if TYPE_CHECKING:
     from ag2.task import TaskSpec
 
 
-class TaskEvent(BaseEvent):
+class TaskEvent(InertEvent):
+    """Task lifecycle; ancestors receive a sub-agent's lifecycle as itself, stamped with its ``path``."""
+
+    __conversational__ = False
+
     task_id: str
     agent_name: str
     objective: str
@@ -21,9 +26,8 @@ class TaskEvent(BaseEvent):
 
 class TaskStarted(TaskEvent):
     parent_tool_call_id: str | None = None
-    # Optional ``TaskSpec`` describing what the task is doing. Set by the
-    # framework-core ``Task`` primitive (``ag2.task``); legacy
-    # ``run_task`` callers leave it ``None``.
+    # TaskSpec is populated by standalone Tasks and model-run lifecycle.
+    # None remains readable for archived events without a spec.
     spec: "TaskSpec | None" = Field(default=None)
     # Absolute ISO deadline (start + ttl_seconds) if the task was created
     # with a TTL, else ``None``. Carried on the event so the network's
@@ -55,14 +59,14 @@ class TaskCompleted(TaskEvent):
     # Widened from ``str | None`` to ``Any`` so framework-core ``Task``
     # owners can return structured results. ``run_task`` still passes a
     # string, so existing callers are unaffected.
-    result: Any = Field(None)
+    result: Any = Field(default=None)
     # Stream reference for inspection. Resolves against the parent's storage
     # only when the sub-task's stream shares it, as `stream=None` builds it to.
     task_stream: "StreamId"
     # Cumulative snapshot of the sub-task's stream, for a holder of this one
     # event to inspect. Never sum these: on a reused stream each snapshot
     # re-reports everything spent before it. Anything that accumulates reads
-    # the ``UsageEvent`` rollup instead — see
+    # the source ``UsageEvent`` records instead — see
     # ``docs/adr/0014-token-accounting-reads-usageevent.md``.
     usage: Usage = Field(default_factory=Usage)
 

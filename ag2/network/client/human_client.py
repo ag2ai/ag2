@@ -237,7 +237,7 @@ class HumanClient:
         """Block until the next matching envelope arrives.
 
         ``predicate=None`` returns the very next envelope. ``timeout``
-        in seconds; raises ``asyncio.TimeoutError`` if exceeded.
+        in seconds; raises ``TimeoutError`` if exceeded.
         Envelopes that don't match the predicate are discarded — pass
         them via ``on_envelope`` if you want both behaviors at once.
 
@@ -251,7 +251,7 @@ class HumanClient:
             if deadline is not None:
                 remaining = deadline - loop.time()
                 if remaining <= 0:
-                    raise asyncio.TimeoutError()
+                    raise TimeoutError()
                 envelope = await asyncio.wait_for(self._inbox.get(), timeout=remaining)
             else:
                 envelope = await self._inbox.get()
@@ -402,7 +402,7 @@ class HumanClient:
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
             envelope = await asyncio.wait_for(inbox.get(), timeout=remaining)
             if envelope is None:
                 inbox.put_nowait(None)

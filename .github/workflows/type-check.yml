@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         optional-dependencies:
           - "none"
           # LLMs
@@ -54,9 +54,6 @@ jobs:
           # Issues with installing retrievechat-qdrant in python 3.14
           - python-version: "3.14"
             optional-dependencies: "retrievechat-qdrant"
-          # Browser use doesn't support below python 3.11
-          - python-version: "3.10"
-            optional-dependencies: "browser-use"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

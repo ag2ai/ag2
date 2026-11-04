@@ -13,7 +13,7 @@ and driven by the agent itself, and the mirror simply subscribes to
 
 import contextlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from ag2.events import (
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class TaskMirror:
@@ -284,9 +284,13 @@ class TaskMirror:
                 task_meta = await self._hub_client.get_task(task_id)
             except Exception:
                 task_meta = None
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
         if task_meta is None or task_meta.spec.capability is None:
             return
+        # A hub-owned expiry may win before a late owner terminal arrives.
+        # Record the accepted state, not the later event's proposed outcome.
+        if task_meta.state in TERMINAL_TASK_STATES:
+            outcome = task_meta.state
         latency_ms: int | None = None
         if task_meta.started_at and now_iso is not None:
             try:
