@@ -216,15 +216,16 @@ Type filters match the delivered event itself. A parent subscription to
 `#!python BaseEvent.source_event` returns the event itself for a local event,
 so shared inspection code can use that property on either form.
 
-This runnable example uses [scripted model replies](/docs/user-guide/testing),
-including a streamed chunk and usage figures, without a provider API key:
+This example streams a worker's reply through the OpenAI Responses API and
+reports actual token usage across the tree. Install `ag2[openai]` and set
+`OPENAI_API_KEY` as described in the [Quick Start](/docs/user-guide/quick-start).
 
 ```python linenums="1"
 import asyncio
 
 from ag2 import Agent, MemoryStream
-from ag2.events import ChildEvent, ModelMessage, ModelMessageChunk, ModelResponse, ToolCallEvent, Usage
-from ag2.testing import TestConfig
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ChildEvent, ModelMessageChunk
 
 def observe_child(event: ChildEvent) -> None:
     source = event.source_event
@@ -236,21 +237,19 @@ async def main():
     stream.where(ChildEvent).subscribe(observe_child)
     worker = Agent(
         "worker",
-        config=TestConfig(
-            ModelMessageChunk("Checking the source"),
-            ModelResponse(ModelMessage("Checked"), usage=Usage(total_tokens=30), model="worker-model"),
-        ),
+        config=OpenAIResponsesConfig(model="gpt-5", streaming=True),
+        prompt="Answer the assigned question in one sentence.",
     )
     coordinator = Agent(
         "coordinator",
-        config=TestConfig(
-            ToolCallEvent(name="task_worker", arguments='{"objective": "Check the source"}'),
-            ModelResponse(ModelMessage("Done"), usage=Usage(total_tokens=10), model="coordinator-model"),
-        ),
-        tools=[worker.as_tool(description="Check a source.")],
+        config=OpenAIResponsesConfig(model="gpt-5", streaming=True),
+        prompt="Delegate the question to task_worker exactly once, then summarize its response.",
+        tools=[worker.as_tool(description="Answer a focused question.")],
     )
-    reply = await coordinator.ask("Check the source", stream=stream)
-    print((await reply.usage()).total.total_tokens)  # 40: worker + coordinator
+    reply = await coordinator.ask("Why give each subagent its own conversation history?", stream=stream)
+    print(reply.body)
+    report = await reply.usage()
+    print(f"Total tokens across the tree: {report.total.total_tokens}")
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -273,14 +272,17 @@ or broadcast step.
 
 Use a custom non-conversational event to exchange application guidance without
 starting another model call. In this example, the worker's tool requests guidance,
-the parent responds, and the worker records the response before its tool resumes:
+the parent responds, and the worker records the response before its tool resumes.
+
+The example uses `#!python OpenAIResponsesConfig`; install `ag2[openai]` and set
+`OPENAI_API_KEY` as described in the [Quick Start](/docs/user-guide/quick-start).
 
 ```python linenums="1"
 import asyncio
 
 from ag2 import Agent, Context, MemoryStream, observer, tool
-from ag2.events import BaseEvent, ChildEvent, ToolCallEvent
-from ag2.testing import TestConfig
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import BaseEvent, ChildEvent
 
 class GuidanceRequested(BaseEvent):
     __conversational__ = False
@@ -291,7 +293,7 @@ class Guidance(BaseEvent):
 
 async def give_guidance(event: ChildEvent) -> None:
     if isinstance(event.source_event, GuidanceRequested):
-        await event.origin.send(Guidance(text="Compare the original sources"))
+        await event.origin.send(Guidance(text="Focus on whether worker updates are visible to the parent"))
 
 def receive_guidance(event: BaseEvent, context: Context) -> None:
     if isinstance(event, Guidance):
@@ -309,19 +311,19 @@ async def main():
     stream.where(ChildEvent).subscribe(give_guidance)
     worker = Agent(
         "worker",
-        config=TestConfig(ToolCallEvent(name="request_guidance", arguments="{}"), "Done"),
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Call request_guidance before answering, then follow its guidance and answer in one sentence.",
         tools=[request_guidance],
         observers=[observer(callback=receive_guidance)],
     )
     coordinator = Agent(
         "coordinator",
-        config=TestConfig(
-            ToolCallEvent(name="task_worker", arguments='{"objective": "Ask for guidance"}'),
-            "Done",
-        ),
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Delegate the question to task_worker exactly once, then summarize its response.",
         tools=[worker.as_tool(description="Work with guidance from the coordinator.")],
     )
-    await coordinator.ask("Ask the worker to proceed", stream=stream)
+    reply = await coordinator.ask("How do copied and shared variables differ?", stream=stream)
+    print(reply.body)
 
 if __name__ == "__main__":
     asyncio.run(main())

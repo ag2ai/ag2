@@ -69,46 +69,48 @@ underlying value, not the `#!python ScopedValue` declaration.
 
 ### Share findings while keeping drafts independent
 
-This example uses [scripted model replies](/docs/user-guide/testing) so the
-delegation and tool call run without an API key. The worker contributes to shared
-findings and edits its own copy of a draft. It cannot see the root's local note.
+The worker contributes to shared findings and edits its own copy of a draft.
+It cannot see the root's local note. The example calls the OpenAI Responses API:
+install `ag2[openai]` and set `OPENAI_API_KEY` as described in the
+[Quick Start](/docs/user-guide/quick-start).
 
 ```python linenums="1"
 import asyncio
 
 from ag2 import Agent, Context, Scope, ScopedValue, tool
-from ag2.events import ToolCallEvent
-from ag2.testing import TestConfig
+from ag2.config import OpenAIResponsesConfig
 
 @tool
-def record_finding(context: Context) -> str:
+def record_finding(finding: str, context: Context) -> str:
     """Save a finding and update this worker's draft."""
-    context.variables["findings"].append("Checked the source")
-    context.variables["draft"].append("Worker's draft")
+    context.variables["findings"].append(finding)
+    context.variables["draft"].append(finding)
     print(f"Root note visible: {'root_note' in context.variables}")  # False
     return "Finding saved"
 
 async def main():
     worker = Agent(
         "worker",
-        config=TestConfig(ToolCallEvent(name="record_finding", arguments="{}"), "Done"),
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Use record_finding exactly once to save the requested finding, then report completion.",
         tools=[record_finding],
     )
     coordinator = Agent(
         "coordinator",
-        config=TestConfig(
-            ToolCallEvent(name="task_worker", arguments='{"objective": "Check the source"}'),
-            "Done",
-        ),
-        tools=[worker.as_tool(description="Check a source and save findings.")],
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Delegate the task to task_worker exactly once, then summarize its response.",
+        tools=[worker.as_tool(description="Record a finding in the shared collection.")],
     )
     supplied = {
         "findings": ScopedValue([], scope=Scope.SHARED),
         "draft": [],
         "root_note": ScopedValue("Coordinator's note", scope=Scope.LOCAL),
     }
-    reply = await coordinator.ask("Check the source", variables=supplied)
-    print(reply.context.variables["findings"])  # ['Checked the source']
+    reply = await coordinator.ask(
+        "Record that each delegated invocation has its own conversation history.",
+        variables=supplied,
+    )
+    print(reply.context.variables["findings"])  # Contains the worker's finding
     print(reply.context.variables["draft"])  # []
     print(supplied["findings"].value)  # []: the caller's input was copied
 
@@ -119,6 +121,8 @@ if __name__ == "__main__":
 Read the resulting state from `#!python reply.context.variables`. Even shared
 values belong to this invocation's tree; they do not mutate the original input
 container or become shared with a separate root invocation.
+The model chooses its tool calls; after `#!python record_finding` runs, the root
+sees the saved finding while its own draft and the caller's input remain unchanged.
 
 ### Declare shared names at the root
 
