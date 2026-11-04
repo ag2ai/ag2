@@ -354,7 +354,6 @@ It means that subagent has no information about previous calls or results. It ju
 | **Dependencies** | Shallow-copied; the parent's configuration fills only keys the sub-agent doesn't set | Replacing a mapping entry stays in the child, but referenced objects remain shared. Values passed to `ask(dependencies=...)` or set at runtime override the sub-agent's own; the parent's constructor and plugin defaults don't (e.g. the sub-agent's `KnowledgePlugin` store wins over the parent's) |
 | **Variables** | Plain / copied values are deep-copied, local values are excluded, and root-declared shared bindings remain shared | [Scope declarations](/docs/user-guide/context/variables#variable-scopes-across-subagents) control visibility. Reserved `ag:` / `a2a:` keys, including `approval_required` "always" answers, are not inherited |
 | **History** | Fresh stream | Clean context — the LLM passes relevant info via `context` parameter |
-| **Depth counter** | Incremented in child; excluded from sync-back | Internal bookkeeping — never leaks to parent |
 | **Agent prompt, tools, config** | Supplied by the worker Agent | Nothing is inherited from the parent; construct each worker with its own capabilities |
 
 ### Persistent Stream
