@@ -5552,23 +5552,14 @@ async with Task(owner_id=agent.name, spec=TaskSpec(title="watched"), context=ctx
 
 Model runs do not inject a standalone Task or replace one supplied by an enclosing block. Use context variables for model-run state.
 
-Inside an `async with Task(...)` block, the framework stamps the active Task into `context.dependencies["ag2.task"]`. Two ways to read it:
-
-### Direct access
-
-```python
-async with Task(owner_id=agent.name, spec=TaskSpec(title="work"), context=ctx) as task:
-    active = ctx.dependencies["ag2.task"]
-    assert active is task
-```
+Code running inside an `async with Task(...)` block can reach the task without having it passed around: annotate a parameter with `TaskInject` and the framework injects the task whose block encloses the call.
 
 ### `TaskInject` annotation
 
-`TaskInject` is a fast_depends-resolvable annotation that injects the active Task into any function the dependency-injection machinery resolves - most usefully a `@tool` body.
+`TaskInject` is a fast_depends-resolvable annotation that injects the enclosing task into any function the dependency-injection machinery resolves - most usefully a `@tool` body.
 
 ```python
-from ag2 import tool
-from ag2.task import TaskInject
+from ag2 import TaskInject, tool
 
 @tool
 async def report(message: str, task: TaskInject) -> str:
@@ -5578,7 +5569,48 @@ async def report(message: str, task: TaskInject) -> str:
     return f"reported on task {task.task_id}"
 ```
 
-The injection has `default=None`, so always treat `task` as possibly `None` and null-check before use.
+`TaskInject` resolves to `None` when no task encloses the call, so always null-check before use.
+
+### Which task a tool sees
+
+Open the block on the stream the agent's turn runs on, and the turn's tools report to that task:
+
+```python
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.context import ConversationContext
+from ag2.stream import MemoryStream
+from ag2.task import Task, TaskSpec
+
+agent = Agent("worker", config=AnthropicConfig(model="claude-sonnet-5"), tools=[report])
+ctx = ConversationContext(stream=MemoryStream())
+async with Task(owner_id=agent.name, spec=TaskSpec(title="work"), context=ctx):
+    await agent.ask("Report progress.", stream=ctx.stream)
+```
+
+- **Parallel tool calls.** When several calls in one model response each open their own task - for example from [tool middleware](tools/tool_middleware.md) that wraps every call in `Task(...)` - each call resolves its **own** task, whatever the others do.
+- **Nested blocks.** A nested block resolves to the innermost enclosing task; once it exits, the outer task again.
+- **Other conversations.** A turn on a different stream started inside the block does not see the task. That includes subagents (`as_tool`): a delegation runs on its own stream and is its own task scope.
+- **Outside the block.** Code the block does not enclose - after it exits, or a handler or background task started before it - resolves `None`, not some other task.
+
+Outside any block, a task you pass yourself as the `"ag2.task"` dependency is injected - handy for testing a tool on its own:
+
+```python
+async with Task(owner_id=agent.name, spec=TaskSpec(title="given")) as task:
+    await agent.ask("Report progress.", dependencies={"ag2.task": task})
+```
+
+### Direct access
+
+For direct readers of the dict, `context.dependencies["ag2.task"]` also holds a task for the duration of the block:
+
+```python
+async with Task(owner_id=agent.name, spec=TaskSpec(title="work"), context=ctx) as task:
+    active = ctx.dependencies["ag2.task"]
+    assert active is task
+```
+
+The slot is best-effort when tasks overlap: with parallel tool calls each opening a task on one conversation, it can only name the most recently entered task still running. Prefer `TaskInject`, which does not read the slot a block stamped.
 
 ## TTL and Expiry
 
@@ -5658,7 +5690,7 @@ Breaking work across multiple agents gives you:
 - **LLM-driven orchestration** - the calling agent decides when to delegate, what context to pass, and how to use the result.
 
 !!! note
-    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other.
+    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Plain variables are deep-copied for each branch; explicitly shared variables remain visible across the tree. See [Variable Scopes Across Subagents](context/variables.md#variable-scopes-across-subagents) for ownership and synchronization rules.
 
 !!! warning "TaskConfig is deprecated"
     `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the automatically injected `run_subtask` / `run_subtasks` tools will be removed in **1.4.0**. Existing code continues to work with deprecation warnings. Use `Agent.as_tool()` for new code and follow the [migration guide](subagents.md#migrating-from-taskconfig) below.
@@ -5735,6 +5767,24 @@ coordinator = Agent(
     ],
 )
 ```
+
+## Observe and Address Subagents
+
+Register an [observer](advanced/observers.md) on the parent to observe its entire delegation subtree,
+including grandchildren and transient chunks. Operational events arrive as
+`ChildEvent` observations; `UsageEvent` and task lifecycle
+events arrive as themselves with delegation provenance. Observation does not
+execute a child's tools or model requests in the parent.
+
+An observed event's live `event.origin` addresses the invocation that
+authored it. Use `await event.origin.send(event_to_deliver)` to send an
+event back through that invocation's normal handlers. Handles expire when the
+invocation ends and are unavailable when reading saved history.
+
+See [Observe a Delegation Tree](advanced/stream.md#observe-a-delegation-tree)
+for event types, filtering, and source accounting, and
+[Reply to an Event's Author](advanced/stream.md#reply-to-an-events-author)
+for a runnable addressed-delivery example.
 
 ## Delegation Lifecycle
 
@@ -5977,11 +6027,11 @@ It means that subagent has no information about previous calls or results. It ju
 
 | What | Behavior | Why |
 |---|---|---|
-| **Dependencies** | Copied; the parent's configuration fills only keys the sub-agent doesn't set | Isolated - child mutations don't affect parent. Values passed to `ask(dependencies=...)` or set at runtime override the sub-agent's own; the parent's constructor and plugin defaults don't (e.g. the sub-agent's `KnowledgePlugin` store wins over the parent's) |
-| **Variables** | Copied; not synced back. `approval_required` "always" answers are not inherited | Concurrent-safe - child mutations stay scoped to the child; the sub-task asks for approval again |
+| **Dependencies** | Shallow-copied; the parent's configuration fills only keys the sub-agent doesn't set | Replacing a mapping entry stays in the child, but referenced objects remain shared. Values passed to `ask(dependencies=...)` or set at runtime override the sub-agent's own; the parent's constructor and plugin defaults don't (e.g. the sub-agent's `KnowledgePlugin` store wins over the parent's) |
+| **Variables** | Plain / copied values are deep-copied, local values are excluded, and root-declared shared bindings remain shared | [Scope declarations](context/variables.md#variable-scopes-across-subagents) control visibility. Reserved `ag:` / `a2a:` keys, including `approval_required` "always" answers, are not inherited |
 | **History** | Fresh stream | Clean context - the LLM passes relevant info via `context` parameter |
 | **Depth counter** | Incremented in child; excluded from sync-back | Internal bookkeeping - never leaks to parent |
-| **Agent prompt, tools, config** | Inherited | The sub-agent brings its own capabilities |
+| **Agent prompt, tools, config** | Supplied by the worker Agent | Nothing is inherited from the parent; construct each worker with its own capabilities |
 
 ### Persistent Stream
 
@@ -6017,7 +6067,7 @@ events = await sub_stream.history.get_events()
 ```
 
 !!! warning
-    Reusing one stream also makes the sub-agent **stateful**: because the history is shared, each delegation sees every earlier delegation's turns, and token cost grows with them. This is the same trade-off as `persistent_stream()`. To observe events *without* accumulating history, use a [custom factory](#custom-factory) that returns a fresh stream per call and subscribe to each one.
+    Reusing one stream also makes the sub-agent **stateful**: because the history is shared, each delegation sees every earlier delegation's turns, and token cost grows with them. This is the same trade-off as `persistent_stream()`. To observe events *without* accumulating child conversation history, register [observers on the parent](advanced/stream.md#observe-a-delegation-tree) and keep the default fresh stream per call.
 
 Unlike `persistent_stream()`, an instance you construct yourself carries its own storage backend unless you pass the parent's - `MemoryStream(storage=parent_stream.history.storage)`.
 
@@ -10475,7 +10525,7 @@ Source: https://docs.ag2.ai/docs/user-guide/context/variables/
 
 # Conversation Variables
 
-Variables provide a flexible way to store, share, and inject contextual information between agents and tools. Unlike hardcoded configurations, variables allow you to dynamically pass state-like API keys, session data, or user preferences-during runtime without exposing them to the underlying LLM.
+Variables hold serializable conversation state, such as session data, user preferences, and task progress. Tools can read and update this state without adding it to the model's input; use [dependencies](inject.md) for secrets and runtime objects such as clients, connections, and locks.
 
 ## Passing Variables to a Conversation
 
@@ -10483,16 +10533,13 @@ You can pass variables at different levels depending on how long they need to pe
 
 ### Agent Variables
 
-When you want a variable to be available across all interactions with a specific agent, you can initialize the agent with default variables.
+Initialize an agent with default variables to make them available to each new invocation. A fresh `ask()` or `run()` deep-copies the merged defaults and per-call values, so separate root invocations do not share their mutable state. Reply continuations keep the current invocation's variables.
 
 ```python
 from ag2 import Agent
 
 # This variable will be available in all tool calls executed by this agent
-agent = Agent(
-    name="WeatherBot",
-    variables={"api_key": "your_global_api_key"}
-)
+agent = Agent(name="WeatherBot", variables={"units": "celsius"})
 ```
 
 ### Conversation Variables
@@ -10523,6 +10570,98 @@ await agent.ask(
     variables={"override_me": "CallLevel", "call_param": "B"}
 )
 ```
+
+## Variable Scopes Across Subagents
+
+Use `ScopedValue(value, scope=Scope.SHARED)` to choose how a variable crosses
+a [subagent delegation](../subagents.md). Import `Scope`,
+`ScopedValue`, and `ScopeError` from `ag2`.
+
+| Scope | What the child receives | Where changes are visible |
+|---|---|---|
+| `Scope.COPIED` | A deep copy of the current value | In that branch; changes do not sync back to the parent or siblings |
+| `Scope.LOCAL` | Nothing; the binding stays in its current branch | In the branch that owns it |
+| `Scope.SHARED` | Access to the same binding | Across the invocation's delegation tree, including replacement of the value |
+
+Plain values use `Scope.COPIED`, as does `ScopedValue(value)`
+without an explicit scope. Tools and `Variable()` injection receive the
+underlying value, not the `ScopedValue` declaration.
+
+### Share findings while keeping drafts independent
+
+The worker contributes to shared findings and edits its own copy of a draft.
+It cannot see the root's local note. The example calls the OpenAI Responses API:
+install `ag2[openai]` and set `OPENAI_API_KEY` as described in the
+[Quick Start](../quick-start.md).
+
+```python
+import asyncio
+
+from ag2 import Agent, Context, Scope, ScopedValue, tool
+from ag2.config import OpenAIResponsesConfig
+
+@tool
+def record_finding(finding: str, context: Context) -> str:
+    """Save a finding and update this worker's draft."""
+    context.variables["findings"].append(finding)
+    context.variables["draft"].append(finding)
+    print(f"Root note visible: {'root_note' in context.variables}")  # False
+    return "Finding saved"
+
+async def main():
+    worker = Agent(
+        "worker",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Use record_finding exactly once to save the requested finding, then report completion.",
+        tools=[record_finding],
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Delegate the task to task_worker exactly once, then summarize its response.",
+        tools=[worker.as_tool(description="Record a finding in the shared collection.")],
+    )
+    supplied = {
+        "findings": ScopedValue([], scope=Scope.SHARED),
+        "draft": [],
+        "root_note": ScopedValue("Coordinator's note", scope=Scope.LOCAL),
+    }
+    reply = await coordinator.ask(
+        "Record that each delegated invocation has its own conversation history.",
+        variables=supplied,
+    )
+    print(reply.context.variables["findings"])  # Contains the worker's finding
+    print(reply.context.variables["draft"])  # []
+    print(supplied["findings"].value)  # []: the caller's input was copied
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Read the resulting state from `reply.context.variables`. Even shared
+values belong to this invocation's tree; they do not mutate the original input
+container or become shared with a separate root invocation.
+The model chooses its tool calls; after `record_finding` runs, the root
+sees the saved finding while its own draft and the caller's input remain unchanged.
+
+### Declare shared names at the root
+
+Declare shared bindings in the root agent's defaults or the root call's
+`variables=`. Descendants can mutate or replace an existing shared
+binding, but introducing a new shared name below the root, changing an existing
+scope, or sharing a reserved `ag:` / `a2a:` name raises `ScopeError`.
+Per-call plain overrides preserve a scope declared in agent defaults.
+
+For open-ended contributions, declare a shared dictionary at the root, such as
+`ScopedValue({}, scope=Scope.SHARED)`, then add entries inside it.
+This adds data without declaring new tree-wide variable names.
+
+!!! note "Sharing does not provide synchronization"
+    Supply an application lock through [dependencies](inject.md)
+    when concurrent workers need to coordinate updates. The dependency mapping is
+    shallow-copied, so its referenced lock can be shared. Use `asyncio.Lock` for
+    cooperating async code; synchronous tools run in threads and need a suitable
+    synchronization strategy. Shared changes are not rolled back when a worker fails.
 
 ## Context Variables Access
 
@@ -12675,7 +12814,7 @@ The per-task `trace_ref` is the real OpenTelemetry trace id of that task's spans
 
     Token accounting now reads `UsageEvent`, the framework's accounting record, instead of summing `ModelResponse`. Work that spends tokens without producing a model response was previously invisible and is now counted:
 
-    - **Delegated sub-tasks.** A worker's spend reaches the parent as a `"subtask"` rollup. For a delegating agent this is often most of the bill.
+    - **Delegated sub-tasks.** A worker's source `UsageEvent` records reach its ancestors as they arrive; older histories may contain `"subtask"` rollups instead. See [Account for Descendant Usage](../advanced/stream.md#account-for-descendant-usage). For a delegating agent this is often most of the bill.
     - **History compaction** and **memory aggregation** - real, billable maintenance calls.
     - **Live sessions**, whose realtime usage maps straight to the accounting record.
 
@@ -14042,7 +14181,7 @@ response = await agent.ask("Hello!", stream=my_stream)
 You can listen to events flowing through the stream using the `subscribe` method. To filter which events you receive, you can use the `where` method.
 
 !!! note
-    All event subscribers and interrupters support the same powerful execution context capabilities as [Agent Tools](../tools/approval_required.md).
+    All event subscribers and interrupters support the same powerful execution context capabilities as [Agent Tools](../tools/tools.md).
 
     By type-hinting the `Context` object (or using `Depends`, `Inject`, `Variable`), your subscribers can access injected dependencies, interact with human-in-the-loop flows, or access conversation variables.
 
@@ -14193,6 +14332,185 @@ with stream.where(ToolResultEvent).join(max_events=1) as results:
 
 !!! warning "Do not timeout individual `join()` pulls"
     Consume the iterator with a plain `async for`. Avoid wrapping individual pulls such as `await asyncio.wait_for(events.__anext__(), timeout=...)`: cancelling one `__anext__()` closes the current iterator, so later events will not be yielded by that iterator. For bounded consumption, use `join(max_events=N)` or put one `asyncio.timeout(...)` around the whole loop.
+
+## Observe a Delegation Tree
+
+When an agent delegates through [subagent tools](../subagents.md),
+every descendant event reaches every ancestor's stream. Forwarding includes
+grandchildren and transient chunks; register an
+[observer](observers.md) on the root agent to observe the
+whole tree without choosing a persistent child stream.
+
+The event type distinguishes observation from local execution:
+
+| Source event | What an ancestor receives | Observer filter |
+|---|---|---|
+| Model requests/responses, tool events, and other operational events | `ChildEvent` containing the original event | `@observer(ChildEvent)`; inspect `event.source_event` |
+| Transient events such as `ModelMessageChunk` | `TransientChildEvent`, a transient subclass of `ChildEvent` | The same `@observer(ChildEvent)` filter |
+| `UsageEvent` and every `TaskEvent` | The source event type, with delegation provenance; both inherit `InertEvent` | `@observer(UsageEvent)` / `@observer(TaskEvent)` |
+
+A `ChildEvent` is non-conversational: it does not enter the ancestor's
+model transcript or trigger its tools, model loop, or HITL handlers. The original
+author's `task_id`, `agent_name`, and `origin_event_id`
+identify its source. Its `path` contains delegation task IDs from the
+outermost invocation to that author. Forwarding through another ancestor keeps
+the same source rather than nesting another observation envelope.
+
+Type filters match the delivered event itself. A parent subscription to
+`ToolCallEvent` receives local tool calls; inspect
+`ChildEvent.source_event` to find calls authored by descendants.
+`BaseEvent.source_event` returns the event itself for a local event,
+so shared inspection code can use that property on either form.
+
+This example streams a worker's reply through the OpenAI Responses API and
+reports actual token usage across the tree. Install `ag2[openai]` and set
+`OPENAI_API_KEY` as described in the [Quick Start](../quick-start.md).
+
+```python
+import asyncio
+
+from ag2 import Agent, observer
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ChildEvent, ModelMessageChunk
+
+@observer(ChildEvent)
+def observe_child(event: ChildEvent) -> None:
+    source = event.source_event
+    if isinstance(source, ModelMessageChunk):
+        print(f"{event.agent_name}: {source.content}")
+
+async def main():
+    worker = Agent(
+        "worker",
+        config=OpenAIResponsesConfig(model="gpt-5", streaming=True),
+        prompt="Answer the assigned question in one sentence.",
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=OpenAIResponsesConfig(model="gpt-5", streaming=True),
+        prompt="Delegate the question to task_worker exactly once, then summarize its response.",
+        tools=[worker.as_tool(description="Answer a focused question.")],
+        observers=[observe_child],
+    )
+    reply = await coordinator.ask("Why give each subagent its own conversation history?")
+    print(reply.body)
+    report = await reply.usage()
+    print(f"Total tokens across the tree: {report.total.total_tokens}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Transient observations remain transient, so chunks are delivered live without
+being retained in default history. Normal `persist_all` behavior still
+applies. Forwarding awaits the ancestor's ordinary delivery pipeline: a slow
+subscriber can delay descendants, and subscriber errors follow normal stream
+delivery behavior. Filter broad subscriptions and cadence-based watches when
+they should only process part of the tree.
+
+### Reply to an Event's Author
+
+While the author is executing, `await event.origin.send(reply_event)`
+delivers an event to that exact invocation through its normal event pipeline.
+The handle addresses the original author even when a grandparent observes the
+event or several invocations use the same agent name. There is no name lookup
+or broadcast step.
+
+Use a custom non-conversational event to exchange application guidance without
+starting another model call. In this example, the worker's tool requests guidance,
+the parent responds, and the worker records the response before its tool resumes.
+
+The example uses `OpenAIResponsesConfig`; install `ag2[openai]` and set
+`OPENAI_API_KEY` as described in the [Quick Start](../quick-start.md).
+
+```python
+import asyncio
+
+from ag2 import Agent, Context, observer, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import BaseEvent, ChildEvent
+
+class GuidanceRequested(BaseEvent):
+    __conversational__ = False
+
+class Guidance(BaseEvent):
+    __conversational__ = False
+    text: str
+
+@observer(ChildEvent)
+async def give_guidance(event: ChildEvent) -> None:
+    if isinstance(event.source_event, GuidanceRequested):
+        await event.origin.send(Guidance(text="Focus on whether worker updates are visible to the parent"))
+
+@observer(Guidance)
+def receive_guidance(event: Guidance, context: Context) -> None:
+    context.variables["guidance"] = event.text
+    print(event.text)
+
+@tool
+async def request_guidance(context: Context) -> str:
+    """Ask the coordinator how to continue."""
+    await context.send(GuidanceRequested())
+    return context.variables["guidance"]
+
+async def main():
+    worker = Agent(
+        "worker",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Call request_guidance before answering, then follow its guidance and answer in one sentence.",
+        tools=[request_guidance],
+        observers=[receive_guidance],
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Delegate the question to task_worker exactly once, then summarize its response.",
+        tools=[worker.as_tool(description="Work with guidance from the coordinator.")],
+        observers=[give_guidance],
+    )
+    reply = await coordinator.ask("How do copied and shared variables differ?")
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The receiving pipeline determines the delivered event's effect. In particular,
+sending a model request can start a reentrant model call; delivery adds no
+scheduling barrier. Each delivery also records a `DownEvent` audit
+(or `TransientDownEvent` for a transient event).
+
+Handles belong to one invocation, expire when it ends, and are not serialized.
+Saved history retains source metadata but has no live `origin`; accessing
+it on a replayed observation or a local inert event raises `RuntimeError`.
+Sending through an expired handle raises `DeliveryError` from
+`ag2.tools.subagents` and publishes `DeliveryFailed` on the
+sender's stream. Even a forwarded terminal lifecycle event no longer has an
+executing recipient.
+
+### Account for Descendant Usage
+
+Ancestors receive each descendant's original `UsageEvent` as it arrives,
+including spend before failure or cancellation. Its `event_id`,
+`kind`, provider, and model stay unchanged through forwarding. Descendant
+records additionally carry `task_id`, `agent_name`, and
+`path`; a local record has no delegation task ID and an empty path.
+
+Use `@observer(UsageEvent)` for both local and descendant spend.
+For local-only usage or lifecycle subscriptions, filter the event's
+`path == ()`; excluding `ChildEvent` alone still includes
+descendant inert events.
+
+`await reply.usage()` includes local and descendant costs and
+deduplicates records by source identity. Custom reports should also count each
+`UsageEvent.event_id` once within their reporting scope. New delegations
+produce no `kind="subtask"` rollup or `parts` summary. `ModelResponse.usage`
+and terminal task usage are snapshots for inspection, not additional additive
+records. Existing archived rollups remain readable.
+
+See [TokenMonitor](observers.md#tokenmonitor) for budget
+alerts and [Variable Scopes Across Subagents](../context/variables.md#variable-scopes-across-subagents)
+for the separate rules governing shared application state.
 
 ## Query retained history
 
@@ -14665,7 +14983,7 @@ agent = Agent(
 
 #### TokenMonitor
 
-Tracks cumulative token usage across `UsageEvent` - the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, sub-task rollups (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
+Tracks cumulative token usage across `UsageEvent` - the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, source events forwarded from descendants (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Descendant usage arrives while the sub-task runs, without a generated rollup; see [Account for Descendant Usage](stream.md#account-for-descendant-usage). Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
 
 ```python
 from ag2 import Agent
@@ -21064,7 +21382,7 @@ If you write a custom adapter, override `tools_for` to offer your channel's verb
 
 ## What gets injected, automatically
 
-Every grouped tool accepts `AgentClientInject`, `ChannelInject`, and (for `tasks`) `TaskInject` parameters that the framework resolves from `context.dependencies` when the tool runs inside a notify handler. Your code does not need to wire them up - the default handler stamps them via `stamp_dependencies` before invoking the agent's turn.
+Every grouped tool accepts `AgentClientInject`, `ChannelInject`, and (for `tasks`) `TaskInject` parameters that the framework resolves from the context when the tool runs inside a notify handler (`TaskInject` resolves to the enclosing `Task(...)` block on the same conversation - see [Tasks](../tasks.md)). Your code does not need to wire them up - the default handler stamps them via `stamp_dependencies` before invoking the agent's turn.
 
 If you are testing a tool *outside* the notify-handler context, pass them yourself:
 
