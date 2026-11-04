@@ -150,12 +150,12 @@ AG2 is async throughout, so the example runs inside an `async` function driven b
 ```python
 import asyncio
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 async def main() -> None:
@@ -181,7 +181,7 @@ Decorate a plain Python function with `@tool` and pass it to the agent. AG2 mana
 ```python
 import asyncio
 from ag2 import Agent, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 @tool
 async def get_weather(city: str) -> str:
@@ -191,7 +191,7 @@ async def get_weather(city: str) -> str:
 agent = Agent(
     "assistant",
     prompt="Use tools when helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     tools=[get_weather],
 )
 
@@ -228,18 +228,38 @@ The API is built around a few simple methods:
 
 The final result of any turn is safely stored in `reply.response`; use `reply.body` for the text.
 
+## Task Lifecycle
+
+`ask()` and `run()` accept `capability` and
+`ttl_seconds` per invocation. Supplying either enables `TaskStarted`
+and a terminal event: completed, failed, cancelled, or externally expired.
+The same lifecycle is used by subagent delegations. Without either option,
+ordinary invocations emit no task lifecycle events.
+
+```python
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+
+agent = Agent("analyst", config=OpenAIResponsesConfig(model="gpt-5"))
+reply = await agent.ask("Analyse the report", capability="analysis", ttl_seconds=60)
+```
+
+`AgentReply.ask()`, `AgentReply.run()`, and `Agent.resume()`
+accept these options too. See [Tasks](tasks.md) for lifecycle,
+cancellation, TTL, and standalone work.
+
 ## Basic Communication Example
 
 Here's how easily you can start and continue a conversation:
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 # Start a new conversation
@@ -259,7 +279,7 @@ Agents can seamlessly use Python functions as tools. When you provide a list of 
 
 ```python
 from ag2 import Agent, Context, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 @tool
 async def echo(text: str) -> str:
@@ -269,7 +289,7 @@ async def echo(text: str) -> str:
 agent = Agent(
     "assistant",
     prompt="Use tools when helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     tools=[echo],
 )
 
@@ -283,7 +303,7 @@ Sometimes an agent needs human guidance. You can configure an agent to handle `H
 
 ```python
 from ag2 import Agent, Context, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import HumanInputRequest, HumanMessage
 
 @tool
@@ -301,7 +321,7 @@ def hitl_hook(event: HumanInputRequest) -> HumanMessage:
 agent = Agent(
     "assistant",
     prompt="Use ask_human when needed.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     tools=[ask_human],
     hitl_hook=hitl_hook,
 )
@@ -317,7 +337,7 @@ Need to know exactly what the agent is doing? Pass a `MemoryStream` when calling
 ```python
 from ag2 import Agent, Context, MemoryStream
 from ag2.events import BaseEvent, ModelResponse, ToolCallEvent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 stream = MemoryStream()
 
@@ -334,7 +354,7 @@ async def on_tool_call(event: ToolCallEvent) -> None:
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 # Stream captures all events during the ask
@@ -354,11 +374,11 @@ The turn does **not** advance on its own. Call `run.start()` to drive it in the 
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig("gpt-4o-mini", streaming=True),
+    config=OpenAICompletionsConfig("gpt-4o-mini", streaming=True),
 )
 
 async with agent.run("Tell me about Paris in two sentences.") as run:
@@ -396,7 +416,7 @@ A running turn keeps an **inbox**. Call `run.enqueue(...)` to push a follow-up m
 ```python
 from ag2 import Agent, tool
 from ag2.events import ToolResultEvent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 @tool
 async def search(query: str) -> str:
@@ -406,7 +426,7 @@ async def search(query: str) -> str:
 agent = Agent(
     "assistant",
     prompt="Use the search tool when helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     tools=[search],
 )
 
@@ -427,6 +447,9 @@ print(await reply.content())
 * **before** `result()` -> merged into the turn's first model call;
 * **while the turn is running** -> consumed by that same turn's next or final model call;
 * **after** the turn finishes -> waits for the next turn on this stream.
+
+A message sent with `run.enqueue` counts as user input, so it starts a new
+interval for [history queries scoped to the current user input](advanced/stream.md#scope-to-the-current-user-input).
 
 !!! tip "Building with an AI coding assistant?"
     See [Coding with AI Assistants](coding_with_ai.md) to set up Claude Code, Cursor, Copilot, or another assistant with AG2 skills and project rules so it writes against the current `ag2` API.
@@ -526,7 +549,7 @@ To configure a model, import the specific provider's configuration class and ini
 
     # Configure a Gemini model
     config = GeminiConfig(
-        model="gemini-3-flash-preview",
+        model="gemini-3.6-flash",
         api_key="...",
         streaming=True
     )
@@ -795,7 +818,7 @@ Authentication accepts any of the following:
     from ag2.config import VertexAIConfig
 
     config = VertexAIConfig(
-        model="gemini-3-flash-preview",
+        model="gemini-3.6-flash",
         project="my-gcp-project",
         location="us-central1",
         credentials="/path/to/service-account-key.json",
@@ -814,7 +837,7 @@ Authentication accepts any of the following:
     # GOOGLE_APPLICATION_CREDENTIALS points to a key file. With nothing
     # passed to `credentials`, google-genai resolves ADC automatically.
     config = VertexAIConfig(
-        model="gemini-3-flash-preview",
+        model="gemini-3.6-flash",
         project="my-gcp-project",
         location="us-central1",
     )
@@ -830,7 +853,7 @@ Authentication accepts any of the following:
     )
 
     config = VertexAIConfig(
-        model="gemini-3-flash-preview",
+        model="gemini-3.6-flash",
         project="my-gcp-project",
         location="us-central1",
         credentials=creds,
@@ -863,7 +886,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 from ag2.config import VertexAIConfig
 
 # All Vertex auth parameters resolved from the environment.
-config = VertexAIConfig(model="gemini-3-flash-preview")
+config = VertexAIConfig(model="gemini-3.6-flash")
 ```
 
 ### Controlling Gemini Thinking
@@ -877,13 +900,13 @@ from ag2.config import GeminiConfig, VertexAIConfig
 
 # Gemini 3 - bound thinking with a level
 gemini3 = GeminiConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     thinking_level="low",  # "low" | "medium" | "high"
 )
 
 # Gemini 2.5 - bound thinking with an explicit token budget
 gemini25 = VertexAIConfig(
-    model="gemini-2.5-pro",
+    model="gemini-2.5-flash-lite",
     project="my-gcp-project",
     location="us-central1",
     thinking_budget=512,  # 0 disables thinking entirely
@@ -893,6 +916,23 @@ gemini25 = VertexAIConfig(
 For full control (e.g. enabling `include_thoughts`), pass a `google.genai.types.ThinkingConfig` directly via `thinking_config`. When set, it takes precedence over the shorthand fields.
 
 The number of thinking tokens consumed is reported on `ModelResponse.usage.thinking_tokens` and emitted as the `gen_ai.usage.thinking_tokens` OpenTelemetry attribute by `TelemetryMiddleware`.
+
+### Gemini Responses Cut at the Token Limit
+
+With [long decode](https://ai.google.dev/gemini-api/docs/generate-content/long-decode) (Gemini 4 Argon, with `max_output_tokens` above the 64K per-request cap), Gemini stops a long response at that cap before the answer is complete, with the finish reason `CONTINUATION` and a token to resume from. From `google-genai` 2.30, the SDK resumes such a response automatically, request after request, until the model finishes. AG2 then returns the joined answer, and `ModelResponse.usage` is the sum of all those requests, since each one is billed on its own.
+
+Set `automatic_continuation=False` on `GeminiConfig` or `VertexAIConfig` to turn the resumption off, for example to cap the cost of a single call:
+
+```python
+from ag2.config import GeminiConfig
+
+config = GeminiConfig(
+    model="gemini-3.6-flash",
+    automatic_continuation=False,
+)
+```
+
+A response cut short then reports `response.finish_reason == "continuation"`, so it can be told apart from a finished one. With `google-genai` 2.29, which knows the finish reason but cannot resume, every cut response reports it this way.
 
 ### Ollama Configuration
 
@@ -1484,13 +1524,13 @@ The most common use is multi-turn that outlives the process: persist a conversat
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ModelRequest, TextInput
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful travel assistant.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 # A conversation you stored earlier and just loaded back from your database.
@@ -1510,7 +1550,7 @@ A turn can also stop **mid-loop** - the model asked to run a tool whose result i
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import (
     ModelMessage,
     ModelRequest,
@@ -1522,7 +1562,7 @@ from ag2.events import (
     ToolResultsEvent,
 )
 
-agent = Agent("support", prompt="Answer using the tool result.", config=OpenAIConfig("gpt-4o-mini"))
+agent = Agent("support", prompt="Answer using the tool result.", config=OpenAICompletionsConfig("gpt-4o-mini"))
 
 # The trajectory recorded earlier: the user asked, and the model responded
 # by requesting a tool call (whose result is not yet known).
@@ -1558,7 +1598,7 @@ print(reply.body)
 ```
 
 !!! note "Reading back the event log"
-    `resume` reads only the events you pass in - it does not load history from a store on its own. The [event log](advanced/knowledge_store.md) written by `KnowledgeConfig(write_event_log=True)` is one place these trajectories can come from: it persists each turn to `/log/{stream_id}.jsonl`, and `EventLogWriter(store).load(stream_id)` reads it back as typed events ready to pass straight to `resume`.
+    `resume` reads only the events you pass in - it does not load history from a store on its own. The [event log](advanced/knowledge_store.md) written by `KnowledgePlugin(store, write_event_log=True)` is one place these trajectories can come from: it persists each turn to `/log/{stream_id}.jsonl`, and `EventLogWriter(store).load(stream_id)` reads it back as typed events ready to pass straight to `resume`.
 
     ```python linenums="1"
     from ag2.knowledge import EventLogWriter
@@ -1639,12 +1679,12 @@ With the default **OpenAI** client, when the schema exposes a JSON Schema to the
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant. Answer concisely.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     response_schema=int,
 )
 
@@ -1669,7 +1709,7 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 class TicketTriage(BaseModel):
     """Structured triage for a single support message."""
@@ -1681,7 +1721,7 @@ class TicketTriage(BaseModel):
 agent = Agent(
     "triage",
     prompt="You triage customer support messages. Be conservative with urgency.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     response_schema=TicketTriage,
 )
 
@@ -1702,7 +1742,7 @@ Turn natural language into something your scheduling layer can consume:
 from dataclasses import dataclass
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 @dataclass
 class DeliveryWindow:
@@ -1714,7 +1754,7 @@ class DeliveryWindow:
 agent = Agent(
     "scheduler",
     prompt="Extract delivery windows as structured data only; use 24h integers for hours.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     response_schema=DeliveryWindow,
 )
 
@@ -1730,12 +1770,12 @@ Use a primitive schema when the payload is a single JSON value and your prompt d
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "reviews",
     prompt="You output a single integer 1-5 for overall satisfaction. No prose.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     response_schema=int,
 )
 
@@ -1802,9 +1842,9 @@ Use a union (`int | str`) or a tuple of types (`(int, str)`) when the model must
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-config = OpenAIConfig("gpt-4o-mini")
+config = OpenAICompletionsConfig("gpt-4o-mini")
 
 # int | str - e.g. a count, or "unknown" when the text does not say
 agent = Agent(
@@ -2002,9 +2042,9 @@ You can keep a **single** schema definition (type, `ResponseSchema`, or `@respon
 
 ```python
 from ag2 import Agent, PromptedSchema, ResponseSchema, response_schema
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-config = OpenAIConfig("gpt-4o-mini")
+config = OpenAICompletionsConfig("gpt-4o-mini")
 
 # Plain type you already pass as response_schema=int elsewhere
 agent_a = Agent("a", config=config, response_schema=PromptedSchema(int))
@@ -2981,11 +3021,11 @@ catalog and tool schemas:
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.tools.skills import LocalRuntime, SkillPlugin
 
 runtime = LocalRuntime("./skills")
-agent = Agent("assistant", prompt="You are a helpful assistant.", config=OpenAIConfig(model="gpt-5-mini"))
+agent = Agent("assistant", prompt="You are a helpful assistant.", config=OpenAICompletionsConfig(model="gpt-5-mini"))
 
 reply = await agent.ask("Help with my project", plugins=[SkillPlugin(runtime)])
 
@@ -3043,6 +3083,443 @@ async def mutate_prompt(event: ModelRequest, context: Context) -> None:
 
 await agent.ask("Tell me a joke", stream=stream)
 ```
+
+---
+
+# Status Bars
+
+Source: https://docs.ag2.ai/docs/user-guide/status_bars/
+
+A status bar gives the model an explicit view of task progress, remaining attempts,
+and the current environment before its next decision. Use it when those facts
+would otherwise be scattered across tool results or change while the agent works.
+
+Your application computes the facts; the model receives a concise observation
+alongside the conversation. In AG2, `@statusbar_middleware` runs before each model
+call, including calls after tools finish, and appends the returned `Input` parts
+at its position in the middleware chain. The static system prompt stays unchanged.
+
+## Use a structured status prompt
+
+Prefer a structured prompt with stable, named sections for the goal, progress,
+constraints, and next step. Keep computed observations separate from guidance
+about what to do next. Use explicit units and limits, and include the current
+values the model needs for its decision.
+
+For example, a support agent can receive this observation after a phone call:
+
+```xml
+<agent_status>
+  <goal>Negotiate a lower subscription price.</goal>
+  <progress>Offers collected; comparison pending.</progress>
+  <constraints>Merchant: Xfinity; phone calls: 2 used, 3 allowed, 1 remaining.</constraints>
+  <next_step>Compare the offers before making another call.</next_step>
+</agent_status>
+```
+
+Choose a consistent format for each callback: Markdown headings, labeled fields,
+or XML tags can organize a `TextInput`. Use `DataInput` for structured values such
+as counters and TODO items, optionally preceded by a short `TextInput` explaining
+their purpose. AG2 accepts these as ordinary input parts; it does not require or
+parse a particular status template. Keep the observation concise and omit fields
+that do not help with the current task.
+
+The examples use `OpenAIResponsesConfig` to call a real model. Install
+`ag2[openai]` and set `OPENAI_API_KEY` as described in the
+[Quick Start](quick-start.md). Each example prints the agent's reply;
+the model chooses its tool calls from the task and the current observations.
+
+## Count attempts and remaining budget
+
+A phone-call history contains individual attempts. The next decision usually
+needs a smaller fact: how many attempts remain for this merchant. Compute that
+fact in code instead of asking the model to recount the transcript.
+
+```python
+import asyncio
+from typing import Annotated
+
+from ag2 import Agent, Context, DataInput, Variable, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ToolCallEvent
+from ag2.middleware import statusbar_middleware
+
+@statusbar_middleware
+async def call_budget(context: Context, merchant: Annotated[str, Variable()]) -> DataInput:
+    calls = await context.stream.history.where(ToolCallEvent.name == "phone_call").all()
+    used = sum(call.serialized_arguments["merchant"] == merchant for call in calls)
+    return DataInput({"merchant": merchant, "calls_used": used, "calls_remaining": max(0, 3 - used)})
+
+@tool
+def phone_call(merchant: str) -> str:
+    """Ask a merchant about its available subscription offers."""
+    return f"{merchant} offered a 10% discount on the current subscription."
+
+async def main():
+    agent = Agent(
+        "negotiator",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        tools=[phone_call],
+        middleware=[call_budget],
+        prompt="Negotiate a better price. Use at most three calls per merchant.",
+    )
+    reply = await agent.ask("Negotiate my subscription.", variables={"merchant": "Xfinity"})
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The phone-call tool returns a sample offer; connect its body to your calling
+service in an application. The observation starts with zero calls used and
+refreshes after each completed tool round. A status bar explains
+the allowance; enforce a hard limit in the tool or execution middleware when the
+allowance must also constrain execution.
+
+Choose the counting interval to match the task. `history.where(...)` reads the
+retained conversation, including earlier user inputs. For an allowance that resets
+with each user input, start with `history.since_last_user_input().where(...)`.
+Tool rounds, background inbox messages, and saved status observations do not reset
+that interval. A genuine `agent.ask(...)` or Reply continuation does.
+
+[History queries](advanced/stream.md#query-retained-history) select
+top-level stored occurrences; they do not expand nested batches or deduplicate
+repeated publications. They are retained-history queries, not lifetime counters
+after compaction. Keep a separate application accumulator if the count must
+outlive the retained records.
+
+## Keep the goal and the next step visible
+
+During a long task, a local action can become more prominent than the original
+goal. A useful status pairs that goal with the remaining work: what is complete,
+what is next, and what still needs review.
+
+Keep the plan in conversation variables and let tools update it. The status
+callback presents the current view; it does not own a second copy of the plan.
+
+```python
+import asyncio
+from typing import Annotated
+
+from ag2 import Agent, Context, DataInput, TextInput, Variable, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import Input
+from ag2.middleware import statusbar_middleware
+
+@statusbar_middleware
+def task_progress(
+    goal: Annotated[str, Variable()],
+    steps: Annotated[list[str], Variable()],
+) -> list[Input] | None:
+    if not steps:
+        return None
+    return [TextInput(f"Original task: {goal}"), DataInput({"remaining_steps": steps})]
+
+@tool
+def save_draft(content: str, context: Context, steps: Annotated[list[str], Variable()]) -> str:
+    """Save the release-note draft and mark the drafting step complete."""
+    context.variables["draft"] = content
+    if "Draft release notes" in steps:
+        steps.remove("Draft release notes")
+    return "Draft saved. Review is still pending."
+
+async def main():
+    agent = Agent(
+        "writer",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        tools=[save_draft],
+        middleware=[task_progress],
+        prompt="Use save_draft to save your draft, then pause so the user can review it.",
+    )
+    reply = await agent.ask(
+        "Draft release notes for version 1.2: faster search and improved export. Pause before review.",
+        variables={
+            "goal": "Draft and review the release notes",
+            "steps": ["Draft release notes", "Review release notes"],
+        },
+    )
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+After `save_draft` saves the generated text, the next model request shows only
+the review step as remaining. The agent can explain what has been completed and
+what still needs the user's attention.
+
+Use the same pattern for targeted reminders: return a short next-action hint
+when the agent enters a review phase, approaches an allowance, or repeats an
+unsuccessful operation. Return `None` when that condition no longer holds. In the
+example, an empty plan stops producing a reminder. Returning an empty sequence
+also skips the insertion.
+
+Keep instructions that must apply throughout the task in the
+[system prompt](system_prompts.md). A conditional reminder adds
+relevant guidance to the current decision; it appears only when its callback
+returns content. AG2 calls the function on each logical model call; any cadence
+or suppression of unchanged values belongs in the callback's application state.
+
+## Recover from repeated failures
+
+A useful recovery observation combines the failed operation, its arguments, and
+a concrete next action. It can help the model choose a different strategy instead
+of repeating the same request. Clear the current warning after a successful
+retry so it does not describe an error that has already been resolved.
+
+```python
+import asyncio
+
+from ag2 import Agent, Context, DataInput, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ToolCallEvent, ToolErrorEvent, ToolResultEvent
+from ag2.middleware import statusbar_middleware
+
+@statusbar_middleware
+async def recovery_hint(context: Context) -> DataInput | None:
+    history = context.stream.history
+    latest = await history.since_last_user_input().where(ToolResultEvent.name == "read_report").last()
+    if not isinstance(latest, ToolErrorEvent):
+        return None
+    call = await history.where(ToolCallEvent.id == latest.parent_id).first()
+    return DataInput({
+        "error": str(latest.error),
+        "arguments": call.serialized_arguments if call is not None else {},
+        "next_action": "List the reports and choose an existing name before reading again.",
+    })
+
+@tool
+def read_report(name: str) -> str:
+    """Read a report from the example's available reports."""
+    if name != "report.txt":
+        raise FileNotFoundError(name)
+    return "Quarterly revenue increased."
+
+@tool
+def list_reports() -> list[str]:
+    """List the reports available in this example."""
+    return ["report.txt"]
+
+async def main():
+    agent = Agent(
+        "reader",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        tools=[read_report, list_reports],
+        middleware=[recovery_hint],
+        prompt="If a report cannot be read, investigate the available names before trying again.",
+    )
+    reply = await agent.ask("Read missing.txt; locate the quarterly report if that name is wrong.")
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The callback inspects the latest read result, including its error subtype. After
+the successful read, it returns `None`, and the next input ends in the actual tool
+results. Correlation uses the call ID rather than inferring the operation from
+its text. The model receives the failure through the normal tool-result path
+and can use `list_reports` to choose an existing name.
+
+## Observe time, workspace, and external state
+
+Use a status bar for facts that can change independently of the conversation:
+current time, elapsed time since a user input, available files, or a project's
+latest external state. Read them through dependencies so each conversation can
+have its own workspace and clients.
+
+```python
+import asyncio
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Annotated
+
+from ag2 import Agent, Context, DataInput, Depends, Inject, TextInput
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import Input, ModelRequest
+from ag2.middleware import statusbar_middleware
+
+async def read_project_state(directory: Annotated[Path, Inject()]) -> dict:
+    path = directory / "project-status.json"
+    if not path.exists():
+        return {"status": "No project status file is available."}
+    return json.loads(await asyncio.to_thread(path.read_text))
+
+@statusbar_middleware
+async def environment(
+    context: Context,
+    directory: Annotated[Path, Inject()],
+    project_state: Annotated[dict, Depends(read_project_state)],
+) -> list[Input]:
+    now = datetime.now(timezone.utc)
+    latest_input = await context.stream.history.where(ModelRequest.origin == "user").last()
+    elapsed = now.timestamp() - latest_input.created_at if latest_input is not None else None
+    return [
+        TextInput(f"Current UTC time: {now.isoformat()}; workspace: {directory}"),
+        DataInput({
+            "seconds_since_input": elapsed,
+            "files": sorted(path.name for path in directory.iterdir()),
+            "project_state": project_state,
+        }),
+    ]
+
+async def main():
+    agent = Agent(
+        "analyst",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        middleware=[environment],
+        dependencies={"directory": Path.cwd()},
+    )
+    reply = await agent.ask("Summarize the current workspace and project state.")
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+`Inject` supplies the workspace, while `Depends` reads its current
+`project-status.json` before the callback runs. The file is optional and can hold
+application state such as the current phase and outstanding incidents. For a
+service-backed project, replace that dependency with your application's async
+SDK call. The workspace is a path owned by this conversation; the example does
+not change the process's working directory. Event timestamps also support
+comparisons such as time since the latest tool result or activity across days.
+
+The ordered result can contain text, structured data, and supported media such
+as an `ImageInput` dashboard snapshot. Normal
+[input conversion](multimodal/inputs.md) applies; a status bar does
+not add media capabilities to a provider that lacks them. See
+[dependency injection](context/inject.md) and
+[composed dependencies](depends.md) for application resource setup.
+
+## Choose current state or a progress trail
+
+Use dynamic observations for facts where the latest value is what matters. Keep
+a trail when the sequence of progress updates is itself useful to the task.
+
+| Mode | What the next model call receives | Useful cases |
+| --- | --- | --- |
+| `persist=False` (default) | A fresh observation; previous dynamic observations are absent | Current TODO, remaining attempts, clock, workspace, recovery hint |
+| `persist=True` | Retained earlier observations, then a new nonempty observation | Completed milestones, progress review, a sequence of state changes |
+
+This example retains progress after each tool round:
+
+```python
+import asyncio
+from typing import Annotated
+
+from ag2 import Agent, Context, DataInput, Variable, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.middleware import statusbar_middleware
+
+@statusbar_middleware(persist=True)
+def progress(completed: Annotated[int, Variable(default=0)]) -> DataInput:
+    return DataInput({"completed_steps": completed})
+
+@tool
+def record_milestone(summary: str, context: Context) -> str:
+    """Record a milestone after completing a useful step of the task."""
+    context.variables["completed"] += 1
+    return f"Milestone {context.variables['completed']}: {summary}"
+
+async def main():
+    agent = Agent(
+        "planner",
+        config=OpenAIResponsesConfig(model="gpt-5", parallel_tool_calls=False),
+        tools=[record_milestone],
+        middleware=[progress],
+        prompt="Plan the work in stages and record a milestone after completing each stage.",
+    )
+    reply = await agent.ask("Design a two-stage rollout plan for a new search feature.")
+    reply = await reply.ask("Explain how the plan progressed through its milestones.")
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Each nonempty callback result creates one saved observation, even if its value
+matches the preceding one. Return `None` or an empty sequence to skip a new record;
+this leaves earlier records available. Saved parts are snapshots, so later
+application mutations do not rewrite them. They remain visible on a Reply
+continuation even when the middleware ran only on an earlier invocation.
+
+Saved observations are service records, not new user inputs. Their parts use the
+normal user-content representation for the provider; they do not modify the
+system prompt or create a new conversational turn. Publication happens before
+the model call: failed persistence prevents that call, while a later provider
+failure or cancellation leaves the committed observation in history.
+
+Dynamic and persistent callbacks can be combined, for example with
+`middleware=[progress, environment]` using the callbacks and dependencies above.
+Earlier progress stays in chronological order; only the current environment
+observation is added to the new request. A fresh conversation on the same Agent
+starts with a fresh trail.
+
+Persistent observations grow the retained context and can include outdated
+values. Dynamic observations avoid that accumulation, but removing previous
+request-only content can affect provider caching. Choose based on the task and
+measure with your provider; neither mode promises prompt-cache hits or preserved
+reasoning compatibility. Status blocks already present when `HistoryLimiter`
+or `SlidingWindowPolicy` runs count toward its event window. Their content also
+counts toward token budgets. Compaction excludes status from its conversational
+event count and from summarization input, but includes retained status in its
+token estimate. When a limiter trims history, status never stands in for a turn
+on its own: the trim widens past it, so the tool round it follows is kept with
+it. Normal reducers and compaction can remove retained observations; there is no
+automatic refresh or archive lookup after removal.
+
+## Register, compose, and inspect
+
+Register the decorated callback in the Agent's `middleware` list, as above, or
+pass it through an invocation or Plugin. Invocation contributions apply to that
+turn; register them again on a continuation if you need fresh computations there.
+
+Callbacks can be sync or async and use `Context`, `Variable`, `Inject`, and
+`Depends`. Return one `Input`, an ordered sequence of `Input` parts, or `None`.
+Strings, mappings, generators, and sequences containing non-Input values are
+rejected before the provider call and before that callback saves a new record.
+DI is resolved afresh for each logical model call; generator dependencies stay
+open through the wrapped call and are cleaned up on success, error, or cancellation.
+Keep mutable conversation state in variables or conversation-scoped dependencies.
+Clients deliberately shared by the application remain shared.
+
+Multiple callbacks append in registration order, and downstream middleware can
+still transform their inputs. To reuse one prepared observation across retries,
+put status outside retry: `middleware=[progress, RetryMiddleware(...)]`.
+`RetryMiddleware` is imported from `ag2.middleware`. Retries inside status reuse
+the same observation and do not save it again. A new tool round computes another
+observation. Reversing the wrappers follows normal retry semantics, including
+its publication guard: dynamic status is computed again for each attempt.
+
+!!! warning "Persistent status inside retry is unsupported"
+
+    Do not place a persistent status (`persist=True`) inside `RetryMiddleware`.
+    The observation is published before the model call, so retry's publication
+    guard sees output from the failed attempt and re-raises instead of retrying.
+    The framework does not reorder the middleware automatically.
+
+Retained observations are `StatusObservation` events, available from
+`ag2.events`. Each one carries its ordered `parts` and the callback's `source`
+identity, and can be read back with
+[history queries](advanced/stream.md#query-retained-history):
+
+```python
+from ag2.events import StatusObservation
+
+observations = await reply.context.stream.history.where(StatusObservation).all()
+for observation in observations:
+    print(observation.source, observation.parts)
+```
+
+See [middleware ordering](middleware.md#middleware-ordering) for
+composition details and [testing model inputs](testing.md#inspect-complete-model-inputs)
+for dedicated automated checks of status delivery.
+
+For offline automated scenarios covering these cases, conditional updates,
+multimodal state, and retries, see the
+[eleven executable status bar scenarios](https://github.com/ag2ai/ag2/tree/main/examples/status_middleware_usecases).
 
 ---
 
@@ -3593,6 +4070,9 @@ In practice, you use middleware to:
 - normalize tool inputs or outputs
 - short-circuit or reshape a response
 
+For recipes that keep task progress, remaining attempts, and environment state
+visible to the model, see [Status Bars](status_bars.md).
+
 ## Middleware Hooks
 
 `BaseMiddleware` exposes four async hooks.
@@ -3708,13 +4188,13 @@ To make middleware apply to every turn for an agent, pass it through the `middle
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import LoggingMiddleware, RetryMiddleware
 
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     middleware=[
         LoggingMiddleware(),
         RetryMiddleware(max_retries=2),
@@ -3733,13 +4213,13 @@ Both `Agent.ask(...)` and `AgentReply.ask(...)` accept a `middleware` argument.
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import LoggingMiddleware, TokenLimiter
 
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 reply = await agent.ask(
@@ -3764,7 +4244,7 @@ This matters when you combine behaviors such as logging, mutation, and retries.
 
 ```python
 from ag2 import Agent, Context
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import BaseEvent, ModelResponse
 from ag2.middleware import AgentTurn, BaseMiddleware
 
@@ -3807,7 +4287,7 @@ class C(BaseMiddleware):
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     middleware=[A, B],
 )
 
@@ -3837,7 +4317,7 @@ import logging
 from collections.abc import Sequence
 
 from ag2 import Agent, Context
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import BaseEvent, ModelResponse, ToolCallEvent
 from ag2.middleware import BaseMiddleware, LLMCall, Middleware, ToolExecution
 
@@ -3874,12 +4354,39 @@ class AuditMiddleware(BaseMiddleware):
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     middleware=[
         Middleware(AuditMiddleware, logger=logging.getLogger("ag2.audit")),
     ],
 )
 ```
+
+### Bracketing the Whole Execution Scope
+
+`on_turn()` starts after tool schemas are resolved and ends before observers complete. When setup must happen before tool resolution, or teardown after observers (for example, `KnowledgePlugin` bootstraps its store first and writes the final event log last), give your middleware factory a `scope(event, context)` method returning an async context manager. A factory with that method satisfies `ScopedMiddlewareFactory` from `ag2.middleware`:
+
+```python
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
+from ag2 import Agent, Context
+from ag2.events import BaseEvent
+from ag2.middleware import BaseMiddleware
+
+class AuditScope:
+    def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
+        return BaseMiddleware(event, context)
+
+    @asynccontextmanager
+    async def scope(self, event: BaseEvent, context: Context) -> AsyncGenerator[None]:
+        print("before tool resolution")
+        yield
+        print("after observers completed")
+
+agent = Agent("assistant", middleware=[AuditScope()])
+```
+
+Scopes enter in registration order and exit in reverse order. The factory outlives turns, so keep per-invocation state inside the scope rather than on the factory. The `Middleware(...)` wrapper does not forward `scope`; write the factory class directly.
 
 ### Guidelines for Custom Middleware
 
@@ -3969,14 +4476,14 @@ This is useful when you have middleware that should only run for certain event t
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ToolCallEvent
 from ag2.middleware import ConditionalMiddleware, Middleware
 
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     middleware=[
         ConditionalMiddleware(
             Middleware(ApprovalMiddleware),
@@ -4134,7 +4641,7 @@ import asyncio
 from prometheus_client import CollectorRegistry, start_http_server
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import MetricsMiddleware
 
 async def main() -> None:
@@ -4146,7 +4653,7 @@ async def main() -> None:
     agent = Agent(
         "assistant",
         prompt="You are a helpful assistant.",
-        config=OpenAIConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
         middleware=[metrics],
     )
 
@@ -4218,7 +4725,7 @@ Create one `MetricsMiddleware` per `CollectorRegistry`, then share that middlewa
 from prometheus_client import CollectorRegistry
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import MetricsMiddleware
 
 registry = CollectorRegistry()
@@ -4226,13 +4733,13 @@ metrics = MetricsMiddleware(registry=registry)
 
 assistant = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     middleware=[metrics],
 )
 
 reviewer = Agent(
     "reviewer",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     middleware=[metrics],
 )
 ```
@@ -4338,6 +4845,46 @@ Create separate rows for agent turns, LLM calls, tools, human input, and token u
 Source: https://docs.ag2.ai/docs/user-guide/testing/
 
 AG2 provides a built-in `TestConfig` utility in the `ag2.testing` module to help you write unit tests for your agents. It allows you to mock LLM responses and simulate tool execution scenarios without making actual API calls.
+
+## Inspect complete model inputs
+
+Wrap `TestConfig` in `TrackingConfig` to inspect what the framework sends to the
+model. Each entry in `calls` records one attempted call, including attempts that
+raise an exception. Its `messages` tuple contains the complete ordered event
+input, while `prompt`, `tools`, `dependencies`, and `variables` retain the call's
+settings.
+
+```python
+import pytest
+
+from ag2 import Agent, TextInput
+from ag2.events import ModelMessage, ModelRequest, ModelResponse
+from ag2.testing import TestConfig, TrackingConfig
+
+@pytest.mark.asyncio
+async def test_model_receives_conversation():
+    config = TrackingConfig(TestConfig("Hello!", "Goodbye!"))
+    agent = Agent("assistant", config=config)
+
+    reply = await agent.ask("Hi")
+    await reply.ask("Bye")
+
+    assert config.calls[1].messages == (
+        ModelRequest([TextInput("Hi")]),
+        ModelResponse(ModelMessage("Hello!")),
+        ModelRequest([TextInput("Bye")]),
+    )
+    config.mock.assert_called_with(ModelRequest([TextInput("Bye")]))
+```
+
+Message snapshots copy events and their supported mutable payloads, including
+input metadata and provider replay data. Later changes to live history or an
+application's original data do not change earlier snapshots. Snapshot events
+remain ordinary event objects; treat them as observations rather than modifying
+them. The existing `mock` still records each call's original last message.
+For compatibility, `ModelCall` equality compares its existing settings fields;
+assert `call.messages` explicitly to compare message snapshots. Dependencies and
+variables retain their existing shallow-copy behavior.
 
 ## How to mock LLM answers
 
@@ -4483,20 +5030,22 @@ Agent(
     response_schema: ResponseProto | type | None = None,
     hitl_hook: HumanHook | None = None,
     plugins: Iterable[Plugin] = (),
-    assembly: Iterable[AssemblyPolicy] = (),
-    knowledge: KnowledgeConfig | None = None,
-    tasks: TaskConfig | Literal[False] | None = None,
 )
 ```
 
-The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, ...) are covered in [Agent Communication](agents.md) and the parameter-specific guides. The harness hooks are `assembly=`, `knowledge=`, and `tasks=`, each documented below.
+The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, ...) are covered in [Agent Communication](agents.md) and the parameter-specific guides. Context policies use `middleware=`; persistent knowledge is configured through `plugins=[KnowledgePlugin(...)]`. Legacy `knowledge=` and `tasks=` remain available during their deprecation period. The legacy `assembly=` parameter is deprecated and will be removed in 1.4.0.
 
-## `assembly=` - context policies
+## Context policies through `middleware=`
 
-A list of [`AssemblyPolicy`](advanced/assembly.md) instances. When non-empty, the Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain so your policies transform `(prompts, events)` before every LLM call.
+Wrap your [`AssemblyPolicy`](advanced/assembly.md) instances in `Middleware(AssemblerMiddleware, policies=[...])`. Add `Middleware(HaltCheckMiddleware)` immediately after it when using `AlertPolicy`.
+
+!!! warning "`assembly=` is deprecated"
+    `Agent(assembly=...)` keeps its existing behavior and emits a `DeprecationWarning` where the agent is constructed. It will be removed in **1.4.0**. Migrate to `middleware=` as shown below.
 
 ```python
 from ag2 import Agent
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import HaltCheckMiddleware, Middleware
 from ag2.policies import (
     AlertPolicy,
     SlidingWindowPolicy,
@@ -4506,49 +5055,59 @@ from ag2.policies import (
 agent = Agent(
     "assistant",
     config=config,
-    assembly=[
-        WorkingMemoryPolicy(),                # inject /memory/working.md
-        AlertPolicy(),                         # deliver ObserverAlerts, halt on FATAL
-        SlidingWindowPolicy(max_events=50),   # cap history footprint
+    middleware=[
+        Middleware(
+            AssemblerMiddleware,
+            policies=[
+                WorkingMemoryPolicy(),              # inject /memory/working.md
+                AlertPolicy(),                      # deliver alerts, halt on FATAL
+                SlidingWindowPolicy(max_events=50), # cap history footprint
+            ],
+        ),
+        Middleware(HaltCheckMiddleware),
     ],
 )
 ```
 
 Order matters - see the [ordering rule in the assembly doc](advanced/assembly.md#ordering-matters). `AssemblerMiddleware.validate_order()` will flag known problematic compositions.
 
-## `knowledge=` - KnowledgeConfig
+## KnowledgePlugin
 
 Groups everything that involves the [`KnowledgeStore`](advanced/knowledge_store.md): the store itself, optional bootstrap, and optional compaction + aggregation strategies.
 
 ```python
-from dataclasses import dataclass
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
-@dataclass
-class KnowledgeConfig:
-    store: KnowledgeStore
-    expose_tool: bool = True
-    write_event_log: bool = True
-    compact: CompactStrategy | None = None
-    compact_trigger: CompactTrigger | None = None
-    aggregate: AggregateStrategy | None = None
-    aggregate_trigger: AggregateTrigger | None = None
-    bootstrap: StoreBootstrap | None = None
+store = MemoryKnowledgeStore()
+
+plugin = KnowledgePlugin(
+    store,                         # required KnowledgeStore
+    expose_tool=True,
+    write_event_log=True,
+    bootstrap=None,
+    compact=None,
+    compact_trigger=None,
+    aggregate=None,
+    aggregate_trigger=None,
+)
 ```
 
-| Field | What it does |
+| Option | What it does |
 |---|---|
 | `store` | Registered in `context.dependencies[KnowledgeStore]` so policies like `WorkingMemoryPolicy` / `EpisodicMemoryPolicy` can read it. |
-| `expose_tool` | When `True` (default), the agent gets an auto-injected `knowledge` action-group tool that lets the LLM call `read` / `write` / `list` / `delete` on the store. Set to `False` when the store should be policy-only - the model never sees the tool, and the bootstrap SKILL.md text drops its "use the `knowledge` tool" sentence. |
+| `expose_tool` | When `True` (default), the agent gets a plugin-provided `knowledge` action-group tool that lets the LLM call `read` / `write` / `list` / `delete` on the store. Set to `False` when the store should be policy-only - the model never sees the tool, and the bootstrap SKILL.md text drops its "use the `knowledge` tool" sentence. |
 | `write_event_log` | When `True` (default), the agent persists its stream history to `/log/{stream_id}.jsonl` at the end of each `ask()`. Set to `False` to keep the store free of stream logs (e.g. when the store is purely user-facing memory). |
 | `compact` / `compact_trigger` | Wires a compaction middleware that fires [`compact()`](advanced/compaction.md) between turns when the trigger thresholds are exceeded. |
 | `aggregate` / `aggregate_trigger` | Wires an aggregation middleware that fires [`aggregate()`](advanced/aggregation.md) on the configured cadence. Failures emit `AggregationFailed` on the stream - see [Aggregation > Wiring onto an Agent](advanced/aggregation.md#wiring-onto-an-agent) for the full lifecycle event triple. |
 | `bootstrap` | Runs once on first use to seed the store. `None` falls back to `DefaultBootstrap(mention_tool=expose_tool)`, so the generated SKILL.md text matches whether the LLM can actually call the `knowledge` tool. |
 
 ```python
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import Middleware
 from ag2.compact import CompactTrigger, TailWindowCompact
-from ag2.knowledge import DiskKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, DiskKnowledgeStore
 from ag2.policies import WorkingMemoryPolicy
 from pathlib import Path
 
@@ -4557,111 +5116,112 @@ store = DiskKnowledgeStore(Path("./knowledge"))
 agent = Agent(
     "assistant",
     config=main_config,
-    knowledge=KnowledgeConfig(
+    plugins=[KnowledgePlugin(
         store=store,
         compact=TailWindowCompact(target=100),
         compact_trigger=CompactTrigger(max_events=200),
         aggregate=ConversationSummaryAggregate(config=summarizer_config),
         aggregate_trigger=AggregateTrigger(every_n_turns=10, on_end=True),
-    ),
-    assembly=[WorkingMemoryPolicy()],
+    )],
+    middleware=[Middleware(AssemblerMiddleware, policies=[WorkingMemoryPolicy()])],
 )
 ```
 
-The compaction and aggregation middleware are opt-in per field: passing `compact=` without `compact_trigger=` still works (a default `CompactTrigger()` with all thresholds disabled is used). Omit a strategy entirely and the corresponding middleware is not wired.
+Provide each strategy together with its trigger. Omit compaction or aggregation to leave that maintenance disabled.
 
-## `tasks=` - TaskConfig
+### Migrating from `knowledge=`
 
-Sub-task delegation is **off by default** - a bare Agent has no `run_subtask` / `run_subtasks` tools. Pass `tasks=TaskConfig(...)` to opt in, and the Agent will auto-inject the pair of sub-task tools that let the LLM spawn isolated child Agents to handle self-contained work. `TaskConfig` configures how those children are built.
-
-```python
-from dataclasses import dataclass
-
-@dataclass
-class TaskConfig:
-    config: ModelConfig | None = None
-    prompt: str = (
-        "You are a task agent. Complete the assigned task thoroughly and "
-        "concisely. Return only the result."
-    )
-    include_tools: Iterable[str] | None = None
-    exclude_tools: Iterable[str] = ()
-    extra_tools: Iterable[Callable | Tool] = ()
-    max_concurrency: int | None = None
-```
-
-| Field | What it does |
-|---|---|
-| `config` | The `ModelConfig` used for sub-task Agents. Falls back to the parent Agent's `config`. |
-| `prompt` | Default system prompt for sub-task Agents. |
-| `include_tools` | Allowlist of parent-tool names to inherit. `None` means "inherit all". |
-| `exclude_tools` | Blocklist of parent-tool names to drop. Applied after `include_tools`. |
-| `extra_tools` | Additional tools given to sub-tasks that the parent does not have. |
-| `max_concurrency` | Optional cap shared by all sub-tasks spawned by this Agent. Extra work waits for a slot. `None` keeps concurrency unbounded. |
-
-By default a sub-task Agent inherits **all** of the parent's user-supplied tools. Sub-tasks are themselves constructed with `tasks=False` (the Agent default), so they have no `run_subtask` / `run_subtasks` tools - recursive delegation is structurally impossible and no depth limit is needed.
+`Agent(knowledge=...)` emits one `DeprecationWarning` at construction in 1.3
+and will be removed in **1.4.0**. Move the same settings into a plugin:
 
 ```python
-from ag2 import Agent, TaskConfig
+from ag2 import Agent
+from ag2.config import OpenAICompletionsConfig
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 agent = Agent(
-    "orchestrator",
-    config=main_config,
-    tools=[search, fetch_url, summarize],
-    tasks=TaskConfig(
-        config=worker_config,                 # cheaper model for sub-tasks
-        prompt="You are a focused worker; one step only.",
-        include_tools=["search", "fetch_url"],  # don't expose summarize to children
-        max_concurrency=4,                    # bound model/API fan-out
-    ),
+    "assistant",
+    config=OpenAICompletionsConfig(model="gpt-5"),
+    plugins=[KnowledgePlugin(store=MemoryKnowledgeStore())],
 )
 ```
 
-### `tasks=False` - the default
+Move `expose_tool`, `write_event_log`, `bootstrap`, `compact`, `compact_trigger`,
+`aggregate`, and `aggregate_trigger` unchanged into `KnowledgePlugin`.
+`KnowledgeConfig` and its current imports remain available; only the Agent
+parameter is deprecated. Supplying both configurations raises `ValueError`
+before bootstrap. For policy-only memory, use
+`KnowledgePlugin(store, expose_tool=False)`. Custom `StoreBootstrap`,
+`CompactStrategy`, and `AggregateStrategy` implementations keep their protocols.
 
-`tasks=False` is the Agent default, so a bare Agent never spawns children. You only need to pass it explicitly to be self-documenting; otherwise just omit `tasks=` entirely.
+Construction performs no store I/O. Bootstrap precedes tool schema resolution
+and middleware/observer setup, uses the existing `/.initialized` sentinel, and
+coordinates concurrent calls on the configured plugin. On completion,
+aggregation runs before compaction; logging follows observer completion.
+Aggregation retains its trigger-driven cleanup on failures and cancellation.
+Final logging runs only when the enclosing execution scope exits normally:
+run handles (including `Agent.ask`) close that scope normally even when their
+background turn failed; a failing `AgentReply.ask` propagates through the scope
+and skips logging, as before migration.
 
-```python
-focused = Agent(
-    "summarizer",
-    prompt="Summarise the input. Do not delegate.",
-    config=main_config,
-    # tasks=False is the default - no run_subtask / run_subtasks tools.
-)
-```
+The store is a plugin dependency default. Explicit Agent or invocation
+`dependencies={KnowledgeStore: other_store}` overrides it for policies, tools,
+bootstrap, and maintenance together. Legacy `knowledge=` retains its previous
+precedence during the compatibility period. An invocation-only plugin is
+removed after that invocation, including its tools and dependency default.
+A worker needs its own plugin; delegation does not inherit the parent's tools.
 
-## `run_subtask` / `run_subtasks` - auto-injected tools
+### Tool approval and automatic writes
 
-When you opt in via `tasks=TaskConfig(...)`, the Agent exposes two tools to the LLM:
+The `knowledge` tool uses ordinary tool middleware and tool precedence.
+Attach the existing `approval_required()` middleware to gate model-requested
+reads, writes, lists, and deletes. Denying a call prevents that tool action.
+Bootstrap, aggregation, compaction archives, and event logs are automatic
+maintenance; an individual tool approval does not gate those writes. Approval
+is never enabled automatically. Set `write_event_log=False` to opt out of
+conversation logs independently of tool exposure and other maintenance.
 
-- `run_subtask(task: str)` - spawn one sub-task Agent. Useful when the LLM has a single self-contained piece of work to delegate.
-- `run_subtasks(tasks: list[str], parallel: bool = True)` - spawn multiple sub-tasks in one tool call. Defaults to running them concurrently with `asyncio.gather`; pass `parallel=False` only when later tasks depend on earlier results.
+## Subagent delegation
 
-The LLM is told (via the tool descriptions) that it can call `run_subtask` multiple times in parallel within a single response, and that `run_subtasks` is the deliberate fan-out form. Each child gets a fresh `MemoryStream` and the parent's tools (filtered by `TaskConfig`).
+Build each worker as an Agent with its own config, prompt and tools, then expose
+it to the parent through `Agent.as_tool()`. A worker receives only the tools you
+configure on it. Give it delegate tools only when further delegation is intended.
+The model can request several delegates in one response to run them concurrently.
 
-Set `TaskConfig(max_concurrency=N)` when that fan-out needs a model, API, or
-resource limit. The cap is shared by both tools on the Agent, so several
-parallel `run_subtask` calls and a concurrent `run_subtasks` call cannot
-bypass one another.
+To cap concurrency, share a tool middleware function that closes over one
+semaphore across the delegates. See [Limiting concurrency](subagents.md#limiting-concurrency).
+To let the model compose a worker per objective, use
+[`dynamic_agent()`](subagents.md#dynamic-agents).
 
-For a more explicit, named delegate where the parent LLM sees a tool like `task_researcher` instead of generic `run_subtask`, use [`Agent.as_tool()`](#agentas_tool). The two patterns can coexist: a coordinator can have both auto-injected sub-tasks and a named `task_researcher` tool.
+### Migrating from TaskConfig
 
-See [Subagents](subagents.md) for the full sub-task delegation guide - context flow and custom streams for self-delegation via `as_tool()`.
+!!! warning "Deprecated - removal in 1.4.0"
+    `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the auto-injected
+    `run_subtask` / `run_subtasks` tools remain available during the deprecation
+    period and will be removed in **1.4.0**. Move the worker's config, prompt and
+    tools onto an explicit Agent, then register its `Agent.as_tool()` on the
+    parent. See the [migration guide](subagents.md#migrating-from-taskconfig)
+    for the field mapping and concurrency changes.
 
 ## Agent.as_tool()
 
 Expose any Agent as a `FunctionTool` so another Agent can invoke it like any other tool:
 
 ```python
+from ag2 import Agent
+from ag2.config import OpenAICompletionsConfig
+
+config = OpenAICompletionsConfig(model="gpt-4o-mini")
+
 child = Agent(
     "researcher",
     prompt="Answer the objective concisely.",
-    config=main_config,
+    config=config,
 )
 
 parent = Agent(
     "lead",
-    config=main_config,
+    config=config,
     tools=[child.as_tool(description="Delegate fact-finding to a researcher.")],
 )
 
@@ -4683,7 +5243,8 @@ An Agent reports what it is made of, so you can compare two agents, assert on co
 | `middleware` | agent-level middleware, in registration order |
 | `dependencies` / `variables` | injected values, keyed as supplied |
 | `config` / `response_schema` / `hitl_hook` | model config, schema, human-input hook |
-| `observers` / `assembly` / `tasks` | observers, assembly policies, `TaskConfig` |
+| `observers` / `assembly` | observers, assembly policies |
+| `tasks` | `TaskConfig` or `None`; deprecated, removed in 1.4.0 |
 
 Sequences come back as tuples and mappings as read-only views, so an agent cannot be changed through them.
 
@@ -4724,18 +5285,9 @@ first.middleware[0].middleware is second.middleware[0].middleware
 
 ## Turn lifecycle
 
-Each `await agent.ask(...)` runs through the middleware chain in this order (outermost -> innermost):
+Each `await agent.ask(...)` enters middleware in registration order (outermost -> innermost), then reaches the LLM client. Register `AssemblerMiddleware` before `HaltCheckMiddleware` so alerts can halt the current call. Place retry, logging, or other middleware according to whether they should see the original or assembled context.
 
-```
-1. AssemblerMiddleware              (if assembly=[...])
-2. _HaltCheckMiddleware             (if assembly=[...] - watches for HaltEvent)
-3. _CompactionMiddleware            (if knowledge.compact configured)
-4. _AggregationMiddleware           (if knowledge.aggregate configured)
-5. User-provided middleware         (retry, rate-limit, logging, ...)
-6. LLM client                       (innermost)
-```
-
-The internal harness middleware (`_AssemblerMiddleware`, `_HaltCheckMiddleware`, `_CompactionMiddleware`, `_AggregationMiddleware`) are assembled conditionally - you only pay for what you turn on.
+`KnowledgePlugin` contributes compaction and aggregation middleware through ordinary plugin composition. Keep the context assembler and halt checker in your explicit `middleware` list; plugin and invocation contributions follow their registration order.
 
 Lifecycle events emitted during a turn include `ObserverStarted` / `ObserverCompleted`, `CompactionCompleted`, `AggregationCompleted`, and `HaltEvent`. Subscribe to any of them via an [Observer](advanced/observers.md) or a stream subscriber.
 
@@ -4745,12 +5297,92 @@ Lifecycle events emitted during a turn include `ObserverStarted` / `ObserverComp
 
 Source: https://docs.ag2.ai/docs/user-guide/tasks/
 
-A `Task` is a framework-core wrapper any `Agent` can use to give a unit of work a trackable lifecycle. While the task is active, the framework emits `TaskStarted`, `TaskProgress`, `TaskCompleted`, `TaskFailed`, and `TaskExpired` events on a stream - so observers (UIs, watchers, mirrors, test harnesses) can follow along without participating in execution.
+Model runs and standalone work share the task lifecycle: `TaskStarted`,
+optional `TaskProgress`, and one terminal event - `TaskCompleted`,
+`TaskFailed`, `TaskExpired`, or `TaskCancelled`.
+Observers, network mirrors, and UIs consume the same events in each case.
 
-!!! note
-    Tasks are **agent-owned**. The framework does not assign or schedule them. Standalone usage requires no observers - events fly past harmlessly if nothing subscribes.
+## Model Runs
 
-## When to Use a Task
+Pass `capability` or `ttl_seconds` to enable lifecycle events
+for an agent invocation:
+
+```python
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+
+agent = Agent("researcher", config=OpenAIResponsesConfig(model="gpt-5"))
+
+reply = await agent.ask(
+    "Research deployment patterns",
+    capability="research",
+    ttl_seconds=60,
+)
+```
+
+`capability` tags the work for network observations. The task title
+(`TaskStarted.objective`) is the agent's name, never the prompt, because
+task events are mirrored to the network hub; a delegation uses its objective.
+`ttl_seconds` carries an absolute expiry deadline on `TaskStarted`;
+an external observer owns expiry. It does not set a local execution timeout.
+Omitting both options leaves ordinary runs without task lifecycle events.
+
+The observable form accepts the same options:
+
+```python
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import TaskCompleted, TaskStarted
+
+agent = Agent("researcher", config=OpenAIResponsesConfig(model="gpt-5"))
+
+def show_task(event):
+    print(type(event).__name__, event.task_id)
+
+async with agent.run("Research deployment patterns", capability="research") as run:
+    run.stream.where(TaskStarted | TaskCompleted).subscribe(show_task, sync_to_thread=False)
+    reply = await run.result()
+```
+
+Entering `run` opens the scope. `TaskStarted` is emitted when
+`start()` or `result()` drives it; leaving an undriven run emits
+no task events. Repeated `result()` calls share one invocation and
+one lifecycle. The terminal is emitted after middleware and observer cleanup
+when the run scope closes. `ask()` completes that cleanup before it
+returns. Subscribe directly to the stream to observe the terminal after
+run-scoped observers have been released.
+
+A model or tool exception produces `TaskFailed` and propagates to the
+caller. Cancelling the turn or leaving a running scope produces
+`TaskCancelled` after running tools and descendants have settled.
+Setup errors produce a start/failure pair even if the model never runs.
+Cleanup errors, including a storage failure while usage is recorded, produce a
+failure terminal and propagate to the caller; cleanup cancellation produces
+`TaskCancelled`. Before publishing its terminal, an opted-in run waits
+for delegations it left running in the background, so `ask()` returns
+once they have settled.
+
+Waiting for a shared stream's turn lock happens before the run scope opens.
+Cancelling an ordinary invocation during that wait emits no task events.
+A delegation also reports a rejected attempt to its parent as a start/cancellation
+pair, using the same lifecycle transitions without entering the busy stream.
+
+`AgentReply.ask()`, `AgentReply.run()`, and `Agent.resume()`
+accept the same options. Each continuation gets a fresh task identity when
+opted in; capability and TTL are supplied per invocation. Recovery of model
+work uses the recorded trajectory and `resume()`.
+
+Delegations through `Agent.as_tool()` use this lifecycle automatically,
+with the delegation's task ID and parent tool-call ID. Ancestors receive the
+same events with their source path, without duplicate starts or terminals.
+See [Subagents](subagents.md).
+
+## Standalone Work
+
+Construct `Task` directly for arbitrary coroutines outside the model
+loop. Tasks are owner-driven; the framework does not assign or schedule them.
+
+### When to Use a Standalone Task
 
 Use a Task whenever a unit of work has a beginning, an end, and observable progress that you want to surface beyond your own function's return value:
 
@@ -4758,17 +5390,15 @@ Use a Task whenever a unit of work has a beginning, an end, and observable progr
 - **HITL approvals** where a UI needs to know the task is waiting on a human.
 - **Test harnesses** that assert a sequence of lifecycle events.
 
-For lightweight LLM-driven sub-agent delegation see [Subagents](subagents.md) - that's a different feature that wraps an Agent in a `run_subtask` tool.
-
-## Quick Start
+### Standalone Example
 
 ```python
 from ag2 import Agent
-from ag2.config import AnthropicConfig
+from ag2.task import Task, TaskSpec
 
-agent = Agent("indexer", config=AnthropicConfig(model="claude-sonnet-5"))
+agent = Agent("indexer")
 
-async with agent.task("index documents") as task:
+async with Task(owner_id=agent.name, spec=TaskSpec(title="index documents")) as task:
     await task.progress({"stage": "discover", "files": 12})
     await task.progress({"stage": "index", "indexed": 12})
     await task.complete({"indexed": 12})
@@ -4784,7 +5414,8 @@ The `async with` block opens the lifecycle. On clean exit the task auto-complete
 ```
 CREATED -> RUNNING -> COMPLETED   (terminal, success)
                    -> FAILED      (terminal, exception or explicit fail)
-                   -> EXPIRED     (terminal, TTL elapsed)
+                   -> EXPIRED     (terminal, externally observed expiry)
+                   -> CANCELLED   (terminal, explicit or coroutine cancellation)
 ```
 
 | State | Meaning |
@@ -4793,36 +5424,52 @@ CREATED -> RUNNING -> COMPLETED   (terminal, success)
 | `RUNNING` | Inside the `async with` block. Progress events allowed. |
 | `COMPLETED` | Reached `complete()` or clean block exit. |
 | `FAILED` | Reached `fail()` or block exited via exception. |
-| `EXPIRED` | TTL elapsed; emitted by an external observer (e.g. a network hub's TTL sweeper). |
+| `EXPIRED` | An external observer marked the task expired. |
+| `CANCELLED` | Reached `cancel()` or the coroutine exited with `asyncio.CancelledError`. |
 
 The terminal states are immutable - once set, further `complete() / fail() / progress()` calls are silent no-ops. The set is exported as `ag2.task.TERMINAL_TASK_STATES`.
 
 ## API Reference
 
-### `Agent.task(...)`
+### `Task(...)`
 
 ```python
-agent.task(
-    title: str,
-    *,
-    description: str = "",
-    payload: dict[str, Any] | None = None,
-    capability: str | None = None,
-    ttl_seconds: int | None = None,
-    context: ConversationContext | None = None,
-) -> Task
+from ag2.task import CheckpointStore, Task, TaskSpec
+
+Task(
+    owner_id=agent.name,
+    spec=TaskSpec(
+        title="index documents",
+        description="",
+        payload={},
+        capability=None,
+    ),
+    context=None,
+    ttl_seconds=None,
+    checkpoint_store=None,
+    resume_from=None,
+)
 ```
 
 | Parameter | Type | Description |
 |---|---|---|
-| `title` | `str` | Short objective shown on every event. |
-| `description` | `str` | Optional longer description. |
-| `payload` | `dict[str, Any] \| None` | Initial payload merged into `TaskSpec`. |
-| `capability` | `str \| None` | Tags the task with a capability name; used by network mirrors. |
-| `ttl_seconds` | `int \| None` | Sets `metadata.expires_at`. The Task does not self-expire - an external observer must call `task.expire()` when the TTL elapses. |
-| `context` | `ConversationContext \| None` | If supplied, events flow on `context.stream` and `ag2.task` is stamped into `context.dependencies` for the duration of the block. If omitted, the Task creates a private `MemoryStream` on entry. |
+| `owner_id` | `str` | Owner identity included in lifecycle events; use `agent.name` for agent-owned work. |
+| `spec` | `TaskSpec` | Title, description, payload and optional capability tag. |
+| `context` | `ConversationContext \| None` | Events flow on `context.stream`; `TaskInject` resolves to this Task for the duration of the block. If omitted, the Task creates a private `MemoryStream` on entry. |
+| `ttl_seconds` | `int \| None` | Sets `metadata.expires_at`; an external observer owns expiry. |
+| `checkpoint_store` | `CheckpointStore \| None` | Store for owner-defined checkpoint state. |
+| `resume_from` | `str \| None` | Prior task ID whose checkpoint is loaded into `task.resumed_state` on entry. |
 
-Returns an unentered `Task`. Use as `async with agent.task(...) as task:`.
+Returns an unentered Task. Construction does not start work or emit events.
+
+`TaskSpec` describes the work:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `title` | `str` | Required | Short objective shown on every event. |
+| `description` | `str` | `""` | Longer description. |
+| `payload` | `dict[str, Any]` | Fresh `{}` | Owner-defined task data. |
+| `capability` | `str \| None` | `None` | Capability name used by network mirrors. |
 
 ### `Task` instance methods
 
@@ -4831,6 +5478,8 @@ Returns an unentered `Task`. Use as `async with agent.task(...) as task:`.
 | `await task.progress(payload)` | Emits `TaskProgress`; merges `payload` into `metadata.progress` and stamps `last_progress_at`. No-op if already terminal. |
 | `await task.complete(result=None)` | Terminal. Emits `TaskCompleted`; sets `metadata.result` and `state = COMPLETED`. |
 | `await task.fail(error)` | Terminal. Accepts a string (wrapped in `RuntimeError`) or any `BaseException`. Emits `TaskFailed`; sets `state = FAILED`. |
+| `await task.cancel(reason="")` | Terminal. Emits `TaskCancelled`; sets `state = CANCELLED`. |
+| `await task.checkpoint(state)` | Persists owner-defined recovery state through the configured store. |
 | `await task.expire()` | Terminal. Emits `TaskExpired`; sets `state = EXPIRED`. Called by external TTL observers. |
 
 ### Properties
@@ -4850,7 +5499,7 @@ from ag2.stream import MemoryStream
 
 ctx = ConversationContext(stream=MemoryStream())
 
-async with agent.task("with-ctx", context=ctx) as task:
+async with Task(owner_id=agent.name, spec=TaskSpec(title="with-ctx"), context=ctx) as task:
     ...
 ```
 
@@ -4864,11 +5513,12 @@ The `async with` block has these guarantees:
 
 - **Clean exit, no terminal call** -> auto `complete(result=None)`.
 - **Exception inside the block** -> auto `fail(exc)`, then the exception propagates.
+- **Coroutine cancellation** -> auto `cancel("cancelled")`, then cancellation propagates.
 - **Already terminal at exit time** -> nothing further happens.
 
 ```python
 try:
-    async with agent.task("flaky") as task:
+    async with Task(owner_id=agent.name, spec=TaskSpec(title="flaky")) as task:
         raise ValueError("boom")
 except ValueError as exc:
     print(task.state)            # TaskState.FAILED
@@ -4890,7 +5540,7 @@ stream.subscribe(
     sync_to_thread=False,
 )
 
-async with agent.task("watched", context=ctx) as task:
+async with Task(owner_id=agent.name, spec=TaskSpec(title="watched"), context=ctx) as task:
     await task.progress({"step": "fetch"})
     await task.complete({"ok": True})
 ```
@@ -4900,12 +5550,14 @@ async with agent.task("watched", context=ctx) as task:
 
 ## Reading the Active Task with `TaskInject`
 
-Inside an `async with agent.task(...)` block, the framework stamps the active Task into `context.dependencies["ag2.task"]`. Two ways to read it:
+Model runs do not inject a standalone Task or replace one supplied by an enclosing block. Use context variables for model-run state.
+
+Inside an `async with Task(...)` block, the framework stamps the active Task into `context.dependencies["ag2.task"]`. Two ways to read it:
 
 ### Direct access
 
 ```python
-async with agent.task("work", context=ctx) as task:
+async with Task(owner_id=agent.name, spec=TaskSpec(title="work"), context=ctx) as task:
     active = ctx.dependencies["ag2.task"]
     assert active is task
 ```
@@ -4943,15 +5595,46 @@ async def sweep(task: Task, deadline: datetime) -> None:
         await asyncio.sleep(1.0)
 ```
 
+## Checkpoint and Recovery
+
+Pass a `checkpoint_store` to persist owner-defined state with
+`await task.checkpoint(state)`. To continue that work, construct a new
+Task with the same store and `resume_from` set to the prior task ID.
+On entry, `task.resumed_state` contains the saved state, or
+`None` if no checkpoint is available. The application decides how to
+continue from that state.
+
+```python
+from ag2.task import Task, TaskSpec
+
+async with Task(
+    owner_id=agent.name,
+    spec=TaskSpec(title="index documents", capability="indexing"),
+    context=ctx,
+    checkpoint_store=store,
+    resume_from=prior_task_id,
+) as task:
+    next_document = (task.resumed_state or {}).get("next_document", 0)
+    await task.progress({"next_document": next_document})
+    # Process the next batch, then save where to continue.
+    await task.checkpoint({"next_document": next_document + 12})
+```
+
+Without a checkpoint store, `checkpoint()` is a no-op and
+`resumed_state` is `None`.
+
 ## TaskSpec and TaskMetadata
 
 Two small dataclasses surface around a Task:
 
-- `TaskSpec` - what the task is doing: `title`, `description`, `payload`, optional `capability`. Created by `Agent.task(...)`.
-- `TaskMetadata` - mutable lifecycle record updated on each transition: `task_id`, `owner_id`, `spec`, `state`, ISO-8601 timestamps, `progress`, `result`, `error`, optional `session_id`.
+- `TaskSpec` - what the task is doing: `title`, `description`, `payload`, optional `capability`. Passed to `Task(spec=...)`.
+- `TaskMetadata` - mutable lifecycle record updated on each transition: `task_id`, `owner_id`, `spec`, `state`, ISO-8601 timestamps, `progress`, `result`, `error`, optional `channel_id`.
 
 ```python
-async with agent.task("survey", description="probe upstream", payload={"region": "us"}) as task:
+async with Task(
+    owner_id=agent.name,
+    spec=TaskSpec(title="survey", description="probe upstream", payload={"region": "us"}),
+) as task:
     print(task.metadata.spec.title)        # 'survey'
     print(task.metadata.spec.payload)      # {'region': 'us'}
     print(task.metadata.owner_id)          # 'researcher'
@@ -4975,10 +5658,10 @@ Breaking work across multiple agents gives you:
 - **LLM-driven orchestration** - the calling agent decides when to delegate, what context to pass, and how to use the result.
 
 !!! note
-    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other. For auto-injected sub-tasks, `TaskConfig(max_concurrency=N)` bounds the total fan-out across both `run_subtask` and `run_subtasks`.
+    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other.
 
-!!! tip
-    For lightweight self-delegation where the parent doesn't need a *named* delegate, opt in to the auto-injected `run_subtask` / `run_subtasks` tools by passing `tasks=TaskConfig(...)` - see [`tasks=` in The Agent Harness](agent_harness.md#tasks-taskconfig). Use `Agent.as_tool()` (below) when you want a distinct, purpose-named tool exposed to the LLM.
+!!! warning "TaskConfig is deprecated"
+    `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the automatically injected `run_subtask` / `run_subtasks` tools will be removed in **1.4.0**. Existing code continues to work with deprecation warnings. Use `Agent.as_tool()` for new code and follow the [migration guide](subagents.md#migrating-from-taskconfig) below.
 
 ## Subagents API
 
@@ -5036,7 +5719,7 @@ task_writer(
 |---|---|---|
 | `description` | `str` | Tool description shown to the LLM (required) |
 | `name` | `str | None` | Override the default `task_{agent.name}` tool name |
-| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](subagents.md#sub-task-streams)) |
 | `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
 
 You can also use `subagent_tool()` directly for more control:
@@ -5052,6 +5735,101 @@ coordinator = Agent(
     ],
 )
 ```
+
+## Delegation Lifecycle
+
+Each delegation uses the same [task lifecycle](tasks.md) as an
+opted-in `ask()` or `run()`: one `TaskStarted` and one
+terminal event for that invocation. `TaskCancelled` identifies cancellation;
+`TaskFailed` identifies an execution error. The start carries a
+`TaskSpec` and the parent tool-call ID. Ancestors receive task events
+with the original delegation path, alongside source `UsageEvent` records.
+
+Lifecycle is automatic for delegates. A capability-tagged parent run has its
+own lifecycle in addition to each child's, with a distinct task ID.
+`TaskCompleted.usage` is a cumulative stream snapshot for inspection;
+accounting reads source usage records rather than summing these snapshots.
+
+## Migrating from TaskConfig
+
+Create a worker explicitly, then add its delegate tool to the parent's `tools` list. This replaces `tasks=TaskConfig(...)` without adding a new configuration API:
+
+```python
+from ag2 import Agent
+from ag2.config import OpenAICompletionsConfig
+
+worker = Agent(
+    "worker",
+    prompt="Complete the assigned task concisely. Return only the result.",
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
+)
+coordinator = Agent(
+    "coordinator",
+    prompt="Delegate independent work to task_worker, then combine the results.",
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
+    tools=[worker.as_tool(description="Complete a focused sub-task.")],
+)
+
+reply = await coordinator.ask("Compare Python and Rust for web APIs.")
+print(reply.body)
+```
+
+Map each `TaskConfig` field onto the worker explicitly. Some of its defaults were implicit, so check each one:
+
+| `TaskConfig` | Explicit worker |
+|---|---|
+| `config=None` (the subtask used the **parent's** config) | Pass the parent's config to the worker: `config=` is not inherited. |
+| `prompt` (default: `"You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."`) | Set the worker's `prompt=`; there is no default task prompt. |
+| Parent tools, filtered by `include_tools` / `exclude_tools` | List the tools in the worker's `tools=`. The list is fixed when the worker is built: tools added to the parent later with `add_tool` are not picked up. |
+| `extra_tools` | Add them to the worker's `tools=`. |
+| `max_concurrency` | See [Limiting concurrency](subagents.md#limiting-concurrency) below. |
+
+Omit `tasks=` from the parent and update prompts that mention `run_subtask` or `run_subtasks` to use the delegate's tool name (`task_worker` above) and its `objective` / `context` parameters.
+
+A few behaviours differ:
+
+- **One worker, many calls.** `run_subtask` built a fresh Agent per call; a delegate reuses the same worker Agent. Each call still runs on a fresh stream, so history does not leak between calls. Don't use a [persistent or shared stream](subagents.md#sub-task-streams) for a worker meant to run in parallel - calls on one stream run one turn at a time.
+- **Fan-out is up to the model.** `run_subtasks` dispatched the whole batch from a single tool call when parallel execution was enabled. With delegates, the calling LLM requests several calls in one response and the framework runs them concurrently; prompt for it explicitly. Where order matters, have the LLM call the delegate one step at a time.
+- **No built-in recursion guard.** Subtasks could never spawn subtasks. A worker can delegate only through the tools you give it, so keep delegate tools off the worker (avoid [self-delegation](subagents.md#self-delegation) here).
+- **Workers composed per task.** If you relied on `run_subtask` to spin up a generic worker for arbitrary work, [`dynamic_agent()`](subagents.md#dynamic-agents) is the closer fit: the LLM composes a focused worker per objective, and spawned workers cannot spawn further.
+
+`TaskStarted`, `TaskCompleted` and `TaskFailed` lifecycle events, HITL bridging, and forwarding of source `UsageEvent` records work with delegates.
+
+### Limiting concurrency
+
+`as_tool()` has no `max_concurrency` parameter. To cap how many delegate calls run at once, pass the same tool middleware to every delegate that shares the cap:
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.middleware import ToolMiddleware
+
+def concurrency_limit(limit: int) -> ToolMiddleware:
+    slots = asyncio.Semaphore(limit)
+
+    async def limited(call_next, event, context):
+        async with slots:
+            return await call_next(event, context)
+
+    return limited
+
+limit = concurrency_limit(3)
+coordinator = Agent(
+    "coordinator",
+    tools=[
+        researcher.as_tool(description="Research a question.", middleware=[limit]),
+        writer.as_tool(description="Draft a section.", middleware=[limit]),
+    ],
+)
+```
+
+!!! warning "Use a function, not a middleware object"
+    Tool middleware is deep-copied when its tool is registered. A callable *object* holding the semaphore is copied once per delegate, so each delegate silently gets its own cap. A function and its closure are not copied, so every delegate shares one semaphore. Create the limiter inside the event loop that runs the agent; an `asyncio.Semaphore` must not be shared across loops.
+
+### Deprecation warnings
+
+`Agent(tasks=TaskConfig(...))` emits one `DeprecationWarning` pointing at the line that builds the Agent. Constructing, copying or pickling a `TaskConfig` doesn't warn at runtime, but type checkers flag every use of the class. Reading `Agent.tasks` and leaving tasks disabled emit no warning.
 
 ## Background Subagents
 
@@ -5087,7 +5865,7 @@ How it behaves:
 | `agent` | `Agent` | The agent to run as a background sub-task (positional) |
 | `description` | `str` | Tool description shown to the LLM (required) |
 | `name` | `str | None` | Override the default `background_task_{agent.name}` tool name |
-| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](subagents.md#sub-task-streams)) |
 | `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
 
 !!! note
@@ -5128,9 +5906,9 @@ The analyst's LLM may call `sub_task` multiple times - one per aspect - then syn
 ```python
 from ag2 import Agent
 from ag2.tools.dynamic import dynamic_agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-config = OpenAIConfig(model="gpt-4o-mini")
+config = OpenAICompletionsConfig(model="gpt-4o-mini")
 
 orchestrator = Agent(
     "orchestrator",
@@ -5199,7 +5977,7 @@ It means that subagent has no information about previous calls or results. It ju
 
 | What | Behavior | Why |
 |---|---|---|
-| **Dependencies** | Copied | Isolated - child mutations don't affect parent |
+| **Dependencies** | Copied; the parent's configuration fills only keys the sub-agent doesn't set | Isolated - child mutations don't affect parent. Values passed to `ask(dependencies=...)` or set at runtime override the sub-agent's own; the parent's constructor and plugin defaults don't (e.g. the sub-agent's `KnowledgePlugin` store wins over the parent's) |
 | **Variables** | Copied; not synced back. `approval_required` "always" answers are not inherited | Concurrent-safe - child mutations stay scoped to the child; the sub-task asks for approval again |
 | **History** | Fresh stream | Clean context - the LLM passes relevant info via `context` parameter |
 | **Depth counter** | Incremented in child; excluded from sync-back | Internal bookkeeping - never leaks to parent |
@@ -5445,7 +6223,7 @@ from ag2.events import ImageInput
 agent = Agent(
     "vision_agent",
     "You are a helpful assistant that describes images.",
-    config=GeminiConfig(model="gemini-3-flash-preview"),
+    config=GeminiConfig(model="gemini-3.6-flash"),
 )
 
 image = ImageInput("https://example.com/photo.jpg")
@@ -5851,7 +6629,7 @@ image = reply.files[0]
 | `partial_images` | 1-3, number of partial images to stream |
 
 !!! warning
-    `ImageGenerationTool` requires the Responses API. Using it with the Chat Completions API (`OpenAIConfig`) raises an `UnsupportedToolError`.
+    `ImageGenerationTool` requires the Responses API. Using it with the Chat Completions API (`OpenAICompletionsConfig`) raises an `UnsupportedToolError`.
 
 ## Mistral
 
@@ -6097,7 +6875,7 @@ Set `timeout` in seconds for tools that perform network requests or other potent
 import httpx
 
 from ag2 import Agent, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 @tool(timeout=30.0)
 async def fetch_page(url: str) -> str:
@@ -6109,7 +6887,7 @@ async def fetch_page(url: str) -> str:
 
 agent = Agent(
     name="WebAssistant",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     tools=[fetch_page],
 )
 ```
@@ -7030,8 +7808,6 @@ agent = Agent(
             ),
             answering=MCPAnswerPolicy(
                 elicitation="ask",          # route questions to this agent's human
-                sampling=True,              # let the server borrow this agent's model
-                roots=["/srv/project"],     # directories to report
                 max_rounds=10,              # how often it may come back for more
             ),
         )
@@ -7040,6 +7816,10 @@ agent = Agent(
 ```
 
 `MCPToolkit` answers what you have enabled and retries the call - the whole loop happens inside the one operation, so nothing is held between calls: the pause is on the remote server and your end is simply waiting.
+
+Keep deprecated MCP sampling and roots disabled in new integrations. Configure
+the server's own LLM provider, and pass filesystem scope through its tool
+arguments, resource URIs or configuration instead.
 
 With no human-input hook configured, a question surfaces the usual "human input was requested but not provided" failure rather than a silent decline: an absent channel is not a refusal, and reporting it as one would hand the server a decline you never made.
 
@@ -7076,8 +7856,8 @@ A server may declare a **resolved parameter** - a tool parameter whose value com
 | field | what it hands over | default |
 |---|---|---|
 | `elicitation` | your user's attention - the question goes to `context.input()`, and so to the agent's `hitl_hook` | `"decline"` |
-| `sampling` | **your model budget** - the completion runs on this agent's own model, and you pay for it | `False` |
-| `roots` | your filesystem layout - plain paths only, no `Variable`, since these are deployment configuration rather than a runtime value | `()` |
+| `sampling` | Deprecated MCP capability: lends **your model budget** to the server | `False` |
+| `roots` | Deprecated MCP capability: reports your filesystem layout as plain paths, without `Variable` resolution | `()` |
 | `max_rounds` | nothing; it bounds how many times a server may come back before the call is abandoned | `10` |
 
 `elicitation` reuses the same two-valued `ElicitationPolicy` as `ACPConfig.elicitation_policy`, so the word means one thing across AG2's protocol integrations. `sampling` is named for the protocol operation rather than "model" on purpose: this side **lends** your model, while [serving](serving_mcp.md)'s `client_model=` **borrows** the caller's - opposite directions that must not share a word.
@@ -7148,6 +7928,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | `authorization_token` | `None` | bearer token sent unless `headers` already contains `Authorization` (case-insensitive) |
 | `headers` | `None` | extra HTTP headers |
 | `connection_timeout` | `30.0` | seconds to wait on the server |
+| `max_sse_event_size` | `1_048_576` | largest single server-sent event, in bytes, the client accepts (`None` lifts the cap); a tool result is one event, so raise it for a trusted server whose results exceed 1 MiB |
 | `proxy` | `None` | HTTP proxy to route through |
 | `verify` | `True` | verify the server's TLS certificate |
 | `protocol_mode` | `"legacy"` | `"auto"` probes for a modern-era peer and falls back |
@@ -7169,7 +7950,7 @@ That is also why the callbacks your `answering` policy implies are supplied per 
 | `protocol_mode` | `"legacy"` | `"auto"` probes for a modern-era peer and falls back |
 | `server_label` / `description` / `allowed_tools` / `blocked_tools` / `tool_name_prefix` | as above | as above |
 
-Every field of both configs except `connection_timeout`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime - handy for injecting per-conversation tokens or workspace paths.
+Every field of both configs except `connection_timeout`, `max_sse_event_size`, `proxy`, `verify`, `encoding` and `protocol_mode` can be a `Variable` if the value is only known at runtime - handy for injecting per-conversation tokens or workspace paths.
 
 `MCPToolkit` reuses tool discovery while the resolved configuration is unchanged. Changing the server address, credentials, stdio launch settings, filters or prefix triggers discovery again. Concurrent agent turns keep separate snapshots of the tools they discovered. Each discovered tool is pinned to the resolved configuration that discovered it, so a call always reaches the server that advertised the tool even when a `Variable` would now resolve differently. A value that changes mid-turn, such as a rotated token, applies from the next discovery. Only the most recent configuration is cached, so alternating configurations can require another discovery request, and turns that resolve different configurations discover one after another rather than in parallel. Changes to a server's tool list alone do not invalidate this cache.
 
@@ -7324,17 +8105,25 @@ app = MCPServer(agent, elicitation_policy="ask")  # "ask" is the default
 
 Only a client that advertised it can answer is ever asked. A client that cannot - or a policy of `"decline"` - falls through to the agent's own `hitl_hook`, and with none configured the turn fails with the usual `HumanInputNotProvidedError` and its instructional message. That loud failure is deliberate: silently returning a degraded result would hide from the caller that the question went nowhere.
 
-### Run on the calling client's model
+### Configure the served agent's model
 
-A deployment holding no model credentials can still serve an agent that needs one: `client_model=True` runs the agent's own reasoning on the **calling client's** LLM, over MCP sampling.
+Configure the served Agent with its own provider and leave `client_model`
+disabled (the default). The server uses its configured model for reasoning:
 
 ```python
 from ag2 import Agent
+from ag2.config import AnthropicConfig
 from ag2.mcp import MCPServer
 
-agent = Agent(name="assistant")  # no config of its own
-app = MCPServer(agent, client_model=True)
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(agent)
 ```
+
+#### Compatibility with client-provided models
+
+The legacy `client_model=True` option runs reasoning on the calling client's
+LLM over deprecated MCP sampling. New integrations should configure a provider
+on the served Agent as above.
 
 It is off unless you ask for it, and a server that has not enabled it never sends a sampling request and never needs the capability of its clients.
 
@@ -7791,7 +8580,7 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `lifespan` | `None` | an `mcp` server lifespan |
 | `sessions` | `True` | conversation history: `True`, a `SessionConfig`, or `False` for stateless |
 | `elicitation_policy` | `"ask"` | whether the served agent's questions reach the calling client's human |
-| `client_model` | `False` | run the agent's reasoning on the calling client's model |
+| `client_model` | `False` | legacy MCP sampling; configure the served Agent's own model for new integrations |
 | `resources` / `resource_templates` / `prompts` | `()` | expose these alongside the tool; each capability is advertised only when non-empty |
 | `tools` | `()` | deterministic `@mcp_tool` tools served next to `ask` |
 | `apps` | `()` | MCP Apps whose tools and interactive documents are served together |
@@ -8570,7 +9359,7 @@ from ag2.tools import GoogleMapsTool
 
 agent = Agent(
     "concierge",
-    config=GeminiConfig(model="gemini-3-flash-preview"),
+    config=GeminiConfig(model="gemini-3.6-flash"),
     tools=[
         GoogleMapsTool(
             latitude=40.7128,
@@ -9414,7 +10203,7 @@ A hook is an **async** callable with the same parameters as `BaseMiddleware.on_t
 from typing import Annotated
 
 from ag2 import Agent, Context, tool, Variable
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ToolCallEvent, ToolResultEvent
 from ag2.middleware import ToolExecution
 
@@ -9431,7 +10220,7 @@ def search(query: str, request_id: Annotated[str, Variable()]) -> str:
     """Runs a search. request_id may be injected by middleware."""
     return f"results-for-{query}-{request_id}"
 
-agent = Agent("assistant", config=OpenAIConfig("gpt-4o-mini"))
+agent = Agent("assistant", config=OpenAICompletionsConfig("gpt-4o-mini"))
 ```
 
 !!! note
@@ -9512,7 +10301,7 @@ Do not rely on either. Put the shared state in `context.dependencies` and keep t
 
 ```python
 from ag2 import Agent, Context, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ToolCallEvent, ToolResultEvent
 from ag2.middleware import MiddlewareDescription, ToolExecution, ToolResultType
 
@@ -9551,7 +10340,7 @@ def fetch(url: str) -> str:
 budget = CallBudget(limit=3, key="web")
 agent = Agent(
     "assistant",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     tools=[tool(search, middleware=[budget]), tool(fetch, middleware=[budget])],
     dependencies={("budget", "web"): Counter()},
 )
@@ -9581,7 +10370,7 @@ This is useful for tools that perform **irreversible**, **expensive**, or **sens
 import asyncio
 
 from ag2 import Agent, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import approval_required
 
 @tool(
@@ -9593,7 +10382,7 @@ def delete_account(user_id: str) -> str:
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     tools=[delete_account],
     hitl_hook=lambda event: input(event.content),
 )
@@ -10256,7 +11045,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware.builtin import TelemetryMiddleware
 
 # 1. Configure OpenTelemetry
@@ -10269,7 +11058,7 @@ trace.set_tracer_provider(tracer_provider)
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     middleware=[
         TelemetryMiddleware(
             tracer_provider=tracer_provider,
@@ -10440,7 +11229,7 @@ TelemetryMiddleware(
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware.builtin import TelemetryMiddleware
 from ag2.tools import tool
 
@@ -10452,7 +11241,7 @@ def get_weather(city: str) -> str:
 agent = Agent(
     "weather_agent",
     prompt="Use the get_weather tool to answer weather questions.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[get_weather],
     middleware=[
         TelemetryMiddleware(
@@ -10501,7 +11290,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import DiskKnowledgeStore
 from ag2.middleware.builtin import TelemetryMiddleware
 from ag2.network import Hub, HubClient, LocalLink, Passport, Resume
@@ -10534,7 +11323,7 @@ async def main() -> None:
     #    spans link back to the envelope that triggered them.
     alice = Agent(
         "alice",
-        config=OpenAIConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="alice")],
     )
 
@@ -10567,7 +11356,7 @@ The hub and listener emit five span types. Each carries an `ag2.span.type` attri
 Agents instrumented with `TelemetryMiddleware` add their own `agent` / `llm` / `tool` / `human_input` spans (see [Agent Telemetry](agent.md)), linked to the triggering envelope.
 
 !!! note
-    `network.task` spans cover capability-tagged tasks - the same `agent.task(..., capability="X")` mechanism described in [Task Observation](../network/task_observation.md). The span records the task's `capability`, `outcome`, and latency, which is what feeds task-level evaluation views.
+    `network.task` spans cover capability-tagged tasks - the same `Task(spec=TaskSpec(title="...", capability="X"), ...)` mechanism described in [Task Observation](../network/task_observation.md). The span records the task's `capability`, `outcome`, and latency, which is what feeds task-level evaluation views.
 
 ### Checkpoint events
 
@@ -10773,7 +11562,7 @@ async def get_weather(city: str) -> str:
 
 agent = Agent(
     "weather",
-    config=GeminiConfig(model="gemini-3-flash-preview"),
+    config=GeminiConfig(model="gemini-3.6-flash"),
     tools=[get_weather],
 )
 
@@ -10894,7 +11683,7 @@ Start as small as possible: two questions, an agent, one check. This calls a rea
 import asyncio
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.eval import Suite, run_agent
 from ag2.eval.scorers import final_answer_matches
 
@@ -10905,7 +11694,7 @@ suite = Suite.from_list([
 ])
 
 # 2. the agent under test
-agent = Agent("geographer", prompt="Answer with the capital city.", config=OpenAIConfig(model="gpt-4o-mini"))
+agent = Agent("geographer", prompt="Answer with the capital city.", config=OpenAICompletionsConfig(model="gpt-4o-mini"))
 
 async def main():
     # 3 + 4. score each answer against its expected value, and run
@@ -11157,12 +11946,12 @@ scorers = [
 Some properties can't be checked with `==`: *is the answer helpful? well-reasoned? on-brand?* `agent_judge` hands the answer plus a criterion you write to a judge model, which returns a numeric score. This is a more capable take on a LLM-as-a-judge evaluation.
 
 ```python
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.eval.scorers import agent_judge
 
 scorers = [
-    agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer resolves the user's request.", key="helpfulness"),
-    agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer is concise.", key="conciseness"),
+    agent_judge(OpenAICompletionsConfig(model="gpt-4o-mini"), criterion="The answer resolves the user's request.", key="helpfulness"),
+    agent_judge(OpenAICompletionsConfig(model="gpt-4o-mini"), criterion="The answer is concise.", key="conciseness"),
 ]
 ```
 
@@ -11183,7 +11972,7 @@ scorers = [
 A judge returns a *number*, but for automation you often want a hard verdict - *reject anything below 0.7*. Pass `threshold=` to gate the judge: its column then lands in `result.pass_rate(key)` (pass iff `score >= threshold`) instead of `score_stats`, and the raw number is recorded in the feedback's `detail`.
 
 ```python
-agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer is helpful.", key="helpfulness", threshold=0.7)
+agent_judge(OpenAICompletionsConfig(model="gpt-4o-mini"), criterion="The answer is helpful.", key="helpfulness", threshold=0.7)
 ```
 
 `threshold=0.7` is shorthand for wrapping the judge in the generic `threshold(...)` combinator, which gates **any** numeric scorer (a judge, or your own `@scorer`) into a Pass/Fail - `scorer -> scorer`:
@@ -11214,7 +12003,7 @@ scorers = [failure_attribution(key="failure_mode")]
 Out of the box it runs **deterministic detectors** (a crash/exception, no final answer, a tool error) - no model needed. Pass a `config` to add an **LLM attributor** that classifies the subtler, semantic failures the detectors can't see (wrong answer, gave up, looped):
 
 ```python
-failure_attribution(OpenAIConfig(model="gpt-4o-mini"), key="failure_mode")
+failure_attribution(OpenAICompletionsConfig(model="gpt-4o-mini"), key="failure_mode")
 ```
 
 To locate the decisive step of multi-agent failures without an LLM judge, the [mi4afa extension](../extensions/mi4afa.md) reads it from an open-weight model's activations with a trained probe.
@@ -11355,7 +12144,7 @@ from ag2.config import GeminiConfig
 weather_agent = Agent(
     "weather",
     prompt="You are a weather assistant. Use get_weather.",
-    config=GeminiConfig(model="gemini-3-flash-preview"),
+    config=GeminiConfig(model="gemini-3.6-flash"),
     tools=[get_weather],
 )
 ```
@@ -11656,14 +12445,14 @@ A `Variants` is a mapping of name -> `Agent` instance, plus an `axis` label that
 
 ```python
 from ag2 import Agent
-from ag2.config import GeminiConfig, OpenAIConfig
+from ag2.config import GeminiConfig, OpenAICompletionsConfig
 from ag2.eval import Variants, run_variants
 
 board = await run_variants(
     suite,
     variants=Variants({
-        "gpt-4o": Agent("weather", config=OpenAIConfig("gpt-4o"), tools=[get_weather]),
-        "flash":  Agent("weather", config=GeminiConfig("gemini-3-flash-preview"), tools=[get_weather]),
+        "gpt-4o": Agent("weather", config=OpenAICompletionsConfig("gpt-4o"), tools=[get_weather]),
+        "flash":  Agent("weather", config=GeminiConfig("gemini-3.6-flash"), tools=[get_weather]),
     }, axis="config"),
     scorers=[...],
     store_dir="runs",
@@ -12126,7 +12915,7 @@ Each provider reads its key from the environment unless you pass one:
         prompt="You are a helpful voice assistant.",
         config=CascadeConfig(
             stt=OpenAITranscriber("gpt-4o-mini-transcribe"),
-            model=config.OpenAIConfig("gpt-5-mini", streaming=True),
+            model=config.OpenAICompletionsConfig("gpt-5-mini", streaming=True),
             tts=ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"),
         ),
     )
@@ -12183,7 +12972,7 @@ Mistral classes need the `mistral` extra and `MISTRAL_API_KEY` in the environmen
 pip install "ag2[mistral]"
 ```
 
-`MistralRealtimeTranscriber` also needs the SDK's websocket client:
+`MistralRealtimeTranscriber` and `MistralRealtimeTTSConfig` also need the SDK's websocket client:
 
 ```bash
 pip install "mistralai[realtime]"
@@ -12229,7 +13018,7 @@ from ag2.live import OpenAITranscriber, SoundDeviceRecorder
 
 agent = Agent(
     "assistant",
-    config=config.OpenAIConfig("gpt-5", streaming=True),
+    config=config.OpenAICompletionsConfig("gpt-5", streaming=True),
 )
 
 async def main():
@@ -12428,7 +13217,7 @@ tts = ElevenLabsStreamingTTSConfig("eleven_flash_v2_5", voice_id="21m00Tcm4TlvDq
 agent = Agent(
     "assistant",
     prompt="You are a helpful voice assistant. Keep answers to a few sentences.",
-    config=config.OpenAIConfig("gpt-5-mini", streaming=True),
+    config=config.OpenAICompletionsConfig("gpt-5-mini", streaming=True),
     observers=[TTSObserver(tts)],
 )
 
@@ -12441,6 +13230,28 @@ if __name__ == "__main__":
 ```
 
 The same works with Mistral - swap in `MistralStreamingTTSConfig("voxtral-mini-tts-2603", voice_id="my-saved-voice")`. It converts Mistral's float32 PCM to the int16 PCM `SoundDevicePlayer` expects.
+
+### Streaming the reply's text (Mistral realtime)
+
+A streaming config still waits for a whole sentence: `TTSObserver` cuts the reply at sentence boundaries (`min_chars`, default 60) and sends one request per sentence. `MistralRealtimeTTSConfig` takes the reply's text instead, as the model streams it, over one realtime connection per reply. Mistral decides where to cut the audio, so the voice keeps its context across sentences and the reply pays for one connection instead of one request per sentence. Mistral still holds a short sentence back until the text after it arrives, so the first audio does not come sooner than with sentence buffering:
+
+```python
+from ag2.live import MistralRealtimeTTSConfig, TTSObserver
+
+tts = MistralRealtimeTTSConfig(
+    "voxtral-mini-tts-3",  # the default; the realtime endpoint rejects voxtral-mini-tts-2603
+    voice_id="my-saved-voice",  # or ref_audio="<base64 clip>"
+    streaming_mode="responsive",  # or "long_form"; omit for the server default
+    expressiveness=1.5,  # 1 or above; omit for the server default
+)
+
+observer = TTSObserver(tts)  # min_chars does not apply to this config
+```
+
+It works anywhere a TTS config does, including `CascadeConfig(tts=...)`. Each model response is its own reply: when the model says something before calling a tool, that text is spoken on its own connection before the tool runs, and the answer after the tool opens a new one. A non-streaming model config (no message chunks) gets its completed reply spoken. A server `error` event raises `RuntimeError`; a connection the server refuses (an unknown voice or model) raises the SDK's `RealtimeSpeechException`. A `CascadeConfig` barge-in closes the connection in the background, so the next turn does not wait for the closing handshake.
+
+!!! note
+    `TTSObserver` only sees a reply end through its `ModelMessage`. If a reply fails mid-stream, its open connection carries over into the next reply.
 
 ### Streaming directly to the speaker
 
@@ -12574,7 +13385,7 @@ SAMPLE_RATE = 24000  # pcm_24000, what the player and recorder use
 agent = Agent(
     "assistant",
     prompt="You are a helpful voice assistant. Keep answers to a few sentences.",
-    config=config.OpenAIConfig("gpt-5-mini", streaming=True),
+    config=config.OpenAICompletionsConfig("gpt-5-mini", streaming=True),
     observers=[TTSObserver(ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"))],
 )
 
@@ -12856,7 +13667,7 @@ if __name__ == "__main__":
     from ag2.live import gemini
 
     config = gemini.RealTimeConfig(
-        "gemini-3.1-flash-live-preview",
+        "gemini-3.8-live",
         output=gemini.AudioOutput(voice="Puck", language_code="en-US"),
         input=gemini.InputConfig(transcribe=True),
     )
@@ -12888,7 +13699,7 @@ if __name__ == "__main__":
         name="assistant",
         prompt="You are a helpful voice assistant. Always respond in English.",
         config=gemini.RealTimeConfig(
-            "gemini-3.1-flash-live-preview",
+            "gemini-3.8-live",
             output=gemini.AudioOutput(voice="Puck", language_code="en-US"),
             input=gemini.InputConfig(transcribe=True),
         ),
@@ -12934,7 +13745,7 @@ agent = LiveAgent(
     prompt="You are a voice assistant. Answer in one or two short sentences.",
     config=CascadeConfig(
         stt=OpenAITranscriber("gpt-4o-mini-transcribe"),
-        model=config.OpenAIConfig("gpt-5-mini", streaming=True),
+        model=config.OpenAICompletionsConfig("gpt-5-mini", streaming=True),
         tts=ElevenLabsStreamingTTSConfig("eleven_flash_v2_5"),
     ),
 )
@@ -13063,7 +13874,7 @@ Human-in-the-loop works as it does on an `Agent`: pass `hitl_hook=` to the `Live
 | History | Returned via `AgentReply` | Lives on the session's stream |
 | Turn detection | Application-driven (you call `ask`) | Provider-driven (VAD) |
 | Structured output | Supported | Not supported |
-| `tasks` / `run_subtask` | Supported | Not supported |
+| `tasks` / `run_subtask` | Supported (deprecated, removed in 1.4.0) | Not supported |
 
 If you need both - for example, a realtime voice front-end that hands off to a tasking agent - drive the handoff through a tool on the `LiveAgent` that delegates to a separate `Agent` using `Agent.as_tool()`.
 
@@ -13101,7 +13912,7 @@ Use `FilesAPI` when you want to:
 
 `FilesAPI` is available for:
 
-- `OpenAIConfig`
+- `OpenAICompletionsConfig`
 - `OpenAIResponsesConfig`
 - `AnthropicConfig`
 - `GeminiConfig`
@@ -13349,7 +14160,7 @@ The same parameter works with `stream.subscribe(handler, timeout=5.0)` and `stre
 
 The limit starts when delivery reaches that handler and covers dependency resolution, handler execution, and dependency cleanup. Waiting for earlier handlers does not consume it. Calls the handler awaits, including nested event publication, share its limit. It does not limit the subscription's lifetime or detached background tasks.
 
-Expiry raises `asyncio.TimeoutError` to the event publisher, like other handler exceptions, and stops delivery of that event to subsequent handlers. During an agent turn this can fail the turn. The subscription remains registered for later events until explicitly removed or its scope ends.
+Expiry raises `TimeoutError` to the event publisher, like other handler exceptions, and stops delivery of that event to subsequent handlers. During an agent turn this can fail the turn. The subscription remains registered for later events until explicitly removed or its scope ends.
 
 !!! warning "Cancellation is cooperative"
     AG2 requests cancellation and waits for it to finish, so cancellation cleanup can exceed the configured limit. A synchronous callback running in a worker thread may continue after AG2 stops waiting. Configure timeouts on its HTTP client, database driver, or subprocess as well. Blocking code with `sync_to_thread=False` prevents the event loop from enforcing the timeout.
@@ -13382,6 +14193,113 @@ with stream.where(ToolResultEvent).join(max_events=1) as results:
 
 !!! warning "Do not timeout individual `join()` pulls"
     Consume the iterator with a plain `async for`. Avoid wrapping individual pulls such as `await asyncio.wait_for(events.__anext__(), timeout=...)`: cancelling one `__anext__()` closes the current iterator, so later events will not be yielded by that iterator. For bounded consumption, use `join(max_events=N)` or put one `asyncio.timeout(...)` around the whole loop.
+
+## Query retained history
+
+Use `stream.history.where(...)` to inspect events already stored in a
+conversation. It accepts the same event classes and field conditions as live
+subscriptions. Building a query is synchronous; its `all()`, `first()`, `last()`,
+and `count()` methods are asynchronous and each reads a fresh, finite snapshot.
+
+```python
+import asyncio
+from ag2 import Context, MemoryStream
+from ag2.events import ToolCallEvent
+
+async def main():
+    stream = MemoryStream()
+    context = Context(stream)
+    await context.send(ToolCallEvent(name="lookup", arguments='{"page": 1}'))
+    await context.send(ToolCallEvent(name="lookup", arguments='{"page": 2}'))
+    calls = stream.history.where(ToolCallEvent)
+    lookups = calls.where(ToolCallEvent.name == "lookup")
+    print(await lookups.count())  # 2
+    print(await lookups.first())  # First stored lookup
+    print(await lookups.last())   # Most recent stored lookup
+    print(await lookups.all())    # Both lookups, in publication order
+
+asyncio.run(main())
+```
+
+Chained `where` clauses combine with AND and leave the original query unchanged.
+Class queries include subclasses. `all()` returns a fresh list of the ordinary
+stored event objects; `first()` and `last()` return `None` for an empty selection,
+and `count()` returns zero. Storage errors propagate to the caller.
+
+History queries select top-level stored occurrences. They preserve repeated
+publications and do not expand tool batches, model responses, or child streams.
+A filtered stream shares its parent's History: a live subscription filter does
+not implicitly restrict history queries.
+
+Unlike `stream.get()` or `join()`, these operations never wait for future events.
+They cover retained history only. Events removed by compaction are unavailable,
+so a history count is not a lifetime total.
+
+### Scope to the current user input
+
+`history.since_last_user_input()` selects events after the latest
+retained actual user input and excludes that input itself. It composes with the
+same filters and terminal methods. This example uses the OpenAI Responses API;
+set `OPENAI_API_KEY` before running it, as described in the
+[Quick Start](../quick-start.md):
+
+```python
+import asyncio
+
+from ag2 import Agent, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ToolCallEvent
+
+@tool
+def lookup() -> str:
+    """Look up an item."""
+    return "item"
+
+async def main():
+    agent = Agent(
+        "lookup",
+        tools=[lookup],
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Use lookup to find items. Answer acknowledgements directly.",
+    )
+    reply = await agent.ask("Find an item using lookup.")
+    history = reply.context.stream.history
+    calls = history.since_last_user_input().where(ToolCallEvent)
+    print("Calls for this input:", await calls.count())
+    await reply.ask("Thanks")
+    print("Calls for the new input:", await calls.count())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The query is lazy, so the same `calls` object counts the second input after
+`reply.ask("Thanks")` starts a new interval.
+
+A new interval starts with:
+
+- `agent.ask()`, `agent.run()`, and their continuations
+  `reply.ask()` and `reply.run()`;
+- a follow-up sent with `run.enqueue(...)`
+  ([feeding the turn while it runs](../agents.md#feeding-the-turn-while-it-runs)),
+  once the running turn consumes it.
+
+Tool results, compaction summaries, and messages queued with
+`context.enqueue(...)` from tools or background tasks do not start a
+new interval, even when they arrive after the model's final response.
+
+Each `ModelRequest` stores this in its `origin` field: `"user"` for input a
+person sent, `"service"` for framework messages. The provider still receives
+both as user-role content. Requests stored before the field existed count as
+`"user"`. Code that forwards a person's message into a running turn, such as a
+chat bridge, marks it explicitly with
+`context.enqueue("Use the March report instead", origin="user")`.
+
+The boundary is found before filters apply, so
+`history.where(ToolCallEvent).since_last_user_input()` selects the same
+events. If compaction or retention has removed the latest user input, the scoped
+query returns an empty selection; it does not recover the boundary from a
+summary.
 
 ## Raise events manually
 
@@ -13436,14 +14354,14 @@ pip install "ag2[redis]"
 ```python
 from ag2 import Agent
 from ag2.streams.redis import RedisStream
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 stream = RedisStream("redis://localhost:6379")
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 reply = await agent.ask("Hello!", stream=stream)
@@ -13554,7 +14472,7 @@ Pass observers when creating the agent. These observers are active for every `ag
 
 ```python
 from ag2 import Agent, observer
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ModelResponse, ToolCallEvent
 
 @observer(ModelResponse)
@@ -13563,7 +14481,7 @@ def on_response(event: ModelResponse) -> None:
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     observers=[on_response],
 )
 
@@ -13579,7 +14497,7 @@ from ag2 import Agent
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 @agent.observer(ModelResponse)
@@ -13696,7 +14614,7 @@ reply = await agent.ask("Hello!")
 
 The parameter also works with `observer(ModelResponse, callback, timeout=5.0)`, `@agent.observer(ModelResponse, timeout=5.0)`, and `@plugin.observer(ModelResponse, timeout=5.0)`. Omit the condition to apply it to callbacks receiving every event.
 
-The default is `None` (no limit). A configured timeout must be finite and greater than zero. It covers dependency resolution, the callback, and dependency cleanup. Expiry raises `asyncio.TimeoutError` to the event publisher and can fail the agent turn, just like other callback exceptions. See [Subscriber timeouts](stream.md#subscriber-timeouts) for delivery and cancellation behavior.
+The default is `None` (no limit). A configured timeout must be finite and greater than zero. It covers dependency resolution, the callback, and dependency cleanup. Expiry raises `TimeoutError` to the event publisher and can fail the agent turn, just like other callback exceptions. See [Subscriber timeouts](stream.md#subscriber-timeouts) for delivery and cancellation behavior.
 
 ## Observers vs Middleware vs Stream Subscribers
 
@@ -13736,11 +14654,11 @@ Detects repetitive tool-call patterns. Maintains a sliding window of recent tool
 ```python
 from ag2 import Agent
 from ag2.observers import LoopDetector
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "poller",
-    config=OpenAIConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     observers=[LoopDetector(window_size=10, repeat_threshold=3)],
 )
 ```
@@ -13752,11 +14670,11 @@ Tracks cumulative token usage across `UsageEvent` - the framework's accounting r
 ```python
 from ag2 import Agent
 from ag2.observers import TokenMonitor
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     observers=[TokenMonitor(warn_threshold=50_000, alert_threshold=100_000)],
 )
 ```
@@ -13813,11 +14731,11 @@ Register it like any other observer:
 
 ```python
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     observers=[AvgCompletionObserver(window=5, timeout=5.0)],
 )
 ```
@@ -14202,7 +15120,7 @@ Resulting layout:
 | Path | Purpose |
 |---|---|
 | `/SKILL.md` | Top-level store description |
-| `/log/` | Conversation logs - auto-populated by `EventLogWriter` after each `ask()` unless `KnowledgeConfig.write_event_log=False` |
+| `/log/` | Conversation logs - auto-populated by `EventLogWriter` after each `ask()` unless `KnowledgePlugin(store, write_event_log=False)` |
 | `/artifacts/` | User files, downloads, reference material |
 | `/memory/` | Working memory and conversation summaries |
 
@@ -14214,11 +15132,11 @@ Implement your own `StoreBootstrap` if you need a different layout.
 
 ```python
 from ag2 import Agent, MemoryStream
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import EventLogWriter, MemoryKnowledgeStore
 
 stream = MemoryStream()
-agent = Agent("assistant", config=OpenAIConfig(model="gpt-5"))
+agent = Agent("assistant", config=OpenAICompletionsConfig(model="gpt-5"))
 await agent.ask("Hello!", stream=stream)
 
 # Persist all events from this stream
@@ -14233,10 +15151,10 @@ loaded = await writer.load(stream.id)  # -> list[BaseEvent]
 
 Persisted events land at `/log/{stream_id}.jsonl`. Events of types that cannot be deserialized (e.g. a removed class) come back as `UnknownEvent` - no data is lost.
 
-When an `Agent` is given a `KnowledgeConfig`, it runs this `persist(...)` step for you at the end of every `ask()` - so you only call `EventLogWriter` directly in a custom harness. Set `KnowledgeConfig.write_event_log=False` to turn the automatic write off (e.g. when the store is purely user-facing memory rather than a transcript archive); if the writer raises, the turn still returns its reply and an `EventLogFailed` event is emitted on the stream.
+When an `Agent` is given a `KnowledgePlugin`, it runs this `persist(...)` step for you at the end of every `ask()` - so you only call `EventLogWriter` directly in a custom harness. Set `KnowledgePlugin(store, write_event_log=False)` to turn the automatic write off (e.g. when the store is purely user-facing memory rather than a transcript archive); if the writer raises, the turn still returns its reply and an `EventLogFailed` event is emitted on the stream.
 
 !!! tip
-    Pair `EventLogWriter` with `DefaultBootstrap` to get a ready-to-use persistent agent state. The writer targets `/log/` which the bootstrap has already described via `SKILL.md`. If you set `KnowledgeConfig.expose_tool=False`, the `Agent` passes `DefaultBootstrap(mention_tool=False)` so the generated `SKILL.md` doesn't tell the LLM about a `knowledge` tool it can't call.
+    Pair `EventLogWriter` with `DefaultBootstrap` to get a ready-to-use persistent agent state. The writer targets `/log/` which the bootstrap has already described via `SKILL.md`. If you set `KnowledgePlugin(store, expose_tool=False)`, the `Agent` passes `DefaultBootstrap(mention_tool=False)` so the generated `SKILL.md` doesn't tell the LLM about a `knowledge` tool it can't call.
 
 ## LockedKnowledgeStore - serialize writers
 
@@ -14300,24 +15218,35 @@ A policy receives the current `prompts` and `events`, returns modified copies. P
 
 ## Wiring policies onto an Agent
 
-Pass your policy list via the `assembly=` keyword when constructing an Agent. The Agent wires an internal `AssemblerMiddleware` at the outermost position of the middleware chain automatically.
+Register `AssemblerMiddleware` through `middleware=`. Put `HaltCheckMiddleware` immediately after it when using `AlertPolicy`, so a FATAL alert stops the model call. Middleware runs in list order, from outermost to innermost.
+
+!!! warning "`assembly=` is deprecated"
+    `Agent(assembly=...)` will be removed in **1.4.0**. Until then it keeps its existing behavior and emits a `DeprecationWarning` where the agent is constructed, including when an empty iterable was explicitly supplied. Use the middleware configuration below instead; `AssemblyPolicy` and the built-in policies remain supported.
 
 ```python
 from ag2 import Agent
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import HaltCheckMiddleware, Middleware
 from ag2.policies import (
     AlertPolicy,
     WorkingMemoryPolicy,
     SlidingWindowPolicy,
 )
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-5"),
-    assembly=[
-        WorkingMemoryPolicy(),
-        AlertPolicy(),
-        SlidingWindowPolicy(max_events=50),
+    config=OpenAICompletionsConfig(model="gpt-5"),
+    middleware=[
+        Middleware(
+            AssemblerMiddleware,
+            policies=[
+                WorkingMemoryPolicy(),
+                AlertPolicy(),
+                SlidingWindowPolicy(max_events=50),
+            ],
+        ),
+        Middleware(HaltCheckMiddleware),
     ],
 )
 ```
@@ -14330,7 +15259,7 @@ Inside each turn the `AssemblerMiddleware`:
 4. Restores the original prompt afterward.
 
 !!! tip
-    `AssemblerMiddleware` and `AssemblyPolicy` live in `ag2.assembly` if you need to wire the middleware manually (for example, inside a custom harness that isn't built on `Agent`).
+    `AssemblerMiddleware` and `AssemblyPolicy` live in `ag2.assembly`; `Middleware` and `HaltCheckMiddleware` are imported from `ag2.middleware`. If you also use the legacy `assembly=` parameter, both policy chains run; migrate the policies rather than registering them twice. `agent.assembly` reports only legacy and plugin policies, not policies registered through middleware.
 
 ## Ordering matters
 
@@ -14418,7 +15347,9 @@ Takes no arguments. Dedup state lives on the instance - give each Agent its own 
 Reads `/memory/working.md` from the [KnowledgeStore](knowledge_store.md) and injects it into the prompt. Working memory is the agent's persistent state - written between conversations by an aggregation strategy and read on every turn.
 
 ```python
+from ag2 import Agent
 from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import Middleware
 from ag2.policies import WorkingMemoryPolicy
 from ag2.knowledge import KnowledgeStore, MemoryKnowledgeStore
 
@@ -14429,7 +15360,7 @@ agent = Agent(
     "assistant",
     config=config,
     dependencies={KnowledgeStore: store},
-    middleware=[lambda e, c: AssemblerMiddleware(e, c, policies=[WorkingMemoryPolicy()])],
+    middleware=[Middleware(AssemblerMiddleware, policies=[WorkingMemoryPolicy()])],
 )
 ```
 
@@ -14605,13 +15536,13 @@ Summarizes the dropped portion via one LLM call, inserts a `CompactionSummary` e
 
 ```python
 from ag2.compact import SummarizeCompact
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 compact = SummarizeCompact(
     target=50,
-    config=OpenAIConfig(model="gpt-5-mini"),  # cheap model recommended for summaries
+    config=OpenAICompletionsConfig(model="gpt-5-mini"),  # cheap model recommended for summaries
 )
 
 retained = await compact.compact(events, ctx, store)
@@ -14642,23 +15573,23 @@ summary = CompactionSummary(
 
 ## Wiring onto an Agent
 
-Pass the strategy + trigger through [`KnowledgeConfig`](../agent_harness.md#knowledge-knowledgeconfig). The Agent wires a `_CompactionMiddleware` that fires the strategy automatically after each turn when the trigger threshold is crossed.
+Pass the strategy + trigger through [`KnowledgePlugin`](../agent_harness.md#knowledgeplugin). The plugin contributes middleware that fires the strategy automatically after each turn when the trigger threshold is crossed.
 
 ```python
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.compact import CompactTrigger, TailWindowCompact
-from ag2.config import OpenAIConfig
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.config import OpenAICompletionsConfig
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
 agent = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-5"),
-    knowledge=KnowledgeConfig(
+    config=OpenAICompletionsConfig(model="gpt-5"),
+    plugins=[KnowledgePlugin(
         store=store,
         compact=TailWindowCompact(target=100),
         compact_trigger=CompactTrigger(max_events=200),
-    ),
+    )],
 )
 ```
 
@@ -14799,11 +15730,11 @@ Writes a timestamped summary of the conversation to `/memory/conversations/`. Th
 
 ```python
 from ag2.aggregate import ConversationSummaryAggregate
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
-strategy = ConversationSummaryAggregate(config=OpenAIConfig(model="gpt-5-mini"))
+strategy = ConversationSummaryAggregate(config=OpenAICompletionsConfig(model="gpt-5-mini"))
 
 # After the conversation:
 await strategy.aggregate(events, ctx, store)
@@ -14822,11 +15753,11 @@ Updates `/memory/working.md` - the agent's single persistent state document. Rea
 
 ```python
 from ag2.aggregate import WorkingMemoryAggregate
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
-strategy = WorkingMemoryAggregate(config=OpenAIConfig(model="gpt-5-mini"))
+strategy = WorkingMemoryAggregate(config=OpenAICompletionsConfig(model="gpt-5-mini"))
 
 # Refresh working memory at the end of a session:
 await strategy.aggregate(events, ctx, store)
@@ -14839,7 +15770,7 @@ The default prompt is journal-style: *preserve facts that are still relevant, dr
 
 ```python
 strategy = WorkingMemoryAggregate(
-    config=OpenAIConfig(model="gpt-5-mini"),
+    config=OpenAICompletionsConfig(model="gpt-5-mini"),
     prompt=(
         "You maintain a research agent's working memory. Track tactics, "
         "not topical facts: which phrasings worked, which sources were "
@@ -14872,24 +15803,24 @@ The path constants (`WORKING_MEMORY_PATH`, `CONVERSATIONS_PREFIX`) are defined i
 
 ## Wiring onto an Agent
 
-Pass the strategy + trigger through [`KnowledgeConfig`](../agent_harness.md#knowledge-knowledgeconfig). The Agent wires a `_AggregationMiddleware` that fires `aggregate()` automatically according to the trigger.
+Pass the strategy + trigger through [`KnowledgePlugin`](../agent_harness.md#knowledgeplugin). The plugin contributes middleware that fires `aggregate()` automatically according to the trigger.
 
 ```python
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
-from ag2.config import OpenAIConfig
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.config import OpenAICompletionsConfig
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
-summarizer_config = OpenAIConfig(model="gpt-5-mini")  # cheap model for summaries
+summarizer_config = OpenAICompletionsConfig(model="gpt-5-mini")  # cheap model for summaries
 agent = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-5"),
-    knowledge=KnowledgeConfig(
+    config=OpenAICompletionsConfig(model="gpt-5"),
+    plugins=[KnowledgePlugin(
         store=store,
         aggregate=ConversationSummaryAggregate(config=summarizer_config),
         aggregate_trigger=AggregateTrigger(every_n_turns=10, on_end=True),
-    ),
+    )],
 )
 ```
 
@@ -14911,10 +15842,10 @@ If you're not using `Agent` (custom harness, tests, one-off scripts), call `awai
 
 ```python
 from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 trigger = AggregateTrigger(every_n_turns=10, on_end=True)
-strategy = ConversationSummaryAggregate(config=OpenAIConfig(model="gpt-5-mini"))
+strategy = ConversationSummaryAggregate(config=OpenAICompletionsConfig(model="gpt-5-mini"))
 
 _turn_count = 0
 
@@ -15035,12 +15966,12 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream, read_run_input
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     name="support_bot",
     prompt="You help users with billing questions.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 stream = AGUIStream(agent)
@@ -15085,14 +16016,14 @@ uvicorn run_ag_ui:app --reload --port 8000
     ```python linenums="1"
     from ag2 import Agent
     from ag2.ag_ui import AGUIStream
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
     from fastapi import FastAPI
     from starlette.routing import Route
 
     agent = Agent(
         name="support_bot",
         prompt="You help users with billing questions.",
-        config=OpenAIConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     )
     app = FastAPI()
     stream = AGUIStream(agent)
@@ -15240,7 +16171,7 @@ endpoint on both routes as shown in the simpler example above.
 | `transport` | `streaming: true` | Always |
 | `tools` | `supported: true`, `clientProvided: true` | `clientProvided` on `AGUIStream` only: the A2UI transport ignores `RunAgentInput.tools` |
 | `state` | `snapshots: true` | `AGUIStream` only |
-| `multiAgent` | `supported: true`, `delegation: true`; named `subagents` for `as_tool` | The agent is built with `tasks=TaskConfig(...)` or has delegation tools |
+| `multiAgent` | `supported: true`, `delegation: true`; named `subagents` for `as_tool` | The agent has delegation tools or uses the deprecated `tasks=TaskConfig(...)` API (removed in 1.4.0) |
 | `reasoning` | `encrypted: true` for Gemini function-call signatures | Gemini agents only |
 | `multimodal` | `input`: media the configured provider mapper accepts | Always |
 | `humanInTheLoop` | `supported: true`, `interrupts` | `interrupts` is `false` when the agent has its own `hitl_hook` |
@@ -15365,6 +16296,9 @@ answers its call: the model sees the empty string.
 Each delegation to a sub-agent (`agent.as_tool(...)`, `run_subtask`) reaches the
 client as a subagent invocation with its own `subagentRunId`, so two parallel
 delegations to the same agent can be told apart:
+
+!!! warning "Legacy automatic subtask tools"
+    `run_subtask` / `run_subtasks` enabled by `TaskConfig` are deprecated and will be removed in **1.4.0**. Use [explicit delegation](../subagents.md#migrating-from-taskconfig) through `Agent.as_tool()`; its AG-UI capabilities and lifecycle reporting remain supported.
 
 ```text
 SUBAGENT_STARTED  {"subagentRunId":"4f1c...","name":"researcher","description":"<the objective>"}
@@ -15661,7 +16595,7 @@ Run an AG2 agent behind an AG-UI 1.0 endpoint and connect a CopilotKit UI to it.
 
 ## Prerequisites
 
-- Python 3.10-3.14 and `uv`
+- Python 3.11-3.14 and `uv`
 - Node.js 20.9 or newer and `pnpm`
 - An OpenAI API key for the sample agent
 
@@ -15898,12 +16832,12 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream, read_run_input
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     name="support_bot",
     prompt="You help users with billing questions.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 stream = AGUIStream(agent)
@@ -15946,7 +16880,7 @@ AG2 supports this through injected `Context` and `dispatch(variables=...)`. Your
 ```python
 from ag2 import Agent, Context, tool
 from ag2.ag_ui import AGUIStream, RunAgentInput
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 @tool
 def get_user_profile(context: Context) -> str:
@@ -15956,7 +16890,7 @@ def get_user_profile(context: Context) -> str:
 agent = Agent(
     name="profile_bot",
     prompt="You can look up a user profile when needed.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[get_user_profile],
 )
 
@@ -15982,7 +16916,7 @@ Example backend tool:
 
 ```python
 from ag2 import Agent, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 @tool
 def calculate_sum(a: int, b: int) -> int:
@@ -15992,7 +16926,7 @@ def calculate_sum(a: int, b: int) -> int:
 agent = Agent(
     name="calculator",
     tools=[calculate_sum],
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 ```
 
@@ -16113,9 +17047,9 @@ Sub-modules:
 | `ag2.a2a.push` | `A2APushConfig`, `A2APushAuthentication`, CRUD helpers |
 | `ag2.a2a.security` | `Scheme` / `Requirement` types, scheme factories (`bearer_scheme`, `api_key_scheme`, `oauth2_scheme`, `mtls_scheme`, `http_auth_scheme`, `open_id_connect_scheme`) and the `require()` builder for `AgentCard` auth declarations |
 | `ag2.a2a.events` | Typed `A2AEvent` wrappers surfaced into the AG2 stream - `A2ATaskSnapshot`, `A2ATaskStatusUpdate`, `A2ATaskArtifactUpdate`, `A2ATextArtifact`, `A2AToolCallArtifact`, `A2AMessage` |
-| `ag2.a2a.errors` | Exception hierarchy - `A2AError`, `A2ATaskTerminalError`, `A2AReconnectError`, `A2AInvalidCardError`, `A2AIncompatibleProtocolVersionError`, `A2AClientToolsNotSupportedError`, `A2ACardSignatureError`, `A2AStaleCardSignatureError` |
+| `ag2.a2a.errors` | Exception hierarchy - `A2AError`, `A2ATaskTerminalError`, `A2ATaskCancelledError`, `A2AReconnectError`, `A2AInvalidCardError`, `A2AIncompatibleProtocolVersionError`, `A2AClientToolsNotSupportedError`, `A2ACardSignatureError`, `A2AStaleCardSignatureError` |
 | `ag2.a2a.transports` | `TransportName` - `Literal["jsonrpc", "rest", "grpc"]` - plus low-level `build_*` builders |
-| `ag2.a2a.testing` | In-process test helpers - `make_test_client_factory`, `make_test_rest_client_factory`, `pick_free_port` |
+| `ag2.a2a.testing` | In-process test helpers - `make_test_client_factory`, `make_test_rest_client_factory`, `pick_free_port`, `ToolRoundsConfig`, `ObservedAgentExecutor`, `TaskStatusRecorder`, `TurnGate` |
 
 !!! note
     The A2A integration depends on [`a2a-sdk`](https://pypi.org/project/a2a-sdk/). Install with the `a2a` extras: `#!bash pip install "ag2[a2a]"` - that covers the A2A **client**. Serving needs the SDK's own transport extras on top, installed directly: `#!bash pip install "a2a-sdk[http-server]"` for `build_jsonrpc` / `build_rest`, and `#!bash pip install "a2a-sdk[grpc]"` for `build_grpc`.
@@ -16159,6 +17093,8 @@ async def main() -> None:
 
 After startup the agent card is reachable at `http://127.0.0.1:8000/.well-known/agent-card.json`. A client connects by passing that base URL to `A2AConfig(card_url=...)` - see the [Client](client.md) page.
 
+When the model streams its answer, the server publishes the text as one artifact and closes it (`last_chunk=True`) before the task leaves `working` (completed, failed, input required or cancelled), so any A2A client can tell the answer is complete. The one exception is a cancel that reaches a [different replica](server.md#running-on-several-replicas) from the one running the task: the SDK records `CANCELED` in the shared store and stops the running turn, which gets no chance to send the closing chunk. The terminal status still ends the stream, so clients lose nothing but the marker.
+
 ## What `A2AServer` Holds
 
 `A2AServer.__init__` materialises transport-agnostic state - the executor, the task store, optional push notifications. Transport-specific parameters (URL, paths, ports) live on the `build_*` methods.
@@ -16169,7 +17105,7 @@ After startup the agent card is reachable at `http://127.0.0.1:8000/.well-known/
 | `task_store` | Shared `TaskStore`, or a `VersionedTaskStore` for [several replicas](#running-on-several-replicas). Defaults to a single `InMemoryTaskStore` reused across every `build_*` call |
 | `event_stream` | `TaskEventStream` that carries task events between replicas. Required with a `VersionedTaskStore`, rejected without one |
 | `push_config_store` | Enables push-notifications CRUD (see [Tasks & Push](tasks_and_push.md)). Optional |
-| `push_sender` | Custom delivery sender. Defaults to no-op when not set |
+| `push_sender` | Custom delivery sender. With a `push_config_store` and no sender, the SDK's `BasePushNotificationSender` delivers |
 | `push_url_validator` | Optional async callback receiving a URL and returning `bool`. Rejects disallowed push-notification URLs before storing them |
 | `extended_card` | Auth-aware extra metadata returned via `GetExtendedAgentCard` |
 | `card_modifier` / `extended_card_modifier` | Per-request hooks that mutate the card before it's served |
@@ -16232,10 +17168,11 @@ gRPC.
 - **Hosts must resolve.** The SDK policy resolves the hostname and rejects it if
   DNS fails or any address is private, loopback, or link-local. The client only
   sees `Invalid push notification URL`; the reason is in the server log.
-- **Registration only.** The validator screens URLs when they are registered. A
+- **Registration and delivery.** The validator screens URLs when they are
+  registered, and the default sender checks them again before each delivery. A
   custom `push_sender` is not covered; give it the same callback (the
   SDK's `BasePushNotificationSender` takes `push_url_validator`).
-- Works on every SDK `ag2[a2a]` installs (`a2a-sdk>=1.2.0`).
+- Works on every SDK `ag2[a2a]` installs (`a2a-sdk>=1.3.0`).
 
 !!! note
     The default `InMemoryTaskStore` is materialised **once** at `__init__` time. This is what makes JSON-RPC, REST and gRPC bound to the same `A2AServer` see each other's tasks - a single store, three transports.
@@ -16277,9 +17214,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from ag2 import Agent
 from ag2.a2a import A2AServer
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-agent = Agent("assistant", config=OpenAIConfig("gpt-5"))
+agent = Agent("assistant", config=OpenAICompletionsConfig("gpt-5"))
 
 async def main() -> None:
     engine = create_async_engine("postgresql+asyncpg://user:password@db/a2a")
@@ -16537,8 +17474,8 @@ app = server.build_jsonrpc(url=url, card=card)
 | Argument | Purpose |
 |---|---|
 | `version` | Card version (defaults to `"1.0.0"`) |
-| `description` | Free-form description. Defaults to the first entry of the agent's system prompt |
-| `skills` | Explicit `Sequence[AgentSkill]`. When `None`, `build_card` walks `agent.tools` for any `SkillsToolkit` and publishes its local skills automatically; falls back to a single agent-derived skill if none are found |
+| `description` | Free-form description. Defaults to the first entry of the agent's system prompt, or the agent's name when it has none, since the field is required |
+| `skills` | Explicit `Sequence[AgentSkill]`. When `None`, `build_card` walks `agent.tools` for any `SkillsToolkit` and publishes its local skills automatically, each tagged with its own name since `tags` is required; falls back to a single agent-derived skill, tagged with the agent's name, if none are found |
 | `push_notifications` | Toggles `capabilities.push_notifications` on the card |
 | `provider` | `AgentProvider` block (organization, URL) |
 | `documentation_url` / `icon_url` | Discovery metadata |
@@ -16887,6 +17824,18 @@ except A2AExtensionNotSupportedError as err:
 ```
 
 See [Declaring Extensions](server.md#declaring-extensions) for the server side.
+
+## What the Reply Contains
+
+The reply is the text of the final model turn; text from earlier turns of a tool round trip is not repeated. Each artifact's text appears once, including an artifact that carries other parts next to its text. Artifacts are ordered by when they first appeared on the task, which is the order a polled task lists them, so an artifact reused from an earlier turn of a tool round trip comes before one that this turn added. The text of a message answering the turn follows the artifacts. A text artifact the server re-sends in full replaces its earlier content instead of being appended to it, even when the new text is shorter. A tool call is surfaced once however often later updates or polls repeat it.
+
+<!-- Pending maintainer agreement (PR #3494, Open Decision 1): the reading of a re-send into a reused artifact id below is proposed, not settled. Keep it in step with the _ArtifactText docstring. -->
+
+When a server writes into an artifact id it already used in an earlier turn, the reply holds only what the artifact gained in this turn: its text past what it held when the turn began, or its whole text if it no longer begins with that. An artifact that comes back unchanged adds nothing. A full re-send that begins with the earlier turn's text therefore counts as a continuation of it, because a polled snapshot of appended text looks exactly the same. A server that wants a whole new answer in a later turn should write it to a new artifact id, as the AG2 server does.
+
+When the server cancels the task, the client raises `A2ATaskCancelledError` with the artifacts received so far in `err.task.artifacts`, one entry per artifact under its own id, preserving all parts and metadata, including empty and nontext artifacts. Only a completed task's status message is part of the reply; a message attached to a task that is still working is a progress note and is left out, and one that repeats the artifacts' text exactly is not counted twice. A completion message with other text is appended after the artifacts' text exactly as sent, with no separator added. An AG2 server returns its answer as a text artifact, as the A2A spec asks of results, whether or not the model streamed it, so its text never arrives twice, even when the server ran its own tools between model calls; its completion message carries only context variables. Client tools run only when the task waits for input: a tool call on a task that completes is logged and ignored, since a finished task takes no tool results. Polling and streaming follow the same rules.
+
+A streamed task can reach its final state without a separate status update: the stream may consist of the task alone, already finished, or close on a final task snapshot. The client reads the outcome from that task, so a cancelled, failed or rejected task raises its error either way. If the stream closes before the task has reached a final state, which can happen when a cancel is recorded after the server has stopped streaming, the client reads the task with `get_task` until it settles instead of returning the partial text as the answer.
 
 ## A2AConfig Reference
 
@@ -17250,7 +18199,7 @@ cancelled = await cancel_task(
 )
 ```
 
-`metadata` is forwarded to the server's cancel handler - useful for auditing who cancelled what and why. Already-terminal tasks (`COMPLETED`, `FAILED`, etc.) are typically refused with a `409`-style error; surface the exception, don't paper over it.
+`metadata` is forwarded to the server's cancel handler - useful for auditing who cancelled what and why. Already-terminal tasks (`COMPLETED`, `FAILED`, etc.) are refused with `TaskNotCancelableError`, and an AG2 server refuses the same way when the task finishes on its own while the cancel is in flight; surface the exception, don't paper over it.
 
 ## Push Notifications
 
@@ -17342,7 +18291,7 @@ Topics that aren't part of the day-to-day A2A path: human-in-the-loop, transpare
 
 ## Human-in-the-Loop via `input_required`
 
-When a server-side executor raises `requires_input(...)` mid-task, the A2A server transitions the task to `TASK_STATE_INPUT_REQUIRED` and surfaces the prompt to the client. The AG2 client invokes the local agent's `hitl_hook` with the prompt and continues the same turn with the reply - the server prompt does **not** leak into the final response text.
+When a server-side executor calls `requires_input(...)` mid-task, the A2A server transitions the task to `TASK_STATE_INPUT_REQUIRED` and surfaces the prompt to the client. The AG2 client invokes the local agent's `hitl_hook` with the prompt and continues the same turn with the reply - the server prompt does **not** leak into the final response text.
 
 ```python
 from ag2 import Agent
@@ -17368,7 +18317,11 @@ See [Human in the Loop](../context/human_in_the_loop.md) for the underlying `hit
 
 Streaming connections drop. Network blips, load balancer recycles, idle timeouts - the SSE channel breaks, and the client needs to recover without losing partially-streamed artifacts.
 
-The A2A client keeps internal drive state across drops: on `A2AClientError` mid-stream it issues a fresh `subscribe` against the same `task_id`, deduplicates artifacts already seen by `artifact_id` (and messages by `message_id`), and continues from where it failed. Application code sees a single uninterrupted reply.
+The A2A client keeps internal drive state across drops: on `A2AClientError` mid-stream it issues a fresh `subscribe` against the same `task_id` and continues from where it failed. The new stream opens with the task as it stands, so text produced while the client was disconnected is recovered from that snapshot. Artifacts are reconciled by `artifact_id` (messages by `message_id`): an update that restates what was already received adds nothing, and a completed artifact is never applied twice. An update that would change an artifact already closed with `last_chunk` is either a replay or a server breaking the spec (§4.2.2), so it is not applied as it streams: once the run settles, the client reads the task back with one `GetTask` and takes that artifact's stored content, which is what a polling client sees. Application code sees a single uninterrupted reply.
+
+If the task finished while the stream was down, the server refuses the subscription; the client then reads the final task with `get_task` and builds the reply from it, so a dropped connection at the very end does not fail the call.
+
+The client can only resubscribe once it knows the task id, which arrives with the first event. A connection lost before that raises `A2AReconnectError` without retrying: sending the message again would start a second task.
 
 ```python
 remote = Agent(
@@ -17386,7 +18339,7 @@ reply = await remote.ask("a long answer")
 | Field | Default | Purpose |
 |---|---|---|
 | `max_reconnects` | `3` | Total reconnect attempts before giving up with `A2AReconnectError` |
-| `reconnect_backoff` | `0.5` | Seconds to wait between attempts (constant - no jitter or exponential) |
+| `reconnect_backoff` | `0.5` | Seconds to wait before the first attempt; doubles on each following one (no jitter) |
 
 When attempts are exhausted the client raises `A2AReconnectError(attempts=N)`. Catch it to fall back to a polling re-fetch via `get_task` if you need recovery beyond the streaming budget.
 
@@ -17425,12 +18378,13 @@ All A2A errors live in `ag2.a2a.errors` and inherit from `A2AError`. Catch `A2AE
 | `A2ACardSignatureError` | A card failed JWS verification - `err.source` says which card (see [Card Signing](card_signing.md#failure-modes)) |
 | `A2AStaleCardSignatureError` | Server-side: a `build_*` call was handed an already-signed card whose capability flags AG2 has to flip, with no `card_signer` to re-sign it (see [Card Signing](card_signing.md#bringing-your-own-signature)) |
 | `A2AReconnectError` | Streaming reconnect attempts exhausted - `err.attempts` holds the count |
-| `A2ATaskTerminalError` | Base for the three terminal-state errors below; carries `err.task` with the final `Task` (status, history, artifacts) |
+| `A2ATaskTerminalError` | Base for the terminal-state errors below; carries `err.task` with the final `Task` (status, history, artifacts) |
 | `A2ATaskFailedError` | Task ended in `TASK_STATE_FAILED` |
 | `A2ATaskRejectedError` | Task ended in `TASK_STATE_REJECTED` |
-| `A2ATaskAuthRequiredError` | Task ended in `TASK_STATE_AUTH_REQUIRED`. Per A2A spec §7.6 the agent expects credentials out-of-band - apply them and retry |
+| `A2ATaskCancelledError` | Task ended in `TASK_STATE_CANCELED` - `err.task.artifacts` holds the partial text received before the cancellation |
+| `A2ATaskAuthRequiredError` | Task stopped in `TASK_STATE_AUTH_REQUIRED`, an interrupted state rather than a terminal one (spec §4.1.3). Per A2A spec §7.6 the agent expects credentials out-of-band - apply them and retry |
 
-Catch `A2ATaskTerminalError` to handle any terminal failure uniformly; switch on the concrete subclass when the recovery path differs (e.g. retry with auth on `AuthRequired`, surface the error to the operator on `Failed` / `Rejected`).
+Catch `A2ATaskTerminalError` to handle any terminal failure uniformly; switch on the concrete subclass when the recovery path differs (e.g. retry with auth on `AuthRequired`, surface the error to the operator on `Failed` / `Rejected`, treat `Cancelled` as an operator or server decision rather than a fault).
 
 ## Testing Helpers
 
@@ -17452,6 +18406,55 @@ await remote.ask("ping")
 | `make_test_client_factory(server, url=..., card=..., timeout=...)` | `httpx.AsyncClient` factory dispatching JSON-RPC into the server's ASGI app via `httpx.ASGITransport` |
 | `make_test_rest_client_factory(server, url=..., card=..., timeout=...)` | Same idea for REST - builds the REST app and a card declaring only the REST interface |
 | `pick_free_port(host="127.0.0.1")` | Probe a free TCP port. Used by gRPC tests since gRPC has no in-process transport equivalent |
+| `ToolRoundsConfig(*rounds)` | Script a served agent one tool round at a time - a `Turn`, or a `TestConfig` for a round that streams before it ends - for tests where the client runs tools and the server continues the task |
+| `ObservedAgentExecutor(agent, *observers)` | Serve `agent` with observers that see the request's whole task lifecycle, including `WORKING` and the terminal status, which observers on the agent miss because they only run during the model turn. They see what this request puts on the wire: a task parked in `INPUT_REQUIRED` and cancelled afterwards, or one cancelled through another replica, is closed by the SDK outside the request, so read its final state with `get_task` |
+| `TaskStatusRecorder()` | Observer recording every `A2ATaskStatusUpdate` state in delivery order; `await recorder.wait_for(state)` waits for one |
+| `TurnGate()` | A server tool, `gate.hold`, that keeps the task `working` until `gate.release()`, so a test can cancel or inspect it mid-turn |
+
+The server builds a fresh LLM client for every request, so a single `TestConfig` would replay its first turn after each client-tool round trip. `ToolRoundsConfig` picks the round from the conversation history instead:
+
+```python
+from ag2 import Agent
+from ag2.a2a.testing import ToolRoundsConfig
+from ag2.events import ToolCallEvent
+
+server_agent = Agent(
+    "server",
+    config=ToolRoundsConfig(
+        ToolCallEvent(name="get_weather", arguments='{"city": "Paris"}'),  # round 1: call the client tool
+        "Sunny in Paris.",  # round 2: answer after the tool result
+    ),
+)
+```
+
+To assert on the server side of a task's lifecycle, serve the agent through `ObservedAgentExecutor`:
+
+```python
+import asyncio
+
+from a2a.types import TaskState
+
+from ag2 import Agent
+from ag2.a2a import A2AConfig, A2AServer
+from ag2.a2a.tasks import cancel_task, list_tasks
+from ag2.a2a.testing import ObservedAgentExecutor, TaskStatusRecorder, TurnGate, make_test_client_factory
+from ag2.events import ToolCallEvent
+from ag2.testing import TestConfig
+
+gate = TurnGate()
+statuses = TaskStatusRecorder()
+agent = Agent("server", config=TestConfig(ToolCallEvent(name="hold"), "done"), tools=[gate.hold])
+server = A2AServer(agent, executor=ObservedAgentExecutor(agent, statuses))
+config = A2AConfig(card_url="http://test", httpx_client_factory=make_test_client_factory(server))
+remote = Agent("remote", config=config)
+
+asking = asyncio.create_task(remote.ask("go"))
+await gate.entered.wait()  # the task is working
+[task] = (await list_tasks(config)).tasks
+await cancel_task(config, task.id)
+
+assert statuses.states == [TaskState.TASK_STATE_WORKING, TaskState.TASK_STATE_CANCELED]
+```
 
 Pass `card=` when the default `build_card(agent, url=url)` can't express what the test needs - a custom `extensions` list, for instance. It defaults to `None`, which keeps the auto-built card.
 
@@ -19176,7 +20179,7 @@ It is fully **opt-in**. Bare `Agent` continues to work standalone with no behavi
 - A **registry of named agents** that can find each other by capability.
 - **Durable messaging** with replayable channel transcripts (write-ahead log).
 - **Governance**: per-agent rules (access, rate, inbox, limits), per-adapter expectations, and a hub-side audit log.
-- **Sub-task observability**: `agent.task(...)` lifecycle events automatically forwarded to the hub when run inside a network turn.
+- **Sub-task observability**: `Task(...)` lifecycle events automatically forwarded to the hub when run inside a network turn.
 - **Distributed / cross-process deployment**: replace `LocalLink` with `WsLink` to run the hub and each agent as separate OS processes connected over WebSocket.
 
 ## The Mental Model
@@ -19445,7 +20448,7 @@ resume = Resume(
 | `domains` | tenant | Coarse subject-matter areas. |
 | `summary` | tenant | One-line description, indexed for peer lookup. |
 | `examples` | tenant | Optional `ResumeExample` records - exemplar past work. |
-| `observed` | **hub-mutated** | Per-capability `ObservedStat`: counts of completed/failed/expired tasks plus a `p50_latency_ms`. Updated automatically when an agent runs a capability-tagged `agent.task(...)` inside a network turn - see [Task Observation](task_observation.md). |
+| `observed` | **hub-mutated** | Per-capability `ObservedStat`: counts of completed/failed/expired tasks plus a `p50_latency_ms`. Updated automatically when an agent runs a capability-tagged `Task(...)` inside a network turn - see [Task Observation](task_observation.md). |
 | `last_updated` | hub-stamped | ISO-Z, refreshed on every mutation. |
 
 `Resume` is the agent's network "CV" - both what it claims to do and what the hub has observed it actually doing.
@@ -19807,7 +20810,7 @@ from ag2.network import EV_TEXT
 # Wait for the next text reply from a specific peer.
 reply = await human.next_envelope(
     predicate=lambda e: e.event_type == EV_TEXT and e.sender_id == peer_id,
-    timeout=60.0,   # raises asyncio.TimeoutError if exceeded
+    timeout=60.0,   # raises TimeoutError if exceeded
 )
 
 # Or stream everything until disconnect.
@@ -19933,7 +20936,7 @@ while True:
             timeout=60.0,
         )
         print(f"expert> {reply.event_data['text']}")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print("expert> (no reply within 60s)")
 
 await channel.close(reason="operator_done")
@@ -20008,7 +21011,7 @@ Each grouped tool takes an `action` literal plus action-specific args, keeping t
 
 ### `tasks(action)` - task lifecycle
 
-Two halves: **active actions** (the agent is inside its own `agent.task(...)` block) and **observation actions** (any task the hub has observed).
+Two halves: **active actions** (the agent is inside its own `Task(...)` block) and **observation actions** (any task the hub has observed).
 
 | Action | Half | Args | Returns |
 |---|---|---|---|
@@ -20019,7 +21022,7 @@ Two halves: **active actions** (the agent is inside its own `agent.task(...)` bl
 | `"wait"` | observation | `task_id, timeout=300, poll_interval=0.1` | Blocks until the task reaches a terminal state. |
 | `"cancel"` | observation | `task_id, reason?` | Posts an `ag2.task.cancel_request` to the task's owner in the task's channel; the owner decides whether to cancel. An agent outside that channel may send one request per task - a retry returns an error. |
 
-`"start"` is intentionally **not** a tool - calling it from the LLM would bypass the `async with agent.task(...)` lifecycle that scopes `TaskInject` correctly. Owners start tasks in their own code; the LLM uses `"progress"`/`"complete"` once a task is active, and `delegate` for one-shot remote work.
+`"start"` is intentionally **not** a tool - calling it from the LLM would bypass the `async with Task(...)` lifecycle that scopes `TaskInject` correctly. Owners start tasks in their own code; the LLM uses `"progress"`/`"complete"` once a task is active, and `delegate` for one-shot remote work.
 
 ### `context(action)` - past content
 
@@ -20361,7 +21364,7 @@ async def wait_for_text_count(hub, channel_id, expected, *, timeout=120.0):
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return
         await asyncio.sleep(0.05)
-    raise asyncio.TimeoutError("did not reach expected count")
+    raise TimeoutError("did not reach expected count")
 
 await wait_for_text_count(hub, channel.channel_id, expected=6)
 await channel.close()
@@ -21603,7 +22606,7 @@ async def stream_until_closed(hub, channel_id, name_by_id, *, timeout=180.0):
             if env.event_type == EV_CHANNEL_CLOSED:
                 return env.event_data
         await asyncio.sleep(0.05)
-    raise asyncio.TimeoutError(...)
+    raise TimeoutError(...)
 ```
 
 `ChannelMetadata.close_reason` is also stored, so post-mortem inspection via `hub.get_channel(channel_id)` returns the reason string without re-reading the WAL.
@@ -21830,7 +22833,7 @@ A few changes that will affect how you architect the migration:
 - **The hub is authoritative.** Turn-taking, state, audit, and expectation enforcement all live in the hub. Your agent code becomes thinner.
 - **Channels have ids.** Every `alice.open(...)` returns a channel id. Audit, replay, and inspection are scoped to it.
 - **Default handlers do most of the heavy lifting.** When agents have `attach_plugin=True`, you don't write any "agent receives message -> run LLM -> send reply" glue. The framework handles it.
-- **Sub-task observation comes for free.** Calls to `agent.task(..., capability="X")` inside a network turn auto-update `Resume.observed["X"]`. There was no equivalent in the classic world. See [Task Observation](task_observation.md).
+- **Sub-task observation comes for free.** Calls to `Task(spec=TaskSpec(title="...", capability="X"), ...)` inside a network turn auto-update `Resume.observed["X"]`. There was no equivalent in the classic world. See [Task Observation](task_observation.md).
 - **Expectations replace `max_round` exhaustively.** You can declare `reply_within(60s, auto_close)` per channel type, get a violation logged to the audit log, and have the channel auto-close - see [Expectations & Audit](expectations_and_audit.md).
 - **Views replace ad-hoc context windowing.** Each adapter has a default view (`FullTranscript`, `WindowedSummary`); custom views plug in via the `ViewPolicy` Protocol - see [Views & Skills](views_and_skills.md).
 - **The transport is pluggable.** `LocalLink` is the in-process default, but the link-layer is a Protocol - cross-process and cross-host transports are drop-in replacements.
@@ -22580,7 +23583,7 @@ talk to each other; everything routes through the hub.
     ```
 
     OpenAI exposes the analogous `parallel_tool_calls=False`
-    as a typed field on `OpenAIConfig`; Gemini's behaviour
+    as a typed field on `OpenAICompletionsConfig`; Gemini's behaviour
     is naturally serial.
 
 ## Agent Flow
@@ -23021,7 +24024,7 @@ sequenceDiagram
 ## Code
 
 !!! tip
-    Every LLM-driven agent uses `AnthropicConfig(model="claude-sonnet-5")` - set `ANTHROPIC_API_KEY` in your environment (the script calls `load_dotenv()`), or swap in `OpenAIConfig` / `GeminiConfig` to run on another provider. The `user` agent uses `TestConfig()` because it only opens the channel and sends the kickoff - it never takes an LLM turn. All agents register with `attach_plugin=False`: none of them need the `NetworkPlugin` tools (`say` / `delegate` / `peers` / ...), and leaving those off keeps the coordinator's tool surface to just `handoff` and `finish`.
+    Every LLM-driven agent uses `AnthropicConfig(model="claude-sonnet-5")` - set `ANTHROPIC_API_KEY` in your environment (the script calls `load_dotenv()`), or swap in `OpenAICompletionsConfig` / `GeminiConfig` to run on another provider. The `user` agent uses `TestConfig()` because it only opens the channel and sends the kickoff - it never takes an LLM turn. All agents register with `attach_plugin=False`: none of them need the `NetworkPlugin` tools (`say` / `delegate` / `peers` / ...), and leaving those off keeps the coordinator's tool surface to just `handoff` and `finish`.
 
 ```python
 """Cookbook - Coordinator (manager + specialists) pattern.
@@ -25159,7 +26162,12 @@ Register on a custom registry and pass to `Hub.open(..., evaluators=registry)`. 
 
 Source: https://docs.ag2.ai/docs/user-guide/network/task_observation/
 
-The bridge between the [`Task` lifecycle primitive](../tasks.md) and the network's per-agent track record. When an Agent runs an `agent.task(..., capability="X")` inside a network turn, a `TaskMirror` forwards the lifecycle events to the hub. On terminal events with a `capability` tag, the hub updates the worker's `Resume.observed[capability]`.
+The bridge between the [task lifecycle](../tasks.md) and the network's
+per-agent track record. An `agent.ask(..., capability="X")` or
+`agent.run(..., capability="X")` emits task events directly. Standalone
+work can also use `Task` with `TaskSpec(capability="X", ...)`.
+The turn's `TaskMirror` forwards these events to the hub, which updates
+`Resume.observed[capability]` on the accepted terminal state.
 
 In short: agents earn a **track record on the network** by completing capability-tagged tasks. Other agents (and operators) read that track record off the worker's `Resume`.
 
@@ -25192,12 +26200,32 @@ finally:
 
 ## Capability Tagging
 
-`agent.task(...)` accepts a `capability` keyword:
+For model work, pass the capability on the invocation:
 
 ```python
-async with agent.task(
-    "survey: deployment patterns",
-    capability="research",
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+
+agent = Agent("researcher", config=OpenAIResponsesConfig(model="gpt-5"))
+
+reply = await agent.ask("Survey deployment patterns", capability="research", ttl_seconds=60)
+```
+
+Use `stream=ctx.stream` when running inside a context whose stream already has
+a mirror attached. A `ttl_seconds` deadline is observed by the hub's sweeper;
+it does not create a local model-call timeout. If hub expiry wins before a
+late completion, the hub retains `EXPIRED` and records that outcome once.
+
+For standalone work, construct a Task on the observed context:
+
+Set `capability` on the task's `TaskSpec`:
+
+```python
+from ag2.task import Task, TaskSpec
+
+async with Task(
+    owner_id=agent.name,
+    spec=TaskSpec(title="survey: deployment patterns", capability="research"),
     context=ctx,
 ) as task:
     await task.progress({"step": "gather"})
@@ -25272,7 +26300,7 @@ Notably:
 
 ## When to Skip Capability Tagging
 
-Not every `agent.task(...)` deserves a capability tag. Tag only when:
+Not every `Task` deserves a capability tag. Tag only when:
 
 - The task represents a **capability you want to track** in the agent's resume.
 - Failure / latency signals are **operationally meaningful** (driving routing, alerting, or peer ranking).
@@ -25284,16 +26312,26 @@ Untagged tasks still get full lifecycle observation in the audit log - just no `
 A common pattern: an agent has multiple capability roles. Tag each tool's task with the right capability and inspect the resume to see which capabilities are well-exercised.
 
 ```python
+from ag2.task import Task, TaskSpec
+
 @worker.tool
 async def research(topic: str, ctx: Context) -> str:
-    async with worker.task(f"research: {topic}", capability="research", context=ctx) as t:
-        # ...
+    async with Task(
+        owner_id=worker.name,
+        spec=TaskSpec(title=f"research: {topic}", capability="research"),
+        context=ctx,
+    ) as t:
+        ...
     return f"researched {topic}"
 
 @worker.tool
 async def summarise(text: str, ctx: Context) -> str:
-    async with worker.task("summarise", capability="summarisation", context=ctx) as t:
-        # ...
+    async with Task(
+        owner_id=worker.name,
+        spec=TaskSpec(title="summarise", capability="summarisation"),
+        context=ctx,
+    ) as t:
+        ...
     return f"summary: ..."
 ```
 
@@ -25588,7 +26626,7 @@ Agents backed by different providers can share the same hub and the same channel
 import asyncio
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.network import EV_TEXT, HubClient, WsLink
 from ag2.network.adapters.consulting import CONSULTING_TYPE
 
@@ -25597,7 +26635,7 @@ async def main() -> None:
     await hub_client.open()
 
     alice = await hub_client.register(
-        Agent("alice", prompt="You are a coordinator.", config=OpenAIConfig(model="gpt-4o-mini")),
+        Agent("alice", prompt="You are a coordinator.", config=OpenAICompletionsConfig(model="gpt-4o-mini")),
     )
 
     # open() and send() travel to the hub over the wire;
@@ -25736,12 +26774,12 @@ End-to-end runnable scripts demonstrating `ag2`. Each example is self-contained,
 | 02 | [Recipe Builder](02_recipe_builder.md) | Tools + Pydantic structured output | `Agent`, `tools=`, `response_schema=` |
 | 03 | [Travel Planner](03_travel_planner.md) | Multi-turn chat via chained `reply.ask()` | `agent.ask()`, `reply.ask()` |
 | 04 | [Token Watchdog](04_token_watchdog.md) | Built-in + custom observers, `ObserverAlert` | `BaseObserver`, `TokenMonitor`, `LoopDetector`, `EventWatch` |
-| 05 | [Research Squad](05_research_squad.md) | Parallel subtasks + sibling delegation | `run_subtasks(parallel=True)`, `Agent.as_tool()` |
-| 06 | [Journal Companion](06_journal_companion.md) | Persistent memory across runs | `KnowledgeConfig`, `WorkingMemoryAggregate`, `WorkingMemoryPolicy` |
-| 07 | [Long-Doc Chat](07_long_doc_chat.md) | Composing assembly policies + compaction | `assembly=[...]`, `SlidingWindowPolicy`, `TokenBudgetPolicy`, `TailWindowCompact` |
+| 05 | [Research Squad](05_research_squad.md) | Parallel delegation + sibling delegation | `Agent.as_tool()`, `TaskStarted` / `TaskCompleted` |
+| 06 | [Journal Companion](06_journal_companion.md) | Persistent memory across runs | `KnowledgePlugin`, `WorkingMemoryAggregate`, `WorkingMemoryPolicy` |
+| 07 | [Long-Doc Chat](07_long_doc_chat.md) | Composing assembly policies + compaction | `Middleware(AssemblerMiddleware, policies=[...])`, `SlidingWindowPolicy`, `TokenBudgetPolicy`, `TailWindowCompact` |
 | 08 | [Safety Guard](08_safety_guard.md) | FATAL alert -> `AlertPolicy` -> `HaltEvent` | `ObserverAlert(FATAL)`, `AlertPolicy`, `HaltEvent` |
 
-Set `GEMINI_API_KEY` (or swap in another provider's `ModelConfig` - `AnthropicConfig`, `OpenAIConfig`, etc.) before running.
+Set `GEMINI_API_KEY` (or swap in another provider's `ModelConfig` - `AnthropicConfig`, `OpenAICompletionsConfig`, etc.) before running.
 
 ---
 
@@ -25785,7 +26823,7 @@ def section(title: str) -> None:
     print(f"\n── {title} ───")
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     section("Bare Agent - ask and print")
 
@@ -25873,7 +26911,7 @@ def scale_ingredient(quantity: float, factor: float) -> float:
     return round(quantity * factor, 2)
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     section("Recipe builder - scale an existing dish for 6 servings")
 
@@ -25966,7 +27004,7 @@ TURNS = [
 ]
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     agent = Agent(
         "travel-planner",
@@ -26059,7 +27097,7 @@ class AlertConsole(BaseObserver):
         return None  # Don't emit a follow-up alert
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     section("Watchdog - low thresholds so observers trip on a single ask")
 
@@ -26098,19 +27136,21 @@ if __name__ == "__main__":
 
 Source: https://docs.ag2.ai/docs/user-guide/code_examples/05_research_squad/
 
-Two complementary multi-Agent patterns in one example. First, a coordinator opts in to the auto-injected `run_subtasks` tool (via `tasks=TaskConfig()`) to fan out three independent factual lookups concurrently in a single tool call. Then a second coordinator delegates arithmetic to a `math_expert` Agent exposed via `Agent.as_tool()`. Together they show "fan out then collect" alongside "named delegate".
+Two complementary multi-Agent patterns in one example. First, a coordinator calls a researcher's delegate tool for three independent factual lookups, requesting concurrent calls in one response. Then a second coordinator delegates arithmetic to a `math_expert` Agent. Both use `Agent.as_tool()` with explicitly constructed workers.
+
+!!! note "Migrating older examples"
+    `TaskConfig` and the automatically injected `run_subtask` / `run_subtasks` tools are deprecated and will be removed in **1.4.0**. This example uses [explicit delegation](../subagents.md#migrating-from-taskconfig).
 
 ## What it covers
 
-- Opting in to `run_subtask` / `run_subtasks` via `tasks=TaskConfig(...)` - disabled by default; subtasks themselves never get them, so recursion is impossible by construction.
-- Calling `run_subtasks(parallel=True)` to dispatch many sub-questions concurrently from one tool call.
+- Constructing workers with their own prompts, model configs, and tools.
+- Requesting multiple calls to a delegate in one model response for concurrent fan-out.
 - Wrapping an Agent with `Agent.as_tool()` to expose it as a named delegate (`task_math-expert`) on a parent's tool list.
 - Subscribing to `TaskStarted` / `TaskCompleted` lifecycle events to observe the fan-out from outside the Agent.
 
 ## Primitives covered
 
-- `Agent` with `tasks=TaskConfig(...)` to opt in to sub-task tools
-- `run_subtasks(parallel=True)` for concurrent fan-out
+- Explicit worker Agents exposed as tools for concurrent fan-out
 - `Agent.as_tool(description=...)` for sibling delegation
 - `TaskStarted` / `TaskCompleted` events on the stream
 - `MemoryStream` + `stream.where(EventType).subscribe(...)`
@@ -26122,17 +27162,14 @@ Two complementary multi-Agent patterns in one example. First, a coordinator opts
 
 Two patterns for multi-Agent orchestration:
 
-1. **Opt-in subtask tools.** Pass ``tasks=TaskConfig(...)`` and the Agent
-   gains ``run_subtask`` / ``run_subtasks``. The coordinator uses
-   ``run_subtasks`` with ``parallel=True`` to fan out three short
-   investigations concurrently. Spawned subtasks have **no** ``run_subtask``
-   tools (they default to ``tasks=False``), so recursion is structurally
-   impossible - no depth limiter needed.
+1. **Concurrent delegation.** The coordinator requests three calls to
+   ``task_researcher`` in one model response. Each call runs the explicit
+   researcher Agent on its own fresh stream. The researcher has no tools,
+   so it cannot delegate further.
 
 2. **``Agent.as_tool()``.** A second Agent (``math_expert``) is exposed to
-   the coordinator as a callable tool. The wrapped Agent has no
-   ``run_subtask`` tools either (default), so recursion is bounded by the
-   call structure.
+   the coordinator as a callable tool. The wrapped Agent has no tools,
+   so it cannot delegate further.
 
 Run::
 
@@ -26143,7 +27180,6 @@ import asyncio
 import time
 
 from ag2 import Agent
-from ag2.agent import TaskConfig
 from ag2.config import GeminiConfig
 from ag2.events import TaskCompleted, TaskStarted
 from ag2.stream import MemoryStream
@@ -26152,19 +27188,25 @@ def section(title: str) -> None:
     print(f"\n── {title} ───")
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
-    section("Parallel subtasks - fan out three lookups in one tool call")
+    section("Parallel subtasks - fan out three lookups through a delegate")
+
+    researcher = Agent(
+        "researcher",
+        prompt="Answer the factual lookup concisely. Return only the result.",
+        config=config,
+    )
 
     coordinator = Agent(
         "coordinator",
         prompt=(
-            "You answer multi-part questions by dispatching run_subtasks "
-            "with parallel=True. Use one tool call with every sub-question "
-            "packed into the 'tasks' list. Be concise."
+            "You answer multi-part questions by calling task_researcher. "
+            "Issue a separate call for each sub-question in one response "
+            "so the lookups run concurrently. Then combine the results. Be concise."
         ),
         config=config,
-        tasks=TaskConfig(),  # Opt in to run_subtask / run_subtasks.
+        tools=[researcher.as_tool(description="Answer an independent factual lookup.")],
     )
 
     # Collect subtask lifecycle events so we can show the fan-out to the user
@@ -26176,7 +27218,7 @@ async def main() -> None:
 
     start = time.monotonic()
     reply = await coordinator.ask(
-        "Use run_subtasks(parallel=True) to answer, in one tool call: "
+        "Call task_researcher three times in one response to answer: "
         "(a) what is the tallest waterfall in the world, "
         "(b) what year was the Eiffel Tower completed, "
         "(c) what is the boiling point of nitrogen in Celsius. "
@@ -26189,7 +27231,7 @@ async def main() -> None:
     print()
     print(f"Subtasks dispatched: {len(starts)}")
     print(f"Subtasks finished:   {len(completions)}")
-    print(f"Wall time:           {elapsed:.2f}s (3 concurrent LLM calls)")
+    print(f"Wall time:           {elapsed:.2f}s")
 
     section("Sibling delegation - math_expert is a tool on coordinator2")
 
@@ -26234,12 +27276,12 @@ A daily-journal Agent that genuinely remembers across runs - not by replaying co
 - Persistent agent memory backed by a `DiskKnowledgeStore` on disk.
 - `WorkingMemoryAggregate` - an LLM-driven rollup that runs at the end of every conversation and writes `/memory/working.md`.
 - `WorkingMemoryPolicy` - an assembly policy that reads `/memory/working.md` and injects it as context before every LLM call.
-- The full `KnowledgeConfig(store=..., aggregate=..., aggregate_trigger=...)` shape and how it pairs with `assembly=`.
+- The full `KnowledgePlugin(store=..., aggregate=..., aggregate_trigger=...)` shape and how it pairs with `AssemblerMiddleware`.
 - The `AggregateTrigger(on_end=True)` cadence - fire once when the conversation ends.
 
 ## Primitives covered
 
-- `KnowledgeConfig` with `store`, `aggregate`, `aggregate_trigger`
+- `KnowledgePlugin` with `store`, `aggregate`, `aggregate_trigger`
 - `DiskKnowledgeStore`
 - `WorkingMemoryAggregate` (rollup strategy)
 - `AggregateTrigger(on_end=True)`
@@ -26274,17 +27316,19 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.aggregate import AggregateTrigger, WorkingMemoryAggregate
 from ag2.config import GeminiConfig
-from ag2.knowledge import DiskKnowledgeStore
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import Middleware
+from ag2.knowledge import KnowledgePlugin, DiskKnowledgeStore
 from ag2.policies import ConversationPolicy, WorkingMemoryPolicy
 
 def section(title: str) -> None:
     print(f"\n── {title} ───")
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     # Use a fresh tempdir so the example is reproducible.
     workdir = Path(tempfile.mkdtemp(prefix="journal-companion-"))
@@ -26301,15 +27345,20 @@ async def main() -> None:
                     "Be brief and reference their past entries when relevant."
                 ),
                 config=config,
-                knowledge=KnowledgeConfig(
+                plugins=[KnowledgePlugin(
                     store=store,
                     aggregate=WorkingMemoryAggregate(config=config),
                     # on_end=True: roll up working memory when each conversation finishes
                     aggregate_trigger=AggregateTrigger(on_end=True),
-                ),
-                assembly=[
-                    WorkingMemoryPolicy(),  # inject /memory/working.md on every LLM call
-                    ConversationPolicy(),  # then filter to conversation events
+                )],
+                middleware=[
+                    Middleware(
+                        AssemblerMiddleware,
+                        policies=[
+                            WorkingMemoryPolicy(),  # inject /memory/working.md on every LLM call
+                            ConversationPolicy(),  # then filter to conversation events
+                        ],
+                    ),
                 ],
             )
 
@@ -26362,13 +27411,13 @@ A "remember the last words" chat exercise that stress-tests the assembly chain. 
 - `ConversationPolicy` to drop lifecycle/internal events from the LLM's view.
 - `SlidingWindowPolicy(max_events=N, transparent=True)` for a hard event-count cap.
 - `TokenBudgetPolicy(max_tokens=N)` as a belt-and-braces secondary cap.
-- Combining the assembly chain with a `KnowledgeConfig` that wires `TailWindowCompact` for stream-history compaction (different from assembly!).
+- Combining the assembly chain with a `KnowledgePlugin` that wires `TailWindowCompact` for stream-history compaction (different from assembly!).
 - Watching `CompactionCompleted` events fire from outside the Agent.
 
 ## Primitives covered
 
-- `assembly=[ConversationPolicy(), SlidingWindowPolicy(...), TokenBudgetPolicy(...)]`
-- `KnowledgeConfig` with `compact=TailWindowCompact(...)` + `compact_trigger=CompactTrigger(...)`
+- `Middleware(AssemblerMiddleware, policies=[ConversationPolicy(), SlidingWindowPolicy(...), TokenBudgetPolicy(...)])`
+- `KnowledgePlugin` with `compact=TailWindowCompact(...)` + `compact_trigger=CompactTrigger(...)`
 - `MemoryKnowledgeStore` (in-memory variant of the knowledge store)
 - `CompactionCompleted` lifecycle event
 
@@ -26396,11 +27445,13 @@ Run::
 
 import asyncio
 
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.config import GeminiConfig
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import Middleware
 from ag2.events import CompactionCompleted
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.policies import (
     ConversationPolicy,
     SlidingWindowPolicy,
@@ -26421,7 +27472,7 @@ QUESTIONS = [
 ]
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     store = MemoryKnowledgeStore()
     compactions: list[CompactionCompleted] = []
@@ -26435,16 +27486,21 @@ async def main() -> None:
             "Answer directly without calling any tools."
         ),
         config=config,
-        assembly=[
-            ConversationPolicy(),
-            SlidingWindowPolicy(max_events=6, transparent=True),
-            TokenBudgetPolicy(max_tokens=2000),
+        middleware=[
+            Middleware(
+                AssemblerMiddleware,
+                policies=[
+                    ConversationPolicy(),
+                    SlidingWindowPolicy(max_events=6, transparent=True),
+                    TokenBudgetPolicy(max_tokens=2000),
+                ],
+            ),
         ],
-        knowledge=KnowledgeConfig(
+        plugins=[KnowledgePlugin(
             store=store,
             compact=TailWindowCompact(target=4),
             compact_trigger=CompactTrigger(max_events=8),
-        ),
+        )],
     )
 
     section("Long-doc chat - assembly policies trim what the LLM actually sees")
@@ -26473,22 +27529,22 @@ if __name__ == "__main__":
 
 Source: https://docs.ag2.ai/docs/user-guide/code_examples/08_safety_guard/
 
-A custom `BaseObserver` (`PathGuardian`) watches every tool call and emits a `Severity.FATAL` `ObserverAlert` when an Agent tries to write to a forbidden path like `/etc/`. The alert routes through `AlertPolicy` -> `HaltEvent` -> `_HaltCheckMiddleware`, which short-circuits the next LLM call with a synthetic `HALTED: ...` response. The first ask (writing to `/tmp/...`) succeeds; the second (writing to `/etc/passwd`) is blocked end-to-end.
+A custom `BaseObserver` (`PathGuardian`) watches every tool call and emits a `Severity.FATAL` `ObserverAlert` when an Agent tries to write to a forbidden path like `/etc/`. The alert routes through `AlertPolicy` -> `HaltEvent` -> `HaltCheckMiddleware`, which short-circuits the next LLM call with a synthetic `HALTED: ...` response. The first ask (writing to `/tmp/...`) succeeds; the second (writing to `/etc/passwd`) is blocked end-to-end.
 
 ## What it covers
 
 - Building a `BaseObserver` that watches a specific event type (here `ToolCallEvent`) via `EventWatch`.
 - Returning an `ObserverAlert(severity=Severity.FATAL, ...)` from an observer to signal a hard-stop condition.
-- How `AlertPolicy` (in the `assembly` chain) translates a FATAL alert into a `HaltEvent` and appends a halt notice to the system prompt.
-- How `_HaltCheckMiddleware` (auto-wired when `assembly` is non-empty) sees the `HaltEvent` and short-circuits the next LLM call.
+- How `AlertPolicy` (in the `AssemblerMiddleware` policy chain) translates a FATAL alert into a `HaltEvent` and appends a halt notice to the system prompt.
+- How `HaltCheckMiddleware` (registered after `AssemblerMiddleware`) sees the `HaltEvent` and short-circuits the next LLM call.
 - Subscribing to `HaltEvent` and `ObserverAlert` from outside the Agent to verify the halt fired.
 
 ## Primitives covered
 
 - `BaseObserver` + `EventWatch(ToolCallEvent)`
 - `ObserverAlert` with `Severity.FATAL`
-- `AlertPolicy` in the `assembly=` chain
-- Auto-wired `_HaltCheckMiddleware` (no explicit middleware setup needed)
+- `AlertPolicy` in `Middleware(AssemblerMiddleware, policies=[...])`
+- `Middleware(HaltCheckMiddleware)` after the assembler
 - `HaltEvent` lifecycle event
 
 ## Source
@@ -26505,8 +27561,7 @@ there is fully wired by the framework:
 2. ``AlertPolicy`` (an assembly policy) picks it up before the next LLM
    call, emits a ``HaltEvent`` on the stream, and appends a halt notice
    to the system prompt.
-3. ``_HaltCheckMiddleware`` (wired in automatically when ``assembly`` is
-   non-empty) sees the ``HaltEvent`` and short-circuits the LLM call with
+3. ``HaltCheckMiddleware`` (registered after ``AssemblerMiddleware``) sees the ``HaltEvent`` and short-circuits the LLM call with
    a synthetic ``HALTED: ...`` response.
 
 Run::
@@ -26519,6 +27574,8 @@ import asyncio
 from ag2 import Agent
 from ag2 import Context
 from ag2.config import GeminiConfig
+from ag2.assembly import AssemblerMiddleware
+from ag2.middleware import HaltCheckMiddleware, Middleware
 from ag2.events import BaseEvent, ToolCallEvent, HaltEvent, ObserverAlert, Severity
 from ag2.observers import BaseObserver
 from ag2.policies import AlertPolicy
@@ -26557,7 +27614,7 @@ class PathGuardian(BaseObserver):
         return None
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     halt_events: list[HaltEvent] = []
     alerts: list[ObserverAlert] = []
@@ -26575,7 +27632,10 @@ async def main() -> None:
         config=config,
         tools=[write_file],
         observers=[PathGuardian()],
-        assembly=[AlertPolicy()],  # routes FATAL alerts to HaltEvent
+        middleware=[
+            Middleware(AssemblerMiddleware, policies=[AlertPolicy()]),
+            Middleware(HaltCheckMiddleware),  # stops the model call on HaltEvent
+        ],
     )
 
     section("Safe request - observer stays silent")
@@ -27430,7 +28490,7 @@ import asyncio
 
 from ag2 import Agent, MemoryStream, tool
 from ag2.compact import SummarizeCompact, TailWindowCompact
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.extensions.compaction_verifier import (
     CompactionVerifier,
     IdentityCompact,
@@ -27438,7 +28498,7 @@ from ag2.extensions.compaction_verifier import (
     ReplayEnvironment,
 )
 
-config = OpenAIConfig(model="gpt-4.1-mini", temperature=0.7)
+config = OpenAICompletionsConfig(model="gpt-4.1-mini", temperature=0.7)
 
 class Shop:
     """Deterministic state: the same calls always leave it the same way."""
@@ -27766,13 +28826,13 @@ Each request creates an isolated session: the agent runs, responds, and the sess
 import uvicorn
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.extensions.nlip import NlipServer
 
 agent = Agent(
     name="python_expert",
     prompt="You are an expert Python developer. Answer questions clearly and concisely with practical examples.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 server = NlipServer(agent)
@@ -27870,7 +28930,7 @@ import httpx
 import uvicorn
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.extensions.nlip import NlipServer
 
 NWS_API_BASE = "https://api.weather.gov"
@@ -27929,7 +28989,7 @@ agent = Agent(
         "get_weather_alerts takes a 2-letter US state code. "
         "get_weather_forecast takes latitude and longitude."
     ),
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[get_weather_alerts, get_weather_forecast],
 )
 
@@ -27972,7 +29032,7 @@ import asyncio
 import httpx
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.extensions.nlip import NlipConfig
 
 async def geocode_location(location: str) -> dict:
@@ -28018,7 +29078,7 @@ async def run_weather_task(task: str, weather_server_url: str = "http://localhos
             "then use ask_weather_agent to get the forecast using those coordinates. "
             "Summarize the final result for the user."
         ),
-        config=OpenAIConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
         tools=[geocode_location, ask_weather_agent],
     )
 
