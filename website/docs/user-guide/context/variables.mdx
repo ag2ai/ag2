@@ -5,7 +5,7 @@ sidebarTitle: Variables
 
 # Conversation Variables
 
-Variables provide a flexible way to store, share, and inject contextual information between agents and tools. Unlike hardcoded configurations, variables allow you to dynamically pass state—like API keys, session data, or user preferences—during runtime without exposing them to the underlying LLM.
+Variables hold serializable conversation state, such as session data, user preferences, and task progress. Tools can read and update this state without adding it to the model's input; use [dependencies](/docs/user-guide/context/inject) for secrets and runtime objects such as clients, connections, and locks.
 
 ## Passing Variables to a Conversation
 
@@ -13,16 +13,13 @@ You can pass variables at different levels depending on how long they need to pe
 
 ### Agent Variables
 
-When you want a variable to be available across all interactions with a specific agent, you can initialize the agent with default variables.
+Initialize an agent with default variables to make them available to each new invocation. A fresh `ask()` or `run()` deep-copies the merged defaults and per-call values, so separate root invocations do not share their mutable state. Reply continuations keep the current invocation's variables.
 
 ```python linenums="1"
 from ag2 import Agent
 
 # This variable will be available in all tool calls executed by this agent
-agent = Agent(
-    name="WeatherBot",
-    variables={"api_key": "your_global_api_key"}
-)
+agent = Agent(name="WeatherBot", variables={"units": "celsius"})
 ```
 
 ### Conversation Variables
@@ -53,6 +50,98 @@ await agent.ask(
     variables={"override_me": "CallLevel", "call_param": "B"}
 )
 ```
+
+## Variable Scopes Across Subagents
+
+Use `#!python ScopedValue(value, scope=Scope.SHARED)` to choose how a variable crosses
+a [subagent delegation](/docs/user-guide/subagents). Import `#!python Scope`,
+`#!python ScopedValue`, and `#!python ScopeError` from `#!python ag2`.
+
+| Scope | What the child receives | Where changes are visible |
+|---|---|---|
+| `#!python Scope.COPIED` | A deep copy of the current value | In that branch; changes do not sync back to the parent or siblings |
+| `#!python Scope.LOCAL` | Nothing; the binding stays in its current branch | In the branch that owns it |
+| `#!python Scope.SHARED` | Access to the same binding | Across the invocation's delegation tree, including replacement of the value |
+
+Plain values use `#!python Scope.COPIED`, as does `#!python ScopedValue(value)`
+without an explicit scope. Tools and `#!python Variable()` injection receive the
+underlying value, not the `#!python ScopedValue` declaration.
+
+### Share findings while keeping drafts independent
+
+The worker contributes to shared findings and edits its own copy of a draft.
+It cannot see the root's local note. The example calls the OpenAI Responses API:
+install `ag2[openai]` and set `OPENAI_API_KEY` as described in the
+[Quick Start](/docs/user-guide/quick-start).
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent, Context, Scope, ScopedValue, tool
+from ag2.config import OpenAIResponsesConfig
+
+@tool
+def record_finding(finding: str, context: Context) -> str:
+    """Save a finding and update this worker's draft."""
+    context.variables["findings"].append(finding)
+    context.variables["draft"].append(finding)
+    print(f"Root note visible: {'root_note' in context.variables}")  # False
+    return "Finding saved"
+
+async def main():
+    worker = Agent(
+        "worker",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Use record_finding exactly once to save the requested finding, then report completion.",
+        tools=[record_finding],
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Delegate the task to task_worker exactly once, then summarize its response.",
+        tools=[worker.as_tool(description="Record a finding in the shared collection.")],
+    )
+    supplied = {
+        "findings": ScopedValue([], scope=Scope.SHARED),
+        "draft": [],
+        "root_note": ScopedValue("Coordinator's note", scope=Scope.LOCAL),
+    }
+    reply = await coordinator.ask(
+        "Record that each delegated invocation has its own conversation history.",
+        variables=supplied,
+    )
+    print(reply.context.variables["findings"])  # Contains the worker's finding
+    print(reply.context.variables["draft"])  # []
+    print(supplied["findings"].value)  # []: the caller's input was copied
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Read the resulting state from `#!python reply.context.variables`. Even shared
+values belong to this invocation's tree; they do not mutate the original input
+container or become shared with a separate root invocation.
+The model chooses its tool calls; after `#!python record_finding` runs, the root
+sees the saved finding while its own draft and the caller's input remain unchanged.
+
+### Declare shared names at the root
+
+Declare shared bindings in the root agent's defaults or the root call's
+`#!python variables=`. Descendants can mutate or replace an existing shared
+binding, but introducing a new shared name below the root, changing an existing
+scope, or sharing a reserved `ag:` / `a2a:` name raises `#!python ScopeError`.
+Per-call plain overrides preserve a scope declared in agent defaults.
+
+For open-ended contributions, declare a shared dictionary at the root, such as
+`#!python ScopedValue({}, scope=Scope.SHARED)`, then add entries inside it.
+This adds data without declaring new tree-wide variable names.
+
+!!! note "Sharing does not provide synchronization"
+    Supply an application lock through [dependencies](/docs/user-guide/context/inject)
+    when concurrent workers need to coordinate updates. The dependency mapping is
+    shallow-copied, so its referenced lock can be shared. Use `asyncio.Lock` for
+    cooperating async code; synchronous tools run in threads and need a suitable
+    synchronization strategy. Shared changes are not rolled back when a worker fails.
 
 ## Context Variables Access
 

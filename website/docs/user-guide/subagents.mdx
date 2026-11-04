@@ -14,7 +14,7 @@ Breaking work across multiple agents gives you:
 - **LLM-driven orchestration** — the calling agent decides when to delegate, what context to pass, and how to use the result.
 
 !!! note
-    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other.
+    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Plain variables are deep-copied for each branch; explicitly shared variables remain visible across the tree. See [Variable Scopes Across Subagents](/docs/user-guide/context/variables#variable-scopes-across-subagents) for ownership and synchronization rules.
 
 !!! warning "TaskConfig is deprecated"
     `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the automatically injected `run_subtask` / `run_subtasks` tools will be removed in **1.4.0**. Existing code continues to work with deprecation warnings. Use `Agent.as_tool()` for new code and follow the [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig) below.
@@ -91,6 +91,24 @@ coordinator = Agent(
     ],
 )
 ```
+
+## Observe and Address Subagents
+
+Register an [observer](/docs/user-guide/advanced/observers) on the parent to observe its entire delegation subtree,
+including grandchildren and transient chunks. Operational events arrive as
+`#!python ChildEvent` observations; `#!python UsageEvent` and task lifecycle
+events arrive as themselves with delegation provenance. Observation does not
+execute a child's tools or model requests in the parent.
+
+An observed event's live `#!python event.origin` addresses the invocation that
+authored it. Use `#!python await event.origin.send(event_to_deliver)` to send an
+event back through that invocation's normal handlers. Handles expire when the
+invocation ends and are unavailable when reading saved history.
+
+See [Observe a Delegation Tree](/docs/user-guide/advanced/stream#observe-a-delegation-tree)
+for event types, filtering, and source accounting, and
+[Reply to an Event's Author](/docs/user-guide/advanced/stream#reply-to-an-events-author)
+for a runnable addressed-delivery example.
 
 ## Delegation Lifecycle
 
@@ -333,11 +351,11 @@ It means that subagent has no information about previous calls or results. It ju
 
 | What | Behavior | Why |
 |---|---|---|
-| **Dependencies** | Copied; the parent's configuration fills only keys the sub-agent doesn't set | Isolated — child mutations don't affect parent. Values passed to `ask(dependencies=...)` or set at runtime override the sub-agent's own; the parent's constructor and plugin defaults don't (e.g. the sub-agent's `KnowledgePlugin` store wins over the parent's) |
-| **Variables** | Copied; not synced back. `approval_required` "always" answers are not inherited | Concurrent-safe — child mutations stay scoped to the child; the sub-task asks for approval again |
+| **Dependencies** | Shallow-copied; the parent's configuration fills only keys the sub-agent doesn't set | Replacing a mapping entry stays in the child, but referenced objects remain shared. Values passed to `ask(dependencies=...)` or set at runtime override the sub-agent's own; the parent's constructor and plugin defaults don't (e.g. the sub-agent's `KnowledgePlugin` store wins over the parent's) |
+| **Variables** | Plain / copied values are deep-copied, local values are excluded, and root-declared shared bindings remain shared | [Scope declarations](/docs/user-guide/context/variables#variable-scopes-across-subagents) control visibility. Reserved `ag:` / `a2a:` keys, including `approval_required` "always" answers, are not inherited |
 | **History** | Fresh stream | Clean context — the LLM passes relevant info via `context` parameter |
 | **Depth counter** | Incremented in child; excluded from sync-back | Internal bookkeeping — never leaks to parent |
-| **Agent prompt, tools, config** | Inherited | The sub-agent brings its own capabilities |
+| **Agent prompt, tools, config** | Supplied by the worker Agent | Nothing is inherited from the parent; construct each worker with its own capabilities |
 
 ### Persistent Stream
 
@@ -373,7 +391,7 @@ events = await sub_stream.history.get_events()
 ```
 
 !!! warning
-    Reusing one stream also makes the sub-agent **stateful**: because the history is shared, each delegation sees every earlier delegation's turns, and token cost grows with them. This is the same trade-off as `#!python persistent_stream()`. To observe events *without* accumulating history, use a [custom factory](#custom-factory) that returns a fresh stream per call and subscribe to each one.
+    Reusing one stream also makes the sub-agent **stateful**: because the history is shared, each delegation sees every earlier delegation's turns, and token cost grows with them. This is the same trade-off as `#!python persistent_stream()`. To observe events *without* accumulating child conversation history, register [observers on the parent](/docs/user-guide/advanced/stream#observe-a-delegation-tree) and keep the default fresh stream per call.
 
 Unlike `#!python persistent_stream()`, an instance you construct yourself carries its own storage backend unless you pass the parent's — `#!python MemoryStream(storage=parent_stream.history.storage)`.
 
