@@ -101,18 +101,18 @@ async def main():
         prompt="Delegate the task to task_worker exactly once, then summarize its response.",
         tools=[worker.as_tool(description="Record a finding in the shared collection.")],
     )
-    supplied = {
+    initial_variables = {
         "findings": ScopedValue([], scope=Scope.SHARED),
         "draft": [],
         "root_note": ScopedValue("Coordinator's note", scope=Scope.LOCAL),
     }
     reply = await coordinator.ask(
         "Record that each delegated invocation has its own conversation history.",
-        variables=supplied,
+        variables=initial_variables,
     )
     print(reply.context.variables["findings"])  # Contains the worker's finding
     print(reply.context.variables["draft"])  # []
-    print(supplied["findings"].value)  # []: the caller's input was copied
+    print(initial_variables["findings"].value)  # []: the caller's input was copied
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -129,7 +129,9 @@ sees the saved finding while its own draft and the caller's input remain unchang
 Declare shared bindings in the root agent's defaults or the root call's
 `#!python variables=`. Descendants can mutate or replace an existing shared
 binding, but introducing a new shared name below the root, changing an existing
-scope, or sharing a reserved `ag:` / `a2a:` name raises `#!python ScopeError`.
+scope, or sharing a reserved `ag:` / `a2a:` name raises `#!python ScopeError`
+at the assignment. Inside a worker's tool, that error becomes the tool's error
+result for the worker's model; it does not propagate to the root `#!python ask()`.
 Per-call plain overrides preserve a scope declared in agent defaults.
 
 For open-ended contributions, declare a shared dictionary at the root, such as

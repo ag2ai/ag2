@@ -202,7 +202,7 @@ The event type distinguishes observation from local execution:
 |---|---|---|
 | Model requests/responses, tool events, and other operational events | `#!python ChildEvent` containing the original event | `#!python @observer(ChildEvent)`; inspect `#!python event.source_event` |
 | Transient events such as `#!python ModelMessageChunk` | `#!python TransientChildEvent`, a transient subclass of `#!python ChildEvent` | The same `#!python @observer(ChildEvent)` filter |
-| `#!python UsageEvent` and every `#!python TaskEvent` | The source event type, with delegation provenance; both inherit `#!python InertEvent` | `#!python @observer(UsageEvent)` / `#!python @observer(TaskEvent)` |
+| `#!python UsageEvent` and every `#!python TaskEvent` | The source event type, with delegation provenance; both inherit `#!python InertEvent` | `#!python @observer(UsageEvent)`; lifecycle classes such as `#!python @observer((TaskStarted, TaskCompleted, TaskFailed))` |
 
 A `#!python ChildEvent` is non-conversational: it does not enter the ancestor's
 model transcript or trigger its tools, model loop, or HITL handlers. The original
@@ -306,7 +306,7 @@ def receive_guidance(event: Guidance, context: Context) -> None:
 async def request_guidance(context: Context) -> str:
     """Ask the coordinator how to continue."""
     await context.send(GuidanceRequested())
-    return context.variables["guidance"]
+    return context.variables.get("guidance", "No guidance received; answer directly.")
 
 async def main():
     worker = Agent(
