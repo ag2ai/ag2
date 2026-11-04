@@ -1,0 +1,112 @@
+---
+title: Membase Memory
+sidebarTitle: Membase Memory
+---
+
+`MembaseToolkit` gives an agent long-term memory backed by the user's [Membase](https://membase.com){.external-link target="_blank"} account: one memory the user keeps across the AI tools they use. The agent can search it, save a note to it when the user asks, and read the user's profile. Every search passage names the Memory it came from, so the agent can cite it.
+
+!!! note
+    Requires the `unibaseio-membase` package and a Membase developer key: `pip install "unibaseio-membase>=0.4.0,<0.5"`
+
+## Installation
+
+Install AG2, your model provider, and the Membase Python SDK:
+
+```bash
+pip install "ag2[anthropic]" "unibaseio-membase>=0.4.0,<0.5"
+```
+
+Create a developer key in the Membase app under **Connect › Developer keys** and export it:
+
+```bash
+export MEMBASE_API_KEY="mbk_..."
+```
+
+A **Read** key can search and, with Profile ticked, read the profile. Saving needs a **Read & write** key that reaches a single Memory, where the notes land.
+
+## Use Membase with an agent
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.membase import MembaseToolkit
+
+
+async def main() -> None:
+    agent = Agent(
+        "assistant",
+        prompt=(
+            "You are a helpful assistant with long-term memory. Search Membase before answering anything that "
+            "may depend on what the user told you before, and cite the Memory each fact came from. Save to "
+            "Membase only when the user asks you to remember something."
+        ),
+        config=AnthropicConfig(model="claude-sonnet-5"),
+        tools=[MembaseToolkit()],  # reads MEMBASE_API_KEY
+    )
+
+    reply = await agent.ask("Which database did we pick for the ledger?")
+    print(reply.body)
+
+
+asyncio.run(main())
+```
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `membase_search` | Searches every Memory the key reaches. Returns passages with the Memory each came from, and names any Memory that could not answer |
+| `membase_save` | Saves one note in the user's own words, only when the user asks |
+| `membase_profile` | Reads the user's profile facts (name, role, lasting preferences), newest first |
+
+There is no delete tool. Removing memory stays in the Membase app.
+
+The first search after a quiet spell can take up to a minute while the user's memory wakes; the SDK waits up to 90 seconds and retries transient failures. A refused or revoked key raises the SDK's `PermissionDeniedError`.
+
+## Picking a subset of tools
+
+Each tool is a factory method on the toolkit. Call the ones you need, for example to leave saving out for a Read key:
+
+```python linenums="1"
+toolkit = MembaseToolkit()
+
+agent = Agent(
+    "assistant",
+    config=config,
+    tools=[toolkit.search(limit=5), toolkit.profile()],
+)
+```
+
+## One key is one person
+
+A Membase key belongs to one person's account. In a multi-user application, resolve the key per conversation with a `Variable` and pass each user's own key in the conversation's variables:
+
+```python linenums="1"
+from ag2 import Agent, Variable
+from ag2.extensions.membase import MembaseToolkit
+
+agent = Agent(
+    "assistant",
+    config=config,
+    tools=[MembaseToolkit(api_key=Variable("membase_api_key"))],
+)
+
+reply = await agent.ask("What do you remember about me?", variables={"membase_api_key": key_for(user_id)})
+```
+
+`limit` also accepts a `Variable`.
+
+## Local memory
+
+Membase also runs on your machine with the open-source engine. Start it and point the toolkit at it:
+
+```bash
+pip install "unibaseio-membase[local]>=0.4.0,<0.5"
+membase --local serve
+```
+
+```python linenums="1"
+toolkit = MembaseToolkit(api_key="local", base_url="http://127.0.0.1:8787")
+```
