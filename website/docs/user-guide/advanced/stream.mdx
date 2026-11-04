@@ -192,16 +192,17 @@ with stream.where(ToolResultEvent).join(max_events=1) as results:
 
 When an agent delegates through [subagent tools](/docs/user-guide/subagents),
 every descendant event reaches every ancestor's stream. Forwarding includes
-grandchildren and transient chunks; subscribe on the root stream to observe the
+grandchildren and transient chunks; register an
+[observer](/docs/user-guide/advanced/observers) on the root agent to observe the
 whole tree without choosing a persistent child stream.
 
 The event type distinguishes observation from local execution:
 
-| Source event | What an ancestor receives | How to subscribe |
+| Source event | What an ancestor receives | Observer filter |
 |---|---|---|
-| Model requests/responses, tool events, and other operational events | `#!python ChildEvent` containing the original event | `#!python stream.where(ChildEvent)`; inspect `#!python event.source_event` |
-| Transient events such as `#!python ModelMessageChunk` | `#!python TransientChildEvent`, a transient subclass of `#!python ChildEvent` | The same `#!python ChildEvent` subscription |
-| `#!python UsageEvent` and every `#!python TaskEvent` | The source event type, with delegation provenance; both inherit `#!python InertEvent` | Existing `#!python UsageEvent` / `#!python TaskEvent` subscriptions |
+| Model requests/responses, tool events, and other operational events | `#!python ChildEvent` containing the original event | `#!python @observer(ChildEvent)`; inspect `#!python event.source_event` |
+| Transient events such as `#!python ModelMessageChunk` | `#!python TransientChildEvent`, a transient subclass of `#!python ChildEvent` | The same `#!python @observer(ChildEvent)` filter |
+| `#!python UsageEvent` and every `#!python TaskEvent` | The source event type, with delegation provenance; both inherit `#!python InertEvent` | `#!python @observer(UsageEvent)` / `#!python @observer(TaskEvent)` |
 
 A `#!python ChildEvent` is non-conversational: it does not enter the ancestor's
 model transcript or trigger its tools, model loop, or HITL handlers. The original
@@ -223,18 +224,17 @@ reports actual token usage across the tree. Install `ag2[openai]` and set
 ```python linenums="1"
 import asyncio
 
-from ag2 import Agent, MemoryStream
+from ag2 import Agent, observer
 from ag2.config import OpenAIResponsesConfig
 from ag2.events import ChildEvent, ModelMessageChunk
 
+@observer(ChildEvent)
 def observe_child(event: ChildEvent) -> None:
     source = event.source_event
     if isinstance(source, ModelMessageChunk):
         print(f"{event.agent_name}: {source.content}")
 
 async def main():
-    stream = MemoryStream()
-    stream.where(ChildEvent).subscribe(observe_child)
     worker = Agent(
         "worker",
         config=OpenAIResponsesConfig(model="gpt-5", streaming=True),
@@ -245,8 +245,9 @@ async def main():
         config=OpenAIResponsesConfig(model="gpt-5", streaming=True),
         prompt="Delegate the question to task_worker exactly once, then summarize its response.",
         tools=[worker.as_tool(description="Answer a focused question.")],
+        observers=[observe_child],
     )
-    reply = await coordinator.ask("Why give each subagent its own conversation history?", stream=stream)
+    reply = await coordinator.ask("Why give each subagent its own conversation history?")
     print(reply.body)
     report = await reply.usage()
     print(f"Total tokens across the tree: {report.total.total_tokens}")
@@ -280,7 +281,7 @@ The example uses `#!python OpenAIResponsesConfig`; install `ag2[openai]` and set
 ```python linenums="1"
 import asyncio
 
-from ag2 import Agent, Context, MemoryStream, observer, tool
+from ag2 import Agent, Context, observer, tool
 from ag2.config import OpenAIResponsesConfig
 from ag2.events import BaseEvent, ChildEvent
 
@@ -291,14 +292,15 @@ class Guidance(BaseEvent):
     __conversational__ = False
     text: str
 
+@observer(ChildEvent)
 async def give_guidance(event: ChildEvent) -> None:
     if isinstance(event.source_event, GuidanceRequested):
         await event.origin.send(Guidance(text="Focus on whether worker updates are visible to the parent"))
 
-def receive_guidance(event: BaseEvent, context: Context) -> None:
-    if isinstance(event, Guidance):
-        context.variables["guidance"] = event.text
-        print(event.text)
+@observer(Guidance)
+def receive_guidance(event: Guidance, context: Context) -> None:
+    context.variables["guidance"] = event.text
+    print(event.text)
 
 @tool
 async def request_guidance(context: Context) -> str:
@@ -307,22 +309,21 @@ async def request_guidance(context: Context) -> str:
     return context.variables["guidance"]
 
 async def main():
-    stream = MemoryStream()
-    stream.where(ChildEvent).subscribe(give_guidance)
     worker = Agent(
         "worker",
         config=OpenAIResponsesConfig(model="gpt-5"),
         prompt="Call request_guidance before answering, then follow its guidance and answer in one sentence.",
         tools=[request_guidance],
-        observers=[observer(callback=receive_guidance)],
+        observers=[receive_guidance],
     )
     coordinator = Agent(
         "coordinator",
         config=OpenAIResponsesConfig(model="gpt-5"),
         prompt="Delegate the question to task_worker exactly once, then summarize its response.",
         tools=[worker.as_tool(description="Work with guidance from the coordinator.")],
+        observers=[give_guidance],
     )
-    reply = await coordinator.ask("How do copied and shared variables differ?", stream=stream)
+    reply = await coordinator.ask("How do copied and shared variables differ?")
     print(reply.body)
 
 if __name__ == "__main__":
@@ -350,7 +351,7 @@ including spend before failure or cancellation. Its `#!python event_id`,
 records additionally carry `#!python task_id`, `#!python agent_name`, and
 `#!python path`; a local record has no delegation task ID and an empty path.
 
-Use `#!python stream.where(UsageEvent)` for both local and descendant spend.
+Use `#!python @observer(UsageEvent)` for both local and descendant spend.
 For local-only usage or lifecycle subscriptions, filter the event's
 `#!python path == ()`; excluding `#!python ChildEvent` alone still includes
 descendant inert events.

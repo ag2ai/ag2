@@ -94,7 +94,7 @@ coordinator = Agent(
 
 ## Observe and Address Subagents
 
-Subscribe to the parent's stream to observe its entire delegation subtree,
+Register an [observer](/docs/user-guide/advanced/observers) on the parent to observe its entire delegation subtree,
 including grandchildren and transient chunks. Operational events arrive as
 `#!python ChildEvent` observations; `#!python UsageEvent` and task lifecycle
 events arrive as themselves with delegation provenance. Observation does not
@@ -391,7 +391,7 @@ events = await sub_stream.history.get_events()
 ```
 
 !!! warning
-    Reusing one stream also makes the sub-agent **stateful**: because the history is shared, each delegation sees every earlier delegation's turns, and token cost grows with them. This is the same trade-off as `#!python persistent_stream()`. To observe events *without* accumulating child conversation history, subscribe to the [parent's stream](/docs/user-guide/advanced/stream#observe-a-delegation-tree) and keep the default fresh stream per call.
+    Reusing one stream also makes the sub-agent **stateful**: because the history is shared, each delegation sees every earlier delegation's turns, and token cost grows with them. This is the same trade-off as `#!python persistent_stream()`. To observe events *without* accumulating child conversation history, register [observers on the parent](/docs/user-guide/advanced/stream#observe-a-delegation-tree) and keep the default fresh stream per call.
 
 Unlike `#!python persistent_stream()`, an instance you construct yourself carries its own storage backend unless you pass the parent's — `#!python MemoryStream(storage=parent_stream.history.storage)`.
 
