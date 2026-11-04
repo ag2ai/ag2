@@ -37,6 +37,10 @@
          <lastmod>2026-11-04</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/docs/blog/2026/11/04/Agent-Status-Bar/</loc>
+         <lastmod>2026-11-04</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/docs/contributor-guide/Research/</loc>
          <lastmod>2026-11-04</lastmod>
     </url>
@@ -565,15 +569,19 @@
          <lastmod>2026-11-04</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/docs/blog/category/ag2-beta/</loc>
-         <lastmod>2026-11-04</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/docs/blog/category/agent/</loc>
          <lastmod>2026-11-04</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/docs/blog/category/context-engineering/</loc>
+         <lastmod>2026-11-04</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/docs/blog/category/middleware/</loc>
+         <lastmod>2026-11-04</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/docs/blog/category/ag2-beta/</loc>
          <lastmod>2026-11-04</lastmod>
     </url>
     <url>
