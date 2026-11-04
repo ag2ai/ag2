@@ -27,13 +27,16 @@ the owner can pick up mid-flow after a restart.
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
+from contextvars import ContextVar, Token
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Annotated, Any, Protocol, runtime_checkable
 from uuid import uuid4
 
-from .annotations import Inject
+from fast_depends.library import CustomField
+
 from .context import ConversationContext, SubId
 from .events import (
     BaseEvent,
@@ -47,6 +50,7 @@ from .events import (
 )
 from .events.task_events import TaskEvent
 from .stream import MemoryStream
+from .utils import CONTEXT_OPTION_NAME
 
 __all__ = (
     "TERMINAL_TASK_STATES",
@@ -60,6 +64,11 @@ __all__ = (
 
 
 _TASK_DEP_KEY = "ag2.task"
+# Tasks whose block stamped ``_TASK_DEP_KEY`` into this dict and is still open.
+# Immutable, so a copied dict (``ask(dependencies=...)``, a subagent's
+# dependencies) keeps the snapshot and ``TaskInject`` still recognises the
+# copied slot as a block's stamp rather than a caller-provided task.
+_TASK_STAMPS_KEY = "ag2.task.stamps"
 
 
 class TaskState(str, Enum):
@@ -215,16 +224,28 @@ class Task:
     auto-cancels with ``TaskCancelled`` and also propagates.
 
     If a ``ConversationContext`` is passed, events flow on that stream and
-    ``ag2.task`` is stamped into ``context.dependencies`` for the duration
-    of the ``async with`` block (so ``TaskInject`` resolves to the active
-    task). With no context, the Task creates a private ``MemoryStream`` —
-    standalone use; events still fire but only observers attached to that
-    private stream see them.
+    ``TaskInject`` resolves to this task for the duration of the
+    ``async with`` block — for the code inside the block and for descendants
+    it spawns while it is open (another task in the same tool, a background
+    coroutine, a worker thread). With no context, the Task creates a private
+    ``MemoryStream`` — standalone use; events still fire but only observers
+    attached to that private stream see them.
 
-    ``context.dependencies`` holds a single ``ag2.task`` slot. When sibling
-    tasks overlap on one context (e.g. parallel tool calls in one turn),
-    the slot holds the most recently entered task that is still running,
-    so ``TaskInject`` inside an earlier sibling resolves to a later one.
+    ``TaskInject`` is scoped per conversation (stream) and per asyncio task:
+    sibling tool calls that each open a task on the same context (one turn,
+    several calls gathered concurrently) each resolve their *own* task,
+    whatever the others do, and a task opened on one conversation is not
+    visible to ``TaskInject`` resolving on another. A turn run on the block's
+    own stream (``agent.ask(..., stream=ctx.stream)`` inside the block) does
+    see it. A nested block resolves to the innermost enclosing task and
+    restores the outer one on exit.
+
+    ``context.dependencies`` also holds an ``ag2.task`` slot for the duration
+    of the block, kept for direct readers of the dict; it can only name the
+    most recently entered task still running, so it is best-effort under
+    overlapping siblings. ``TaskInject`` ignores that slot,
+    but still honours an ``ag2.task`` dependency the caller provided when no
+    block encloses the call.
     """
 
     def __init__(
@@ -246,6 +267,7 @@ class Task:
         self._metadata: TaskMetadata | None = None
         self._previous_dep: Task | None = None
         self._exited = False
+        self._node_token: Token[_ActiveTaskNode | None] | None = None
         self._checkpoint_store = checkpoint_store
         self._resume_from = resume_from
         # Populated in ``__aenter__`` by reading from ``checkpoint_store``
@@ -479,6 +501,13 @@ class Task:
         if inject:
             self._previous_dep = _nearest_active(self._context.dependencies.get(_TASK_DEP_KEY))
             self._context.dependencies[_TASK_DEP_KEY] = self
+            self._context.dependencies[_TASK_STAMPS_KEY] = self._context.dependencies.get(
+                _TASK_STAMPS_KEY, frozenset()
+            ) | {self}
+            # ``TaskInject`` reads this chain, not the slot above: each asyncio task
+            # (every gathered tool call) copies the context at creation, so siblings
+            # that enter a task block see only their own node.
+            self._node_token = _active_task_node.set(_ActiveTaskNode(self._context, self, _active_task_node.get()))
         if publisher is None:
             self._terminal_subscription = self._context.stream.where(TaskEvent).subscribe(
                 self._observe_terminal, interrupt=True, sync_to_thread=False
@@ -554,11 +583,26 @@ class Task:
 
     def _unbind(self) -> None:
         self._exited = True
+        token, self._node_token = self._node_token, None
+        if token is not None:
+            # Enter and exit run in the same asyncio task for ``async with``,
+            # so the reset restores whatever the chain held before this block
+            # (the outer task's node, for a nested block). ``reset`` only fails
+            # if exit somehow runs on a different asyncio task than entry — an
+            # unsupported shape; leaving the node is safe, resolution skips
+            # exited tasks.
+            with suppress(ValueError):
+                _active_task_node.reset(token)
         if self._context is None:
             return
         if self._terminal_subscription is not None:
             self._context.stream.unsubscribe(self._terminal_subscription)
             self._terminal_subscription = None
+        stamps = self._context.dependencies.get(_TASK_STAMPS_KEY, frozenset()) - {self}
+        if stamps:
+            self._context.dependencies[_TASK_STAMPS_KEY] = stamps
+        else:
+            self._context.dependencies.pop(_TASK_STAMPS_KEY, None)
         # A sibling that entered later owns the slot; leave it alone.
         if self._context.dependencies.get(_TASK_DEP_KEY) is self:
             prev = _nearest_active(self._previous_dep)
@@ -579,4 +623,75 @@ def _nearest_active(task: Task | None) -> Task | None:
     return task
 
 
-TaskInject = Annotated[Task | None, Inject(_TASK_DEP_KEY, default=None)]
+class _ActiveTaskNode:
+    """One entry of the active-task chain the current asyncio task can see.
+
+    The chain is what ``TaskInject`` reads. Each asyncio task — every tool
+    call the executor gathers — copies the chain at creation, so sibling tool
+    calls that each open a task block each extend their own copy and resolve
+    their own task. ``previous`` is the node this one replaced at entry, so a
+    resolution for a conversation the inner node does not belong to (a nested
+    task block on another context) can walk down to the node that does.
+    """
+
+    __slots__ = ("context", "previous", "task")
+
+    def __init__(self, context: ConversationContext, task: "Task", previous: "_ActiveTaskNode | None") -> None:
+        self.context = context
+        self.task = task
+        self.previous = previous
+
+
+_active_task_node: ContextVar[_ActiveTaskNode | None] = ContextVar("ag2_active_task", default=None)
+
+
+def _resolve_injected_task(context: ConversationContext) -> "Task | None":
+    """The task whose ``async with`` block encloses this call, or ``None``.
+
+    Walks the chain from the innermost node and returns the first task that
+    is still running on *this* conversation — the same stream, since every
+    ``ask`` builds a fresh ``ConversationContext`` for its turn. A task block
+    on one conversation therefore stays invisible to an unrelated conversation
+    started inside it, but reaches a turn run on its own stream. Exited nodes
+    are walked past for descendants that outlive their block: a background
+    task spawned inside a nested block still reaches the outer task while it
+    runs, and ``None`` once nothing above it is running.
+
+    With no enclosing block, an ``ag2.task`` dependency the caller provided
+    (``ask(dependencies=...)``, ``Context(dependencies=...)``) is returned. A
+    slot a block stamped is not, here or in a copy of its dict: siblings share
+    that slot, so it may name another sibling's task.
+    """
+    stream_id = context.stream.id
+    node = _active_task_node.get()
+    while node is not None:
+        if node.context.stream.id == stream_id and not node.task._exited:
+            return node.task
+        node = node.previous
+
+    provided = context.dependencies.get(_TASK_DEP_KEY)
+    if any(provided is stamped for stamped in context.dependencies.get(_TASK_STAMPS_KEY, ())):
+        return None
+    return provided
+
+
+class _TaskInjectField(CustomField):
+    """Resolve to the enclosing task instead of reading a shared dict.
+
+    ``Inject`` reads ``context.dependencies``, which is one slot per
+    conversation — wrong whenever sibling tool calls overlap there. This
+    field resolves from the calling asyncio task's chain first (see
+    :class:`_ActiveTaskNode`).
+    """
+
+    def __init__(self) -> None:
+        super().__init__(cast=False, required=False)
+
+    def use(self, /, **kwargs: Any) -> dict[str, Any]:
+        if ctx := kwargs.get(CONTEXT_OPTION_NAME):
+            assert self.param_name
+            kwargs[self.param_name] = _resolve_injected_task(ctx)
+        return kwargs
+
+
+TaskInject = Annotated[Task | None, _TaskInjectField()]

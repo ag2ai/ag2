@@ -10,9 +10,10 @@ for ``TaskInject``, and TTL field population.
 """
 
 import asyncio
-from itertools import permutations
+from typing import Any
 
 import pytest
+from dirty_equals import IsList
 
 from ag2 import Agent, Context, TaskInject
 from ag2.config import AnthropicConfig
@@ -27,11 +28,13 @@ from ag2.events import (
     TaskStarted,
     ToolCallEvent,
     ToolCallsEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
 )
 from ag2.middleware import ToolExecution, ToolResultType
 from ag2.stream import MemoryStream
 from ag2.task import TERMINAL_TASK_STATES, Task, TaskSpec, TaskState
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools import tool
 
 
@@ -327,72 +330,147 @@ class TestMetadata:
             assert task.metadata.spec.payload == {"capability": "search"}
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "exit_order",
-    [*permutations("AB"), *permutations("ABC")],
-    ids="".join,
-)
-async def test_parallel_tool_tasks_inject_latest_running_task(exit_order: tuple[str, ...]) -> None:
-    """Sibling tool calls in one turn each open a task on the shared context.
-    A tool resolving ``TaskInject`` after each exit gets the latest-entered
-    task still running — never an exited one — and ``None`` after the last."""
-    names = sorted(exit_order)
-    # One `step_X` call opens task X; one `probe_X` call injects the task once X exited.
-    gates = {f"{kind}_{n}": asyncio.Event() for kind in ("step", "probe") for n in names}
-    done = {call_id: asyncio.Event() for call_id in gates}
-    entered = {n: asyncio.Event() for n in names}
-    # Steps enter one after another, so entry order is ``names``.
-    entered_before = dict(zip(names[1:], names))
-    tasks: dict[str, Task] = {}
-    injected: dict[str, Task | None] = {}
+async def _report(note: str, task: TaskInject) -> str:
+    """Report progress on the active task."""
+    if task is None:
+        return "no active task"
+    await task.progress({"note": note})
+    return "reported"
 
-    async def hold_until_released(call_next: ToolExecution, event: ToolCallEvent, ctx: Context) -> ToolResultType:
-        await gates[event.id].wait()
-        return await call_next(event, ctx)
 
-    @tool
-    async def step(name: str, ctx: Context) -> str:
-        if name in entered_before:
-            await entered[entered_before[name]].wait()
-        async with Task(owner_id=agent.name, spec=TaskSpec(title=name), context=ctx) as task:
-            tasks[name] = task
-            entered[name].set()
-            await gates[f"step_{name}"].wait()
-        done[f"step_{name}"].set()
-        return name
+def _report_call(note: str) -> ToolCallEvent:
+    return ToolCallEvent(id=note, name="report", arguments=f'{{"note": "{note}"}}')
 
-    @tool(middleware=[hold_until_released])
-    async def probe(after: str, task: TaskInject) -> str:
-        injected[after] = task
-        done[f"probe_{after}"].set()
-        return after
 
-    agent = Agent(
-        "researcher",
-        config=TestConfig(
-            ModelResponse(
-                tool_calls=ToolCallsEvent([
-                    *(ToolCallEvent(id=f"step_{n}", name="step", arguments=f'{{"name": "{n}"}}') for n in names),
-                    *(ToolCallEvent(id=f"probe_{n}", name="probe", arguments=f'{{"after": "{n}"}}') for n in names),
-                ]),
-            ),
-            "Done",
-        ),
-        tools=[step, probe],
+def _reporter(note: str) -> Agent:
+    """An agent whose one turn calls ``report(note)``."""
+    return Agent(
+        "reporter",
+        config=TestConfig(ModelResponse(tool_calls=ToolCallsEvent([_report_call(note)])), "Done"),
+        tools=[tool(_report, name="report")],
     )
 
-    reply = asyncio.create_task(agent.ask("Run the steps."))
-    await asyncio.gather(*(e.wait() for e in entered.values()))
 
-    running = list(names)
-    expected: dict[str, Task | None] = {}
-    for name in exit_order:
-        for call_id in (f"step_{name}", f"probe_{name}"):
-            gates[call_id].set()
-            await done[call_id].wait()
-        running.remove(name)
-        expected[name] = tasks[running[-1]] if running else None
+def _progress(events: list[BaseEvent]) -> list[tuple[str, dict[str, Any]]]:
+    """``(task title, payload)`` of every ``TaskProgress`` seen, in order."""
+    return [(event.objective, event.payload) for event in events if isinstance(event, TaskProgress)]
 
-    assert (await reply).body == "Done"
-    assert injected == expected
+
+@pytest.mark.asyncio
+class TestTaskInject:
+    """A ``@tool`` reports progress through ``TaskInject`` to the task whose
+    ``Task(...)`` block encloses the call."""
+
+    async def test_parallel_tool_calls_report_to_their_own_task(self) -> None:
+        """Tool middleware opens a task per call; with every block open at once,
+        each call's progress lands on its own task, not on the last one opened."""
+        notes = ["A", "B", "C"]
+        opened: set[str] = set()
+        all_open = asyncio.Event()
+
+        async def task_per_call(call_next: ToolExecution, event: ToolCallEvent, ctx: Context) -> ToolResultType:
+            async with Task(owner_id=agent.name, spec=TaskSpec(title=event.id), context=ctx):
+                opened.add(event.id)
+                if opened == set(notes):
+                    all_open.set()
+                await all_open.wait()
+                return await call_next(event, ctx)
+
+        agent = Agent(
+            "planner",
+            config=TestConfig(ModelResponse(tool_calls=ToolCallsEvent([_report_call(n) for n in notes])), "Done"),
+            tools=[tool(_report, name="report", middleware=[task_per_call])],
+        )
+        stream = MemoryStream()
+        events = _subscribe(stream)
+
+        await agent.ask("Run the steps.", stream=stream)
+
+        assert _progress(events) == IsList(*((n, {"note": n}) for n in notes), check_order=False)
+
+    @pytest.mark.parametrize("capability", [None, "reporting"])
+    async def test_turn_inside_a_block_reports_to_it(self, capability: str | None) -> None:
+        stream = MemoryStream()
+        events = _subscribe(stream)
+
+        async with Task(owner_id="researcher", spec=TaskSpec(title="job"), context=ConversationContext(stream=stream)):
+            await _reporter("progress").ask("Report.", stream=stream, capability=capability)
+
+        assert _progress(events) == [("job", {"note": "progress"})]
+
+    async def test_nested_blocks_report_to_the_innermost(self) -> None:
+        owner = _agent()
+        stream = MemoryStream()
+        ctx = ConversationContext(stream=stream)
+        events = _subscribe(stream)
+
+        async with Task(owner_id=owner.name, spec=TaskSpec(title="outer"), context=ctx):
+            async with Task(owner_id=owner.name, spec=TaskSpec(title="inner"), context=ctx):
+                await _reporter("inside inner").ask("Report.", stream=stream)
+            await _reporter("after inner").ask("Report.", stream=stream)
+        await _reporter("after outer").ask("Report.", stream=stream)
+
+        assert _progress(events) == [
+            ("inner", {"note": "inside inner"}),
+            ("outer", {"note": "after inner"}),
+        ]
+
+    async def test_without_a_block_there_is_no_task(self) -> None:
+        call = _report_call("progress")
+        tracking = TrackingConfig(TestConfig(ModelResponse(tool_calls=ToolCallsEvent([call])), "Done"))
+        agent = Agent("reporter", config=tracking, tools=[tool(_report, name="report")])
+        stream = MemoryStream()
+        events = _subscribe(stream)
+
+        await agent.ask("Report.", stream=stream)
+
+        tracking.mock.assert_called_with(ToolResultsEvent([ToolResultEvent.from_call(call, "no active task")]))
+        assert _progress(events) == []
+
+    async def test_a_turn_on_another_stream_does_not_see_the_block(self) -> None:
+        stream = MemoryStream()
+        events = _subscribe(stream)
+
+        async with Task(owner_id="researcher", spec=TaskSpec(title="job"), context=ConversationContext(stream=stream)):
+            await _reporter("elsewhere").ask("Report.", stream=MemoryStream())
+
+        assert _progress(events) == []
+
+    async def test_a_subagent_does_not_see_the_parent_task(self) -> None:
+        """The parent opens a task around the delegation; the worker runs its own
+        conversation and does not report to it."""
+
+        async def task_per_call(call_next: ToolExecution, event: ToolCallEvent, ctx: Context) -> ToolResultType:
+            async with Task(owner_id=parent.name, spec=TaskSpec(title="delegation"), context=ctx):
+                return await call_next(event, ctx)
+
+        worker = _reporter("from worker")
+        parent = Agent(
+            "parent",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent([
+                        ToolCallEvent(name="task_reporter", arguments='{"objective": "Report."}')
+                    ])
+                ),
+                "Done",
+            ),
+            tools=[worker.as_tool(description="Reports on the active task.", middleware=[task_per_call])],
+        )
+        stream = MemoryStream()
+        events = _subscribe(stream)
+
+        await parent.ask("Delegate.", stream=stream)
+
+        assert _progress(events) == []
+
+    async def test_a_task_passed_as_a_dependency_is_injected(self) -> None:
+        task_stream = MemoryStream()
+        events = _subscribe(task_stream)
+
+        async with Task(
+            owner_id="researcher", spec=TaskSpec(title="given"), context=ConversationContext(stream=task_stream)
+        ) as given:
+            await _reporter("progress").ask("Report.", dependencies={"ag2.task": given})
+
+        assert _progress(events) == [("given", {"note": "progress"})]

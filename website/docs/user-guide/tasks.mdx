@@ -258,23 +258,14 @@ async with Task(owner_id=agent.name, spec=TaskSpec(title="watched"), context=ctx
 
 Model runs do not inject a standalone Task or replace one supplied by an enclosing block. Use context variables for model-run state.
 
-Inside an `#!python async with Task(...)` block, the framework stamps the active Task into `#!python context.dependencies["ag2.task"]`. Two ways to read it:
-
-### Direct access
-
-```python linenums="1"
-async with Task(owner_id=agent.name, spec=TaskSpec(title="work"), context=ctx) as task:
-    active = ctx.dependencies["ag2.task"]
-    assert active is task
-```
+Code running inside an `#!python async with Task(...)` block can reach the task without having it passed around: annotate a parameter with `#!python TaskInject` and the framework injects the task whose block encloses the call.
 
 ### `#!python TaskInject` annotation
 
-`#!python TaskInject` is a fast_depends-resolvable annotation that injects the active Task into any function the dependency-injection machinery resolves — most usefully a `#!python @tool` body.
+`#!python TaskInject` is a fast_depends-resolvable annotation that injects the enclosing task into any function the dependency-injection machinery resolves — most usefully a `#!python @tool` body.
 
-```python linenums="1" hl_lines="2 5"
-from ag2 import tool
-from ag2.task import TaskInject
+```python linenums="1" hl_lines="1 4"
+from ag2 import TaskInject, tool
 
 @tool
 async def report(message: str, task: TaskInject) -> str:
@@ -284,7 +275,48 @@ async def report(message: str, task: TaskInject) -> str:
     return f"reported on task {task.task_id}"
 ```
 
-The injection has `#!python default=None`, so always treat `task` as possibly `#!python None` and null-check before use.
+`#!python TaskInject` resolves to `#!python None` when no task encloses the call, so always null-check before use.
+
+### Which task a tool sees
+
+Open the block on the stream the agent's turn runs on, and the turn's tools report to that task:
+
+```python linenums="1" hl_lines="9-10"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.context import ConversationContext
+from ag2.stream import MemoryStream
+from ag2.task import Task, TaskSpec
+
+agent = Agent("worker", config=AnthropicConfig(model="claude-sonnet-5"), tools=[report])
+ctx = ConversationContext(stream=MemoryStream())
+async with Task(owner_id=agent.name, spec=TaskSpec(title="work"), context=ctx):
+    await agent.ask("Report progress.", stream=ctx.stream)
+```
+
+- **Parallel tool calls.** When several calls in one model response each open their own task — for example from [tool middleware](/docs/user-guide/tools/tool_middleware) that wraps every call in `#!python Task(...)` — each call resolves its **own** task, whatever the others do.
+- **Nested blocks.** A nested block resolves to the innermost enclosing task; once it exits, the outer task again.
+- **Other conversations.** A turn on a different stream started inside the block does not see the task. That includes subagents (`#!python as_tool`): a delegation runs on its own stream and is its own task scope.
+- **Outside the block.** Code the block does not enclose — after it exits, or a handler or background task started before it — resolves `#!python None`, not some other task.
+
+Outside any block, a task you pass yourself as the `#!python "ag2.task"` dependency is injected — handy for testing a tool on its own:
+
+```python linenums="1" hl_lines="2"
+async with Task(owner_id=agent.name, spec=TaskSpec(title="given")) as task:
+    await agent.ask("Report progress.", dependencies={"ag2.task": task})
+```
+
+### Direct access
+
+For direct readers of the dict, `#!python context.dependencies["ag2.task"]` also holds a task for the duration of the block:
+
+```python linenums="1"
+async with Task(owner_id=agent.name, spec=TaskSpec(title="work"), context=ctx) as task:
+    active = ctx.dependencies["ag2.task"]
+    assert active is task
+```
+
+The slot is best-effort when tasks overlap: with parallel tool calls each opening a task on one conversation, it can only name the most recently entered task still running. Prefer `#!python TaskInject`, which does not read the slot a block stamped.
 
 ## TTL and Expiry
 
