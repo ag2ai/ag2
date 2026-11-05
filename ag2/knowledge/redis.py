@@ -24,6 +24,15 @@ redis.call('ZADD', KEYS[2], version, ARGV[2])
 return size
 """
 
+# Uses the same keys and arguments as append; content and its indexed version
+# must become visible together, even across connections or caller cancellation.
+_WRITE_SCRIPT = """
+redis.call('SET', KEYS[1], ARGV[1])
+local version = redis.call('INCR', KEYS[3])
+redis.call('ZADD', KEYS[2], version, ARGV[2])
+return version
+"""
+
 
 class RedisKnowledgeStore:
     """Redis-backed :class:`KnowledgeStore`.
@@ -34,9 +43,9 @@ class RedisKnowledgeStore:
     :meth:`list_versions_under` returns a snapshot in one round trip
     and the polling watcher can diff without per-key ``GET``s.
 
-    :meth:`append` runs as one server-side script over the content, index and
-    version-counter keys, so it is atomic across connections but needs a
-    single Redis node (those keys do not share a Cluster slot).
+    :meth:`write` and :meth:`append` each run as one server-side script over the
+    content, index and version-counter keys, so they are atomic across connections
+    but need a single Redis node (those keys do not share a Cluster slot).
 
     ``on_change`` uses :class:`PollingChangeWatcher` (no Redis
     keyspace notifications — see §14 Phase 3b "Deferred"). The default
@@ -67,14 +76,12 @@ class RedisKnowledgeStore:
         self._index_key = f"{self._key_prefix}:__index"
         self._version_key = f"{self._key_prefix}:__version_counter"
         self._append_script = self._client.register_script(_APPEND_SCRIPT)
+        self._write_script = self._client.register_script(_WRITE_SCRIPT)
         self._poll_interval_s = poll_interval_s
         self._lock = asyncio.Lock()
 
     def _key(self, path: str) -> str:
         return f"{self._key_prefix}:{_normalize(path)}"
-
-    async def _index_add(self, normalized: str, version: int) -> None:
-        await self._client.zadd(self._index_key, {normalized: float(version)})
 
     async def _index_remove(self, *normalized_paths: str) -> None:
         if normalized_paths:
@@ -97,11 +104,11 @@ class RedisKnowledgeStore:
         return value.decode("utf-8") if isinstance(value, bytes) else str(value)
 
     async def write(self, path: str, content: str) -> None:
-        normalized = _normalize(path)
         async with self._lock:
-            version = int(await self._client.incr(self._version_key))
-            await self._client.set(self._key(path), content.encode("utf-8"))
-            await self._index_add(normalized, version)
+            await self._write_script(
+                keys=[self._key(path), self._index_key, self._version_key],
+                args=[content.encode("utf-8"), _normalize(path)],
+            )
 
     async def list(self, path: str = "/") -> list[str]:
         prefix = _normalize(path).rstrip("/") + "/"

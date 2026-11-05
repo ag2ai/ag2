@@ -3,14 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import os
 import shutil
 import subprocess
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import suppress
 from pathlib import Path
+from typing import Any
+from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 
 redis = pytest.importorskip("redis")
 
@@ -26,8 +31,29 @@ pytestmark = [
 _CONNECTIONS = 20
 
 
+class PausedRedis(Redis):
+    """Pause after a completed content mutation, before returning to the store."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.mutated = asyncio.Event()
+        self.resume = asyncio.Event()
+        self.pause = True
+
+    async def execute_command(self, *args: Any, **options: Any) -> Any:
+        result = await super().execute_command(*args, **options)
+        if self.pause and args[0] in ("SET", "EVALSHA", "EVAL"):
+            self.pause = False
+            self.mutated.set()
+            await self.resume.wait()
+        return result
+
+
 @pytest.fixture(scope="module")
-def redis_socket() -> Iterator[str]:
+def redis_url() -> Iterator[str]:
+    if url := os.environ.get("AG2_TEST_REDIS_URL"):
+        yield url
+        return
     executable = shutil.which("redis-server")
     if executable is None:
         pytest.skip("redis-server is required for the knowledge-store integration tests")
@@ -50,7 +76,7 @@ def redis_socket() -> Iterator[str]:
                         if process.poll() is not None or time.monotonic() >= deadline:
                             pytest.fail("the owned Redis server did not start")
                         time.sleep(0.01)
-            yield socket
+            yield f"unix://{socket}"
         finally:
             process.terminate()
             try:
@@ -60,12 +86,24 @@ def redis_socket() -> Iterator[str]:
                 process.wait()
 
 
+@pytest_asyncio.fixture
+async def key_prefix(redis_url: str) -> AsyncIterator[str]:
+    # A unique prefix instead of FLUSHDB, so AG2_TEST_REDIS_URL never loses unrelated keys.
+    prefix = f"ag2:test:{uuid4().hex}"
+    yield prefix
+    async with Redis.from_url(redis_url) as client:
+        keys = [key async for key in client.scan_iter(match=f"{prefix}:*")]
+        if keys:
+            await client.delete(*keys)
+
+
 @pytest.mark.parametrize("initial", ["", "snow☃\n"])
-async def test_independent_connections_append_without_losing_entries(redis_socket: str, initial: str) -> None:
-    clients = [Redis(unix_socket_path=redis_socket) for _ in range(_CONNECTIONS)]
+async def test_independent_connections_append_without_losing_entries(
+    redis_url: str, key_prefix: str, initial: str
+) -> None:
+    clients = [Redis.from_url(redis_url) for _ in range(_CONNECTIONS)]
     try:
-        await clients[0].flushdb()
-        stores = [RedisKnowledgeStore(client) for client in clients]
+        stores = [RedisKnowledgeStore(client, key_prefix=key_prefix) for client in clients]
         if initial:
             await stores[0].write("/log.jsonl", initial)
         payloads = [f"entry-{i}-雪\n" for i in range(_CONNECTIONS)]
@@ -84,10 +122,9 @@ async def test_independent_connections_append_without_losing_entries(redis_socke
             await client.aclose()
 
 
-async def test_append_keeps_empty_and_utf8_byte_offset_semantics(redis_socket: str) -> None:
-    async with Redis(unix_socket_path=redis_socket) as client:
-        await client.flushdb()
-        store = RedisKnowledgeStore(client)
+async def test_append_keeps_empty_and_utf8_byte_offset_semantics(redis_url: str, key_prefix: str) -> None:
+    async with Redis.from_url(redis_url) as client:
+        store = RedisKnowledgeStore(client, key_prefix=key_prefix)
         assert await store.append("/log.jsonl", "") == 0
         assert await store.exists("/log.jsonl")
         assert await store.append("/log.jsonl", "雪") == 0
@@ -96,3 +133,45 @@ async def test_append_keeps_empty_and_utf8_byte_offset_semantics(redis_socket: s
         assert (await store.list_versions_under("/"))["/log.jsonl"] == 3
         await store.delete("/log.jsonl")
         assert not await store.exists("/log.jsonl")
+
+
+@pytest.mark.parametrize("content", ["", "snow☃雪"])
+async def test_cancelled_write_keeps_content_and_index_consistent(
+    redis_url: str, key_prefix: str, content: str
+) -> None:
+    async with PausedRedis.from_url(redis_url) as client:
+        store = RedisKnowledgeStore(client, key_prefix=key_prefix)
+        execution = asyncio.create_task(store.write("notes//entry.txt/", content))
+        try:
+            await asyncio.wait_for(client.mutated.wait(), timeout=5)
+        finally:
+            execution.cancel()
+            with suppress(asyncio.CancelledError):
+                await execution
+
+        assert await store.read("/notes/entry.txt") == content
+        assert await store.list("/notes") == ["entry.txt"]
+        assert await store.list_versions_under("/notes") == {"/notes/entry.txt": 1}
+
+
+@pytest.mark.parametrize("operation", ["write", "append"])
+async def test_independent_mutation_does_not_regress_write_version(
+    redis_url: str, key_prefix: str, operation: str
+) -> None:
+    async with PausedRedis.from_url(redis_url) as paused, Redis.from_url(redis_url) as other:
+        first = RedisKnowledgeStore(paused, key_prefix=key_prefix)
+        second = RedisKnowledgeStore(other, key_prefix=key_prefix)
+        execution = asyncio.create_task(first.write("/note.txt", "first雪"))
+        try:
+            await asyncio.wait_for(paused.mutated.wait(), timeout=5)
+            if operation == "write":
+                await second.write("/note.txt", "second☃")
+            else:
+                assert await second.append("/note.txt", "second☃") == len("first雪".encode())
+        finally:
+            paused.resume.set()
+            await asyncio.wait_for(execution, timeout=5)
+
+        expected = "second☃" if operation == "write" else "first雪second☃"
+        assert await first.read("/note.txt") == expected
+        assert await first.list_versions_under("/") == {"/note.txt": 2}
