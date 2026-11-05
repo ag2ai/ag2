@@ -877,10 +877,11 @@ def normalize_usage(raw: dict[str, Any]) -> Usage:
     """Normalize Anthropic's native usage keys to standard format.
 
     ``server_tool_use`` (a count of tool *requests*), the ``service_tier`` and
-    ``inference_geo`` labels and ``cache_creation``'s per-lifetime breakdown are
-    deliberately unmapped: ``Usage`` carries whole-call token counts only.
+    ``inference_geo`` labels are deliberately unmapped. ``cache_creation``
+    decomposes the reported cache-write total by retention without changing it.
     """
     details = raw.get("output_tokens_details") or {}
+    cache_creation = raw.get("cache_creation")
     prompt = float(raw.get("input_tokens", 0))
     completion = float(raw.get("output_tokens", 0))
     return Usage(
@@ -892,4 +893,11 @@ def normalize_usage(raw: dict[str, Any]) -> Usage:
         # Output tokens spent on internal reasoning — a decomposition of
         # ``output_tokens``, not an addition to it, matching the OpenAI mapper.
         thinking_tokens=_count_or_absent(details.get("thinking_tokens")),
+        cache_creation_input_tokens_by_ttl={
+            ttl: float(cache_creation[key])
+            for ttl, key in (("5m", "ephemeral_5m_input_tokens"), ("1h", "ephemeral_1h_input_tokens"))
+            if cache_creation.get(key) is not None
+        }
+        if cache_creation is not None
+        else None,
     )

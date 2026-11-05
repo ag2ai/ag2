@@ -89,6 +89,21 @@ async def _usage_of(
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.mark.parametrize("streaming", [False, True])
+@pytest.mark.parametrize("breakdown", [None, {}, {"ephemeral_1h_input_tokens": 70, "ephemeral_5m_input_tokens": 0}])
+async def test_cache_retention_breakdown(streaming: bool, breakdown: dict[str, int] | None) -> None:
+    raw = {"input_tokens": 12, "output_tokens": 8, "cache_creation_input_tokens": 70, "cache_creation": breakdown}
+    payload = _stream_events(raw, {"output_tokens": 8}) if streaming else _message(raw)
+
+    assert await _usage_of(payload, streaming=streaming) == Usage(
+        prompt_tokens=12,
+        completion_tokens=8,
+        total_tokens=20,
+        cache_creation_input_tokens=70,
+        cache_creation_input_tokens_by_ttl=None if breakdown is None else {"1h": 70, "5m": 0} if breakdown else {},
+    )
+
+
 class TestThinkingTokens:
     async def test_a_non_streaming_call_reports_the_providers_figure(self) -> None:
         """The whole-object comparison pins the decomposition too: 214 thinking tokens
@@ -221,6 +236,7 @@ class TestTheShapeTheApiSends:
             cache_creation_input_tokens=0,
             cache_read_input_tokens=0,
             thinking_tokens=45,
+            cache_creation_input_tokens_by_ttl={"1h": 0, "5m": 0},
         )
 
     async def test_thinking_disabled_still_carries_a_measured_zero(self) -> None:
@@ -233,4 +249,5 @@ class TestTheShapeTheApiSends:
             cache_creation_input_tokens=0,
             cache_read_input_tokens=0,
             thinking_tokens=0,
+            cache_creation_input_tokens_by_ttl={"1h": 0, "5m": 0},
         )

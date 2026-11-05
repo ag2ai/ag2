@@ -22,6 +22,15 @@ def _add_tokens(a: float | None, b: float | None) -> float | None:
     return (a or 0) + (b or 0)
 
 
+def _add_cache_creation_tokens(a: dict[str, float] | None, b: dict[str, float] | None) -> dict[str, float] | None:
+    if a is None and b is None:
+        return None
+    result = dict(a or {})
+    for ttl, tokens in (b or {}).items():
+        result[ttl] = result.get(ttl, 0) + tokens
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class Usage:
     """Token usage normalized across LLM providers."""
@@ -32,6 +41,12 @@ class Usage:
     cache_read_input_tokens: float | None = None
     cache_creation_input_tokens: float | None = None
     thinking_tokens: float | None = None
+    cache_creation_input_tokens_by_ttl: dict[str, float] | None = None
+    """Reported cache writes by retention (for example, ``"12h"``).
+
+    These counts decompose ``cache_creation_input_tokens``; do not add them to it.
+    Missing durations remain unknown, rather than inferred from the aggregate.
+    """
 
     def __bool__(self) -> bool:
         return any((
@@ -41,6 +56,7 @@ class Usage:
             self.cache_read_input_tokens,
             self.cache_creation_input_tokens,
             self.thinking_tokens,
+            any((self.cache_creation_input_tokens_by_ttl or {}).values()),
         ))
 
     def __add__(self, other: "Usage") -> "Usage":
@@ -56,6 +72,9 @@ class Usage:
                 self.cache_creation_input_tokens, other.cache_creation_input_tokens
             ),
             thinking_tokens=_add_tokens(self.thinking_tokens, other.thinking_tokens),
+            cache_creation_input_tokens_by_ttl=_add_cache_creation_tokens(
+                self.cache_creation_input_tokens_by_ttl, other.cache_creation_input_tokens_by_ttl
+            ),
         )
 
 

@@ -228,6 +228,23 @@ from ag2.config import OpenAIResponsesConfig
 config = OpenAIResponsesConfig(model="gpt-5")
 ```
 
+### Cache Write Retention and Usage
+
+Use `prompt_cache_options={"ttl": "12h"}` with `OpenAIResponsesConfig` to request twelve-hour cache retention on supported models. This requires `openai>=3.45.0`, included by the `ag2[openai]` extra:
+
+```python linenums="1"
+from ag2.config import OpenAIResponsesConfig
+
+config = OpenAIResponsesConfig(
+    model="gpt-5",
+    prompt_cache_options={"ttl": "12h"},
+)
+```
+
+`ModelResponse.usage.cache_creation_input_tokens_by_ttl` keeps the provider's reported cache-write counts by retention. OpenAI Responses reports `"30m"` and `"12h"`; Anthropic reports `"5m"` and `"1h"`. An omitted breakdown remains `None`, and a measured zero stays zero. Missing durations are not inferred from the aggregate.
+
+The breakdown decomposes `cache_creation_input_tokens`. Do not add it to that count or `total_tokens`. Usage reports sum each retention separately, so applications can apply the provider's retention-specific prices. The map contains counts only, not prices, and supports other retention strings when a provider adds them.
+
 ### Controlling OpenAI Reasoning
 
 OpenAI reasoning models spend extra tokens thinking before they answer. Both OpenAI configs let you bound that effort, and the Responses config can also request a summary of the thinking. See the [OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning){.external-link target="_blank"} for which values each model accepts.
