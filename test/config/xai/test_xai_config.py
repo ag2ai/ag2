@@ -4,6 +4,8 @@
 
 from unittest.mock import patch
 
+from xai_sdk.types.chat import Guideline
+
 from ag2.config import XAIConfig
 from ag2.config.xai import XAIClient, XAIFilesClient
 
@@ -80,3 +82,14 @@ def test_create_files_client_returns_xai_files_client() -> None:
         client = config.create_files_client()
 
     assert isinstance(client, XAIFilesClient)
+
+
+def test_copy_safety_options() -> None:
+    config = XAIConfig(model="grok-4-fast")
+    guidelines: list[Guideline] = [{"type": "policy", "category": "violence", "behavior": "decline"}]
+
+    copied = config.copy(safety_identifier="opaque-user-id", guidelines=guidelines)
+
+    assert copied == XAIConfig(model="grok-4-fast", safety_identifier="opaque-user-id", guidelines=guidelines)
+    assert config == XAIConfig(model="grok-4-fast")
+    assert copied.copy(safety_identifier=None, guidelines=None) == config

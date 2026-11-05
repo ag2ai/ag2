@@ -100,7 +100,7 @@ gemini = [
 # === Voice / TTS providers (ag2.live) ===
 elevenlabs = ["elevenlabs>=2.73.0,<3"]
 
-xai = ["xai-sdk>=1.12.2,<2"]
+xai = ["xai-sdk>=1.21.0,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
 mistral = ["mistralai>=3.6.0,<4"]
 ollama = ["ollama>=0.5.2,<1"]

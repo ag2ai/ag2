@@ -7,11 +7,12 @@ from dataclasses import dataclass, replace
 from typing import Any, TypedDict
 
 from typing_extensions import Unpack
+from xai_sdk.proto import chat_pb2
 
 from ag2.config.config import ModelConfig, ModelProvider
 
 from .files import XAIFilesClient
-from .xai_client import CreateOptions, IncludeOption, ReasoningEffort, ToolMode, XAIClient
+from .xai_client import CreateOptions, Guideline, IncludeOption, ReasoningEffort, ToolMode, XAIClient
 
 XAI_DEFAULT_API_HOST = "api.x.ai"
 
@@ -32,6 +33,8 @@ class XAIConfigOverrides(TypedDict, total=False):
     seed: int | None
     stop: Sequence[str] | None
     user: str | None
+    safety_identifier: str | None
+    guidelines: Sequence[Guideline | chat_pb2.Guideline] | None
     logprobs: bool | None
     top_logprobs: int | None
     tool_choice: ToolMode | None
@@ -73,6 +76,8 @@ class XAIConfig(ModelConfig):
     max_turns: int | None = None
     include: Sequence[IncludeOption] | None = None
     conversation_id: str | None = None
+    safety_identifier: str | None = None
+    guidelines: Sequence[Guideline | chat_pb2.Guideline] | None = None
 
     @property
     def provider(self) -> ModelProvider:
@@ -92,6 +97,8 @@ class XAIConfig(ModelConfig):
             seed=self.seed,
             stop=self.stop,
             user=self.user,
+            safety_identifier=self.safety_identifier,
+            guidelines=self.guidelines,
             logprobs=self.logprobs,
             top_logprobs=self.top_logprobs,
             tool_choice=self.tool_choice,
