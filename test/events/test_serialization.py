@@ -5,14 +5,15 @@
 """Tests for the shared event-serialization layer."""
 
 import datetime
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 from enum import Enum
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import BaseModel
 
-from ag2.events import BaseEvent, BinaryInput, BinaryType, ModelMessage, ModelRequest, ToolCallEvent
+from ag2.events import BaseEvent, BinaryInput, BinaryType, DataInput, ModelMessage, ModelRequest, ToolCallEvent
 from ag2.events._serialization import (
     deserialize_value,
     import_event_class,
@@ -112,12 +113,58 @@ class _SamplePoint:
     label: str = "origin"
 
 
+@dataclass
+class _SampleCachedPoint:
+    x: int
+    cache: bytes = field(init=False, default=b"")
+
+
+@dataclass(frozen=True, slots=True)
+class _SampleFrozenPoint:
+    x: int
+    doubled: int = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "doubled", self.x * 2)
+
+
 class TestDataclass:
     def test_dataclass_round_trip(self) -> None:
         point = _SamplePoint(1, 2, "p")
         result = _round_trip(point)
         assert result == point
         assert isinstance(result, _SamplePoint)
+
+    def test_non_init_field_preserves_saved_value(self) -> None:
+        point = _SampleCachedPoint(3)
+        point.cache = b"\x00\xff"
+        request = ModelRequest.ensure_request([point])
+
+        result = ModelRequest.from_dict(json.loads(json.dumps(request.to_dict())))
+
+        assert result == request
+
+    def test_frozen_slotted_dataclass_with_non_init_field(self) -> None:
+        request = ModelRequest.ensure_request([_SampleFrozenPoint(3)])
+
+        result = ModelRequest.from_dict(json.loads(json.dumps(request.to_dict())))
+
+        assert result == request
+
+    @pytest.mark.parametrize(
+        ("saved_data", "message"),
+        [({"x": 3, "unexpected": 5}, "unexpected"), ({}, "x")],
+    )
+    def test_invalid_constructor_arguments_still_raise(self, saved_data: dict[str, int], message: str) -> None:
+        payload = {
+            "data": {
+                "__dataclass__": f"{_SampleCachedPoint.__module__}.{_SampleCachedPoint.__qualname__}",
+                "data": saved_data,
+            }
+        }
+
+        with pytest.raises(TypeError, match=message):
+            DataInput.from_dict(payload)
 
 
 class _SamplePydanticModel(BaseModel):
