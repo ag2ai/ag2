@@ -588,6 +588,47 @@ Reasoning content is streamed as `ModelReasoning` events, and reasoning tokens a
 
     Pass `extra_body` to forward provider-specific keys that have no dedicated field. Explicit top-level fields always win over the same key inside `extra_body` — e.g. a top-level `thinking=True` overrides a `thinking` entry inside `extra_body`, while unrelated `extra_body` keys are merged through untouched.
 
+### xAI Configuration
+
+`XAIConfig` connects to [xAI's Grok models](https://docs.x.ai/docs/overview){.external-link target="_blank"} through the official `xai-sdk`. Install the optional dependency with `pip install "ag2[xai]"`.
+
+If `api_key` is not passed explicitly, the SDK resolves it from the `XAI_API_KEY` environment variable.
+
+```python linenums="1"
+from ag2.config import XAIConfig
+
+# Auth resolved from XAI_API_KEY when omitted
+config = XAIConfig(model="grok-4", streaming=True)
+```
+
+#### Safety Identifier and Moderation Guidelines
+
+`guidelines` tightens moderation per category. Each entry declines one of `nsfw`, `violence` or `profanity`; a category you leave out keeps the model's default behavior.
+
+`safety_identifier` tells xAI which end user is behind a request, so a policy violation is attributed to that user rather than to your whole API key. It must be stable and opaque: send a hash of your internal user ID, never an email address or display name. Because it differs per user, set it per request with `config.copy(...)`. xAI prefers it over the older `user` field, which is still accepted.
+
+```python linenums="1" hl_lines="8-11 16-17"
+import hashlib
+
+from ag2 import Agent
+from ag2.config import XAIConfig
+
+config = XAIConfig(
+    model="grok-4",
+    guidelines=[
+        {"type": "policy", "category": "violence", "behavior": "decline"},
+        {"type": "policy", "category": "profanity", "behavior": "decline"},
+    ],
+)
+agent = Agent("support", config=config)
+
+user_id = "customer-1042"
+safety_id = hashlib.sha256(user_id.encode()).hexdigest()
+reply = await agent.ask("How do I reset my password?", config=config.copy(safety_identifier=safety_id))
+```
+
+An unknown category or behavior raises `ValueError` before the request is sent. The API rejects a request that lists a category twice. It also rejects guidelines on a multi-agent model, together with `stop`, or on a deferred completion.
+
 ### Mistral Configuration
 
 `MistralConfig` connects to [Mistral's](https://docs.mistral.ai){.external-link target="_blank"} chat-completions API through the official `mistralai` SDK. Install the optional dependency with `pip install "ag2[mistral]"`.
