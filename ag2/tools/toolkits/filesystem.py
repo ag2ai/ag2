@@ -320,13 +320,4 @@ else:
         results = {p for p in target.glob(pattern) if _is_listed(p)}
         if pattern.endswith("**"):
             results.update(p for p in target.glob(f"{pattern}/*") if _is_listed(p))
-        if "**" in pattern:
-            prefix, suffix = pattern.split("**", 1)
-            suffix = suffix.lstrip("/")
-            prefix_dir = target / prefix if prefix else target
-            if prefix_dir.is_dir():
-                if suffix:
-                    results.update(p for p in prefix_dir.glob(suffix) if _is_listed(p))
-                else:
-                    results.update(p for p in prefix_dir.rglob("*") if _is_listed(p))
         return results
