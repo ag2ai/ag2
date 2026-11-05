@@ -18,6 +18,34 @@ def _usage_event(prompt: int, completion: int, *, model: str, provider: str) -> 
 
 
 class TestUsageArithmetic:
+    def test_retention_breakdowns_sum_without_changing_totals_or_inputs(self) -> None:
+        a = Usage(cache_creation_input_tokens=10, cache_creation_input_tokens_by_ttl={"12h": 10, "30m": 0})
+        b = Usage(cache_creation_input_tokens=25, cache_creation_input_tokens_by_ttl={"12h": 5, "1h": 20})
+
+        result = a + b
+
+        assert result == Usage(
+            cache_creation_input_tokens=35,
+            cache_creation_input_tokens_by_ttl={"12h": 15, "30m": 0, "1h": 20},
+        )
+        assert a.cache_creation_input_tokens_by_ttl == {"12h": 10, "30m": 0}
+        assert b.cache_creation_input_tokens_by_ttl == {"12h": 5, "1h": 20}
+        assert result.cache_creation_input_tokens_by_ttl is not a.cache_creation_input_tokens_by_ttl
+
+    def test_unreported_retention_stays_unknown(self) -> None:
+        measured = Usage(cache_creation_input_tokens_by_ttl={"12h": 0})
+        assert Usage() + measured == measured
+        assert measured + Usage() == measured
+        assert (
+            Usage() + measured
+        ).cache_creation_input_tokens_by_ttl is not measured.cache_creation_input_tokens_by_ttl
+        assert (Usage() + Usage()).cache_creation_input_tokens_by_ttl is None
+
+    def test_retention_only_usage_is_not_dropped_from_reports(self) -> None:
+        usage = Usage(cache_creation_input_tokens_by_ttl={"12h": 10})
+        report = UsageReport.from_events([UsageEvent(usage, kind="model_call")])
+        assert report.total == usage
+
     def test_add_is_field_wise(self) -> None:
         a = Usage(prompt_tokens=10, completion_tokens=5)
         b = Usage(prompt_tokens=3, completion_tokens=7, total_tokens=20)

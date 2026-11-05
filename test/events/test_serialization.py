@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import BaseModel
 
-from ag2.events import BaseEvent, BinaryInput, BinaryType, ModelMessage, ModelRequest, ToolCallEvent
+from ag2.events import BaseEvent, BinaryInput, BinaryType, ModelMessage, ModelRequest, ToolCallEvent, Usage, UsageEvent
 from ag2.events._serialization import (
     deserialize_value,
     import_event_class,
@@ -46,6 +46,14 @@ class TestImportEventClass:
 
 def _round_trip(value: object) -> object:
     return deserialize_value(serialize_value(value))
+
+
+def test_usage_retention_breakdown_survives_event_serialization() -> None:
+    event = UsageEvent(
+        Usage(cache_creation_input_tokens=20, cache_creation_input_tokens_by_ttl={"12h": 20, "30m": 0}),
+        kind="model_call",
+    )
+    assert _round_trip(event) == event
 
 
 class TestPrimitives:

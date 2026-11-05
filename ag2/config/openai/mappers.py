@@ -806,6 +806,7 @@ def normalize_usage(usage: CompletionUsage) -> Usage:
 
 
 def normalize_responses_usage(usage: ResponseUsage) -> Usage:
+    cache_writes = usage.input_tokens_details.cache_write_tokens_details
     return Usage(
         prompt_tokens=usage.input_tokens,
         completion_tokens=usage.output_tokens,
@@ -813,6 +814,12 @@ def normalize_responses_usage(usage: ResponseUsage) -> Usage:
         cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
         cache_creation_input_tokens=usage.input_tokens_details.cache_write_tokens,
         thinking_tokens=usage.output_tokens_details.reasoning_tokens,
+        cache_creation_input_tokens_by_ttl={
+            "30m": cache_writes.ttl_30m_tokens,
+            "12h": cache_writes.ttl_12h_tokens,
+        }
+        if cache_writes is not None
+        else None,
     )
 
 
