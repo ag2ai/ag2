@@ -14,6 +14,10 @@ from ag2.events import AudioInput, DocumentInput, ImageInput, TextInput
 from ag2.stream import MemoryStream
 
 
+def _text(text: str) -> schema.TextContentBlock:
+    return schema.TextContentBlock(type="text", text=text)
+
+
 class RecordingAgent:
     def __init__(self, prompts: list[list[Any]], capabilities: schema.PromptCapabilities | None = None) -> None:
         self.prompts = prompts
@@ -43,7 +47,7 @@ async def test_the_parts_of_one_message_arrive_as_separate_blocks() -> None:
     finally:
         await cfg.aclose()
 
-    assert prompts == [[acp.text_block("first"), acp.text_block("second")]]
+    assert prompts == [[_text("first"), _text("second")]]
 
 
 async def _prompt_sent(capabilities: schema.PromptCapabilities | None, *inputs: Any) -> list[Any]:
@@ -75,11 +79,12 @@ async def test_media_the_agent_accepts_is_sent_as_its_own_block(all_capabilities
     )
 
     assert prompt == [
-        acp.text_block("look"),
-        acp.image_block("aW1n", "image/png"),
-        acp.audio_block("YXVk", "audio/wav"),
-        acp.resource_block(
-            schema.BlobResourceContents(blob="ZG9j", mime_type="application/pdf", uri="attachment:document")
+        _text("look"),
+        schema.ImageContentBlock(type="image", data="aW1n", mime_type="image/png"),
+        schema.AudioContentBlock(type="audio", data="YXVk", mime_type="audio/wav"),
+        schema.EmbeddedResourceContentBlock(
+            type="resource",
+            resource=schema.BlobResourceContents(blob="ZG9j", mime_type="application/pdf", uri="attachment:document"),
         ),
     ]
 
@@ -93,7 +98,7 @@ async def test_media_the_agent_does_not_accept_is_named_not_dropped() -> None:
         DocumentInput(data=b"doc", media_type="application/pdf"),
     )
 
-    assert prompt == [acp.text_block("[image]"), acp.text_block("[audio]"), acp.text_block("[document]")]
+    assert prompt == [_text("[image]"), _text("[audio]"), _text("[document]")]
 
 
 @pytest.mark.asyncio
@@ -102,7 +107,7 @@ async def test_a_url_goes_as_a_resource_link_whatever_the_agent_advertises() -> 
 
     prompt = await _prompt_sent(None, ImageInput(url))
 
-    assert prompt == [acp.resource_link_block(name=url, uri=url)]
+    assert prompt == [schema.ResourceContentBlock(type="resource_link", name=url, uri=url)]
 
 
 @pytest.mark.asyncio
@@ -118,9 +123,9 @@ async def test_a_later_turn_sends_only_the_input_not_yet_sent() -> None:
     finally:
         await cfg.aclose()
 
-    assert prompts == [[acp.text_block("first")], [acp.text_block("second")]]
+    assert prompts == [[_text("first")], [_text("second")]]
 
 
 @pytest.mark.asyncio
 async def test_a_turn_with_no_input_still_sends_an_empty_text_block() -> None:
-    assert await _prompt_sent(None) == [acp.text_block("")]
+    assert await _prompt_sent(None) == [_text("")]

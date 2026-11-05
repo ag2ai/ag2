@@ -52,7 +52,9 @@ class ElicitingAgent:
     async def prompt(self, *, session_id: str, **kwargs: Any) -> schema.PromptResponse:
         await self.conn.session_update(
             session_id=session_id,
-            update=acp.update_agent_message_text(await self._outcome(session_id)),
+            update=schema.AgentMessageChunk(
+                content=schema.TextContentBlock(type="text", text=await self._outcome(session_id))
+            ),
         )
         return schema.PromptResponse(stop_reason="end_turn")
 
