@@ -227,6 +227,7 @@ class TestUsageSpans:
                         prompt_tokens=10,
                         completion_tokens=5,
                         cache_creation_input_tokens=7,
+                        cache_creation_extended_input_tokens=4,
                         cache_read_input_tokens=3,
                     ),
                 )
@@ -237,8 +238,35 @@ class TestUsageSpans:
         await agent.ask("Hello")
 
         [span] = _usage_spans(exporter)
-        assert span.attributes["gen_ai.usage.cache_creation_input_tokens"] == 7
-        assert span.attributes["gen_ai.usage.cache_read_input_tokens"] == 3
+        assert dict(span.attributes) == IsPartialDict({
+            "gen_ai.usage.cache_creation_input_tokens": 7,
+            "gen_ai.usage.cache_creation_extended_input_tokens": 4,
+            "gen_ai.usage.cache_read_input_tokens": 3,
+        })
+
+    async def test_llm_span_carries_extended_cache_writes(self, otel_setup):
+        exporter, provider = otel_setup
+
+        agent = Agent(
+            "assistant",
+            config=TestConfig(
+                ModelResponse(
+                    message=ModelMessage("Hi!"),
+                    usage=Usage(
+                        prompt_tokens=10, cache_creation_input_tokens=7, cache_creation_extended_input_tokens=4
+                    ),
+                )
+            ),
+            middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
+        )
+
+        await agent.ask("Hello")
+
+        [span] = _llm_spans_in_order(exporter)
+        assert dict(span.attributes) == IsPartialDict({
+            "gen_ai.usage.cache_creation_input_tokens": 7,
+            "gen_ai.usage.cache_creation_extended_input_tokens": 4,
+        })
 
     async def test_each_run_records_its_own_spend_once(self, otel_setup):
         """A leaked subscription would re-record spend on every later run.
