@@ -24,20 +24,21 @@ These tests pin:
   resolver into ``view.project`` at turn time.
 """
 
+import asyncio
+
 import pytest
 
 from ag2 import Agent
 from ag2.compact import CompactionSummary
-from ag2.events import ModelMessage, ModelRequest, TextInput
+from ag2.events import BaseEvent, ImageInput, ModelMessage, ModelRequest, TextInput
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
-    EV_TEXT,
-    Envelope,
     FullTranscript,
     Hub,
     NameResolver,
     NamedTranscript,
     NamedWindowedSummary,
+    ViewPolicy,
     WindowedSummary,
     default_name_resolver,
 )
@@ -52,38 +53,9 @@ from ag2.network.channel import (
     Participant,
     ParticipantRole,
 )
-from ag2.network.client.handlers import _render_current_input
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 
-
-def _two_party_metadata(a_id: str, b_id: str) -> ChannelMetadata:
-    """Synthesize a minimal conversation-style channel for projection tests."""
-    return ChannelMetadata(
-        channel_id="ch-test",
-        manifest=ConversationAdapter().manifest,
-        creator_id=a_id,
-        participants=[
-            Participant(agent_id=a_id, role=ParticipantRole.INITIATOR, order=0, joined_at="now"),
-            Participant(agent_id=b_id, role=ParticipantRole.RESPONDENT, order=1, joined_at="now"),
-        ],
-        state=ChannelState.ACTIVE,
-        created_at="now",
-        expires_at=None,
-        knobs={},
-        labels={},
-        required_acks=None,
-        pending_acks=[],
-    )
-
-
-def _text_envelope(sender: str, audience: str, text: str) -> Envelope:
-    return Envelope(
-        channel_id="ch-test",
-        sender_id=sender,
-        audience=[audience],
-        event_type=EV_TEXT,
-        event_data={"text": text},
-    )
+from ._helpers import text_envelope, two_party_metadata
 
 
 def test_default_name_resolver_returns_id_verbatim() -> None:
@@ -93,10 +65,10 @@ def test_default_name_resolver_returns_id_verbatim() -> None:
 @pytest.mark.asyncio
 async def test_full_transcript_accepts_name_for_kwarg() -> None:
     """Back-compat: built-in views accept the new kwarg and behave unchanged."""
-    metadata = _two_party_metadata("alice", "bob")
+    metadata = two_party_metadata("alice", "bob")
     wal = [
-        _text_envelope("alice", "bob", "hi"),
-        _text_envelope("bob", "alice", "hello"),
+        text_envelope("alice", "bob", "hi"),
+        text_envelope("bob", "alice", "hello"),
     ]
 
     view = FullTranscript()
@@ -118,10 +90,10 @@ async def test_full_transcript_accepts_name_for_kwarg() -> None:
 @pytest.mark.asyncio
 async def test_windowed_summary_accepts_name_for_kwarg() -> None:
     """``WindowedSummary`` accepts ``name_for`` without behaviour change."""
-    metadata = _two_party_metadata("alice", "bob")
+    metadata = two_party_metadata("alice", "bob")
     wal = [
-        _text_envelope("alice", "bob", "hi"),
-        _text_envelope("bob", "alice", "hello"),
+        text_envelope("alice", "bob", "hi"),
+        text_envelope("bob", "alice", "hello"),
     ]
 
     view = WindowedSummary(recent_n=10)
@@ -207,7 +179,7 @@ async def test_handler_passes_real_resolver_to_view_project() -> None:
         agent = Agent(name="alice", prompt="x", config=TestConfig([], "ok"))
         client = await hub.register(agent, attach_plugin=False)
 
-        metadata = _two_party_metadata(client.agent_id, "bob")
+        metadata = two_party_metadata(client.agent_id, "bob")
         view = RecordingView()
         await view.project(
             [],
@@ -234,11 +206,11 @@ def _named_resolver(mapping: dict[str, str]) -> NameResolver:
 @pytest.mark.asyncio
 async def test_named_transcript_prefixes_non_self_envelopes() -> None:
     """Non-self lines get ``[<name>]:`` prefix; own lines stay bare."""
-    metadata = _two_party_metadata("alice", "bob")
+    metadata = two_party_metadata("alice", "bob")
     wal = [
-        _text_envelope("alice", "bob", "hi bob"),
-        _text_envelope("bob", "alice", "hi alice"),
-        _text_envelope("alice", "bob", "how's it going"),
+        text_envelope("alice", "bob", "hi bob"),
+        text_envelope("bob", "alice", "hi alice"),
+        text_envelope("alice", "bob", "how's it going"),
     ]
 
     projection = await NamedTranscript().project(
@@ -259,8 +231,8 @@ async def test_named_transcript_prefixes_non_self_envelopes() -> None:
 @pytest.mark.asyncio
 async def test_named_transcript_falls_back_to_raw_id_for_unknown_sender() -> None:
     """If the resolver returns the raw id, projection still succeeds."""
-    metadata = _two_party_metadata("alice", "bob")
-    wal = [_text_envelope("ghost", "alice", "leftover")]
+    metadata = two_party_metadata("alice", "bob")
+    wal = [text_envelope("ghost", "alice", "leftover")]
 
     projection = await NamedTranscript().project(
         wal,
@@ -276,10 +248,10 @@ async def test_named_transcript_falls_back_to_raw_id_for_unknown_sender() -> Non
 @pytest.mark.asyncio
 async def test_named_windowed_summary_short_history_labels_recents() -> None:
     """Short history (WAL ≤ recent_n): labels every non-self projection."""
-    metadata = _two_party_metadata("alice", "bob")
+    metadata = two_party_metadata("alice", "bob")
     wal = [
-        _text_envelope("alice", "bob", "hi"),
-        _text_envelope("bob", "alice", "hello"),
+        text_envelope("alice", "bob", "hi"),
+        text_envelope("bob", "alice", "hello"),
     ]
 
     projection = await NamedWindowedSummary(recent_n=10).project(
@@ -299,8 +271,8 @@ async def test_named_windowed_summary_short_history_labels_recents() -> None:
 @pytest.mark.asyncio
 async def test_named_windowed_summary_long_history_summarises_with_names() -> None:
     """When WAL > recent_n, the head compaction lists speakers by name."""
-    metadata = _two_party_metadata("alice", "bob")
-    wal = [_text_envelope("alice", "bob", f"msg {i}") for i in range(8)]
+    metadata = two_party_metadata("alice", "bob")
+    wal = [text_envelope("alice", "bob", f"msg {i}") for i in range(8)]
 
     projection = await NamedWindowedSummary(recent_n=3).project(
         wal,
@@ -390,8 +362,8 @@ def test_conversation_default_view_unchanged() -> None:
 @pytest.mark.asyncio
 async def test_named_transcript_single_envelope_prefixes_non_self() -> None:
     """project() on a single non-self envelope gives [name]: prefix."""
-    metadata = _two_party_metadata("alice", "bob")
-    wal = [_text_envelope("alice", "bob", "hi bob")]
+    metadata = two_party_metadata("alice", "bob")
+    wal = [text_envelope("alice", "bob", "hi bob")]
 
     projection = await NamedTranscript().project(
         wal,
@@ -407,8 +379,8 @@ async def test_named_transcript_single_envelope_prefixes_non_self() -> None:
 @pytest.mark.asyncio
 async def test_named_windowed_summary_single_envelope_prefixes_non_self() -> None:
     """NamedWindowedSummary.project() on a single envelope gives [name]: prefix."""
-    metadata = _two_party_metadata("alice", "bob")
-    wal = [_text_envelope("alice", "bob", "hi bob")]
+    metadata = two_party_metadata("alice", "bob")
+    wal = [text_envelope("alice", "bob", "hi bob")]
 
     projection = await NamedWindowedSummary(recent_n=10).project(
         wal,
@@ -424,8 +396,8 @@ async def test_named_windowed_summary_single_envelope_prefixes_non_self() -> Non
 @pytest.mark.asyncio
 async def test_full_transcript_single_envelope_no_prefix() -> None:
     """Unnamed FullTranscript.project() on a single envelope gives no prefix."""
-    metadata = _two_party_metadata("alice", "bob")
-    wal = [_text_envelope("alice", "bob", "hi bob")]
+    metadata = two_party_metadata("alice", "bob")
+    wal = [text_envelope("alice", "bob", "hi bob")]
 
     projection = await FullTranscript().project(
         wal,
@@ -441,8 +413,8 @@ async def test_full_transcript_single_envelope_no_prefix() -> None:
 @pytest.mark.asyncio
 async def test_windowed_summary_single_envelope_no_prefix() -> None:
     """Unnamed WindowedSummary.project() on a single envelope gives no prefix."""
-    metadata = _two_party_metadata("alice", "bob")
-    wal = [_text_envelope("alice", "bob", "hi bob")]
+    metadata = two_party_metadata("alice", "bob")
+    wal = [text_envelope("alice", "bob", "hi bob")]
 
     projection = await WindowedSummary(recent_n=10).project(
         wal,
@@ -455,16 +427,16 @@ async def test_windowed_summary_single_envelope_no_prefix() -> None:
     assert projection == [ModelRequest([TextInput("hi bob")])]
 
 
-# ── _render_current_input: branch coverage ────────────────────────────────────
+# ── What the agent is handed for the turn ─────────────────────────────────────
 
 
 class _FixedView:
-    """Stub ViewPolicy that always returns a pre-configured projection."""
+    """A ``ViewPolicy`` that projects every slice to the same events."""
 
     name = "fixed"
 
-    def __init__(self, projected: list) -> None:
-        self._projected = projected
+    def __init__(self, *projected: BaseEvent) -> None:
+        self._projected = list(projected)
 
     async def project(
         self,
@@ -474,67 +446,78 @@ class _FixedView:
         channel,  # noqa: ARG002
         render_envelope,  # noqa: ARG002
         name_for: NameResolver = default_name_resolver,  # noqa: ARG002
-    ) -> list:
-        return self._projected
+    ) -> list[BaseEvent]:
+        return list(self._projected)
 
 
-class _FixedAdapter:
-    """Stub adapter with a fixed extract_turn_input return value."""
+class _ScriptedConversation(ConversationAdapter):
+    """A conversation adapter whose rendering, turn input and view are set by the test."""
 
-    def __init__(self, fallback: str = "fallback") -> None:
-        self._fallback = fallback
+    def __init__(self, *, rendered=None, turn_input=None, view: ViewPolicy | None = None) -> None:
+        super().__init__()
+        self._rendered = rendered
+        self._turn_input = turn_input
+        self._view = view
 
-    def render_envelope(self, envelope):  # noqa: ARG002
-        return None
+    def render_envelope(self, envelope):
+        return self._rendered if self._rendered is not None else super().render_envelope(envelope)
 
-    def extract_turn_input(self, envelope):  # noqa: ARG002
-        return self._fallback
+    def extract_turn_input(self, envelope):
+        return self._turn_input if self._turn_input is not None else super().extract_turn_input(envelope)
+
+    def default_view_policy(self, metadata, participant_id):
+        return self._view or super().default_view_policy(metadata, participant_id)
+
+
+async def _handed_to_bob(adapter: ConversationAdapter, text: str = "hi bob") -> BaseEvent:
+    """Send ``text`` from alice over ``adapter`` and return what bob's LLM was handed for the turn."""
+    hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0, expectation_sweep_interval=0)
+    hub.register_adapter(adapter)
+    bob_config = TrackingConfig(TestConfig("ok"))
+    try:
+        alice = await hub.register(Agent("alice", config=TestConfig("")))
+        bob = await hub.register(Agent("bob", config=bob_config))
+        channel = await alice.open(type="conversation", target=bob.agent_id)
+        await channel.send(text)
+        for _ in range(250):
+            if bob_config.mock.called:
+                break
+            await asyncio.sleep(0.02)
+    finally:
+        await hub.close()
+
+    bob_config.mock.assert_called_once()
+    return bob_config.mock.call_args.args[0]
 
 
 @pytest.mark.asyncio
-class TestRenderCurrentInput:
-    """Branch coverage for ``_render_current_input``."""
+class TestTurnInput:
+    async def test_the_viewed_message_is_what_the_agent_is_asked(self) -> None:
+        assert await _handed_to_bob(ConversationAdapter()) == ModelRequest([TextInput("hi bob")])
 
-    async def test_model_request_with_text_input_returns_content(self) -> None:
-        """Happy path: projected ModelRequest with TextInput → text content."""
-        envelope = _text_envelope("alice", "bob", "hi bob")
-        metadata = _two_party_metadata("alice", "bob")
-        view = _FixedView([ModelRequest([TextInput("[Alice]: hi bob")])])
-        adapter = _FixedAdapter("fallback")
+    async def test_a_string_rendering_becomes_a_text_part(self) -> None:
+        turn = await _handed_to_bob(_ScriptedConversation(rendered="rendered"))
 
-        result = await _render_current_input(view, envelope, adapter, "bob", metadata, default_name_resolver)
+        assert turn == ModelRequest([TextInput("rendered")])
 
-        assert result == "[Alice]: hi bob"
+    async def test_a_rendering_with_an_image_keeps_the_image(self) -> None:
+        photo = ImageInput("https://example.com/photo.png")
 
-    async def test_empty_projection_falls_back_to_adapter(self) -> None:
-        """view.project returns [] (e.g. image/document) → adapter.extract_turn_input."""
-        envelope = _text_envelope("alice", "bob", "hi bob")
-        metadata = _two_party_metadata("alice", "bob")
-        view = _FixedView([])
-        adapter = _FixedAdapter("adapter fallback")
+        turn = await _handed_to_bob(_ScriptedConversation(rendered=["look", photo]))
 
-        result = await _render_current_input(view, envelope, adapter, "bob", metadata, default_name_resolver)
+        assert turn == ModelRequest([TextInput("look"), photo])
 
-        assert result == "adapter fallback"
+    async def test_an_empty_projection_falls_back_to_the_adapter_turn_input(self) -> None:
+        turn = await _handed_to_bob(_ScriptedConversation(turn_input="from the adapter", view=_FixedView()))
 
-    async def test_model_request_no_text_parts_falls_back_to_adapter(self) -> None:
-        """ModelRequest with no TextInput parts (e.g. only non-text inputs) → adapter fallback."""
-        envelope = _text_envelope("alice", "bob", "hi bob")
-        metadata = _two_party_metadata("alice", "bob")
-        view = _FixedView([ModelRequest([])])
-        adapter = _FixedAdapter("adapter fallback")
+        assert turn == ModelRequest([TextInput("from the adapter")])
 
-        result = await _render_current_input(view, envelope, adapter, "bob", metadata, default_name_resolver)
+    async def test_a_request_without_content_falls_back_to_the_adapter_turn_input(self) -> None:
+        adapter = _ScriptedConversation(turn_input=[TextInput("from the adapter")], view=_FixedView(ModelRequest([])))
 
-        assert result == "adapter fallback"
+        assert await _handed_to_bob(adapter) == ModelRequest([TextInput("from the adapter")])
 
-    async def test_model_message_returns_content(self) -> None:
-        """ModelMessage projection (custom view treating current turn as own-past) → content."""
-        envelope = _text_envelope("bob", "alice", "my own message")
-        metadata = _two_party_metadata("alice", "bob")
-        view = _FixedView([ModelMessage("my own message")])
-        adapter = _FixedAdapter("fallback")
+    async def test_a_view_projecting_an_assistant_message_still_hands_over_its_text(self) -> None:
+        adapter = _ScriptedConversation(view=_FixedView(ModelMessage("my own message")))
 
-        result = await _render_current_input(view, envelope, adapter, "bob", metadata, default_name_resolver)
-
-        assert result == "my own message"
+        assert await _handed_to_bob(adapter) == ModelRequest([TextInput("my own message")])

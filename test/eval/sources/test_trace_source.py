@@ -62,3 +62,17 @@ async def test_directory_source_round_trip(tmp_path) -> None:
     assert trace.events_of(ToolCallEvent)[0].arguments == '{"city": "NYC"}'
     assert len(trace.events_of(ToolResultEvent)) == 1
     assert trace.duration_ms == 300
+
+
+@pytest.mark.asyncio()
+async def test_directory_source_reads_trace_saved_with_a_bom(tmp_path) -> None:
+    spans = [SpanData("invoke_agent x", "root", None, 0, 300 * _MS, {ATTR_SPAN_TYPE: SPAN_TYPE_AGENT})]
+    save_trace(tmp_path, "trace-1", spans, task_id="task-1")
+    file = tmp_path / "trace-1.json"
+    file.write_bytes(b"\xef\xbb\xbf" + file.read_bytes())
+
+    source = DirectoryTraceSource(tmp_path)
+    [ref] = [ref async for ref in source.list()]
+
+    assert ref == TraceRef(trace_id="trace-1", task_id="task-1", metadata={})
+    assert (await source.load(ref)).duration_ms == 300

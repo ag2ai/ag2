@@ -22,9 +22,11 @@ from typing import TYPE_CHECKING
 import acp
 from acp import schema
 
-from ag2.events import BaseEvent, ModelRequest, TextInput
+from ag2.events import BaseEvent, ModelRequest
 
+from .mappers import input_to_prompt_block
 from .tool_gateway import MCPCapabilityError
+from .types import ContentBlock
 
 if TYPE_CHECKING:
     from .bridge import ACPBridge
@@ -34,17 +36,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def new_prompt_text(messages: Sequence[BaseEvent], sent_count: int) -> tuple[str, int]:
-    """Return (text of ``ModelRequest`` turns beyond ``sent_count``, new request count).
+def new_prompt_blocks(
+    messages: Sequence[BaseEvent],
+    sent_count: int,
+    capabilities: schema.PromptCapabilities | None,
+) -> tuple[list[ContentBlock], int]:
+    """Return (blocks of ``ModelRequest`` turns beyond ``sent_count``, new request count).
 
-    The user's input arrives as ``ModelRequest`` events carrying ``TextInput``
-    parts. We forward only the requests not yet sent to the live ACP session,
-    tracked by ``sent_count`` (a high-water mark over the run's request events).
+    The user's input arrives as ``ModelRequest`` events carrying input parts
+    (text, images, documents, ...). We forward only the requests not yet sent
+    to the live ACP session, tracked by ``sent_count`` (a high-water mark over
+    the run's request events). Each part stays its own block; ``capabilities``
+    is what the agent advertised it accepts, see :func:`input_to_prompt_block`.
     """
     requests = [m for m in messages if isinstance(m, ModelRequest)]
     new = requests[sent_count:]
-    parts = [p.content for req in new for p in req.parts if isinstance(p, TextInput)]
-    return "\n".join(parts), len(requests)
+    return [input_to_prompt_block(p, capabilities) for req in new for p in req.parts], len(requests)
 
 
 def _model_option(session: schema.NewSessionResponse) -> schema.SessionConfigOptionSelect | None:
@@ -123,6 +130,8 @@ class ACPSession:
         # agent advertises no picker (nothing to report beyond config.model).
         self.model: str | None = None
         self.sent_count: int = 0
+        # What the agent said it accepts in a prompt; None until it has said.
+        self.prompt_capabilities: schema.PromptCapabilities | None = None
         self.gateway: ToolGateway | None = None
         self.external_servers: list[acp.schema.HttpMcpServer] = []
         # the config's connection hook, entered
@@ -171,6 +180,8 @@ class ACPSession:
                 protocol_version=protocol_version,
                 client_capabilities=client_capabilities,
             )
+            if init.agent_capabilities:
+                self.prompt_capabilities = init.agent_capabilities.prompt_capabilities
             if mcp_servers:
                 caps = init.agent_capabilities.mcp_capabilities if init.agent_capabilities else None
                 if caps is None or not caps.http:
@@ -212,6 +223,7 @@ class ACPSession:
         self.bridge = None
         self.session_id = None
         self.model = None
+        self.prompt_capabilities = None
         self.sent_count = 0
         self.external_servers = []
         try:

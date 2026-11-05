@@ -7,6 +7,7 @@ import base64
 import hashlib
 from collections.abc import AsyncGenerator, Iterable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
+from copy import copy, deepcopy
 from dataclasses import replace
 from functools import partial
 from types import EllipsisType
@@ -120,6 +121,7 @@ async def _mcp_session(
             streamable_http_client(
                 config.server_url,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 http_client=client,
+                max_sse_event_size=config.max_sse_event_size,
             ) as (read_stream, write_stream),
             ClientSession(read_stream, write_stream, **session_kwargs) as session,
         ):
@@ -287,6 +289,14 @@ class MCPToolkit(Toolkit):
     one. The agent never sees that these are MCP tools — they look and behave
     like ordinary :class:`FunctionTool` instances.
 
+    Discovery is reused while the resolved configuration stays the same. A
+    changed configuration replaces the cached remote tools; concurrent agent
+    turns retain their own discovered tool snapshots. Each discovered tool is
+    pinned to the configuration that discovered it, including resolved
+    ``Variable`` values such as arguments, environment and headers, so a call
+    always reaches the server that advertised the tool. A value that changes
+    between turns, like a rotated token, applies from the next discovery.
+
     Set ``tool_name_prefix`` on the config to namespace the agent-visible tool
     names, so that two servers exposing the same generic name (``search``) do
     not collide locally. The prefix never reaches the server: discovery
@@ -315,7 +325,7 @@ class MCPToolkit(Toolkit):
     answering: MCPAnswerPolicy
     """Which of the operator's own resources this server may use."""
 
-    __slots__ = ("config", "answering", "_discovered", "_discover_lock")
+    __slots__ = ("config", "answering", "_discovered_config", "_discover_lock")
 
     def __init__(
         self,
@@ -328,7 +338,7 @@ class MCPToolkit(Toolkit):
             server = MCPServerConfig(server_url=server)
         self.config: AnyMCPConfig = server
         self.answering = answering if answering is not None else MCPAnswerPolicy()
-        self._discovered = False
+        self._discovered_config: AnyMCPConfig | None = None
         self._discover_lock = asyncio.Lock()
 
         label = server.server_label if isinstance(server.server_label, str) else ""
@@ -338,19 +348,25 @@ class MCPToolkit(Toolkit):
         )
 
     async def schemas(self, context: "Context") -> Iterable[ToolSchema]:
-        await self._discover_tools(context)
-        return await super().schemas(context)
+        # Keep the published members consistent with these schemas even when
+        # a locally added tool yields while producing its own schema.
+        async with self._discover_lock:
+            await self._discover_tools(context)
+            return await super().schemas(context)
+
+    def _snapshot(self) -> "MCPToolkit":
+        snapshot = copy(self)
+        # A default factory may return a different value on the next lookup.
+        # Generating schemas on a pruned copy must not rediscover dropped tools.
+        if self._discovered_config is not None:
+            snapshot.config = self._discovered_config
+        return snapshot
 
     async def _discover_tools(self, context: "Context") -> None:
-        if self._discovered:
-            return
-
-        async with self._discover_lock:
-            if self._discovered:
-                return
-
-            resolved = _resolve_config(self.config, context)
-
+        # Own the mutable lists/dicts too: changing a caller's allowlist or
+        # headers must not also change the configuration we compare against.
+        resolved = deepcopy(_resolve_config(self.config, context))
+        if self._discovered_config != resolved:
             async with _mcp_session(resolved) as session:
                 page = await session.list_tools()
                 raw_tools = list(page.tools)
@@ -374,6 +390,7 @@ class MCPToolkit(Toolkit):
             allowed = resolved.allowed_tools
             blocked = set(resolved.blocked_tools or [])  # type: ignore[arg-type]
             prefix: str = resolved.tool_name_prefix  # type: ignore[assignment]
+            tools = {name: tool for name, tool in self._tools.items() if not isinstance(tool, _MCPProxyTool)}
 
             for raw in raw_tools:
                 # Filters match the server's own names, before any prefixing.
@@ -381,16 +398,20 @@ class MCPToolkit(Toolkit):
                     continue
                 if raw.name in blocked:
                     continue
+                # Pin the proxy to the configuration that advertised the tool: re-resolving
+                # the template per call could reach a different server (default_factory).
                 proxy = _MCPProxyTool(
-                    config=self.config,
+                    config=resolved,
                     raw_tool=raw,
                     tool_name_prefix=prefix,
                     middleware=self._middleware,
                     answering=self.answering,
                 )
-                self._tools[proxy.name] = proxy
+                tools.setdefault(proxy.name, proxy)
 
-            self._discovered = True
+            # Replace the previous remote tools only after discovery succeeds.
+            self._tools = tools
+            self._discovered_config = resolved
 
 
 def _unwrap(error: Exception) -> Exception:
@@ -404,14 +425,9 @@ def _unwrap(error: Exception) -> Exception:
     call failed for. A group carrying more than one failure is left alone:
     picking one of several would hide the rest.
     """
-    while True:
-        # Recognised by what it carries rather than by ``BaseExceptionGroup``,
-        # which is a 3.11 builtin: on 3.10 the group is the ``exceptiongroup``
-        # backport's class instead, and the name is not there to test against.
-        members = getattr(error, "exceptions", None)
-        if not isinstance(members, tuple) or len(members) != 1 or not isinstance(members[0], Exception):
-            return error
-        error = members[0]
+    while isinstance(error, ExceptionGroup) and len(error.exceptions) == 1:
+        error = error.exceptions[0]
+    return error
 
 
 def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":

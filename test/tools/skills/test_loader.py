@@ -123,6 +123,21 @@ def test_parse_frontmatter_recovers_unquoted_colon() -> None:
     assert result["description"] == "Use this skill when: the user asks"
 
 
+@pytest.mark.parametrize(
+    "description",
+    [
+        r"Use when: reading C:\Users\me\notes",
+        r"Use when: matching \d+ digits",
+        r'Use when: reading C:\path with "quotes"',
+    ],
+)
+def test_parse_frontmatter_recovers_unquoted_colon_with_backslashes(description: str) -> None:
+    text = f"---\nname: my-skill\ndescription: {description}\n---\nBody"
+    result = parse_frontmatter(text)
+    assert result["name"] == "my-skill"
+    assert result["description"] == description
+
+
 def _write_skill(base: Path, dir_name: str, body: str) -> None:
     skill_dir = base / dir_name
     skill_dir.mkdir(parents=True)
@@ -165,6 +180,26 @@ def test_loader_collision_warns_and_first_wins(tmp_path: Path, caplog: pytest.Lo
 
     assert meta.metadata.description == "from project"
     assert "shadowed" in caplog.text
+
+
+def test_parse_frontmatter_recovers_backslashes_in_non_description_key() -> None:
+    text = "---\nname: my-skill\ndescription: A skill\ncompatibility: Needs: C:\\tools\\bin\n---\nBody"
+    assert parse_frontmatter(text) == {
+        "name": "my-skill",
+        "description": "A skill",
+        "compatibility": r"Needs: C:\tools\bin",
+    }
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_loader_loads_skill_with_backslashes_in_unquoted_description(tmp_path: Path, strict: bool) -> None:
+    description = r"Use when: reading C:\Users\me\notes or matching \d+"
+    _write_skill(tmp_path, "my-skill", f"---\nname: my-skill\ndescription: {description}\n---\nBody")
+
+    [meta] = SkillLoader(tmp_path, strict=strict).discover()
+
+    assert meta.name == "my-skill"
+    assert meta.metadata.description == description
 
 
 def test_loader_strict_requires_name_and_description(tmp_path: Path) -> None:

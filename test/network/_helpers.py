@@ -16,15 +16,24 @@
 
 import asyncio
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ag2 import Context
 from ag2.config import LLMClient, ModelConfig
 from ag2.events import BaseEvent, ModelMessage, ModelResponse
 from ag2.network import EV_TEXT, Envelope, Hub
+from ag2.network.adapters.conversation import ConversationAdapter
+from ag2.network.channel import ChannelMetadata, ChannelState, Participant, ParticipantRole
 
-__all__ = ("ScriptedConfig", "_MockClock", "wait_for_delivery", "wait_for_text_count")
+__all__ = (
+    "ScriptedConfig",
+    "_MockClock",
+    "text_envelope",
+    "two_party_metadata",
+    "wait_for_delivery",
+    "wait_for_text_count",
+)
 
 
 class _MockClock:
@@ -34,13 +43,43 @@ class _MockClock:
     def __init__(self, start: str = "2026-01-01T00:00:00+00:00") -> None:
         self._now = datetime.fromisoformat(start)
         if self._now.tzinfo is None:
-            self._now = self._now.replace(tzinfo=timezone.utc)
+            self._now = self._now.replace(tzinfo=UTC)
 
     def __call__(self) -> str:
         return self._now.isoformat()
 
     def advance(self, seconds: float) -> None:
         self._now = self._now + timedelta(seconds=seconds)
+
+
+def two_party_metadata(a_id: str, b_id: str) -> ChannelMetadata:
+    """Synthesize a minimal conversation-style channel for projection tests."""
+    return ChannelMetadata(
+        channel_id="ch-test",
+        manifest=ConversationAdapter().manifest,
+        creator_id=a_id,
+        participants=[
+            Participant(agent_id=a_id, role=ParticipantRole.INITIATOR, order=0, joined_at="now"),
+            Participant(agent_id=b_id, role=ParticipantRole.RESPONDENT, order=1, joined_at="now"),
+        ],
+        state=ChannelState.ACTIVE,
+        created_at="now",
+        expires_at=None,
+        knobs={},
+        labels={},
+        required_acks=None,
+        pending_acks=[],
+    )
+
+
+def text_envelope(sender: str, audience: str, text: str) -> Envelope:
+    return Envelope(
+        channel_id="ch-test",
+        sender_id=sender,
+        audience=[audience],
+        event_type=EV_TEXT,
+        event_data={"text": text},
+    )
 
 
 class ScriptedConfig(ModelConfig):
@@ -114,7 +153,7 @@ async def wait_for_text_count(
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return wal
         await asyncio.sleep(0.02)
-    raise asyncio.TimeoutError(f"channel {channel_id!r} never reached {expected} EV_TEXT envelopes")
+    raise TimeoutError(f"channel {channel_id!r} never reached {expected} EV_TEXT envelopes")
 
 
 async def wait_for_delivery(
@@ -134,4 +173,4 @@ async def wait_for_delivery(
         if any(e.event_type == EV_TEXT and e.event_data.get("text") == text for e in received):
             return
         await asyncio.sleep(0.02)
-    raise asyncio.TimeoutError(f"no EV_TEXT envelope carrying {text!r} was delivered within {timeout}s")
+    raise TimeoutError(f"no EV_TEXT envelope carrying {text!r} was delivered within {timeout}s")

@@ -2,22 +2,35 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import ast
-import inspect
 import json
-import textwrap
 from collections.abc import Iterable, Mapping, Sequence
-from enum import Enum
-from functools import cache
 from typing import Any, NoReturn
 
 from fast_depends.library.serializer import SerializerProto
-from typesafe_sdk import Answer, Choice, ChoiceAnswer, JSONValue, Noul, NoulAnswer, Question, Score
+from pydantic import BaseModel, Field
+from typesafe_sdk import (
+    Answer,
+    Box,
+    BoxAnswer,
+    Choice,
+    ChoiceAnswer,
+    ContentValue,
+    Image,
+    JSONValue,
+    Noul,
+    NoulAnswer,
+    NoulCriteria,
+    Question,
+    Score,
+    ScoreAnswer,
+)
 from typesafe_sdk import Usage as TypeSafeUsage
 
 from ag2.compact import CompactionSummary
 from ag2.events import (
     BaseEvent,
+    BinaryInput,
+    BinaryType,
     DataInput,
     Input,
     ModelRequest,
@@ -26,8 +39,9 @@ from ag2.events import (
     ToolResultsEvent,
     Usage,
 )
-from ag2.exceptions import AG2Error, UnsupportedInputError, UnsupportedToolError
-from ag2.response import ResponseProto, ResponseSchema
+from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.response import DecisionSpec, NotADecisionError, ResponseProto, ResponseSchema
+from ag2.response.schema import strip_annotated
 from ag2.tools.schemas import ToolSchema
 
 PROVIDER = "typesafe"
@@ -35,13 +49,26 @@ PROVIDER = "typesafe"
 ANSWER_KEY = "answer"  # Name of the single question sent per request
 
 
-class UnsupportedResponseSchemaError(AG2Error):
+class BoundingBox(BaseModel):
+    """Where something is in an image: each edge as a fraction of its height (`top`, `bottom`) or width (`left`, `right`).
+
+    Pass `ResponseSchema(BoundingBox)` to ask TypeSafe to locate what the agent prompt describes in the image of the
+    request. The box's confidence is on `reply.response.metadata`.
+    """
+
+    top: float = Field(ge=0, le=1)
+    bottom: float = Field(ge=0, le=1)
+    left: float = Field(ge=0, le=1)
+    right: float = Field(ge=0, le=1)
+
+
+class UnsupportedResponseSchemaError(NotADecisionError):
     """Raised when a ``response_schema`` cannot be expressed as a TypeSafe question."""
 
     def __init__(self, reason: str) -> None:
         super().__init__(
             f"{reason} TypeSafe Jev is decision-only: use `bool`, an `Enum` of strings, a documented `IntEnum`, "
-            "or a `0..1` number schema from `ResponseSchema.from_schema` as `response_schema`."
+            "a `0..1` number schema from `ResponseSchema.from_schema`, or `BoundingBox` as `response_schema`."
         )
 
 
@@ -50,9 +77,9 @@ def tool_to_api(t: ToolSchema) -> NoReturn:
     raise UnsupportedToolError(t.type, PROVIDER)
 
 
-def convert_state(messages: Iterable[BaseEvent], serializer: SerializerProto) -> list[dict[str, JSONValue | None]]:
+def convert_state(messages: Iterable[BaseEvent], serializer: SerializerProto) -> list[dict[str, ContentValue | None]]:
     """Serialise the conversation into Jev ``state``: a JSON array of ``{role, content}``."""
-    state: list[dict[str, JSONValue | None]] = []
+    state: list[dict[str, ContentValue | None]] = []
 
     for message in messages:
         if isinstance(message, ModelRequest):
@@ -72,17 +99,19 @@ def convert_state(messages: Iterable[BaseEvent], serializer: SerializerProto) ->
     return state
 
 
-def _parts_content(parts: Sequence[Input], serializer: SerializerProto) -> JSONValue | None:
+def _parts_content(parts: Sequence[Input], serializer: SerializerProto) -> ContentValue | None:
     values = [_part_value(p, serializer) for p in parts]
     return values[0] if len(values) == 1 else values
 
 
-def _part_value(part: Input, serializer: SerializerProto) -> JSONValue | None:
+def _part_value(part: Input, serializer: SerializerProto) -> ContentValue | None:
     if isinstance(part, TextInput):
         return part.content
     if isinstance(part, DataInput):
         data: JSONValue | None = json.loads(serializer.encode(part.data))
         return data
+    if isinstance(part, BinaryInput) and part.kind is BinaryType.IMAGE:
+        return Image(part.data)
     raise UnsupportedInputError(type(part).__name__, PROVIDER)
 
 
@@ -92,18 +121,22 @@ def response_proto_to_question(
     instructions: str | None,
     criteria: Mapping[str, str] | None = None,
 ) -> Question:
-    """Convert a ``response_schema`` to the single Jev question: noul, choice or score."""
-    node, _ = _decision_node(response)
-    question = _explicit_description(response) or node.get("description")
-    instructions = "\n\n".join(s for s in (instructions, question) if s) or None
-    criteria = criteria or {}
-    values = node.get("enum")
-    docs = _option_docs(response)
+    """Convert a ``response_schema`` to the single Jev question: noul, choice, score or box."""
+    if _is_box(response):
+        # The prompt says what to find; a description is only the caller's own (a docstring is not a question).
+        explicit = response.explicit_description if isinstance(response, ResponseSchema) else None
+        return Box(instructions="\n\n".join(s for s in (instructions, explicit) if s) or None)
 
-    is_bool = node.get("type") == "boolean" and (values is None or set(values) == {True, False})
-    is_probability = node.get("type") == "number" and node.get("minimum") == 0 and node.get("maximum") == 1
-    if is_bool or is_probability:
-        noul_criteria = {k: criteria[k] for k in ("true", "false") if k in criteria}
+    spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
+    instructions = "\n\n".join(s for s in (instructions, spec.question) if s) or None
+    criteria = criteria or {}
+
+    if spec.kind == "predicate":
+        noul_criteria = NoulCriteria()
+        if "true" in criteria:
+            noul_criteria["true"] = criteria["true"]
+        if "false" in criteria:
+            noul_criteria["false"] = criteria["false"]
         if not instructions and not noul_criteria:
             # The API rejects a bare yes/no question; fail before the request with a way out.
             raise ValueError(
@@ -111,93 +144,67 @@ def response_proto_to_question(
                 "`ResponseSchema(bool, description=...)`, or describe the outcomes with "
                 "`TypeSafeConfig(criteria={'true': ..., 'false': ...})`."
             )
-        return Noul(instructions=instructions, criteria=noul_criteria or None)
-    if values and all(isinstance(v, str) for v in values):
-        return Choice(instructions=instructions, criteria={v: criteria.get(v) or docs.get(v) for v in values})
-    if values and all(isinstance(v, int) and not isinstance(v, bool) for v in values):
-        # A rubric is levels 0..n-1 in numeric order, each saying what it means.
-        levels = [criteria.get(str(v)) or docs.get(v) for v in range(len(values))]
-        if sorted(values) != list(range(len(values))) or not 2 <= len(values) <= 10 or not all(levels):
-            raise UnsupportedResponseSchemaError(
-                "A score needs 2-10 levels numbered from 0, each described by a docstring under "
-                "the member or by `criteria`."
-            )
-        return Score(instructions=instructions, criteria=levels)
+        if instructions:
+            return Noul(instructions=instructions, criteria=noul_criteria or None)
+        if (described_true := criteria.get("true")) is not None:
+            return Noul(criteria={"true": described_true, "false": criteria.get("false")})
+        return Noul(criteria={"true": None, "false": criteria["false"]})
 
-    raise UnsupportedResponseSchemaError("`response_schema` is not a decision type.")
+    if spec.kind == "choice":
+        return Choice(
+            instructions=instructions,
+            criteria={str(o.value): criteria.get(str(o.value)) or o.description for o in spec.options},
+        )
+
+    # A rubric is levels 0..n-1 in numeric order, each saying what it means.
+    levels = [criteria.get(str(o.value)) or o.description for o in spec.options]
+    if not spec.is_rubric or not 2 <= len(levels) <= 10 or not all(levels):
+        raise UnsupportedResponseSchemaError(
+            "A score needs 2-10 levels numbered from 0, each described by a docstring under "
+            "the member (unreadable when the source is unavailable, e.g. in a REPL or for a functional `Enum`), "
+            "by `Annotated[..., Question(options=...)]` or by `criteria`."
+        )
+    return Score(instructions=instructions, criteria=levels)
+
+
+def require_image_for_box(question: Question, state: Iterable[Mapping[str, ContentValue | None]]) -> None:
+    """Refuse a box question with nothing to look at: the API would answer with an invented box."""
+    if not isinstance(question, Box):
+        return
+    for message in state:
+        content = message["content"]
+        if any(isinstance(part, Image) for part in (content if isinstance(content, list) else [content])):
+            return
+    raise ValueError("A BoundingBox needs an image in the request: send one with `ImageInput`.")
+
+
+def _is_box(response: ResponseProto[Any] | None) -> bool:
+    return isinstance(response, ResponseSchema) and strip_annotated(response.types) is BoundingBox
 
 
 def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, boolean_threshold: float = 0.5) -> str:
     """Render a Jev answer as the JSON the ``response_schema`` validates."""
-    node, embedded = _decision_node(response)
+    if _is_box(response):
+        if not isinstance(answer, BoxAnswer):  # pragma: no cover - the API answers the question it was asked
+            raise UnsupportedResponseSchemaError(f"TypeSafe answered a box question with a {answer.type!r} answer.")
+        # The model's estimate may land just outside the image; the box is clamped rather than the answer lost.
+        edges = {edge: min(max(value, 0.0), 1.0) for edge, value in answer.box.model_dump().items()}
+        return BoundingBox(**edges).model_dump_json()
+
+    spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
 
     value: bool | int | float | str
     if isinstance(answer, NoulAnswer):
-        value = answer.noul >= boolean_threshold if node.get("type") == "boolean" else answer.noul
+        value = spec.predicate_value(answer.noul, threshold=boolean_threshold)
     elif isinstance(answer, ChoiceAnswer):
         value = answer.choice
-    else:
+    elif isinstance(answer, ScoreAnswer):
         # `score` is the expected value on the 0..n-1 rubric; snap to the nearest level.
-        value = min(max(round(answer.score), 0), len(node["enum"]) - 1)
+        value = spec.snap_score(answer.score)
+    else:  # pragma: no cover - a box answer only answers a box question
+        raise UnsupportedResponseSchemaError(f"TypeSafe answered a decision with a {answer.type!r} answer.")
 
-    return json.dumps({"data": value} if embedded else value)
-
-
-def _explicit_description(response: ResponseProto[Any] | None) -> str | None:
-    """A ``description=`` the user gave, ignoring ``ResponseSchema``'s fallback to the type's docstring."""
-    if response is None or (
-        isinstance(response, ResponseSchema) and response.description == getattr(response.types, "__doc__", None)
-    ):
-        return None
-    return response.description
-
-
-def _option_docs(response: ResponseProto[Any] | None) -> dict[Any, str]:
-    if isinstance(response, ResponseSchema) and isinstance(response.types, type) and issubclass(response.types, Enum):
-        return _member_docstrings(response.types)
-    return {}
-
-
-@cache
-def _member_docstrings(enum_type: type[Enum]) -> dict[Any, str]:
-    """Map each member's value to the string literal under it, read from the class source."""
-    try:
-        tree = ast.parse(textwrap.dedent(inspect.getsource(enum_type)))
-    except (OSError, TypeError, SyntaxError):
-        return {}
-
-    body = tree.body[0].body if tree.body and isinstance(tree.body[0], ast.ClassDef) else []
-    docs = {
-        stmt.targets[0].id: inspect.cleandoc(doc.value.value)
-        for stmt, doc in zip(body, body[1:])
-        if isinstance(stmt, ast.Assign)
-        and len(stmt.targets) == 1
-        and isinstance(stmt.targets[0], ast.Name)
-        and isinstance(doc, ast.Expr)
-        and isinstance(doc.value, ast.Constant)
-        and isinstance(doc.value.value, str)
-    }
-    return {member.value: docs[member.name] for member in enum_type if member.name in docs}
-
-
-def _decision_node(response: ResponseProto[Any] | None) -> tuple[Mapping[str, Any], bool]:
-    """Return the schema node to decide on, and whether ``ResponseSchema`` wrapped it as ``{"data": ...}``."""
-    if response is None:
-        raise UnsupportedResponseSchemaError("A `response_schema` is required.")
-    if not (root := response.json_schema):
-        raise UnsupportedResponseSchemaError(f"`response_schema` {response.name!r} has no JSON schema.")
-
-    node: Mapping[str, Any] = root
-    properties = root.get("properties")
-    embedded = root.get("type") == "object" and isinstance(properties, Mapping) and set(properties) == {"data"}
-    if embedded:
-        # The envelope's description is ag2 boilerplate, not a question for Jev.
-        node = {k: v for k, v in properties["data"].items() if k != "description"}  # type: ignore[index]
-
-    ref = node.get("$ref")
-    if isinstance(ref, str) and ref.startswith("#/$defs/"):
-        node = root.get("$defs", {}).get(ref.removeprefix("#/$defs/"), node)
-    return node, embedded
+    return spec.render(value)
 
 
 def normalize_usage(raw: TypeSafeUsage) -> Usage:

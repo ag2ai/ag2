@@ -5,7 +5,7 @@
 
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, Required, TypedDict, cast
 
 import httpx2
 from fast_depends.library.serializer import SerializerProto
@@ -30,8 +30,7 @@ from openai.types.responses import (
 )
 from openai.types.responses.response_create_params import PromptCacheOptions
 from openai.types.responses.response_output_item import ImageGenerationCall
-from openai.types.shared_params import Metadata
-from typing_extensions import Required
+from openai.types.shared_params import Metadata, Reasoning
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
@@ -88,6 +87,7 @@ class CreateOptions(TypedDict, total=False):
     metadata: Metadata | None | Omit
     prompt_cache_key: str | Omit
     prompt_cache_options: PromptCacheOptions | Omit
+    reasoning: Reasoning | None | Omit
     service_tier: ServiceTier | None | Omit
     user: str
     stream: bool

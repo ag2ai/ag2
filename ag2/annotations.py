@@ -36,8 +36,8 @@ class Inject(CustomField):
             assert self.param_name
 
             name = self.name or self.param_name
-            if opt := ctx.dependencies.get(name):
-                kwargs[self.param_name] = opt
+            if name in ctx.dependencies:
+                kwargs[self.param_name] = ctx.dependencies[name]
             elif self.default is not Ellipsis:
                 kwargs[self.param_name] = ctx.dependencies[name] = self.default
             elif self.default_factory is not Ellipsis:
@@ -69,8 +69,8 @@ class Variable(CustomField):
             assert self.param_name
 
             name = self.name or self.param_name
-            if opt := ctx.variables.get(name):
-                kwargs[self.param_name] = opt
+            if name in ctx.variables:
+                kwargs[self.param_name] = ctx.variables[name]
             elif self.default is not Ellipsis:
                 kwargs[self.param_name] = ctx.variables[name] = self.default
             elif self.default_factory is not Ellipsis:

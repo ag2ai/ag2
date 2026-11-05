@@ -106,9 +106,9 @@ class TestTaskCancel:
         assert not any(isinstance(e, TaskCancelled) for e in events)
 
     @pytest.mark.asyncio
-    async def test_cancel_via_agent_task_helper(self) -> None:
+    async def test_cancel_owned_task(self) -> None:
         agent = Agent(name="alice", config=TestConfig())
-        async with agent.task("work") as task:
+        async with Task(owner_id=agent.name, spec=TaskSpec(title="work")) as task:
             await task.cancel()
             assert task.state == TaskState.CANCELLED
 
@@ -240,11 +240,13 @@ class TestHubBackedCheckpointStore:
             store = HubBackedCheckpointStore(hub)
             agent = Agent(name="alice", config=TestConfig())
 
-            async with agent.task("work", checkpoint_store=store) as first:
+            async with Task(owner_id=agent.name, spec=TaskSpec(title="work"), checkpoint_store=store) as first:
                 await first.checkpoint({"phase": "research", "found": 42})
                 prior_id = first.task_id
 
-            async with agent.task("work", checkpoint_store=store, resume_from=prior_id) as second:
+            async with Task(
+                owner_id=agent.name, spec=TaskSpec(title="work"), checkpoint_store=store, resume_from=prior_id
+            ) as second:
                 assert second.resumed_state == {"phase": "research", "found": 42}
                 await second.complete("resumed and finished")
                 assert second.state == TaskState.COMPLETED
@@ -361,7 +363,9 @@ class TestMirrorCancellation:
             mirror = TaskMirror(hub=hub, owner_id=bob_passport.agent_id)
             sub_ids = mirror.attach(stream)
             try:
-                async with agent.task("indexing", context=Context(stream=stream)) as task:
+                async with Task(
+                    owner_id=agent.name, spec=TaskSpec(title="indexing"), context=Context(stream=stream)
+                ) as task:
                     task_id = task.task_id
                     await task.cancel("wrap-up")
                 # Stream callbacks run via subscribe(sync_to_thread=False) — yield
@@ -395,10 +399,9 @@ class TestMirrorCancellation:
             mirror = TaskMirror(hub=hub, owner_id=bob_passport.agent_id)
             sub_ids = mirror.attach(stream)
             try:
-                async with agent.task(
-                    "indexing",
-                    description="search & summarise",
-                    capability="indexing",
+                async with Task(
+                    owner_id=agent.name,
+                    spec=TaskSpec(title="indexing", description="search & summarise", capability="indexing"),
                     context=Context(stream=stream),
                 ) as task:
                     await task.cancel("wrap-up")

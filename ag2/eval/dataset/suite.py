@@ -111,7 +111,7 @@ class Suite:
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     """Read a JSONL file into a list of dicts, with line-numbered errors."""
     items: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as fh:
+    with path.open(encoding="utf-8-sig") as fh:
         for index, raw in enumerate(fh, start=1):
             line = raw.strip()
             if not line:
@@ -160,7 +160,7 @@ def _coerce_tags(raw: Any, *, source: str, index: int) -> tuple[str, ...]:
         return ()
     if isinstance(raw, str):
         return (raw,)
-    if isinstance(raw, (list, tuple)):
+    if isinstance(raw, (list, tuple)) and all(isinstance(tag, str) for tag in raw):
         return tuple(raw)
     raise ValueError(f"{source}: task at index {index} has invalid 'tags' (must be a string or a list of strings)")
 

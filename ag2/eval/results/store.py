@@ -173,7 +173,7 @@ def load_run(path: str | os.PathLike[str]) -> "RunResult":
     from ..trace import Trace
     from .result import RunResult, TaskResult
 
-    doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    doc = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     task_results: list[TaskResult] = []
     for t in doc.get("tasks", []):
         task = Task(

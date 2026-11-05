@@ -15,7 +15,7 @@ call's result, over the same :class:`~ag2.mcp.pause.SuspendedTurn`.
 
 import base64
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from fast_depends.library.serializer import SerializerProto
 from mcp.types import (
@@ -28,7 +28,6 @@ from mcp.types import (
     SamplingMessage,
     TextContent,
 )
-from typing_extensions import Self
 
 from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig, ModelProvider

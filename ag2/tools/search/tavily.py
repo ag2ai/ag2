@@ -31,6 +31,8 @@ class SearchResult:
     url: str
     content: str
     score: float | None = None
+    raw_content: str | None = None
+    favicon: str | None = None
 
 
 @dataclass(slots=True)
@@ -113,6 +115,8 @@ class TavilySearchTool(Tool):
                     url=r.get("url", ""),
                     content=r.get("content", ""),
                     score=r.get("score"),
+                    raw_content=r.get("raw_content"),
+                    favicon=r.get("favicon"),
                 )
                 for r in (raw.get("results") or [])
             ]

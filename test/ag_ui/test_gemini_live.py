@@ -27,7 +27,7 @@ async def test_frontend_tool_signature_round_trips() -> None:
     if not api_key:
         pytest.skip("GEMINI_API_KEY is unavailable")
 
-    agent = Agent("weather", config=GeminiConfig(model="gemini-3-flash-preview", api_key=api_key))
+    agent = Agent("weather", config=GeminiConfig(model="gemini-3.6-flash", api_key=api_key))
     stream = AGUIStream(agent)
     user = UserMessage(id="m1", content="What's the weather in Paris? Use get_weather.")
     first = await dispatch_run(stream, run_input(user, tools=[weather_tool()], thread_id="t1"))

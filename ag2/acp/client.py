@@ -37,7 +37,7 @@ from ag2.tools.schemas import ToolSchema
 
 from .bridge import make_bridge
 from .mappers import map_usage
-from .session import ACPSession, new_prompt_text
+from .session import ACPSession, new_prompt_blocks
 from .tool_gateway import GATEWAY_SERVER_NAME, ToolGateway, partition_tools
 from .transport import ACPTransportError
 
@@ -181,14 +181,14 @@ class ACPClient:
         state.context = context
         state.begin_turn()
 
-        text, new_count = new_prompt_text(messages, session.sent_count)
+        blocks, new_count = new_prompt_blocks(messages, session.sent_count, session.prompt_capabilities)
 
         async def _run_turn() -> schema.PromptResponse:
             try:
                 # ACP 0.11 dropped PromptRequest.message_id; extra kwargs would only
                 # end up in the request's `_meta`, so send none.
                 return await conn.prompt(
-                    prompt=[acp.text_block(text)],
+                    prompt=blocks or [acp.text_block("")],
                     session_id=session_id,
                 )
             except self.config._transport_errors as e:

@@ -240,7 +240,7 @@ def parse_artifact_update(update: TaskArtifactUpdateEvent) -> A2ATaskArtifactUpd
     """
     artifact = update.artifact
     parts = list(artifact.parts)
-    text_only = parts and all(bool(p.text) for p in parts)
+    text_only = bool(parts) and all(p.HasField("text") for p in parts)
     if text_only:
         return A2ATextArtifact(
             update=update,
@@ -272,18 +272,19 @@ def parse_task_artifact(
 ) -> A2ATaskArtifactUpdate:
     """Wrap a polling-snapshot ``Artifact`` as a typed update event.
 
-    A2A polling re-reads ``task.artifacts`` (a cumulative list of
-    finalised artifacts) instead of an incremental
+    A2A polling re-reads ``task.artifacts`` (the current content of every
+    artifact, possibly still growing) instead of an incremental
     ``TaskArtifactUpdateEvent`` stream. Synthesise the streaming wire
     shape so the same downstream code path can handle both transports.
-    Each polled artifact is treated as a final, non-appended chunk —
-    polling never sees mid-stream chunks.
+    Each polled artifact is a non-appended restatement of the whole
+    artifact and is never marked ``last_chunk``: a single sighting does
+    not say the artifact is complete.
     """
     update = TaskArtifactUpdateEvent(
         task_id=task_id,
         context_id=context_id,
         artifact=artifact,
         append=False,
-        last_chunk=True,
+        last_chunk=False,
     )
     return parse_artifact_update(update)

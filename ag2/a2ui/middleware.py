@@ -28,7 +28,11 @@ def _to_prose_message(original: ModelMessage | None, text: str) -> ModelMessage:
     return ModelMessage(text, metadata=metadata)
 
 
-async def _publish_a2ui(parse_result: A2UIParseResult, response: ModelResponse, context: Context) -> None:
+async def _publish_a2ui(
+    parse_result: A2UIParseResult,
+    response: ModelResponse,
+    context: Context,
+) -> None:
     """Publish a parsed A2UI block and strip it from the durable response.
 
     Emits one :class:`A2UIMessageEvent` per parsed message onto the stream and
@@ -72,7 +76,13 @@ class A2UIExtractionMiddleware(MiddlewareFactory):
 class _A2UIExtractionMiddleware(BaseMiddleware):
     """The per-turn instance used by :class:`A2UIExtractionMiddleware`."""
 
-    def __init__(self, event: BaseEvent, context: Context, *, parser: A2UIResponseParser) -> None:
+    def __init__(
+        self,
+        event: BaseEvent,
+        context: Context,
+        *,
+        parser: A2UIResponseParser,
+    ) -> None:
         super().__init__(event, context)
         self._parser = parser
 
@@ -96,7 +106,7 @@ class A2UIInboundMiddleware(MiddlewareFactory):
     """Factory that emits one :class:`A2UIClientEvent` per incoming interaction.
 
     Built per-request with the client→server interactions parsed from the
-    request (button clicks, v1.0 ``functionResponse``s, client errors). The
+    request (button clicks, v1.0 function calls and responses, client errors). The
     per-turn instance emits them on the stream at the start of the turn — inside
     the turn, where the agent's observers are subscribed — so server-side code
     can react to client interactions, mirroring how :class:`A2UIMessageEvent`
@@ -140,7 +150,11 @@ class A2UIValidationMiddleware(MiddlewareFactory):
     (graceful degradation to text-only).
     """
 
-    def __init__(self, parser: A2UIResponseParser, max_retries: int = 1) -> None:
+    def __init__(
+        self,
+        parser: A2UIResponseParser,
+        max_retries: int = 1,
+    ) -> None:
         if max_retries < 0:
             raise ValueError(f"max_retries must be >= 0, got {max_retries}")
         self._parser = parser

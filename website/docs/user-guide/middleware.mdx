@@ -33,6 +33,9 @@ In practice, you use middleware to:
 - normalize tool inputs or outputs
 - short-circuit or reshape a response
 
+For recipes that keep task progress, remaining attempts, and environment state
+visible to the model, see [Status Bars](/docs/user-guide/status_bars).
+
 ## Middleware Hooks
 
 `BaseMiddleware` exposes four async hooks.
@@ -149,13 +152,13 @@ To make middleware apply to every turn for an agent, pass it through the `middle
 
 ```python linenums="1" hl_lines="9-12"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import LoggingMiddleware, RetryMiddleware
 
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     middleware=[
         LoggingMiddleware(),
         RetryMiddleware(max_retries=2),
@@ -174,13 +177,13 @@ Both `Agent.ask(...)` and `AgentReply.ask(...)` accept a `middleware` argument.
 
 ```python linenums="1" hl_lines="13 18"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware import LoggingMiddleware, TokenLimiter
 
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 reply = await agent.ask(
@@ -205,7 +208,7 @@ This matters when you combine behaviors such as logging, mutation, and retries.
 
 ```python linenums="1"
 from ag2 import Agent, Context
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import BaseEvent, ModelResponse
 from ag2.middleware import AgentTurn, BaseMiddleware
 
@@ -248,7 +251,7 @@ class C(BaseMiddleware):
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     middleware=[A, B],
 )
 
@@ -278,7 +281,7 @@ import logging
 from collections.abc import Sequence
 
 from ag2 import Agent, Context
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import BaseEvent, ModelResponse, ToolCallEvent
 from ag2.middleware import BaseMiddleware, LLMCall, Middleware, ToolExecution
 
@@ -315,12 +318,39 @@ class AuditMiddleware(BaseMiddleware):
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     middleware=[
         Middleware(AuditMiddleware, logger=logging.getLogger("ag2.audit")),
     ],
 )
 ```
+
+### Bracketing the Whole Execution Scope
+
+`on_turn()` starts after tool schemas are resolved and ends before observers complete. When setup must happen before tool resolution, or teardown after observers (for example, `KnowledgePlugin` bootstraps its store first and writes the final event log last), give your middleware factory a `scope(event, context)` method returning an async context manager. A factory with that method satisfies `ScopedMiddlewareFactory` from `ag2.middleware`:
+
+```python linenums="1"
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
+from ag2 import Agent, Context
+from ag2.events import BaseEvent
+from ag2.middleware import BaseMiddleware
+
+class AuditScope:
+    def __call__(self, event: BaseEvent, context: Context) -> BaseMiddleware:
+        return BaseMiddleware(event, context)
+
+    @asynccontextmanager
+    async def scope(self, event: BaseEvent, context: Context) -> AsyncGenerator[None]:
+        print("before tool resolution")
+        yield
+        print("after observers completed")
+
+agent = Agent("assistant", middleware=[AuditScope()])
+```
+
+Scopes enter in registration order and exit in reverse order. The factory outlives turns, so keep per-invocation state inside the scope rather than on the factory. The `Middleware(...)` wrapper does not forward `scope`; write the factory class directly.
 
 ### Guidelines for Custom Middleware
 
@@ -410,14 +440,14 @@ This is useful when you have middleware that should only run for certain event t
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ToolCallEvent
 from ag2.middleware import ConditionalMiddleware, Middleware
 
 agent = Agent(
     "assistant",
     prompt="Be helpful.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     middleware=[
         ConditionalMiddleware(
             Middleware(ApprovalMiddleware),

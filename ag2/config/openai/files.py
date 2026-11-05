@@ -11,7 +11,7 @@ from openai.types import FilePurpose
 from ag2.files.types import FileContent, FileProvider, UploadedFile, _created_at_to_float
 
 if TYPE_CHECKING:
-    from ag2.config.openai.config import OpenAIConfig, OpenAIResponsesConfig
+    from ag2.config.openai.config import OpenAICompletionsConfig, OpenAIResponsesConfig
 
 
 class OpenAIFilesClient:
@@ -19,7 +19,7 @@ class OpenAIFilesClient:
 
     __slots__ = ("_client",)
 
-    def __init__(self, config: "OpenAIConfig | OpenAIResponsesConfig") -> None:
+    def __init__(self, config: "OpenAICompletionsConfig | OpenAIResponsesConfig") -> None:
         self._client = AsyncOpenAI(
             api_key=config.api_key,
             organization=config.organization,
@@ -65,7 +65,7 @@ class OpenAIFilesClient:
                 purpose=f.purpose,
                 created_at=_created_at_to_float(f.created_at),
             )
-            for f in result.data
+            async for f in result
         ]
 
     async def delete(self, file_id: str) -> None:

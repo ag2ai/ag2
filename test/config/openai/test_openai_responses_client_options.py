@@ -22,6 +22,7 @@ NULLABLE_OPTIONS = (
     "max_tool_calls",
     "top_logprobs",
     "metadata",
+    "reasoning",
     "service_tier",
     "truncation",
 )
@@ -95,3 +96,11 @@ async def test_set_options_serialized() -> None:
     assert body["top_p"] == 0.95
     assert body["service_tier"] == "auto"
     assert body["truncation"] == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_reasoning_serialized() -> None:
+    captured: dict[str, object] = {}
+    body = await _request_body(captured, reasoning={"effort": "low", "summary": "auto"})
+
+    assert body["reasoning"] == {"effort": "low", "summary": "auto"}

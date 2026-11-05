@@ -22,6 +22,7 @@ is wasteful and itself biasing) — unlike the LLM judge's dual-order swap.
 
 import inspect
 import json
+import os
 import random
 from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
@@ -97,7 +98,7 @@ async def export_pairwise_cases(
     return path
 
 
-def human_labels(path: str, *, criterion: str, key: str) -> PairwiseComparator:
+def human_labels(path: str | os.PathLike[str], *, criterion: str, key: str) -> PairwiseComparator:
     """A comparator reading human labels for one criterion from a manifest JSONL."""
     return _HumanLabels(path, criterion, key)
 
@@ -110,7 +111,7 @@ def human_pairwise(*, key: str, ask: AskHuman | None = None, seed: int | None = 
 class _HumanLabels:
     """Offline human comparator: reads de-blinded labels lazily on first use."""
 
-    def __init__(self, path: str, criterion: str, key: str) -> None:
+    def __init__(self, path: str | os.PathLike[str], criterion: str, key: str) -> None:
         self.key = key
         self._path = Path(path)
         self._criterion = criterion
@@ -119,7 +120,7 @@ class _HumanLabels:
     def _labels(self) -> dict[str, tuple[str, Any]]:
         if self._by_task is None:
             by_task: dict[str, tuple[str, Any]] = {}
-            for raw in self._path.read_text(encoding="utf-8").splitlines():
+            for raw in self._path.read_text(encoding="utf-8-sig").splitlines():
                 if not raw.strip():
                     continue
                 record = json.loads(raw)

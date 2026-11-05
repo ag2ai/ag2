@@ -251,6 +251,14 @@ class TestRoundTrip:
 
         assert json.loads(resaved.read_text(encoding="utf-8"))["schema_version"] == "0.1"
 
+    def test_a_run_file_saved_with_a_bom_loads(self, tmp_path: Path) -> None:
+        target = tmp_path / "bom-run.json"
+        target.write_text("\ufeff" + json.dumps(to_dict(_make_result())), encoding="utf-8")
+
+        loaded = load_run(target)
+
+        assert to_dict(loaded) == to_dict(_make_result())
+
 
 class TestTraceRefSerialization:
     def test_trace_ref_serialized_when_present(self) -> None:

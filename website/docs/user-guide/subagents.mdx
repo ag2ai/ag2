@@ -14,10 +14,10 @@ Breaking work across multiple agents gives you:
 - **LLM-driven orchestration** — the calling agent decides when to delegate, what context to pass, and how to use the result.
 
 !!! note
-    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Each concurrent sub-task gets its own copy of variables, so they don't interfere with each other. For auto-injected sub-tasks, `TaskConfig(max_concurrency=N)` bounds the total fan-out across both `run_subtask` and `run_subtasks`.
+    When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Plain variables are deep-copied for each branch; explicitly shared variables remain visible across the tree. See [Variable Scopes Across Subagents](/docs/user-guide/context/variables#variable-scopes-across-subagents) for ownership and synchronization rules.
 
-!!! tip
-    For lightweight self-delegation where the parent doesn't need a *named* delegate, opt in to the auto-injected `#!python run_subtask` / `#!python run_subtasks` tools by passing `#!python tasks=TaskConfig(...)` — see [`tasks=` in The Agent Harness](/docs/user-guide/agent_harness#tasks-taskconfig). Use `Agent.as_tool()` (below) when you want a distinct, purpose-named tool exposed to the LLM.
+!!! warning "TaskConfig is deprecated"
+    `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the automatically injected `run_subtask` / `run_subtasks` tools will be removed in **1.4.0**. Existing code continues to work with deprecation warnings. Use `Agent.as_tool()` for new code and follow the [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig) below.
 
 ## Subagents API
 
@@ -75,7 +75,7 @@ task_writer(
 |---|---|---|
 | `description` | `str` | Tool description shown to the LLM (required) |
 | `name` | `str | None` | Override the default `task_{agent.name}` tool name |
-| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](/docs/user-guide/subagents#sub-task-streams)) |
 | `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
 
 You can also use `#!python subagent_tool()` directly for more control:
@@ -91,6 +91,119 @@ coordinator = Agent(
     ],
 )
 ```
+
+## Observe and Address Subagents
+
+Register an [observer](/docs/user-guide/advanced/observers) on the parent to observe its entire delegation subtree,
+including grandchildren and transient chunks. Operational events arrive as
+`#!python ChildEvent` observations; `#!python UsageEvent` and task lifecycle
+events arrive as themselves with delegation provenance. Observation does not
+execute a child's tools or model requests in the parent.
+
+An observed event's live `#!python event.origin` addresses the invocation that
+authored it. Use `#!python await event.origin.send(event_to_deliver)` to send an
+event back through that invocation's normal handlers. Handles expire when the
+invocation ends and are unavailable when reading saved history.
+
+See [Observe a Delegation Tree](/docs/user-guide/advanced/stream#observe-a-delegation-tree)
+for event types, filtering, and source accounting, and
+[Reply to an Event's Author](/docs/user-guide/advanced/stream#reply-to-an-events-author)
+for a runnable addressed-delivery example.
+
+## Delegation Lifecycle
+
+Each delegation uses the same [task lifecycle](/docs/user-guide/tasks) as an
+opted-in `#!python ask()` or `#!python run()`: one `#!python TaskStarted` and one
+terminal event for that invocation. `#!python TaskCancelled` identifies cancellation;
+`#!python TaskFailed` identifies an execution error. The start carries a
+`#!python TaskSpec` and the parent tool-call ID. Ancestors receive task events
+with the original delegation path, alongside source `#!python UsageEvent` records.
+
+Lifecycle is automatic for delegates. A capability-tagged parent run has its
+own lifecycle in addition to each child's, with a distinct task ID.
+`#!python TaskCompleted.usage` is a cumulative stream snapshot for inspection;
+accounting reads source usage records rather than summing these snapshots.
+
+## Migrating from TaskConfig
+
+Create a worker explicitly, then add its delegate tool to the parent's `tools` list. This replaces `tasks=TaskConfig(...)` without adding a new configuration API:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAICompletionsConfig
+
+worker = Agent(
+    "worker",
+    prompt="Complete the assigned task concisely. Return only the result.",
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
+)
+coordinator = Agent(
+    "coordinator",
+    prompt="Delegate independent work to task_worker, then combine the results.",
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
+    tools=[worker.as_tool(description="Complete a focused sub-task.")],
+)
+
+reply = await coordinator.ask("Compare Python and Rust for web APIs.")
+print(reply.body)
+```
+
+Map each `TaskConfig` field onto the worker explicitly. Some of its defaults were implicit, so check each one:
+
+| `TaskConfig` | Explicit worker |
+|---|---|
+| `config=None` (the subtask used the **parent's** config) | Pass the parent's config to the worker: `config=` is not inherited. |
+| `prompt` (default: `"You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."`) | Set the worker's `prompt=`; there is no default task prompt. |
+| Parent tools, filtered by `include_tools` / `exclude_tools` | List the tools in the worker's `tools=`. The list is fixed when the worker is built: tools added to the parent later with `add_tool` are not picked up. |
+| `extra_tools` | Add them to the worker's `tools=`. |
+| `max_concurrency` | See [Limiting concurrency](/docs/user-guide/subagents#limiting-concurrency) below. |
+
+Omit `tasks=` from the parent and update prompts that mention `run_subtask` or `run_subtasks` to use the delegate's tool name (`task_worker` above) and its `objective` / `context` parameters.
+
+A few behaviours differ:
+
+- **One worker, many calls.** `run_subtask` built a fresh Agent per call; a delegate reuses the same worker Agent. Each call still runs on a fresh stream, so history does not leak between calls. Don't use a [persistent or shared stream](/docs/user-guide/subagents#sub-task-streams) for a worker meant to run in parallel — calls on one stream run one turn at a time.
+- **Fan-out is up to the model.** `run_subtasks` dispatched the whole batch from a single tool call when parallel execution was enabled. With delegates, the calling LLM requests several calls in one response and the framework runs them concurrently; prompt for it explicitly. Where order matters, have the LLM call the delegate one step at a time.
+- **No built-in recursion guard.** Subtasks could never spawn subtasks. A worker can delegate only through the tools you give it, so keep delegate tools off the worker (avoid [self-delegation](/docs/user-guide/subagents#self-delegation) here).
+- **Workers composed per task.** If you relied on `run_subtask` to spin up a generic worker for arbitrary work, [`dynamic_agent()`](/docs/user-guide/subagents#dynamic-agents) is the closer fit: the LLM composes a focused worker per objective, and spawned workers cannot spawn further.
+
+`TaskStarted`, `TaskCompleted` and `TaskFailed` lifecycle events, HITL bridging, and forwarding of source `UsageEvent` records work with delegates.
+
+### Limiting concurrency
+
+`as_tool()` has no `max_concurrency` parameter. To cap how many delegate calls run at once, pass the same tool middleware to every delegate that shares the cap:
+
+```python linenums="1" hl_lines="6-13 19-20"
+import asyncio
+
+from ag2 import Agent
+from ag2.middleware import ToolMiddleware
+
+def concurrency_limit(limit: int) -> ToolMiddleware:
+    slots = asyncio.Semaphore(limit)
+
+    async def limited(call_next, event, context):
+        async with slots:
+            return await call_next(event, context)
+
+    return limited
+
+limit = concurrency_limit(3)
+coordinator = Agent(
+    "coordinator",
+    tools=[
+        researcher.as_tool(description="Research a question.", middleware=[limit]),
+        writer.as_tool(description="Draft a section.", middleware=[limit]),
+    ],
+)
+```
+
+!!! warning "Use a function, not a middleware object"
+    Tool middleware is deep-copied when its tool is registered. A callable *object* holding the semaphore is copied once per delegate, so each delegate silently gets its own cap. A function and its closure are not copied, so every delegate shares one semaphore. Create the limiter inside the event loop that runs the agent; an `asyncio.Semaphore` must not be shared across loops.
+
+### Deprecation warnings
+
+`Agent(tasks=TaskConfig(...))` emits one `DeprecationWarning` pointing at the line that builds the Agent. Constructing, copying or pickling a `TaskConfig` doesn't warn at runtime, but type checkers flag every use of the class. Reading `Agent.tasks` and leaving tasks disabled emit no warning.
 
 ## Background Subagents
 
@@ -126,7 +239,7 @@ How it behaves:
 | `agent` | `Agent` | The agent to run as a background sub-task (positional) |
 | `description` | `str` | Tool description shown to the LLM (required) |
 | `name` | `str | None` | Override the default `background_task_{agent.name}` tool name |
-| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](#sub-task-streams)) |
+| `stream` | `StreamFactory | None` | Factory to create custom streams for sub-tasks (see [Sub-Task Streams](/docs/user-guide/subagents#sub-task-streams)) |
 | `middleware` | `Iterable[ToolMiddleware]` | Tool middleware applied to the delegate tool (e.g., `approval_required`) |
 
 !!! note
@@ -167,9 +280,9 @@ The analyst's LLM may call `sub_task` multiple times — one per aspect — then
 ```python linenums="1" hl_lines="2 17"
 from ag2 import Agent
 from ag2.tools.dynamic import dynamic_agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-config = OpenAIConfig(model="gpt-4o-mini")
+config = OpenAICompletionsConfig(model="gpt-4o-mini")
 
 orchestrator = Agent(
     "orchestrator",
@@ -238,11 +351,10 @@ It means that subagent has no information about previous calls or results. It ju
 
 | What | Behavior | Why |
 |---|---|---|
-| **Dependencies** | Copied | Isolated — child mutations don't affect parent |
-| **Variables** | Copied; not synced back. `approval_required` "always" answers are not inherited | Concurrent-safe — child mutations stay scoped to the child; the sub-task asks for approval again |
+| **Dependencies** | Shallow-copied; the parent's configuration fills only keys the sub-agent doesn't set | Replacing a mapping entry stays in the child, but referenced objects remain shared. Values passed to `ask(dependencies=...)` or set at runtime override the sub-agent's own; the parent's constructor and plugin defaults don't (e.g. the sub-agent's `KnowledgePlugin` store wins over the parent's) |
+| **Variables** | Plain / copied values are deep-copied, local values are excluded, and root-declared shared bindings remain shared | [Scope declarations](/docs/user-guide/context/variables#variable-scopes-across-subagents) control visibility. Reserved `ag:` / `a2a:` keys, including `approval_required` "always" answers, are not inherited |
 | **History** | Fresh stream | Clean context — the LLM passes relevant info via `context` parameter |
-| **Depth counter** | Incremented in child; excluded from sync-back | Internal bookkeeping — never leaks to parent |
-| **Agent prompt, tools, config** | Inherited | The sub-agent brings its own capabilities |
+| **Agent prompt, tools, config** | Supplied by the worker Agent | Nothing is inherited from the parent; construct each worker with its own capabilities |
 
 ### Persistent Stream
 
@@ -278,7 +390,7 @@ events = await sub_stream.history.get_events()
 ```
 
 !!! warning
-    Reusing one stream also makes the sub-agent **stateful**: because the history is shared, each delegation sees every earlier delegation's turns, and token cost grows with them. This is the same trade-off as `#!python persistent_stream()`. To observe events *without* accumulating history, use a [custom factory](#custom-factory) that returns a fresh stream per call and subscribe to each one.
+    Reusing one stream also makes the sub-agent **stateful**: because the history is shared, each delegation sees every earlier delegation's turns, and token cost grows with them. This is the same trade-off as `#!python persistent_stream()`. To observe events *without* accumulating child conversation history, register [observers on the parent](/docs/user-guide/advanced/stream#observe-a-delegation-tree) and keep the default fresh stream per call.
 
 Unlike `#!python persistent_stream()`, an instance you construct yourself carries its own storage backend unless you pass the parent's — `#!python MemoryStream(storage=parent_stream.history.storage)`.
 

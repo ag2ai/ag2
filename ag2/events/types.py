@@ -2,12 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from copy import copy
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from typing import Any
+from typing import Any, Self
 from uuid import uuid4
 
 from .base import BaseEvent, Field
+from .delegation import InertEvent
 from .tool_events import ToolCallsEvent
 
 
@@ -153,14 +155,15 @@ class ModelResponse(ModelEvent):
         return msg
 
 
-class UsageEvent(BaseEvent):
+class UsageEvent(InertEvent):
     """Token usage for a single unit of work, emitted at the point the tokens
     are spent.
 
     Decoupled from :class:`ModelResponse` so token accounting is independent of
     whether a response is produced and persisted: every LLM call (main loop,
-    live session, history compaction, memory aggregation) and every sub-task
-    rollup emits one of these onto the stream. :class:`~ag2.UsageReport`
+    live session, history compaction, memory aggregation) emits one source
+    record. Ancestors receive the original UsageEvent without an envelope or
+    rollup. :class:`~ag2.UsageReport`
     aggregates the event log over these events alone — the single source of
     truth, so there is no double counting.
 
@@ -171,23 +174,44 @@ class UsageEvent(BaseEvent):
 
     __conversational__ = False
 
+    event_id: str = Field(default_factory=lambda: uuid4().hex, compare=False, repr=False)
     usage: Usage = Field(default_factory=Usage, kw_only=False)
     kind: str = Field(default="model_call")
-    """``"model_call"`` for a direct LLM call, ``"subtask"`` for a sub-agent
-    rollup, ``"compaction"`` / ``"aggregation"`` for internal maintenance calls."""
+    """Original stage: model_call, compaction, aggregation, or a client-specific kind.
+
+    Archived records may contain the old subtask rollup kind.
+    """
 
     model: str | None = Field(default=None, compare=False)
     provider: str | None = Field(default=None, compare=False)
     finish_reason: str | None = Field(default=None, compare=False)
     label: str | None = Field(default=None, compare=False)
-    """Sub-agent name for ``"subtask"`` events; ``None`` otherwise."""
+    """Sub-agent name on an archived ``"subtask"`` rollup; ``None`` otherwise.
+
+    Spend forwarded from a sub-agent names it in ``agent_name`` instead.
+    """
+    task_id: str | None = Field(default=None, compare=False)
+    """The delegation that spent these tokens; ``None`` for the local agent's own spend."""
+    agent_name: str | None = Field(default=None, compare=False)
+    """The sub-agent that spent these tokens; ``None`` for the local agent's own spend."""
     parts: "list[UsageEvent]" = Field(default_factory=list, compare=False)
-    """For a ``"subtask"`` rollup, the model calls it sums, each under its own provider and model.
+    """Legacy rollup details retained for reading archived records.
+
+    New delegations forward source events and do not populate this field.
+    For an archived ``"subtask"`` rollup, the model calls it sums, each under its own provider and model.
 
     For a reader that has to count each provider's figures its own way before
     adding them up. :class:`~ag2.UsageReport` reads the rollup alone, so these
     are never counted twice.
     """
+
+    def as_local(self) -> Self:
+        """A new publication: a fresh ``event_id`` and no inherited provenance."""
+        event = copy(super().as_local())
+        event.event_id = uuid4().hex
+        event.task_id = None
+        event.agent_name = None
+        return event
 
 
 class ModelMessageChunk(ModelEvent):

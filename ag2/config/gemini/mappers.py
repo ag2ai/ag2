@@ -273,9 +273,12 @@ def convert_messages(
             if message.message:
                 parts.append(types.Part.from_text(text=message.message.content))
             for call in message.tool_calls.calls:
-                fc_part = types.Part.from_function_call(
-                    name=call.name,
-                    args=json.loads(call.arguments or "{}"),
+                fc_part = types.Part(
+                    function_call=types.FunctionCall(
+                        id=call.id,
+                        name=call.name,
+                        args=json.loads(call.arguments or "{}"),
+                    ),
                 )
                 if isinstance(call, GeminiToolCallEvent) and call.thought_signature is not None:
                     fc_part.thought_signature = call.thought_signature
@@ -320,10 +323,13 @@ def convert_messages(
                     response_dict = {}
 
                 parts_list.append(
-                    types.Part.from_function_response(
-                        name=r.name or "",
-                        response=response_dict,
-                        parts=media_parts or None,
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            id=r.parent_id,
+                            name=r.name or "",
+                            response=response_dict,
+                            parts=media_parts or None,
+                        ),
                     )
                 )
             result.append(types.Content(role="user", parts=parts_list))
@@ -391,9 +397,14 @@ def normalize_usage(metadata: types.GenerateContentResponseUsageMetadata) -> Usa
     tool_use_prompt = _to_float(getattr(metadata, "tool_use_prompt_token_count", None))
     if tool_use_prompt is not None:
         prompt = (prompt or 0.0) + tool_use_prompt
+    completion = _to_float(metadata.candidates_token_count)
+    # Gemini reports thoughts beside candidates; completion includes both,
+    # with thinking_tokens retained as the reasoning breakdown.
+    if thinking is not None:
+        completion = (completion or 0.0) + thinking
     return Usage(
         prompt_tokens=prompt,
-        completion_tokens=_to_float(metadata.candidates_token_count),
+        completion_tokens=completion,
         total_tokens=_to_float(metadata.total_token_count),
         cache_read_input_tokens=cache_read,
         thinking_tokens=thinking,

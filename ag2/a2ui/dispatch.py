@@ -37,11 +37,11 @@ from ag2.usage import collect_usage_events
 from ._runtime import _A2UIRuntime
 from ._types import ServerToClientMessage
 from .actions import A2UIAction
+from .data_model import data_model_to_prompt
 from .events import A2UIMessageEvent
-from .incoming import A2UIIncomingActionResult
 from .middleware import A2UIInboundMiddleware
 from .request import A2UIServerRequest
-from .server_action import build_server_action_context, run_server_action
+from .server_action import run_client_interactions
 
 
 @dataclass(slots=True)
@@ -94,10 +94,11 @@ async def stream_turn(
 
     Server-side actions are handled first and never invoke the agent: each
     incoming click whose name maps to a ``server_actions`` entry runs that
-    action and its result is yielded as A2UI message frames. The agent then
-    runs only if the turn still has input for it (a user message, or a click on
-    a button with no registered action) — a turn carrying *only* server-side
-    clicks skips the agent entirely.
+    action and its result is yielded as A2UI message frames, and each v1.0
+    ``callAgentFunction`` is answered with an ``agentFunctionResponse``. The
+    agent then runs only if the turn still has input for it (a user message, or
+    a click on a button with no registered action) — a turn carrying *only*
+    server-side interactions skips the agent entirely.
 
     Args:
         agent: The plain ``Agent`` to run. Must have ``config`` set (unless the
@@ -131,27 +132,19 @@ async def stream_turn(
         RuntimeError: If the agent must run but has no ``config`` to create an
             LLM client.
     """
-    # Run server-side click actions and emit their messages. These never reach
-    # the agent (the prompt rewriter already skipped registered actions).
-    handled_server = False
-    if server_actions:
-        # Server actions resolve their dependencies against the agent's DI
-        # surface (built once for the turn, only when a click actually runs).
-        action_context = build_server_action_context(agent, variables=request.variables)
-        for interaction in request.client_interactions:
-            if not isinstance(interaction, A2UIIncomingActionResult):
-                continue
-            server_action = server_actions.get(interaction.action.name)
-            if server_action is None:
-                continue
-            handled_server = True
-            for message in await run_server_action(
-                server_action,
-                interaction.action,
-                version=runtime.version_string,
-                context=action_context,
-            ):
-                yield A2UIMessageFrame(message)
+    # Answer the interactions the server handles itself (registered clicks and
+    # callAgentFunction calls) and emit their messages. These never reach the
+    # agent (the prompt rewriter already skipped them).
+    server_messages, handled_server = await run_client_interactions(
+        request.client_interactions,
+        server_actions,
+        agent,
+        variables=request.variables,
+        version=runtime.version_string,
+        catalog_id=runtime.catalog_id,
+    )
+    for message in server_messages:
+        yield A2UIMessageFrame(message)
 
     # Run the agent only when the turn has real input for it. A turn whose only
     # content was server-side clicks is complete already; don't fabricate a
@@ -188,10 +181,15 @@ async def stream_turn(
 
     # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
     # prompt section, fold in negotiated client capabilities so the LLM only
-    # targets components the client can render, and inject the validation
+    # targets components the client can render, add the client's data model, and inject the validation
     # middleware that emits the A2UIMessageEvents collected above.
     caps_prompt = runtime.capabilities_prompt(request.client_capabilities)
-    extra_prompt = [runtime.system_prompt_section, *([caps_prompt] if caps_prompt else [])]
+    data_model_prompt = data_model_to_prompt(request.client_data_model)
+    extra_prompt = [
+        runtime.system_prompt_section,
+        *([caps_prompt] if caps_prompt else []),
+        *([data_model_prompt] if data_model_prompt else []),
+    ]
 
     merged_variables = {
         **dict(agent._agent_variables),

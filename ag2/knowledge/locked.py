@@ -4,7 +4,7 @@
 
 from typing import Any
 
-from .base import ChangeCallback, ChangeSubscription, KnowledgeStore
+from .base import ChangeCallback, ChangeSubscription, KnowledgeStore, _normalize
 
 
 class LockedKnowledgeStore:
@@ -22,37 +22,40 @@ class LockedKnowledgeStore:
         return await self._store.read(path)
 
     async def write(self, path: str, content: str) -> None:
-        acquired = await self._lock.acquire(f"store:write:{path}", ttl=30.0)
+        lock_name = f"store:write:{_normalize(path)}"
+        acquired = await self._lock.acquire(lock_name, ttl=30.0)
         if not acquired:
             raise RuntimeError(f"Failed to acquire write lock for {path}")
         try:
             await self._store.write(path, content)
         finally:
-            await self._lock.release(f"store:write:{path}")
+            await self._lock.release(lock_name)
 
     async def list(self, path: str = "/") -> list[str]:
         return await self._store.list(path)
 
     async def delete(self, path: str) -> None:
-        acquired = await self._lock.acquire(f"store:write:{path}", ttl=30.0)
+        lock_name = f"store:write:{_normalize(path)}"
+        acquired = await self._lock.acquire(lock_name, ttl=30.0)
         if not acquired:
             raise RuntimeError(f"Failed to acquire delete lock for {path}")
         try:
             await self._store.delete(path)
         finally:
-            await self._lock.release(f"store:write:{path}")
+            await self._lock.release(lock_name)
 
     async def exists(self, path: str) -> bool:
         return await self._store.exists(path)
 
     async def append(self, path: str, content: str) -> int:
-        acquired = await self._lock.acquire(f"store:write:{path}", ttl=30.0)
+        lock_name = f"store:write:{_normalize(path)}"
+        acquired = await self._lock.acquire(lock_name, ttl=30.0)
         if not acquired:
             raise RuntimeError(f"Failed to acquire append lock for {path}")
         try:
             return await self._store.append(path, content)
         finally:
-            await self._lock.release(f"store:write:{path}")
+            await self._lock.release(lock_name)
 
     async def read_range(self, path: str, start: int, end: int | None = None) -> str:
         return await self._store.read_range(path, start, end)

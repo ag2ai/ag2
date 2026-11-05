@@ -32,6 +32,7 @@ def parse_frontmatter(text: str) -> dict[str, object]:
     unquoted scalar whose value contains a colon (``description: Use when: ...``).
     A best-effort recovery quotes such values and retries once before giving up.
     """
+    text = text.removeprefix("\ufeff")  # UTF-8 BOM (e.g. PowerShell 5.1 `Out-File -Encoding UTF8`)
     if not text.startswith("---"):
         return {}
     end = text.find("\n---", 3)
@@ -56,7 +57,7 @@ def _recover_malformed_yaml(block: str) -> object:
         if m and ":" in m.group(2):
             value = m.group(2).strip()
             if value and value[0] not in "\"'>|[{":
-                escaped = value.replace('"', '\\"')
+                escaped = value.replace("\\", "\\\\").replace('"', '\\"')
                 line = f'{m.group(1)}"{escaped}"'
         fixed_lines.append(line)
     try:
@@ -70,6 +71,7 @@ def strip_frontmatter(text: str) -> str:
 
     Returns the whole text (trimmed) when there is no ``--- ... ---`` block.
     """
+    text = text.removeprefix("\ufeff")  # UTF-8 BOM (e.g. PowerShell 5.1 `Out-File -Encoding UTF8`)
     if not text.startswith("---"):
         return text.strip()
     end = text.find("\n---", 3)

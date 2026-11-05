@@ -60,8 +60,6 @@ class _A2UIRuntime:
             version_string=self.schema_manager.version_string,
             server_to_client_schema=(self.schema_manager.server_to_client_schema if validate_responses else None),
             schema_registry=(self.schema_manager.build_schema_registry() if validate_responses else None),
-            component_schemas=(self.schema_manager.get_component_schemas() if validate_responses else None),
-            catalog_id=(self.schema_manager.catalog_id if validate_responses else None),
         )
         # Clickable buttons are declared on ``A2UIServer(actions=[...])``; the
         # server passes their action declarations here for prompt + click routing.

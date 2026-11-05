@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import locale
 from pathlib import Path, PurePosixPath
 from unittest.mock import MagicMock
 
@@ -212,6 +213,23 @@ class TestShellAdapterFiltering:
         adapter = ShellAdapter(LocalSandbox(tmp_path), ignore=[".env"])
         assert "Access denied" not in await adapter.run("ls *.txt")
 
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("dd if=.env of=out.txt", id="dd-read"),
+            pytest.param("dd if=a.txt of=.env", id="dd-write"),
+            pytest.param("git diff --output=.env", id="git-output"),
+            pytest.param("sort a.txt -o.env", id="short-option-attached"),
+            pytest.param("sort a.txt -ro.env", id="short-options-attached"),
+        ],
+    )
+    async def test_ignore_denies_path_embedded_in_a_word(self, command: str) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, ignore=[".env"])
+        result = await adapter.run(command)
+        assert "Access denied" in result
+        assert sandbox.execs == []
+
     async def test_blocked_or_ignore_alone_switches_on_restricted_mode(self) -> None:
         assert ShellAdapter(RecordingSandbox(), blocked=["rm"]).restricted
         assert ShellAdapter(RecordingSandbox(), ignore=[".env"]).restricted
@@ -257,6 +275,13 @@ class TestShellAdapterAsync:
         adapter = ShellAdapter(sandbox)
         result = await adapter.run("exit 7")
         assert "exit code: 7" in result
+
+    async def test_run_keeps_undecodable_output_and_exit_code(self, tmp_path: Path) -> None:
+        sandbox = LocalSandbox(tmp_path)
+        adapter = ShellAdapter(sandbox)
+        result = await adapter.run(r"printf 'error: \201' >&2; exit 7")
+        expected = b"error: \x81".decode(locale.getpreferredencoding(False), errors="replace")
+        assert result == f"{expected}\n[exit code: 7]"
 
 
 @pytest.mark.asyncio

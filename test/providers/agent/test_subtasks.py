@@ -8,6 +8,7 @@ delegation, no-recursion guarantee, persistent_stream. Real LLM calls.
 
 import pytest
 
+import ag2.tools.subagents.run_task as run_task_mod
 from ag2 import Agent
 from ag2 import agent as actor_mod
 from ag2.agent import TaskConfig
@@ -15,9 +16,12 @@ from ag2.events import TaskCompleted, TaskStarted
 from ag2.history import MemoryStorage
 from ag2.stream import MemoryStream
 from ag2.tools.subagents import persistent_stream
-from ag2.tools.subagents import run_task as run_task_mod
 
-pytestmark = pytest.mark.asyncio
+# Exercises the deprecated TaskConfig / run_subtask path on purpose.
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning"),
+]
 
 
 async def test_run_subtask_auto_injected(provider_config) -> None:

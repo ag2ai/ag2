@@ -116,15 +116,23 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                parts: list[dict[str, Any]] = []
+                parts: list[str] = []
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
-                        parts.append({"type": "text", "text": part.content})
+                        parts.append(part.content)
                     elif isinstance(part, DataInput):
-                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                        parts.append(serializer.encode(part.data).decode())
                     else:
                         raise UnsupportedInputError(type(part).__name__, "ollama")
-                content = parts[0]["text"] if len(parts) == 1 and parts[0]["type"] == "text" else parts
-                result.append({"role": "tool", "content": content})
+                # Ollama API only accepts plain-string `content`, so emit one tool
+                # message per part instead of joining them. An empty result still
+                # yields one (empty) message so the call keeps its result.
+                for text in parts or [""]:
+                    tool_message: dict[str, Any] = {"role": "tool", "content": text}
+                    # Names supplement position: Ollama matches results to calls by order, and two parallel
+                    # calls of the same tool can only be told apart that way.
+                    if r.name:
+                        tool_message["tool_name"] = r.name
+                    result.append(tool_message)
 
     return result

@@ -9,35 +9,8 @@ from acp import schema
 
 from ag2.acp import MCPCapabilityError
 from ag2.acp.bridge import make_bridge
-from ag2.acp.session import ACPSession, new_prompt_text
+from ag2.acp.session import ACPSession
 from ag2.acp.testing import ACPTurn, fake_acp_config
-from ag2.events import ModelRequest, TextInput
-from ag2.events.types import ModelMessage
-
-
-def _req(text: str) -> ModelRequest:
-    return ModelRequest(parts=[TextInput(text)])
-
-
-def test_delta_returns_only_new_requests() -> None:
-    msgs = [_req("first"), ModelMessage("reply"), _req("second")]
-    text, count = new_prompt_text(msgs, sent_count=0)
-    assert "first" in text and "second" in text
-    assert count == 2
-
-
-def test_delta_skips_already_sent() -> None:
-    msgs = [_req("first"), _req("second")]
-    text, count = new_prompt_text(msgs, sent_count=1)
-    assert text == "second"
-    assert count == 2
-
-
-def test_delta_empty_when_nothing_new() -> None:
-    msgs = [_req("only")]
-    text, count = new_prompt_text(msgs, sent_count=1)
-    assert text == ""
-    assert count == 1
 
 
 def _msg(text: str) -> schema.AgentMessageChunk:

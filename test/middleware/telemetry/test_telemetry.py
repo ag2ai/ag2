@@ -13,7 +13,6 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult
 from pydantic import BaseModel
 
 from ag2 import Agent, Context
-from ag2.agent import KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact
 from ag2.events import (
     BaseEvent,
@@ -33,7 +32,7 @@ from ag2.events import (
     Usage,
     UsageEvent,
 )
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.middleware import BaseMiddleware, Middleware
 from ag2.middleware.builtin.telemetry import MAX_TOOL_RESULT_CHARS, TelemetryMiddleware, _build_input_messages
 from ag2.stream import MemoryStream
@@ -188,11 +187,7 @@ class TestUsageSpans:
         assert span.attributes["ag2.usage.total_tokens"] == 15
 
     async def test_delegated_spend_is_captured_without_instrumenting_the_worker(self, otel_setup):
-        """The rollup lands on the parent's stream, so the parent's telemetry sees it.
-
-        Instrumenting the worker as well would put both its per-call events and
-        the rollup in one trace and double-count them.
-        """
+        """The parent's telemetry consumes the worker's original source usage."""
         exporter, provider = otel_setup
 
         worker = Agent(
@@ -214,11 +209,11 @@ class TestUsageSpans:
         await coordinator.ask("Tell me about X")
 
         usage_spans = _usage_spans(exporter)
-        by_kind = {s.attributes["ag2.usage.kind"]: s for s in usage_spans}
-        assert set(by_kind) == {"model_call", "subtask"}
-        assert by_kind["subtask"].attributes["ag2.usage.label"] == "worker"
-        assert by_kind["subtask"].attributes["gen_ai.usage.input_tokens"] == 900
-        assert by_kind["subtask"].attributes["gen_ai.usage.output_tokens"] == 90
+        assert len(usage_spans) == 2
+        assert {s.attributes["ag2.usage.kind"] for s in usage_spans} == {"model_call"}
+        assert sorted(s.attributes["gen_ai.usage.input_tokens"] for s in usage_spans) == [100, 900]
+        assert sorted(s.attributes["gen_ai.usage.output_tokens"] for s in usage_spans) == [10, 90]
+        assert len({s.attributes["ag2.usage.event_id"] for s in usage_spans}) == 2
 
     async def test_cache_counts_are_carried(self, otel_setup):
         exporter, provider = otel_setup
@@ -1122,13 +1117,15 @@ async def test_compacted_history_reaches_the_span(otel_setup):
             ModelResponse(ModelMessage("Second answer")),
             ModelResponse(ModelMessage("Third answer")),
         ),
-        knowledge=KnowledgeConfig(
-            store=MemoryKnowledgeStore(),
-            compact=SummarizeCompact(target=1, config=summarizer),
-            compact_trigger=CompactTrigger(max_events=2),
-            expose_tool=False,
-            write_event_log=False,
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=MemoryKnowledgeStore(),
+                compact=SummarizeCompact(target=1, config=summarizer),
+                compact_trigger=CompactTrigger(max_events=2),
+                expose_tool=False,
+                write_event_log=False,
+            )
+        ],
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant")],
     )
 

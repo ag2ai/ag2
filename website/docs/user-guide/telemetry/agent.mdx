@@ -25,7 +25,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware.builtin import TelemetryMiddleware
 
 # 1. Configure OpenTelemetry
@@ -38,7 +38,7 @@ trace.set_tracer_provider(tracer_provider)
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     middleware=[
         TelemetryMiddleware(
             tracer_provider=tracer_provider,
@@ -62,6 +62,20 @@ invoke_agent assistant
   |-- execute_tool get_weather      # tool execution
   |-- chat gpt-4o-mini              # LLM call after tool result
   +-- await_human_input assistant   # human-in-the-loop
+```
+
+### Anthropic SDK spans
+
+The `anthropic` SDK traces its own API calls with OpenTelemetry, on by default. When a global tracer provider is
+registered, each request also produces an `anthropic.messages.create` client span (scope `com.anthropic.sdk.python`),
+nested under AG2's `chat` span, and the SDK sends a `traceparent` header. Set `open_telemetry` on `AnthropicConfig`
+to configure or disable these spans; leaving it unset keeps the SDK's `ANTHROPIC_OPEN_TELEMETRY*` environment
+variables in charge:
+
+```python linenums="1"
+from ag2.config import AnthropicConfig
+
+config = AnthropicConfig(model="claude-sonnet-5", open_telemetry=False)  # no SDK spans, only AG2's
 ```
 
 ## Span Types
@@ -195,7 +209,7 @@ TelemetryMiddleware(
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware.builtin import TelemetryMiddleware
 from ag2.tools import tool
 
@@ -207,7 +221,7 @@ def get_weather(city: str) -> str:
 agent = Agent(
     "weather_agent",
     prompt="Use the get_weather tool to answer weather questions.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[get_weather],
     middleware=[
         TelemetryMiddleware(

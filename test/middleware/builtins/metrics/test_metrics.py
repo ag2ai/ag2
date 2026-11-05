@@ -4,12 +4,11 @@
 
 import asyncio
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Self
 
 import pytest
 from dirty_equals import IsFloat
 from prometheus_client import CollectorRegistry
-from typing_extensions import Self
 
 from ag2 import Agent
 from ag2.annotations import Context

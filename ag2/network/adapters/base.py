@@ -29,10 +29,12 @@ Three layers of surface per adapter:
   workflow, where handoff tools are user-authored) return ``[]``.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, TypeAlias
 
-from ag2.events import Input
+from ag2.events import Input, TextInput
+from ag2.types import SendableMessage
 
 from ..channel import ChannelManifest, ChannelMetadata, ChannelState
 from ..envelope import EV_PACKET, EV_TEXT, Envelope
@@ -52,6 +54,7 @@ __all__ = (
     "AdapterState",
     "ChannelAdapter",
     "ExpectedTurn",
+    "Rendered",
     "default_build_packet_envelope",
     "default_build_round_envelope",
     "default_build_text_envelope",
@@ -59,7 +62,29 @@ __all__ = (
     "default_extract_turn_input",
     "default_render_envelope",
     "default_tools_for",
+    "ensure_parts",
 )
+
+
+Rendered: TypeAlias = SendableMessage | Input | Sequence[SendableMessage | Input]
+"""What an adapter hands the LLM for an envelope: one message, or a sequence
+of them as separate parts. Anything but an ``Input`` is converted the way
+``Agent.ask`` converts its arguments (see :func:`ensure_parts`)."""
+
+
+def ensure_parts(content: Rendered | None) -> list[Input]:
+    """Normalise what an adapter produced into ``Input`` parts.
+
+    A string, bytes, an ``Input`` or any other single message is one part; a
+    sequence is one part per item. ``None`` is no parts. Items convert via
+    ``Input.ensure_input``, so a string becomes a ``TextInput`` and
+    structured data a ``DataInput``.
+    """
+    if content is None:
+        return []
+    if isinstance(content, str | bytes | bytearray) or not isinstance(content, Sequence):
+        return [Input.ensure_input(content)]
+    return [Input.ensure_input(part) for part in content]
 
 
 class AdapterState(Protocol):
@@ -174,11 +199,11 @@ class ChannelAdapter(Protocol):
         """Per-participant default projection for this channel type."""
         ...
 
-    def extract_turn_input(self, envelope: Envelope) -> "str | Input | list[Input] | None":
-        """Decode an inbound substantive envelope into the input the
+    def extract_turn_input(self, envelope: Envelope) -> Rendered | None:
+        """Decode an inbound substantive envelope into the input parts the
         next speaker's LLM should receive on its turn.
 
-        Return ``None`` (or empty string) for envelopes this adapter
+        Return ``None`` (or no parts) for envelopes this adapter
         doesn't act on — the handler will skip the round.
 
         The default behaviour (``default_extract_turn_input``) handles
@@ -210,8 +235,11 @@ class ChannelAdapter(Protocol):
         """
         ...
 
-    def render_envelope(self, envelope: Envelope) -> str | None:
-        """Project ``envelope`` to its LLM-visible string for view policies.
+    def render_envelope(self, envelope: Envelope) -> Rendered | None:
+        """Project ``envelope`` to its LLM-visible parts for view policies.
+
+        A string, an ``Input`` or a sequence of them (see :data:`Rendered`);
+        the handler normalises it before a view sees it.
 
         Called by ``ViewPolicy.project`` once per envelope in the WAL
         slice the participant should see. Adapters that emit only
@@ -220,8 +248,8 @@ class ChannelAdapter(Protocol):
         ``EV_PACKET``) handle their own types and fall through to
         the default for the universal cases.
 
-        Returning ``None`` means "skip this envelope in the projection"
-        (non-substantive event types, malformed payload, etc.).
+        Returning ``None`` (or no parts) means "skip this envelope in the
+        projection" (non-substantive event types, malformed payload, etc.).
         """
         ...
 
@@ -287,7 +315,7 @@ class ChannelAdapter(Protocol):
         ...
 
 
-def default_extract_turn_input(envelope: Envelope) -> str | None:
+def default_extract_turn_input(envelope: Envelope) -> list[Input] | None:
     """Default ``extract_turn_input``: decode ``EV_TEXT`` only.
 
     Adapters that don't handle additional substantive event types
@@ -295,7 +323,7 @@ def default_extract_turn_input(envelope: Envelope) -> str | None:
     """
     if envelope.event_type == EV_TEXT:
         text = envelope.event_data.get("text", "")
-        return text if isinstance(text, str) else None
+        return [TextInput(text)] if isinstance(text, str) and text else None
     return None
 
 
@@ -325,17 +353,17 @@ def default_build_round_envelope(
     )
 
 
-def default_render_envelope(envelope: Envelope) -> str | None:
+def default_render_envelope(envelope: Envelope) -> list[TextInput] | None:
     """Default ``render_envelope``: project ``EV_TEXT`` only.
 
-    Returns the envelope's text payload, or ``None`` for any other
-    event type (so the view skips it). Adapters that emit additional
-    substantive event types override ``render_envelope`` and fall
-    through to this helper for ``EV_TEXT``.
+    Returns the envelope's text payload as a single part, or ``None`` for
+    any other event type (so the view skips it). Adapters that emit
+    additional substantive event types override ``render_envelope`` and
+    fall through to this helper for ``EV_TEXT``.
     """
     if envelope.event_type == EV_TEXT:
         text = envelope.event_data.get("text", "")
-        return text if isinstance(text, str) else None
+        return [TextInput(text)] if isinstance(text, str) else None
     return None
 
 

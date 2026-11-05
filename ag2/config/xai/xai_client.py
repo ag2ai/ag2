@@ -4,10 +4,9 @@
 
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Required, TypedDict
 
 from fast_depends.library.serializer import SerializerProto
-from typing_extensions import Required
 from xai_sdk import AsyncClient
 from xai_sdk.aio.chat import Chat as XAIChat
 from xai_sdk.chat import Response as XAIResponse
@@ -102,21 +101,19 @@ class XAIClient(LLMClient):
         else:
             prompt = context.prompt
 
-        xai_messages, replay_responses = convert_messages(prompt, messages, serializer)
+        xai_messages = convert_messages(prompt, messages, serializer)
         xai_tools = [tool_to_api(t) for t in tools]
         response_format = response_proto_to_format(response_schema)
 
         create_kwargs: dict[str, Any] = dict(self._create_options)
-        if xai_messages:
-            create_kwargs["messages"] = xai_messages
         if xai_tools:
             create_kwargs["tools"] = xai_tools
         if response_format is not None:
             create_kwargs["response_format"] = response_format
 
         chat = self._client.chat.create(**create_kwargs)
-        for resp in replay_responses:
-            chat.append(resp)
+        for message in xai_messages:
+            chat.append(message)
 
         if self._streaming:
             return await self._call_streaming(chat, context)

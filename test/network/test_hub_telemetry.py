@@ -37,6 +37,7 @@ from ag2.network.hub import HubTelemetryListener, RuleBasedArbiter
 from ag2.network.hub._envelope_tracing import EnvelopeTracer
 from ag2.network.hub.layout import spans_path
 from ag2.stream import MemoryStream
+from ag2.task import Task, TaskSpec
 from ag2.testing import TestConfig
 
 from ._helpers import ScriptedConfig, wait_for_text_count
@@ -211,7 +212,11 @@ async def test_update_task_terminal_fans_out_network_task_span(otel_setup) -> No
     mirror = TaskMirror(hub=hub, owner_id=bob.agent_id)
     sub_ids = mirror.attach(stream)
     try:
-        async with bob_agent.task("analyse the data", capability="analysis", context=Context(stream=stream)) as task:
+        async with Task(
+            owner_id=bob_agent.name,
+            spec=TaskSpec(title="analyse the data", capability="analysis"),
+            context=Context(stream=stream),
+        ) as task:
             await task.complete(result="done")
     finally:
         mirror.detach(stream, sub_ids)

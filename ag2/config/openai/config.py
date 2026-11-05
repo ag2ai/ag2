@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, Self, TypedDict
 
 import httpx2
 from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
@@ -15,14 +16,20 @@ from openai.types.chat import (
 from openai.types.chat.completion_create_params import PromptCacheOptions, WebSearchOptions
 from openai.types.responses import ServiceTier as ResponseServiceTier
 from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
-from typing_extensions import Unpack
+from openai.types.shared_params import DecisionQuestionInputPart, Reasoning
+from typing_extensions import Unpack, deprecated
 
 from ag2.config.config import ModelConfig, ModelProvider
+from ag2.events import Input
 
 from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, Modality, OpenAIClient, ReasoningEffort, ServiceTier, Verbosity
+from .openai_decisions_client import OpenAIDecisionsClient
 from .openai_responses_client import CreateOptions as ResponseCreateOptions
 from .openai_responses_client import OpenAIResponsesClient, Truncation
+
+if TYPE_CHECKING:
+    from ag2.files.protocol import FilesClient
 
 
 class OpenAIConfigOverrides(TypedDict, total=False):
@@ -68,7 +75,9 @@ class OpenAIConfigOverrides(TypedDict, total=False):
 
 
 @dataclass(slots=True)
-class OpenAIConfig(ModelConfig):
+class OpenAICompletionsConfig(ModelConfig):
+    """Configure the OpenAI Chat Completions API, including compatible endpoints."""
+
     model: ChatModel | str
     api_key: str | None = None
     base_url: str | None = None
@@ -120,7 +129,7 @@ class OpenAIConfig(ModelConfig):
     def provider(self) -> ModelProvider:
         return ModelProvider.OPENAI
 
-    def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> "OpenAIConfig":
+    def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> Self:
         return replace(self, **overrides)
 
     def create(self) -> OpenAIClient:
@@ -176,6 +185,24 @@ class OpenAIConfig(ModelConfig):
         return OpenAIFilesClient(self)
 
 
+OPENAI_CONFIG_DEPRECATION = (
+    "OpenAIConfig as a Chat Completions config is deprecated and will be removed in 1.4.0. "
+    "Use OpenAICompletionsConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
+    "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig."
+)
+
+
+@deprecated(OPENAI_CONFIG_DEPRECATION, category=None)
+class OpenAIConfig(OpenAICompletionsConfig):
+    """Compatibility name for Chat Completions until the Responses alias switch in 1.4.0."""
+
+    __slots__ = ()
+
+    @deprecated(OPENAI_CONFIG_DEPRECATION)
+    def create(self) -> OpenAIClient:
+        return super().create()
+
+
 class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     model: ChatModel | str
     api_key: str | None
@@ -200,6 +227,7 @@ class OpenAIResponsesConfigOverrides(TypedDict, total=False):
     prompt_cache_key: str | Omit
     prompt_cache_options: ResponsePromptCacheOptions | Omit
     prompt_cache_diagnostics: bool
+    reasoning: Reasoning | None | Omit
     service_tier: ResponseServiceTier | None | Omit
     user: str
     truncation: Truncation | None | Omit
@@ -242,6 +270,7 @@ class OpenAIResponsesConfig(ModelConfig):
     # reuses the originating turn's client. A fresh `agent.ask(...)` builds a new one and
     # starts over. An explicit `prompt_cache_options["comparison_response_id"]` outranks it.
     prompt_cache_diagnostics: bool = False
+    reasoning: Reasoning | None | Omit = omit
     service_tier: ResponseServiceTier | None | Omit = omit
     user: str = ""
     truncation: Truncation | None | Omit = omit
@@ -268,6 +297,7 @@ class OpenAIResponsesConfig(ModelConfig):
             prompt_cache_key=self.prompt_cache_key,
             # an empty object is not a setting, and a model without the feature 400s on one
             prompt_cache_options=self.prompt_cache_options or omit,
+            reasoning=self.reasoning,
             service_tier=self.service_tier,
             truncation=self.truncation,
         )
@@ -293,3 +323,79 @@ class OpenAIResponsesConfig(ModelConfig):
 
     def create_files_client(self) -> OpenAIFilesClient:
         return OpenAIFilesClient(self)
+
+
+class OpenAIDecisionsConfigOverrides(TypedDict, total=False):
+    model: str
+    api_key: str | None
+    base_url: str | None
+    organization: str | None
+    project: str | None
+    timeout: Any
+    max_retries: int
+    default_headers: dict[str, str] | None
+    default_query: dict[str, object] | None
+    http_client: httpx2.AsyncClient | None
+    safety_identifier: str | None | Omit
+    boolean_threshold: float
+    descriptions: Mapping[str, str] | None
+    question_instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None
+    extra_body: dict[str, Any] | None
+
+
+@dataclass(slots=True)
+class OpenAIDecisionsConfig(ModelConfig):
+    """OpenAI's Decisions API: one typed question per call, taken from the agent's ``response_schema``."""
+
+    model: str = "gpt-6-luna"
+    api_key: str | None = None
+    base_url: str | None = None
+    organization: str | None = None
+    project: str | None = None
+    timeout: Any = not_given
+    max_retries: int = DEFAULT_MAX_RETRIES
+    default_headers: dict[str, str] | None = None
+    default_query: dict[str, object] | None = None
+    http_client: httpx2.AsyncClient | None = None
+    safety_identifier: str | None | Omit = omit
+    # A ``bool`` schema is ``True`` once the predicate's probability reaches this.
+    boolean_threshold: float = 0.5
+    # Option descriptions keyed by choice value or score level as a string; they
+    # outrank the docstrings under ``Enum`` members.
+    descriptions: Mapping[str, str] | None = None
+    # What the question carries after the agent prompt: a string, or a sequence of
+    # strings, inputs (``ImageInput``, ``DataInput``, ...) and SDK parts
+    # (``input_text`` / ``input_image`` / ``input_json``) when the question needs to
+    # carry an image or JSON. The schema description is still appended.
+    question_instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None = None
+    extra_body: dict[str, Any] | None = None
+
+    @property
+    def provider(self) -> ModelProvider:
+        return ModelProvider.OPENAI
+
+    def copy(self, /, **overrides: Unpack[OpenAIDecisionsConfigOverrides]) -> "OpenAIDecisionsConfig":
+        return replace(self, **overrides)
+
+    def create(self) -> OpenAIDecisionsClient:
+        return OpenAIDecisionsClient(
+            model=self.model,
+            api_key=self.api_key,
+            organization=self.organization,
+            project=self.project,
+            base_url=self.base_url,
+            timeout=self.timeout,
+            max_retries=self.max_retries,
+            default_headers=self.default_headers,
+            default_query=self.default_query,
+            http_client=self.http_client,
+            safety_identifier=self.safety_identifier,
+            boolean_threshold=self.boolean_threshold,
+            descriptions=self.descriptions,
+            question_instructions=self.question_instructions,
+            extra_body=self.extra_body,
+        )
+
+    def create_files_client(self) -> "FilesClient":
+        # The endpoint takes inline data URLs only; an uploaded ``file_id`` is rejected.
+        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

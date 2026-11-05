@@ -60,6 +60,7 @@ class TestAgentComposition:
         assert agent.tasks is None
         assert agent.response_schema is None
 
+    @pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
     def test_set_slots_are_reported(self) -> None:
         @observer
         def watcher(event, context) -> None:  # type: ignore[no-untyped-def]

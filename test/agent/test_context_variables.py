@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ag2 import Agent, Context, Variable
+from ag2 import Agent, Context, Inject, Variable
 from ag2.context import strip_reserved_variables
 from ag2.events import ToolCallEvent
 from ag2.middleware.builtin.tools.approval import BYPASS_KEY
@@ -223,6 +223,59 @@ async def test_variable_with_default_factory_called_once(mock: MagicMock) -> Non
     mock.factory.assert_called_once()
     mock.first.assert_called_once_with([1])
     mock.second.assert_called_once_with([1, 2])
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize("value", ["", 0, False, [], {}], ids=repr)
+async def test_falsy_values_are_resolved(mock: MagicMock, value: Any) -> None:
+    def my_tool(
+        var: Annotated[Any, Variable("myvar")],
+        dep: Annotated[Any, Inject("mydep")],
+    ) -> str:
+        mock(var, dep)
+        return ""
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="my_tool"),
+            "result",
+        ),
+        tools=[my_tool],
+        variables={"myvar": value},
+        dependencies={"mydep": value},
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called_once_with(value, value)
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize("value", ["", 0, False, [], {}], ids=repr)
+async def test_falsy_values_win_over_defaults(mock: MagicMock, value: Any) -> None:
+    def my_tool(
+        ctx: Context,
+        var: Annotated[Any, Variable("myvar", default="default")],
+        dep: Annotated[Any, Inject("mydep", default="default")],
+    ) -> str:
+        mock(var, dep, ctx.variables["myvar"], ctx.dependencies["mydep"])
+        return ""
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCallEvent(name="my_tool"),
+            "result",
+        ),
+        tools=[my_tool],
+        variables={"myvar": value},
+        dependencies={"mydep": value},
+    )
+
+    await agent.ask("Hi!")
+
+    mock.assert_called_once_with(value, value, value, value)
 
 
 class TestReservedVariables:

@@ -31,12 +31,12 @@ With the default **OpenAI** client, when the schema exposes a JSON Schema to the
 
 ```python linenums="1" hl_lines="8 13"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant. Answer concisely.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     response_schema=int,
 )
 
@@ -61,7 +61,7 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 class TicketTriage(BaseModel):
     """Structured triage for a single support message."""
@@ -73,7 +73,7 @@ class TicketTriage(BaseModel):
 agent = Agent(
     "triage",
     prompt="You triage customer support messages. Be conservative with urgency.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     response_schema=TicketTriage,
 )
 
@@ -94,7 +94,7 @@ Turn natural language into something your scheduling layer can consume:
 from dataclasses import dataclass
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 @dataclass
 class DeliveryWindow:
@@ -106,7 +106,7 @@ class DeliveryWindow:
 agent = Agent(
     "scheduler",
     prompt="Extract delivery windows as structured data only; use 24h integers for hours.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     response_schema=DeliveryWindow,
 )
 
@@ -122,12 +122,12 @@ Use a primitive schema when the payload is a single JSON value and your prompt d
 
 ```python linenums="1" hl_lines="6 8"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "reviews",
     prompt="You output a single integer 1–5 for overall satisfaction. No prose.",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     response_schema=int,
 )
 
@@ -139,7 +139,7 @@ stars = await reply.content()
 
 !!! tip "Decision models"
 
-    On `TypeSafeConfig` the response schema is not a format hint but the question itself: `bool`, an `Enum` or an `IntEnum` rubric is put to the Jev decision model, which answers with a confidence and per-option probabilities instead of text. See [TypeSafe (Jev) Configuration](/docs/user-guide/model_configuration#typesafe-jev-configuration).
+    On decision-only providers (`OpenAIDecisionsConfig` and `TypeSafeConfig`) the response schema is not a format hint but the question itself: `bool`, an `Enum` or an `IntEnum` rubric is put to the decision model, which answers with probabilities (and, for choices and scores, a confidence) instead of text. See [Decision Models](/docs/user-guide/decision_models) for recipes, and the [OpenAI Decisions](/docs/user-guide/model_configuration#openai-decisions-configuration) and [TypeSafe (Jev)](/docs/user-guide/model_configuration#typesafe-jev-configuration) configuration sections for provider settings.
 
 ---
 
@@ -194,9 +194,9 @@ Use a union (`int | str`) or a tuple of types (`(int, str)`) when the model must
 
 ```python linenums="1" hl_lines="11"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-config = OpenAIConfig("gpt-4o-mini")
+config = OpenAICompletionsConfig("gpt-4o-mini")
 
 # int | str — e.g. a count, or "unknown" when the text does not say
 agent = Agent(
@@ -395,9 +395,9 @@ You can keep a **single** schema definition (type, `ResponseSchema`, or `@respon
 
 ```python linenums="1" hl_lines="7 15 22"
 from ag2 import Agent, PromptedSchema, ResponseSchema, response_schema
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
-config = OpenAIConfig("gpt-4o-mini")
+config = OpenAICompletionsConfig("gpt-4o-mini")
 
 # Plain type you already pass as response_schema=int elsewhere
 agent_a = Agent("a", config=config, response_schema=PromptedSchema(int))

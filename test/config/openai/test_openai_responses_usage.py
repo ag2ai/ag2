@@ -25,6 +25,7 @@ class TestNormalizeUsage:
             completion_tokens=20,
             total_tokens=120,
             cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
             thinking_tokens=0,
         )
 
@@ -42,6 +43,7 @@ class TestNormalizeUsage:
             completion_tokens=20,
             total_tokens=120,
             cache_read_input_tokens=80,
+            cache_creation_input_tokens=0,
             thinking_tokens=0,
         )
 
@@ -54,13 +56,12 @@ class TestNormalizeUsage:
             output_tokens_details=OutputTokensDetails(reasoning_tokens=10),
         )
         result = normalize_responses_usage(usage)
-        # reasoning tokens map to thinking_tokens, NOT cache_creation_input_tokens
-        # (OpenAI has no cache-write metric, so cache_creation stays None)
+        # Reasoning tokens stay separate from the reported cache-write count.
         assert result == Usage(
             prompt_tokens=100,
             completion_tokens=20,
             total_tokens=120,
             cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
             thinking_tokens=10,
         )
-        assert result.cache_creation_input_tokens is None

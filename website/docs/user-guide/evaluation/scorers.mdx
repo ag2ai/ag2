@@ -152,12 +152,12 @@ scorers = [
 Some properties can't be checked with `==`: *is the answer helpful? well-reasoned? on-brand?* `agent_judge` hands the answer plus a criterion you write to a judge model, which returns a numeric score. This is a more capable take on a LLM-as-a-judge evaluation.
 
 ```python linenums="1"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.eval.scorers import agent_judge
 
 scorers = [
-    agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer resolves the user's request.", key="helpfulness"),
-    agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer is concise.", key="conciseness"),
+    agent_judge(OpenAICompletionsConfig(model="gpt-4o-mini"), criterion="The answer resolves the user's request.", key="helpfulness"),
+    agent_judge(OpenAICompletionsConfig(model="gpt-4o-mini"), criterion="The answer is concise.", key="conciseness"),
 ]
 ```
 
@@ -178,7 +178,7 @@ scorers = [
 A judge returns a *number*, but for automation you often want a hard verdict — *reject anything below 0.7*. Pass `threshold=` to gate the judge: its column then lands in `result.pass_rate(key)` (pass iff `score >= threshold`) instead of `score_stats`, and the raw number is recorded in the feedback's `detail`.
 
 ```python linenums="1"
-agent_judge(OpenAIConfig(model="gpt-4o-mini"), criterion="The answer is helpful.", key="helpfulness", threshold=0.7)
+agent_judge(OpenAICompletionsConfig(model="gpt-4o-mini"), criterion="The answer is helpful.", key="helpfulness", threshold=0.7)
 ```
 
 `threshold=0.7` is shorthand for wrapping the judge in the generic `threshold(...)` combinator, which gates **any** numeric scorer (a judge, or your own `@scorer`) into a Pass/Fail — `scorer → scorer`:
@@ -209,8 +209,10 @@ scorers = [failure_attribution(key="failure_mode")]
 Out of the box it runs **deterministic detectors** (a crash/exception, no final answer, a tool error) — no model needed. Pass a `config` to add an **LLM attributor** that classifies the subtler, semantic failures the detectors can't see (wrong answer, gave up, looped):
 
 ```python linenums="1"
-failure_attribution(OpenAIConfig(model="gpt-4o-mini"), key="failure_mode")
+failure_attribution(OpenAICompletionsConfig(model="gpt-4o-mini"), key="failure_mode")
 ```
+
+To locate the decisive step of multi-agent failures without an LLM judge, the [mi4afa extension](/docs/user-guide/extensions/mi4afa) reads it from an open-weight model's activations with a trained probe.
 
 ## Exception handling
 

@@ -4,6 +4,7 @@
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
+from copy import copy
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -66,6 +67,10 @@ class ToolSearchTool(Tool):
     @property
     def tools(self) -> tuple[Tool, ...]:
         return tuple(self._tools.values())
+
+    def _snapshot(self) -> "ToolSearchTool":
+        """Copy the deferred members before resolving them for one turn."""
+        return copy(self)
 
     async def schemas(self, context: "Context") -> list[ToolSchema]:
         schemas: list[ToolSchema] = [ToolSearchToolSchema(mode=self._mode)]

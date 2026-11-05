@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-import httpx
+import httpx2
 import pytest
 from fast_depends.use import SerializerCls
 from mistralai.client.models import DeltaMessage, TextChunk, ThinkChunk, Tool
@@ -102,6 +102,32 @@ class TestRequest:
 
         assert chat.kwargs["temperature"] == 0.25
         assert chat.kwargs["max_tokens"] == 64
+
+    async def test_sampling_and_logprob_options_are_forwarded(self) -> None:
+        chat = FakeChat()
+
+        await _ask(
+            _make_client(
+                chat, top_k=5, min_tokens=2, repetition_penalty=1.1, logprobs=True, top_logprobs=3, service_tier="auto"
+            )
+        )
+
+        assert chat.kwargs["top_k"] == 5
+        assert chat.kwargs["min_tokens"] == 2
+        assert chat.kwargs["repetition_penalty"] == 1.1
+        assert chat.kwargs["logprobs"] is True
+        assert chat.kwargs["top_logprobs"] == 3
+        assert chat.kwargs["service_tier"] == "auto"
+
+    async def test_prediction_and_guardrails_are_forwarded(self) -> None:
+        chat = FakeChat()
+        prediction = {"type": "content", "content": "def f():"}
+        guardrails = [{"block_on_error": True}]
+
+        await _ask(_make_client(chat, prediction=prediction, guardrails=guardrails))
+
+        assert chat.kwargs["prediction"] == prediction
+        assert chat.kwargs["guardrails"] == guardrails
 
     async def test_none_options_are_dropped(self) -> None:
         chat = FakeChat()
@@ -271,7 +297,7 @@ class TestServerExecutedTools:
 
     async def test_failed_download_does_not_break_the_turn(self) -> None:
         """The URL is still on the tool-result event, so the turn stays usable."""
-        http = FakeHttpClient(error=httpx.ConnectError("boom"))
+        http = FakeHttpClient(error=httpx2.ConnectError("boom"))
         context = make_call_context()
 
         response = await _ask(_make_client(FakeChat(make_agentic_response()), http=http), context=context)
