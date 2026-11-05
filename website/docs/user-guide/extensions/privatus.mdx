@@ -1,0 +1,109 @@
+---
+title: Privatus Analytics Integration
+sidebarTitle: Privatus Analytics
+---
+
+The `ag2.extensions.privatus` module gives an agent the tools of the hosted [Privatus Analytics](https://privatusanalytics.com){.external-link target="_blank"} MCP server. Your agent can then tell you how your website is doing with real numbers, without you opening a dashboard.
+
+Privatus Analytics counts website visits without cookies and filters out bots. Through its MCP server an agent can read visitors, top pages, referrers, campaigns and Core Web Vitals, and manage goals, alerts and uptime checks.
+
+## Installation
+
+The toolkit uses AG2's MCP client, so install AG2 with the `mcp` extra and your model provider:
+
+```bash
+pip install "ag2[mcp,openai]"
+```
+
+Then get an API token:
+
+1. Sign in at [privatusanalytics.com](https://privatusanalytics.com){.external-link target="_blank"}. The free plan needs no card.
+2. Open **Workspace settings**, then **API tokens**, and create a token. It starts with `pat_`.
+3. For reports only, give it just the `analytics.read` permission.
+
+```bash
+export PRIVATUS_API_TOKEN="pat_your_token"
+```
+
+## Ask an agent about your website
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.config import OpenAIConfig
+from ag2.extensions.privatus import PrivatusAnalyticsToolkit
+
+async def main() -> None:
+    agent = Agent(
+        "analyst",
+        prompt="You read website stats and explain them in plain words.",
+        config=OpenAIConfig(model="gpt-5"),
+        tools=[PrivatusAnalyticsToolkit()],
+    )
+    reply = await agent.ask("Which pages got the most visitors last week?")
+    print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+`PrivatusAnalyticsToolkit()` reads `PRIVATUS_API_TOKEN` when it is built. You can also pass the token as the first argument.
+
+## Pick the tools the agent sees
+
+The server only lists the tools your token may use. To narrow that further, pass `allowed_tools` or `blocked_tools`. These use the server's own tool names:
+
+```python linenums="1"
+from ag2.extensions.privatus import PrivatusAnalyticsToolkit
+
+toolkit = PrivatusAnalyticsToolkit(
+    allowed_tools=["sites_list", "stats_aggregate", "stats_breakdown", "stats_timeseries"],
+)
+```
+
+Use `tool_name_prefix="pa_"` when another toolkit on the same agent has tools with the same names.
+
+## One token per user
+
+When each user of your app has their own Privatus Analytics token, pass a `Variable` and give the value on each run:
+
+```python linenums="1"
+from ag2 import Agent, Variable
+from ag2.extensions.privatus import PrivatusAnalyticsToolkit
+
+agent = Agent(
+    "analyst",
+    config=config,
+    tools=[PrivatusAnalyticsToolkit(Variable("privatus_token"))],
+)
+
+reply = await agent.ask(
+    "How many visitors did my site get today?",
+    variables={"privatus_token": user_token},
+)
+```
+
+## Safety
+
+- Each tool checks the token's permissions. A token with only `analytics.read` cannot change anything.
+- Hard-to-undo actions, such as deleting data, billing and access settings, are never run by the server. It returns a link so a person can finish them.
+- The token stays in your process. It is sent only to the MCP server URL, as `Authorization: Bearer <token>`.
+
+## Settings
+
+| Argument | Default | What it does |
+|---|---|---|
+| `api_token` | `PRIVATUS_API_TOKEN` | Token sent as a bearer token. A `Variable` is resolved on each run. |
+| `server_url` | `https://privatusanalytics.com/mcp` | The MCP endpoint. |
+| `allowed_tools` | all the token may use | Server tool names to expose. |
+| `blocked_tools` | none | Server tool names to hide. |
+| `tool_name_prefix` | `""` | Prefix for the tool names the agent sees. |
+| `connection_timeout` | `30.0` | Seconds to wait on the server. |
+
+## Links
+
+- **MCP server docs:** [privatusanalytics.com/docs/mcp](https://privatusanalytics.com/docs/mcp){.external-link target="_blank"}
+- **REST API docs:** [privatusanalytics.com/docs/api](https://privatusanalytics.com/docs/api){.external-link target="_blank"}
+- **MCP server README:** [github.com/Privatus-Analytics/mcp-server](https://github.com/Privatus-Analytics/mcp-server){.external-link target="_blank"}
+- **Maintainer:** [@ja-andrews](https://github.com/ja-andrews){.external-link target="_blank"}
