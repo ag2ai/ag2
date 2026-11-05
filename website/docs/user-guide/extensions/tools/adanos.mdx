@@ -1,0 +1,78 @@
+---
+title: Adanos market sentiment
+sidebarTitle: Adanos
+---
+
+`AdanosToolkit` gives a research agent one `adanos_query` tool for source-labelled attention and sentiment data from [Adanos](https://adanos.org/){.external-link target="_blank"}. This contributor-maintained Extension is maintained by [alexander-schneider](https://github.com/alexander-schneider){.external-link target="_blank"}.
+
+!!! note
+    Adanos is a commercial, plan-limited data provider. You need an API key, and your plan controls source access, quotas, and available history. No additional Python package is required beyond AG2.
+
+## Register the toolkit
+
+Set `ADANOS_API_KEY` in your application's server-side environment, or pass `api_key` to the constructor. Do not put the key in agent prompts or tool arguments.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import ModelConfig
+from ag2.extensions.tools import AdanosToolkit
+
+def research_agent(config: ModelConfig) -> Agent:
+    return Agent(
+        "market-researcher",
+        config=config,
+        tools=[AdanosToolkit()],
+        prompt="Use source-labelled sentiment evidence. Distinguish null from zero.",
+    )
+```
+
+Pass your configured model to `research_agent`, then use `await agent.ask(...)` as with other AG2 tools. The toolkit registers one native FunctionTool backed by a bound async method. Its key is not part of the model-visible schema. Missing or invalid credentials produce a native tool error without a network request.
+
+## Supported queries
+
+The integration targets Adanos OpenAPI **1.54.1**. Each of the five operations works with each of the five sources, for 25 combinations.
+
+| `source` | API namespace |
+| :--- | :--- |
+| `reddit_stocks` | `/reddit/stocks/v1` |
+| `x_stocks` | `/x/stocks/v1` |
+| `news_stocks` | `/news/stocks/v1` |
+| `polymarket_stocks` | `/polymarket/stocks/v1` |
+| `reddit_crypto` | `/reddit/crypto/v1` |
+
+| `operation` | Additional arguments | Provider data root |
+| :--- | :--- | :--- |
+| `trending` | Optional `from_date`, `to_date`, `limit` from 1 to 100 | Array of assets |
+| `asset` | Required `asset`; optional `from_date`, `to_date` | Object |
+| `compare` | Required `assets`, a list of 1 to 10 keys; optional `from_date`, `to_date` | Object containing `stocks`, or `tokens` for crypto |
+| `search` | Required `query`; optional `limit` from 1 to 50 | Object containing `query`, `count`, `period_days`, and `results` |
+| `market_sentiment` | Optional `from_date`, `to_date` | Object |
+
+Both `source` and `operation` are required. Other arguments are accepted only for the operations listed above. If omitted, `limit` uses the provider default of 20. Search needs at least two non-cashtag characters after trimming. News search permits up to 100 characters, and Polymarket search permits up to 50.
+
+Dates are inclusive UTC calendar dates in `YYYY-MM-DD` format, sent as `from` and `to`. The tool never sends `days`. Omitted dates use the provider defaults, today for trending and market sentiment, and the last seven days for asset and compare. Search has a fixed seven-day summary and accepts no dates. A requested historical period is **not a historical point-in-time guarantee**. Data may reflect later processing or reference changes.
+
+For crypto, `asset` selects `/token/{symbol}`, and compare sends `symbols`. Stock sources use `/stock/{ticker}` and `tickers`. Asset path values are encoded. News uses company keys such as `BRK` and `ABX.DE`, not share-class tickers such as `BRK.A` or `BRK-B`. The tool passes keys unchanged and leaves source-specific identity validation to Adanos. Use that source's search results to select keys.
+
+## Evidence and failures
+
+Successful calls return a native `ToolResult` containing a structured object with these fields.
+
+| Field | Meaning |
+| :--- | :--- |
+| `source` | Requested source identifier |
+| `operation` | Requested operation |
+| `requested_period` | Requested `from` and `to` dates, or `null` when omitted; not a claim about the resolved period |
+| `data` | Unmodified provider JSON |
+
+Null values remain null. Zero activity and empty result lists remain valid data. Field meanings differ by source, for example Polymarket uses trade and market counts rather than mention counts. The tool does not repair data, combine sentiment scores, provide prices, or make trading decisions.
+
+Each call owns and closes an `httpx.AsyncClient`, including on failure or cancellation. Requests use only `https://api.adanos.com`, a 30-second HTTP timeout, TLS verification, and no redirects, retries, automatic pagination, or environment proxy settings. Concurrent invocations do not share clients or modify environment variables.
+
+HTTP failures, redirects, transport failures, malformed JSON, and unexpected response shapes raise sanitized exceptions. AG2 delivers these as native `ToolErrorEvent` events, not successful evidence. HTTP errors include the status code but never the provider error body or API key. Success checks cover operation-specific root kinds and identifying fields, not every nested provider field. A 429 requires the application to decide whether and when to try again.
+
+## Excluded endpoints
+
+This is not a complete Adanos API client. Raw mentions, explain, sector and country rankings, stats, health, direct text sentiment analysis, extra filters, and pagination are excluded. The tool accepts no arbitrary URL, HTTP method, headers, or query parameter dictionary.
+
+See the [Adanos API documentation](https://api.adanos.org/docs){.external-link target="_blank"} for provider fields, source availability, and plan limits.
