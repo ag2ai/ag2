@@ -1,0 +1,103 @@
+---
+title: Asyntai
+sidebarTitle: Asyntai
+---
+
+`AsyntaiToolkit` connects an agent to [Asyntai](https://asyntai.com){.external-link target="_blank"}, an AI chatbot for websites. Asyntai answers visitors from a website's own pages, documents and knowledge base, and it captures leads. Use this toolkit when an agent needs answers from that website knowledge, needs to add knowledge to it, or needs to read the leads and conversations the chatbot collected.
+
+!!! note
+    No extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on. The Asyntai API needs an API key from a paid Asyntai plan. Create the key under **Settings > API** in the [Asyntai dashboard](https://asyntai.com/dashboard/){.external-link target="_blank"}.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.asyntai import AsyntaiToolkit
+
+agent = Agent(
+    "support",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[AsyntaiToolkit()],
+)
+```
+
+Pass `api_key=...` or set the `ASYNTAI_API_KEY` environment variable. The toolkit raises `ValueError` if it finds neither.
+
+## Tools
+
+| Tool | Default | Description |
+| :--- | :--- | :--- |
+| `asyntai_ask_website` | Yes | Ask the knowledge base of a website and get an answer. Pass the returned `session_id` to ask a follow-up question |
+| `asyntai_list_websites` | Yes | List the websites on the account, with their ids |
+| `asyntai_add_text` | No | Add a text to the knowledge base |
+| `asyntai_add_url` | No | Add a web page to the knowledge base |
+| `asyntai_list_knowledge` | No | List the knowledge base entries |
+| `asyntai_get_leads` | No | Read the leads the chatbot captured, with optional `email` and `since` filters |
+| `asyntai_get_conversation` | No | Read the messages of one conversation |
+
+The default tools only read website knowledge. The other tools change the knowledge base or read visitor data, so you turn them on yourself. To register all seven tools, pass `all_tools=True`:
+
+```python linenums="1"
+agent = Agent("support", config=config, tools=[AsyntaiToolkit(all_tools=True)])
+```
+
+## Choosing a website
+
+An Asyntai account can hold several websites. Without a website id, Asyntai uses the account's primary website. `asyntai_get_leads` then returns the leads of all websites.
+
+```python linenums="1"
+toolkit = AsyntaiToolkit(website_id=12)  # default website for every tool
+```
+
+The model can also name a website in a tool call, using the ids from `asyntai_list_websites`. That value takes priority over the default. `website_id` also accepts a `Variable` for deferred context resolution:
+
+```python linenums="1"
+from ag2 import Variable
+
+agent = Agent("support", config=config, tools=[AsyntaiToolkit(website_id=Variable("site"))])
+
+await agent.ask("What is the return policy?", variables={"site": 12})
+```
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit: `ask()`, `list_websites()`, `add_text()`, `add_url()`, `list_knowledge()`, `get_leads()` and `get_conversation()`. Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = AsyntaiToolkit()
+
+agent = Agent(
+    "sales",
+    config=config,
+    tools=[toolkit.ask(website_id=12), toolkit.get_leads(website_id=12)],
+)
+```
+
+Every factory method also accepts `name` and `description` overrides for the registered tool.
+
+## Connection settings
+
+The toolkit opens one `httpx.AsyncClient` per request. Override how that client connects:
+
+```python linenums="1"
+toolkit = AsyntaiToolkit(
+    base_url="https://asyntai.com/api/v1",  # override to route through your own gateway
+    timeout=60.0,                           # per-request timeout in seconds
+    proxy="http://proxy.internal:3128",
+    verify=True,                            # set False only to skip TLS verification
+)
+```
+
+A non-2xx response raises `httpx.HTTPStatusError` with Asyntai's own error message, for example for an invalid API key.
+
+## Result
+
+| Tool | Result | Fields |
+| :--- | :--- | :--- |
+| `asyntai_ask_website` | `AsyntaiAnswer` | `answer`, `session_id` |
+| `asyntai_list_websites` | `AsyntaiWebsites` | `websites` |
+| `asyntai_add_text`, `asyntai_add_url` | `AsyntaiKnowledgeAdded` | `entry_id`, `title`, `url`, `chunks_created` |
+| `asyntai_list_knowledge` | `AsyntaiKnowledgeEntries` | `entries` |
+| `asyntai_get_leads` | `AsyntaiLeads` | `leads` |
+| `asyntai_get_conversation` | `AsyntaiConversation` | `session_id`, `messages` |
+
+For the fields of each website, entry, lead and message, see the [Asyntai API reference](https://asyntai.com/documentation/api/){.external-link target="_blank"}.
