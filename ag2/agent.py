@@ -592,11 +592,13 @@ class AgentRun(Generic[TResult, TAgent]):
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
         context_overrides: _ContextOverrides | None = None,
+        initial_history: Sequence[BaseEvent] | None = None,
     ) -> None:
         self.__agent = agent
         self.__trigger = trigger
         self.__context = context
         self.__context_overrides = context_overrides
+        self.__initial_history = initial_history
         self.__config = config
         self.__tools = tools
         self.__plugins = tuple(plugins)
@@ -650,6 +652,7 @@ class AgentRun(Generic[TResult, TAgent]):
                 capability=self.__capability,
                 ttl_seconds=self.__ttl_seconds,
                 context_overrides=self.__context_overrides,
+                initial_history=self.__initial_history,
                 additional_plugins=self.__plugins,
                 hitl_hook=self.__hitl_hook,
                 additional_tools=self.__tools,
@@ -1396,6 +1399,7 @@ class Agent(PluginTarget, Generic[TResult]):
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
         context_overrides: _ContextOverrides | None = None,
+        initial_history: Sequence[BaseEvent] | None = None,
     ) -> "AgentRun[Any, Any]":
         """The launch primitive: wrap a ``(trigger, context)`` turn as an ``AgentRun``.
 
@@ -1419,6 +1423,7 @@ class Agent(PluginTarget, Generic[TResult]):
             hitl_hook=hitl_hook,
             client=client,
             context_overrides=context_overrides,
+            initial_history=initial_history,
         )
 
     async def resume(
@@ -1452,7 +1457,6 @@ class Agent(PluginTarget, Generic[TResult]):
         """
         stream = stream or MemoryStream()
         *history, trigger = events
-        await stream.history.replace(history)
 
         context = self.__build_context(
             stream,
@@ -1464,6 +1468,7 @@ class Agent(PluginTarget, Generic[TResult]):
         async with self._make_run(
             trigger,
             context=context,
+            initial_history=history,
             config=config,
             tools=tools,
             plugins=plugins,
@@ -1583,6 +1588,7 @@ class Agent(PluginTarget, Generic[TResult]):
         client: LLMClient | None = None,
         config: ModelConfig | None = None,
         context_overrides: _ContextOverrides | None = None,
+        initial_history: Sequence[BaseEvent] | None = None,
         capability: str | None = None,
         ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
@@ -1597,6 +1603,8 @@ class Agent(PluginTarget, Generic[TResult]):
         additional_middleware = tuple(additional_middleware)
         validate_knowledge_middleware(chain(self._middleware, plugins.middleware, additional_middleware))
         async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
+            if initial_history is not None:
+                await context.stream.history.replace(initial_history)
             # Served entry points (A2A, A2UI, NLIP) build their own context; the
             # running agent is always this one for the duration of the turn.
             _set_for_turn(stack, context.dependencies, AGENT_CONTEXT_DEPENDENCY_KEY, self)
