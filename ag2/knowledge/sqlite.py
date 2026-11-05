@@ -82,7 +82,18 @@ class SqliteKnowledgeStore:
 
     async def _run(self, func: Callable[[], Any]) -> Any:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, func)
+        pending = loop.run_in_executor(None, func)
+        try:
+            return await asyncio.shield(pending)
+        except asyncio.CancelledError:
+            # Cancelling the await cannot stop a running thread. Keep the caller's
+            # connection lock until that operation settles, even on repeated cancel.
+            while not pending.done():
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await asyncio.shield(pending)
+            if not pending.cancelled():
+                pending.exception()
+            raise
 
     def _sync_read(self, normalized: str) -> str | None:
         conn = self._ensure_connected()
