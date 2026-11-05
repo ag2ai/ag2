@@ -123,10 +123,13 @@ class ClientToolCallEvent(ToolEvent):
 
     @classmethod
     def from_call(cls, call: ToolCallEvent) -> "ClientToolCallEvent":
+        # Middleware can edit the decoded arguments without changing the
+        # provider's original string. Forward those edits to the client.
+        arguments = call.arguments if call._serialized_arguments is None else json.dumps(call._serialized_arguments)
         return cls(
             id=call.id,
             name=call.name,
-            arguments=call.arguments,
+            arguments=arguments,
         )
 
 
