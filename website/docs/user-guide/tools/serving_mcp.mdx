@@ -108,17 +108,25 @@ app = MCPServer(agent, elicitation_policy="ask")  # "ask" is the default
 
 Only a client that advertised it can answer is ever asked. A client that cannot — or a policy of `"decline"` — falls through to the agent's own `hitl_hook`, and with none configured the turn fails with the usual `HumanInputNotProvidedError` and its instructional message. That loud failure is deliberate: silently returning a degraded result would hide from the caller that the question went nowhere.
 
-### Run on the calling client's model
+### Configure the served agent's model
 
-A deployment holding no model credentials can still serve an agent that needs one: `client_model=True` runs the agent's own reasoning on the **calling client's** LLM, over MCP sampling.
+Configure the served Agent with its own provider and leave `client_model`
+disabled (the default). The server uses its configured model for reasoning:
 
 ```python linenums="1"
 from ag2 import Agent
+from ag2.config import AnthropicConfig
 from ag2.mcp import MCPServer
 
-agent = Agent(name="assistant")  # no config of its own
-app = MCPServer(agent, client_model=True)
+agent = Agent(name="assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = MCPServer(agent)
 ```
+
+#### Compatibility with client-provided models
+
+The legacy `client_model=True` option runs reasoning on the calling client's
+LLM over deprecated MCP sampling. New integrations should configure a provider
+on the served Agent as above.
 
 It is off unless you ask for it, and a server that has not enabled it never sends a sampling request and never needs the capability of its clients.
 
@@ -575,7 +583,7 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `lifespan` | `None` | an `mcp` server lifespan |
 | `sessions` | `True` | conversation history: `True`, a `SessionConfig`, or `False` for stateless |
 | `elicitation_policy` | `"ask"` | whether the served agent's questions reach the calling client's human |
-| `client_model` | `False` | run the agent's reasoning on the calling client's model |
+| `client_model` | `False` | legacy MCP sampling; configure the served Agent's own model for new integrations |
 | `resources` / `resource_templates` / `prompts` | `()` | expose these alongside the tool; each capability is advertised only when non-empty |
 | `tools` | `()` | deterministic `@mcp_tool` tools served next to `ask` |
 | `apps` | `()` | MCP Apps whose tools and interactive documents are served together |

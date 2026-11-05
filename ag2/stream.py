@@ -12,12 +12,13 @@ from uuid import uuid4
 
 from fast_depends.core import CallModel
 
-from ag2.types import ClassInfo, SendableMessage
+from ag2.types import ClassInfo, RequestOrigin, SendableMessage
 
 from .annotations import Context as AnnotatedContext
 from .context import ConversationContext, Stream, StreamId, SubId, drop_background_task
 from .events import BaseEvent, Input, ModelRequest
 from .events.conditions import Condition, TypeCondition
+from .events.delegation import delivery_of
 from .history import History, MemoryStorage, Storage
 from .utils import CONTEXT_OPTION_NAME, _validate_timeout, build_model
 
@@ -182,11 +183,11 @@ class MemoryStream(ABCStream):
             # These are real-time streaming artifacts superseded by their final counterparts.
             self.subscribe(_FilteredStorage(storage).save_event)
 
-    def enqueue(self, *content: "SendableMessage | Input") -> None:
+    def enqueue(self, *content: "SendableMessage | Input", origin: RequestOrigin = "service") -> None:
         if not content:
             return
         parts = [Input.ensure_input(item) for item in content]
-        self.pending_messages.append(ModelRequest(parts))
+        self.pending_messages.append(ModelRequest(parts, origin=origin))
 
     def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         task = asyncio.create_task(coro)
@@ -228,7 +229,7 @@ class MemoryStream(ABCStream):
         """Subscribe with an optional finite positive per-call timeout in seconds.
 
         ``None`` waits indefinitely. The limit covers dependency resolution,
-        handler execution, and dependency cleanup. Expiry raises ``asyncio.TimeoutError``
+        handler execution, and dependency cleanup. Expiry raises ``TimeoutError``
         to ``send`` and stops delivery of that event to subsequent handlers.
         Cancellation is cooperative; worker threads can continue after expiry.
         """
@@ -252,8 +253,12 @@ class MemoryStream(ABCStream):
         self._interrupters.pop(sub_id, None)
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None:
+        delivery = delivery_of(event)
+        validate = delivery.validate if delivery is not None else None
         # interrupters should follow registration order
         for interrupter in tuple(self._interrupters.values()):
+            if validate is not None:
+                validate()
             if interrupter.condition and not interrupter.condition(event):
                 continue
 
@@ -265,6 +270,8 @@ class MemoryStream(ABCStream):
         # TODO: we need to publish under RWLock to prevent
         # subscribers dictionary mutation. Now it is protected by copy
         for subscriber in tuple(self._subscribers.values()):
+            if validate is not None:
+                validate()
             if subscriber.condition and not subscriber.condition(event):
                 continue
 
@@ -352,8 +359,8 @@ class SubStream(ABCStream):
     def pending_messages(self) -> list[ModelRequest]:
         return self._parent.pending_messages
 
-    def enqueue(self, *content: "SendableMessage | Input") -> None:
-        self._parent.enqueue(*content)
+    def enqueue(self, *content: "SendableMessage | Input", origin: RequestOrigin = "service") -> None:
+        self._parent.enqueue(*content, origin=origin)
 
     def spawn_background(self, coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         return self._parent.spawn_background(coro)

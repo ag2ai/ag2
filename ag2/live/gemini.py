@@ -53,12 +53,8 @@ LiveVoice = Literal[
     "Zephyr",
 ]
 ModelName = Literal[
-    "gemini-2.0-flash-live-001",
-    "gemini-live-2.5-flash-preview",
-    "gemini-2.5-flash-preview-native-audio-dialog",
-    "gemini-2.5-flash-native-audio-preview-09-2025",
-    "gemini-2.5-flash-native-audio-preview-12-2025",
-    "gemini-3.1-flash-live-preview",
+    "gemini-3.8-live",
+    "gemini-3.8-live-extended-thinking",
 ]
 
 
@@ -82,6 +78,9 @@ class TextOutput:
 
     Selects the ``TEXT`` modality; the model returns raw text via
     ``ModelMessageChunk`` events with no audio playback.
+
+    ``gemini-3.8-live`` accepts only the ``AUDIO`` modality; use
+    ``AudioOutput`` there and read the text from its transcription.
     """
 
 

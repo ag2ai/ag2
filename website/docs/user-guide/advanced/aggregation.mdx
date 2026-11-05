@@ -69,11 +69,11 @@ Writes a timestamped summary of the conversation to `/memory/conversations/`. Th
 
 ```python linenums="1" hl_lines="6 9"
 from ag2.aggregate import ConversationSummaryAggregate
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
-strategy = ConversationSummaryAggregate(config=OpenAIConfig(model="gpt-5-mini"))
+strategy = ConversationSummaryAggregate(config=OpenAICompletionsConfig(model="gpt-5-mini"))
 
 # After the conversation:
 await strategy.aggregate(events, ctx, store)
@@ -92,11 +92,11 @@ Updates `/memory/working.md` — the agent's single persistent state document. R
 
 ```python linenums="1" hl_lines="6 9"
 from ag2.aggregate import WorkingMemoryAggregate
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
-strategy = WorkingMemoryAggregate(config=OpenAIConfig(model="gpt-5-mini"))
+strategy = WorkingMemoryAggregate(config=OpenAICompletionsConfig(model="gpt-5-mini"))
 
 # Refresh working memory at the end of a session:
 await strategy.aggregate(events, ctx, store)
@@ -109,7 +109,7 @@ The default prompt is journal-style: *preserve facts that are still relevant, dr
 
 ```python linenums="1" hl_lines="3-8"
 strategy = WorkingMemoryAggregate(
-    config=OpenAIConfig(model="gpt-5-mini"),
+    config=OpenAICompletionsConfig(model="gpt-5-mini"),
     prompt=(
         "You maintain a research agent's working memory. Track tactics, "
         "not topical facts: which phrasings worked, which sources were "
@@ -142,24 +142,24 @@ The path constants (`WORKING_MEMORY_PATH`, `CONVERSATIONS_PREFIX`) are defined i
 
 ## Wiring onto an Agent
 
-Pass the strategy + trigger through [`KnowledgeConfig`](/docs/user-guide/agent_harness#knowledge-knowledgeconfig). The Agent wires a `_AggregationMiddleware` that fires `aggregate()` automatically according to the trigger.
+Pass the strategy + trigger through [`KnowledgePlugin`](/docs/user-guide/agent_harness#knowledgeplugin). The plugin contributes middleware that fires `aggregate()` automatically according to the trigger.
 
 ```python linenums="1" hl_lines="11-15"
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
-from ag2.config import OpenAIConfig
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.config import OpenAICompletionsConfig
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 store = MemoryKnowledgeStore()
-summarizer_config = OpenAIConfig(model="gpt-5-mini")  # cheap model for summaries
+summarizer_config = OpenAICompletionsConfig(model="gpt-5-mini")  # cheap model for summaries
 agent = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-5"),
-    knowledge=KnowledgeConfig(
+    config=OpenAICompletionsConfig(model="gpt-5"),
+    plugins=[KnowledgePlugin(
         store=store,
         aggregate=ConversationSummaryAggregate(config=summarizer_config),
         aggregate_trigger=AggregateTrigger(every_n_turns=10, on_end=True),
-    ),
+    )],
 )
 ```
 
@@ -181,10 +181,10 @@ If you're not using `Agent` (custom harness, tests, one-off scripts), call `#!py
 
 ```python linenums="1"
 from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 trigger = AggregateTrigger(every_n_turns=10, on_end=True)
-strategy = ConversationSummaryAggregate(config=OpenAIConfig(model="gpt-5-mini"))
+strategy = ConversationSummaryAggregate(config=OpenAICompletionsConfig(model="gpt-5-mini"))
 
 _turn_count = 0
 

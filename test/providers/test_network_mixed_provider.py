@@ -160,7 +160,7 @@ async def test_3way_discussion_one_per_provider() -> None:
     configs = {
         "alice": AnthropicConfig(model="claude-haiku-4-5", api_key=anth_key),
         "bob": OpenAIConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
-        "carol": GeminiConfig(model="gemini-3-flash-preview", api_key=gemini_key, temperature=0),
+        "carol": GeminiConfig(model="gemini-3.6-flash", api_key=gemini_key, temperature=0),
     }
 
     clients = []

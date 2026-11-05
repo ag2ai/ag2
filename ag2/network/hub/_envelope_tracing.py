@@ -22,7 +22,7 @@ Two responsibilities:
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from opentelemetry import trace
@@ -82,8 +82,7 @@ def get_tracer(tracer_provider: "TracerProvider | None" = None) -> trace.Tracer:
 def _iso_from_ns(ns: "int | None") -> "str | None":
     if ns is None:
         return None
-    # ``timezone.utc`` (not ``datetime.UTC``) to keep the Python 3.10 floor.
-    return datetime.fromtimestamp(ns / 1_000_000_000, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.fromtimestamp(ns / 1_000_000_000, tz=UTC).isoformat().replace("+00:00", "Z")
 
 
 def iso_to_ns(iso: "str | None") -> "int | None":

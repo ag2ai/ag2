@@ -27,7 +27,7 @@ Pass observers when creating the agent. These observers are active for every `#!
 
 ```python linenums="1" hl_lines="12"
 from ag2 import Agent, observer
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ModelResponse, ToolCallEvent
 
 @observer(ModelResponse)
@@ -36,7 +36,7 @@ def on_response(event: ModelResponse) -> None:
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
     observers=[on_response],
 )
 
@@ -52,7 +52,7 @@ from ag2 import Agent
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig("gpt-4o-mini"),
+    config=OpenAICompletionsConfig("gpt-4o-mini"),
 )
 
 @agent.observer(ModelResponse)
@@ -169,7 +169,7 @@ reply = await agent.ask("Hello!")
 
 The parameter also works with `#!python observer(ModelResponse, callback, timeout=5.0)`, `#!python @agent.observer(ModelResponse, timeout=5.0)`, and `#!python @plugin.observer(ModelResponse, timeout=5.0)`. Omit the condition to apply it to callbacks receiving every event.
 
-The default is `#!python None` (no limit). A configured timeout must be finite and greater than zero. It covers dependency resolution, the callback, and dependency cleanup. Expiry raises `asyncio.TimeoutError` to the event publisher and can fail the agent turn, just like other callback exceptions. See [Subscriber timeouts](/docs/user-guide/advanced/stream#subscriber-timeouts) for delivery and cancellation behavior.
+The default is `#!python None` (no limit). A configured timeout must be finite and greater than zero. It covers dependency resolution, the callback, and dependency cleanup. Expiry raises `TimeoutError` to the event publisher and can fail the agent turn, just like other callback exceptions. See [Subscriber timeouts](/docs/user-guide/advanced/stream#subscriber-timeouts) for delivery and cancellation behavior.
 
 ## Observers vs Middleware vs Stream Subscribers
 
@@ -209,27 +209,27 @@ Detects repetitive tool-call patterns. Maintains a sliding window of recent tool
 ```python linenums="1"
 from ag2 import Agent
 from ag2.observers import LoopDetector
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "poller",
-    config=OpenAIConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     observers=[LoopDetector(window_size=10, repeat_threshold=3)],
 )
 ```
 
 #### TokenMonitor
 
-Tracks cumulative token usage across `UsageEvent` — the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, sub-task rollups (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
+Tracks cumulative token usage across `UsageEvent` — the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, source events forwarded from descendants (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Descendant usage arrives while the sub-task runs, without a generated rollup; see [Account for Descendant Usage](/docs/user-guide/advanced/stream#account-for-descendant-usage). Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
 
 ```python linenums="1"
 from ag2 import Agent
 from ag2.observers import TokenMonitor
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     observers=[TokenMonitor(warn_threshold=50_000, alert_threshold=100_000)],
 )
 ```
@@ -286,11 +286,11 @@ Register it like any other observer:
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
-    config=OpenAIConfig(model="gpt-5"),
+    config=OpenAICompletionsConfig(model="gpt-5"),
     observers=[AvgCompletionObserver(window=5, timeout=5.0)],
 )
 ```

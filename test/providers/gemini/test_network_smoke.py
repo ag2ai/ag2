@@ -5,7 +5,7 @@
 """Network tool surface smoke tests against a real Gemini model.
 
 Mirrors the Anthropic / OpenAI smokes to prove the network surface is
-provider-neutral end-to-end. Uses ``gemini-3-flash-preview`` (the
+provider-neutral end-to-end. Uses ``gemini-3.6-flash`` (the
 project key does not have access to any 2.X model).
 
 Loads ``.env`` from the repo root; skips if ``GEMINI_API_KEY`` is
@@ -46,7 +46,7 @@ def gemini_config() -> GeminiConfig:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         pytest.skip("GEMINI_API_KEY not set")
-    return GeminiConfig(model="gemini-3-flash-preview", api_key=api_key, temperature=0)
+    return GeminiConfig(model="gemini-3.6-flash", api_key=api_key, temperature=0)
 
 
 async def _wait_for_text_count(

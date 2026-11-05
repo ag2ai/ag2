@@ -59,7 +59,7 @@ cancelled = await cancel_task(
 )
 ```
 
-`#!python metadata` is forwarded to the server's cancel handler — useful for auditing who cancelled what and why. Already-terminal tasks (`#!python COMPLETED`, `#!python FAILED`, etc.) are typically refused with a `#!python 409`-style error; surface the exception, don't paper over it.
+`#!python metadata` is forwarded to the server's cancel handler — useful for auditing who cancelled what and why. Already-terminal tasks (`#!python COMPLETED`, `#!python FAILED`, etc.) are refused with `#!python TaskNotCancelableError`, and an AG2 server refuses the same way when the task finishes on its own while the cancel is in flight; surface the exception, don't paper over it.
 
 ## Push Notifications
 

@@ -82,7 +82,7 @@ async def test_callback_timeout_through_observer_helpers(registration: str, filt
         plugin.observer(condition, callback.handle, timeout=0.02)
         agent = Agent("test", config=TestConfig("done"), plugins=[plugin])
 
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         await agent.ask("trigger")
 
     assert callback.started.is_set()
@@ -129,7 +129,7 @@ async def test_base_observer_timeout_is_logged_for_every_trigger(kind: str, capl
         assert any(
             "Observer 'recovering' process() failed" in record.message
             and record.exc_info is not None
-            and isinstance(record.exc_info[1], asyncio.TimeoutError)
+            and isinstance(record.exc_info[1], TimeoutError)
             for record in caplog.records
         )
 

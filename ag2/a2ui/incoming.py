@@ -7,8 +7,7 @@ import logging
 import re
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
-
-from typing_extensions import assert_never
+from typing import assert_never
 
 from ._types import JsonValue
 from .actions import A2UIEventAction

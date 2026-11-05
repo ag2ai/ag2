@@ -127,7 +127,7 @@ class DockerSandbox(SandboxBase):
                 asyncio.to_thread(container.exec_run, argv, **exec_kwargs),
                 timeout=exec_timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await self._restart_container()
             return ExecResult(output=f"Execution timed out after {exec_timeout}s", exit_code=124)
         except APIError as e:

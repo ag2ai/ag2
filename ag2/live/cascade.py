@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager, suppress
 
 from fast_depends.library.serializer import SerializerProto
 
+from ag2._model_input import model_inputs
 from ag2.config.config import ModelConfig
 from ag2.context import ConversationContext
 from ag2.events import (
@@ -136,7 +137,10 @@ class CascadeConfig(RealtimeConfig):
 
             if _running(turn):
                 assert turn is not None
-                await turn
+                # `wait`, not `await turn`: a turn cancelled by a barge-in may still
+                # be unwinding, and its cancellation must not reach the sender of
+                # the microphone audio. A failed turn is logged by `spawn_background`.
+                await asyncio.wait([turn])
 
             # `spawn_background` (not a bare `create_task`) so a turn that
             # raises is logged rather than vanishing into an unretrieved task.
@@ -183,40 +187,47 @@ class CascadeConfig(RealtimeConfig):
     ) -> None:
         speech = Speech(self._tts, self._min_chars)
 
-        with context.stream.where(ModelMessageChunk).sub_scope(speech.on_chunk):
-            for _ in range(MAX_TOOL_ITERATIONS):
-                messages = _conversation(await context.stream.history.get_events())
-                response = await client(  # type: ignore[operator]
-                    messages,
-                    context,
-                    tools=schemas,
-                    response_schema=None,
-                    serializer=serializer,
-                )
-
-                if response.usage:
-                    await context.send(
-                        UsageEvent(
-                            response.usage,
-                            kind="model_call",
-                            model=response.model,
-                            provider=response.provider,
-                            finish_reason=response.finish_reason,
-                        )
+        try:
+            with context.stream.where(ModelMessageChunk).sub_scope(speech.on_chunk):
+                for _ in range(MAX_TOOL_ITERATIONS):
+                    messages = _conversation(await context.stream.history.get_events())
+                    response = await client(  # type: ignore[operator]
+                        messages,
+                        context,
+                        tools=schemas,
+                        response_schema=None,
+                        serializer=serializer,
                     )
-                await context.send(response)
 
-                if not response.tool_calls:
+                    if response.usage:
+                        await context.send(
+                            UsageEvent(
+                                response.usage,
+                                kind="model_call",
+                                model=response.model,
+                                provider=response.provider,
+                                finish_reason=response.finish_reason,
+                            )
+                        )
+                    await context.send(response)
+
+                    # Every model response is its own reply: words said before a
+                    # tool call are spoken before the tool runs, not after it.
                     await speech.finish(response.content, context)
-                    return
+                    if not response.tool_calls:
+                        return
 
-                async with context.stream.get(ToolResultsEvent | ModelResponse) as results:
-                    await context.send(response.tool_calls)
-                    settled = await results
+                    async with context.stream.get(ToolResultsEvent | ModelResponse) as results:
+                        await context.send(response.tool_calls)
+                        settled = await results
 
-                if isinstance(settled, ModelResponse):
-                    await speech.finish(settled.content, context)
-                    return
+                    if isinstance(settled, ModelResponse):
+                        await speech.finish(settled.content, context)
+                        return
+
+        finally:
+            # A barge-in cancels the turn mid-reply: close the reply's request with it.
+            await speech.aclose()
 
         raise RuntimeError(f"Tool loop exceeded {MAX_TOOL_ITERATIONS} iterations in one voice turn")
 
@@ -229,8 +240,11 @@ def _conversation(events: "Iterable[BaseEvent]") -> "list[BaseEvent]":
     them, but they would still be walked (and held) on every model call, so a
     long conversation pays for the whole recording on each turn. Transcripts
     carry the meaning; the bytes are for the recorder and the speaker.
+
+    Retained status observations on a shared stream are projected to request
+    views, as the agent loop does, so the model sees them here too.
     """
-    return [e for e in events if not isinstance(e, (RecordedAudioEvent, SynthesizedAudioEvent))]
+    return model_inputs(e for e in events if not isinstance(e, (RecordedAudioEvent, SynthesizedAudioEvent)))
 
 
 def _running(task: "asyncio.Task[None] | None") -> bool:

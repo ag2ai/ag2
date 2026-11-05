@@ -26,7 +26,7 @@ import logging
 import os
 import time
 from collections.abc import Awaitable, Callable, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import partial
 from typing import Any, Literal
 from uuid import uuid4
@@ -146,7 +146,7 @@ async def _grade(
     semaphore = asyncio.Semaphore(max(1, concurrency))
 
     actual_run_id = run_id if run_id is not None else uuid4().hex
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
 
     if stream is not None:
         eval_ctx = ConversationContext(stream=stream) if stream is not None else None

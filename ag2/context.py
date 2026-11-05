@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable, Coroutine, Mapping
+from collections.abc import AsyncIterator, Callable, Coroutine, Mapping, MutableMapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
@@ -13,9 +13,9 @@ from uuid import UUID
 import anyio.from_thread
 from fast_depends import Provider
 
-from ag2.types import ClassInfo, SendableMessage
+from ag2.types import ClassInfo, RequestOrigin, SendableMessage
 
-from .events import BaseEvent, HumanInputRequest, HumanMessage, Input, MessageEnqueued, ModelRequest
+from .events import BaseEvent, HumanInputRequest, HumanMessage, InertEvent, Input, MessageEnqueued, ModelRequest
 from .events.conditions import Condition
 from .exceptions import HumanInputError, HumanInputFailedError, HumanInputTimeoutError
 
@@ -49,12 +49,13 @@ class Stream(Protocol):
 
     async def send(self, event: BaseEvent, context: "ConversationContext") -> None: ...
 
-    def enqueue(self, *content: "SendableMessage | Input") -> None:
+    def enqueue(self, *content: "SendableMessage | Input", origin: RequestOrigin = "service") -> None:
         """Append a follow-up turn to this stream's inbox.
 
         Low-level: it only appends and announces nothing. Code that hands a
         running agent input goes through ``ConversationContext.enqueue``,
-        which also publishes ``MessageEnqueued``.
+        which also publishes ``MessageEnqueued``. *origin* is stored on the
+        queued ``ModelRequest``; pass ``"user"`` only for input a person sent.
         """
         ...
 
@@ -134,7 +135,7 @@ class ConversationContext:
     # store Context Variables as separated serializable field. Keys under
     # ``RESERVED_VARIABLE_PREFIXES`` are the framework's own control-plane state
     # and are never authored by a remote peer — see ``strip_reserved_variables``.
-    variables: dict[str, Any] = field(default_factory=dict)
+    variables: MutableMapping[str, Any] = field(default_factory=dict)
 
     dependencies: dict[Any, Any] = field(default_factory=dict)
 
@@ -157,7 +158,7 @@ class ConversationContext:
         """
         return self.stream.spawn_background(coro)
 
-    def enqueue(self, *content: "SendableMessage | Input") -> None:
+    def enqueue(self, *content: "SendableMessage | Input", origin: RequestOrigin = "service") -> None:
         """Append a follow-up turn to the stream's inbox and announce it.
 
         The inbox lives on the stream, so a message enqueued here survives the
@@ -166,10 +167,13 @@ class ConversationContext:
         task, so this stays safe to call from a stream subscriber and from a
         sync tool running in a worker thread. From a thread that is not an
         event-loop worker the message is appended but not announced.
+
+        Framework and tool updates keep the default ``"service"`` origin, so
+        they do not start a new ``History.since_last_user_input()`` interval.
         """
         if not content:
             return
-        self.stream.enqueue(*content)
+        self.stream.enqueue(*content, origin=origin)
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -228,7 +232,7 @@ class ConversationContext:
             except HumanInputError:
                 raise  # classified already, by _ask_human or by the hook itself
 
-            except asyncio.TimeoutError as exc:
+            except TimeoutError as exc:
                 # Only ``wait_for`` can reach this: anything the channel raised,
                 # timeouts included, left _ask_human as a HumanInputError.
                 raise HumanInputTimeoutError(request.timeout) from exc  # type: ignore[arg-type]
@@ -236,6 +240,8 @@ class ConversationContext:
         return result.content
 
     async def send(self, event: BaseEvent) -> None:
+        if isinstance(event, InertEvent):
+            event = event.as_local()
         await self.stream.send(event, self)
 
 

@@ -9,6 +9,7 @@ from .base import (
     HumanInputHook,
     LLMCall,
     Middleware,
+    ScopedMiddlewareFactory,
     ToolExecution,
     ToolMiddleware,
     ToolResultType,
@@ -24,6 +25,8 @@ from .builtin import (
     approval_required,
 )
 from .describe import DescribableMiddleware, DescribedMiddleware, MiddlewareDescription
+from .halt import HaltCheckMiddleware
+from .statusbar import statusbar_middleware
 
 __all__ = (
     "AgentTurn",
@@ -32,6 +35,7 @@ __all__ = (
     "ConditionalMiddleware",
     "DescribableMiddleware",
     "DescribedMiddleware",
+    "HaltCheckMiddleware",
     "HistoryLimiter",
     "HumanInputHook",
     "LLMCall",
@@ -40,10 +44,12 @@ __all__ = (
     "Middleware",
     "MiddlewareDescription",
     "RetryMiddleware",
+    "ScopedMiddlewareFactory",
     "TelemetryMiddleware",
     "TokenLimiter",
     "ToolExecution",
     "ToolMiddleware",
     "ToolResultType",
     "approval_required",
+    "statusbar_middleware",
 )

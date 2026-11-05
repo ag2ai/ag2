@@ -53,12 +53,12 @@ Here is the simplest form of the new model:
 
 ```python linenums="1" hl_lines="12 16 22 27 31"
 from ag2 import Agent, MemoryStream
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "assistant",
     prompt="You are a concise assistant.",
-    config=OpenAIConfig("gpt-5-nano"),
+    config=OpenAICompletionsConfig("gpt-5-nano"),
 )
 
 async def main() -> None:
@@ -119,11 +119,11 @@ from aiogram.filters import CommandStart
 from aiogram.types import Message
 
 from ag2 import Agent, MemoryStream
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     "ambient-agent",
-    config=OpenAIConfig("gpt-5-nano", reasoning_effort="low"),
+    config=OpenAICompletionsConfig("gpt-5-nano", reasoning_effort="low"),
 )
 
 dp = Dispatcher()
@@ -193,7 +193,7 @@ from aiogram.types import Message
 from pydantic import Field
 
 from ag2 import Agent, MemoryStream, Variable, tool
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ModelRequest, ModelResponse
 
 MEMORY_DIR = Path("./memory")
@@ -220,7 +220,7 @@ def read_conversation_history(
 
 agent = Agent(
     "ambient-agent",
-    config=OpenAIConfig("gpt-5-nano", reasoning_effort="low"),
+    config=OpenAICompletionsConfig("gpt-5-nano", reasoning_effort="low"),
     tools=[read_conversation_history],
 )
 
@@ -298,7 +298,7 @@ from aiogram.types import Message
 from pydantic import Field
 
 from ag2 import Agent, MemoryStream, Variable
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ModelRequest, ModelResponse
 from ag2.middleware import LoggingMiddleware
 
@@ -308,7 +308,7 @@ logging.basicConfig(level=logging.INFO)
 
 agent = Agent(
     "test-agent",
-    config=OpenAIConfig(
+    config=OpenAICompletionsConfig(
         "gpt-5-nano",
         reasoning_effort="low",
         streaming=True,

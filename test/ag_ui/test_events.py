@@ -41,6 +41,7 @@ from ag2 import Agent, Context
 from ag2.ag_ui import AGUIStream
 from ag2.config.gemini.events import GeminiToolCallEvent
 from ag2.events import ModelReasoning, TaskCompleted, TaskStarted, ToolCallEvent
+from ag2.task import Task, TaskSpec
 from ag2.testing import TestConfig, Turn
 from test.ag_ui.harness import dispatch_events, each, kinds_of, run_input, sole, weather_tool, wire
 
@@ -278,7 +279,7 @@ class TestAnInvocationThatEndsWithoutFinishing:
         @parent.tool
         async def research(context: Context) -> str:
             """Research, and stop the task the given way."""
-            task = parent.task("research", context=context)
+            task = Task(owner_id=parent.name, spec=TaskSpec(title="research"), context=context)
             await task.__aenter__()
             if end == "cancel":
                 await task.cancel("no longer needed")

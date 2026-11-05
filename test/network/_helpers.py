@@ -16,7 +16,7 @@
 
 import asyncio
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ag2 import Context
@@ -43,7 +43,7 @@ class _MockClock:
     def __init__(self, start: str = "2026-01-01T00:00:00+00:00") -> None:
         self._now = datetime.fromisoformat(start)
         if self._now.tzinfo is None:
-            self._now = self._now.replace(tzinfo=timezone.utc)
+            self._now = self._now.replace(tzinfo=UTC)
 
     def __call__(self) -> str:
         return self._now.isoformat()
@@ -153,7 +153,7 @@ async def wait_for_text_count(
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return wal
         await asyncio.sleep(0.02)
-    raise asyncio.TimeoutError(f"channel {channel_id!r} never reached {expected} EV_TEXT envelopes")
+    raise TimeoutError(f"channel {channel_id!r} never reached {expected} EV_TEXT envelopes")
 
 
 async def wait_for_delivery(
@@ -173,4 +173,4 @@ async def wait_for_delivery(
         if any(e.event_type == EV_TEXT and e.event_data.get("text") == text for e in received):
             return
         await asyncio.sleep(0.02)
-    raise asyncio.TimeoutError(f"no EV_TEXT envelope carrying {text!r} was delivered within {timeout}s")
+    raise TimeoutError(f"no EV_TEXT envelope carrying {text!r} was delivered within {timeout}s")
