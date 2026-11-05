@@ -806,12 +806,15 @@ def normalize_usage(usage: CompletionUsage) -> Usage:
 
 
 def normalize_responses_usage(usage: ResponseUsage) -> Usage:
+    write_details = usage.input_tokens_details.cache_write_tokens_details
     return Usage(
         prompt_tokens=usage.input_tokens,
         completion_tokens=usage.output_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
         cache_creation_input_tokens=usage.input_tokens_details.cache_write_tokens,
+        # Writes made under `prompt_cache_options={"ttl": "12h"}`.
+        cache_creation_extended_input_tokens=write_details.ttl_12h_tokens if write_details else None,
         thinking_tokens=usage.output_tokens_details.reasoning_tokens,
     )
 
