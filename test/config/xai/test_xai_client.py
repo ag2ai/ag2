@@ -193,3 +193,43 @@ async def test_response_format_sent_to_server() -> None:
 
         [request] = xai_server.requests
         assert request.response_format.format_type == chat_pb2.FORMAT_TYPE_JSON_SCHEMA
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("streaming", [False, True])
+@pytest.mark.parametrize("configured", [False, True])
+async def test_safety_options_reach_server(streaming: bool, configured: bool) -> None:
+    async with fake_xai_server() as xai_server:
+        xai_server.reply(_response(content="Hello"))
+        xai_server.stream(_chunk(content="Hello"), _chunk(finish_reason=sample_pb2.REASON_STOP))
+        config = XAIConfig(model="grok-4-fast", api_key="test", api_host=xai_server.address, streaming=streaming)
+        if configured:
+            config = config.copy(
+                safety_identifier="opaque-user-id",
+                guidelines=[{"type": "policy", "category": "violence", "behavior": "decline"}],
+            )
+
+        response = await config.create()(
+            messages=[ModelRequest([TextInput("hello")])],
+            context=Context(stream=MemoryStream()),
+            tools=[],
+            response_schema=None,
+            serializer=SerializerCls,
+        )
+
+        assert response.message == ModelMessage("Hello")
+        [request] = xai_server.requests
+        assert request.HasField("safety_identifier") is configured
+        assert request.safety_identifier == ("opaque-user-id" if configured else "")
+        assert list(request.guidelines) == (
+            [
+                chat_pb2.Guideline(
+                    policy=chat_pb2.PolicyGuideline(
+                        category=chat_pb2.GUIDELINE_CATEGORY_VIOLENCE,
+                        behavior=chat_pb2.GUIDELINE_BEHAVIOR_DECLINE,
+                    )
+                )
+            ]
+            if configured
+            else []
+        )

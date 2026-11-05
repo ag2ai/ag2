@@ -153,6 +153,26 @@ config = XAIConfig(
     streaming=True
 )
 ```
+
+Use `safety_identifier` to attribute policy violations to a stable, opaque end-user identifier.
+Use a hash of an internal user ID, never an email address or display name.
+`guidelines` configures output moderation by category (`nsfw`, `violence`, or `profanity`):
+
+```python linenums="1"
+from hashlib import sha256
+
+from ag2.config import XAIConfig
+
+config = XAIConfig(
+    model="grok-4",
+    safety_identifier=sha256(b"internal-user-123").hexdigest(),
+    guidelines=[{"type": "policy", "category": "violence", "behavior": "decline"}],
+)
+```
+
+Both options require `xai-sdk>=1.21.0` and are omitted when unset.
+The SDK validates guideline categories and behaviors. The API rejects duplicate categories
+and combinations that do not support guidelines, including multi-agent models and `stop`.
   </Tab>
 
   <Tab title="Z.AI">
