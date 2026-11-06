@@ -52,7 +52,7 @@ _LAZY_EXPORTS = {
     "ZAIConfig": LazyExport(".zai", "zai"),
 }
 
-__getattr__, __dir__ = lazy_exports(__name__, globals(), _LAZY_EXPORTS)
+__getattr__ = lazy_exports(__name__, globals(), _LAZY_EXPORTS)
 
 __all__ = (
     "AnthropicConfig",

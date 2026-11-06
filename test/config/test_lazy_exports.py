@@ -67,8 +67,25 @@ def test_every_export_resolves() -> None:
         assert getattr(ag2.config, name) is not None
 
 
-def test_dir_lists_every_export() -> None:
-    assert set(ag2.config.__all__) <= set(dir(ag2.config))
+def test_freezing_time_loads_no_provider_sdk() -> None:
+    loaded = _run(
+        f"""
+        import sys
+        from freezegun import freeze_time
+        import ag2
+        with freeze_time():
+            pass
+        print(sorted(m for m in {PROVIDER_SDKS!r} if m in sys.modules))
+        """
+    )
+
+    assert loaded == "[]"
+
+
+def test_accessed_export_is_cached_in_the_namespace() -> None:
+    value = ag2.config.OllamaConfig
+
+    assert vars(ag2.config)["OllamaConfig"] is value
 
 
 def test_unknown_name_raises_attribute_error() -> None:

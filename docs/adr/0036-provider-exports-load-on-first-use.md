@@ -22,8 +22,9 @@ exports every provider class through a PEP 562 module `__getattr__` built by
 access and the value is cached in the package namespace. An `ImportError`
 still yields the `missing_optional_dependency` stand-in with the same install
 hint, now created on first access instead of at import. A `TYPE_CHECKING`
-block keeps the real imports visible to type checkers, and `__dir__` lists
-every export.
+block keeps the real imports visible to type checkers. There is no `__dir__`:
+freezegun walks `dir()` of every loaded module on `freeze_time()`, so listing
+lazy names there would import every SDK under the frozen clock.
 
 Core modules must not import a provider module, so `import ag2` loads no
 provider SDK; `test/config/test_lazy_exports.py` enforces this.
@@ -33,8 +34,8 @@ provider SDK; `test/config/test_lazy_exports.py` enforces this.
 - `import ag2` no longer pays for provider SDKs it does not use. A process that
   wants them preloaded (pre-fork servers, warm-up hooks) must import the
   provider explicitly, for example `from ag2.config import OpenAIConfig`.
-- `vars(ag2.config)` shows a provider only after it is first accessed; use
-  `dir()` or `__all__` to list exports.
+- `vars(ag2.config)` and `dir(ag2.config)` show a provider only after it is
+  first accessed; `__all__` lists every export.
 - Tooling that treats any module with `__getattr__` specially (freezegun's
   `ignore=` lists, some auto-instrumentation) sees `ag2.config` as such a module.
 - New provider exports go into the lazy map, not a `try/except ImportError`

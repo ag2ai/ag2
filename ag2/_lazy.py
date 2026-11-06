@@ -29,11 +29,12 @@ def lazy_exports(
     package: str,
     namespace: dict[str, Any],
     exports: Mapping[str, LazyExport],
-) -> tuple[Callable[[str], Any], Callable[[], list[str]]]:
-    """Build a package's PEP 562 ``__getattr__`` and ``__dir__`` for ``exports``.
+) -> Callable[[str], Any]:
+    """Build a package's PEP 562 ``__getattr__`` for ``exports``.
 
     Each name is imported on first access and cached in ``namespace``, so later
-    lookups never reach ``__getattr__``.
+    lookups never reach ``__getattr__``. There is deliberately no ``__dir__``:
+    tools that walk ``dir()`` of every module (freezegun) would import them all.
     """
 
     def getattr_(name: str) -> Any:
@@ -52,7 +53,4 @@ def lazy_exports(
         namespace[name] = value
         return value
 
-    def dir_() -> list[str]:
-        return sorted({*namespace, *exports})
-
-    return getattr_, dir_
+    return getattr_
