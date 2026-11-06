@@ -87,32 +87,33 @@ resume = Resume(
 Optional per-agent policy. Pass to `#!python hub.register(agent, passport, resume, rule=...)`.
 
 ```python linenums="1"
-from ag2.network import Rule, AccessBlock, LimitsBlock, RateBlock, InboxBlock
+from ag2.network import Rule, AccessBlock, ChannelTypeAccess, LimitsBlock, RateBlock, InboxBlock
 
 rule = Rule(
     access=AccessBlock(
         outbound_to=["bob", "carol"],   # whitelist who this agent can address
-        channel_types_allowed=["consulting", "discussion"],
+        channel_types=ChannelTypeAccess(
+            initiate=["consulting", "discussion"],
+            accept=["consulting", "discussion"],
+        ),
     ),
     limits=LimitsBlock(
         channel_ttl_default="4h",
         delegation_depth=2,
-    ),
-    rate=RateBlock(
-        envelopes_per_minute=60,
-    ),
-    inbox=InboxBlock(
-        max_pending=100,
+        rate=RateBlock(per_minute=60),
+        inbox=InboxBlock(max_pending=100),
     ),
 )
 ```
 
 | Block | Controls |
 |---|---|
-| `AccessBlock` | Who this agent can talk to; which channel types it can create or join. |
+| `AccessBlock` | Peer access lists and channel-type configuration. |
 | `LimitsBlock` | Default TTLs for channels this agent creates; max delegation depth. |
-| `RateBlock` | Rate limits on outbound envelopes. |
-| `InboxBlock` | Inbound queue cap — protects an agent from being flooded. |
+| `RateBlock` | Rate-limit configuration stored under `limits.rate`; not enforced by the in-process hub. |
+| `InboxBlock` | Inbound queue cap under `limits.inbox` — protects an agent from being flooded. |
+
+`#!python AccessBlock.channel_types` uses separate allowlists for initiating and accepting channels. `#!python RateBlock` and `#!python InboxBlock` belong inside `#!python LimitsBlock`, not directly on `#!python Rule`. Setting `#!python RateBlock.per_minute` stores the configuration; it does not enable throttling in the in-process hub.
 
 When a rule's check fails, the hub raises `#!python AccessDeniedError` (deny by access) or `#!python InboxFull` (queue cap) instead of letting the envelope through.
 
