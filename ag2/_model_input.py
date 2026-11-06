@@ -5,10 +5,10 @@
 """Project status into detached provider-neutral request views."""
 
 from collections.abc import Iterable
-from copy import deepcopy
+from copy import copy, deepcopy
 from typing import Literal
 
-from ag2.events import BaseEvent, Field, Input, ModelRequest, StatusObservation
+from ag2.events import BaseEvent, Field, Input, ModelRequest, ModelResponse, StatusObservation, ToolResultsEvent
 
 
 class _StatusRequest(ModelRequest):
@@ -35,4 +35,35 @@ def observation_request(event: StatusObservation) -> ModelRequest:
 
 
 def model_inputs(events: Iterable[BaseEvent]) -> list[BaseEvent]:
-    return [observation_request(event) if isinstance(event, StatusObservation) else event for event in events]
+    result: list[BaseEvent] = []
+    response_index: int | None = None
+    pending: set[str] = set()
+    for event in events:
+        if isinstance(event, ModelResponse):
+            if (
+                event.response_force
+                and event.message is None
+                and event.tool_calls
+                and response_index is not None
+                and all(call.id in pending for call in event.tool_calls.calls)
+            ):
+                # A client handoff announces pending calls, not another model
+                # turn. Replay the approved calls on the original response,
+                # leaving the stored/wire events untouched.
+                original = result[response_index]
+                assert isinstance(original, ModelResponse)
+                projected = copy(original)
+                projected.tool_calls = copy(original.tool_calls)
+                approved = {call.id: call for call in event.tool_calls.calls}
+                projected.tool_calls.calls = [approved.get(call.id, call) for call in original.tool_calls.calls]
+                result[response_index] = projected
+                continue
+            response_index = len(result)
+            pending = {call.id for call in event.tool_calls.calls}
+        elif isinstance(event, ModelRequest):
+            response_index = None
+            pending.clear()
+        elif isinstance(event, ToolResultsEvent):
+            pending.difference_update(result.parent_id for result in event.results)
+        result.append(observation_request(event) if isinstance(event, StatusObservation) else event)
+    return result
