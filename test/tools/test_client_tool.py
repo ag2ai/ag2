@@ -51,7 +51,7 @@ async def test_client_response_preserves_effective_call_and_provider_fields(
     reply = await agent.ask("Read the file")
 
     name = "approved_tool" if constrain else "my_client_tool"
-    arguments = '{"path":"/allowed"}' if constrain else '{"path":"/untrusted"}'
+    arguments = '{"path":"/allowed"}' if constrain else json.dumps({"path": "/untrusted"})
     expected = ProviderToolCallEvent(
         id=original.id,
         name=name,
@@ -175,3 +175,34 @@ async def test_function_tool_with_middleware_preserves_existing() -> None:
     await agent.ask("Hi!")
 
     assert call_order == ["second", "first", "tool"]
+
+
+class IncrementCount(BaseMiddleware):
+    async def on_tool_execution(
+        self, call_next: ToolExecution, event: ToolCallEvent, context: Context
+    ) -> ToolResultType:
+        event.serialized_arguments["count"] += 1
+        return await call_next(event, context)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("client_side", [False, True])
+async def test_middleware_argument_edits_reach_tool(client_side: bool) -> None:
+    received: list[int] = []
+
+    @tool
+    def count_items(count: int) -> str:
+        received.append(count)
+        return "counted"
+
+    target = ClientTool(schema={"function": {"name": "count_items", "parameters": {}}}) if client_side else count_items
+    config = TestConfig(ToolCallEvent(name="count_items", arguments='{"count":1}'), "done")
+    agent = Agent("test", config=config, tools=[target], middleware=[IncrementCount])
+
+    reply = await agent.ask("Count items")
+
+    if client_side:
+        arguments = reply.response.tool_calls.to_api()[0]["function"]["arguments"]
+        assert json.loads(arguments) == {"count": 2}
+    else:
+        assert received == [2]

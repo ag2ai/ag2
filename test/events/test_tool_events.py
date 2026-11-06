@@ -3,7 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from typing import Any
 from unittest.mock import patch
+
+import pytest
 
 from ag2.events import (
     ClientToolCallEvent,
@@ -92,3 +95,26 @@ class TestSerializedArgumentsEmptyInput:
             assert tc.serialized_arguments == {"b": 2}
 
             assert mock_loads.call_count == 1
+
+
+class TestClientToolCallEffectiveArguments:
+    @pytest.mark.parametrize("arguments", ['{ "count" : 1 }', '{"count":', ""])
+    def test_unparsed_arguments_preserved(self, arguments: str) -> None:
+        original = ToolCallEvent(name="count_items", arguments=arguments)
+        assert ClientToolCallEvent.from_call(original).arguments == arguments
+
+    @pytest.mark.parametrize("arguments", [{"count": 2}, {}, {"count": True}])
+    def test_explicit_arguments_used(self, arguments: dict[str, Any]) -> None:
+        original = ToolCallEvent(name="count_items", arguments='{"count":1}')
+        original.serialized_arguments = arguments
+        assert ClientToolCallEvent.from_call(original).arguments == json.dumps(arguments)
+
+    def test_reading_arguments_preserves_values(self) -> None:
+        original = ToolCallEvent(name="count_items", arguments='{ "count" : 1 }')
+        assert original.serialized_arguments == {"count": 1}
+        assert json.loads(ClientToolCallEvent.from_call(original).arguments) == {"count": 1}
+
+    def test_explicit_arguments_replace_invalid_json(self) -> None:
+        original = ToolCallEvent(name="count_items", arguments='{"count":')
+        original.serialized_arguments = {"count": 2}
+        assert json.loads(ClientToolCallEvent.from_call(original).arguments) == {"count": 2}
