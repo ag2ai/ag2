@@ -24,11 +24,12 @@ from ag2.testing import TestConfig, TrackingConfig
 def _frozen_clock() -> Generator[FrozenDateTimeFactory]:
     # Inspecting lazy exports can import SDK models under FakeDatetime, or load
     # entire optional ML stacks. Leave those namespaces alone; freeze asyncio.
+    # ag2's own lazy packages stay frozen: freezegun matches ignores by prefix.
     lazy_modules = [
         name
         for name, module in list(sys.modules.items())
         if module is not None
-        and not name.startswith("asyncio")
+        and not name.startswith(("asyncio", "ag2"))
         and ("__getattr__" in vars(module) or hasattr(type(module), "__getattr__"))
     ]
     with freeze_time(ignore=lazy_modules) as clock:

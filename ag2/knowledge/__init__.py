@@ -14,6 +14,9 @@ Filesystem semantics are used because:
 3. Any backend (memory, disk, S3, Redis) can implement path-based key-value
 """
 
+from typing import TYPE_CHECKING
+
+from ag2._lazy import LazyExport, lazy_exports
 from ag2.exceptions import missing_additional_dependency
 
 from .base import (
@@ -28,13 +31,18 @@ from .locked import LockedKnowledgeStore
 from .log import EventLogWriter
 from .memory import MemoryKnowledgeStore
 from .plugin import KnowledgePlugin
-from .redis import RedisKnowledgeStore
 from .sqlite import SqliteKnowledgeStore
 
 try:
     from .disk import DiskKnowledgeStore
 except ImportError as e:
     DiskKnowledgeStore = missing_additional_dependency("DiskKnowledgeStore", "watchdog>=4.0,<7", e)  # type: ignore[misc]
+
+if TYPE_CHECKING:
+    from .redis import RedisKnowledgeStore
+
+# The redis client loads on first use; see docs/adr/0036-provider-exports-load-on-first-use.md.
+__getattr__ = lazy_exports(__name__, globals(), {"RedisKnowledgeStore": LazyExport(".redis")})
 
 __all__ = [
     "CONVERSATIONS_PREFIX",

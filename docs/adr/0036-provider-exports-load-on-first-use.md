@@ -26,6 +26,11 @@ block keeps the real imports visible to type checkers. There is no `__dir__`:
 freezegun walks `dir()` of every loaded module on `freeze_time()`, so listing
 lazy names there would import every SDK under the frozen clock.
 
+The same pattern covers the other heavy exports: `ag2.tools`'s search tools and
+toolkits (ddgs, Tavily, Perplexity, the MCP client) and `ag2.knowledge`'s
+`RedisKnowledgeStore`. Their dependencies are required, so an `ImportError`
+propagates instead of becoming a stand-in.
+
 Core modules must not import a provider module, so `import ag2` loads no
 provider SDK; `test/config/test_lazy_exports.py` enforces this.
 
