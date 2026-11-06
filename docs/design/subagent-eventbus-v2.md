@@ -105,6 +105,13 @@ than reaching a later invocation on the same persistent stream.
 Halt cancels current asynchronous work and its subtree, settles child tasks,
 and emits `TaskCancelled` after cleanup. Targeted cancellation returns a
 cancelled delegation result; the parent and unrelated siblings continue.
+Repeated Halt requests to the same invocation preserve the first reason and
+allow the cancellation cleanup already in progress to finish.
+If an ancestor is then halted or its caller is cancelled, an already-cancelling
+descendant keeps its first reason and finishes cleanup before its terminal.
+The delegation owns its entire invocation, including asynchronous middleware
+and observer teardown. Repeated cancellation of its waiter cannot abandon that
+scope before it has settled.
 Cancelling the parent also settles its background descendants. A running
 synchronous tool in a thread requires cooperative stopping: cancelling its
 awaiting coroutine cannot stop the Python thread.

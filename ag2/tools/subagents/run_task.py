@@ -18,7 +18,7 @@ from ag2.utils import CONFIGURED_DEPENDENCIES_CONTEXT_KEY
 from ._forwarding import PARENT_CANCELLED, DelegationRegistry, Forwarder
 
 if TYPE_CHECKING:
-    from ag2.agent import Agent
+    from ag2.agent import Agent, AgentReply
 
 
 @dataclass
@@ -81,12 +81,15 @@ async def run_task(
     dependencies = _inherited_dependencies(parent_context.dependencies, agent.dependencies.keys())
     dependencies[Forwarder] = forwarder
     try:
-        reply = await agent.ask(
-            prompt,
-            stream=task_stream,
-            dependencies=dependencies,
-            variables=derive_child_variables(parent_context.variables),
+        invocation = asyncio.create_task(
+            agent.ask(
+                prompt,
+                stream=task_stream,
+                dependencies=dependencies,
+                variables=derive_child_variables(parent_context.variables),
+            )
         )
+        reply = await _await_invocation(invocation, forwarder)
     except asyncio.CancelledError as exc:
         await forwarder.reject(exc)
         origin = forwarder.origin
@@ -109,3 +112,27 @@ async def run_task(
     finally:
         forwarder.close()
         registry.unregister(task_id)
+
+
+async def _await_invocation(
+    invocation: "asyncio.Task[AgentReply[Any, Any]]", forwarder: Forwarder
+) -> "AgentReply[Any, Any]":
+    """Keep a delegation's whole scope alive until its cancellation settles."""
+    try:
+        return await asyncio.shield(invocation)
+    except asyncio.CancelledError:
+        if invocation.done():
+            raise
+        # A targeted Halt (possibly from an ancestor) already cancelled the
+        # driver. Cancelling ask as well would interrupt its scope teardown.
+        origin = forwarder.origin
+        if origin is None or not origin.halted:
+            invocation.cancel()
+        while not invocation.done():
+            try:
+                await asyncio.shield(invocation)
+            except asyncio.CancelledError:
+                # The owner still propagates cancellation after ask has closed
+                # its middleware, observers, lifecycle and stream turn lock.
+                continue
+        return invocation.result()
