@@ -10,10 +10,13 @@ arbitrary ``BaseEvent`` trigger (typically a ``ToolResultsEvent``), so the model
 reacts to a tool result mid-loop without the tool being re-executed.
 """
 
+import asyncio
+
 import pytest
 
-from ag2 import Agent
+from ag2 import Agent, Context
 from ag2.events import (
+    BaseEvent,
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -38,6 +41,66 @@ def _seed_through_tool_call(question: str, tool_name: str, args: str, tc_id: str
 
 
 class TestAgentResume:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("cancel", [False, True])
+    @pytest.mark.parametrize("reconstruct_stream", [False, True])
+    async def test_queued_resume_preserves_running_turn_history(self, cancel: bool, reconstruct_stream: bool) -> None:
+        stream = MemoryStream()
+        target = MemoryStream(storage=stream.history.storage, id=stream.id) if reconstruct_stream else stream
+        previous = ModelRequest([TextInput("original conversation")])
+        replacement = ModelRequest([TextInput("replacement conversation")])
+        trigger = ModelRequest([TextInput("resume question")])
+        await stream.history.replace([previous])
+        agent = Agent("retriever", config=TestConfig("active answer"))
+        started = asyncio.Event()
+
+        async def resume() -> str:
+            started.set()
+            reply = await agent.resume(replacement, trigger, stream=target, config=TestConfig("resumed answer"))
+            return reply.body
+
+        pending = None
+        try:
+            async with agent.run("active question", stream=stream) as run:
+                pending = asyncio.create_task(resume())
+                await started.wait()
+                if cancel:
+                    pending.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await pending
+
+                assert list(await stream.history.get_events()) == [previous]
+                assert (await run.result()).body == "active answer"
+
+            if not cancel:
+                assert await pending == "resumed answer"
+                assert await stream.history.where(ModelRequest).all() == [replacement, trigger]
+        finally:
+            if pending is not None and not pending.done():
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("has_prefix", [False, True])
+    async def test_resume_seeds_history_before_dynamic_prompt(self, has_prefix: bool) -> None:
+        stream = MemoryStream()
+        await stream.history.replace([ModelRequest([TextInput("stale conversation")])])
+        prefix = [ModelRequest([TextInput("restored conversation")])] if has_prefix else []
+        observed: list[list[BaseEvent]] = []
+
+        async def prompt(context: Context) -> str:
+            observed.append(list(await context.stream.history.get_events()))
+            return "Answer the question."
+
+        agent = Agent("retriever", config=TestConfig("answer"), prompt=prompt)
+        trigger = ModelRequest([TextInput("resume question")])
+
+        reply = await agent.resume(*prefix, trigger, stream=stream)
+
+        assert reply.body == "answer"
+        assert observed == [prefix]
+        assert await stream.history.where(ModelRequest).all() == [*prefix, trigger]
+
     @pytest.mark.asyncio
     async def test_resume_from_tool_results_continues_turn(self) -> None:
         """A ToolResultsEvent trigger drives one LLM call → final answer."""
