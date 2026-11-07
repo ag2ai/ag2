@@ -4,6 +4,8 @@
 
 """Public-API tests for run comparison — ``load_run`` and ``RunResult.diff``."""
 
+import json
+
 import pytest
 
 from ag2.eval import (
@@ -43,6 +45,14 @@ def _run(*task_results: TaskResult, run_id: str = "r", label: str | None = None)
 
 
 class TestLoadRun:
+    def test_rejects_duplicate_ids_in_saved_run(self, tmp_path) -> None:
+        path = _run(_tr("t1", (Feedback(key="check", score=True),))).save(tmp_path)
+        doc = json.loads(path.read_text())
+        doc["tasks"].append({**doc["tasks"][0], "feedback": [{"key": "check", "score": False}]})
+        path.write_text(json.dumps(doc))
+        with pytest.raises(ValueError, match="duplicate task_id 't1'"):
+            load_run(path)
+
     def test_round_trips_scores_and_identity(self, tmp_path) -> None:
         result = _run(
             _tr("t1", (Feedback(key="check", score=True),), tags=("easy",)),
@@ -71,6 +81,20 @@ class TestLoadRun:
 
 
 class TestDiff:
+    def test_run_result_rejects_duplicates_even_with_valid_suite(self) -> None:
+        first = _tr("same", (Feedback(key="check", score=False),), inputs={"input": "first"})
+        second = _tr("same", (Feedback(key="check", score=True),), inputs={"input": "second"})
+        with pytest.raises(ValueError, match="duplicate task_id 'same'"):
+            RunResult(
+                run_id="ambiguous",
+                tasks=(first, second),
+                suite=Suite([first.task]),
+                target_path="m:f",
+                concurrency=1,
+                duration_ms=0,
+                created_at="2026-11-07T00:00:00+00:00",
+            )
+
     def test_identical_runs_have_no_regressions(self) -> None:
         diff = _run(_tr("t1", (Feedback(key="check", score=True),))).diff(
             _run(_tr("t1", (Feedback(key="check", score=True),)))
