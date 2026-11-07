@@ -4,7 +4,7 @@
 
 from typing import Any
 
-from .base import ChangeCallback, ChangeSubscription, KnowledgeStore, _normalize
+from .base import ChangeCallback, ChangeSubscription, CompareAndSwapStore, KnowledgeStore, _normalize
 
 
 class LockedKnowledgeStore:
@@ -33,6 +33,21 @@ class LockedKnowledgeStore:
 
     async def list(self, path: str = "/") -> list[str]:
         return await self._store.list(path)
+
+    async def compare_and_swap(self, path: str, expected: str | None, content: str) -> bool:
+        lock_name = f"store:write:{_normalize(path)}"
+        acquired = await self._lock.acquire(lock_name, ttl=30.0)
+        if not acquired:
+            raise RuntimeError(f"Failed to acquire write lock for {path}")
+        try:
+            if isinstance(self._store, CompareAndSwapStore):
+                return await self._store.compare_and_swap(path, expected, content)
+            if await self._store.read(path) != expected:
+                return False
+            await self._store.write(path, content)
+            return True
+        finally:
+            await self._lock.release(lock_name)
 
     async def delete(self, path: str) -> None:
         lock_name = f"store:write:{_normalize(path)}"
