@@ -50,6 +50,20 @@ from ._helpers import make_agent, text_of, tool_named
 
 CARD = "<html><head><title>Card</title></head><body><div id='card'></div></body></html>"
 
+# A document written against the upstream SDK, loading it from a CDN.
+UPSTREAM_CARD = """<html><head><title>Card</title></head><body><div id="card"></div>
+<script type="module">
+  import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";
+  const app = new App({ name: "Product card", version: "1.0.0" });
+  app.ontoolresult = (result) => { document.getElementById("card").textContent = result.structuredContent.name; };
+  await app.connect();
+</script></body></html>"""
+
+# The same document after a bundler inlined the SDK: the package name is gone,
+# the handshake's method name is not.
+BUNDLED_CARD = """<html><head><script>var M={initialize:"ui/initialize"};/* … */</script></head>
+<body><div id="card"></div></body></html>"""
+
 # What an MCP Apps client advertises: the extension, listing the one MIME type a
 # ``ui://`` document is ever served under.
 _UI_AD = {EXTENSION_ID: {"mimeTypes": [APP_MIME_TYPE]}}
@@ -74,6 +88,11 @@ def _card_app(content: Any = CARD, **kwargs: Any) -> MCPApp:
         return Item(name=item_id, price=10)
 
     return app
+
+
+def _runtime_introducing(name: str) -> str:
+    """The runtime of an app that introduces itself to the host as ``name``."""
+    return MCPApp("ui://elsewhere/doc", "", name=name).runtime_script()
 
 
 def _body(contents: Any) -> str:
@@ -492,6 +511,151 @@ class TestTheRuntime:
         app = MCPApp("ui://x/y", "<p>hi</p>", name="</script><script>alert(1)</script>")
 
         assert "</script><script>" not in app.runtime_script()
+
+    async def test_a_document_that_places_it_itself_does_not_get_it_twice(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        placed = "<html><head>" + MCPApp("ui://shop/card", CARD).runtime_script() + "</head><body></body></html>"
+        server = MCPServer(make_agent(), apps=[_card_app(placed)])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            async with connect(server) as session:
+                read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == placed
+        assert caplog.text == ""
+
+
+@pytest.mark.asyncio
+class TestTheNameItIntroducesItselfBy:
+    async def test_it_is_the_documents_title(self) -> None:
+        app = MCPApp("ui://shop/card", "<div id='card'></div>", title="Product card")
+        server = MCPServer(make_agent(), apps=[app])
+
+        async with connect(server) as session:
+            served = _body((await session.read_resource("ui://shop/card")).contents[0])
+
+        assert served == _runtime_introducing("Product card") + "<div id='card'></div>"
+
+    async def test_it_is_a_request_scoped_title_resolved_per_read(self) -> None:
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"tenant": "North shop"})
+
+        app = MCPApp("ui://shop/card", "<div id='card'></div>", title=Variable("tenant"))
+        server = MCPServer(make_agent(), apps=[app], context_provider=provider)
+
+        async with connect(server) as session:
+            served = _body((await session.read_resource("ui://shop/card")).contents[0])
+
+        assert served == _runtime_introducing("North shop") + "<div id='card'></div>"
+
+    async def test_the_title_wins_over_the_name(self) -> None:
+        app = MCPApp("ui://shop/card", CARD, name="card", title="Product card")
+
+        assert app.runtime_script() == _runtime_introducing("Product card")
+
+    async def test_without_a_title_it_is_the_name(self) -> None:
+        app = MCPApp("ui://shop/card", CARD, name="card")
+
+        assert app.runtime_script() == MCPApp("ui://shop/card", CARD, title="card").runtime_script()
+
+    async def test_without_either_it_is_the_uri_path(self) -> None:
+        assert MCPApp("ui://shop/card", CARD).runtime_script() == _runtime_introducing("shop/card")
+
+    async def test_an_empty_title_falls_back_to_the_uri_path(self) -> None:
+        assert MCPApp("ui://shop/card", CARD, title="").runtime_script() == _runtime_introducing("shop/card")
+
+    async def test_a_request_scoped_title_outside_a_request_falls_back_to_the_uri_path(self) -> None:
+        app = MCPApp("ui://shop/card", CARD, title=Variable("tenant"))
+
+        assert app.runtime_script() == _runtime_introducing("shop/card")
+
+
+@pytest.mark.asyncio
+class TestUpstreamAppSdk:
+    async def test_a_document_importing_it_is_served_as_written(self, caplog: pytest.LogCaptureFixture) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(UPSTREAM_CARD)])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            async with connect(server) as session:
+                read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == UPSTREAM_CARD
+        assert caplog.text == ""
+
+    async def test_a_bundle_carrying_its_own_handshake_is_served_as_written(self) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(BUNDLED_CARD)])
+
+        async with connect(server) as session:
+            read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == BUNDLED_CARD
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            pytest.param(
+                '<script src="https://cdn.example.com/npm/@modelcontextprotocol/ext-apps@2/dist/app.js"></script>',
+                id="script-src",
+            ),
+            pytest.param(
+                "<script type='module'>import { App } from 'https://esm.sh/@modelcontextprotocol/ext-apps@2';</script>",
+                id="single-quoted-import",
+            ),
+            pytest.param(
+                '<script type="module">import{App}from"https://esm.sh/@modelcontextprotocol/ext-apps@2";</script>',
+                id="minified-import",
+            ),
+            pytest.param(
+                '<script type="module">const { App } = await import("https://esm.sh/@modelcontextprotocol/ext-apps@2");</script>',
+                id="dynamic-import",
+            ),
+            pytest.param("<script>var M={initialize:'ui/initialize'};</script>", id="single-quoted-method"),
+        ],
+    )
+    async def test_every_way_of_loading_it_is_served_as_written(self, body: str) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        async with connect(server) as session:
+            read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == body
+
+    async def test_a_document_only_mentioning_it_still_gets_ag2ui(self) -> None:
+        body = "<p>Unlike @modelcontextprotocol/ext-apps, this card performs the ui/initialize handshake through ag2ui.</p>"
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        async with connect(server) as session:
+            served = _body((await session.read_resource("ui://shop/card")).contents[0])
+
+        assert "window.ag2ui" in served
+
+    async def test_a_document_mixing_both_is_warned_about(self, caplog: pytest.LogCaptureFixture) -> None:
+        body = UPSTREAM_CARD.replace("await app.connect();", "await app.connect(); await ag2ui.ready;")
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            async with connect(server) as session:
+                read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == body
+        assert "ui://shop/card" in caplog.text
+        assert "uses ag2ui" in caplog.text
+
+    async def test_a_body_from_a_provider_is_checked_on_every_read(self) -> None:
+        bodies = iter([CARD, UPSTREAM_CARD])
+
+        def body() -> str:
+            return next(bodies)
+
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        async with connect(server) as session:
+            first = _body((await session.read_resource("ui://shop/card")).contents[0])
+            second = _body((await session.read_resource("ui://shop/card")).contents[0])
+
+        assert "window.ag2ui" in first
+        assert second == UPSTREAM_CARD
 
 
 @pytest.mark.asyncio

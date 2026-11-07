@@ -266,6 +266,8 @@ ag2ui.host.protocolVersion;  // the dialect revision the host answered with
 ag2ui.host.info;             // the host's name and version
 ```
 
+The runtime introduces the document to the host by a human name — the app's `title`, else its `name`, else the URI without `ui://` (`shop/card`).
+
 Each subscription returns an unsubscribe function. The document's size is reported automatically via a `ResizeObserver`, so the host can size the frame without your writing one.
 
 **Subscribe whenever you like; call only after `ag2ui.ready`.** Registering a handler is local and is safe the moment the document parses — which is why the card above awaits nothing. Everything that *talks* to the host is refused until the handshake completes, so `await ag2ui.ready` before the first `callTool`, `sendMessage` or `readResource`; calling earlier throws rather than posting into a channel the host is still discarding.
@@ -326,9 +328,67 @@ Omit it and no `visibility` is advertised at all, leaving the host to its own de
 
 `examples/mcp/server_apps.py` is a runnable version of this shop, with a button that calls `add_to_cart`.
 
-### Bringing your own bundle
+## Using the upstream `App` SDK instead
 
-`inject_runtime=False` turns injection off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself.
+`ag2ui` is one way to talk to the host, not the only one. A document written against the `App` class from [`@modelcontextprotocol/ext-apps`](https://github.com/modelcontextprotocol/ext-apps){.external-link target="_blank"} works as it is: **a body that loads `@modelcontextprotocol/ext-apps` — an `import` or a `<script src>` naming the package — or that carries the `"ui/initialize"` method name as a string (a bundle that inlined the SDK) is served without `ag2ui`**, so the host does not see two handshakes. Unquoted prose mentioning either does not count, but visible text showing the method name in quotes — `<code>"ui/initialize"</code>` — does. A document that loads the SDK some other way — from a file whose URL does not name the package — is not recognised; pass `inject_runtime=False` for it. A recognised document that also calls `ag2ui.` logs a warning on `ag2.mcp.apps`, since `ag2ui` will not exist there.
+
+The two cover the same ground:
+
+| `ag2ui` | `App` from `@modelcontextprotocol/ext-apps` |
+|---|---|
+| injected; `await ag2ui.ready` | `const app = new App({ name, version })`; `await app.connect()` |
+| `ag2ui.onToolResult(fn)` | `app.ontoolresult = fn` |
+| `ag2ui.onToolResult("show_item", fn)` | `app.ontoolresult = fn`, routing on `result._meta["ai.ag2/tool"]` yourself |
+| `ag2ui.onToolInput(fn)` | `app.ontoolinput = fn` |
+| `ag2ui.onToolInputPartial(fn)` | `app.ontoolinputpartial = fn` |
+| `ag2ui.onHostContextChanged(fn)` | `app.onhostcontextchanged = fn` |
+| `ag2ui.onCancelled(fn)` | `app.ontoolcancelled = fn` |
+| `ag2ui.callTool("add_to_cart", { item_id: "42" })` | `app.callServerTool({ name: "add_to_cart", arguments: { item_id: "42" } })` |
+| `ag2ui.sendMessage("Show me the kettle")` | `app.sendMessage({ role: "user", content: [{ type: "text", text: "Show me the kettle" }] })` |
+| `ag2ui.openLink(url)` | `app.openLink({ url })` |
+| `ag2ui.readResource(uri)` | `app.readServerResource({ uri })` |
+| `ag2ui.updateContext({ content })` | `app.updateModelContext({ content })` |
+| `ag2ui.requestDisplayMode("fullscreen")` | `app.requestDisplayMode({ mode: "fullscreen" })` |
+| `ag2ui.downloadFile(contents)` | `app.downloadFile({ contents })` |
+| `ag2ui.sampling({ messages, maxTokens })` | `app.createSamplingMessage({ messages, maxTokens })` |
+| `ag2ui.log("info", "rendered")` | `app.sendLog({ level: "info", data: "rendered" })` |
+| `ag2ui.host.capabilities` / `ag2ui.host.context` | `app.getHostCapabilities()` / `app.getHostContext()` |
+
+One difference in shape: each `ag2ui.on…` call adds a subscriber and returns an unsubscribe function, while each `app.on…` property holds a single handler.
+
+Choose `ag2ui` for a small hand-written document with no build step and no network access; choose `App` when you already use it, want its React bindings and theming helpers, or share the document with servers written in other languages.
+
+Without a bundler, load the SDK's self-contained `app-with-deps` build from a CDN. The example below is the shop card again, calling the `show_item` and `add_to_cart` tools declared [above](#who-may-call-a-tool) on `shop`. The host's default sandbox blocks every external script, so **declare the CDN in `csp=`** or the import fails silently:
+
+```python linenums="1" hl_lines="7 21"
+from ag2.mcp import MCPApp, ResourceCsp
+
+CARD = """
+<div id="card">Loading…</div>
+<button id="add">Add to cart</button>
+<script type="module">
+  import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";
+
+  const app = new App({ name: "Product card", version: "1.0.0" });
+  app.ontoolresult = (result) => {
+    document.getElementById("card").textContent = `${result.structuredContent.name}: $${result.structuredContent.price}`;
+  };
+  await app.connect();
+
+  document.getElementById("add").onclick = async () => {
+    const result = await app.callServerTool({ name: "add_to_cart", arguments: { item_id: "42" } });
+    document.getElementById("card").textContent = result.content[0].text;
+  };
+</script>
+"""
+shop = MCPApp("ui://shop/card", CARD, title="Product card", csp=ResourceCsp(resource_domains=["https://unpkg.com"]))
+```
+
+Register handlers before `app.connect()`, as the SDK's own docs ask: the host may deliver the tool result as soon as the handshake completes.
+
+## Bringing your own bundle
+
+A bundle that inlined the upstream SDK is usually recognised by its handshake and served untouched, as above. A hand-written runtime that sends `"ui/initialize"` is recognised the same way. For one that builds the method name at run time, or loads the SDK from a URL that does not name the package, pass `inject_runtime=False`: injection is off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself — a body that already carries it is not given a second copy.
 
 ```python linenums="1"
 from pathlib import Path
@@ -369,6 +429,7 @@ Each of these produces an error or a warning that says what to do:
 - **Giving an app tool to an agent.** `Agent(tools=[show_recipe])` raises a `TypeError`: an `@app.tool` / `@mcp_tool` tool is served to MCP clients through `MCPServer(apps=...)` / `MCPServer(tools=...)`. To give the same function to an agent, decorate it with `@tool` instead.
 - **A file name as a string.** A `str` body is always literal HTML, so `MCPApp("ui://shop/card", "card.html")` serves the text `card.html`. A string with no markup that ends in `.html` / `.htm` logs a warning on `ag2.mcp.apps` suggesting `Path("card.html")`.
 - **Declaring a tool after the server is built** raises `ag2.mcp.errors.MCPAppFrozenError` naming the tool — see [Taking an app apart](#taking-an-app-apart).
+- **Using `ag2ui` in a document built on the upstream `App`.** Such a document is served without `ag2ui`, so the call fails in the browser; the server logs a warning on `ag2.mcp.apps` naming the document. Use one or the other — see [Using the upstream `App` SDK instead](#using-the-upstream-app-sdk-instead).
 - **A host that never renders** — see [When the host shows text only](#when-the-host-shows-text-only).
 
 ## Reference
@@ -503,5 +564,5 @@ The app itself stays reusable — registering the same one with a second server 
 ## See also
 
 - [Serving an Agent as an MCP Server](/docs/user-guide/tools/serving_mcp) — transports, CORS, conversations, security, and protocol extensions.
-- [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) — the older embedded-resource mechanism, for MCP-UI-only clients.
+- [MCP-UI (legacy embedded resources)](/docs/user-guide/tools/mcp_ui) — the older mechanism, for clients that render only MCP-UI resources.
 - [MCP Servers](/docs/user-guide/tools/mcp_servers) — the inverse direction, consuming an MCP server as tools.

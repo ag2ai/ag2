@@ -1,19 +1,22 @@
 ---
-title: MCP-UI Resources
-sidebarTitle: MCP-UI
+title: MCP-UI (legacy embedded resources)
+sidebarTitle: MCP-UI (legacy)
 ---
 
-# MCP-UI Resources
+# MCP-UI (legacy embedded resources)
 
 [MCP-UI](https://mcpui.dev/){.external-link target="_blank"} lets an MCP server return a **renderable UI** — raw HTML, an `iframe` URL, or a Remote-DOM script — from a tool result instead of plain text. A UI-capable client (e.g. the JS [`@mcp-ui/client`](https://mcpui.dev/){.external-link target="_blank"}) renders it inline; a text-only client falls back to the embedded resource.
+
+!!! tip "For new work, use MCP Apps"
+    [MCP Apps](/docs/user-guide/tools/mcp_apps) — `ag2.mcp.apps` — is the way to serve UI from an AG2 server. [MCP-UI](https://mcpui.dev/){.external-link target="_blank"}'s own SDK now implements MCP Apps, and a host implementing MCP Apps does not render the embedded resources this page builds. Keep `ag2.mcp_ui` for clients that render only MCP-UI resources.
 
 AG2 builds these resources and the interactive callbacks (**UI Actions**) in `ag2.mcp_ui`. They are returned from the serving side of `ag2.mcp` — an AG2 `Agent` exposed as an MCP server — so this page starts with the minimum you need to serve one, then focuses on the UI helpers.
 
 !!! note "This is the serving side of MCP"
     `ag2.mcp.MCPServer` exposes an agent **as** an MCP server — see [Serving an Agent as an MCP Server](/docs/user-guide/tools/serving_mcp) for transports, conversations and security. This is the inverse of consuming an MCP server as tools with `MCPToolkit` / `MCPServerTool` — see [MCP Servers](/docs/user-guide/tools/mcp_servers) for that.
 
-!!! warning "MCP-UI and MCP Apps are alternatives — pick one"
-    [MCP Apps](/docs/user-guide/tools/mcp_apps) — `ag2.mcp.apps`, the `io.modelcontextprotocol/ui` extension — is the other mechanism, and it inverts this one. There the document is registered as a resource and read by URI **in parallel with** the call, so it cannot be built from the call's arguments; the per-call data reaches it as the result's `structuredContent` instead. A host implementing MCP Apps will not render UI a handler returned. Choose by the host you are serving.
+!!! note "How MCP Apps differs"
+    [MCP Apps](/docs/user-guide/tools/mcp_apps) — `ag2.mcp.apps`, the `io.modelcontextprotocol/ui` extension — inverts this mechanism. There the document is registered as a resource and read by URI **in parallel with** the call, so it cannot be built from the call's arguments; the per-call data reaches it as the result's `structuredContent` instead.
 
 ## Installation
 

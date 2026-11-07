@@ -66,6 +66,20 @@ logger = logging.getLogger(__name__)
 # HTML file name was almost certainly meant as a file, so it is warned about.
 _LOOKS_LIKE_HTML_PATH = re.compile(r"^[^<]*\.html?\s*$", re.IGNORECASE)
 
+# A document that already performs the ``ui/initialize`` handshake: it loads the
+# upstream ``@modelcontextprotocol/ext-apps`` SDK (an ``import``/``from`` or a
+# ``src=`` naming the package, typically on a CDN), or carries the method name as
+# a string literal (a bundle that inlined the SDK, or ``ag2ui`` placed by hand).
+# A second handshake would answer the host twice, so such a body is served without
+# the runtime. Only code shapes match — prose mentioning either is not a handshake.
+_OWN_HANDSHAKE = re.compile(
+    r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\bsrc\s*=\s*)["'][^"']*@modelcontextprotocol/ext-apps"""
+    r"""|["']ui/initialize["']"""
+)
+
+# A call into ``ag2ui`` from a document that does not define it.
+_USES_AG2UI = re.compile(r"\bag2ui\.")
+
 # The key ``_meta`` reserves for MCP Apps, on a tool and on a resource alike.
 UI_META_KEY = "ui"
 
@@ -140,8 +154,12 @@ class MCPApp:
     thing in that slot is the binding the decorator itself writes.
 
     ``inject_runtime`` controls injection of the document runtime (see
-    :meth:`runtime_script`). Turn it off for a document that brings its own
-    bundle: the body is then served byte-for-byte as given.
+    :meth:`runtime_script`). A body that already performs the ``ui/initialize``
+    handshake — one importing the upstream ``@modelcontextprotocol/ext-apps``
+    SDK, or a bundle naming that method — is served without it regardless, so a
+    document never answers the host twice. Turn it off for a runtime that builds
+    the method name at run time, or loads the SDK from a URL that does not name
+    the package: the body is then served byte-for-byte as given.
     """
 
     __slots__ = (
@@ -313,7 +331,17 @@ class MCPApp:
     async def _read(self, context: MCPExecutionContext) -> str:
         body = await _resolve_content(self._content, context)
         inject_runtime = resolve_context_value(self._inject_runtime, context)
-        return _inject(body, self.runtime_script()) if inject_runtime else body
+        if not inject_runtime:
+            return body
+        if _OWN_HANDSHAKE.search(body):
+            if _USES_AG2UI.search(body) and "window.ag2ui" not in body:
+                logger.warning(
+                    "MCP app %s performs its own ui/initialize handshake, so ag2ui is not injected, "
+                    "but the document uses ag2ui. Use either ag2ui or the @modelcontextprotocol/ext-apps App.",
+                    self._uri,
+                )
+            return body
+        return _inject(body, self._script_for(resolve_context_value(self._title, context)))
 
     def runtime_script(self) -> str:
         """The ``<script>`` element performing the MCP Apps handshake, as text.
@@ -330,10 +358,19 @@ class MCPApp:
         ``ag2ui.host.capabilities`` and ``ag2ui.host.context``; an ``ag2ui.ready``
         promise; and automatic size reporting.
 
+        The script introduces the document to the host by a human name: its
+        ``title``, else an explicit ``name``, else the URI without its scheme. A
+        ``Variable`` title is resolved per read when injecting; here, without a
+        request, it is skipped.
+
         This is the same text injection uses, exposed for a document that would
-        rather place it itself (with ``inject_runtime=False``).
+        rather place it itself. Injection skips a body that already performs the
+        handshake, so placing this text yourself needs no ``inject_runtime=False``.
         """
-        return _runtime_script(self._name)
+        return self._script_for(self._title)
+
+    def _script_for(self, title: AppText | None) -> str:
+        return _runtime_script(_display_name(title, self._name, self._uri))
 
     @overload
     def tool(
@@ -626,6 +663,19 @@ def _inject(html: str, script: str) -> str:
             end = html.find(">", match.start()) + 1
             return html[:end] + script + html[end:]
     return script + html
+
+
+def _display_name(title: AppText | None, name: str, uri: str) -> str:
+    """The name the document introduces itself to the host by in ``ui/initialize``.
+
+    An unresolved ``Variable`` title is skipped. ``name`` counts only when it was
+    given: the constructor defaults it to the URI.
+    """
+    if isinstance(title, str) and title:
+        return title
+    if name != uri:
+        return name
+    return uri.removeprefix("ui://")
 
 
 def _js(value: object) -> str:
