@@ -97,3 +97,20 @@ async def test_indexed_tool_calls_are_still_accumulated_by_index() -> None:
     ])
 
     assert [(c.id, c.arguments) for c in result.tool_calls.calls] == [("call_1", '{"city": "Paris"}')]
+
+
+@pytest.mark.asyncio
+async def test_whole_tool_calls_that_all_use_index_zero_stay_separate() -> None:
+    def whole(call_id: str, city: str) -> dict[str, Any]:
+        return {"index": 0, **_call(call_id, "get_weather", f'{{"city": "{city}"}}')}
+
+    result = await _stream([
+        _chunk({"role": "assistant", "tool_calls": [whole("call_1", "Paris")]}),
+        _chunk({"tool_calls": [whole("call_2", "Rome")]}),
+        _chunk({}, finish_reason="tool_calls"),
+    ])
+
+    assert [(c.id, c.arguments) for c in result.tool_calls.calls] == [
+        ("call_1", '{"city": "Paris"}'),
+        ("call_2", '{"city": "Rome"}'),
+    ]
