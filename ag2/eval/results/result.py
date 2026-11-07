@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from .._types import Feedback
 from ..dataset import Suite, Task
+from ..dataset.task import _validate_task_ids
 from ..sources.trace_source import TraceRef
 from ..trace import TokenUsage, Trace
 
@@ -121,6 +122,7 @@ class RunResult:
         store_dir: str | os.PathLike[str] | None = None,
         schema_version: str = _SCHEMA_VERSION,
     ) -> None:
+        _validate_task_ids((result.task for result in tasks), source=f"run {run_id!r}")
         self._run_id = run_id
         self._schema_version = schema_version
         self._tasks = tasks

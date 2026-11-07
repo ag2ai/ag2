@@ -14,6 +14,36 @@ from pydantic import BaseModel
 from ag2.eval import Suite, Task
 
 
+class TestTaskIdentity:
+    @pytest.mark.parametrize("task_id", ["", " ", 0, 7, [], {}])
+    def test_rejects_invalid_explicit_ids(self, task_id) -> None:
+        with pytest.raises(ValueError, match="index 0.*non-empty string"):
+            Suite.from_list([{"task_id": task_id, "inputs": {"input": "hi"}}])
+
+    def test_direct_constructor_rejects_duplicates(self) -> None:
+        with pytest.raises(ValueError, match="duplicate task_id 'same'.*indices 0 and 1"):
+            Suite([Task(task_id="same", inputs={"input": "first"}), Task(task_id="same", inputs={"input": "second"})])
+
+    @pytest.mark.parametrize("explicit_first", [True, False])
+    def test_rejects_explicit_and_generated_id_collisions(self, explicit_first) -> None:
+        items = [{"inputs": {"input": "first"}}, {"inputs": {"input": "second"}}]
+        index = 0 if explicit_first else 1
+        items[index]["task_id"] = "task-0001" if explicit_first else "task-0000"
+        with pytest.raises(ValueError, match="duplicate task_id"):
+            Suite.from_list(items)
+
+    def test_jsonl_rejects_duplicates_with_source_path(self, tmp_path) -> None:
+        path = tmp_path / "duplicate.jsonl"
+        path.write_text("\n".join(json.dumps({"task_id": "same", "inputs": {"input": value}}) for value in ["a", "b"]))
+        with pytest.raises(ValueError, match="duplicate.jsonl: duplicate task_id 'same'"):
+            Suite.from_jsonl(path)
+
+    def test_null_id_still_uses_generated_default(self) -> None:
+        assert Suite.from_list([{"task_id": None, "inputs": {"input": "hi"}}]).tasks == (
+            Task(task_id="task-0000", inputs={"input": "hi"}),
+        )
+
+
 class _RefModel(BaseModel):
     answer: str
     confidence: float = 1.0

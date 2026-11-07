@@ -4,7 +4,7 @@
 
 """Task — one unit of evaluation, loaded from a dataset."""
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field, is_dataclass
 from typing import Any
 from uuid import uuid4
@@ -48,6 +48,20 @@ class Task:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "reference_outputs", _coerce_reference_outputs(self.reference_outputs))
+
+
+def _validate_task_ids(tasks: Iterable[Task], *, source: str) -> None:
+    seen: dict[str, int] = {}
+    for index, task in enumerate(tasks):
+        task_id = task.task_id
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise ValueError(f"{source}: task at index {index} has invalid task_id (must be a non-empty string)")
+        if task_id in seen:
+            raise ValueError(
+                f"{source}: duplicate task_id {task_id!r} at indices {seen[task_id]} and {index}; "
+                "task IDs must be unique"
+            )
+        seen[task_id] = index
 
 
 def _coerce_reference_outputs(value: object) -> dict[str, Any] | None:
