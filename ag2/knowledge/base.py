@@ -103,6 +103,21 @@ class KnowledgeStore(Protocol):
         ...
 
 
+@runtime_checkable
+class CompareAndSwapStore(Protocol):
+    """Optional atomic-update capability used by working-memory aggregation.
+
+    Implementations must coordinate independent handles to the same storage.
+    ``None`` as the expected value means the file must not exist; it is distinct
+    from an existing empty file. A failed comparison must not change the store
+    or emit a change notification.
+    """
+
+    async def compare_and_swap(self, path: str, expected: str | None, content: str) -> bool:
+        """Write ``content`` only if the current value equals ``expected``."""
+        ...
+
+
 def _normalize(path: str) -> str:
     """Normalize path: ensure leading /, collapse //, strip trailing /."""
     if not path.startswith("/"):
