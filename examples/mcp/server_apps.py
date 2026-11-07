@@ -1,18 +1,35 @@
-"""Serve an MCP App: an agent plus an interactive document a host renders.
+"""Serve an MCP App: an agent plus an interactive product card a host renders.
 
-Run it over stdio and point an MCP Apps host (or the MCP Inspector) at it::
+Run it over HTTP (needs ``uvicorn``; ``ANTHROPIC_API_KEY`` for the agent's own
+``ask`` tool)::
 
     python examples/mcp/server_apps.py
 
-The document is static and registered as a resource — the host reads it *in
+and connect a host that renders MCP Apps to ``http://127.0.0.1:3001/mcp``:
+
+* VS Code — ``.vscode/mcp.json``:
+  ``{"servers": {"shop": {"type": "http", "url": "http://127.0.0.1:3001/mcp"}}}``
+* MCP Inspector — ``npx @modelcontextprotocol/inspector``, transport
+  "Streamable HTTP", the URL above. The server allows the Inspector's origin
+  (``http://localhost:6274``) through CORS.
+* Claude Desktop — launches servers over stdio; point ``claude_desktop_config.json``
+  at ``python /absolute/path/to/examples/mcp/server_apps.py --stdio``.
+
+Then ask the host's model to show item 42 and press "Add to cart".
+
+The document is static and registered as a resource: the host reads it *in
 parallel with* the call, so it cannot be built from the call's arguments. Each
-call's data arrives inside the frame as the result's ``structuredContent``.
-Contrast ``server_ui.py``, which builds HTML from arguments inside the handler;
-the two mechanisms are alternatives.
+call's data arrives in the frame as the result's ``structuredContent``. The
+button calls a second, app-only tool and renders what ``ag2ui.callTool`` returns.
+The guide is ``website/docs/user-guide/tools/mcp_apps.mdx``.
 """
 
 import asyncio
+import sys
 from dataclasses import dataclass
+
+import uvicorn
+from starlette.middleware.cors import CORSMiddleware
 
 from ag2 import Agent
 from ag2.config import AnthropicConfig
@@ -46,12 +63,17 @@ CARD = """<!doctype html>
         document.getElementById("buy").disabled = false;
       });
 
-      ag2ui.onToolResult("add_to_cart", function (result) {
-        document.getElementById("status").textContent = result.structuredContent.status;
-      });
-
-      document.getElementById("buy").addEventListener("click", function () {
-        ag2ui.callTool("add_to_cart", { item_id: current.item_id });
+      // The call resolves with its result; hosts differ on whether they also
+      // push it to onToolResult, so the button renders what it got back.
+      document.getElementById("buy").addEventListener("click", async function () {
+        var status = document.getElementById("status");
+        try {
+          await ag2ui.ready;
+          var result = await ag2ui.callTool("add_to_cart", { item_id: current.item_id });
+          status.textContent = result.isError ? "Could not add it." : result.structuredContent.status;
+        } catch (e) {
+          status.textContent = e.message;
+        }
       });
     </script>
   </body>
@@ -110,6 +132,18 @@ agent = Agent(
 
 server = MCPServer(agent, apps=[shop])
 
+# Browser-based hosts send a CORS preflight; desktop hosts ignore this.
+app = CORSMiddleware(
+    server,
+    allow_origins=["http://localhost:6274"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"],
+    expose_headers=["mcp-session-id"],
+)
+
 
 if __name__ == "__main__":
-    asyncio.run(server.run_stdio())
+    if "--stdio" in sys.argv:
+        asyncio.run(server.run_stdio())
+    else:
+        uvicorn.run(app, host="127.0.0.1", port=3001)

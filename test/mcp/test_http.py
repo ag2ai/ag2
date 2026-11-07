@@ -5,8 +5,10 @@
 import asyncio
 
 import pytest
+from dirty_equals import IsPartialDict, IsStr
 from mcp.server.streamable_http_manager import DEFAULT_MAX_SESSIONS, DEFAULT_SESSION_IDLE_TIMEOUT
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.middleware.cors import CORSMiddleware
 
 from ag2.mcp import MCPServer, TransportConfig
 from ag2.mcp.testing import serve
@@ -41,6 +43,64 @@ class TestHttpTransport:
 
         assert on_custom.status_code == 200
         assert on_default.status_code == 404
+
+    async def test_the_endpoint_answers_without_a_redirect(self) -> None:
+        """A browser refuses a redirected CORS preflight."""
+        app = MCPServer(greeter(), json_response=True)
+
+        async with serve(app) as client:
+            resp = await client.post("/mcp", headers=JSON_HEADERS, json=_INIT, follow_redirects=False)
+
+        assert resp.status_code == 200
+
+    async def test_a_trailing_slash_is_redirected_to_the_endpoint(self) -> None:
+        """A client still configured with ``/mcp/`` keeps working, by redirect."""
+        app = MCPServer(greeter(), json_response=True)
+
+        async with serve(app) as client:
+            resp = await client.post("/mcp/", headers=JSON_HEADERS, json=_INIT, follow_redirects=False)
+
+        assert resp.status_code == 307
+        assert resp.headers["location"] == "http://test/mcp"
+
+
+@pytest.mark.asyncio
+async def test_the_documented_cors_recipe_lets_a_browser_host_connect() -> None:
+    """The CORS recipe ``serving_mcp.mdx`` gives for hosts that run in a browser."""
+    app = CORSMiddleware(
+        MCPServer(greeter(), json_response=True),
+        allow_origins=["http://localhost:6274"],
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"],
+        expose_headers=["mcp-session-id"],
+    )
+
+    async with serve(app) as client:
+        preflight = await client.options(
+            "/mcp",
+            headers={
+                "Origin": "http://localhost:6274",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,mcp-protocol-version",
+            },
+            follow_redirects=False,
+        )
+        opened = await client.post(
+            "/mcp",
+            headers={**JSON_HEADERS, "Origin": "http://localhost:6274"},
+            json=_INIT,
+            follow_redirects=False,
+        )
+
+    assert preflight.status_code == 200
+    assert opened.status_code == 200
+    # Without the exposed header a browser host cannot read its session id,
+    # and every request after ``initialize`` is refused.
+    assert dict(opened.headers) == IsPartialDict({
+        "access-control-allow-origin": "http://localhost:6274",
+        "access-control-expose-headers": "mcp-session-id",
+        "mcp-session-id": IsStr(min_length=1),
+    })
 
 
 @pytest.mark.asyncio
