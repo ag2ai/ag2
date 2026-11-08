@@ -137,7 +137,14 @@ app = CORSMiddleware(
     server,
     allow_origins=["http://localhost:6274"],
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"],
+    allow_headers=[
+        "content-type",
+        "mcp-protocol-version",
+        "mcp-session-id",
+        "last-event-id",
+        "mcp-method",
+        "mcp-name",
+    ],
     expose_headers=["mcp-session-id"],
 )
 

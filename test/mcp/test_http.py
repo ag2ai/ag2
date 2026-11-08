@@ -68,10 +68,17 @@ class TestHttpTransport:
 async def test_the_documented_cors_recipe_lets_a_browser_host_connect() -> None:
     """The CORS recipe ``serving_mcp.mdx`` gives for hosts that run in a browser."""
     app = CORSMiddleware(
-        MCPServer(greeter(), json_response=True),
+        MCPServer(greeter(), json_response=True, sessions=False),
         allow_origins=["http://localhost:6274"],
         allow_methods=["GET", "POST", "DELETE"],
-        allow_headers=["content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"],
+        allow_headers=[
+            "content-type",
+            "mcp-protocol-version",
+            "mcp-session-id",
+            "last-event-id",
+            "mcp-method",
+            "mcp-name",
+        ],
         expose_headers=["mcp-session-id"],
     )
 
@@ -81,7 +88,7 @@ async def test_the_documented_cors_recipe_lets_a_browser_host_connect() -> None:
             headers={
                 "Origin": "http://localhost:6274",
                 "Access-Control-Request-Method": "POST",
-                "Access-Control-Request-Headers": "content-type,mcp-protocol-version",
+                "Access-Control-Request-Headers": "content-type,mcp-protocol-version,mcp-method,mcp-name",
             },
             follow_redirects=False,
         )
@@ -91,9 +98,38 @@ async def test_the_documented_cors_recipe_lets_a_browser_host_connect() -> None:
             json=_INIT,
             follow_redirects=False,
         )
+        modern = await client.post(
+            "/mcp",
+            headers={
+                **JSON_HEADERS,
+                "Origin": "http://localhost:6274",
+                "MCP-Protocol-Version": "2026-07-28",
+                "MCP-Method": "tools/call",
+                "MCP-Name": "ask",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "ask",
+                    "arguments": {"message": "Hello"},
+                    "_meta": {
+                        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                        "io.modelcontextprotocol/clientCapabilities": {},
+                    },
+                },
+            },
+            follow_redirects=False,
+        )
 
     assert preflight.status_code == 200
     assert opened.status_code == 200
+    assert modern.status_code == 200
+    assert modern.json() == IsPartialDict({
+        "result": IsPartialDict({"content": [{"type": "text", "text": "hi"}], "isError": False}),
+    })
+    assert dict(modern.headers) == IsPartialDict({"access-control-allow-origin": "http://localhost:6274"})
     # Without the exposed header a browser host cannot read its session id,
     # and every request after ``initialize`` is refused.
     assert dict(opened.headers) == IsPartialDict({

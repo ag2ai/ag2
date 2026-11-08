@@ -60,7 +60,9 @@ app = CORSMiddleware(
     MCPServer(agent),
     allow_origins=["http://localhost:6274"],  # the host page's origin, e.g. the MCP Inspector
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id"],
+    allow_headers=[
+        "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id", "mcp-method", "mcp-name",
+    ],
     expose_headers=["mcp-session-id"],
 )
 
@@ -68,7 +70,7 @@ if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
 ```
 
-Wrap the server itself rather than mounting it into a `Starlette(middleware=[...])` app: `CORSMiddleware` passes the ASGI `lifespan` through, so the server's session manager still starts. The listed headers are the MCP ones a browser blocks by default: `mcp-protocol-version` and `mcp-session-id` on every request, `last-event-id` when a host resumes a dropped stream, and — exposed on the way out — `mcp-session-id`, without which the host cannot read its session and every request after `initialize` fails. List the host's exact origin rather than `"*"`: a server reachable from any page can be driven by any page.
+Wrap the server itself rather than mounting it into a `Starlette(middleware=[...])` app: `CORSMiddleware` passes the ASGI `lifespan` through, so the server's session manager still starts. The listed headers cover `mcp-protocol-version`, `mcp-session-id` for session-based clients, and `last-event-id` when a host resumes a dropped stream. Clients using protocol `2026-07-28` also send `mcp-method`, plus `mcp-name` for requests such as `tools/call` and `resources/read`; omitting these from `allow_headers` makes their browser preflight fail. Exposing `mcp-session-id` on responses lets session-based clients read their session ID and send it on subsequent requests. List the host's exact origin rather than `"*"`: a server reachable from any page can be driven by any page.
 
 ### Serve over stdio instead
 
