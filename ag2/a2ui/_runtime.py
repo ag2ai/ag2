@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 from ag2.middleware.base import MiddlewareFactory
 
-from ._types import A2UIVersion, JsonSchema
+from ._types import A2UIVersion, A2UIWireVersion, JsonSchema
 from .actions import A2UIEventAction
 from .capabilities import A2UIClientCapabilities, capabilities_to_prompt
 from .middleware import A2UIExtractionMiddleware, A2UIValidationMiddleware
@@ -60,8 +60,6 @@ class _A2UIRuntime:
             version_string=self.schema_manager.version_string,
             server_to_client_schema=(self.schema_manager.server_to_client_schema if validate_responses else None),
             schema_registry=(self.schema_manager.build_schema_registry() if validate_responses else None),
-            component_schemas=(self.schema_manager.get_component_schemas() if validate_responses else None),
-            catalog_id=(self.schema_manager.catalog_id if validate_responses else None),
         )
         # Clickable buttons are declared on ``A2UIServer(actions=[...])``; the
         # server passes their action declarations here for prompt + click routing.
@@ -96,7 +94,7 @@ class _A2UIRuntime:
         return self.schema_manager.catalog_id
 
     @property
-    def version_string(self) -> A2UIVersion:
+    def version_string(self) -> A2UIWireVersion:
         """The wire ``version`` string stamped on messages (e.g. ``"v0.9.1"``)."""
         return self.schema_manager.version_string
 

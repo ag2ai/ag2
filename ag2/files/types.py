@@ -4,7 +4,7 @@
 
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -42,7 +42,7 @@ class UploadedFile(FileIdInput):
 
 def _datetime_to_timestamp(value: datetime) -> float:
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.replace(tzinfo=UTC)
     return value.timestamp()
 
 

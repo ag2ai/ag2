@@ -65,22 +65,35 @@ def _agent_span(start_ns: int = 0, end_ns: int = 500 * _MS) -> SpanData:
     )
 
 
-def _llm_span(start_ns: int, *, content: str = "hello", in_tok: int = 10, out_tok: int = 5) -> SpanData:
+def _llm_span(
+    start_ns: int,
+    *,
+    content: str = "hello",
+    in_tok: int = 10,
+    out_tok: int = 5,
+    cache_create: int | None = None,
+    cache_create_extended: int | None = None,
+) -> SpanData:
     output = json.dumps([{"content": content, "role": "assistant"}])
+    attributes: dict[str, object] = {
+        ATTR_SPAN_TYPE: SPAN_TYPE_LLM,
+        "gen_ai.usage.input_tokens": in_tok,
+        "gen_ai.usage.output_tokens": out_tok,
+        "gen_ai.output.messages": output,
+        "gen_ai.response.model": "gpt-x",
+        "gen_ai.response.finish_reasons": ["stop"],
+    }
+    if cache_create is not None:
+        attributes["gen_ai.usage.cache_creation_input_tokens"] = cache_create
+    if cache_create_extended is not None:
+        attributes["gen_ai.usage.cache_creation_extended_input_tokens"] = cache_create_extended
     return SpanData(
         name="chat gpt-x",
         span_id=f"llm-{start_ns}",
         parent_id="root",
         start_ns=start_ns,
         end_ns=start_ns + 50 * _MS,
-        attributes={
-            ATTR_SPAN_TYPE: SPAN_TYPE_LLM,
-            "gen_ai.usage.input_tokens": in_tok,
-            "gen_ai.usage.output_tokens": out_tok,
-            "gen_ai.output.messages": output,
-            "gen_ai.response.model": "gpt-x",
-            "gen_ai.response.finish_reasons": ["stop"],
-        },
+        attributes=attributes,
     )
 
 
@@ -124,6 +137,7 @@ def _usage_span(
     total: int = 990,
     cache_create: int = 7,
     cache_read: int = 3,
+    cache_create_extended: int | None = None,
 ) -> SpanData:
     attributes: dict[str, object] = {
         ATTR_SPAN_TYPE: SPAN_TYPE_USAGE,
@@ -138,6 +152,8 @@ def _usage_span(
         attributes["gen_ai.usage.cache_creation_input_tokens"] = cache_create
     if cache_read:
         attributes["gen_ai.usage.cache_read_input_tokens"] = cache_read
+    if cache_create_extended is not None:
+        attributes["gen_ai.usage.cache_creation_extended_input_tokens"] = cache_create_extended
     return SpanData(
         name=f"record_usage {kind}",
         span_id=f"usage-{start_ns}",
@@ -226,6 +242,36 @@ class TestAG2GenAIConvention:
         )
         assert usage_event.kind == "subtask"
         assert usage_event.label == "worker"
+
+    def test_usage_span_reconstructs_extended_cache_writes(self) -> None:
+        trace = spans_to_trace([
+            _agent_span(),
+            _usage_span(20 * _MS, kind="model_call", cache_create=1200, cache_create_extended=300),
+        ])
+
+        [usage_event] = trace.events_of(UsageEvent)
+        assert usage_event.usage == Usage(
+            prompt_tokens=900,
+            completion_tokens=90,
+            total_tokens=990,
+            cache_creation_input_tokens=1200,
+            cache_creation_extended_input_tokens=300,
+            cache_read_input_tokens=3,
+        )
+
+    def test_llm_span_reconstructs_extended_cache_writes(self) -> None:
+        trace = spans_to_trace([
+            _agent_span(),
+            _llm_span(10 * _MS, in_tok=12, out_tok=7, cache_create=1200, cache_create_extended=300),
+        ])
+
+        [response] = trace.events_of(ModelResponse)
+        assert response.usage == Usage(
+            prompt_tokens=12,
+            completion_tokens=7,
+            cache_creation_input_tokens=1200,
+            cache_creation_extended_input_tokens=300,
+        )
 
     def test_usage_span_and_the_llm_span_it_accompanies_count_once(self) -> None:
         """A main-loop call produces both spans — exactly one accounting event."""

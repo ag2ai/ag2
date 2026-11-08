@@ -10,9 +10,10 @@ events through observers, and optionally runs the harness primitives
 spawning).
 
 A bare ``Agent(name, config=cfg)`` has zero harness middleware — it behaves
-exactly like a plain LLM loop. Harness features are opt-in: pass ``assembly=``
-for context policies, ``knowledge=KnowledgeConfig(...)`` for a knowledge store,
-or ``tasks=TaskConfig(...)`` to enable subtask spawning (disabled by default).
+exactly like a plain LLM loop. Harness features are opt-in: use ``middleware=``
+for context policies, ``plugins=[KnowledgePlugin(...)]`` for a knowledge store,
+or use ``Agent.as_tool()`` for explicit subagent delegation. The legacy
+``tasks=TaskConfig(...)`` API is deprecated and will be removed in 1.4.0.
 """
 
 import asyncio
@@ -27,73 +28,78 @@ from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
-from typing import Any, Generic, Literal, TypeVar, overload
+from typing import Any, Generic, Literal, TypeGuard, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends import Provider
 from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
+from typing_extensions import deprecated
 
 from ag2.events import BinaryResult
 
-from .aggregate import AggregateStrategy, AggregateTrigger
+from ._model_input import model_inputs
+from ._run_lifecycle import RunLifecycle
 from .annotations import Context
 from .assembly import AssemblerMiddleware, AssemblyPolicy
-from .compact import CompactStrategy, CompactTrigger
 from .config import LLMClient, ModelConfig
 from .events import (
     BaseEvent,
     DrainedModelRequest,
     HumanInputRequest,
     Input,
+    ModelReasoning,
     ModelRequest,
     ModelResponse,
-    ToolCallsEvent,
+    ProviderReplay,
+    StatusObservation,
     ToolResultsEvent,
     UsageEvent,
-    estimated_tokens,
     is_conversational,
 )
 from .events.lifecycle import (
-    AggregationCompleted,
-    AggregationFailed,
-    AggregationStarted,
-    CompactionCompleted,
-    CompactionFailed,
-    CompactionStarted,
-    EventLogFailed,
     ObserverCompleted,
     ObserverStarted,
 )
 from .exceptions import ConfigNotProvidedError, HumanInputError
-from .history import HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
+from .history import CANCELLED_TOOL_RESULT, HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
-from .knowledge import DefaultBootstrap, EventLogWriter, KnowledgeStore
+from .knowledge._legacy import LegacyKnowledgeAdapter
 from .knowledge.config import KnowledgeConfig
+from .knowledge.plugin import validate_knowledge_middleware
 from .middleware.base import (
     AgentTurn,
     BaseMiddleware,
     LLMCall,
+    Middleware,
     MiddlewareFactory,
+    ScopedMiddlewareFactory,
     ToolMiddleware,
 )
 from .middleware.describe import DescribedMiddleware
+from .middleware.halt import HaltCheckMiddleware
 from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
+from .scopes import merge_variables, overlay_variables
 from .stream import MemoryStream, Stream, StreamId
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, Toolkit, tool
+from .tools.final import FunctionTool, Toolkit
 from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
+from .tools.subagents._forwarding import PARENT_CANCELLED, DelegationRegistry, Forwarder
 from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
-from .types import Omit, Omittable, SendableMessage, omit
-from .usage import UsageReport, collect_usage_events
-from .utils import AGENT_CONTEXT_DEPENDENCY_KEY, MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY
+from .types import Omit, Omittable, RequestOrigin, SendableMessage, omit
+from .usage import UsageReport
+from .utils import (
+    AGENT_CONTEXT_DEPENDENCY_KEY,
+    CONFIGURED_DEPENDENCIES_CONTEXT_KEY,
+    MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +108,41 @@ TAgent = TypeVar313("TAgent", default=str)
 T2 = TypeVar("T2")
 
 
+TASK_CONFIG_DEPRECATION = (
+    "TaskConfig, Agent(tasks=...) and the auto-injected run_subtask / run_subtasks tools are deprecated "
+    "and will be removed in 1.4.0. Expose explicitly constructed worker Agents through Agent.as_tool() instead."
+)
+
+ASSEMBLY_DEPRECATION = (
+    "Agent(assembly=...) is deprecated and will be removed in 1.4.0. Register "
+    "middleware=[Middleware(AssemblerMiddleware, policies=[...]), Middleware(HaltCheckMiddleware)] instead; "
+    "import AssemblerMiddleware from ag2.assembly and Middleware / HaltCheckMiddleware from ag2.middleware."
+)
+
+
+KNOWLEDGE_DEPRECATION = (
+    "Agent(knowledge=...) is deprecated and will be removed in 1.4.0. "
+    "Use plugins=[KnowledgePlugin(store=..., ...)] instead; import KnowledgePlugin from ag2.knowledge."
+)
+
+
+AGENT_TASK_DEPRECATION = (
+    "Agent.task() is deprecated and will be removed in 1.4.0. "
+    "Use Task(owner_id=agent.name, spec=TaskSpec(title=..., description=..., payload=..., capability=...), ...) "
+    "instead; import Task and TaskSpec from ag2.task. Pass context, ttl_seconds, checkpoint_store and resume_from "
+    "directly to Task."
+)
+
+
+@deprecated(TASK_CONFIG_DEPRECATION, category=None)
 @dataclass
 class TaskConfig:
     """Groups task-spawning Agent parameters.
+
+    Deprecated; will be removed in 1.4.0 along with ``Agent(tasks=...)`` and
+    the auto-injected ``run_subtask`` / ``run_subtasks`` tools. Construct
+    worker Agents explicitly and pass their ``Agent.as_tool()`` tools to
+    the parent instead.
 
     By default a subtask Agent inherits **all** of the parent's user-supplied
     tools (everything passed via ``tools=``). Subtask Agents never receive the
@@ -211,7 +249,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -219,6 +257,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TAgent]": ...
 
@@ -227,7 +267,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -235,6 +275,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TAgent]": ...
 
@@ -243,7 +285,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -251,6 +293,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[str, TAgent]": ...
 
@@ -259,13 +303,15 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[TAgent, TAgent]": ...
 
@@ -273,7 +319,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -281,17 +327,18 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
-        initial_event = ModelRequest.ensure_request(list(msg))
-
-        client = config.create() if config else self.__client
-
         return await self.__agent._execute(
-            initial_event,
+            ModelRequest.ensure_request(list(msg)),
             context=self.context,
-            client=client,
+            client=None if config else self.__client,
+            config=config,
             context_overrides=_ContextOverrides(dict(dependencies or {}), dict(variables or {}), tuple(prompt)),
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
             additional_tools=tools,
             additional_plugins=plugins,
@@ -305,7 +352,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -313,6 +360,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[T2, TAgent]": ...
 
@@ -321,7 +370,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -329,6 +378,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[T2, TAgent]": ...
 
@@ -337,7 +388,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -345,6 +396,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[str, TAgent]": ...
 
@@ -353,13 +406,15 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[TAgent, TAgent]": ...
 
@@ -367,7 +422,7 @@ class AgentReply(Generic[TResult, TAgent]):
         self,
         *msg: SendableMessage | Input,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -375,6 +430,8 @@ class AgentReply(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentRun[Any, Any]":
         """Observable, non-blocking continuation of this reply (counterpart to ``ask``).
@@ -385,7 +442,7 @@ class AgentReply(Generic[TResult, TAgent]):
         """
         initial_event = ModelRequest.ensure_request(list(msg))
 
-        client = config.create() if config else self.__client
+        client = None if config else self.__client
 
         return self.__agent._make_run(
             initial_event,
@@ -397,9 +454,19 @@ class AgentReply(Generic[TResult, TAgent]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
             client=client,
         )
+
+
+def _owned_delegation(context: Context) -> Forwarder | None:
+    """The delegation executing on this context's own stream, if any."""
+    delegation: Forwarder | None = context.dependencies.get(Forwarder)
+    if delegation is not None and delegation.stream.id != context.stream.id:
+        return None
+    return delegation
 
 
 @dataclass(frozen=True, slots=True)
@@ -412,7 +479,7 @@ class _ContextOverrides:
 
     def apply(self, context: Context) -> None:
         context.dependencies.update(self.dependencies)
-        context.variables.update(self.variables)
+        context.variables = overlay_variables(context.variables, self.variables)
         if self.prompt:
             context.prompt = list(self.prompt)
 
@@ -432,6 +499,15 @@ class _PluginPrompt(str):
 def _remove_plugin_prompts(context: Context, fragments: Sequence[str]) -> None:
     owned = {id(fragment) for fragment in fragments}
     context.prompt[:] = [fragment for fragment in context.prompt if id(fragment) not in owned]
+
+
+def _set_for_turn(stack: AsyncExitStack, dependencies: dict[Any, Any], key: Any, value: Any) -> None:
+    """Set a framework dependency for one turn and restore what was there after it."""
+    if (previous := dependencies.get(key)) is None:
+        stack.callback(dependencies.pop, key, None)
+    else:
+        stack.callback(dependencies.__setitem__, key, previous)
+    dependencies[key] = value
 
 
 def _remove_plugin_default(context: Context, attribute: str, key: Any, value: Any) -> None:
@@ -511,6 +587,8 @@ class AgentRun(Generic[TResult, TAgent]):
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
         context_overrides: _ContextOverrides | None = None,
@@ -526,6 +604,8 @@ class AgentRun(Generic[TResult, TAgent]):
         self.__observers = observers
         self.__response_schema = response_schema
         self.__hitl_hook = hitl_hook
+        self.__capability = capability
+        self.__ttl_seconds = ttl_seconds
         # A continuation (``AgentReply.run``) supplies the original turn's client
         # so it keeps using the same provider; a fresh run leaves it None and the
         # client is resolved from config on enter.
@@ -533,6 +613,7 @@ class AgentRun(Generic[TResult, TAgent]):
 
         self.__stack = AsyncExitStack()
         self.__driver: Callable[[], Awaitable[AgentReply[TResult, TAgent]]] | None = None
+        self.__lifecycle: RunLifecycle | None = None
         # The single task driving the turn, created lazily by ``start()`` or
         # ``result()``. It holds the turn's outcome, so awaiting it again is
         # idempotent; ``__aexit__`` cancels it if it is still running.
@@ -553,16 +634,21 @@ class AgentRun(Generic[TResult, TAgent]):
         next turn on this stream. Safe to call from a stream subscriber (inline
         during the drive) or a concurrent task — it appends at once and
         announces the message with ``MessageEnqueued`` from a background task.
+
+        The message counts as user input: when the turn consumes it, a new
+        ``History.since_last_user_input()`` interval starts.
         """
-        self.__context.enqueue(*content)
+        self.__context.enqueue(*content, origin="user")
 
     async def __aenter__(self) -> "AgentRun[TResult, TAgent]":
-        self.__driver = await self.__stack.enter_async_context(
+        self.__driver, self.__lifecycle = await self.__stack.enter_async_context(
             self.__agent._turn_scope(
                 self.__trigger,
                 context=self.__context,
                 client=self.__client,
                 config=self.__config,
+                capability=self.__capability,
+                ttl_seconds=self.__ttl_seconds,
                 context_overrides=self.__context_overrides,
                 additional_plugins=self.__plugins,
                 hitl_hook=self.__hitl_hook,
@@ -612,18 +698,26 @@ class AgentRun(Generic[TResult, TAgent]):
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
         tb: Any,
-    ) -> bool:
+    ) -> Literal[False]:
         task = self.__task
-        if task is not None:
-            if not task.done():
-                task.cancel()
-            # Retrieve the outcome so a cancelled/failed background turn does not
-            # surface as an unretrieved-task warning. The caller opted out of the
-            # result by leaving the block without awaiting ``result()``, so its
-            # cancellation or failure is swallowed here.
-            with suppress(asyncio.CancelledError, Exception):
-                await task
-        await self.__stack.aclose()
+        failure: BaseException | None = None
+        try:
+            if task is not None:
+                if not task.done():
+                    task.cancel()
+                # Retrieve the outcome even when the caller opted out of result().
+                # A task cancelled before its first coroutine step still needs a
+                # terminal lifecycle; middleware scope teardown retains its contract.
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception) as error:
+                    failure = error
+            if failure is not None and self.__lifecycle is not None:
+                await self.__lifecycle.reject(failure)
+        finally:
+            # Always release the stream turn lock, including when the driver
+            # raised KeyboardInterrupt / SystemExit.
+            await self.__stack.aclose()
         return False
 
 
@@ -687,15 +781,18 @@ class Agent(PluginTarget, Generic[TResult]):
     A bare ``Agent(name, config=cfg)`` has zero harness middleware and
     behaves exactly like a plain LLM loop. Harness features are opt-in:
 
-    * ``assembly=`` — assembly policies (e.g. ``ConversationPolicy``,
-      ``SlidingWindow``, ``AlertPolicy``). When non-empty,
-      ``AssemblerMiddleware`` and ``_HaltCheckMiddleware`` are wired in.
-    * ``knowledge=KnowledgeConfig(store=...)`` — persistent knowledge store,
+    * ``middleware=`` — register context policies with
+      ``Middleware(AssemblerMiddleware, policies=[...])``. Add
+      ``Middleware(HaltCheckMiddleware)`` after it when using ``AlertPolicy``.
+      The legacy ``assembly=`` parameter is deprecated and will be removed
+      in 1.4.0; it keeps wiring both middleware automatically until then.
+    * ``plugins=[KnowledgePlugin(store=...)]`` — persistent knowledge store,
       compaction, aggregation.
     * ``tasks=TaskConfig(...)`` — opt in to the auto-injected ``run_subtask``
       / ``run_subtasks`` tools, and override the LLM config / prompt /
       tool-inheritance rules for sub-task Agents. Defaults to ``False``
-      (sub-task tools disabled).
+      (sub-task tools disabled). Deprecated; will be removed in 1.4.0.
+      Use worker Agents exposed through ``Agent.as_tool()`` instead.
     """
 
     @overload
@@ -710,12 +807,12 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         response_schema: type[TResult],
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -730,12 +827,12 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         response_schema: ResponseProto[TResult],
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -750,12 +847,12 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         response_schema: types.UnionType,
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -770,12 +867,12 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         response_schema: None = ...,
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     def __init__(
@@ -789,12 +886,12 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         response_schema: (ResponseProto[TResult] | type[TResult] | types.UnionType | None) = None,
         plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | Literal[False] = False,
-        assembly: Iterable[AssemblyPolicy] = (),
+        assembly: Iterable[AssemblyPolicy] | None = None,
     ) -> None:
         self._init_target(
             name,
@@ -821,9 +918,11 @@ class Agent(PluginTarget, Generic[TResult]):
         # Task spawning. ``tasks=False`` (the default) means no auto-injected
         # ``run_subtask`` / ``run_subtasks`` tools. Pass ``tasks=TaskConfig(...)``
         # to opt in.
-        if tasks is False:
+        # ``None`` is treated as disabled: older docs showed it as the default.
+        if tasks is False or tasks is None:
             self._task_config: TaskConfig | None = None
         else:
+            warnings.warn(TASK_CONFIG_DEPRECATION, DeprecationWarning, stacklevel=2)
             self._task_config = tasks
             self._additional_tools.append(_build_subtask_toolkit(self))
         # One Semaphore per running loop: sharing one raises once a second loop
@@ -834,32 +933,28 @@ class Agent(PluginTarget, Generic[TResult]):
         )
         self._task_slots_lock = threading.Lock()
 
-        # Knowledge store + compaction/aggregation strategies
-        if knowledge:
-            self._agent_dependencies[KnowledgeStore] = knowledge.store
-            self._knowledge_context = _KnowledgeContext(knowledge, self.name)
-
-            if knowledge.expose_tool:
-                self._additional_tools.append(_make_knowledge_tool(knowledge.store))
-
-            if knowledge.compact:
-                self.add_middleware(_CompactionMiddlewareFactory(self.name, knowledge))
-
-            if (trigger := knowledge.aggregate_trigger) and (
-                trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end
-            ):
-                self.add_middleware(_AggregationMiddlewareFactory(self.name, knowledge))
-        else:
-            self._knowledge_context = _FakeKnowledgeContext()
+        # Temporary compatibility adapter; remove with knowledge= in 1.4.0.
+        legacy_knowledge = LegacyKnowledgeAdapter(knowledge) if knowledge is not None else None
+        if legacy_knowledge is not None:
+            warnings.warn(KNOWLEDGE_DEPRECATION, DeprecationWarning, stacklevel=2)
+            self._apply_plugin(legacy_knowledge.plugin)
+            self._agent_dependencies.update(legacy_knowledge.dependencies)
+            self._additional_tools.extend(legacy_knowledge.tools)
+        validate_knowledge_middleware(self._middleware)
 
         # Assembly policies (empty by default; bare Agent has no harness).
-        self._policies.extend(assembly)
+        if assembly is not None:
+            warnings.warn(ASSEMBLY_DEPRECATION, DeprecationWarning, stacklevel=2)
+            self._policies.extend(assembly)
         if self._policies:
             for w in AssemblerMiddleware.validate_order(self._policies):
                 logger.warning("Assembly policy ordering: %s", w)
 
-            self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
-            self.add_middleware(_HaltCheckMiddlewareFactory())
+            # Policies may come from constructor plugins alone. Keep the implicit
+            # assembler for them unless the user already registered one.
+            if not _has_user_assembler(self._middleware):
+                self.add_middleware(_AssemblerMiddlewareFactory(self._policies))
+                self.add_middleware(Middleware(HaltCheckMiddleware))
 
     # --- Composition -----------------------------------------------------
     # Read-only views of what this agent is made of, for comparing two agents,
@@ -926,16 +1021,24 @@ class Agent(PluginTarget, Generic[TResult]):
 
     @property
     def tasks(self) -> TaskConfig | None:
-        """Sub-task configuration, or ``None`` when sub-tasks are not enabled."""
+        """Sub-task configuration, or ``None`` when sub-tasks are not enabled.
+
+        Deprecated; will be removed in 1.4.0 with ``Agent(tasks=...)``.
+        """
 
         return self._task_config
 
     @property
     def assembly(self) -> tuple[AssemblyPolicy, ...]:
-        """Assembly policies, in the order they are applied."""
+        """Policies registered via legacy ``assembly=`` or plugins, in application order.
+
+        Policies registered directly through middleware are not included.
+        The ``assembly=`` constructor parameter will be removed in 1.4.0.
+        """
 
         return tuple(self._policies)
 
+    @deprecated(AGENT_TASK_DEPRECATION)
     def task(
         self,
         title: str,
@@ -950,15 +1053,22 @@ class Agent(PluginTarget, Generic[TResult]):
     ) -> Task:
         """Create a ``Task`` whose lifecycle this Agent owns.
 
-        Returns an unentered ``Task``; use as ``async with agent.task(...)``.
+        Deprecated; will be removed in 1.4.0. Construct
+        ``Task(owner_id=self.name, spec=TaskSpec(title=title, ...), ...)``
+        directly instead. The remaining Task parameters are unchanged.
+
+        Returns an unentered ``Task``, used as an async context manager.
         Events flow on ``context.stream`` if a ``ConversationContext`` is
         supplied; else the Task creates a private ``MemoryStream`` on entry
         and events fire on it (only observers attached to that private
         stream see them).
 
-        Inside the ``async with`` block, ``ag2.task`` is stamped into
-        ``context.dependencies`` so any tool annotated with ``TaskInject``
-        resolves to this Task.
+        Inside the ``async with`` block, tools annotated with ``TaskInject``
+        resolve to this Task — per asyncio task, so sibling tool calls that
+        each open a task resolve their own, and a nested block resolves to
+        the innermost enclosing task. ``context.dependencies`` also carries
+        an ``ag2.task`` slot for the block (best-effort under overlapping
+        siblings; kept for direct readers of the dict).
 
         ``capability`` tags the task with a capability name. When the
         agent is registered with the network, the ``TaskMirror`` calls
@@ -993,7 +1103,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1001,6 +1111,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TResult]": ...
 
@@ -1011,7 +1123,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1019,6 +1131,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[T2, TResult]": ...
 
@@ -1029,7 +1143,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1037,6 +1151,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[str, TResult]": ...
 
@@ -1047,13 +1163,15 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentReply[TResult, TResult]": ...
 
@@ -1062,7 +1180,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -1070,8 +1188,15 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
+        """Run a turn to completion.
+
+        ``capability`` or ``ttl_seconds`` enables the task lifecycle for this
+        invocation. TTL is an externally observed deadline, not a local timeout.
+        """
         # ``ask`` is the blocking degenerate case of ``run``: open a run, drive
         # it to its result, and let the scope close.
         async with self._open_run(
@@ -1086,6 +1211,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         ) as handle:
             return await handle.result()
@@ -1096,7 +1223,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1104,6 +1231,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: type[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[T2, TResult]": ...
 
@@ -1114,7 +1243,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1122,6 +1251,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: ResponseProto[T2],
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[T2, TResult]": ...
 
@@ -1132,7 +1263,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
@@ -1140,6 +1271,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
         response_schema: None,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[str, TResult]": ...
 
@@ -1150,13 +1283,15 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
-        variables: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
         prompt: Iterable[str] = ...,
         config: ModelConfig | None = ...,
         tools: Iterable[Tool] = ...,
         plugins: Iterable[Plugin] = ...,
         middleware: Iterable[MiddlewareFactory] = ...,
         observers: Iterable[Observer] = ...,
+        capability: str | None = ...,
+        ttl_seconds: int | None = ...,
         hitl_hook: HumanHook | None = ...,
     ) -> "AgentRun[TResult, TResult]": ...
 
@@ -1165,7 +1300,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -1173,6 +1308,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentRun[Any, Any]":
         """Observable counterpart to ``ask``: open a turn scope you can watch.
@@ -1180,7 +1317,9 @@ class Agent(PluginTarget, Generic[TResult]):
         Returns an :class:`AgentRun` async context manager. Entering it opens the
         turn scope (subscribers live) and yields a handle; the turn advances when
         ``result()`` is awaited, with events flowing through ``run.stream`` as it
-        runs. Mirrors ``ask``'s signature.
+        runs. Mirrors ``ask``'s signature. ``capability`` or ``ttl_seconds``
+        enables task lifecycle events; an undriven run emits none. The terminal
+        is published after scope cleanup. TTL is externally observed.
         """
         return self._open_run(
             *msg,
@@ -1194,6 +1333,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         )
 
@@ -1202,7 +1343,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *msg: SendableMessage | Input,
         stream: Stream | None,
         dependencies: dict[Any, Any] | None,
-        variables: dict[Any, Any] | None,
+        variables: Mapping[str, Any] | None,
         prompt: Iterable[str],
         config: ModelConfig | None,
         tools: Iterable[Tool],
@@ -1210,6 +1351,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None,
     ) -> "AgentRun[Any, Any]":
         """Build a context from public kwargs and open a run over a fresh request.
@@ -1232,6 +1375,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         )
 
@@ -1246,6 +1391,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
         response_schema: Omittable[ResponseProto[Any] | type | None],
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None,
         client: LLMClient | None = None,
         context_overrides: _ContextOverrides | None = None,
@@ -1267,6 +1414,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
             client=client,
             context_overrides=context_overrides,
@@ -1277,7 +1426,7 @@ class Agent(PluginTarget, Generic[TResult]):
         *events: BaseEvent,
         stream: Stream | None = None,
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
         prompt: Iterable[str] = (),
         config: ModelConfig | None = None,
         tools: Iterable[Tool] = (),
@@ -1285,6 +1434,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
         """Resume a turn from a recorded trajectory, driven by an arbitrary event.
@@ -1319,6 +1470,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         ) as handle:
             return await handle.result()
@@ -1333,6 +1486,8 @@ class Agent(PluginTarget, Generic[TResult]):
         middleware: Iterable[MiddlewareFactory] = (),
         observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
     ) -> "AgentReply[Any, Any]":
         """`Agent.ask()` alternative method to call agent with prebuild `context`."""
@@ -1345,6 +1500,8 @@ class Agent(PluginTarget, Generic[TResult]):
             middleware=middleware,
             observers=observers,
             response_schema=response_schema,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
         ) as handle:
             return await handle.result()
@@ -1381,8 +1538,11 @@ class Agent(PluginTarget, Generic[TResult]):
         event: BaseEvent,
         *,
         context: Context,
-        client: LLMClient,
+        client: LLMClient | None,
+        config: ModelConfig | None = None,
         context_overrides: _ContextOverrides | None = None,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
         additional_plugins: Iterable[Plugin] = (),
@@ -1392,8 +1552,8 @@ class Agent(PluginTarget, Generic[TResult]):
     ) -> "AgentReply[Any, Any]":
         """Blocking turn: open the scope and immediately drive it to completion.
 
-        The shared entry for callers that already hold a ``client`` (notably
-        ``AgentReply.ask`` and the A2A executor). ``run`` / ``ask`` route through
+        The shared entry for adapters that already hold a ``client`` (such as
+        the A2A executor). ``run`` / ``ask`` route through
         ``AgentRun``, which enters the *same* ``_turn_scope`` but defers the drive
         to ``result()``.
         """
@@ -1401,14 +1561,17 @@ class Agent(PluginTarget, Generic[TResult]):
             event,
             context=context,
             client=client,
+            config=config,
             context_overrides=context_overrides,
+            capability=capability,
+            ttl_seconds=ttl_seconds,
             hitl_hook=hitl_hook,
             additional_tools=additional_tools,
             additional_plugins=additional_plugins,
             additional_middleware=additional_middleware,
             additional_observers=additional_observers,
             response_schema=response_schema,
-        ) as drive:
+        ) as (drive, _):
             return await drive()
 
     @asynccontextmanager
@@ -1420,16 +1583,45 @@ class Agent(PluginTarget, Generic[TResult]):
         client: LLMClient | None = None,
         config: ModelConfig | None = None,
         context_overrides: _ContextOverrides | None = None,
+        capability: str | None = None,
+        ttl_seconds: int | None = None,
         hitl_hook: HumanHook | None = None,
         additional_tools: Iterable[Tool] = (),
         additional_plugins: Iterable[Plugin] = (),
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: ResponseProto[Any] | type | None | Omit = omit,
-    ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
+    ) -> AsyncGenerator[tuple[Callable[[], Awaitable[AgentReply[Any, Any]]], RunLifecycle | None]]:
         """Resolve invocation plugins and bracket their context contributions."""
         plugins = _TurnPlugins(additional_plugins)
+        additional_middleware = tuple(additional_middleware)
+        validate_knowledge_middleware(chain(self._middleware, plugins.middleware, additional_middleware))
         async with _get_stream_turn_lock(context.stream), AsyncExitStack() as stack:
+            # Served entry points (A2A, A2UI, NLIP) build their own context; the
+            # running agent is always this one for the duration of the turn.
+            _set_for_turn(stack, context.dependencies, AGENT_CONTEXT_DEPENDENCY_KEY, self)
+            # What this agent is configured with, so a delegation can tell it
+            # apart from values the caller supplied for this request.
+            configured = context.dependencies.get(CONFIGURED_DEPENDENCIES_CONTEXT_KEY, {}) | self._agent_dependencies
+            _set_for_turn(stack, context.dependencies, CONFIGURED_DEPENDENCIES_CONTEXT_KEY, configured)
+            delegation = _owned_delegation(context)
+            lifecycle: RunLifecycle | None = None
+            if delegation is not None:
+                await stack.enter_async_context(delegation.execution(context))
+                lifecycle = delegation.lifecycle(context, capability=capability, ttl_seconds=ttl_seconds)
+            elif capability is not None or ttl_seconds is not None:
+                # The title is published to observers and mirrored to the hub,
+                # so it must not carry the caller's prompt.
+                lifecycle = RunLifecycle(
+                    self.name,
+                    TaskSpec(title=self.name, capability=capability),
+                    context,
+                    ttl_seconds=ttl_seconds,
+                )
+            if lifecycle is not None:
+                # Entered before any further setup so a setup failure still
+                # publishes a terminal.
+                await stack.enter_async_context(lifecycle.scope())
             if context_overrides is not None:
                 context_overrides.apply(context)
             if plugins.has_conflicting_hitl_hooks:
@@ -1441,8 +1633,13 @@ class Agent(PluginTarget, Generic[TResult]):
                 target = getattr(context, attribute)
                 for key, value in defaults.items():
                     if key not in target:
-                        target[key] = value
-                        stack.callback(_remove_plugin_default, context, attribute, key, value)
+                        if attribute == "variables":
+                            context.variables = overlay_variables(context.variables, {key: value})
+                            target = context.variables
+                        else:
+                            target[key] = value
+                            configured[key] = value
+                        stack.callback(_remove_plugin_default, context, attribute, key, target[key])
 
             if client is None:
                 client = await self._prepare_turn(event, context, config)
@@ -1467,8 +1664,9 @@ class Agent(PluginTarget, Generic[TResult]):
                 additional_observers=(*plugins.observers, *additional_observers),
                 additional_policies=plugins.policies,
                 response_schema=response_schema,
+                lifecycle=lifecycle,
             ) as drive:
-                yield drive
+                yield drive, lifecycle
 
     @asynccontextmanager
     async def _drive_scope(
@@ -1484,11 +1682,12 @@ class Agent(PluginTarget, Generic[TResult]):
         additional_middleware: Iterable[MiddlewareFactory] = (),
         additional_observers: Iterable[Observer] = (),
         response_schema: Omittable[ResponseProto[Any] | type | None] = omit,
+        lifecycle: RunLifecycle | None = None,
     ) -> "AsyncGenerator[Callable[[], Awaitable[AgentReply[Any, Any]]]]":
         """Open a turn scope and yield a ``drive`` callable that runs it once.
 
         Sets up everything a turn needs and keeps it live across the ``yield``:
-        the per-stream lock (serialisation), the knowledge context, the resolved
+        the per-stream lock (serialisation), middleware scopes, the resolved
         tool schemas, the instantiated middlewares, the turn's subscribers (LLM
         callback, HITL, tool executor) and the observer lifecycle. The yielded
         ``drive`` advances the turn from ``event`` and returns the ``AgentReply``.
@@ -1508,7 +1707,12 @@ class Agent(PluginTarget, Generic[TResult]):
         no-contention acquire. Sub-tasks spawn on their own stream, so they never
         contend with the parent turn's lock.
         """
-        async with self._knowledge_context.enter(context):
+        additional_middleware = tuple(additional_middleware)
+        async with AsyncExitStack() as scope_stack:
+            scoped_factories = tuple(chain(self._middleware, additional_middleware))
+            for factory in scoped_factories:
+                if isinstance(factory, ScopedMiddlewareFactory):
+                    await scope_stack.enter_async_context(factory.scope(event, context))
             if response_schema is omit:
                 final_schema = self._response_schema
             else:
@@ -1540,17 +1744,9 @@ class Agent(PluginTarget, Generic[TResult]):
             )
 
             factories = list(self._middleware)
-            policies = list(additional_policies)
-            if policies:
-                policies = [*self._policies, *policies]
-                for warning in AssemblerMiddleware.validate_order(policies):
-                    logger.warning("Assembly policy ordering: %s", warning)
-                for index, factory in enumerate(factories):
-                    if isinstance(factory, _AssemblerMiddlewareFactory):
-                        factories[index] = _AssemblerMiddlewareFactory(policies)
-                        break
-                else:
-                    factories.extend((_AssemblerMiddlewareFactory(policies), _HaltCheckMiddlewareFactory()))
+            turn_policies = list(additional_policies)
+            if self._policies or turn_policies:
+                _attach_policies(factories, self._policies, turn_policies)
 
             for m in reversed(tuple(chain(factories, additional_middleware))):
                 mw = m(event, context)
@@ -1576,10 +1772,15 @@ class Agent(PluginTarget, Generic[TResult]):
                 # instead of issuing a second LLM call.
                 merged = _drain_pending(context)
                 if merged is not None:
-                    await context.send(DrainedModelRequest(merged.parts))
+                    await context.send(DrainedModelRequest(merged.parts, origin=merged.origin))
 
-                messages = await context.stream.history.get_events()
-                result = await llm_call(messages, context)
+                messages = [
+                    message
+                    for message in await context.stream.history.get_events()
+                    if is_conversational(message)
+                    or isinstance(message, (ModelReasoning, ProviderReplay, StatusObservation))
+                ]
+                result = await llm_call(model_inputs(messages), context)
                 # Emit usage at the point it is spent, decoupled from the
                 # response, so token accounting never depends on a response
                 # being produced. UsageReport reads these events alone.
@@ -1611,6 +1812,12 @@ class Agent(PluginTarget, Generic[TResult]):
                         ),
                     )
 
+                elif (delegation := _owned_delegation(context)) is not None:
+                    stack.enter_context(
+                        context.stream.where(HumanInputRequest).sub_scope(
+                            delegation.bridge, interrupt=True, sync_to_thread=False
+                        )
+                    )
                 else:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
@@ -1633,14 +1840,52 @@ class Agent(PluginTarget, Generic[TResult]):
                 ):
 
                     async def drive() -> "AgentReply[Any, Any]":
+                        delegation = _owned_delegation(context)
                         try:
+                            if (
+                                delegation is not None
+                                and delegation.origin is not None
+                                and delegation.origin.context is context
+                            ):
+                                await delegation.start(context)
+                            if lifecycle is not None:
+                                await lifecycle.start()
                             message = await agent_turn(event, context)
-                        except HumanInputError:
-                            await close_unanswered_tool_calls(
-                                context.stream.history,
-                                result=HUMAN_INPUT_ABANDONED_TOOL_RESULT,
-                            )
+                            registry = context.dependencies.get(DelegationRegistry)
+                            if delegation is not None:
+                                await context.dependencies[DelegationRegistry].settle_descendants(delegation.path)
+                            elif (
+                                lifecycle is not None
+                                and registry is not None
+                                and registry.context.stream.id == context.stream.id
+                            ):
+                                await registry.settle_descendants(())
+                        except BaseException as exc:
+                            if lifecycle is not None:
+                                lifecycle.failure = exc
+                                if (
+                                    delegation is not None
+                                    and delegation.origin is not None
+                                    and delegation.origin.halted
+                                ):
+                                    lifecycle.cancel_reason = delegation.origin.reason
+                            registry = context.dependencies.get(DelegationRegistry)
+                            if registry is not None and (
+                                delegation is not None or registry.context.stream.id == context.stream.id
+                            ):
+                                path = delegation.path if delegation is not None else ()
+                                registry.cancel_descendants(path, str(exc) or PARENT_CANCELLED)
+                                await registry.settle_descendants(path)
+                            if isinstance(exc, (HumanInputError, asyncio.CancelledError)):
+                                await close_unanswered_tool_calls(
+                                    context.stream.history,
+                                    result=HUMAN_INPUT_ABANDONED_TOOL_RESULT
+                                    if isinstance(exc, HumanInputError)
+                                    else CANCELLED_TOOL_RESULT,
+                                )
                             raise
+                        if lifecycle is not None:
+                            lifecycle.result = message.content
                         return AgentReply(
                             message,
                             context=context,
@@ -1659,10 +1904,9 @@ class Agent(PluginTarget, Generic[TResult]):
         ``TaskConfig.include_tools`` / ``exclude_tools``) plus
         ``TaskConfig.extra_tools``. It is constructed with ``tasks=False``
         (the default) so the child has **no** ``run_subtask`` tools —
-        recursive delegation is impossible by construction. ``run_task``
-        emits the ``TaskStarted`` / ``TaskCompleted`` / ``TaskFailed``
-        lifecycle events and handles dependency/variable copy and HITL
-        bridging.
+        recursive delegation is impossible by construction. The delegated run
+        uses the common task lifecycle; ``run_task`` handles dependency/variable
+        copying and HITL bridging.
         """
         tc = self._task_config
         if tc is None:
@@ -1715,13 +1959,13 @@ class Agent(PluginTarget, Generic[TResult]):
         *,
         prompt: Iterable[str] = (),
         dependencies: dict[Any, Any] | None = None,
-        variables: dict[Any, Any] | None = None,
+        variables: Mapping[str, Any] | None = None,
     ) -> Context:
         context = Context(
             stream,
             prompt=list(prompt),
             dependencies=self._agent_dependencies | (dependencies or {}),
-            variables=self._agent_variables | (variables or {}),
+            variables=merge_variables(self._agent_variables, variables),
             dependency_provider=self.dependency_provider,
         )
         context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY] = self
@@ -1750,60 +1994,6 @@ class Agent(PluginTarget, Generic[TResult]):
         )
 
 
-class _KnowledgeContext:
-    def __init__(
-        self,
-        config: "KnowledgeConfig",
-        agent_name: str,
-    ) -> None:
-        self.config = config
-        self._agent_name = agent_name
-
-        self.__lock: asyncio.Lock | None = None
-        self.__bootstrapped = None
-
-    @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncGenerator[None]:
-        store = self.config.store
-
-        if not self.__bootstrapped:
-            if self.__lock is None:
-                self.__lock = asyncio.Lock()
-
-            async with self.__lock:
-                if not self.__bootstrapped:
-                    if not await store.exists("/.initialized"):
-                        await store.write("/.initialized", self._agent_name)
-                        bootstrap = self.config.bootstrap or DefaultBootstrap(mention_tool=self.config.expose_tool)
-                        await bootstrap.bootstrap(store, self._agent_name)
-
-                    self.__bootstrapped = True
-
-        yield None
-
-        if self.config.write_event_log:
-            try:
-                events = list(await context.stream.history.get_events())
-                await EventLogWriter(store).persist(context.stream.id, events)
-
-            except Exception as exc:
-                logger.exception("Event log persistence failed for %s", self._agent_name)
-                with suppress(Exception):
-                    await context.send(
-                        EventLogFailed(
-                            agent=self._agent_name,
-                            error_type=type(exc).__name__,
-                            error=str(exc),
-                        )
-                    )
-
-
-class _FakeKnowledgeContext:
-    @asynccontextmanager
-    async def enter(self, context: "Context") -> AsyncGenerator[None]:
-        yield
-
-
 async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
     # Drain stream-level inbox before the first model call: any messages
     # enqueued by background tasks from a previous ``ask`` (or any other
@@ -1812,7 +2002,7 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
     if isinstance(event, ModelRequest):
         leftover = _drain_pending(context)
         if leftover is not None:
-            event = ModelRequest([*leftover.parts, *event.parts])
+            event = ModelRequest([*leftover.parts, *event.parts], origin=event.origin)
 
     # Sending the event triggers _call_client via the stream subscriber,
     # which drains any pending enqueued input before the LLM call.
@@ -1851,14 +2041,16 @@ def _drain_pending(context: Context) -> ModelRequest | None:
 
     Returns ``None`` if the queue was empty (so callers can short-circuit).
     Multiple enqueues are merged because the wire form only cares about the
-    flat list of parts — one merged request keeps history compact.
+    flat list of parts — one merged request keeps history compact. The merged
+    request is user input if any queued message was.
     """
     queue = context.pending_messages
     if not queue:
         return None
     parts: list[Input] = [part for request in queue for part in request.parts]
+    origin: RequestOrigin = "user" if any(request.origin == "user" for request in queue) else "service"
     queue.clear()
-    return ModelRequest(parts)
+    return ModelRequest(parts, origin=origin)
 
 
 @asynccontextmanager
@@ -1974,107 +2166,44 @@ def _filter_subtask_tools(
     return result
 
 
-def _make_knowledge_tool(store: KnowledgeStore) -> Tool:
-    """Build the ``knowledge`` action-group tool bound to ``store``.
+def _is_user_assembler(factory: MiddlewareFactory) -> TypeGuard[Middleware]:
+    return isinstance(factory, Middleware) and issubclass(factory.cls, AssemblerMiddleware)
 
-    Called once at Agent ``__init__`` so the LLM-visible tool definition is
-    stable across turns and we don't re-allocate the closure per turn.
+
+def _has_user_assembler(factories: Iterable[MiddlewareFactory]) -> bool:
+    return any(_is_user_assembler(f) for f in factories)
+
+
+def _attach_policies(
+    factories: list[MiddlewareFactory],
+    agent_policies: Sequence[AssemblyPolicy],
+    turn_policies: Sequence[AssemblyPolicy],
+) -> None:
+    """Hand agent and invocation-plugin policies to the turn's assembler, in place.
+
+    The assembler is the one ``assembly=`` wired implicitly, or else the first
+    ``Middleware(AssemblerMiddleware, ...)`` the user registered; a user
+    assembler's own policies run first. With neither, an assembler and a halt
+    check are appended, as ``assembly=`` would have done.
     """
+    for index, factory in enumerate(factories):
+        if isinstance(factory, _AssemblerMiddlewareFactory):
+            if not turn_policies:
+                # Already runs ``agent_policies``, validated at construction.
+                return
+            policies = [*agent_policies, *turn_policies]
+            factories[index] = _AssemblerMiddlewareFactory(policies)
+            break
+        if _is_user_assembler(factory):
+            policies = [*factory.options.get("policies", ()), *agent_policies, *turn_policies]
+            factories[index] = Middleware(factory.cls, **{**factory.options, "policies": policies})
+            break
+    else:
+        policies = [*agent_policies, *turn_policies]
+        factories.extend((_AssemblerMiddlewareFactory(policies), Middleware(HaltCheckMiddleware)))
 
-    @tool
-    async def knowledge(action: str, path: str = "/", content: str = "") -> str:
-        """Manage your knowledge store.
-
-        Actions:
-            read   - Read file at path.
-            write  - Write content to path.
-            list   - List entries at path.
-            delete - Delete file at path.
-        """
-        if action == "read":
-            result = await store.read(path)
-            return result if result is not None else f"Not found: {path}"
-
-        elif action == "write":
-            if not content:
-                return "Error: content is required for write action."
-            await store.write(path, content)
-            return f"Written to {path}"
-
-        elif action == "list":
-            entries = await store.list(path)
-            if not entries:
-                return f"Empty: {path}"
-            skill_path = f"{path.rstrip('/')}/SKILL.md"
-            skill = await store.read(skill_path)
-            listing = "\n".join(entries)
-            if skill:
-                listing = f"{skill}\n---\n{listing}"
-            return listing
-
-        elif action == "delete":
-            await store.delete(path)
-            return f"Deleted: {path}"
-
-        else:
-            return f"Unknown action: {action}. Available: read, write, list, delete."
-
-    return knowledge
-
-
-class _HaltCheckMiddleware(BaseMiddleware):
-    """Catches ``HaltEvent`` on the stream and short-circuits the LLM call.
-
-    ``AlertPolicy`` emits ``HaltEvent`` when a FATAL alert is detected.
-    This middleware subscribes in ``on_turn`` (scoped to a single turn so
-    the subscription never outlives the ``_execute`` that created it) and,
-    on any subsequent ``on_llm_call``, returns a synthetic ``HALTED``
-    response instead of invoking the model.
-    """
-
-    def __init__(self, event: BaseEvent, context: Context) -> None:
-        super().__init__(event, context)
-        self._halted = False
-        self._halt_reason = ""
-
-    async def on_turn(
-        self,
-        call_next: Callable[..., Any],
-        event: BaseEvent,
-        context: Context,
-    ) -> Any:
-        from .events.alert import HaltEvent
-
-        async def _on_halt(evt: HaltEvent) -> None:
-            self._halted = True
-            self._halt_reason = evt.reason
-
-        sub_id = context.stream.where(HaltEvent).subscribe(_on_halt)
-        try:
-            return await call_next(event, context)
-        finally:
-            context.stream.unsubscribe(sub_id)
-
-    async def on_llm_call(
-        self,
-        call_next: Callable[..., Any],
-        events: Any,
-        context: Context,
-    ) -> ModelResponse:
-        if self._halted:
-            from ag2.events import ModelMessage
-
-            return ModelResponse(
-                message=ModelMessage(content=f"HALTED: {self._halt_reason}"),
-            )
-        return await call_next(events, context)
-
-
-class _HaltCheckMiddlewareFactory:
-    """Factory for _HaltCheckMiddleware."""
-
-    def __call__(self, event: BaseEvent, context: Context) -> _HaltCheckMiddleware:
-        return _HaltCheckMiddleware(event, context)
+    for warning in AssemblerMiddleware.validate_order(policies):
+        logger.warning("Assembly policy ordering: %s", warning)
 
 
 class _AssemblerMiddlewareFactory:
@@ -2085,292 +2214,3 @@ class _AssemblerMiddlewareFactory:
 
     def __call__(self, event: BaseEvent, context: Context) -> AssemblerMiddleware:
         return AssemblerMiddleware(event, context, policies=self._policies)
-
-
-class _CompactionMiddleware(BaseMiddleware):
-    """Triggers compaction after agent turns when thresholds are exceeded."""
-
-    def __init__(
-        self,
-        event: BaseEvent,
-        context: Context,
-        *,
-        actor_name: str,
-        strategy: CompactStrategy,
-        store: KnowledgeStore | None,
-        trigger: CompactTrigger,
-    ) -> None:
-        super().__init__(event, context)
-        self._actor_name = actor_name
-        self._strategy = strategy
-        self._store = store
-        self._trigger = trigger
-        self._last_compact_event_count = 0
-
-    async def on_turn(
-        self,
-        call_next: Callable[..., Any],
-        event: BaseEvent,
-        context: Context,
-    ) -> Any:
-        result = await call_next(event, context)
-
-        events = list(await context.stream.history.get_events())
-        # Count only conversational events — transient artifacts and persisted
-        # telemetry (UsageEvent) must not drive compaction, even if persist_all.
-        conversation_events = [e for e in events if is_conversational(e)]
-        event_count = len(conversation_events)
-
-        # Prevent double compaction — skip if count hasn't grown since last
-        if event_count <= self._last_compact_event_count:
-            return result
-
-        should_compact = False
-        if self._trigger.max_events > 0 and event_count > self._trigger.max_events:
-            should_compact = True
-        if self._trigger.max_tokens > 0:
-            estimated = sum(estimated_tokens(e, self._trigger.chars_per_token) for e in conversation_events)
-            if estimated > self._trigger.max_tokens:
-                should_compact = True
-
-        if should_compact:
-            strategy_name = type(self._strategy).__name__
-            await context.send(
-                CompactionStarted(
-                    agent=self._actor_name,
-                    strategy=strategy_name,
-                    event_count=len(events),
-                )
-            )
-            # Collected live rather than re-read from history afterwards: the
-            # summarization call's own record is sent *while* the strategy runs,
-            # so it is in neither ``events`` nor what the strategy returns. A
-            # subscriber sees it as it is sent, which needs no assumption about
-            # how history grew in the meantime and no second full read of it.
-            spent_during: list[UsageEvent] = []
-            try:
-                with context.stream.where(UsageEvent).sub_scope(collect_usage_events(spent_during)):
-                    compacted = await self._strategy.compact(events, context, self._store)
-            except Exception as exc:
-                logger.exception("Compaction failed for %s", self._actor_name)
-                with suppress(Exception):
-                    await context.send(
-                        CompactionFailed(
-                            agent=self._actor_name,
-                            strategy=strategy_name,
-                            error_type=type(exc).__name__,
-                            error=str(exc),
-                        )
-                    )
-                return result
-
-            await context.stream.history.replace(
-                _with_usage_events(before=events, compacted=compacted, spent_during=spent_during)
-            )
-            self._last_compact_event_count = len([e for e in compacted if is_conversational(e)])
-
-            usage = getattr(self._strategy, "last_usage", {})
-            await context.send(
-                CompactionCompleted(
-                    agent=self._actor_name,
-                    strategy=strategy_name,
-                    events_before=len(events),
-                    events_after=len(compacted),
-                    llm_calls=1 if usage else 0,
-                    usage=usage,
-                )
-            )
-
-        return result
-
-
-def _with_usage_events(
-    *,
-    before: list[BaseEvent],
-    compacted: list[BaseEvent],
-    spent_during: list[UsageEvent],
-) -> list[BaseEvent]:
-    """``compacted``, with every token record of the run put back around it.
-
-    Compaction replaces stream history with what its strategy retained, and
-    ``UsageEvent`` is the only thing ``UsageReport`` reads (`ADR 0014`), so
-    without this a run that compacted under-reports what it cost — on
-    ``AgentReply.usage()`` and on every transport that reports spend. Two
-    records are lost, for two different reasons: those outside the retained
-    window, which the strategy drops along with the conversation, and the
-    summarization call's own, which is emitted *while* the strategy runs and is
-    therefore absent from the snapshot the strategy returns. ``spent_during``
-    carries the second kind, collected from the stream as they were sent.
-
-    The records are rebuilt from ``before`` rather than from ``compacted``, so a
-    strategy that retained a record and one that dropped it read the same: each
-    record of the run appears exactly once, whatever the strategy did with it.
-    The one case this does not cover is a strategy that *synthesises* a new
-    ``UsageEvent`` into its returned list without sending it — that record is
-    dropped here, because telling it apart from a rebuilt copy of an existing
-    one would need identity, which does not survive a storage backend that
-    deserializes on read, or equality, which is wrong on an event whose
-    ``model`` / ``provider`` / ``label`` are ``compare=False``. A strategy that
-    ``context.send``s its spend, as the built-in ones do, is accounted correctly.
-
-    Order is telemetry from before the compaction, then the retained
-    conversation, then what was spent during it. That is not the chronological
-    order of the run — records from inside the retained window are hoisted ahead
-    of the conversation they were interleaved with — but the token records keep
-    their order relative to each other, which is what consumers that group by
-    first appearance need (AG-UI's per-``(provider, model)`` list among them).
-
-    None of this feeds the model or moves the compaction trigger: ``UsageEvent``
-    is not conversational (`ADR 0010`).
-
-    Note that the kept records accumulate: every compaction carries forward
-    every record the stream has seen, so a long-lived stream keeps one event per
-    model call for its whole life and each compaction rewrites all of them. That
-    is the cost of `ADR 0014`'s decision to keep spend in the event log; bounding
-    it belongs with that decision, not here.
-    """
-    return [
-        *(e for e in before if isinstance(e, UsageEvent)),
-        *(e for e in compacted if not isinstance(e, UsageEvent)),
-        *spent_during,
-    ]
-
-
-class _CompactionMiddlewareFactory:
-    """Factory for _CompactionMiddleware."""
-
-    def __init__(self, actor_name: str, config: KnowledgeConfig) -> None:
-        self._actor_name = actor_name
-        self.config = config
-
-    def __call__(self, event: BaseEvent, context: Context) -> _CompactionMiddleware:
-        return _CompactionMiddleware(
-            event,
-            context,
-            actor_name=self._actor_name,
-            strategy=self.config.compact,
-            store=self.config.store,
-            trigger=self.config.compact_trigger,
-        )
-
-
-class _AggregationMiddleware(BaseMiddleware):
-    """Triggers aggregation after agent turns when thresholds are exceeded.
-
-    Counts are derived from stream history — this middleware holds no
-    state of its own. That matters because ``_execute`` builds a fresh
-    middleware instance on every ``ask()``; any per-instance counter
-    would reset between turns and make ``every_n_turns=N`` for ``N>1``
-    effectively dead.
-
-    ``every_n_turns`` counts :class:`ModelRequest` events in history
-    (one per user ask). ``every_n_events`` fires when the total history
-    count crosses a multiple of the threshold during the current turn,
-    which handles non-uniform growth (e.g. tool-heavy turns). ``on_end``
-    fires unconditionally once the turn completes.
-    """
-
-    def __init__(
-        self,
-        event: BaseEvent,
-        context: Context,
-        *,
-        actor_name: str,
-        strategy: AggregateStrategy,
-        store: KnowledgeStore,
-        trigger: AggregateTrigger,
-    ) -> None:
-        super().__init__(event, context)
-        self._actor_name = actor_name
-        self._strategy = strategy
-        self._store = store
-        self._trigger = trigger
-
-    async def on_turn(
-        self,
-        call_next: Callable[..., Any],
-        event: BaseEvent,
-        context: Context,
-    ) -> Any:
-        events_before = list(await context.stream.history.get_events())
-
-        try:
-            result = await call_next(event, context)
-        finally:
-            events_after = list(await context.stream.history.get_events())
-            count_after = len(events_after)
-
-            should_aggregate = False
-
-            if self._trigger.on_end:
-                should_aggregate = True
-
-            if self._trigger.every_n_turns > 0:
-                turn_count = sum(1 for e in events_after if isinstance(e, ModelRequest))
-                if turn_count > 0 and turn_count % self._trigger.every_n_turns == 0:
-                    should_aggregate = True
-
-            if self._trigger.every_n_events > 0:
-                threshold = self._trigger.every_n_events
-                # Count conversational/work events only, not telemetry (e.g. UsageEvent).
-                _countable = (ModelRequest, ModelResponse, ToolCallsEvent, ToolResultsEvent)
-                n_before = sum(1 for e in events_before if isinstance(e, _countable))
-                n_after = sum(1 for e in events_after if isinstance(e, _countable))
-                if n_after // threshold > n_before // threshold:
-                    should_aggregate = True
-
-            if should_aggregate:
-                strategy_name = type(self._strategy).__name__
-                with suppress(Exception):
-                    await context.send(
-                        AggregationStarted(
-                            agent=self._actor_name,
-                            strategy=strategy_name,
-                            event_count=count_after,
-                        )
-                    )
-                try:
-                    await self._strategy.aggregate(events_after, context, self._store)
-                    usage = getattr(self._strategy, "last_usage", {})
-                    await context.send(
-                        AggregationCompleted(
-                            agent=self._actor_name,
-                            strategy=strategy_name,
-                            event_count=count_after,
-                            llm_calls=1 if usage else 0,
-                            usage=usage,
-                        )
-                    )
-                except Exception as exc:
-                    logger.exception("Aggregation failed for %s", self._actor_name)
-                    with suppress(Exception):
-                        await context.send(
-                            AggregationFailed(
-                                agent=self._actor_name,
-                                strategy=strategy_name,
-                                error_type=type(exc).__name__,
-                                error=str(exc),
-                            )
-                        )
-
-        return result
-
-
-class _AggregationMiddlewareFactory:
-    """Factory for _AggregationMiddleware."""
-
-    def __init__(self, actor_name: str, config: "KnowledgeConfig") -> None:
-        self._actor_name = actor_name
-        self._strategy = config.aggregate
-        self._store = config.store
-        self._trigger = config.aggregate_trigger
-
-    def __call__(self, event: BaseEvent, context: Context) -> _AggregationMiddleware:
-        return _AggregationMiddleware(
-            event,
-            context,
-            actor_name=self._actor_name,
-            strategy=self._strategy,
-            store=self._store,
-            trigger=self._trigger,
-        )

@@ -4,10 +4,14 @@
 
 """Tests for OpenAI Responses client usage normalization."""
 
+import pytest
 from openai.types.responses.response_usage import InputTokensDetails, OutputTokensDetails, ResponseUsage
 
+from ag2 import Agent
 from ag2.config.openai.mappers import normalize_responses_usage
 from ag2.events import Usage
+
+from ._helpers import capturing_config, config, message, response
 
 
 class TestNormalizeUsage:
@@ -25,6 +29,7 @@ class TestNormalizeUsage:
             completion_tokens=20,
             total_tokens=120,
             cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
             thinking_tokens=0,
         )
 
@@ -42,6 +47,7 @@ class TestNormalizeUsage:
             completion_tokens=20,
             total_tokens=120,
             cache_read_input_tokens=80,
+            cache_creation_input_tokens=0,
             thinking_tokens=0,
         )
 
@@ -54,13 +60,141 @@ class TestNormalizeUsage:
             output_tokens_details=OutputTokensDetails(reasoning_tokens=10),
         )
         result = normalize_responses_usage(usage)
-        # reasoning tokens map to thinking_tokens, NOT cache_creation_input_tokens
-        # (OpenAI has no cache-write metric, so cache_creation stays None)
+        # Reasoning tokens stay separate from the reported cache-write count.
         assert result == Usage(
             prompt_tokens=100,
             completion_tokens=20,
             total_tokens=120,
             cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
             thinking_tokens=10,
         )
-        assert result.cache_creation_input_tokens is None
+
+
+@pytest.mark.asyncio
+class TestCacheWriteRetention:
+    async def test_12h_writes_are_reported_as_extended_cache_writes(self) -> None:
+        agent = Agent(
+            "assistant",
+            config=config(
+                response(
+                    message("ok"),
+                    usage={
+                        "input_tokens": 1200,
+                        "output_tokens": 20,
+                        "total_tokens": 1220,
+                        "input_tokens_details": {
+                            "cached_tokens": 0,
+                            "cache_write_tokens": 1000,
+                            "cache_write_tokens_details": {"ttl_12h_tokens": 800, "ttl_30m_tokens": 200},
+                        },
+                        "output_tokens_details": {"reasoning_tokens": 0},
+                    },
+                )
+            ),
+        )
+
+        reply = await agent.ask("Summarize the corpus.")
+
+        assert (await reply.usage()).total == Usage(
+            prompt_tokens=1200,
+            completion_tokens=20,
+            total_tokens=1220,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=1000,
+            cache_creation_extended_input_tokens=800,
+            thinking_tokens=0,
+        )
+
+    async def test_a_streaming_call_reports_them_from_the_completed_response(self) -> None:
+        streaming, _ = capturing_config(
+            response(
+                message("ok"),
+                usage={
+                    "input_tokens": 1200,
+                    "output_tokens": 20,
+                    "total_tokens": 1220,
+                    "input_tokens_details": {
+                        "cached_tokens": 0,
+                        "cache_write_tokens": 1000,
+                        "cache_write_tokens_details": {"ttl_12h_tokens": 800, "ttl_30m_tokens": 200},
+                    },
+                    "output_tokens_details": {"reasoning_tokens": 0},
+                },
+            ),
+            stream=True,
+        )
+        agent = Agent("assistant", config=streaming)
+
+        reply = await agent.ask("Summarize the corpus.")
+
+        assert (await reply.usage()).total == Usage(
+            prompt_tokens=1200,
+            completion_tokens=20,
+            total_tokens=1220,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=1000,
+            cache_creation_extended_input_tokens=800,
+            thinking_tokens=0,
+        )
+
+    async def test_30m_writes_report_a_measured_zero(self) -> None:
+        agent = Agent(
+            "assistant",
+            config=config(
+                response(
+                    message("ok"),
+                    usage={
+                        "input_tokens": 1200,
+                        "output_tokens": 20,
+                        "total_tokens": 1220,
+                        "input_tokens_details": {
+                            "cached_tokens": 0,
+                            "cache_write_tokens": 1000,
+                            "cache_write_tokens_details": {"ttl_12h_tokens": 0, "ttl_30m_tokens": 1000},
+                        },
+                        "output_tokens_details": {"reasoning_tokens": 0},
+                    },
+                )
+            ),
+        )
+
+        reply = await agent.ask("Summarize the corpus.")
+
+        assert (await reply.usage()).total == Usage(
+            prompt_tokens=1200,
+            completion_tokens=20,
+            total_tokens=1220,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=1000,
+            cache_creation_extended_input_tokens=0,
+            thinking_tokens=0,
+        )
+
+    async def test_an_absent_breakdown_leaves_extended_writes_absent(self) -> None:
+        agent = Agent(
+            "assistant",
+            config=config(
+                response(
+                    message("ok"),
+                    usage={
+                        "input_tokens": 1200,
+                        "output_tokens": 20,
+                        "total_tokens": 1220,
+                        "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 1000},
+                        "output_tokens_details": {"reasoning_tokens": 0},
+                    },
+                )
+            ),
+        )
+
+        reply = await agent.ask("Summarize the corpus.")
+
+        assert (await reply.usage()).total == Usage(
+            prompt_tokens=1200,
+            completion_tokens=20,
+            total_tokens=1220,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=1000,
+            thinking_tokens=0,
+        )

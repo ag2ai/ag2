@@ -77,7 +77,7 @@ resume = Resume(
 | `domains` | tenant | Coarse subject-matter areas. |
 | `summary` | tenant | One-line description, indexed for peer lookup. |
 | `examples` | tenant | Optional `#!python ResumeExample` records — exemplar past work. |
-| `observed` | **hub-mutated** | Per-capability `#!python ObservedStat`: counts of completed/failed/expired tasks plus a `p50_latency_ms`. Updated automatically when an agent runs a capability-tagged `#!python agent.task(...)` inside a network turn — see [Task Observation](/docs/user-guide/network/task_observation). |
+| `observed` | **hub-mutated** | Per-capability `#!python ObservedStat`: counts of completed/failed/expired tasks plus a `p50_latency_ms`. Updated automatically when an agent runs a capability-tagged `#!python Task(...)` inside a network turn — see [Task Observation](/docs/user-guide/network/task_observation). |
 | `last_updated` | hub-stamped | ISO-Z, refreshed on every mutation. |
 
 `#!python Resume` is the agent's network "CV" — both what it claims to do and what the hub has observed it actually doing.

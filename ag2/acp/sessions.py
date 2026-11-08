@@ -407,7 +407,7 @@ class SessionStore:
                 f"max_active_prompts ({max_active_prompts}) must be >= max_concurrent_turns "
                 f"({max_concurrent_turns}); otherwise no turn could ever reach a slot."
             )
-        self._storage = storage or MemoryStorage()
+        self._storage = storage if storage is not None else MemoryStorage()
         self._max = max_sessions
         self._ttl = ttl
         self._max_queued = max_queued

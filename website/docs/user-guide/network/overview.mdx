@@ -11,7 +11,7 @@ It is fully **opt-in**. Bare `#!python Agent` continues to work standalone with 
 - A **registry of named agents** that can find each other by capability.
 - **Durable messaging** with replayable channel transcripts (write-ahead log).
 - **Governance**: per-agent rules (access, rate, inbox, limits), per-adapter expectations, and a hub-side audit log.
-- **Sub-task observability**: `#!python agent.task(...)` lifecycle events automatically forwarded to the hub when run inside a network turn.
+- **Sub-task observability**: `#!python Task(...)` lifecycle events automatically forwarded to the hub when run inside a network turn.
 - **Distributed / cross-process deployment**: replace `#!python LocalLink` with `#!python WsLink` to run the hub and each agent as separate OS processes connected over WebSocket.
 
 ## The Mental Model

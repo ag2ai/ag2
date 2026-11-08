@@ -6,8 +6,7 @@
 
 import pytest
 
-from ag2 import Agent, Context
-from ag2.agent import KnowledgeConfig
+from ag2 import Agent, Context, KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact, TailWindowCompact
 from ag2.events import (
     BuiltinToolCallEvent,
@@ -28,7 +27,7 @@ from ag2.events import (
     UsageEvent,
 )
 from ag2.events.base import is_conversational
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
 from test._helpers import DurableReasoning, lookup
@@ -214,11 +213,13 @@ class TestTelemetryNotConversational:
         agent = Agent(
             "compactor",
             config=TestConfig(ModelResponse(ModelMessage("a"), usage=Usage(total_tokens=5))),
-            knowledge=KnowledgeConfig(
-                store=MemoryKnowledgeStore(),
-                compact=TailWindowCompact(target=2),
-                compact_trigger=CompactTrigger(max_events=2),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=MemoryKnowledgeStore(),
+                    compact=TailWindowCompact(target=2),
+                    compact_trigger=CompactTrigger(max_events=2),
+                )
+            ],
         )
         await agent.ask("once", stream=stream)
         assert completions == []
@@ -266,13 +267,15 @@ class TestTelemetrySurvivesCompaction:
                 ),
             ),
             tools=[lookup],
-            knowledge=KnowledgeConfig(
-                store=MemoryKnowledgeStore(),
-                compact=SummarizeCompact(target=6, config=summarizer),
-                compact_trigger=CompactTrigger(max_events=2),
-                expose_tool=False,
-                write_event_log=False,
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=MemoryKnowledgeStore(),
+                    compact=SummarizeCompact(target=6, config=summarizer),
+                    compact_trigger=CompactTrigger(max_events=2),
+                    expose_tool=False,
+                    write_event_log=False,
+                )
+            ],
         )
 
     async def test_spend_from_before_the_retained_window_survives(self) -> None:
@@ -388,14 +391,47 @@ class TestCompactionWiredOnAgent:
                 ModelResponse(ModelMessage("c")),
                 ModelResponse(ModelMessage("d")),
             ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    compact=TailWindowCompact(target=2),
+                    compact_trigger=CompactTrigger(max_events=3),
+                )
+            ],
+        )
+
+        # Four turns on the same stream — history grows past max_events=3
+        reply = await agent.ask("turn-1", stream=stream)
+        for q in ("turn-2", "turn-3", "turn-4"):
+            reply = await reply.ask(q)
+
+        assert len(completions) >= 1
+        assert completions[0].agent == "compactor"
+        assert completions[0].strategy == "TailWindowCompact"
+        assert completions[0].events_after <= 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.filterwarnings(r"ignore:Agent\(knowledge=:DeprecationWarning")
+    async def test_legacy_knowledge_config_fires_when_threshold_crossed(self) -> None:
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "compactor",
+            config=TestConfig(
+                ModelResponse(ModelMessage("a")),
+                ModelResponse(ModelMessage("b")),
+                ModelResponse(ModelMessage("c")),
+                ModelResponse(ModelMessage("d")),
+            ),
             knowledge=KnowledgeConfig(
-                store=store,
+                store=MemoryKnowledgeStore(),
                 compact=TailWindowCompact(target=2),
                 compact_trigger=CompactTrigger(max_events=3),
             ),
         )
 
-        # Four turns on the same stream — history grows past max_events=3
         reply = await agent.ask("turn-1", stream=stream)
         for q in ("turn-2", "turn-3", "turn-4"):
             reply = await reply.ask(q)
@@ -415,11 +451,13 @@ class TestCompactionWiredOnAgent:
         agent = Agent(
             "compactor",
             config=TestConfig(ModelResponse(ModelMessage("hi"))),
-            knowledge=KnowledgeConfig(
-                store=store,
-                compact=TailWindowCompact(target=2),
-                compact_trigger=CompactTrigger(max_events=100),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    compact=TailWindowCompact(target=2),
+                    compact_trigger=CompactTrigger(max_events=100),
+                )
+            ],
         )
         await agent.ask("once", stream=stream)
 
@@ -437,11 +475,13 @@ class TestCompactionWiredOnAgent:
         agent = Agent(
             "compactor",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(
-                store=store,
-                compact=TailWindowCompact(target=1),
-                compact_trigger=CompactTrigger(max_tokens=1000),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    compact=TailWindowCompact(target=1),
+                    compact_trigger=CompactTrigger(max_tokens=1000),
+                )
+            ],
         )
         await agent.ask("x" * 10_000, stream=stream)
 
@@ -476,11 +516,13 @@ class TestCompactionLifecycleEvents:
                 ModelResponse(ModelMessage("c")),
                 ModelResponse(ModelMessage("d")),
             ),
-            knowledge=KnowledgeConfig(
-                store=store,
-                compact=TailWindowCompact(target=2),
-                compact_trigger=CompactTrigger(max_events=3),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    compact=TailWindowCompact(target=2),
+                    compact_trigger=CompactTrigger(max_events=3),
+                )
+            ],
         )
         reply = await agent.ask("turn-1", stream=stream)
         for q in ("turn-2", "turn-3", "turn-4"):
@@ -504,11 +546,13 @@ class TestCompactionLifecycleEvents:
                 ModelResponse(ModelMessage("a")),
                 ModelResponse(ModelMessage("b")),
             ),
-            knowledge=KnowledgeConfig(
-                store=store,
-                compact=_RaisingCompact(),
-                compact_trigger=CompactTrigger(max_events=1),
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=store,
+                    compact=_RaisingCompact(),
+                    compact_trigger=CompactTrigger(max_events=1),
+                )
+            ],
         )
         # The turn itself succeeds — only compaction failed.
         await agent.ask("turn-1", stream=stream)

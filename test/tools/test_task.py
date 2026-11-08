@@ -15,7 +15,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from ag2 import Agent, Context, MemoryStream, Variable, tool
-from ag2 import agent as actor_mod
 from ag2.agent import TaskConfig
 from ag2.context import StreamId
 from ag2.events import (
@@ -35,12 +34,14 @@ from ag2.events import (
 )
 from ag2.history import MemoryStorage, Storage
 from ag2.middleware import BaseMiddleware
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools import Toolkit
 from ag2.tools.subagents import background_agent_tool, subagent_tool
-from ag2.tools.subagents import run_task as run_task_mod
-from ag2.tools.subagents.run_task import _rollup_usage, run_task
+from ag2.tools.subagents.run_task import run_task
 from ag2.usage import UsageReport
+
+# Exercises the deprecated TaskConfig / run_subtask path on purpose.
+pytestmark = pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
 
 
 @tool
@@ -674,52 +675,15 @@ class TestSubtaskInheritance:
         assert any(isinstance(e, ToolCallEvent) and e.name == "lookup" for e in sub_events)
 
     async def test_subtask_excludes_via_exclude_tools(self) -> None:
-        """``TaskConfig.exclude_tools`` removes named tools from inheritance."""
-
-        @tool
-        def secret_tool() -> str:
-            """A tool the subtask must NOT see."""
-            return "should not run"
-
-        @tool
-        def public_tool() -> str:
-            """A tool the subtask CAN see."""
-            return "ok"
-
-        sub_config = TestConfig(ModelResponse(ModelMessage("Done without secret.")))
-        parent_config = TestConfig(
-            ToolCallEvent(name="run_subtask", arguments='{"task": "Work"}'),
-            ModelResponse(ModelMessage("OK.")),
-        )
+        tracking = TrackingConfig(TestConfig("Done without the excluded tool."))
         parent = Agent(
             "parent",
-            config=parent_config,
-            tools=[secret_tool, public_tool],
-            tasks=TaskConfig(config=sub_config, exclude_tools=["secret_tool"]),
+            config=TestConfig(ToolCallEvent(name="run_subtask", arguments='{"task":"work"}'), "done"),
+            tools=[noop, flaky],
+            tasks=TaskConfig(config=tracking, exclude_tools=["flaky"]),
         )
-
-        # Capture the bare child Agent the real ``_spawn_subtask`` hands to
-        # ``run_task`` (rather than reconstructing the spawn logic), then assert
-        # on the tools it actually inherited.
-        captured: list[Agent] = []
-        original = run_task_mod.run_task
-
-        async def capturing_run_task(agent, *args, **kwargs):
-            captured.append(agent)
-            return await original(agent, *args, **kwargs)
-
-        run_task_mod.run_task = capturing_run_task
-        actor_mod._run_task = capturing_run_task
-        try:
-            await parent.ask("go", stream=MemoryStream())
-        finally:
-            run_task_mod.run_task = original
-            actor_mod._run_task = original
-
-        assert captured, "subtask must have been spawned"
-        names = _tool_names(captured[0].tools)
-        assert "secret_tool" not in names
-        assert "public_tool" in names
+        await parent.ask("start")
+        assert {schema.function.name for schema in tracking.calls[0].tools} == {"noop"}
 
     async def test_subtask_include_tools_allowlist(self) -> None:
         """``include_tools=[...]`` keeps only the named tools."""
@@ -789,42 +753,14 @@ class TestSubtaskInheritance:
 @pytest.mark.asyncio
 class TestSubtaskNoRecursion:
     async def test_child_has_no_subtask_tools(self) -> None:
-        """A subtask Agent never gets ``run_subtask`` — recursion impossible.
-
-        Spawn a subtask, capture the bare child Agent, and assert it has
-        no tools regardless of what the parent has.
-        """
-        sub_config = TestConfig(ModelResponse(ModelMessage("Done.")))
+        tracking = TrackingConfig(TestConfig("done"))
         parent = Agent(
             "parent",
-            config=TestConfig(),
-            tasks=TaskConfig(config=sub_config),
+            config=TestConfig(ToolCallEvent(name="run_subtask", arguments='{"task":"work"}'), "done"),
+            tasks=TaskConfig(config=tracking),
         )
-
-        captured: list[Agent] = []
-        original = run_task_mod.run_task
-
-        async def capturing_run_task(agent, *args, **kwargs):
-            captured.append(agent)
-            return await original(agent, *args, **kwargs)
-
-        # Monkey-patch both bindings: ``run_task_mod.run_task`` is the import
-        # site; ``actor_mod._run_task`` is the ``agent.py`` reference.
-        run_task_mod.run_task = capturing_run_task
-        actor_mod._run_task = capturing_run_task
-
-        try:
-            ctx = _make_parent_context()
-            await parent._spawn_subtask("anything", ctx)
-        finally:
-            run_task_mod.run_task = original
-            actor_mod._run_task = original
-
-        assert captured, "subtask must have run"
-        child = captured[0]
-        # The child Agent has zero subtask tools and zero ``_task_config``.
-        assert child._task_config is None
-        assert not child.tools
+        await parent.ask("start")
+        assert tracking.calls[0].tools == ()
 
 
 @pytest.mark.asyncio
@@ -1061,10 +997,13 @@ def test_max_concurrency_holds_per_loop_under_concurrent_threads() -> None:
 
     A fresh Agent per round, because the cap can only go missing while its
     semaphore is first provisioned, and a tightened switch interval so CPython
-    interleaves the two threads inside that window.
+    interleaves the two threads inside that window. The interval is left alone
+    under a tracer (coverage): on 3.11 a thread switch landing inside a new
+    thread's ``settrace`` kills that thread, so AnyIO's worker never answers.
     """
     old_interval = sys.getswitchinterval()
-    sys.setswitchinterval(0.00001)
+    if sys.gettrace() is None:
+        sys.setswitchinterval(0.00001)
 
     def make_parent() -> Agent:
         return Agent(
@@ -1167,391 +1106,99 @@ def test_max_concurrency_does_not_retain_finished_loops() -> None:
 
 
 @pytest.mark.asyncio
-class TestSubtaskUsageRollup:
-    async def test_rollup_sums_all_model_calls(self) -> None:
-        """A tool-looping sub-agent rolls up usage from every model call.
-
-        The sub-agent makes two model calls (tool dispatch, then wrap-up). The
-        rollup carried back via ``TaskResult.usage`` / ``TaskCompleted.usage``
-        must be the sum of both — not just the final turn.
-        """
-
+class TestSubtaskSourceUsage:
+    async def test_each_source_call_keeps_its_provider_and_model(self) -> None:
         worker = Agent(
             "worker",
             config=TestConfig(
                 ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
+                    tool_calls=ToolCallsEvent([ToolCallEvent(name="noop", arguments="{}")]),
                     usage=Usage(prompt_tokens=10, completion_tokens=5),
+                    model="small",
+                    provider="first",
                 ),
                 ModelResponse(
                     ModelMessage("done"),
                     usage=Usage(prompt_tokens=20, completion_tokens=8),
+                    model="large",
+                    provider="second",
                 ),
             ),
             tools=[noop],
         )
-
-        parent_ctx = _make_parent_context()
-        result = await run_task(worker, "go", parent_context=parent_ctx)
-
-        assert result.completed is True
-        # Sum of both model calls (10+20 prompt, 5+8 completion).
+        ctx = _make_parent_context()
+        result = await run_task(worker, "work", parent_context=ctx)
+        report = UsageReport.from_events(await ctx.stream.history.get_events())
         assert result.usage == Usage(prompt_tokens=30, completion_tokens=13)
-
-        events = list(await parent_ctx.stream.history.get_events())
-        completed = [e for e in events if isinstance(e, TaskCompleted)][0]
-        assert completed.usage == Usage(prompt_tokens=30, completion_tokens=13)
-
-    async def test_rollup_emits_subtask_usage_event_on_parent(self) -> None:
-        """The rollup reaches the parent as a single ``UsageEvent`` so the
-        parent's report accounts for the sub-task without seeing its per-call
-        events (which live on the sub-agent's private stream)."""
-
-        worker = Agent(
-            "worker",
-            config=TestConfig(
-                ModelResponse(
-                    ModelMessage("done"),
-                    usage=Usage(prompt_tokens=20, completion_tokens=8),
-                ),
-            ),
-        )
-
-        parent_ctx = _make_parent_context()
-        await run_task(worker, "go", parent_context=parent_ctx)
-
-        events = list(await parent_ctx.stream.history.get_events())
-        usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        # ``label`` is ``compare=False`` on the event, so comparing whole
-        # ``UsageEvent``s would not check it — the fields go in a tuple instead.
-        assert [(e.usage, e.kind, e.label) for e in usage_events] == [
-            (Usage(prompt_tokens=20, completion_tokens=8), "subtask", "worker")
-        ]
-
-        report = UsageReport.from_events(events)
-        assert report.total == Usage(prompt_tokens=20, completion_tokens=8)
-        assert report.by_kind == {"subtask": Usage(prompt_tokens=20, completion_tokens=8)}
-
-    async def test_rollup_carries_the_pair_of_a_single_configuration_delegation(self) -> None:
-        """One configuration behind the spend means the rollup can name it.
-
-        Still one rollup — that invariant is asserted above and unchanged — but a
-        consumer breaking spend down per provider and model now sees this
-        delegation under the configuration that actually billed it instead of
-        under an unlabelled row.
-        """
-
-        worker = Agent(
-            "worker",
-            config=TestConfig(
-                ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
-                    usage=Usage(prompt_tokens=10, completion_tokens=5),
-                    model="claude-haiku-4",
-                    provider="anthropic",
-                ),
-                ModelResponse(
-                    ModelMessage("done"),
-                    usage=Usage(prompt_tokens=20, completion_tokens=8),
-                    model="claude-haiku-4",
-                    provider="anthropic",
-                ),
-            ),
-            tools=[noop],
-        )
-
-        parent_ctx = _make_parent_context()
-        await run_task(worker, "go", parent_context=parent_ctx)
-
-        events = list(await parent_ctx.stream.history.get_events())
-        usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert [(e.provider, e.model) for e in usage_events] == [("anthropic", "claude-haiku-4")]
-        assert UsageReport.from_events(events).by_model == {
-            "claude-haiku-4": Usage(prompt_tokens=30, completion_tokens=13)
+        assert report.total == result.usage
+        assert report.by_model == {
+            "small": Usage(prompt_tokens=10, completion_tokens=5),
+            "large": Usage(prompt_tokens=20, completion_tokens=8),
         }
+        assert [record.kind for record in report.records] == ["model_call", "model_call"]
 
-    async def test_rollup_leaves_the_pair_unset_when_the_delegation_spanned_several(self) -> None:
-        """Two configurations behind the spend leave the rollup unlabelled.
-
-        Naming either — or the parent's — would attribute tokens to a model that
-        did not spend them, and a consumer cannot tell a wrong label from a right
-        one. The tokens themselves are still rolled up in full.
-        """
-
+    async def test_failure_keeps_previously_published_spend(self) -> None:
+        spent = Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300)
         worker = Agent(
             "worker",
             config=TestConfig(
-                ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
-                    usage=Usage(prompt_tokens=10, completion_tokens=5),
-                    model="claude-haiku-4",
-                    provider="anthropic",
-                ),
-                ModelResponse(
-                    ModelMessage("done"),
-                    usage=Usage(prompt_tokens=20, completion_tokens=8),
-                    model="gpt-5-mini",
-                    provider="openai",
-                ),
-            ),
-            tools=[noop],
-        )
-
-        parent_ctx = _make_parent_context()
-        await run_task(worker, "go", parent_context=parent_ctx)
-
-        events = list(await parent_ctx.stream.history.get_events())
-        usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert [(e.provider, e.model, e.usage) for e in usage_events] == [
-            (None, None, Usage(prompt_tokens=30, completion_tokens=13))
-        ]
-
-    async def test_rollup_leaves_a_partial_total_absent(self) -> None:
-        """One call without a reported total leaves the rollup's total absent."""
-
-        worker = Agent(
-            "worker",
-            config=TestConfig(
-                ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
-                    usage=Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),
-                    model="claude-haiku-4",
-                    provider="anthropic",
-                ),
-                ModelResponse(
-                    ModelMessage("done"),
-                    usage=Usage(prompt_tokens=40, completion_tokens=4),
-                    model="claude-haiku-4",
-                    provider="anthropic",
-                ),
-            ),
-            tools=[noop],
-        )
-
-        parent_ctx = _make_parent_context()
-        await run_task(worker, "go", parent_context=parent_ctx)
-
-        events = list(await parent_ctx.stream.history.get_events())
-        usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert [(e.provider, e.model, e.usage) for e in usage_events] == [
-            ("anthropic", "claude-haiku-4", Usage(prompt_tokens=140, completion_tokens=14))
-        ]
-        assert usage_events[0].usage.total_tokens is None
-
-    async def test_rollup_of_a_mixed_delegation_also_drops_a_partial_total(self) -> None:
-        """The unlabelled rollup is subject to the same rule as a labelled one."""
-
-        worker = Agent(
-            "worker",
-            config=TestConfig(
-                ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="noop", arguments="{}")]),
-                    usage=Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110),
-                    model="claude-haiku-4",
-                    provider="anthropic",
-                ),
-                ModelResponse(
-                    ModelMessage("done"),
-                    usage=Usage(prompt_tokens=40, completion_tokens=4),
-                    model="gpt-5-mini",
-                    provider="openai",
-                ),
-            ),
-            tools=[noop],
-        )
-
-        parent_ctx = _make_parent_context()
-        await run_task(worker, "go", parent_context=parent_ctx)
-
-        events = list(await parent_ctx.stream.history.get_events())
-        usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert [(e.provider, e.model, e.usage) for e in usage_events] == [
-            (None, None, Usage(prompt_tokens=140, completion_tokens=14))
-        ]
-
-    async def test_a_record_that_spent_nothing_does_not_decide_the_total(self) -> None:
-        """An all-absent ``Usage`` is not a call that omitted its total."""
-        assert _rollup_usage([
-            UsageEvent(Usage(total_tokens=110), kind="model_call"),
-            UsageEvent(Usage(), kind="model_call"),
-        ]) == Usage(total_tokens=110)
-
-    async def test_rollup_reports_usage_incurred_before_a_failure(self) -> None:
-        """A sub-task that bills a model call and *then* dies still reports that
-        spend — on ``TaskResult.usage`` and as a rollup on the parent.
-
-        The failure is a tool blowing up, the common real-world case: a flaky
-        downstream API takes the run down after the tokens are already spent.
-        """
-        worker = Agent(
-            "worker",
-            config=TestConfig(
-                ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="flaky", arguments="{}")]),
-                    usage=Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300),
-                ),
+                ModelResponse(tool_calls=ToolCallsEvent([ToolCallEvent(name="flaky", arguments="{}")]), usage=spent),
             ),
             tools=[flaky],
         )
-
-        parent_ctx = _make_parent_context()
-        result = await run_task(worker, "go", parent_context=parent_ctx)
-
-        spent = Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300)
-        assert result.completed is False
+        ctx = _make_parent_context()
+        result = await run_task(worker, "work", parent_context=ctx)
+        assert not result.completed
         assert isinstance(result.error, RuntimeError)
         assert result.usage == spent
-
-        events = list(await parent_ctx.stream.history.get_events())
-        usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        # ``label`` is ``compare=False``, so equality alone would not pin it.
-        assert [(e.usage, e.kind, e.label) for e in usage_events] == [(spent, "subtask", "worker")]
-
-        # The rollup precedes the terminal lifecycle event, as on the success path.
-        assert [type(e) for e in events if isinstance(e, (UsageEvent, TaskFailed))] == [UsageEvent, TaskFailed]
-
-        report = UsageReport.from_events(events)
-        assert report.total == spent
-        assert report.by_kind == {"subtask": spent}
-        assert [(r.kind, r.label) for r in report.records] == [("subtask", "worker")]
-
-    async def test_failure_before_any_billable_call_emits_no_rollup(self) -> None:
-        """A sub-task that dies before spending anything contributes nothing, so
-        no zero-valued rollup pollutes the parent's report."""
-
-        worker = Agent("worker", config=TestConfig())  # no scripted responses
-
-        parent_ctx = _make_parent_context()
-        result = await run_task(worker, "go", parent_context=parent_ctx)
-
-        assert result.completed is False
-        assert result.usage == Usage()
-
-        events = list(await parent_ctx.stream.history.get_events())
-        assert [e for e in events if isinstance(e, UsageEvent)] == []
-        assert UsageReport.from_events(events).by_kind == {}
-
-    async def test_failure_populates_usage_with_emit_events_disabled(self) -> None:
-        """``emit_events=False`` keeps the numbers on the result while emitting
-        nothing, so a caller doing its own lifecycle accounting loses neither."""
-        worker = Agent(
-            "worker",
-            config=TestConfig(
-                ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="flaky", arguments="{}")]),
-                    usage=Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300),
-                ),
-            ),
-            tools=[flaky],
-        )
-
-        parent_ctx = _make_parent_context()
-        result = await run_task(worker, "go", parent_context=parent_ctx, emit_events=False)
-
-        assert result.completed is False
-        assert result.usage == Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300)
-        assert list(await parent_ctx.stream.history.get_events()) == []
-
-    async def test_unreadable_history_after_a_failure_still_yields_a_result(self) -> None:
-        """A storage outage that kills the sub-task must not kill the reporting.
-
-        The backend goes down mid-run, so the failure path's own read of the
-        cumulative number fails too. ``run_task`` still returns a
-        ``TaskResult`` — the read is not allowed to escape and take the
-        ``TaskFailed`` event with it — and degrades the number to what this
-        invocation was seen to spend.
-
-        The sub-task's error here *is* the outage: the sub-agent reads its own
-        history to build the next request, so it hits the broken backend before
-        the tool's ``RuntimeError`` can surface. Preserving a sub-task error
-        raised for some other reason is covered by
-        ``test_rollup_reports_usage_incurred_before_a_failure``, where the read
-        succeeds.
-        """
-        storage = _BreakableStorage()
-
-        @tool
-        def breaks_storage() -> str:
-            """A tool that takes the storage backend down with it."""
-            storage.break_reads()
-            raise RuntimeError("downstream API is down")
-
-        spent = Usage(prompt_tokens=250, completion_tokens=50, total_tokens=300)
-        worker = Agent(
-            "worker",
-            config=TestConfig(
-                ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="breaks_storage", arguments="{}")]),
-                    usage=spent,
-                ),
-            ),
-            tools=[breaks_storage],
-        )
-
-        parent_ctx = _make_parent_context()
-        result = await run_task(
-            worker,
-            "go",
-            parent_context=parent_ctx,
-            stream=MemoryStream(storage=storage),
-        )
-
-        assert result.completed is False
-        # Reported, not swallowed: the outage is what actually killed the run.
-        assert isinstance(result.error, ConnectionError)
-        # Degraded to this invocation's spend, rather than lost to the failed read.
-        assert result.usage == spent
-
-        events = list(await parent_ctx.stream.history.get_events())
-        assert [e for e in events if isinstance(e, UsageEvent)] == [UsageEvent(spent, kind="subtask")]
-        assert [e.error for e in events if isinstance(e, TaskFailed)] == [result.error]
-
-    async def test_failing_grandchild_rolls_up_through_the_child_exactly_once(self) -> None:
-        """A failing grandchild's spend reaches the top exactly once.
-
-        The delegation tool returns only an error string, so the cost has to be
-        visible where the result is not — and nesting must not distort it.
-        """
-        grandchild_spend = Usage(prompt_tokens=100, completion_tokens=10, total_tokens=110)
-        grandchild = Agent(
-            "grandchild",
-            config=TestConfig(
-                ModelResponse(
-                    tool_calls=ToolCallsEvent(calls=[ToolCallEvent(name="flaky", arguments="{}")]),
-                    usage=grandchild_spend,
-                ),
-            ),
-            tools=[flaky],
-        )
-
-        dispatch = Usage(prompt_tokens=20, completion_tokens=2, total_tokens=22)
-        wrapup = Usage(prompt_tokens=30, completion_tokens=3, total_tokens=33)
-        child = Agent(
-            "child",
-            config=TestConfig(
-                ModelResponse(
-                    tool_calls=ToolCallsEvent(
-                        calls=[ToolCallEvent(name="task_grandchild", arguments='{"objective": "dig"}')]
-                    ),
-                    usage=dispatch,
-                ),
-                ModelResponse(ModelMessage("gave up"), usage=wrapup),
-            ),
-            tools=[subagent_tool(grandchild, description="Delegate to the grandchild")],
-        )
-
-        parent_ctx = _make_parent_context()
-        result = await run_task(child, "top", parent_context=parent_ctx)
-
-        assert result.completed is True
-
-        # One rollup on the parent, carrying the child's own two calls plus the
-        # grandchild's spend — counted once, not once per level.
-        events = list(await parent_ctx.stream.history.get_events())
-        usage_events = [e for e in events if isinstance(e, UsageEvent)]
-        assert [(e.usage, e.kind, e.label) for e in usage_events] == [
-            (dispatch + wrapup + grandchild_spend, "subtask", "child"),
+        assert UsageReport.from_events(await ctx.stream.history.get_events()).total == spent
+        events = list(await ctx.stream.history.get_events())
+        assert [type(event) for event in events if isinstance(event, (UsageEvent, TaskFailed))] == [
+            UsageEvent,
+            TaskFailed,
         ]
+
+    async def test_lifecycle_suppression_does_not_suppress_accounting(self) -> None:
+        spent = Usage(total_tokens=30)
+        worker = Agent("worker", config=TestConfig(ModelResponse(ModelMessage("done"), usage=spent)))
+        ctx = _make_parent_context()
+        result = await run_task(worker, "work", parent_context=ctx, emit_events=False)
+        events = list(await ctx.stream.history.get_events())
+        assert result.completed
+        assert UsageReport.from_events(events).total == spent
+        assert not any(isinstance(event.source_event, (TaskStarted, TaskCompleted, TaskFailed)) for event in events)
+
+    async def test_failure_before_any_call_spends_nothing(self) -> None:
+        ctx = _make_parent_context()
+        result = await run_task(Agent("broken", config=TestConfig()), "work", parent_context=ctx)
+        assert not result.completed
+        assert result.usage == Usage()
+        assert UsageReport.from_events(await ctx.stream.history.get_events()).total == Usage()
+
+    async def test_storage_outage_does_not_hide_spend_or_failure(self) -> None:
+        storage = _BreakableStorage()
+        spent = Usage(total_tokens=30)
+        worker = Agent(
+            "worker",
+            config=TestConfig(
+                ModelResponse(
+                    tool_calls=ToolCallsEvent([ToolCallEvent(name="break_storage", arguments="{}")]), usage=spent
+                ),
+            ),
+            tools=[break_storage],
+        )
+        ctx = _make_parent_context(dependencies={"breakable_storage": storage})
+        result = await run_task(worker, "work", parent_context=ctx, stream=MemoryStream(storage=storage))
+        assert not result.completed
+        assert isinstance(result.error, ConnectionError)
+        assert result.usage == spent
+        assert UsageReport.from_events(await ctx.stream.history.get_events()).total == spent
+
+
+async def break_storage(ctx: Context) -> str:
+    """Model an external storage failure through a public tool."""
+    ctx.dependencies["breakable_storage"].break_reads()
+    raise RuntimeError("downstream API is down")
 
 
 class TestHitlPropagation:

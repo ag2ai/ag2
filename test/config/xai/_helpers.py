@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import grpc
-from xai_sdk.proto import chat_pb2, chat_pb2_grpc
+from xai_sdk.proto import chat_pb2, chat_pb2_grpc, files_pb2_grpc
 
 
 class FakeChatServer(chat_pb2_grpc.ChatServicer):
@@ -56,5 +56,18 @@ async def fake_xai_server() -> AsyncGenerator[FakeChatServer]:
     await server.start()
     try:
         yield servicer
+    finally:
+        await server.stop(None)
+
+
+@asynccontextmanager
+async def serve_files(servicer: files_pb2_grpc.FilesServicer) -> AsyncGenerator[str]:
+    """Serve *servicer* as the xAI ``Files`` service and yield its ``localhost:<port>`` address."""
+    server = grpc.aio.server()
+    files_pb2_grpc.add_FilesServicer_to_server(servicer, server)  # type: ignore[no-untyped-call]
+    port = server.add_secure_port("localhost:0", grpc.local_server_credentials())
+    await server.start()
+    try:
+        yield f"localhost:{port}"
     finally:
         await server.stop(None)

@@ -79,7 +79,7 @@ from ag2.config.mistral.mappers import convert_messages as mistral_messages  # n
 from ag2.config.ollama.mappers import convert_messages as ollama_messages  # noqa: E402
 from ag2.config.openai.mappers import convert_messages as openai_messages  # noqa: E402
 from ag2.config.openai.mappers import events_to_responses_input as responses_messages  # noqa: E402
-from ag2.config.typesafe.mappers import _parts_content as typesafe_parts  # noqa: E402
+from ag2.config.typesafe.mappers import convert_state as typesafe_state  # noqa: E402
 from ag2.config.xai.mappers import convert_messages as xai_messages  # noqa: E402
 from ag2.config.zai.mappers import convert_messages as zai_messages  # noqa: E402
 from ag2.events import (  # noqa: E402
@@ -152,7 +152,7 @@ _ACCEPTED: dict[str, tuple[Callable[[], ModelConfig], set[str], set[str]]] = {
     "openai-responses": (_keyed(OpenAIResponsesConfig), _MISTRAL, _MISTRAL),
     "xai": (_keyed(XAIConfig), _MISTRAL, _NOTHING),
     "zai": (_keyed(ZAIConfig), _NOTHING, _NOTHING),
-    "typesafe": (_keyed(TypeSafeConfig), _NOTHING, _NOTHING),
+    "typesafe": (_keyed(TypeSafeConfig), {"png", "avif"}, {"png", "avif"}),
 }
 
 _ClientPart = ImagePart | AudioPart | VideoPart | DocumentPart
@@ -231,6 +231,7 @@ _MAPPERS: dict[str, Callable[[list[BaseEvent], SerializerProto], Sized]] = {
     "openai-responses": responses_messages,
     "xai": partial(xai_messages, []),
     "zai": partial(zai_messages, []),
+    "typesafe": typesafe_state,
 }
 
 
@@ -264,11 +265,6 @@ def test_the_table_agrees_with_what_the_provider_mapper_takes(provider: str, pos
     rejected = _refuses(_MAPPERS[provider], _history(position, _PROBES[probe]))
 
     assert rejected is (probe not in (in_user if position == "user" else in_tool))
-
-
-@pytest.mark.parametrize("probe", list(_PROBES))
-def test_typesafe_takes_no_media_and_its_converter_agrees(probe: str) -> None:
-    assert _refuses(typesafe_parts, [_PROBES[probe]]) is True
 
 
 @pytest.mark.asyncio

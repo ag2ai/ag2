@@ -112,6 +112,7 @@ def make_stream_chunk(
         data=SimpleNamespace(
             choices=[
                 SimpleNamespace(
+                    index=0,
                     delta=SimpleNamespace(content=content, tool_calls=tool_calls or [], tool_call_id=tool_call_id),
                     finish_reason=finish_reason,
                 )

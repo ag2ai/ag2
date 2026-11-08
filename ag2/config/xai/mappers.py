@@ -313,9 +313,15 @@ def normalize_usage(usage: usage_pb2.SamplingUsage | None) -> Usage:
     if usage is None:
         return Usage()
 
+    # xAI reports reasoning beside the completion (total = prompt + completion +
+    # reasoning); completion includes it, with thinking_tokens as the breakdown.
+    completion = float(usage.completion_tokens) if usage.completion_tokens else None
+    if usage.reasoning_tokens:
+        completion = (completion or 0.0) + usage.reasoning_tokens
+
     return Usage(
         prompt_tokens=float(usage.prompt_tokens) if usage.prompt_tokens else None,
-        completion_tokens=float(usage.completion_tokens) if usage.completion_tokens else None,
+        completion_tokens=completion,
         total_tokens=float(usage.total_tokens) if usage.total_tokens else None,
         cache_read_input_tokens=float(usage.cached_prompt_text_tokens) if usage.cached_prompt_text_tokens else None,
         thinking_tokens=float(usage.reasoning_tokens) if usage.reasoning_tokens else None,

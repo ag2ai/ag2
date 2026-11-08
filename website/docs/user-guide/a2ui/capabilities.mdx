@@ -47,6 +47,9 @@ server = A2UIServer(
 
 The custom catalog's rules are appended to the basic catalog's rules in the system prompt, and its component schemas are added to the validation registry — so malformed uses of your components are caught and retried just like the built-ins.
 
+!!! note "v1.0 catalogs"
+    A v1.0 catalog may `#!python $ref` only the components, functions and leaf `#!python $defs` it declares (`#!python #/components/...`, `#!python #/functions/...`, `#!python #/$defs/...`) and the standard types the spec lists, written as `#!python common_types.json#/$defs/<Type>` (for example `#!python DynamicString`, `#!python ChildList` or `#!python Action`). A reference into another catalog, the basic one included, is rejected when the catalog is loaded. v1.0 catalogs carry their guidance in an `#!python instructions` field; without `#!python custom_catalog_rules`, the custom catalog's `#!python instructions` are appended instead.
+
 !!! tip
     Two knobs control prompt size: `#!python include_schema_in_prompt` (the full JSON schema — better validation, more tokens) and `#!python include_rules_in_prompt` (the plain-text catalog rules). Both default to `#!python True`; turn them off to trade strictness for a shorter prompt.
 
@@ -60,7 +63,7 @@ How capabilities reach the agent depends on the transport:
 
 <Tabs>
   <Tab title="REST">
-Send them in the request body under `#!python a2uiClientCapabilities`, nested by protocol version (see the [Server](/docs/user-guide/a2ui/server) request contract):
+Send them in the request body under `#!python a2uiClientCapabilities` (`#!python a2uiRendererCapabilities` for v1.0), nested under `#!python "v0.9"` (also for v0.9.1, which reuses the v0.9 key) or `#!python "1.0"` for v1.0 (see the [Server](/docs/user-guide/a2ui/server) request contract):
 
 ```json
 {
@@ -72,10 +75,23 @@ Send them in the request body under `#!python a2uiClientCapabilities`, nested by
   }
 }
 ```
+
+For v1.0:
+
+```json
+{
+  "messages": [{"role": "user", "content": "show a booking form"}],
+  "a2uiRendererCapabilities": {
+    "1.0": {
+      "supportedCatalogIds": ["https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"]
+    }
+  }
+}
+```
   </Tab>
 
   <Tab title="A2A">
-The client puts the same shape on the A2A message `#!python metadata`. The [A2A executor](/docs/user-guide/a2ui/a2a) reads it off the incoming message and folds it into the turn's system prompt automatically.
+The client puts the same shape on the A2A message `#!python metadata` — under `#!python a2uiClientCapabilities`, or `#!python a2uiRendererCapabilities` for v1.0 (the key the upstream v1.0 extension specification uses). The [A2A executor](/docs/user-guide/a2ui/a2a) reads it off the incoming message and folds it into the turn's system prompt automatically.
   </Tab>
 </Tabs>
 

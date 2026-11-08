@@ -134,11 +134,10 @@ class OllamaClient(LLMClient):
 
         calls = [
             ToolCallEvent(
-                id=f"call_{i}",
                 name=tc.function.name,
                 arguments=json.dumps(tc.function.arguments),
             )
-            for i, tc in enumerate(msg.tool_calls or [])
+            for tc in msg.tool_calls or []
         ]
 
         prompt_n = float(response.prompt_eval_count or 0)
@@ -190,7 +189,6 @@ class OllamaClient(LLMClient):
             for tc in msg.tool_calls or []:
                 calls.append(
                     ToolCallEvent(
-                        id=f"call_{len(calls)}",
                         name=tc.function.name,
                         arguments=json.dumps(tc.function.arguments),
                     )

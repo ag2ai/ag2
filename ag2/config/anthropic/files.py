@@ -27,6 +27,7 @@ class AnthropicFilesClient:
             max_retries=config.max_retries,
             default_headers=config.default_headers,
             http_client=config.http_client,
+            open_telemetry=config.open_telemetry,
         )
 
     async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:
@@ -63,7 +64,7 @@ class AnthropicFilesClient:
                 purpose=None,
                 created_at=_created_at_to_float(f.created_at),
             )
-            for f in result.data
+            async for f in result
         ]
 
     async def delete(self, file_id: str) -> None:

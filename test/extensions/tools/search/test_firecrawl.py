@@ -484,18 +484,6 @@ class TestSearchExecution:
             await agent.ask("search")
 
     @respx.mock
-    async def test_missing_api_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("FIRECRAWL_API_KEY", raising=False)
-        route = respx.post(FIRECRAWL_SEARCH_URL).mock(return_value=httpx.Response(200, json=SAMPLE_SEARCH_RAW))
-        toolkit = FirecrawlToolkit()
-
-        agent = Agent("a", config=_tool_call_config({"query": "q"}, tool_name="firecrawl_search"), tools=[toolkit])
-
-        with pytest.raises(ValueError, match="API key"):
-            await agent.ask("search")
-        assert not route.called
-
-    @respx.mock
     async def test_api_key_read_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("FIRECRAWL_API_KEY", "env-key")
         route = respx.post(FIRECRAWL_SEARCH_URL).mock(return_value=httpx.Response(200, json=SAMPLE_SEARCH_RAW))

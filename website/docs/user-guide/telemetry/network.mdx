@@ -29,7 +29,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import DiskKnowledgeStore
 from ag2.middleware.builtin import TelemetryMiddleware
 from ag2.network import Hub, HubClient, LocalLink, Passport, Resume
@@ -63,7 +63,7 @@ async def main() -> None:
     #    spans link back to the envelope that triggered them.
     alice = Agent(
         "alice",
-        config=OpenAIConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
         middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="alice")],
     )
 
@@ -97,7 +97,7 @@ The hub and listener emit five span types. Each carries an `ag2.span.type` attri
 Agents instrumented with `#!python TelemetryMiddleware` add their own `agent` / `llm` / `tool` / `human_input` spans (see [Agent Telemetry](/docs/user-guide/telemetry/agent)), linked to the triggering envelope.
 
 !!! note
-    `#!python network.task` spans cover capability-tagged tasks — the same `#!python agent.task(..., capability="X")` mechanism described in [Task Observation](/docs/user-guide/network/task_observation). The span records the task's `capability`, `outcome`, and latency, which is what feeds task-level evaluation views.
+    `#!python network.task` spans cover capability-tagged tasks — the same `#!python Task(spec=TaskSpec(title="...", capability="X"), ...)` mechanism described in [Task Observation](/docs/user-guide/network/task_observation). The span records the task's `capability`, `outcome`, and latency, which is what feeds task-level evaluation views.
 
 ### Checkpoint events
 

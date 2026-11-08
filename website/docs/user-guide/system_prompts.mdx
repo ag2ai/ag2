@@ -99,11 +99,11 @@ catalog and tool schemas:
 
 ```python linenums="1" hl_lines="8 11 15"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.tools.skills import LocalRuntime, SkillPlugin
 
 runtime = LocalRuntime("./skills")
-agent = Agent("assistant", prompt="You are a helpful assistant.", config=OpenAIConfig(model="gpt-5-mini"))
+agent = Agent("assistant", prompt="You are a helpful assistant.", config=OpenAICompletionsConfig(model="gpt-5-mini"))
 
 reply = await agent.ask("Help with my project", plugins=[SkillPlugin(runtime)])
 

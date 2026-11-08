@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+from collections.abc import Iterable
 from contextlib import suppress
 from uuid import UUID, uuid4
 
@@ -16,8 +17,24 @@ from ag2.acp.sessions import (
     SessionStore,
     UnknownSessionError,
 )
-from ag2.events import ModelMessage
+from ag2.context import StreamId
+from ag2.events import BaseEvent, ModelMessage
 from ag2.history import MemoryStorage
+
+
+class _SizedStorage(MemoryStorage):
+    """A ``Storage`` that defines ``__len__``, so it is falsy until something is written."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stream_ids: set[StreamId] = set()
+
+    def __len__(self) -> int:
+        return len(self.stream_ids)
+
+    async def set_history(self, stream_id: StreamId, events: Iterable[BaseEvent]) -> None:
+        self.stream_ids.add(stream_id)
+        await super().set_history(stream_id, events)
 
 
 @pytest.mark.asyncio
@@ -103,6 +120,30 @@ class TestHistoryIsolation:
         store.stream(session).enqueue("late result")
 
         assert store.stream(session).pending_messages
+
+
+@pytest.mark.asyncio
+class TestSuppliedStorage:
+    """A supplied backend holds the history even while it is empty, and so possibly falsy."""
+
+    async def test_an_empty_backend_is_used(self) -> None:
+        storage = _SizedStorage()
+        assert not storage
+        store = SessionStore(storage=storage)
+        session = await store.create()
+
+        await store.stream(session).history.replace([ModelMessage("kept")])
+
+        assert [e.content for e in await storage.get_history(session.stream_id)] == ["kept"]
+
+    async def test_an_empty_backend_flows_through_from_config(self) -> None:
+        storage = _SizedStorage()
+        store = SessionStore.from_config(SessionConfig(storage=storage))
+        session = await store.create()
+
+        await store.stream(session).history.replace([ModelMessage("kept")])
+
+        assert [e.content for e in await storage.get_history(session.stream_id)] == ["kept"]
 
 
 @pytest.mark.asyncio

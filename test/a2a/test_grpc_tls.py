@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
 
 import grpc
@@ -34,8 +34,8 @@ def self_signed() -> tuple[bytes, bytes]:
         .issuer_name(name)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(timezone.utc) - timedelta(minutes=5))
-        .not_valid_after(datetime.now(timezone.utc) + timedelta(hours=1))
+        .not_valid_before(datetime.now(UTC) - timedelta(minutes=5))
+        .not_valid_after(datetime.now(UTC) + timedelta(hours=1))
         .add_extension(
             x509.SubjectAlternativeName([x509.IPAddress(ip_address(HOST))]),
             critical=False,

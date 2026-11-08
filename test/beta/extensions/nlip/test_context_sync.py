@@ -9,11 +9,10 @@ framework's own state: a peer neither writes them nor reads them.
 """
 
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Self
 
 import httpx
 import pytest
-from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.config import LLMClient, ModelConfig

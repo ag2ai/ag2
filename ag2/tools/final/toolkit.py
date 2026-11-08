@@ -75,6 +75,7 @@ class Toolkit(Tool):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool: ...
 
@@ -87,6 +88,7 @@ class Toolkit(Tool):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> Callable[[Callable[..., Any]], FunctionTool]: ...
 
@@ -98,6 +100,7 @@ class Toolkit(Tool):
         description: str | None = None,
         schema: FunctionParameters | None = None,
         sync_to_thread: bool = True,
+        timeout: float | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> FunctionTool | Callable[[Callable[..., Any]], FunctionTool]:
         def make_tool(f: Callable[..., Any]) -> FunctionTool:
@@ -107,6 +110,7 @@ class Toolkit(Tool):
                 description=description,
                 schema=schema,
                 sync_to_thread=sync_to_thread,
+                timeout=timeout,
                 middleware=middleware,
             )
             self._add_tool(t)

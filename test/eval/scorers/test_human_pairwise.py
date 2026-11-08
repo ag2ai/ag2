@@ -37,7 +37,7 @@ async def test_offline_export_label_import_roundtrip(tmp_path) -> None:
         out_lines.append(json.dumps(rec))
     labeled.write_text("\n".join(out_lines) + "\n")
 
-    comp = human_labels(str(labeled), criterion="correctness", key="correctness@human")
+    comp = human_labels(labeled, criterion="correctness", key="correctness@human")
     result = await evaluate_pairwise(src_a, src_b, comparators=[comp], variant_a="A", variant_b="B", store_dir=tmp_path)
 
     assert result.tally("correctness@human") == (2, 0, 0)  # A wins both

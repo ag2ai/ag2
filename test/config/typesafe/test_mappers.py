@@ -8,11 +8,22 @@ from typing import Any
 
 import pytest
 from fast_depends.pydantic import PydanticSerializer
-from typesafe_sdk import Choice, ChoiceAnswer, Noul, NoulAnswer, Score, ScoreAnswer
+from typesafe_sdk import (
+    Box,
+    BoxAnswer,
+    BoxCoordinates,
+    Choice,
+    ChoiceAnswer,
+    Noul,
+    NoulAnswer,
+    Score,
+    ScoreAnswer,
+)
 from typesafe_sdk import Usage as TypeSafeUsage
 
 from ag2.compact import CompactionSummary
 from ag2.config.typesafe.mappers import (
+    BoundingBox,
     UnsupportedResponseSchemaError,
     answer_metadata,
     answer_to_content,
@@ -21,6 +32,7 @@ from ag2.config.typesafe.mappers import (
     response_proto_to_question,
 )
 from ag2.events import (
+    BaseEvent,
     DataInput,
     FileIdInput,
     ModelMessage,
@@ -242,6 +254,34 @@ def test_convert_state_serialises_history() -> None:
     ]
 
 
+def test_bounding_box_maps_to_box() -> None:
+    question = response_proto_to_question(ResponseSchema(BoundingBox), instructions="The dog")
+
+    assert question == Box(instructions="The dog")
+
+
+def test_bounding_box_description_follows_the_prompt() -> None:
+    question = response_proto_to_question(
+        ResponseSchema(BoundingBox, description="Include the leash."), instructions="The dog"
+    )
+
+    assert question == Box(instructions="The dog\n\nInclude the leash.")
+
+
+def test_bounding_box_docstring_is_not_a_question() -> None:
+    assert response_proto_to_question(ResponseSchema(BoundingBox), instructions=None) == Box()
+
+
+def test_bounding_box_answer_is_the_schema_json() -> None:
+    schema = ResponseSchema(BoundingBox)
+    answer = BoxAnswer(box=BoxCoordinates(top=0.2, bottom=0.66, left=0.19, right=0.68), confidence=0.9)
+
+    content = answer_to_content(schema, answer)
+
+    assert BoundingBox.model_validate_json(content) == BoundingBox(top=0.2, bottom=0.66, left=0.19, right=0.68)
+    assert answer_metadata(answer)["confidence"] == 0.9
+
+
 def test_convert_state_rejects_files() -> None:
     with pytest.raises(UnsupportedInputError, match="FileIdInput"):
         convert_state([ModelRequest([FileIdInput("file_1")])], PydanticSerializer())
@@ -273,3 +313,15 @@ def test_bool_with_instructions_keeps_only_described_outcomes(criteria: dict[str
     question = response_proto_to_question(ResponseSchema(bool), instructions="Triage.", criteria=criteria)
 
     assert question.model_dump(mode="json") == {"type": "noul", "instructions": "Triage.", "criteria": criteria}
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_state(final_turn_history, PydanticSerializer) == [
+        {"role": "user", "content": "first turn"},
+        {"role": "tool", "content": "sent"},
+        {"role": "tool", "content": "lookup result"},
+        {"role": "assistant", "content": "sent"},
+        {"role": "user", "content": "second turn"},
+        {"role": "assistant", "content": "second reply"},
+    ]

@@ -34,14 +34,14 @@ def _agent(usage: dict[str, Any]) -> Agent:
             json={
                 "candidates": [{"content": {"role": "model", "parts": [{"text": "done"}]}, "finishReason": "STOP"}],
                 "usageMetadata": usage,
-                "modelVersion": "gemini-3-flash",
+                "modelVersion": "gemini-3.6-flash",
             },
         )
 
     return Agent(
         "test_agent",
         config=GeminiConfig(
-            model="gemini-3-flash",
+            model="gemini-3.6-flash",
             api_key="test",
             http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
         ),
@@ -54,7 +54,7 @@ async def _finished(agent: Agent) -> RunFinishedEvent:
 
 
 async def test_the_output_a_client_sees_counts_what_gemini_spent_thinking() -> None:
-    """Gemini reports its thoughts beside the candidates, so they are added in on the way out."""
+    """Gemini thoughts are already in normalized completion and must not be added twice."""
     agent = _agent({
         "promptTokenCount": 12,
         "candidatesTokenCount": 10,
@@ -65,7 +65,7 @@ async def test_the_output_a_client_sees_counts_what_gemini_spent_thinking() -> N
     assert (await _finished(agent)).usage == [
         TokenUsage(
             provider="google",
-            model="gemini-3-flash",
+            model="gemini-3.6-flash",
             input_tokens=12,
             output_tokens=40,
             total_tokens=52,
@@ -85,7 +85,7 @@ async def test_a_cached_prompt_is_already_inside_gemini_s_input() -> None:
     assert (await _finished(agent)).usage == [
         TokenUsage(
             provider="google",
-            model="gemini-3-flash",
+            model="gemini-3.6-flash",
             input_tokens=1200,
             output_tokens=10,
             total_tokens=1210,

@@ -34,7 +34,7 @@ class XAIFilesClient:
             provider=FileProvider.XAI,
             bytes_count=result.size,
             purpose=purpose,
-            created_at=_created_at_to_float(result.created_at),
+            created_at=_created_at_to_float(result.created_at.ToDatetime()),
         )
 
     async def read(self, file_id: str) -> FileContent:
@@ -47,16 +47,21 @@ class XAIFilesClient:
 
     async def list(self) -> list[UploadedFile]:
         result = await self._client.files.list()
-        return [
-            UploadedFile(
-                file_id=f.id,
-                filename=f.filename,
-                provider=FileProvider.XAI,
-                bytes_count=f.size,
-                created_at=_created_at_to_float(f.created_at),
+        files: list[UploadedFile] = []
+        while True:
+            files.extend(
+                UploadedFile(
+                    file_id=f.id,
+                    filename=f.filename,
+                    provider=FileProvider.XAI,
+                    bytes_count=f.size,
+                    created_at=_created_at_to_float(f.created_at.ToDatetime()),
+                )
+                for f in result.data
             )
-            for f in result.data
-        ]
+            if not result.pagination_token:
+                return files
+            result = await self._client.files.list(pagination_token=result.pagination_token)
 
     async def delete(self, file_id: str) -> None:
         await self._client.files.delete(file_id)
