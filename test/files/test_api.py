@@ -43,3 +43,15 @@ class TestFilesAPIUpload:
             await files.upload("report.pdf")
 
         assert await files.list() == []
+
+    async def test_keeps_surviving_files_after_a_deletion(self) -> None:
+        files = FilesAPI(TestConfig(files=TestFilesClient()))
+        first = await files.upload(b"a", "a.txt")
+        second = await files.upload(b"b", "b.txt")
+        await files.delete(first.file_id)
+
+        third = await files.upload(b"c", "c.txt")
+
+        assert await files.list() == [second, third]
+        assert await files.read(second.file_id) == FileContent(name="b.txt", data=b"b")
+        assert await files.read(third.file_id) == FileContent(name="c.txt", data=b"c")

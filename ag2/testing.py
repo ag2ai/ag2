@@ -178,10 +178,12 @@ class TestFilesClient:
 
     def __init__(self) -> None:
         self._files: dict[str, tuple[UploadedFile, bytes]] = {}
+        self._uploads = 0
 
     async def upload(self, data: bytes, filename: str, purpose: str | None = None, **options: Any) -> UploadedFile:
+        self._uploads += 1
         uploaded = UploadedFile(
-            file_id=f"file-{len(self._files) + 1}",
+            file_id=f"file-{self._uploads}",
             filename=filename,
             bytes_count=len(data),
             purpose=purpose,
