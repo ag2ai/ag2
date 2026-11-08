@@ -186,7 +186,7 @@ def _forwarded_input(forwarded_props: dict[str, Any]) -> RunAgentInput:
 
 
 _CALL_AGENT_FUNCTION = {
-    "version": "v1.0",
+    "version": "1.0",
     "callAgentFunction": {
         "surfaceId": "s1",
         "functionCallId": "fc-1",
@@ -295,7 +295,7 @@ async def test_renderer_function_response_in_forwarded_props_reaches_the_agent()
         protocol_version="v1.0",
         validate_responses=False,
     )
-    response = {"version": "v1.0", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}
+    response = {"version": "1.0", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}
 
     events = await _dispatch_events(server, _forwarded_input({"a2uiAction": response}))
 
