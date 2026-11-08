@@ -6,12 +6,11 @@ import warnings
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AsyncExitStack
 from functools import wraps
-from typing import Any, TypeAlias, overload
+from typing import Any, Self, TypeAlias, overload
 
 from fast_depends import Provider
 from fast_depends.library.serializer import SerializerProto
 from fast_depends.pydantic import PydanticSerializer
-from typing_extensions import Self
 
 from .annotations import Context
 from .assembly import AssemblyPolicy
@@ -205,9 +204,11 @@ class PromptObserverMixin:
         """Append an assembly policy to the chain.
 
         Policies run in order; a newly added policy runs after existing ones.
-        Construction-time ordering validation (warning on suspicious sequences)
-        only runs over policies passed via ``assembly=`` — late additions skip
-        the check, so callers should be confident in the ordering they introduce.
+        On an ``Agent`` they join the first registered
+        ``Middleware(AssemblerMiddleware, ...)``, after its own policies, or an
+        assembler the agent appends when there is none. Ordering is validated
+        (warning on suspicious sequences) at construction and on each turn
+        that brings policies from elsewhere.
         """
         self._policies.append(policy)
         return self

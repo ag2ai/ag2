@@ -143,6 +143,14 @@ async def test_one_option_travels_without_the_other(body_of: Surface) -> None:
     assert body["prompt_cache_options"] == {"ttl": "30m"}
 
 
+@pytest.mark.asyncio
+async def test_twelve_hour_retention_reaches_the_responses_request() -> None:
+    """Responses only: Chat Completions answers ``ttl: "12h"`` with a 400 (probed 2026-11-05, ``gpt-5.6``)."""
+    body = await _responses_body(prompt_cache_options={"ttl": "12h"})
+
+    assert body["prompt_cache_options"] == {"ttl": "12h"}
+
+
 @BOTH_SURFACES
 @pytest.mark.asyncio
 async def test_a_cache_key_does_not_drag_in_an_end_user_identifier(body_of: Surface) -> None:

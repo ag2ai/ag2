@@ -5,7 +5,7 @@
 """``tasks(action)`` — task lifecycle for the LLM.
 
 Active task actions (resolved via ``TaskInject`` to the agent's
-currently-running ``agent.task(...)`` block):
+currently-running ``Task(...)`` block):
 
 * ``progress`` — emit a ``TaskProgress`` payload on the active task.
 * ``complete`` — terminal: emit ``TaskCompleted``. Usually unnecessary
@@ -22,7 +22,7 @@ Discovery / observation:
 
 ``start`` is intentionally **not** a tool — calling it from the LLM
 would bypass the ``async with`` lifecycle that scopes
-``TaskInject`` correctly. Owners start tasks via ``agent.task(...)``
+``TaskInject`` correctly. Owners start tasks via ``Task(...)``
 in their own code; the LLM uses ``progress`` and ``complete`` once a
 task is active, and ``delegate`` for one-shot remote work.
 """
@@ -80,7 +80,7 @@ def make_tasks_tool(agent_client: "AgentClient") -> object:
     ) -> dict | list[dict] | str:
         """Task lifecycle.
 
-        Active-task actions (require an open ``agent.task(...)`` block):
+        Active-task actions (require an open ``Task(...)`` block):
             ``progress``  args payload (dict)
             ``complete``  args result?
 
@@ -97,7 +97,7 @@ def make_tasks_tool(agent_client: "AgentClient") -> object:
 
         if action == "progress":
             if active_task is None:
-                return "Error: progress requires an active `agent.task(...)` block"
+                return "Error: progress requires an active `Task(...)` block"
             try:
                 await active_task.progress(payload or {})
             except Exception as exc:
@@ -106,7 +106,7 @@ def make_tasks_tool(agent_client: "AgentClient") -> object:
 
         if action == "complete":
             if active_task is None:
-                return "Error: complete requires an active `agent.task(...)` block"
+                return "Error: complete requires an active `Task(...)` block"
             try:
                 await active_task.complete(result=result)
             except Exception as exc:

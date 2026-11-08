@@ -412,6 +412,7 @@ async def test_a_delegated_question_nobody_can_answer_ends_the_parent_turn() -> 
 
 @pytest.mark.asyncio()
 @pytest.mark.parametrize("parallel", [True, False], ids=["parallel", "sequential"])
+@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
 async def test_an_unanswerable_subtask_ends_the_parent_turn(parallel: bool) -> None:
     """``run_subtasks`` fans out; the fan-out must not swallow the failure.
 
@@ -437,7 +438,7 @@ async def test_an_unanswerable_subtask_ends_the_parent_turn(parallel: bool) -> N
         await parent.ask("Hi!", stream=stream)
 
     executed.assert_not_called()
-    assert any(isinstance(event, TaskFailed) for event in await stream.history.get_events())
+    assert any(isinstance(event.source_event, TaskFailed) for event in await stream.history.get_events())
 
 
 @pytest.mark.asyncio()

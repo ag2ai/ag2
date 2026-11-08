@@ -85,7 +85,8 @@ def build_card(
     if "grpc" in transports and grpc_url is None:
         raise ValueError("grpc_url is required when 'grpc' is in transports")
 
-    description_text = description or _agent_description(agent)
+    # Spec §5.7: the card's description is REQUIRED, so an agent without a prompt is described by its name.
+    description_text = description or _agent_description(agent) or agent.name
     resolved_skills = _resolve_skills(agent, skills, description_text)
     declared: list[AgentExtension] = [
         AgentExtension(
@@ -202,7 +203,10 @@ def _resolve_skills(
         return list(explicit)
 
     auto = [
-        AgentSkill(id=skill.name, name=skill.name, description=skill.metadata.description or skill.name)
+        # ``tags`` is REQUIRED (spec §5.7); a skill's own name is the one keyword it is sure to have.
+        AgentSkill(
+            id=skill.name, name=skill.name, description=skill.metadata.description or skill.name, tags=[skill.name]
+        )
         for tool in agent.tools
         if isinstance(tool, SkillsToolkit)
         for skill in tool.merged_skills()
@@ -214,7 +218,7 @@ def _resolve_skills(
         AgentSkill(
             id=agent.name,
             name=agent.name,
-            description=description or agent.name,
-            tags=[],
+            description=description,
+            tags=[agent.name],
         ),
     ]

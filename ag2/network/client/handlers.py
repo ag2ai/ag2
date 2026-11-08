@@ -278,8 +278,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
             )
 
         # Attach the TaskMirror for the duration of the LLM turn so any
-        # ``agent.task(...)`` (typically via the ``tasks(action="start")``
-        # tool) surfaces ``ag2.task.*`` envelopes to the hub and triggers
+        # bound ``Task(...)`` surfaces ``ag2.task.*`` envelopes to the hub and triggers
         # ``record_observation`` on capability-tagged terminal events.
         mirror = TaskMirror(
             hub_client=client._hub_client,

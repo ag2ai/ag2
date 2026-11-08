@@ -39,10 +39,44 @@ from ag2.events import (
 from ag2.middleware.builtin.telemetry import TelemetryMiddleware
 from ag2.testing import TestConfig
 from ag2.tools import tool
+from ag2.usage import UsageReport
 
 
 def _live_trace(capture: EventCapture) -> Trace:
     return Trace(events=capture.events, exception=None, duration_ms=0)
+
+
+@pytest.mark.asyncio
+async def test_source_usage_identity_survives_instrumentation_of_all_ancestors(otel_provider) -> None:
+    exporter, provider = otel_provider
+    leaf = Agent(
+        "leaf",
+        config=TestConfig(ModelResponse(ModelMessage("done"), usage=Usage(prompt_tokens=3, completion_tokens=1))),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="leaf")],
+    )
+    worker = Agent(
+        "worker",
+        config=TestConfig(
+            ToolCallEvent(name="task_leaf", arguments='{"objective":"work"}'),
+            ModelResponse(ModelMessage("done"), usage=Usage(prompt_tokens=2, completion_tokens=1)),
+        ),
+        tools=[leaf.as_tool(description="Work")],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="worker")],
+    )
+    root = Agent(
+        "root",
+        config=TestConfig(
+            ToolCallEvent(name="task_worker", arguments='{"objective":"work"}'),
+            ModelResponse(ModelMessage("done"), usage=Usage(prompt_tokens=1, completion_tokens=1)),
+        ),
+        tools=[worker.as_tool(description="Work")],
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="root")],
+    )
+    reply = await root.ask("start")
+    trace = readable_spans_to_trace(exporter.get_finished_spans())
+    assert trace.tokens == TokenUsage(input=6, output=3)
+    assert len(trace.events_of(UsageEvent)) == 3
+    assert (await reply.usage()).total == Usage(prompt_tokens=6, completion_tokens=3)
 
 
 @pytest.fixture()
@@ -201,6 +235,34 @@ async def test_accounting_events_survive_the_span_round_trip(otel_provider) -> N
 
 
 @pytest.mark.asyncio()
+@pytest.mark.parametrize("extended", (pytest.param(300, id="extended-writes"), pytest.param(0, id="measured-zero")))
+async def test_extended_cache_writes_survive_the_span_round_trip(otel_provider, extended: int) -> None:
+    """A usage reloaded from traces keeps the extended-retention share of cache writes.
+
+    A measured ``0`` stays ``0``: it says the provider reported the breakdown and
+    nothing was written with extended retention, which ``None`` would not.
+    """
+    exporter, provider = otel_provider
+    usage = Usage(
+        prompt_tokens=11,
+        completion_tokens=4,
+        total_tokens=15,
+        cache_creation_input_tokens=1200,
+        cache_creation_extended_input_tokens=extended,
+    )
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hello there!"), usage=usage)),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", model_name="mock")],
+    )
+
+    await agent.ask("Hi")
+
+    trace = readable_spans_to_trace(exporter.get_finished_spans())
+    assert [e.usage for e in trace.events_of(UsageEvent)] == [usage]
+
+
+@pytest.mark.asyncio()
 async def test_delegated_spend_survives_the_span_round_trip(otel_provider) -> None:
     """Sub-agent spend is the majority of a delegating agent's bill.
 
@@ -235,10 +297,12 @@ async def test_delegated_spend_survives_the_span_round_trip(otel_provider) -> No
     spans = readable_spans_to_trace(exporter.get_finished_spans())
 
     def by_kind(trace: Trace) -> dict[str, int]:
-        return {e.kind: int(e.usage.total_tokens or 0) for e in trace.events_of(UsageEvent)}
+        return {
+            kind: int(usage.total_tokens or 0) for kind, usage in UsageReport.from_events(trace.events).by_kind.items()
+        }
 
     assert by_kind(spans) == by_kind(live)
-    assert by_kind(spans) == {"model_call": 110, "subtask": 990}
+    assert by_kind(spans) == {"model_call": 1100}
 
     # The number a user reads. Before this path existed the span-built Trace
     # reported 110 of the 1100 actually spent — the worker's share was invisible.

@@ -15,8 +15,12 @@ class _MemoryChangeSubscription:
         self._subscribers = subscribers
         self._key = key
         self._callback = callback
+        self._closed = False
 
     async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         bucket = self._subscribers.get(self._key)
         if not bucket:
             return

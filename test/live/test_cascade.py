@@ -6,10 +6,9 @@ import asyncio
 import math
 import struct
 from collections.abc import AsyncIterator, Sequence
-from typing import Any
+from typing import Any, Self
 
 import pytest
-from typing_extensions import Self
 
 from ag2.annotations import Context
 from ag2.config import LLMClient, ModelConfig, ModelProvider
@@ -24,8 +23,11 @@ from ag2.events import (
     ModelRequest,
     ModelResponse,
     RecordedAudioEvent,
+    StatusObservation,
     SynthesizedAudioEvent,
+    TextInput,
     ToolCallEvent,
+    ToolCallsEvent,
     TranscriptionCompletedEvent,
     Usage,
 )
@@ -88,6 +90,25 @@ class FakeStreamingTTS(FakeTTS):
         self.spoken.append(text)
         for word in text.split():
             yield f"audio:{word}".encode()
+
+
+class FakeTextStreamingTTS(FakeTTS):
+    """Records each reply's text pieces, one list per `stream_text` call."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.replies: list[list[str]] = []
+        self.closed = 0
+
+    async def stream_text(self, text: AsyncIterator[str]) -> AsyncIterator[bytes]:
+        pieces: list[str] = []
+        self.replies.append(pieces)
+        try:
+            async for piece in text:
+                pieces.append(piece)
+                yield f"audio:{piece}".encode()
+        finally:
+            self.closed += 1
 
 
 class RecordingConfig(ModelConfig):
@@ -211,6 +232,24 @@ class TestCascadeSession:
         for messages in model.seen:
             assert not any(isinstance(e, (RecordedAudioEvent, SynthesizedAudioEvent)) for e in messages)
 
+    async def test_retained_status_on_a_shared_stream_reaches_the_model(self) -> None:
+        """A status observation saved by an agent on the same stream is projected
+        to a request view, as the agent loop does, rather than passed raw."""
+        stt, tts = FakeSTT(), FakeTTS()
+        model = RecordingConfig(TestConfig("Understood."))
+        stream = MemoryStream()
+        await stream.history.replace([StatusObservation([TextInput("progress:1")], source="fixture")])
+        context = ConversationContext(stream=stream)
+
+        async with cascade(model, stt, tts).session(context, serializer=None):  # type: ignore[arg-type]
+            await speak_one_turn(context)
+            await asyncio.sleep(0.05)
+
+        [status, *_] = model.seen[0]
+        assert not isinstance(status, StatusObservation)
+        assert isinstance(status, ModelRequest)
+        assert status.parts == [TextInput("progress:1")]
+
     async def test_instructions_reach_the_prompt(self) -> None:
         """`LiveAgent` hands the agent prompt to the session rather than the
         context, so the session installs it — and removes it again on exit."""
@@ -263,6 +302,126 @@ class TestCascadeSession:
             "The weather today is sunny and warm.",
             "You will not need a coat.",
         ]
+
+    async def test_text_streaming_tts_takes_the_reply_as_it_streams(self) -> None:
+        """A text-streaming config gets one call per reply, fed every chunk —
+        no sentence buffering, so `min_chars` does not hold any text back."""
+        stt, tts = FakeSTT(), FakeTextStreamingTTS()
+        context = ConversationContext(stream=MemoryStream())
+
+        heard: list[bytes] = []
+        context.stream.where(SynthesizedAudioEvent).subscribe(
+            lambda e: heard.append(e.content),  # type: ignore[arg-type,return-value]
+        )
+
+        config = cascade(ChunkingConfig("It is ", "sunny."), stt, tts)
+        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+            await speak_one_turn(context)
+            await asyncio.sleep(0.05)
+
+        assert tts.replies == [["It is ", "sunny."]]
+        assert heard == [b"audio:It is ", b"audio:sunny."]
+        assert tts.spoken == []
+        assert tts.closed == 1
+
+    async def test_text_streaming_tts_speaks_a_non_streaming_reply(self) -> None:
+        stt, tts = FakeSTT(), FakeTextStreamingTTS()
+        context = ConversationContext(stream=MemoryStream())
+
+        config = cascade(TestConfig("It is sunny."), stt, tts)
+        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+            await speak_one_turn(context)
+            await asyncio.sleep(0.05)
+
+        assert tts.replies == [["It is sunny."]]
+
+    async def test_barge_in_closes_the_reply_being_streamed(self) -> None:
+        stt, tts = FakeSTT(), FakeTextStreamingTTS()
+        started = asyncio.Event()
+
+        class StallingConfig(ChunkingConfig):
+            def create(self) -> LLMClient:
+                async def client(messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+                    await context.send(ModelMessageChunk("Let me "))
+                    started.set()
+                    await asyncio.sleep(10)  # outlives the barge-in
+                    raise AssertionError("an interrupted turn must not finish")
+
+                return client  # type: ignore[return-value]
+
+        context = ConversationContext(stream=MemoryStream())
+
+        config = cascade(StallingConfig(), stt, tts, barge_in=True)
+        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+            await speak_one_turn(context)
+            await asyncio.wait_for(started.wait(), timeout=1)
+            await asyncio.sleep(0.01)
+
+            await context.send(RecordedAudioEvent(pcm(0.1, 6000)))
+            await asyncio.sleep(0.05)
+
+        assert tts.replies == [["Let me "]]
+        assert tts.closed == 1
+
+    async def test_slow_close_after_barge_in_does_not_hold_up_the_next_turn(self) -> None:
+        """A realtime connection can take seconds to close: the user's next
+        utterance must still be heard, and the abandoned reply's cancellation
+        must not reach whoever is sending the microphone audio."""
+        stt = FakeSTT()
+        started = asyncio.Event()
+
+        class SlowClosingTTS(FakeTextStreamingTTS):
+            async def stream_text(self, text: AsyncIterator[str]) -> AsyncIterator[bytes]:
+                try:
+                    async for chunk in super().stream_text(text):
+                        yield chunk
+                finally:
+                    await asyncio.sleep(10)  # the server is slow to finish the closing handshake
+
+        class StallingConfig(ChunkingConfig):
+            def create(self) -> LLMClient:
+                async def client(messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+                    await context.send(ModelMessageChunk("Let me "))
+                    started.set()
+                    await asyncio.sleep(10)  # outlives the barge-in
+                    raise AssertionError("an interrupted turn must not finish")
+
+                return client  # type: ignore[return-value]
+
+        context = ConversationContext(stream=MemoryStream())
+
+        config = cascade(StallingConfig(), stt, SlowClosingTTS(), barge_in=True)
+        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+            await speak_one_turn(context)
+            await asyncio.wait_for(started.wait(), timeout=1)
+            await asyncio.sleep(0.01)
+
+            await asyncio.wait_for(speak_one_turn(context), timeout=1)
+            await asyncio.sleep(0.05)
+
+            assert len(stt.calls) == 2
+
+    async def test_model_failure_closes_the_reply_being_streamed(self) -> None:
+        stt, tts = FakeSTT(), FakeTextStreamingTTS()
+
+        class FailingConfig(ChunkingConfig):
+            def create(self) -> LLMClient:
+                async def client(messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
+                    await context.send(ModelMessageChunk("Let me "))
+                    await asyncio.sleep(0.01)  # lets the reply's request open first
+                    raise ConnectionError("model stream broke")
+
+                return client  # type: ignore[return-value]
+
+        context = ConversationContext(stream=MemoryStream())
+
+        config = cascade(FailingConfig(), stt, tts)
+        async with config.session(context, serializer=None):  # type: ignore[arg-type]
+            await speak_one_turn(context)
+            await asyncio.sleep(0.05)
+
+        assert tts.replies == [["Let me "]]
+        assert tts.closed == 1
 
     async def test_silence_produces_no_turn(self) -> None:
         stt, tts = FakeSTT(), FakeTTS()
@@ -418,6 +577,39 @@ class TestLiveAgentIntegration:
 
         assert called == ["Berlin"]
         assert tts.spoken == ["It is sunny in Berlin."]
+
+    @pytest.mark.parametrize("tts_cls", [FakeTTS, FakeTextStreamingTTS])
+    async def test_words_before_a_tool_call_are_spoken_before_it_runs(self, tts_cls: type[FakeTTS]) -> None:
+        """Each model response is its own reply: what the model says before a
+        tool call is not held back until the tool has answered."""
+        stt, tts = FakeSTT(), tts_cls()
+        heard_at_call: list[int] = []
+        heard: list[bytes] = []
+
+        def get_weather(city: str) -> str:
+            heard_at_call.append(len(heard))
+            return "sunny"
+
+        model = TestConfig(
+            ModelMessageChunk("Let me check."),
+            ModelResponse(
+                ModelMessage("Let me check."),
+                tool_calls=ToolCallsEvent([ToolCallEvent(name="get_weather", arguments='{"city": "Berlin"}')]),
+            ),
+            "It is sunny in Berlin.",
+        )
+
+        agent = LiveAgent("assistant", config=cascade(model, stt, tts, min_chars=1), tools=[get_weather])
+
+        async with agent.run() as context:
+            context.stream.where(SynthesizedAudioEvent).subscribe(
+                lambda e: heard.append(e.content),  # type: ignore[arg-type,return-value]
+            )
+            await speak_one_turn(context)
+            await asyncio.sleep(0.1)
+
+        assert heard_at_call == [1]
+        assert heard == [b"audio:Let me check.", b"audio:It is sunny in Berlin."]
 
     async def test_run_tool_overrides_an_agent_tool_of_the_same_name(self) -> None:
         stt, tts = FakeSTT(), FakeTTS()

@@ -4,10 +4,10 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
-from typing import TypedDict
+from typing import Self, TypedDict
 
 import httpx
-from typing_extensions import Self, Unpack
+from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig
 

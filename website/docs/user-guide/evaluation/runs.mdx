@@ -75,7 +75,7 @@ from ag2.config import GeminiConfig
 weather_agent = Agent(
     "weather",
     prompt="You are a weather assistant. Use get_weather.",
-    config=GeminiConfig(model="gemini-3-flash-preview"),
+    config=GeminiConfig(model="gemini-3.6-flash"),
     tools=[get_weather],
 )
 ```

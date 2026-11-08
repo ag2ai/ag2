@@ -12,7 +12,7 @@ Unlike compaction (which removes), aggregation creates.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
 from fast_depends.pydantic import PydanticSerializer
@@ -84,7 +84,7 @@ class ConversationSummaryAggregate:
         if not events:
             return
         summary = await self._summarize(events, context)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         stream_id = str(context.stream.id)
         await store.write(f"{CONVERSATIONS_PREFIX}{ts}_{stream_id}.md", summary)
 

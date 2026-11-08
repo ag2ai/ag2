@@ -55,7 +55,7 @@ def anthropic_config() -> AnthropicConfig:
 @pytest.fixture()
 def gemini_config() -> GeminiConfig:
     return GeminiConfig(
-        model="gemini-3.1-flash-lite",
+        model="gemini-3.5-flash-lite",
         api_key=_require_gemini_key(),
         temperature=0,
     )
@@ -125,7 +125,7 @@ def streaming_config(request):
             streaming=True,
         )
     return GeminiConfig(
-        model="gemini-3.1-flash-lite",
+        model="gemini-3.5-flash-lite",
         api_key=_require_gemini_key(),
         temperature=0,
         streaming=True,

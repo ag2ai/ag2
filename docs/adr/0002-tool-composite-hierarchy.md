@@ -3,7 +3,7 @@ status: accepted
 date: 2026-06-16
 ---
 
-# Tools are one `Tool` abstraction with three seams; `Toolkit` is itself a `Tool`
+# Tools are one `Tool` abstraction with two seams; `Toolkit` is itself a `Tool`
 
 ## Context
 
@@ -30,19 +30,17 @@ agent has to special-case. The legacy `ag2/tools/Toolkit` does exactly that
 ## Decision
 
 There is **one** abstraction: `Tool` (ABC, `ag2/tools/tool.py`), with
-exactly three seams that every kind implements:
+two seams:
 
 - **`schemas(context) -> Iterable[ToolSchema]`** — what capability(ies) this
   contributes to the model request. Function-shaped tools emit
   `FunctionToolSchema`; provider-native tools emit their own `*ToolSchema`
   (a provider-neutral capability flag the mappers translate).
-- **`set_provider(provider)`** — bind the `fast_depends` DI provider. Only the
-  function family needs it; the base and the builtins no-op.
 - **`register(stack, context, *, middleware)`** — subscribe this tool's
   execution behaviour onto the event stream for the duration of a run.
 
 `Toolkit(Tool)` is the **composite**: it holds `dict[str, Tool]` and implements
-all three seams by fanning out to its children. Because a toolkit *is a* `Tool`,
+both seams by fanning out to its children. Because a toolkit *is a* `Tool`,
 the agent treats a single tool and a toolkit identically, and toolkits nest
 (`MCPToolkit(Toolkit)`, `SkillsToolkit(Toolkit)`, …). `ToolExecutor.register`
 just calls `tool.register(...)` over a flat `Iterable[Tool]`, plus a fallback
@@ -83,15 +81,14 @@ just calls `tool.register(...)` over a flat `Iterable[Tool]`, plus a fallback
   recent resolved configuration is retained, with its mutable values copied so
   an in-place edit cannot silently change the cache's comparison value.
 
-- **`set_provider` is a no-op on most tools.** Only `FunctionTool` (and via the
-  composite, `Toolkit`) needs the DI provider, because only locally-executed
-  Python callables resolve `Context` / `Inject` / `Variable` dependencies.
-  Client, builtin, and MCP-proxy tools ignore it. The base `Tool.set_provider`
-  being a no-op rather than abstract is what keeps those subclasses free of
-  boilerplate.
+- **Dependency injection uses the live context.** As decided in
+  [ADR 0007](0007-tool-dependency-provider-from-context.md), `set_provider` is
+  removed. Locally executed callables resolve `Context`, `Inject`, and
+  `Variable` through the context supplied at execution time; tools do not hold
+  a second provider binding. This supersedes the original third seam.
 
 To add a new kind of tool: subclass `Tool`, implement `schemas()` (always), and
 implement `register()` to express how it runs (locally, client-side, provider-
-side no-op, or remote-forward). Implement `set_provider()` only if it executes
-local Python. To group tools, build on `Toolkit` and override `schemas()` if
+side no-op, or remote-forward). Resolve dependencies from the execution
+context. To group tools, build on `Toolkit` and override `schemas()` if
 discovery is lazy — never special-case it in the agent or `ToolExecutor`.

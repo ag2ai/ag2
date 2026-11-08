@@ -3,11 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import Any, Self
 
 import pytest
 from fast_depends.library.serializer import SerializerProto
-from typing_extensions import Self
 
 from ag2 import Agent, Context, Toolkit, tool
 from ag2.config import LLMClient, ModelConfig, ModelProvider

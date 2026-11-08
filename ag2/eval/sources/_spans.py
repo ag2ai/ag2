@@ -106,6 +106,7 @@ logger = logging.getLogger(__name__)
 _ATTR_USAGE_INPUT = "gen_ai.usage.input_tokens"
 _ATTR_USAGE_OUTPUT = "gen_ai.usage.output_tokens"
 _ATTR_USAGE_CACHE_CREATE = "gen_ai.usage.cache_creation_input_tokens"
+_ATTR_USAGE_CACHE_CREATE_EXTENDED = "gen_ai.usage.cache_creation_extended_input_tokens"
 _ATTR_USAGE_CACHE_READ = "gen_ai.usage.cache_read_input_tokens"
 _ATTR_USAGE_THINKING = "gen_ai.usage.thinking_tokens"
 _ATTR_OUTPUT_MESSAGES = "gen_ai.output.messages"
@@ -474,6 +475,15 @@ def spans_to_trace(
     # reads as a no-op — double-counted every instrumented sub-agent. It is a
     # no-op for a trace with no rollups, which is every foreign dialect.
     events = _drop_duplicated_rollups(events, _nested_agent_spend(ordered))
+    seen_usage: set[str] = set()
+    unique: list[BaseEvent] = []
+    for event in events:
+        if isinstance(event, UsageEvent):
+            if event.event_id in seen_usage:
+                continue
+            seen_usage.add(event.event_id)
+        unique.append(event)
+    events = unique
 
     if ordered and not events:
         logger.warning(
@@ -494,6 +504,7 @@ def _llm_span_to_response(span: SpanData) -> ModelResponse:
         prompt_tokens=a.get(_ATTR_USAGE_INPUT),
         completion_tokens=a.get(_ATTR_USAGE_OUTPUT),
         cache_creation_input_tokens=a.get(_ATTR_USAGE_CACHE_CREATE),
+        cache_creation_extended_input_tokens=a.get(_ATTR_USAGE_CACHE_CREATE_EXTENDED),
         cache_read_input_tokens=a.get(_ATTR_USAGE_CACHE_READ),
         thinking_tokens=a.get(_ATTR_USAGE_THINKING),
     )
@@ -518,11 +529,13 @@ def _usage_span_to_event(span: SpanData) -> UsageEvent:
         completion_tokens=a.get(_ATTR_USAGE_OUTPUT),
         total_tokens=a.get(ATTR_USAGE_TOTAL),
         cache_creation_input_tokens=a.get(_ATTR_USAGE_CACHE_CREATE),
+        cache_creation_extended_input_tokens=a.get(_ATTR_USAGE_CACHE_CREATE_EXTENDED),
         cache_read_input_tokens=a.get(_ATTR_USAGE_CACHE_READ),
         thinking_tokens=a.get(_ATTR_USAGE_THINKING),
     )
     return UsageEvent(
         usage,
+        event_id=a.get("ag2.usage.event_id") or span.span_id,
         kind=a.get(ATTR_USAGE_KIND, "model_call"),
         # ``None``, not ``""`` — the live event documents ``None`` for anything
         # that is not a sub-task rollup, and callers test it with ``is None``.

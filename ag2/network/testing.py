@@ -31,6 +31,6 @@ class RacingKnowledgeStore(MemoryKnowledgeStore):
             if self._readers >= 2:
                 self._second_reader.set()
             else:
-                with contextlib.suppress(asyncio.TimeoutError):
+                with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(self._second_reader.wait(), self._overlap_wait)
         return content

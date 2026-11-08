@@ -16,12 +16,12 @@ from typing import Any
 import pytest
 from ag_ui.core import RunErrorEvent, RunFinishedEvent, TokenUsage, UserMessage
 
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.ag_ui import AGUIStream
 from ag2.aggregate import AggregateTrigger, ConversationSummaryAggregate
 from ag2.compact import CompactTrigger, SummarizeCompact
 from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent, Usage
-from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 from ag2.testing import TestConfig
 from ag2.tools import tool
 from test._helpers import lookup
@@ -740,13 +740,15 @@ class TestInternalMaintenanceSpend:
                 ),
             ),
             tools=[lookup],
-            knowledge=KnowledgeConfig(
-                store=MemoryKnowledgeStore(),
-                compact=SummarizeCompact(target=6, config=summarizer),
-                compact_trigger=CompactTrigger(max_events=2),
-                expose_tool=False,
-                write_event_log=False,
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=MemoryKnowledgeStore(),
+                    compact=SummarizeCompact(target=6, config=summarizer),
+                    compact_trigger=CompactTrigger(max_events=2),
+                    expose_tool=False,
+                    write_event_log=False,
+                )
+            ],
         )
 
         assert (await _finished(agent)).usage == [
@@ -776,13 +778,15 @@ class TestInternalMaintenanceSpend:
                     provider="stub",
                 ),
             ),
-            knowledge=KnowledgeConfig(
-                store=MemoryKnowledgeStore(),
-                aggregate=ConversationSummaryAggregate(config=aggregator),
-                aggregate_trigger=AggregateTrigger(on_end=True),
-                expose_tool=False,
-                write_event_log=False,
-            ),
+            plugins=[
+                KnowledgePlugin(
+                    store=MemoryKnowledgeStore(),
+                    aggregate=ConversationSummaryAggregate(config=aggregator),
+                    aggregate_trigger=AggregateTrigger(on_end=True),
+                    expose_tool=False,
+                    write_event_log=False,
+                )
+            ],
         )
 
         assert (await _finished(agent)).usage == [

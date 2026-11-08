@@ -16,7 +16,7 @@ starlette is absent.
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -59,7 +59,7 @@ class Clock:
     """
 
     def __init__(self, start: datetime | None = None) -> None:
-        self._now = start or datetime(2026, 1, 1, tzinfo=timezone.utc)
+        self._now = start or datetime(2026, 1, 1, tzinfo=UTC)
 
     def __call__(self) -> datetime:
         return self._now

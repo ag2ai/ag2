@@ -56,7 +56,7 @@ The per-task `trace_ref` is the real OpenTelemetry trace id of that task's spans
 
     Token accounting now reads `UsageEvent`, the framework's accounting record, instead of summing `ModelResponse`. Work that spends tokens without producing a model response was previously invisible and is now counted:
 
-    - **Delegated sub-tasks.** A worker's spend reaches the parent as a `"subtask"` rollup. For a delegating agent this is often most of the bill.
+    - **Delegated sub-tasks.** A worker's source `UsageEvent` records reach its ancestors as they arrive; older histories may contain `"subtask"` rollups instead. See [Account for Descendant Usage](/docs/user-guide/advanced/stream#account-for-descendant-usage). For a delegating agent this is often most of the bill.
     - **History compaction** and **memory aggregation** — real, billable maintenance calls.
     - **Live sessions**, whose realtime usage maps straight to the accounting record.
 

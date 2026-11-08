@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
@@ -19,26 +19,20 @@ from a2a.server.tasks import (
     TaskUpdater,
 )
 from a2a.types import Part, Task, TaskState, TaskStatus
-from typing_extensions import Self
 
-from ag2 import Agent, Context
+from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer, build_card
 from ag2.a2a.testing import (
+    ToolRoundsConfig,
     make_test_client_factory,
     make_test_rest_client_factory,
     pick_free_port,
 )
-from ag2.config.client import LLMClient
-from ag2.config.config import ModelConfig
 from ag2.events import (
     BaseEvent,
-    ModelMessage,
-    ModelResponse,
-    ToolCallEvent,
-    ToolCallsEvent,
-    ToolResultEvent,
+    ModelMessageChunk,
 )
-from ag2.testing import TestConfig, TrackingConfig
+from ag2.testing import TestConfig, TrackingConfig, Turn
 
 
 def a2a_config(agent: Agent) -> A2AConfig:
@@ -69,14 +63,6 @@ class ExecutorPair:
 
 
 @dataclass(slots=True)
-class RecordingPair:
-    server: A2AServer
-    server_agent: Agent
-    client: Agent
-    recording: "RecordingConfig"
-
-
-@dataclass(slots=True)
 class GrpcPair:
     server: A2AServer
     server_agent: Agent
@@ -84,68 +70,6 @@ class GrpcPair:
     tracking: TrackingConfig
     grpc_url: str
     grpc_server: grpc.aio.Server
-
-
-# Stateless mock: A2A executor recreates the LLM client on every turn (per
-# its stateless-flavor design), so an iter-based TestConfig would replay
-# the first event forever. This mock decides what to return based on the
-# message history instead.
-class StatelessScript(ModelConfig):
-    def __init__(
-        self,
-        initial: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
-        after_tool: ModelResponse | str | None = None,
-    ) -> None:
-        self.initial = initial
-        self.after_tool = after_tool
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "StatelessScriptClient":
-        return StatelessScriptClient(self.initial, self.after_tool)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class StatelessScriptClient(LLMClient):
-    def __init__(
-        self,
-        initial: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
-        after_tool: ModelResponse | str | None,
-    ) -> None:
-        self._initial = initial
-        self._after_tool = after_tool
-
-    async def __call__(
-        self,
-        messages: Sequence[BaseEvent],
-        context: Context,
-        **kwargs: Any,
-    ) -> ModelResponse:
-        last_meaningful = next(
-            (m for m in reversed(messages) if isinstance(m, ToolResultEvent)),
-            None,
-        )
-        chosen = self._after_tool if last_meaningful is not None else self._initial
-        if chosen is None:
-            chosen = ""
-        return await _materialize(chosen, context)
-
-
-async def _materialize(value: Any, context: Context) -> ModelResponse:
-    if isinstance(value, ModelResponse):
-        return value
-    if isinstance(value, str):
-        message = ModelMessage(value)
-        await context.send(message)
-        return ModelResponse(message=message)
-    if isinstance(value, ToolCallEvent):
-        return ModelResponse(tool_calls=ToolCallsEvent([value]))
-    if isinstance(value, Iterable):
-        return ModelResponse(tool_calls=ToolCallsEvent(list(value)))
-    raise TypeError(f"Cannot materialize response of type {type(value).__name__}")
 
 
 class PromptThenAckExecutor(A2AAgentExecutorBase):
@@ -224,9 +148,14 @@ class GatedExecutor(A2AAgentExecutorBase):
         raise NotImplementedError
 
 
+def _tool_rounds(initial: Turn, after_tool: "Turn | None") -> ToolRoundsConfig:
+    """The server answers with ``initial``, then with ``after_tool`` once the tool results come back."""
+    return ToolRoundsConfig(initial, after_tool if after_tool is not None else "")
+
+
 def make_pair(
-    initial: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
-    after_tool: ModelResponse | str | None = None,
+    initial: Turn,
+    after_tool: "Turn | None" = None,
     *,
     server_tools: Iterable[Callable[..., object]] = (),
     client_tools: Iterable[Callable[..., object]] = (),
@@ -235,7 +164,7 @@ def make_pair(
     task_store: TaskStore | None = None,
     push_config_store: PushNotificationConfigStore | None = None,
 ) -> A2APair:
-    tracking = TrackingConfig(StatelessScript(initial, after_tool))
+    tracking = TrackingConfig(_tool_rounds(initial, after_tool))
     server_agent = Agent("server-agent", config=tracking)
     for tool in server_tools:
         server_agent.tool(tool)
@@ -293,68 +222,14 @@ def make_executor_pair(
     return ExecutorPair(server=server, executor=executor, client=client)
 
 
-# Captures the full ``messages`` list per LLM call. ``TrackingConfig`` only
-# records ``messages[-1]``, which is enough for last-input assertions but not
-# for verifying that the full prior-turn history was passed across the wire
-# on a follow-up turn.
-class RecordingConfig(ModelConfig):
-    def __init__(self, response: str) -> None:
-        self.response = response
-        self.calls: list[list[BaseEvent]] = []
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "RecordingClient":
-        return RecordingClient(self.response, self.calls)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class RecordingClient(LLMClient):
-    def __init__(self, response: str, calls: list[list[BaseEvent]]) -> None:
-        self._response = response
-        self._calls = calls
-
-    async def __call__(
-        self,
-        messages: Sequence[BaseEvent],
-        context: Context,
-        **kwargs: Any,
-    ) -> ModelResponse:
-        self._calls.append(list(messages))
-        msg = ModelMessage(self._response)
-        await context.send(msg)
-        return ModelResponse(message=msg)
-
-
-def make_recording_pair(
-    response: str,
-    *,
-    server_url: str = "http://test",
-    streaming: bool = False,
-) -> RecordingPair:
-    recording = RecordingConfig(response=response)
-    server_agent = Agent("server-agent", config=recording)
-    server = A2AServer(server_agent)
-    factory = make_test_client_factory(server, url=server_url)
-
-    client = Agent(
-        "client-agent",
-        config=A2AConfig(card_url=server_url, httpx_client_factory=factory, streaming=streaming),
-    )
-    return RecordingPair(server=server, server_agent=server_agent, client=client, recording=recording)
-
-
 def make_rest_pair(
-    initial: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
-    after_tool: ModelResponse | str | None = None,
+    initial: Turn,
+    after_tool: "Turn | None" = None,
     *,
     server_url: str = "http://test",
     streaming: bool = False,
 ) -> A2APair:
-    tracking = TrackingConfig(StatelessScript(initial, after_tool))
+    tracking = TrackingConfig(_tool_rounds(initial, after_tool))
     server_agent = Agent("server-agent", config=tracking)
     server = A2AServer(server_agent)
     factory = make_test_rest_client_factory(server, url=server_url)
@@ -372,13 +247,13 @@ def make_rest_pair(
 
 
 async def start_grpc_pair(
-    initial: ModelResponse | ToolCallEvent | Iterable[ToolCallEvent] | str,
-    after_tool: ModelResponse | str | None = None,
+    initial: Turn,
+    after_tool: "Turn | None" = None,
     *,
     host: str = "127.0.0.1",
     streaming: bool = False,
 ) -> GrpcPair:
-    tracking = TrackingConfig(StatelessScript(initial, after_tool))
+    tracking = TrackingConfig(_tool_rounds(initial, after_tool))
     server_agent = Agent("server-agent", config=tracking)
     server = A2AServer(server_agent)
 
@@ -404,3 +279,75 @@ async def start_grpc_pair(
         grpc_url=grpc_url,
         grpc_server=grpc_server,
     )
+
+
+_Script = Callable[[TaskUpdater, asyncio.Event], Awaitable[None]]
+
+
+class ScriptedExecutor(A2AAgentExecutorBase):
+    """Runs a fresh task through ``script``; ``release`` is opened by the test, never by a timer."""
+
+    def __init__(self, script: _Script) -> None:
+        self._script = script
+        self.release = asyncio.Event()
+
+    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        msg = request_context.message
+        assert msg is not None
+        task_id = msg.task_id or uuid4().hex
+        context_id = msg.context_id or uuid4().hex
+        await event_queue.enqueue_event(
+            Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
+        )
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        await updater.start_work()
+        await self._script(updater, self.release)
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        return None
+
+
+class EventCollector:
+    """Subscriber that records the events it is given; ``on_event`` is handed to ``stream.subscribe``."""
+
+    def __init__(self) -> None:
+        self.events: list[BaseEvent] = []
+
+    async def on_event(self, event: BaseEvent) -> None:
+        self.events.append(event)
+
+    @property
+    def chunks(self) -> list[str]:
+        return [e.content for e in self.events if isinstance(e, ModelMessageChunk)]
+
+
+_Turn = Callable[[TaskUpdater], Awaitable[None]]
+
+
+async def _complete_with_ok(updater: TaskUpdater) -> None:
+    await updater.complete(message=updater.new_agent_message([Part(text="ok")]))
+
+
+class ToolRoundTripExecutor(A2AAgentExecutorBase):
+    """Runs ``first_turn`` for a new task and ``continuation`` once the client answers its request for input."""
+
+    def __init__(self, first_turn: _Turn, continuation: _Turn = _complete_with_ok) -> None:
+        self._first_turn = first_turn
+        self._continuation = continuation
+
+    async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        msg = request_context.message
+        assert msg is not None
+        resumed = request_context.current_task is not None
+        task_id = msg.task_id or uuid4().hex
+        context_id = msg.context_id or uuid4().hex
+        if not resumed:
+            await event_queue.enqueue_event(
+                Task(id=task_id, context_id=context_id, status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED)),
+            )
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        await updater.start_work()
+        await (self._continuation if resumed else self._first_turn)(updater)
+
+    async def cancel(self, request_context: RequestContext, event_queue: EventQueue) -> None:
+        return None

@@ -59,7 +59,7 @@ from ag2.network import EV_TEXT
 # Wait for the next text reply from a specific peer.
 reply = await human.next_envelope(
     predicate=lambda e: e.event_type == EV_TEXT and e.sender_id == peer_id,
-    timeout=60.0,   # raises asyncio.TimeoutError if exceeded
+    timeout=60.0,   # raises TimeoutError if exceeded
 )
 
 # Or stream everything until disconnect.
@@ -185,7 +185,7 @@ while True:
             timeout=60.0,
         )
         print(f"expert> {reply.event_data['text']}")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print("expert> (no reply within 60s)")
 
 await channel.close(reason="operator_done")
