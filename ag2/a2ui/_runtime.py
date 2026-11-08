@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 from ag2.middleware.base import MiddlewareFactory
 
-from ._types import A2UIVersion, JsonSchema
+from ._types import A2UIVersion, A2UIWireVersion, JsonSchema
 from .actions import A2UIEventAction
 from .capabilities import A2UIClientCapabilities, capabilities_to_prompt
 from .middleware import A2UIExtractionMiddleware, A2UIValidationMiddleware
@@ -94,7 +94,7 @@ class _A2UIRuntime:
         return self.schema_manager.catalog_id
 
     @property
-    def version_string(self) -> A2UIVersion:
+    def version_string(self) -> A2UIWireVersion:
         """The wire ``version`` string stamped on messages (e.g. ``"v0.9.1"``)."""
         return self.schema_manager.version_string
 

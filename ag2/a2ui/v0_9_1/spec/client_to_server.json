@@ -1,15 +1,12 @@
 {
-  "title": "A2UI (Agent to UI) Client-to-Server Event Schema",
+  "title": "A2UI Client-to-Server Event Schema",
   "description": "Describes a JSON payload for a client-to-server event message.",
   "type": "object",
   "minProperties": 2,
   "maxProperties": 2,
   "properties": {
     "version": {
-      "enum": [
-        "v0.9",
-        "v0.9.1"
-      ]
+      "enum": ["v0.9", "v0.9.1"]
     },
     "action": {
       "type": "object",
@@ -38,13 +35,7 @@
           "additionalProperties": true
         }
       },
-      "required": [
-        "name",
-        "surfaceId",
-        "sourceComponentId",
-        "timestamp",
-        "context"
-      ]
+      "required": ["name", "surfaceId", "sourceComponentId", "timestamp", "context"]
     },
     "error": {
       "description": "Reports a client-side error.",
@@ -69,12 +60,7 @@
               "description": "A short one or two sentence description of why validation failed."
             }
           },
-          "required": [
-            "code",
-            "path",
-            "message",
-            "surfaceId"
-          ],
+          "required": ["code", "path", "message", "surfaceId"],
           "additionalProperties": false
         },
         {
@@ -95,11 +81,7 @@
               "description": "The id of the surface where the error occurred."
             }
           },
-          "required": [
-            "code",
-            "surfaceId",
-            "message"
-          ],
+          "required": ["code", "surfaceId", "message"],
           "additionalProperties": true
         }
       ]
@@ -107,16 +89,10 @@
   },
   "oneOf": [
     {
-      "required": [
-        "action",
-        "version"
-      ]
+      "required": ["action", "version"]
     },
     {
-      "required": [
-        "error",
-        "version"
-      ]
+      "required": ["error", "version"]
     }
   ]
 }
