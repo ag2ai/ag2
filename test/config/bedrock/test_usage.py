@@ -2,13 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for Converse usage normalization (inputTokens → prompt_tokens, cache keys)."""
+"""Tests for Converse usage normalization.
+
+``prompt_tokens`` is the whole input: ``inputTokens`` plus both cache counts (ADR 0036).
+"""
 
 from ag2.config.bedrock.mappers import normalize_usage
 from ag2.events import Usage
 
 
-def test_full_usage_with_cache_tokens() -> None:
+def test_a_total_that_leaves_out_the_cache_is_recomputed() -> None:
+    """The cache counts join the input, so a reported total below input plus output is not believed."""
     usage = normalize_usage({
         "inputTokens": 100,
         "outputTokens": 25,
@@ -18,11 +22,27 @@ def test_full_usage_with_cache_tokens() -> None:
     })
 
     assert usage == Usage(
-        prompt_tokens=100,
+        prompt_tokens=150,
         completion_tokens=25,
-        total_tokens=125,
+        total_tokens=175,
         cache_read_input_tokens=40,
         cache_creation_input_tokens=10,
+    )
+
+
+def test_a_total_that_already_counts_the_cache_is_kept() -> None:
+    usage = normalize_usage({
+        "inputTokens": 4,
+        "outputTokens": 236,
+        "totalTokens": 1468,
+        "cacheWriteInputTokens": 1228,
+    })
+
+    assert usage == Usage(
+        prompt_tokens=1232,
+        completion_tokens=236,
+        total_tokens=1468,
+        cache_creation_input_tokens=1228,
     )
 
 

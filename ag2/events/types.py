@@ -24,13 +24,22 @@ def _add_tokens(a: float | None, b: float | None) -> float | None:
 
 @dataclass(frozen=True, slots=True)
 class Usage:
-    """Token usage normalized across LLM providers."""
+    """Token usage normalized across LLM providers.
+
+    Every provider mapper fills the fields with the same meaning (ADR 0036), so a
+    consumer never needs to know which provider reported them.
+    """
 
     prompt_tokens: float | None = None
+    """The whole input the model read, including tokens read from or written to
+    the cache. The uncached input is ``prompt_tokens`` minus both cache counts."""
     completion_tokens: float | None = None
+    """The whole output, including ``thinking_tokens``."""
     total_tokens: float | None = None
     cache_read_input_tokens: float | None = None
+    """The part of ``prompt_tokens`` read from the provider's prompt cache."""
     cache_creation_input_tokens: float | None = None
+    """The part of ``prompt_tokens`` written to the provider's prompt cache."""
     cache_creation_extended_input_tokens: float | None = None
     """The part of ``cache_creation_input_tokens`` written with the provider's
     extended cache retention: OpenAI's 12-hour TTL, Anthropic's 1-hour TTL.
