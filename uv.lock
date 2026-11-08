@@ -190,6 +190,7 @@ dev = [
     { name = "transformers" },
     { name = "typer" },
     { name = "types-aiobotocore", extra = ["bedrock-runtime"] },
+    { name = "types-jsonschema" },
     { name = "types-pyyaml" },
     { name = "watchdog" },
     { name = "websockets" },
@@ -270,7 +271,7 @@ test-core = [
     { name = "pytest-timeout" },
 ]
 types = [
-    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "perplexity", "typesafe", "xai", "zai"] },
+    { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "typesafe", "xai", "zai"] },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "freezegun" },
@@ -284,6 +285,7 @@ types = [
     { name = "python-dotenv" },
     { name = "respx" },
     { name = "types-aiobotocore", extra = ["bedrock-runtime"] },
+    { name = "types-jsonschema" },
     { name = "types-pyyaml" },
 ]
 
@@ -344,6 +346,7 @@ dev = [
     { name = "ag2", extras = ["openai"] },
     { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
     { name = "ag2", extras = ["redis"] },
+    { name = "ag2", extras = ["redis", "metrics"] },
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
@@ -386,6 +389,7 @@ dev = [
     { name = "transformers", specifier = ">=4.57,<6" },
     { name = "typer", specifier = ">=0.22,<0.28" },
     { name = "types-aiobotocore", extras = ["bedrock-runtime"] },
+    { name = "types-jsonschema" },
     { name = "types-pyyaml" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
@@ -503,6 +507,7 @@ types = [
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
     { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
+    { name = "ag2", extras = ["redis", "metrics"] },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "freezegun", specifier = ">=1.5,<2" },
@@ -516,6 +521,7 @@ types = [
     { name = "python-dotenv" },
     { name = "respx", specifier = ">=0.23.0,<0.24.0" },
     { name = "types-aiobotocore", extras = ["bedrock-runtime"] },
+    { name = "types-jsonschema" },
     { name = "types-pyyaml" },
 ]
 
@@ -6037,6 +6043,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a5/03/2ed9d60830bf34d4cfd838377e8711640174d98f0d860de098f5e6983426/types_aiobotocore_bedrock_runtime-3.10.0.tar.gz", hash = "sha256:fd27ce48ebfeb02afce10e4b225b2300dac0860e93b1d1dcef658b47c70fbc74", size = 31813, upload-time = "2026-10-24T03:45:13.516Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1d/06/ea481d28e397c64009457bc7c59e954f06cfed68e063e6b72565fe1ef31e/types_aiobotocore_bedrock_runtime-3.10.0-py3-none-any.whl", hash = "sha256:56ba8c3529c8e70a791c21a995a0d9098943f2cef405788f32bd645636b53046", size = 38499, upload-time = "2026-10-24T03:45:10.729Z" },
+]
+
+[[package]]
+name = "types-jsonschema"
+version = "4.26.0.20261006"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "referencing" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/29/d2/1f742605f5a6d39f993134885b8de41c98af606871d3ebddaf3e776bd1eb/types_jsonschema-4.26.0.20261006.tar.gz", hash = "sha256:3eb7db61b6819d40addfdaac7173e749071a7d4a9a4394f0c844598ec84b2500", size = 16843, upload-time = "2026-10-06T08:16:07.318Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/a0/4f2e3c0dc3d5cad958006f2e0307065cc8fe4fbf0393ff0b69d55ee9bbe5/types_jsonschema-4.26.0.20261006-py3-none-any.whl", hash = "sha256:29301f4e65e3928540cdf5e23ad716e38bb0c0b416a48dada213edd3d70206ec", size = 16113, upload-time = "2026-10-06T08:16:06.355Z" },
 ]
 
 [[package]]
