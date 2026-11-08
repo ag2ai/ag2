@@ -34,7 +34,14 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
-      - uses: j178/prek-action@44924fe9ef4a6f88253c4b6b1bf11c689d3ce53d # v3.1.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/prek
+          key: prek-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      # prek from PyPI rather than GitHub Releases, whose downloads time out with 504s.
+      # Keep the version in step with the `dev` dependency group.
+      - name: Run prek
+        run: uvx prek@0.5.4 run --show-diff-on-failure --color=always --all-files
 
   type-check:
     permissions:
