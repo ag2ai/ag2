@@ -61,7 +61,7 @@ The adapter speaks a minimal, dependency-free JSON body (no `#!python ag-ui` / `
 | `#!python variables` | Context variables merged into the turn (e.g. locale, user id). |
 | `#!python a2ui` | Client→server envelopes — button clicks (`#!python action`), v1.0 `#!python callAgentFunction` / `#!python rendererFunctionResponse`, and client errors — answered on the server or rewritten into corrective prompts for the turn. See [Actions](/docs/user-guide/a2ui/actions). |
 | `#!python a2uiRendererDataModel` | Optional (`#!python a2uiClientDataModel` before v1.0): `#!python {"version": ..., "surfaces": {"<surfaceId>": {...}}}`, the current data model of surfaces created with `#!python sendDataModel: true`. Folded into the prompt as untrusted, user-editable state — not instructions. |
-| `#!python a2uiClientCapabilities` | Optional catalog negotiation, nested under the protocol version (`#!python a2uiRendererCapabilities` for v1.0). Folded into the prompt so the LLM only targets components the client can render. |
+| `#!python a2uiRendererCapabilities` | Optional (`#!python a2uiClientCapabilities` before v1.0): catalog negotiation, nested under `#!python "1.0"` (`#!python "v0.9"` for v0.9 and v0.9.1). Folded into the prompt so the LLM only targets components the client can render. |
 
 An envelope in `#!python a2ui` that does not match the spec is skipped with a logged warning rather than guessed at: a `#!python callAgentFunction` without a string `#!python surfaceId`, or a `#!python rendererFunctionResponse` without a `#!python functionCallId` or without exactly one of `#!python value` / `#!python error`.
 

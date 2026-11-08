@@ -12,7 +12,7 @@ from ag2.config.gemini.events import (
     GeminiServerToolCallEvent,
     GeminiServerToolResultEvent,
 )
-from ag2.config.gemini.mappers import convert_messages
+from ag2.config.gemini.mappers import SKIP_THOUGHT_SIGNATURE, convert_messages
 from ag2.events import (
     AudioInput,
     BaseEvent,
@@ -51,7 +51,12 @@ class TestConvertMessagesEmptyArguments:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "model",
-            "parts": [{"function_call": {"id": "tc_1", "name": "list_items", "args": {}}}],
+            "parts": [
+                {
+                    "function_call": {"id": "tc_1", "name": "list_items", "args": {}},
+                    "thought_signature": SKIP_THOUGHT_SIGNATURE,
+                }
+            ],
         }
 
     def test_valid_arguments_are_preserved(self) -> None:
@@ -59,7 +64,12 @@ class TestConvertMessagesEmptyArguments:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "model",
-            "parts": [{"function_call": {"id": "tc_1", "name": "list_items", "args": {"category": "books"}}}],
+            "parts": [
+                {
+                    "function_call": {"id": "tc_1", "name": "list_items", "args": {"category": "books"}},
+                    "thought_signature": SKIP_THOUGHT_SIGNATURE,
+                }
+            ],
         }
 
 

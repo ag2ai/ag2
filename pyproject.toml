@@ -86,7 +86,7 @@ acp = [
 ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
-openai = ["openai>=3.37.0,<4"]
+openai = ["openai>=3.45.0,<4"]
 anthropic = ["anthropic>=1.15.0,<3"]
 gemini = [
     # Version bounds: local types in gemini_types.py are tested for subset compatibility
@@ -100,7 +100,7 @@ gemini = [
 # === Voice / TTS providers (ag2.live) ===
 elevenlabs = ["elevenlabs>=2.73.0,<3"]
 
-xai = ["xai-sdk>=1.12.2,<2"]
+xai = ["xai-sdk>=1.21.0,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
 mistral = ["mistralai>=3.6.0,<4"]
 ollama = ["ollama>=0.5.2,<1"]

@@ -73,12 +73,12 @@ def parse_request(
         resolve_function: Looks up the name of an issued ``callRendererFunction`` by
             its ``functionCallId`` using caller-scoped state, so
             a ``rendererFunctionResponse`` prompt can name the function.
-        version_key: The protocol version under which to read
-            ``a2uiClientCapabilities`` (the client nests it under its version,
-            e.g. ``"v1.0"``, whose key is ``a2uiRendererCapabilities``). Defaults to ``"v0.9"``; callers serving a non-v0.9
-            agent should pass ``agent.schema_manager.version_string`` (the ASGI
-            adapter does), else a newer client's capabilities are silently
-            dropped.
+        version_key: The protocol version whose capabilities and data model to
+            read: ``a2uiClientCapabilities["v0.9"]`` for v0.9 and v0.9.1,
+            ``a2uiRendererCapabilities["1.0"]`` for v1.0. Defaults to ``"v0.9"``;
+            callers serving a non-v0.9 agent should pass
+            ``agent.schema_manager.protocol_version`` (the ASGI adapter does),
+            else a newer client's capabilities are silently dropped.
 
     Returns:
         The parsed turn. When neither ``messages`` nor ``a2ui`` yields any

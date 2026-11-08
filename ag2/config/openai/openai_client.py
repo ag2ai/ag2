@@ -226,9 +226,10 @@ class OpenAIClient(LLMClient):
                     await context.send(ModelMessageChunk(c))
 
                 for tc in delta.tool_calls or []:
-                    # OpenAI-compatible endpoints may leave out `index` (each such call is a whole call of its own)
-                    # or send every parallel call with index 0 and a distinct id: a new id opens a new entry.
+                    # Indexless fragments continue the latest call unless they carry a new id.
                     slot = slots.get(tc.index) if isinstance(tc.index, int) else None
+                    if tc.index is None and not tc.id and full_tool_calls:
+                        slot = len(full_tool_calls) - 1
                     if slot is None or (tc.id and full_tool_calls[slot]["id"] and tc.id != full_tool_calls[slot]["id"]):
                         slot = len(full_tool_calls)
                         if isinstance(tc.index, int):

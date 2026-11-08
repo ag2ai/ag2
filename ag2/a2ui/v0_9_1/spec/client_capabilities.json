@@ -11,27 +11,19 @@
       "properties": {
         "supportedCatalogIds": {
           "type": "array",
-          "description": "The URI of each of the component and function catalogs that is supported by the client.",
-          "items": {
-            "type": "string"
-          }
+          "description": "An array of string identifiers for each of the component and function catalogs supported by the client.",
+          "items": {"type": "string"}
         },
         "inlineCatalogs": {
           "type": "array",
           "description": "An array of inline catalog definitions, which can contain both components and functions. This should only be provided if the agent declares 'acceptsInlineCatalogs: true' in its capabilities.",
-          "items": {
-            "$ref": "#/$defs/Catalog"
-          }
+          "items": {"$ref": "#/$defs/Catalog"}
         }
       },
-      "required": [
-        "supportedCatalogIds"
-      ]
+      "required": ["supportedCatalogIds"]
     }
   },
-  "required": [
-    "v0.9"
-  ],
+  "required": ["v0.9"],
   "$defs": {
     "FunctionDefinition": {
       "type": "object",
@@ -52,23 +44,11 @@
         },
         "returnType": {
           "type": "string",
-          "enum": [
-            "string",
-            "number",
-            "boolean",
-            "array",
-            "object",
-            "any",
-            "void"
-          ],
+          "enum": ["string", "number", "boolean", "array", "object", "any", "void"],
           "description": "The type of value this function returns."
         }
       },
-      "required": [
-        "name",
-        "parameters",
-        "returnType"
-      ],
+      "required": ["name", "parameters", "returnType"],
       "additionalProperties": false
     },
     "Catalog": {
@@ -102,9 +82,7 @@
           }
         }
       },
-      "required": [
-        "catalogId"
-      ],
+      "required": ["catalogId"],
       "additionalProperties": false
     }
   }
