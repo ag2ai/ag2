@@ -226,6 +226,7 @@ class OpenAIClient(LLMClient):
                     await context.send(ModelMessageChunk(c))
 
                 for tc in delta.tool_calls or []:
+                    # A new id under an occupied index starts a separate call.
                     # Indexless fragments continue the latest call unless they carry a new id.
                     slot = slots.get(tc.index) if isinstance(tc.index, int) else None
                     if tc.index is None and not tc.id and full_tool_calls:

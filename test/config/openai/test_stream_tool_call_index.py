@@ -182,3 +182,17 @@ async def test_agent_runs_parallel_tools_streamed_without_index() -> None:
         IsPartialDict({"tool_call_id": "call_a", "content": "Sunny in Paris"}),
         IsPartialDict({"tool_call_id": "call_b", "content": "12:00 UTC"}),
     ]
+
+
+@pytest.mark.asyncio
+async def test_whole_tool_calls_that_all_use_index_zero_stay_separate() -> None:
+    result = await _complete([
+        _tool_delta('{"city": "Paris"}', index=0, call_id="call_1", name="get_weather"),
+        _tool_delta('{"city": "Rome"}', index=0, call_id="call_2", name="get_weather"),
+        _chunk({}, "tool_calls"),
+    ])
+
+    assert result.tool_calls.calls == [
+        ToolCallEvent(id="call_1", name="get_weather", arguments='{"city": "Paris"}'),
+        ToolCallEvent(id="call_2", name="get_weather", arguments='{"city": "Rome"}'),
+    ]
