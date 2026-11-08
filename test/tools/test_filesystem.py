@@ -624,7 +624,7 @@ async def test_find_files_pattern_cannot_escape_base_dir(tmp_path: Path) -> None
 
 @pytest.mark.parametrize(("pattern", "expected"), [("*/*", []), ("*/**", ["link"]), ("link/**", ["link"])])
 @pytest.mark.asyncio
-async def test_find_files_skips_symlink_target_out_of_base_dir(
+async def test_find_files_lists_link_but_not_contents_out_of_base_dir(
     tmp_path: Path, pattern: str, expected: list[str]
 ) -> None:
     base = tmp_path / "base"
@@ -650,7 +650,9 @@ async def test_find_files_skips_symlink_target_out_of_base_dir(
     await agent.ask("find files")
 
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
-    assert tool_result_msg.results[0].result.parts[0].data == expected
+    [result] = tool_result_msg.results[0].result.parts
+    assert isinstance(result, DataInput)
+    assert result.data == [str(Path(name)) for name in expected]
 
 
 @pytest.mark.parametrize(
@@ -724,7 +726,9 @@ async def test_find_files_lists_symlinks(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(("pattern", "expected"), [("*/*", []), ("*/**", ["escape"])])
 @pytest.mark.asyncio
-async def test_find_files_skips_link_located_out_of_base_dir(tmp_path: Path, pattern: str, expected: list[str]) -> None:
+async def test_find_files_lists_link_but_not_contents_located_out_of_base_dir(
+    tmp_path: Path, pattern: str, expected: list[str]
+) -> None:
     base = tmp_path / "base"
     base.mkdir()
     (base / "a.txt").write_text("a")
@@ -745,7 +749,9 @@ async def test_find_files_skips_link_located_out_of_base_dir(tmp_path: Path, pat
     await agent.ask("find files")
 
     tool_result_msg: ToolResultsEvent = tracking.mock.call_args_list[1][0][0]
-    assert tool_result_msg.results[0].result.parts[0].data == expected
+    [result] = tool_result_msg.results[0].result.parts
+    assert isinstance(result, DataInput)
+    assert result.data == [str(Path(name)) for name in expected]
 
 
 @pytest.mark.asyncio

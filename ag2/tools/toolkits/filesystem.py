@@ -315,7 +315,9 @@ else:
     def _glob(target: Path, pattern: str) -> Iterable[Path]:
         """Yield files matching *pattern* under *target*.
 
-        Backfills Python 3.13's trailing ``**`` semantics: match files as well as directories.
+        Backfills only Python 3.13's trailing ``**`` semantics: match files as well as directories.
+        A trailing ``**/`` still matches directories only, as on 3.13. Other 3.13 differences
+        (e.g. ``**`` inside a segment such as ``foo**``) are not backfilled.
         """
         results = {p for p in target.glob(pattern) if _is_listed(p)}
         if pattern.endswith("**"):
