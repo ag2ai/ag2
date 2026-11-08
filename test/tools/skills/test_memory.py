@@ -250,6 +250,26 @@ class TestScripts:
         with pytest.raises(TypeError, match="requires named arguments"):
             await agent.ask("hi")
 
+    async def test_single_object_array_args_are_accepted(self) -> None:
+        skill = MemorySkill(name="conv", description="d")
+
+        @skill.script
+        def convert(value: float, factor: float) -> str:
+            return str(value * factor)
+
+        call = _call(
+            "run_skill_script",
+            name="conv",
+            script="convert",
+            args=[{"value": 10, "factor": 2}],
+        )
+        tracking = TrackingConfig(TestConfig(call, "done"))
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+
+        await agent.ask("hi")
+
+        assert "20.0" in _tool_result(tracking)
+
 
 @pytest.mark.asyncio
 class TestNamingDefaults:

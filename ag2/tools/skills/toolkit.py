@@ -189,12 +189,13 @@ class SkillsToolkit(Toolkit):
                 Field(description="Script name, for example scaffold.py, build.sh, or an in-process script."),
             ],
             args: Annotated[
-                dict[str, Any] | list[str] | None,
+                dict[str, Any] | list[str] | list[dict[str, Any]] | None,
                 Field(
                     description=(
                         "Script arguments. Use an object of named arguments for in-process scripts "
                         '(for example {"value": 10, "factor": 2}), matching the script\'s '
-                        "<parameters_schema> shown in the loaded skill. Use an array of strings for "
+                        "<parameters_schema> shown in the loaded skill. If your provider emits a "
+                        "single-item array, put that object in the array. Use an array of strings for "
                         'file-based scripts\' positional CLI arguments (for example ["input.docx"]).'
                     )
                 ),
@@ -233,7 +234,7 @@ async def _route_execute(
     name: str,
     script: str,
     context: ConversationContext,
-    args: dict[str, Any] | Sequence[str] | None,
+    args: dict[str, Any] | Sequence[str | dict[str, Any]] | None,
 ) -> str:
     for runtime in reversed(runtimes):
         try:

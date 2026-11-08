@@ -77,18 +77,33 @@ class MemoryRuntime(SkillRuntime):
         name: str,
         script: str,
         context: "ConversationContext",
-        args: dict[str, Any] | Sequence[str] | None = None,
+        args: dict[str, Any] | Sequence[str | dict[str, Any]] | None = None,
     ) -> str:
         skill = self._get(name)
         entry = skill.get_script(script)
         if entry is None:
             raise FileNotFoundError(f"script {script!r} not found in memory skill {name!r}")
-        if args is not None and not isinstance(args, dict):
+        if args is None:
+            named_args: dict[str, Any] = {}
+        elif isinstance(args, dict):
+            named_args = args
+        elif (
+            isinstance(args, Sequence)
+            and not isinstance(args, (str, bytes))
+            and len(args) == 1
+            and isinstance(args[0], dict)
+        ):
+            # Some providers serialize a structured tool argument as a
+            # one-element array. Treat that shape as equivalent to the object
+            # form while keeping positional arrays reserved for file scripts.
+            named_args = args[0]
+        else:
             raise TypeError(
                 f"in-process script {script!r} requires named arguments (an object); "
-                "positional arguments (an array) are only supported for file-based scripts"
+                "a one-element array containing an object is also accepted; positional "
+                "string arguments are only supported for file-based scripts"
             )
-        return _to_text(await _run_tool(entry.tool, args or {}, context, skill=name, part=f"script {script!r}"))
+        return _to_text(await _run_tool(entry.tool, named_args, context, skill=name, part=f"script {script!r}"))
 
     def invalidate(self) -> None:
         # Nothing is cached — discovery reads the in-memory dict directly.

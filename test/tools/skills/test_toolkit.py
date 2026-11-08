@@ -156,6 +156,24 @@ async def test_run_script_routes_named_args_to_memory_runtime(tmp_path: Path, co
 
 
 @pytest.mark.asyncio
+async def test_run_script_routes_single_object_list_to_memory_runtime(tmp_path: Path, context: Context) -> None:
+    """Providers that wrap structured arguments in a one-item list still work."""
+    skill = MemorySkill(name="calc", description="Double a number")
+
+    @skill.script
+    def double(value: int) -> str:
+        return str(2 * value)
+
+    run_tool = SkillsToolkit(MemoryRuntime(skill), LocalRuntime(dir=tmp_path)).run_skill_script()
+    args = json.dumps({"name": "calc", "script": "double", "args": [{"value": 2}]})
+
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert not isinstance(result, ToolErrorEvent)
+    assert result.result.parts == [TextInput(content="4")]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("script_args", [None, [], {}, {"value": 2}])
 async def test_run_script_unknown_skill(tmp_path: Path, context: Context, script_args: object) -> None:
     # Empty catalogs leave the name unconstrained, so the call reaches routing.

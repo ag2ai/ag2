@@ -90,15 +90,17 @@ class SkillRuntime(Protocol):
         name: str,
         script: str,
         context: "ConversationContext",
-        args: dict[str, Any] | Sequence[str] | None = None,
+        args: dict[str, Any] | Sequence[str | dict[str, Any]] | None = None,
     ) -> str:
         """Run a script of skill *name* and return its output.
 
         *args* is a CLI-style positional ``Sequence[str]`` for file-backed scripts
-        (``LocalRuntime``) or a named-argument ``dict`` for in-process scripts
-        (``MemoryRuntime``). A runtime rejects the form it does not support with a
-        ``TypeError`` — but only after checking it owns *name*, so a foreign skill
-        always raises ``SkillNotFoundError`` and routing can fall through.
+        (``LocalRuntime``), or named arguments for in-process scripts
+        (``MemoryRuntime``). In-process scripts accept either a mapping or the
+        one-element list-of-mapping shape emitted by some model providers. A
+        runtime rejects the form it does not support with a ``TypeError`` — but
+        only after checking it owns *name*, so a foreign skill always raises
+        ``SkillNotFoundError`` and routing can fall through.
         *context* is the live conversation context, used for
         dependency injection by runtimes that invoke a callable; a filesystem
         runtime ignores it.
