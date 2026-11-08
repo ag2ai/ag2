@@ -226,6 +226,10 @@ class OpenAIClient(LLMClient):
 
                 for tc in delta.tool_calls or []:
                     ix = tc.index
+                    if ix is None:
+                        # Some OpenAI-compatible servers (e.g. Gemini) omit the index:
+                        # a call carrying an id starts a new entry, anything else continues the last.
+                        ix = len(full_tool_calls) if tc.id or not full_tool_calls else len(full_tool_calls) - 1
                     if ix >= len(full_tool_calls):
                         full_tool_calls.extend(
                             {

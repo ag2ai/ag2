@@ -12,6 +12,7 @@ concerned; what it does in a browser is not reachable from this suite and no
 attempt is made to fake it.
 """
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
@@ -24,8 +25,16 @@ from mcp.shared.exceptions import MCPError
 from mcp.types import CallToolResult, DiscoverResult, TextContent, TextResourceContents
 from mcp_types.version import LATEST_MODERN_VERSION
 
-from ag2 import Inject, Variable
-from ag2.mcp import AppSandbox, MCPApp, MCPRequestContext, MCPServer, client_supports_apps, mcp_tool
+from ag2 import Agent, Inject, Variable
+from ag2.mcp import (
+    AppSandbox,
+    MCPApp,
+    MCPFunctionTool,
+    MCPRequestContext,
+    MCPServer,
+    client_supports_apps,
+    mcp_tool,
+)
 from ag2.mcp.apps import TOOL_META_KEY
 from ag2.mcp.errors import (
     MCPAppFrozenError,
@@ -371,6 +380,25 @@ class TestTheDocument:
         with pytest.raises(MCPDuplicateAppURIError, match="ui://shop/card"):
             MCPServer(make_agent(), apps=[_card_app(), _card_app()])
 
+    async def test_a_path_like_string_body_warns_to_use_a_path(self, caplog: pytest.LogCaptureFixture) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app("card.html")])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            async with connect(server) as session:
+                await session.read_resource("ui://shop/card")
+
+        [record] = [r for r in caplog.records if r.name == "ag2.mcp.apps"]
+        assert "Path('card.html')" in record.getMessage()
+
+    async def test_a_markup_body_never_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app("<a href='x.html'>x.html</a>")])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            async with connect(server) as session:
+                await session.read_resource("ui://shop/card")
+
+        assert [r for r in caplog.records if r.name == "ag2.mcp.apps"] == []
+
 
 @pytest.mark.asyncio
 class TestTheRuntime:
@@ -588,6 +616,31 @@ class TestDegradation:
             discovered = DiscoverResult.model_validate(await session.send_discover(LATEST_MODERN_VERSION))
 
         assert discovered.capabilities.extensions is None
+
+    async def test_withholding_the_binding_is_logged_once_per_connection(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app()])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.server"):
+            async with connect(server) as first:
+                await first.list_tools()
+                await first.list_tools()
+            async with connect(server) as second:
+                await second.list_tools()
+
+        withheld = [r.getMessage() for r in caplog.records if r.name == "ag2.mcp.server"]
+        assert len(withheld) == 2
+        assert all("'show_item'" in message and EXTENSION_ID in message for message in withheld)
+
+    async def test_a_client_that_advertised_is_not_warned(self, caplog: pytest.LogCaptureFixture) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app()])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.server"):
+            async with connect(server, extensions=_UI_AD) as session:
+                await session.list_tools()
+
+        assert [r for r in caplog.records if r.name == "ag2.mcp.server"] == []
 
 
 @pytest.mark.asyncio
@@ -835,3 +888,41 @@ async def test_an_ordinary_tool_alongside_an_app_keeps_its_shape() -> None:
     assert advertised.output_schema is None
     assert text_of(result) == "hi"
     assert result.meta is None
+
+
+@pytest.mark.asyncio
+class TestAnAppToolOutsideTheServer:
+    """An app tool is still the function it wraps, and is not an agent tool."""
+
+    async def test_it_is_callable_like_the_function_it_wraps(self) -> None:
+        app = MCPApp("ui://counter", CARD)
+
+        @app.tool
+        async def increment(count: int, by: int = 1) -> dict[str, int]:
+            """Add to the counter."""
+            return {"count": count + by}
+
+        assert await increment(1, by=2) == {"count": 3}
+
+    async def test_a_sync_mcp_tool_is_callable_like_its_function(self) -> None:
+        @mcp_tool
+        def double(x: int) -> int:
+            """Double x."""
+            return x * 2
+
+        assert double(4) == 8
+
+    async def test_a_tool_built_from_a_handler_explains_how_to_call_it(self) -> None:
+        async def echo(arguments: dict[str, Any], ctx: Any) -> str:
+            return str(arguments)
+
+        built = MCPFunctionTool("echo", "Echo.", echo)
+
+        with pytest.raises(TypeError, match=r"\.call\("):
+            built()
+
+    async def test_giving_it_to_an_agent_names_the_fix(self) -> None:
+        [show_item] = _card_app().tools
+
+        with pytest.raises(TypeError, match=r"MCPServer\(tools=\.\.\.\).*@tool"):
+            Agent("shop", tools=[show_item])

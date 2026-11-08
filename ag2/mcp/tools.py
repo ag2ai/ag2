@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable, Hashable, Mapping, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field, is_dataclass
 from types import GenericAlias
-from typing import Annotated, Any, TypeAlias, get_type_hints, overload
+from typing import Annotated, Any, ClassVar, TypeAlias, get_type_hints, overload
 
 from fast_depends.pydantic.schema import get_schema
 from mcp.server.context import ServerRequestContext
@@ -149,7 +149,24 @@ class MCPFunctionTool:
     ``title`` and ``annotations`` (``mcp.types.ToolAnnotations`` behavior hints
     such as ``readOnlyHint``). ``meta`` reaches ``_meta``, the protocol's
     extension slot; an empty one is not sent at all.
+
+    A tool made by :func:`mcp_tool` (or ``@app.tool``) stays callable as the
+    function it wraps, so a unit test can call it directly: ``await
+    increment(1, by=2)``. Nothing MCP-specific happens on that path — no schema
+    validation, no resolver, no result mapping. A tool constructed from a
+    ``handler`` has no such function; drive it with :meth:`call`.
+
+    It is not an agent tool: ``Agent(tools=[...])`` refuses it with a
+    ``TypeError`` saying so.
     """
+
+    # Read by ``ag2.tools.tool`` to refuse this object with a message that says
+    # what to do, rather than failing deep inside signature inspection.
+    __ag2_tool_refusal__: ClassVar[str] = (
+        "An MCPFunctionTool (from @mcp_tool or @app.tool) is served to MCP clients, not given to an Agent. "
+        "Register it with MCPServer(tools=...) or, for an app, MCPServer(apps=...); "
+        "to give the same function to an agent, decorate it with @tool instead."
+    )
 
     name: str
     description: str
@@ -161,6 +178,23 @@ class MCPFunctionTool:
     meta: Mapping[str, Any] | None = None
     _resolved_params: "Mapping[str, tuple[Resolve, bool]]" = field(default_factory=dict, init=False, repr=False)
     _resolver_plans: "Mapping[Hashable, Any]" = field(default_factory=dict, init=False, repr=False)
+    _function: "Callable[..., Any] | None" = field(default=None, init=False, repr=False)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Call the wrapped function directly, bypassing MCP entirely.
+
+        Returns whatever the function returns — a coroutine for an ``async def``.
+
+        Raises:
+            TypeError: The tool was constructed from a ``handler`` rather than
+                by :func:`mcp_tool`, so there is no function to call.
+        """
+        if self._function is None:
+            raise TypeError(
+                f"MCPFunctionTool {self.name!r} was built from a handler, not by @mcp_tool, so it wraps no function "
+                "to call directly; use `await tool.call(arguments)` instead."
+            )
+        return self._function(*args, **kwargs)
 
     def _mcp_tool(
         self, context: MCPExecutionContext | ConversationContext | None = None, meta_filter: "MetaFilter | None" = None
@@ -366,6 +400,7 @@ def mcp_tool(
         object.__setattr__(
             built, "_resolver_plans", build_resolver_plans(resolved_params, set(schema.get("properties") or ()))
         )
+        object.__setattr__(built, "_function", f)
         return built
 
     if function is not None:
