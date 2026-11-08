@@ -266,7 +266,7 @@ ag2ui.host.protocolVersion;  // the dialect revision the host answered with
 ag2ui.host.info;             // the host's name and version
 ```
 
-The runtime introduces the document to the host by a human name — the app's `title`, else its `name`, else the URI without `ui://` (`shop/card`).
+The runtime introduces the document to the host in `ui/initialize` as `appInfo`: its `name` is the app's `name`, else the URI without `ui://` (`shop/card`), and its `title`, the label a host shows people, is the app's `title` when it has one.
 
 Each subscription returns an unsubscribe function. The document's size is reported automatically via a `ResizeObserver`, so the host can size the frame without your writing one.
 
@@ -330,7 +330,7 @@ Omit it and no `visibility` is advertised at all, leaving the host to its own de
 
 ## Using the upstream `App` SDK instead
 
-`ag2ui` is one way to talk to the host, not the only one. A document written against the `App` class from [`@modelcontextprotocol/ext-apps`](https://github.com/modelcontextprotocol/ext-apps){.external-link target="_blank"} works as it is: **a body that loads `@modelcontextprotocol/ext-apps` — an `import` or a `<script src>` naming the package — or that carries the `"ui/initialize"` method name as a string (a bundle that inlined the SDK) is served without `ag2ui`**, so the host does not see two handshakes. Unquoted prose mentioning either does not count, but visible text showing the method name in quotes — `<code>"ui/initialize"</code>` — does. A document that loads the SDK some other way — from a file whose URL does not name the package — is not recognised; pass `inject_runtime=False` for it. A recognised document that also calls `ag2ui.` logs a warning on `ag2.mcp.apps`, since `ag2ui` will not exist there.
+`ag2ui` is one way to talk to the host, not the only one. A document written against the `App` class from [`@modelcontextprotocol/ext-apps`](https://github.com/modelcontextprotocol/ext-apps){.external-link target="_blank"} works as it is: **a body with a `<script>` that loads `@modelcontextprotocol/ext-apps` — a `src` or an `import` naming the package — or whose code carries the `"ui/initialize"` method name as a string (a bundle that inlined the SDK) is served without `ag2ui`**, so the host does not see two handshakes. Only `<script>` elements the browser runs are searched: text the page displays, quoted or not, does not count, and neither does a script that is commented out, sits inside `<template>` or `<noscript>`, or has a data `type` such as `application/json`. A document that loads the SDK some other way — from a file whose URL does not name the package — is not recognised; pass `inject_runtime=False` for it. A recognised document that also calls `ag2ui.` logs a warning on `ag2.mcp.apps`, since `ag2ui` will not exist there.
 
 The two cover the same ground:
 
@@ -358,33 +358,81 @@ One difference in shape: each `ag2ui.on…` call adds a subscriber and returns a
 
 Choose `ag2ui` for a small hand-written document with no build step and no network access; choose `App` when you already use it, want its React bindings and theming helpers, or share the document with servers written in other languages.
 
-Without a bundler, load the SDK's self-contained `app-with-deps` build from a CDN. The example below is the shop card again, calling the `show_item` and `add_to_cart` tools declared [above](#who-may-call-a-tool) on `shop`. The host's default sandbox blocks every external script, so **declare the CDN in `csp=`** or the import fails silently:
+Without a bundler, load the SDK's self-contained `app-with-deps` build from a CDN. The example below is the shop card from [above](#who-may-call-a-tool), whole: the document lives in its own `card.html` and talks to the host through `App`, and the server passes its path to `MCPApp` and declares the tools on the same `shop`. The host's default sandbox blocks every external script, so **declare the CDN in `csp=`** or the import fails silently:
 
-```python linenums="1" hl_lines="7 21"
-from ag2.mcp import MCPApp, ResourceCsp
+```html linenums="1" title="card.html" hl_lines="11"
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Product card</title>
+</head>
+<body>
+  <div id="card">Loading…</div>
+  <button id="add">Add to cart</button>
+  <script type="module">
+    import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";
 
-CARD = """
-<div id="card">Loading…</div>
-<button id="add">Add to cart</button>
-<script type="module">
-  import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";
+    const app = new App({ name: "shop/card", title: "Product card", version: "1.0.0" });
+    app.ontoolresult = (result) => {
+      document.getElementById("card").textContent = `${result.structuredContent.name}: $${result.structuredContent.price}`;
+    };
+    await app.connect();
 
-  const app = new App({ name: "Product card", version: "1.0.0" });
-  app.ontoolresult = (result) => {
-    document.getElementById("card").textContent = `${result.structuredContent.name}: $${result.structuredContent.price}`;
-  };
-  await app.connect();
-
-  document.getElementById("add").onclick = async () => {
-    const result = await app.callServerTool({ name: "add_to_cart", arguments: { item_id: "42" } });
-    document.getElementById("card").textContent = result.content[0].text;
-  };
-</script>
-"""
-shop = MCPApp("ui://shop/card", CARD, title="Product card", csp=ResourceCsp(resource_domains=["https://unpkg.com"]))
+    document.getElementById("add").onclick = async () => {
+      const result = await app.callServerTool({ name: "add_to_cart", arguments: { item_id: "42" } });
+      document.getElementById("card").textContent = result.content[0].text;
+    };
+  </script>
+</body>
+</html>
 ```
 
-Register handlers before `app.connect()`, as the SDK's own docs ask: the host may deliver the tool result as soon as the handshake completes.
+```python linenums="1" title="server.py" hl_lines="23-28"
+from dataclasses import dataclass
+from pathlib import Path
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPApp, MCPServer, ResourceCsp
+
+@dataclass
+class Item:
+    name: str
+    price: int
+
+    def __str__(self) -> str:
+        return f"{self.name} costs ${self.price}."
+
+@dataclass
+class CartLine:
+    status: str
+
+    def __str__(self) -> str:
+        return self.status
+
+shop = MCPApp(
+    "ui://shop/card",
+    Path(__file__).parent / "card.html",
+    title="Product card",
+    csp=ResourceCsp(resource_domains=["https://unpkg.com"]),
+)
+
+@shop.tool
+async def show_item(item_id: str) -> Item:
+    """Show a product card."""
+    return Item(name="Espresso cup", price=12)
+
+@shop.tool(visibility=["app"])
+async def add_to_cart(item_id: str) -> CartLine:
+    """Add an item to the cart. Called by the card's button, not by the model."""
+    return CartLine(status="Added to your cart")
+
+agent = Agent("shop", prompt="You help customers browse the shop.", config=AnthropicConfig(model="claude-sonnet-5"))
+server = MCPServer(agent, apps=[shop])
+```
+
+The file is read on every resource read, so editing `card.html` needs no server restart. Serve `server` exactly as in the [quick start](#run). Register handlers before `app.connect()`, as the SDK's own docs ask: the host may deliver the tool result as soon as the handshake completes.
 
 ## Bringing your own bundle
 

@@ -12,6 +12,7 @@ concerned; what it does in a browser is not reachable from this suite and no
 attempt is made to fake it.
 """
 
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -90,9 +91,10 @@ def _card_app(content: Any = CARD, **kwargs: Any) -> MCPApp:
     return app
 
 
-def _runtime_introducing(name: str) -> str:
-    """The runtime of an app that introduces itself to the host as ``name``."""
-    return MCPApp("ui://elsewhere/doc", "", name=name).runtime_script()
+def _introducing(name: str, title: str | None = None) -> str:
+    """The ``appInfo`` the runtime sends in ``ui/initialize``: ``name``, displayed as ``title``."""
+    app_info = {"name": name, "version": "1"} | ({"title": title} if title else {})
+    return "appInfo: " + json.dumps(app_info) + ","
 
 
 def _body(contents: Any) -> str:
@@ -528,14 +530,14 @@ class TestTheRuntime:
 
 @pytest.mark.asyncio
 class TestTheNameItIntroducesItselfBy:
-    async def test_it_is_the_documents_title(self) -> None:
+    async def test_it_is_the_uri_path_displayed_as_the_documents_title(self) -> None:
         app = MCPApp("ui://shop/card", "<div id='card'></div>", title="Product card")
         server = MCPServer(make_agent(), apps=[app])
 
         async with connect(server) as session:
             served = _body((await session.read_resource("ui://shop/card")).contents[0])
 
-        assert served == _runtime_introducing("Product card") + "<div id='card'></div>"
+        assert _introducing("shop/card", title="Product card") in served
 
     async def test_it_is_a_request_scoped_title_resolved_per_read(self) -> None:
         async def provider(access: object) -> AskContext:
@@ -547,28 +549,28 @@ class TestTheNameItIntroducesItselfBy:
         async with connect(server) as session:
             served = _body((await session.read_resource("ui://shop/card")).contents[0])
 
-        assert served == _runtime_introducing("North shop") + "<div id='card'></div>"
+        assert _introducing("shop/card", title="North shop") in served
 
-    async def test_the_title_wins_over_the_name(self) -> None:
+    async def test_an_explicit_name_is_kept_beside_the_title(self) -> None:
         app = MCPApp("ui://shop/card", CARD, name="card", title="Product card")
 
-        assert app.runtime_script() == _runtime_introducing("Product card")
+        assert _introducing("card", title="Product card") in app.runtime_script()
 
-    async def test_without_a_title_it_is_the_name(self) -> None:
+    async def test_without_a_title_it_is_the_name_alone(self) -> None:
         app = MCPApp("ui://shop/card", CARD, name="card")
 
-        assert app.runtime_script() == MCPApp("ui://shop/card", CARD, title="card").runtime_script()
+        assert _introducing("card") in app.runtime_script()
 
     async def test_without_either_it_is_the_uri_path(self) -> None:
-        assert MCPApp("ui://shop/card", CARD).runtime_script() == _runtime_introducing("shop/card")
+        assert _introducing("shop/card") in MCPApp("ui://shop/card", CARD).runtime_script()
 
-    async def test_an_empty_title_falls_back_to_the_uri_path(self) -> None:
-        assert MCPApp("ui://shop/card", CARD, title="").runtime_script() == _runtime_introducing("shop/card")
+    async def test_an_empty_title_is_left_out(self) -> None:
+        assert _introducing("shop/card") in MCPApp("ui://shop/card", CARD, title="").runtime_script()
 
-    async def test_a_request_scoped_title_outside_a_request_falls_back_to_the_uri_path(self) -> None:
+    async def test_a_request_scoped_title_outside_a_request_is_left_out(self) -> None:
         app = MCPApp("ui://shop/card", CARD, title=Variable("tenant"))
 
-        assert app.runtime_script() == _runtime_introducing("shop/card")
+        assert _introducing("shop/card") in app.runtime_script()
 
 
 @pytest.mark.asyncio
@@ -611,6 +613,17 @@ class TestUpstreamAppSdk:
                 id="dynamic-import",
             ),
             pytest.param("<script>var M={initialize:'ui/initialize'};</script>", id="single-quoted-method"),
+            pytest.param(
+                "<script type='module'>const { App } = await import(`https://esm.sh/@modelcontextprotocol/ext-apps@2`);</script>",
+                id="template-literal-import",
+            ),
+            pytest.param(
+                '<script type="text/javascript">var M={initialize:"ui/initialize"};</script>', id="javascript-type"
+            ),
+            pytest.param(
+                '<script>var html = "<!-- not a comment -->";</script><script>var M={initialize:"ui/initialize"};</script>',
+                id="comment-marker-inside-script",
+            ),
         ],
     )
     async def test_every_way_of_loading_it_is_served_as_written(self, body: str) -> None:
@@ -621,8 +634,37 @@ class TestUpstreamAppSdk:
 
         assert _body(read.contents[0]) == body
 
-    async def test_a_document_only_mentioning_it_still_gets_ag2ui(self) -> None:
-        body = "<p>Unlike @modelcontextprotocol/ext-apps, this card performs the ui/initialize handshake through ag2ui.</p>"
+    @pytest.mark.parametrize(
+        "body",
+        [
+            pytest.param(
+                "<p>Unlike @modelcontextprotocol/ext-apps, this card performs the ui/initialize handshake through ag2ui.</p>",
+                id="unquoted",
+            ),
+            pytest.param('<p>Install from "@modelcontextprotocol/ext-apps".</p>', id="quoted-package"),
+            pytest.param(
+                '<p>Load it with src="https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps".</p>',
+                id="quoted-src",
+            ),
+            pytest.param('<p>The view sends <code>"ui/initialize"</code> first.</p>', id="quoted-method"),
+            pytest.param(
+                '<img data-src="https://cdn.example.com/@modelcontextprotocol/ext-apps/logo.png">', id="other-src"
+            ),
+            pytest.param('<script type="application/json">{"method": "ui/initialize"}</script>', id="data-script"),
+            pytest.param(
+                '<!-- <script src="https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps"></script> -->',
+                id="commented-out-script",
+            ),
+            pytest.param(
+                "<template><script>var M={initialize:'ui/initialize'};</script></template>", id="template-script"
+            ),
+            pytest.param(
+                "<noscript><script>var M={initialize:'ui/initialize'};</script></noscript>", id="noscript-script"
+            ),
+        ],
+    )
+    async def test_a_document_only_mentioning_it_still_gets_ag2ui(self, body: str) -> None:
+        body += "<script>ag2ui.onToolResult(console.log);</script>"
         server = MCPServer(make_agent(), apps=[_card_app(body)])
 
         async with connect(server) as session:
@@ -630,8 +672,15 @@ class TestUpstreamAppSdk:
 
         assert "window.ag2ui" in served
 
-    async def test_a_document_mixing_both_is_warned_about(self, caplog: pytest.LogCaptureFixture) -> None:
-        body = UPSTREAM_CARD.replace("await app.connect();", "await app.connect(); await ag2ui.ready;")
+    @pytest.mark.parametrize(
+        "use",
+        [
+            pytest.param("await ag2ui.ready;", id="bare"),
+            pytest.param("await window.ag2ui.ready;", id="through-window"),
+        ],
+    )
+    async def test_a_document_mixing_both_is_warned_about(self, use: str, caplog: pytest.LogCaptureFixture) -> None:
+        body = UPSTREAM_CARD.replace("await app.connect();", f"await app.connect(); {use}")
         server = MCPServer(make_agent(), apps=[_card_app(body)])
 
         with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):

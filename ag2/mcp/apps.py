@@ -66,19 +66,39 @@ logger = logging.getLogger(__name__)
 # HTML file name was almost certainly meant as a file, so it is warned about.
 _LOOKS_LIKE_HTML_PATH = re.compile(r"^[^<]*\.html?\s*$", re.IGNORECASE)
 
-# A document that already performs the ``ui/initialize`` handshake: it loads the
-# upstream ``@modelcontextprotocol/ext-apps`` SDK (an ``import``/``from`` or a
-# ``src=`` naming the package, typically on a CDN), or carries the method name as
-# a string literal (a bundle that inlined the SDK, or ``ag2ui`` placed by hand).
-# A second handshake would answer the host twice, so such a body is served without
-# the runtime. Only code shapes match — prose mentioning either is not a handshake.
-_OWN_HANDSHAKE = re.compile(
-    r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\bsrc\s*=\s*)["'][^"']*@modelcontextprotocol/ext-apps"""
-    r"""|["']ui/initialize["']"""
+# A document that already performs the ``ui/initialize`` handshake has a
+# ``<script>`` element that loads the upstream ``@modelcontextprotocol/ext-apps``
+# SDK (a ``src`` attribute, or an ``import``/``from`` in its code, naming the
+# package, typically on a CDN), or whose code carries the method name as a string
+# literal (a bundle that inlined the SDK, or ``ag2ui`` placed by hand). A second
+# handshake would answer the host twice, so such a body is served without the
+# runtime. Only script elements the browser runs are searched: text the page
+# displays, quoted or not, is not a handshake, and neither is a script commented
+# out, inside ``<template>`` / ``<noscript>`` / ``<textarea>``, or of a data type
+# such as ``application/json``. The document is scanned left to right, so a
+# ``<!--`` inside a script's code is code, not a comment. A script element ends at
+# the first ``</script``, as in the browser, or at the end of the body.
+_SCRIPT_OR_INERT = re.compile(
+    r"<!--.*?(?:-->|\Z)"
+    r"|<(template|noscript|textarea)\b.*?(?:</\1\s*>|\Z)"
+    r"|<script\b([^>]*)>(.*?)(?:</script\s*>|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
+_TYPE_ATTRIBUTE = re.compile(r"""(?<![\w-])type\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.IGNORECASE)
+_EXECUTABLE_TYPE = re.compile(
+    r"(?:module|(?:text|application)/(?:x-)?(?:java|ecma)script|text/jscript|text/livescript)?", re.IGNORECASE
+)
+_SDK_SRC = re.compile(r"""(?<![\w-])src\s*=\s*["']?[^"'\s>]*@modelcontextprotocol/ext-apps""", re.IGNORECASE)
+_SDK_CODE = re.compile(
+    r"""(?:\bfrom\s*|\bimport\s*\(?\s*)["'`][^"'`]*@modelcontextprotocol/ext-apps"""
+    r"""|["'`]ui/initialize["'`]"""
 )
 
-# A call into ``ag2ui`` from a document that does not define it.
+# A call into ``ag2ui``, and the assignment that defines it (the runtime placed by
+# hand). A document skipping injection that calls ``ag2ui`` without defining it
+# would fail in the browser.
 _USES_AG2UI = re.compile(r"\bag2ui\.")
+_DEFINES_AG2UI = re.compile(r"\bwindow\.ag2ui\s*=(?!=)")
 
 # The key ``_meta`` reserves for MCP Apps, on a tool and on a resource alike.
 UI_META_KEY = "ui"
@@ -333,8 +353,8 @@ class MCPApp:
         inject_runtime = resolve_context_value(self._inject_runtime, context)
         if not inject_runtime:
             return body
-        if _OWN_HANDSHAKE.search(body):
-            if _USES_AG2UI.search(body) and "window.ag2ui" not in body:
+        if _performs_own_handshake(body):
+            if _USES_AG2UI.search(body) and not _DEFINES_AG2UI.search(body):
                 logger.warning(
                     "MCP app %s performs its own ui/initialize handshake, so ag2ui is not injected, "
                     "but the document uses ag2ui. Use either ag2ui or the @modelcontextprotocol/ext-apps App.",
@@ -358,10 +378,11 @@ class MCPApp:
         ``ag2ui.host.capabilities`` and ``ag2ui.host.context``; an ``ag2ui.ready``
         promise; and automatic size reporting.
 
-        The script introduces the document to the host by a human name: its
-        ``title``, else an explicit ``name``, else the URI without its scheme. A
+        The script introduces the document to the host by an ``appInfo`` whose
+        ``name`` is the explicit ``name``, else the URI without its scheme, and
+        whose ``title``, shown to people, is the document's ``title``. A
         ``Variable`` title is resolved per read when injecting; here, without a
-        request, it is skipped.
+        request, it is left out.
 
         This is the same text injection uses, exposed for a document that would
         rather place it itself. Injection skips a body that already performs the
@@ -370,7 +391,7 @@ class MCPApp:
         return self._script_for(self._title)
 
     def _script_for(self, title: AppText | None) -> str:
-        return _runtime_script(_display_name(title, self._name, self._uri))
+        return _runtime_script(_app_info(title, self._name, self._uri))
 
     @overload
     def tool(
@@ -665,17 +686,39 @@ def _inject(html: str, script: str) -> str:
     return script + html
 
 
-def _display_name(title: AppText | None, name: str, uri: str) -> str:
-    """The name the document introduces itself to the host by in ``ui/initialize``.
+def _performs_own_handshake(html: str) -> bool:
+    """Whether a ``<script>`` element the browser runs already performs ``ui/initialize``."""
+    for match in _SCRIPT_OR_INERT.finditer(html):
+        attributes, code = match.group(2, 3)
+        if attributes is None or not _is_executable(attributes):
+            continue
+        if _SDK_SRC.search(attributes) or _SDK_CODE.search(code):
+            return True
+    return False
 
-    An unresolved ``Variable`` title is skipped. ``name`` counts only when it was
-    given: the constructor defaults it to the URI.
+
+def _is_executable(attributes: str) -> bool:
+    """Whether a ``<script>`` with these attributes runs: no ``type``, ``module`` or a JavaScript type."""
+    declared = _TYPE_ATTRIBUTE.search(attributes)
+    if declared is None:
+        return True
+    value = next(group for group in declared.groups() if group is not None)
+    return _EXECUTABLE_TYPE.fullmatch(value.strip()) is not None
+
+
+def _app_info(title: AppText | None, name: str, uri: str) -> dict[str, str]:
+    """The ``appInfo`` the document introduces itself to the host by in ``ui/initialize``.
+
+    It is an MCP ``Implementation``: ``name`` is for programmatic use and
+    ``title`` for display. ``name`` is the explicit name, else the URI without its
+    scheme — the constructor defaults it to the URI, so only a different value
+    counts as given. ``title`` is the document's title; an empty or unresolved
+    ``Variable`` one is left out, and the host then displays ``name``.
     """
+    info = {"name": name if name != uri else uri.removeprefix("ui://"), "version": "1"}
     if isinstance(title, str) and title:
-        return title
-    if name != uri:
-        return name
-    return uri.removeprefix("ui://")
+        info["title"] = title
+    return info
 
 
 def _js(value: object) -> str:
@@ -683,8 +726,8 @@ def _js(value: object) -> str:
     return json.dumps(value).replace("</", "<\\/")
 
 
-def _runtime_script(app_name: str) -> str:
-    """The document runtime, specialised with the app's name for the handshake.
+def _runtime_script(app_info: dict[str, str]) -> str:
+    """The document runtime, specialised with the app's ``appInfo`` for the handshake.
 
     Written to the constraints the specification's own CSP imposes: inline
     script is permitted and is how the ecosystem ships, but ``eval`` and dynamic
@@ -697,7 +740,7 @@ def _runtime_script(app_name: str) -> str:
     """
     return (
         _RUNTIME_TEMPLATE
-        .replace("__AG2_APP_NAME__", _js(app_name))
+        .replace("__AG2_APP_INFO__", _js(app_info))
         .replace("__AG2_TOOL_KEY__", _js(TOOL_META_KEY))
         .replace("__AG2_PROTOCOL_VERSION__", _js(APP_PROTOCOL_VERSION))
     )
@@ -906,7 +949,7 @@ _RUNTIME_TEMPLATE = """<script>
   };
 
   request("ui/initialize", {
-    appInfo: { name: __AG2_APP_NAME__, version: "1" },
+    appInfo: __AG2_APP_INFO__,
     // Every display mode, because a document that reports its own size lays
     // out in any of them. Declaring none is not the safe default it looks
     // like: a host may decline a mode the view never claimed.
