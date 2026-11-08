@@ -33,13 +33,12 @@ jobs:
         with:
           python-version: ${{ github.event.inputs.python-version }}
 
-      # From PyPI rather than GitHub Releases, whose downloads time out with 504s.
-      - name: Install just
-        run: uv pip install --system "rust-just==1.58.0"
       - name: Build MkDocs documentation
         run: |
           uv venv
           . .venv/bin/activate
+          # just from PyPI rather than GitHub Releases, whose downloads time out with 504s.
+          uv pip install "rust-just==1.58.0"
           uv pip install "torch>=2.5,<3" --index-url https://download.pytorch.org/whl/cpu
           uv pip install --group docs -e .
           just docs-build --force
