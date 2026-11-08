@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from contextlib import AsyncExitStack
 from functools import wraps
 from typing import Any, Self, TypeAlias, overload
@@ -14,9 +14,7 @@ from fast_depends.pydantic import PydanticSerializer
 
 from .annotations import Context
 from .assembly import AssemblyPolicy
-from .events import (
-    ModelRequest,
-)
+from .events import BaseEvent
 from .events.conditions import Condition
 from .hitl import HitlFactory, HumanHook, wrap_hitl
 from .middleware.base import (
@@ -50,7 +48,9 @@ class PromptObserverMixin:
     """
 
     _system_prompt: list[str]
-    _dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]]
+    # Usually a ``ModelRequest``, but ``Agent.resume`` re-enters the turn with
+    # the trajectory's last event (e.g. a ``ToolResultsEvent``).
+    _dynamic_prompt: list[Callable[[BaseEvent, Context], Awaitable[str]]]
     _observers: list[Observer]
     _middleware: list[MiddlewareFactory]
     _policies: list[AssemblyPolicy]
@@ -303,8 +303,8 @@ class PluginTarget(PromptObserverMixin):
         tools: Iterable[Callable[..., Any] | Tool],
         middleware: Iterable[MiddlewareFactory],
         observers: Iterable[Observer],
-        dependencies: dict[Any, Any],
-        variables: dict[Any, Any],
+        dependencies: Mapping[Any, Any] | None,
+        variables: Mapping[str, Any] | None,
         plugins: Iterable["Plugin"],
     ) -> None:
         """Set up the contribution surface shared by every plugin target.
@@ -315,8 +315,10 @@ class PluginTarget(PromptObserverMixin):
         """
         self.name = name
 
-        self._agent_dependencies = dependencies or {}
-        self._agent_variables = variables or {}
+        # Copy: plugins and legacy knowledge add entries, which must not leak
+        # into (or fail on a read-only) mapping the caller passed in.
+        self._agent_dependencies = dict(dependencies or {})
+        self._agent_variables = dict(variables or {})
         self._hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else None
 
         self._middleware = list(middleware)
@@ -367,13 +369,13 @@ class PluginTarget(PromptObserverMixin):
 
 def _wrap_prompt_hook(
     func: PromptHook,
-) -> Callable[[ModelRequest, Context], Awaitable[str]]:
+) -> Callable[[BaseEvent, Context], Awaitable[str]]:
     call_model = build_model(func)
 
     # Carry the hook's identity onto the wrapper, so `Agent.dynamic_prompt`
     # yields something nameable rather than a row of anonymous `wrapper`s.
     @wraps(func)
-    async def wrapper(event: ModelRequest, context: Context) -> str:
+    async def wrapper(event: BaseEvent, context: Context) -> str:
         # `asolve` annotates each positional as a tuple and each keyword as a dict; the values are arbitrary.
         args: tuple[Any, ...] = (event,)
         options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}

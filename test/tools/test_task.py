@@ -13,6 +13,7 @@ from typing import Annotated
 from unittest.mock import MagicMock
 
 import pytest
+from dirty_equals import IsInstance, IsTuple
 
 from ag2 import Agent, Context, MemoryStream, Variable, tool
 from ag2.agent import TaskConfig
@@ -35,9 +36,11 @@ from ag2.events import (
 from ag2.history import MemoryStorage, Storage
 from ag2.middleware import BaseMiddleware
 from ag2.testing import TestConfig, TrackingConfig
-from ag2.tools import Toolkit
+from ag2.tools import Toolkit, WebSearchTool
+from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.subagents import background_agent_tool, subagent_tool
 from ag2.tools.subagents.run_task import run_task
+from ag2.tools.types import FunctionToolSchema
 from ag2.usage import UsageReport
 
 # Exercises the deprecated TaskConfig / run_subtask path on purpose.
@@ -684,6 +687,22 @@ class TestSubtaskInheritance:
         )
         await parent.ask("start")
         assert {schema.function.name for schema in tracking.calls[0].tools} == {"noop"}
+
+    async def test_subtask_inherits_builtin_tools(self) -> None:
+        tracking = TrackingConfig(TestConfig("Done with web search available."))
+        parent = Agent(
+            "parent",
+            config=TestConfig(ToolCallEvent(name="run_subtask", arguments='{"task":"work"}'), "done"),
+            tools=[noop, WebSearchTool()],
+            tasks=TaskConfig(config=tracking),
+        )
+
+        reply = await parent.ask("start")
+
+        assert reply.body == "done"
+        assert tracking.calls[0].tools == IsTuple(
+            IsInstance(FunctionToolSchema), IsInstance(WebSearchToolSchema), check_order=False
+        )
 
     async def test_subtask_include_tools_allowlist(self) -> None:
         """``include_tools=[...]`` keeps only the named tools."""

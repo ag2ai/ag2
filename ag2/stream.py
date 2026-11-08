@@ -4,10 +4,10 @@
 
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
-from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, overload
+from typing import Any, TypeVar, overload
 from uuid import uuid4
 
 from fast_depends.core import CallModel
@@ -23,6 +23,8 @@ from .history import History, MemoryStorage, Storage
 from .utils import CONTEXT_OPTION_NAME, _validate_timeout, build_model
 
 __all__ = ("MemoryStream", "Stream")
+
+_EventT = TypeVar("_EventT", bound=BaseEvent)
 
 
 @dataclass(slots=True)
@@ -102,12 +104,25 @@ class ABCStream(Stream):
             condition = TypeCondition(condition)
         return SubStream(self, condition)
 
+    @overload
+    def get(
+        self,
+        condition: type[_EventT],
+    ) -> AbstractAsyncContextManager[asyncio.Future[_EventT]]: ...
+
+    @overload
+    def get(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> AbstractAsyncContextManager[asyncio.Future[BaseEvent]]: ...
+
     @asynccontextmanager
     async def get(
         self,
         condition: ClassInfo | Condition,
-    ) -> AsyncGenerator[asyncio.Future[BaseEvent]]:
-        result = asyncio.Future[BaseEvent]()
+    ) -> AsyncGenerator[asyncio.Future[Any]]:
+        # Typed per overload: a class condition yields only instances of it.
+        result = asyncio.Future[Any]()
 
         async def wait_result(event: BaseEvent) -> None:
             if not result.done():

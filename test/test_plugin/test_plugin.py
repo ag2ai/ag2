@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
+from types import MappingProxyType
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -171,6 +172,41 @@ class TestPluginDependenciesAndVariables:
 
         await agent.ask("Hi!")
         mock.assert_called_once_with("hello")
+
+    async def test_plugin_variables_do_not_leak_into_caller_mapping(self, mock: MagicMock) -> None:
+        test_config = TestConfig(ToolCallEvent(name="my_tool"), "result")
+
+        def my_tool(ctx: Context) -> str:
+            mock(dict(ctx.variables))
+            return "ok"
+
+        agent_variables = {"agent_var": "mine"}
+        plugin = Plugin(tools=[my_tool], variables={"plugin_var": "theirs"})
+        agent = Agent("agent", config=test_config, plugins=[plugin], variables=agent_variables)
+
+        await agent.ask("Hi!")
+
+        mock.assert_called_once_with({"agent_var": "mine", "plugin_var": "theirs"})
+        assert agent_variables == {"agent_var": "mine"}
+
+    async def test_read_only_agent_variables_combine_with_plugin(self, mock: MagicMock) -> None:
+        test_config = TestConfig(ToolCallEvent(name="my_tool"), "result")
+
+        def my_tool(ctx: Context) -> str:
+            mock(dict(ctx.variables))
+            return "ok"
+
+        plugin = Plugin(tools=[my_tool], variables={"plugin_var": "theirs"})
+        agent = Agent(
+            "agent",
+            config=test_config,
+            plugins=[plugin],
+            variables=MappingProxyType({"agent_var": "mine"}),
+        )
+
+        await agent.ask("Hi!")
+
+        mock.assert_called_once_with({"agent_var": "mine", "plugin_var": "theirs"})
 
     async def test_agent_dependencies_override_plugin(self, mock: MagicMock) -> None:
         test_config = TestConfig(ToolCallEvent(name="my_tool"), "result")

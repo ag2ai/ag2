@@ -437,6 +437,7 @@ files = [
     "ag2/a2ui",
     "ag2/acp",
     "ag2/ag_ui",
+    "ag2/agent.py",
     "ag2/aggregate.py",
     "ag2/annotations.py",
     "ag2/assembly.py",

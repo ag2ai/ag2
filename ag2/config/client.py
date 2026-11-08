@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from fast_depends.library.serializer import SerializerProto
 
@@ -21,6 +21,6 @@ class LLMClient(Protocol):
         context: ConversationContext,
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: SerializerProto,
     ) -> ModelResponse: ...
