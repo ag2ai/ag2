@@ -574,7 +574,7 @@ def _answering(usage: Usage, *, provider: str, model: str = "m") -> Agent:
 class TestProtocolAccounting:
     """AG-UI's input and output are totals, and its cache and reasoning counts parts of them.
 
-    ``Usage`` already counts that way on every provider (ADR 0036), so it reaches the
+    ``Usage`` already counts that way on every provider, so it reaches the
     wire unchanged.
     """
 

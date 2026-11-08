@@ -31,7 +31,7 @@ def _billable_tokens(usage: Usage) -> int:
     for instance).
 
     Cache tokens are counted, once: ``prompt_tokens`` already includes the
-    tokens read from and written to the cache on every provider (ADR 0036), so
+    tokens read from and written to the cache on every provider, so
     the cache fields are not added on top of it. See :class:`TokenMonitor` for
     what the guard's total does and does not cover.
     """

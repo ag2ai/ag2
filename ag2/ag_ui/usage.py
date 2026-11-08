@@ -62,8 +62,8 @@ def _with_total(entry: TokenUsage) -> TokenUsage:
 
 def _token_usage(record: UsageRecord) -> TokenUsage:
     usage = record.usage
-    # ``prompt_tokens`` already counts the whole input, cache included
-    # (ADR 0036), which is what AG-UI's input total means.
+    # ``prompt_tokens`` already counts the whole input, cache included, which is
+    # what AG-UI's input total means.
     input_tokens = _token_count(usage.prompt_tokens)
     output_tokens = _token_count(usage.completion_tokens)
     return TokenUsage(

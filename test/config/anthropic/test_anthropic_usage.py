@@ -4,7 +4,7 @@
 
 """Tests for Anthropic client usage normalization.
 
-``prompt_tokens`` is the whole input: ``input_tokens`` plus both cache counts (ADR 0036).
+``prompt_tokens`` is the whole input: ``input_tokens`` plus both cache counts.
 """
 
 from typing import Any
