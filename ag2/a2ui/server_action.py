@@ -39,7 +39,7 @@ from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.stream import MemoryStream
 from ag2.utils import CONTEXT_OPTION_NAME
 
-from ._types import A2UIVersion, JsonObject, JsonValue, ServerToClientMessage, server_to_client_payload_keys
+from ._types import A2UIWireVersion, JsonObject, JsonValue, ServerToClientMessage, server_to_client_payload_keys
 from .actions import A2UIAction
 from .incoming import (
     A2UIIncomingAction,
@@ -64,7 +64,7 @@ def _is_message(value: JsonValue) -> TypeGuard[JsonObject]:
     return isinstance(value, dict) and not server_to_client_payload_keys().isdisjoint(value)
 
 
-def _stamp(message: JsonObject, version: A2UIVersion) -> ServerToClientMessage:
+def _stamp(message: JsonObject, version: A2UIWireVersion) -> ServerToClientMessage:
     """Ensure a handler-returned message carries the wire ``version``."""
     if "version" not in message:
         message = {"version": version, **message}
@@ -73,7 +73,7 @@ def _stamp(message: JsonObject, version: A2UIVersion) -> ServerToClientMessage:
 
 def _function_response(
     function_call_id: str,
-    version: A2UIVersion,
+    version: A2UIWireVersion,
     *,
     value: JsonValue = None,
     error: dict[str, str] | None = None,
@@ -84,7 +84,7 @@ def _function_response(
     return message  # type: ignore[return-value]
 
 
-def _invalid_function_arguments(call: A2UIIncomingFunctionCall, version: A2UIVersion) -> ServerToClientMessage:
+def _invalid_function_arguments(call: A2UIIncomingFunctionCall, version: A2UIWireVersion) -> ServerToClientMessage:
     return _function_response(
         call.function_call_id,
         version,
@@ -130,7 +130,7 @@ async def run_server_action(
     action: A2UIAction,
     click: A2UIIncomingAction,
     *,
-    version: A2UIVersion,
+    version: A2UIWireVersion,
     context: ConversationContext,
 ) -> list[ServerToClientMessage]:
     """Run a server-side action for a click and map its result to A2UI messages.
@@ -172,7 +172,7 @@ async def run_agent_function(
     action: A2UIAction | None,
     call: A2UIIncomingFunctionCall,
     *,
-    version: A2UIVersion,
+    version: A2UIWireVersion,
     catalog_id: str,
     context: ConversationContext,
 ) -> list[ServerToClientMessage]:
@@ -193,7 +193,7 @@ async def run_agent_function(
         Any messages the handler returned, then the response correlated by
         ``call.function_call_id`` — always exactly one, the renderer is waiting on it.
     """
-    if version != "v1.0":
+    if version != "1.0":
         logger.warning(
             "A2UI callAgentFunction %r needs protocol v1.0 (have %s); it cannot be answered in-protocol.",
             call.call,
@@ -249,7 +249,7 @@ async def run_client_interactions(
     agent: "Agent",
     *,
     variables: dict[str, Any] | None,
-    version: A2UIVersion,
+    version: A2UIWireVersion,
     catalog_id: str,
 ) -> tuple[list[ServerToClientMessage], bool]:
     """Run the interactions the server answers itself, without invoking the agent.
@@ -306,7 +306,7 @@ async def _run_handler(
     return result
 
 
-def _messages_of(result: JsonValue, version: A2UIVersion) -> list[ServerToClientMessage]:
+def _messages_of(result: JsonValue, version: A2UIWireVersion) -> list[ServerToClientMessage]:
     """The handler return as A2UI message(s) to emit verbatim, or ``[]`` when it is a plain value."""
     if _is_message(result):
         return [_stamp(result, version)]

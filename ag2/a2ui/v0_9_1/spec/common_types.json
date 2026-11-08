@@ -32,18 +32,16 @@
           "$ref": "#/$defs/AccessibilityAttributes"
         }
       },
-      "required": [
-        "id"
-      ]
+      "required": ["id"]
     },
     "ChildList": {
       "oneOf": [
         {
           "type": "array",
+          "description": "A static list of child component IDs.",
           "items": {
             "$ref": "#/$defs/ComponentId"
-          },
-          "description": "A static list of child component IDs."
+          }
         },
         {
           "type": "object",
@@ -57,10 +55,7 @@
               "description": "The path to the list of component property objects in the data model."
             }
           },
-          "required": [
-            "componentId",
-            "path"
-          ],
+          "required": ["componentId", "path"],
           "additionalProperties": false
         }
       ]
@@ -73,9 +68,7 @@
           "description": "A JSON Pointer path to a value in the data model."
         }
       },
-      "required": [
-        "path"
-      ],
+      "required": ["path"],
       "additionalProperties": false
     },
     "DynamicValue": {
@@ -230,26 +223,12 @@
         "returnType": {
           "type": "string",
           "description": "The expected return type of the function call.",
-          "enum": [
-            "string",
-            "number",
-            "boolean",
-            "array",
-            "object",
-            "any",
-            "void"
-          ],
+          "enum": ["string", "number", "boolean", "array", "object", "any", "void"],
           "default": "boolean"
         }
       },
-      "required": [
-        "call"
-      ],
-      "oneOf": [
-        {
-          "$ref": "catalog.json#/$defs/anyFunction"
-        }
-      ]
+      "required": ["call"],
+      "oneOf": [{"$ref": "catalog.json#/$defs/anyFunction"}]
     },
     "CheckRule": {
       "type": "object",
@@ -263,15 +242,12 @@
           "description": "The error message to display if the check fails."
         }
       },
-      "required": [
-        "condition",
-        "message"
-      ],
+      "required": ["condition", "message"],
       "additionalProperties": false
     },
     "Checkable": {
-      "description": "Properties for components that support client-side checks.",
       "type": "object",
+      "description": "Properties for components that support client-side checks.",
       "properties": {
         "checks": {
           "type": "array",
@@ -305,15 +281,11 @@
                   }
                 }
               },
-              "required": [
-                "name"
-              ],
+              "required": ["name"],
               "additionalProperties": false
             }
           },
-          "required": [
-            "event"
-          ],
+          "required": ["event"],
           "additionalProperties": false
         },
         {
@@ -324,9 +296,7 @@
               "$ref": "#/$defs/FunctionCall"
             }
           },
-          "required": [
-            "functionCall"
-          ],
+          "required": ["functionCall"],
           "additionalProperties": false
         }
       ]
