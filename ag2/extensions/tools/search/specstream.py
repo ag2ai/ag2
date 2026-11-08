@@ -114,11 +114,12 @@ async def _request(
         body: JSON request body.
 
     Returns:
-        The decoded JSON object, or an empty dict when the payload is not an object.
+        The ``data`` object of the reply envelope (the whole body when it has none), or an empty dict when the payload is not an object.
 
     Raises:
         ValueError: If no API key is available.
         httpx.HTTPStatusError: If SpecStream answers with a non-2xx status code.
+        ValueError: If the reply carries an error and no data.
     """
     key = api_key or os.environ.get(_API_KEY_ENV_VAR)
     if not key:
@@ -133,7 +134,21 @@ async def _request(
         _raise_for_status(response)
         raw = response.json()
 
-    return raw if isinstance(raw, dict) else {}
+    return _unwrap(raw)
+
+
+def _unwrap(raw: Any) -> dict[str, Any]:
+    """Return the ``data`` object of SpecStream's reply envelope, or the body itself when it has no envelope.
+
+    Raises:
+        ValueError: If the envelope carries an error and no data.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    data = raw.get("data") or raw
+    if data is raw and raw.get("error"):
+        raise ValueError(f"SpecStream error: {_text(raw.get('error'), 'message') or 'request failed'}")
+    return data if isinstance(data, dict) else {}
 
 
 class SpecStreamSearchToolkit(Toolkit):

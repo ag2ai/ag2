@@ -22,7 +22,7 @@ from ag2.tools.final.function_tool import FunctionToolSchema
 
 BASE_URL = "https://api.specstream.ai"
 
-SEARCH_PAYLOAD = {
+SEARCH_DATA = {
     "kind": "fact",
     "answer": {"value": "Guido van Rossum", "page": "https://en.wikipedia.org/wiki/Python_(programming_language)"},
     "sources": [
@@ -39,7 +39,7 @@ SEARCH_PAYLOAD = {
     "passages": [{"url": "https://python.org", "title": "Python", "text": "Python is a language."}],
 }
 
-EXTRACT_PAYLOAD = {
+EXTRACT_DATA = {
     "results": [
         {
             "url": "https://example.com/post",
@@ -50,6 +50,9 @@ EXTRACT_PAYLOAD = {
         }
     ]
 }
+
+SEARCH_PAYLOAD = {"request_id": "r1", "status": 200, "data": SEARCH_DATA, "error": None}
+EXTRACT_PAYLOAD = {"request_id": "r2", "status": 200, "data": EXTRACT_DATA, "error": None}
 
 
 @pytest.fixture(autouse=True)
@@ -155,6 +158,28 @@ class TestSearch:
         assert tool_results_event.results[0].result.parts[0] == DataInput(SpecStreamSearchResponse(query="AG2"))
 
     @respx.mock
+    async def test_unwrapped_body_is_still_read(self) -> None:
+        respx.get(f"{BASE_URL}/v1/web-search").mock(return_value=httpx.Response(200, json=SEARCH_DATA))
+        config = TrackingConfig(_tool_call_config({"query": "AG2"}))
+        agent = Agent("a", config=config, tools=[SpecStreamSearchToolkit(api_key="k")])
+
+        await agent.ask("search")
+
+        tool_results_event: ToolResultsEvent = config.mock.call_args_list[1].args[0]
+        response = tool_results_event.results[0].result.parts[0].data
+        assert response.answer == "Guido van Rossum"
+
+    @respx.mock
+    async def test_null_data_raises_the_error_message(self) -> None:
+        respx.get(f"{BASE_URL}/v1/web-search").mock(
+            return_value=httpx.Response(200, json={"data": None, "error": {"message": "Query is empty."}})
+        )
+        agent = Agent("a", config=_tool_call_config({"query": "AG2"}), tools=[SpecStreamSearchToolkit(api_key="k")])
+
+        with pytest.raises(ValueError, match="Query is empty."):
+            await agent.ask("search")
+
+    @respx.mock
     async def test_http_error_carries_api_message(self) -> None:
         respx.get(f"{BASE_URL}/v1/web-search").mock(
             return_value=httpx.Response(402, json={"message": "Balance is empty."})
@@ -189,7 +214,9 @@ class TestExtract:
 
     @respx.mock
     async def test_format_default(self) -> None:
-        route = respx.post(f"{BASE_URL}/v1/extract").mock(return_value=httpx.Response(200, json={"results": []}))
+        route = respx.post(f"{BASE_URL}/v1/extract").mock(
+            return_value=httpx.Response(200, json={"data": {"results": []}})
+        )
         toolkit = SpecStreamSearchToolkit(api_key="k", extract_format="text")
         agent = Agent(
             "a",
