@@ -152,3 +152,53 @@ class TestDiff:
         diff = current.diff(baseline, strict=False)
         assert diff.scorers_only_in_current == ("b",)
         assert "a" in diff.pass_rate_deltas
+
+    def test_pass_rate_uses_tasks_bool_scored_on_both_sides(self) -> None:
+        # Current has score=None on the task baseline failed (scorer raised / no verdict).
+        # Both rates use only the task both sides scored; None is not a failure.
+        baseline = _run(
+            _tr("t1", (Feedback(key="judge", score=True),)),
+            _tr("t2", (Feedback(key="judge", score=False),)),
+        )
+        current = _run(
+            _tr("t1", (Feedback(key="judge", score=True),)),
+            _tr("t2", (Feedback(key="judge", score=None, comment="scorer raised: TimeoutError"),)),
+        )
+
+        diff = current.diff(baseline)
+
+        assert diff.pass_rate_deltas["judge"] == (1.0, 1.0)
+        assert diff.flipped_to_fail == ()
+        assert diff.flipped_to_pass == ()
+
+    def test_mean_uses_tasks_numeric_scored_on_both_sides(self) -> None:
+        baseline = _run(
+            _tr("t1", (Feedback(key="quality", score=1.0),)),
+            _tr("t2", (Feedback(key="quality", score=0.0),)),
+        )
+        current = _run(
+            _tr("t1", (Feedback(key="quality", score=1.0),)),
+            _tr("t2", (Feedback(key="quality", score=None, comment="judge returned no verdict"),)),
+        )
+
+        diff = current.diff(baseline)
+
+        assert diff.mean_deltas["quality"] == (1.0, 1.0)
+
+    def test_scores_with_no_shared_task_are_omitted(self) -> None:
+        # Each side scored a different task, so there is nothing to compare.
+        baseline = _run(
+            _tr("t1", (Feedback(key="judge", score=True), Feedback(key="quality", score=1.0))),
+            _tr("t2", (Feedback(key="judge", score=None), Feedback(key="quality", score=None))),
+        )
+        current = _run(
+            _tr("t1", (Feedback(key="judge", score=None), Feedback(key="quality", score=None))),
+            _tr("t2", (Feedback(key="judge", score=True), Feedback(key="quality", score=0.5))),
+        )
+
+        diff = current.diff(baseline)
+
+        assert "judge" not in diff.pass_rate_deltas
+        assert "quality" not in diff.mean_deltas
+        assert diff.flipped_to_fail == ()
+        assert diff.flipped_to_pass == ()
