@@ -13,7 +13,6 @@ from typing import Annotated
 from unittest.mock import MagicMock
 
 import pytest
-from dirty_equals import IsInstance, IsTuple
 
 from ag2 import Agent, Context, MemoryStream, Variable, tool
 from ag2.agent import TaskConfig
@@ -37,10 +36,8 @@ from ag2.history import MemoryStorage, Storage
 from ag2.middleware import BaseMiddleware
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools import Toolkit, WebSearchTool
-from ag2.tools.builtin.web_search import WebSearchToolSchema
 from ag2.tools.subagents import background_agent_tool, subagent_tool
 from ag2.tools.subagents.run_task import run_task
-from ag2.tools.types import FunctionToolSchema
 from ag2.usage import UsageReport
 
 # Exercises the deprecated TaskConfig / run_subtask path on purpose.
@@ -700,9 +697,7 @@ class TestSubtaskInheritance:
         reply = await parent.ask("start")
 
         assert reply.body == "done"
-        assert tracking.calls[0].tools == IsTuple(
-            IsInstance(FunctionToolSchema), IsInstance(WebSearchToolSchema), check_order=False
-        )
+        assert {schema.type for schema in tracking.calls[0].tools} == {"function", "web_search"}
 
     async def test_subtask_include_tools_allowlist(self) -> None:
         """``include_tools=[...]`` keeps only the named tools."""

@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, 
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, TypeVar, overload
+from typing import Any, overload
 from uuid import uuid4
 
 from fast_depends.core import CallModel
@@ -15,7 +15,7 @@ from fast_depends.core import CallModel
 from ag2.types import ClassInfo, RequestOrigin, SendableMessage
 
 from .annotations import Context as AnnotatedContext
-from .context import ConversationContext, Stream, StreamId, SubId, drop_background_task
+from .context import ConversationContext, Stream, StreamId, SubId, _EventT, drop_background_task
 from .events import BaseEvent, Input, ModelRequest
 from .events.conditions import Condition, TypeCondition
 from .events.delegation import delivery_of
@@ -23,8 +23,6 @@ from .history import History, MemoryStorage, Storage
 from .utils import CONTEXT_OPTION_NAME, _validate_timeout, build_model
 
 __all__ = ("MemoryStream", "Stream")
-
-_EventT = TypeVar("_EventT", bound=BaseEvent)
 
 
 @dataclass(slots=True)
