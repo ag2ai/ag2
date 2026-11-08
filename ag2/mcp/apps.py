@@ -568,7 +568,7 @@ async def _resolve_content(content: AppContent, context: MCPExecutionContext) ->
         return resolved
     if isinstance(resolved, os.PathLike):
         try:
-            return Path(resolved).read_text(encoding="utf-8")
+            return Path(resolved).read_text(encoding="utf-8-sig")
         except OSError as e:
             raise ValueError(f"Could not read MCP app document from {resolved!s}: {e.strerror or e}") from e
         except UnicodeDecodeError as e:

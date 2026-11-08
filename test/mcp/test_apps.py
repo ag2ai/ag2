@@ -215,16 +215,9 @@ class TestTheDocument:
         assert _body(first.contents[0]) == "<p>first</p>"
         assert _body(second.contents[0]) == "<p>second</p>"
 
-    async def test_a_pathlike_body_is_read_as_utf8(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_a_pathlike_body_is_read_as_utf8(self, tmp_path: Path) -> None:
         document = tmp_path / "card.html"
         document.write_bytes("<p>café – 日本語</p>".encode())
-        # Simulate a host whose locale encoding is not UTF-8 (e.g. Windows cp1252).
-        original = Path.read_text
-
-        def locale_read_text(self: Path, encoding: str | None = None, errors: str | None = None) -> str:
-            return original(self, encoding=encoding or "cp1252", errors=errors)
-
-        monkeypatch.setattr(Path, "read_text", locale_read_text)
         server = MCPServer(make_agent(), apps=[_card_app(document, inject_runtime=False)])
 
         async with connect(server) as session:
@@ -232,13 +225,23 @@ class TestTheDocument:
 
         assert _body(read.contents[0]) == "<p>café – 日本語</p>"
 
+    async def test_a_pathlike_body_saved_with_a_bom_is_served_without_it(self, tmp_path: Path) -> None:
+        document = tmp_path / "card.html"
+        document.write_bytes("\ufeff<p>café</p>".encode())
+        server = MCPServer(make_agent(), apps=[_card_app(document, inject_runtime=False)])
+
+        async with connect(server) as session:
+            read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == "<p>café</p>"
+
     async def test_a_non_utf8_pathlike_body_fails_on_read(self, tmp_path: Path) -> None:
         document = tmp_path / "card.html"
-        document.write_bytes(b"<p>caf\xe9</p>")
-        server = MCPServer(make_agent(), apps=[_card_app(document)])
+        document.write_bytes(b"<p>calf\xe9</p>")
+        server = MCPServer(make_agent(), apps=[_card_app(document, inject_runtime=False)])
 
         async with connect(server, raise_exceptions=False) as session:
-            with pytest.raises(MCPError, match="Could not read MCP app document"):
+            with pytest.raises(MCPError, match="Could not read MCP app document .*: not valid UTF-8"):
                 await session.read_resource("ui://shop/card")
 
     async def test_a_missing_pathlike_body_fails_on_read(self, tmp_path: Path) -> None:
