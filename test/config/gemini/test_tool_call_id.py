@@ -47,7 +47,7 @@ def _response(parts: list[SimpleNamespace]) -> SimpleNamespace:
 @pytest.fixture
 def client() -> GeminiClient:
     with patch("ag2.config.gemini.gemini_client.genai.Client"):
-        return GeminiClient(model="gemini-2.5-flash", api_key="test-key")
+        return GeminiClient(model="gemini-2.5-flash-lite", api_key="test-key")
 
 
 @pytest.fixture

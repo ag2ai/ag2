@@ -5,10 +5,8 @@
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any, Self, TypeAlias
 from unittest.mock import MagicMock
-
-from typing_extensions import Self
 
 from ag2 import Context
 from ag2.config import LLMClient, ModelConfig, ModelProvider

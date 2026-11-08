@@ -25,7 +25,7 @@ def gemini_config() -> GeminiConfig:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         pytest.skip("GEMINI_API_KEY not set")
-    return GeminiConfig(model="gemini-3.1-flash-lite", api_key=api_key, temperature=0)
+    return GeminiConfig(model="gemini-3.5-flash-lite", api_key=api_key, temperature=0)
 
 
 @pytest.mark.gemini
@@ -237,7 +237,7 @@ async def test_thinking_level_low_reports_thinking_tokens(gemini_config: GeminiC
 @pytest.mark.asyncio()
 async def test_thinking_budget_reports_thinking_tokens(gemini_config: GeminiConfig) -> None:
     """thinking_budget shorthand is accepted on Gemini 2.5 thinking models."""
-    config = gemini_config.copy(model="gemini-2.5-flash", thinking_budget=512)
+    config = gemini_config.copy(model="gemini-2.5-flash-lite", thinking_budget=512)
 
     agent = Agent(
         name="budgeted-thinker",

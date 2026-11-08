@@ -4,7 +4,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, Self, TypedDict
 
 import httpx2
 from openai import DEFAULT_MAX_RETRIES, Omit, not_given, omit
@@ -17,7 +17,7 @@ from openai.types.chat.completion_create_params import PromptCacheOptions, WebSe
 from openai.types.responses import ServiceTier as ResponseServiceTier
 from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
 from openai.types.shared_params import DecisionQuestionInputPart, Reasoning
-from typing_extensions import Self, Unpack, deprecated
+from typing_extensions import Unpack, deprecated
 
 from ag2.config.config import ModelConfig, ModelProvider
 from ag2.events import Input

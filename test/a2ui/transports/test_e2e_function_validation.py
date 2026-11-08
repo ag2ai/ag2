@@ -50,7 +50,7 @@ async def test_empty_function_name_receives_an_unknown_function_reply() -> None:
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "callAgentFunction": {
                         "surfaceId": "s",
                         "functionCallId": "fc-1",
@@ -63,7 +63,7 @@ async def test_empty_function_name_receives_an_unknown_function_reply() -> None:
 
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
                 "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function ''."},
@@ -91,7 +91,7 @@ async def test_empty_function_call_id_is_preserved_in_the_rpc_reply() -> None:
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "callAgentFunction": {
                         "surfaceId": "s",
                         "functionCallId": "",
@@ -102,7 +102,7 @@ async def test_empty_function_call_id_is_preserved_in_the_rpc_reply() -> None:
         },
     )
 
-    assert messages == [{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "", "value": "found"}}]
+    assert messages == [{"version": "1.0", "agentFunctionResponse": {"functionCallId": "", "value": "found"}}]
     assert tracking.calls == []
 
 
@@ -122,7 +122,7 @@ async def test_renderer_result_with_empty_call_id_reaches_the_model(result: dict
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "rendererFunctionResponse": {"functionCallId": "", **result},
                 }
             ]
@@ -161,7 +161,7 @@ async def test_non_object_function_arguments_do_not_execute_handler(args: Any) -
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "callAgentFunction": {
                         "surfaceId": "s",
                         "functionCallId": "fc-1",
@@ -176,7 +176,7 @@ async def test_non_object_function_arguments_do_not_execute_handler(args: Any) -
     assert tracking.calls == []
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
                 "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid arguments for function 'submit'."},
@@ -205,7 +205,7 @@ async def test_unknown_function_argument_does_not_execute_handler_defaults() -> 
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "callAgentFunction": {
                         "surfaceId": "s",
                         "functionCallId": "fc-1",
@@ -219,7 +219,7 @@ async def test_unknown_function_argument_does_not_execute_handler_defaults() -> 
     assert calls == []
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
                 "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid arguments for function 'buy'."},
@@ -245,7 +245,7 @@ async def test_function_accepting_extra_keywords_receives_them() -> None:
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "callAgentFunction": {
                         "surfaceId": "s",
                         "functionCallId": "fc-1",
@@ -258,7 +258,7 @@ async def test_function_accepting_extra_keywords_receives_them() -> None:
 
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {"functionCallId": "fc-1", "value": "ok"},
         }
     ]
@@ -286,7 +286,7 @@ async def test_omitted_or_empty_function_arguments_use_handler_defaults(include_
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "callAgentFunction": {"surfaceId": "s", "functionCallId": "fc-1", "callFunction": call},
                 }
             ],
@@ -295,7 +295,7 @@ async def test_omitted_or_empty_function_arguments_use_handler_defaults(include_
 
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {"functionCallId": "fc-1", "value": "default"},
         }
     ]
@@ -330,7 +330,7 @@ async def test_function_calls_resolve_only_in_the_active_catalog(catalog_id: str
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "callAgentFunction": {"surfaceId": "s", "functionCallId": "fc-1", "callFunction": call},
                 }
             ],
@@ -346,7 +346,7 @@ async def test_function_calls_resolve_only_in_the_active_catalog(catalog_id: str
             "functionCallId": "fc-1",
             "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function 'lookup'."},
         }
-    assert messages == [{"version": "v1.0", "agentFunctionResponse": expected}]
+    assert messages == [{"version": "1.0", "agentFunctionResponse": expected}]
     assert tracking.calls == []
 
 
@@ -372,7 +372,7 @@ async def test_invalid_catalog_override_does_not_execute_handler(catalog_id: Any
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "callAgentFunction": {
                         "surfaceId": "s",
                         "functionCallId": "fc-1",
@@ -387,7 +387,7 @@ async def test_invalid_catalog_override_does_not_execute_handler(catalog_id: Any
     assert tracking.calls == []
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
                 "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid catalogId for function 'lookup'."},
@@ -410,7 +410,7 @@ async def test_agent_only_bindings_trigger_a_corrective_retry(message_key: str, 
     else:
         value = {"@call": "formatString", "args": {"value": call}} if binding == "nested" else call
         components = [{"id": "root", "component": "Text", "text": value}]
-    operation = {"version": "v1.0", message_key: {"surfaceId": "s", "components": components}}
+    operation = {"version": "1.0", message_key: {"surfaceId": "s", "components": components}}
     tracking = TrackingConfig(TestConfig(f"<a2ui-json>{json.dumps(operation)}</a2ui-json>", "Corrected."))
     app = A2UIServer(
         Agent("ui", config=tracking),
@@ -429,7 +429,7 @@ async def test_agent_only_bindings_trigger_a_corrective_retry(message_key: str, 
 @pytest.mark.parametrize("allowed_callers", ["rendererOnly", "rendererOrAgent"])
 async def test_renderer_callable_bindings_are_emitted(allowed_callers: str) -> None:
     operation = {
-        "version": "v1.0",
+        "version": "1.0",
         "createSurface": {
             "surfaceId": "s",
             "components": [{"id": "root", "component": "Text", "text": {"@call": "lookup"}}],
@@ -453,7 +453,7 @@ async def test_renderer_callable_bindings_are_emitted(allowed_callers: str) -> N
 async def test_agent_only_rpc_and_literal_call_objects_are_emitted() -> None:
     operations = [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "createSurface": {
                 "surfaceId": "s",
                 "dataModel": {"literal": {"@call": "lookup"}},
@@ -469,7 +469,7 @@ async def test_agent_only_rpc_and_literal_call_objects_are_emitted() -> None:
             },
         },
         {
-            "version": "v1.0",
+            "version": "1.0",
             "callRendererFunction": {
                 "functionCallId": "fc-1",
                 "callFunction": {"@call": "lookup", "catalogId": "https://example.com/catalog.json"},
@@ -516,7 +516,7 @@ async def test_function_schema_and_callers_follow_the_explicit_catalog(kind: str
     call = {"@call": "openUrl", "catalogId": selected, "args": {"url": "https://example.com"}}
     if kind.endswith("binding"):
         operation = {
-            "version": "v1.0",
+            "version": "1.0",
             "createSurface": {
                 "surfaceId": "s",
                 "catalogId": custom_id,
@@ -527,7 +527,7 @@ async def test_function_schema_and_callers_follow_the_explicit_catalog(kind: str
             },
         }
     else:
-        operation = {"version": "v1.0", "callRendererFunction": {"functionCallId": "fc-1", "callFunction": call}}
+        operation = {"version": "1.0", "callRendererFunction": {"functionCallId": "fc-1", "callFunction": call}}
     tracking = TrackingConfig(TestConfig(f"<a2ui-json>{json.dumps(operation)}</a2ui-json>", "Corrected."))
     app = A2UIServer(
         Agent("ui", config=tracking),
@@ -565,7 +565,7 @@ async def test_identical_renderer_call_ids_do_not_mix_function_names_between_cli
     )
     for name in ("lookup", "otherLookup"):
         operation = {
-            "version": "v1.0",
+            "version": "1.0",
             "callRendererFunction": {
                 "functionCallId": "fc-1",
                 "callFunction": {"@call": name, "catalogId": catalog["$id"]},
@@ -581,7 +581,7 @@ async def test_identical_renderer_call_ids_do_not_mix_function_names_between_cli
         {
             "a2ui": [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "rendererFunctionResponse": {"functionCallId": "fc-1", "value": 23},
                 }
             ]

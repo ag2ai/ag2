@@ -4,12 +4,11 @@
 
 import asyncio
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Self
 
 import acp
 import pytest
 from acp import schema
-from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.acp import ACPAgent, SessionConfig, StaticTokenAuth

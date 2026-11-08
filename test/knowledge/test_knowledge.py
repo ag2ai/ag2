@@ -15,12 +15,12 @@ import pytest
 pytest.importorskip("watchdog")
 
 from ag2 import Agent
-from ag2.agent import KnowledgeConfig
 from ag2.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TextInput, UnknownEvent
 from ag2.knowledge import (
     DefaultBootstrap,
     DiskKnowledgeStore,
     EventLogWriter,
+    KnowledgePlugin,
     LockedKnowledgeStore,
     MemoryKnowledgeStore,
     SqliteKnowledgeStore,
@@ -89,6 +89,28 @@ class TestMemoryKnowledgeStore:
         store = MemoryKnowledgeStore()
         entries = await store.list("/")
         assert entries == []
+
+    @pytest.mark.parametrize("resubscribe", [False, True])
+    async def test_repeated_close_preserves_other_subscription(self, resubscribe: bool) -> None:
+        store = MemoryKnowledgeStore()
+        received: list[str] = []
+
+        async def callback(path: str) -> None:
+            received.append(path)
+
+        old = await store.on_change("/watched", callback)
+        if resubscribe:
+            await old.close()
+        active = await store.on_change("/watched", callback)
+
+        await old.close()
+        await old.close()
+        await store.write("/watched/file.txt", "first")
+        assert received == ["/watched/file.txt"]
+
+        await active.close()
+        await store.write("/watched/file.txt", "second")
+        assert received == ["/watched/file.txt"]
 
 
 @pytest.mark.asyncio
@@ -264,8 +286,8 @@ class TestDefaultBootstrap:
     async def test_does_not_write_sentinel(self) -> None:
         """``DefaultBootstrap`` writes SKILL.md files but not ``/.initialized``.
 
-        The sentinel is owned by ``Agent`` (it writes it before calling
-        bootstrap, see ``Agent._bootstrap_store_once``).
+        The sentinel is owned by the knowledge scope (it writes it before
+        calling bootstrap, see ``ag2.knowledge._maintenance``).
         """
         store = MemoryKnowledgeStore()
         await DefaultBootstrap().bootstrap(store, "test-agent")
@@ -296,7 +318,7 @@ class TestAgentBootstrapsOnce:
                 ModelResponse(ModelMessage("ok-2")),
                 ModelResponse(ModelMessage("ok-3")),
             ),
-            knowledge=KnowledgeConfig(store=store, bootstrap=counter),
+            plugins=[KnowledgePlugin(store=store, bootstrap=counter)],
         )
 
         await asyncio.gather(
@@ -323,7 +345,7 @@ class TestAgentBootstrapsOnce:
         agent = Agent(
             "later",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(store=store, bootstrap=counter),
+            plugins=[KnowledgePlugin(store=store, bootstrap=counter)],
         )
         await agent.ask("hi")
 
@@ -479,7 +501,7 @@ class TestDiskKnowledgeStore:
             # watchdog delivers asynchronously via a background thread
             try:
                 await asyncio.wait_for(event.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pytest.skip("watchdog backend did not deliver event in time")
             assert any("file.txt" in p for p in received)
         finally:

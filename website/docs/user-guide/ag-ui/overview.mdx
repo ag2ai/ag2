@@ -68,12 +68,12 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream, read_run_input
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     name="support_bot",
     prompt="You help users with billing questions.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 stream = AGUIStream(agent)
@@ -118,14 +118,14 @@ uvicorn run_ag_ui:app --reload --port 8000
     ```python linenums="1"
     from ag2 import Agent
     from ag2.ag_ui import AGUIStream
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
     from fastapi import FastAPI
     from starlette.routing import Route
 
     agent = Agent(
         name="support_bot",
         prompt="You help users with billing questions.",
-        config=OpenAIConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     )
     app = FastAPI()
     stream = AGUIStream(agent)

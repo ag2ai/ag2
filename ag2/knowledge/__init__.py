@@ -27,6 +27,7 @@ from .constants import CONVERSATIONS_PREFIX, LOG_PREFIX, WORKING_MEMORY_PATH
 from .locked import LockedKnowledgeStore
 from .log import EventLogWriter
 from .memory import MemoryKnowledgeStore
+from .plugin import KnowledgePlugin
 from .redis import RedisKnowledgeStore
 from .sqlite import SqliteKnowledgeStore
 
@@ -44,6 +45,7 @@ __all__ = [
     "DefaultBootstrap",
     "DiskKnowledgeStore",
     "EventLogWriter",
+    "KnowledgePlugin",
     "KnowledgeStore",
     "LockedKnowledgeStore",
     "MemoryKnowledgeStore",

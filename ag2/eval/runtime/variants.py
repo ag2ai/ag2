@@ -19,7 +19,7 @@ import re
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from operator import itemgetter
 from uuid import uuid4
 
@@ -150,7 +150,7 @@ async def run_variants(
     """
     scorer_list = tuple(scorers)
     base_run_id = run_id if run_id is not None else uuid4().hex
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     started = time.perf_counter()
 
     eval_ctx = ConversationContext(stream=stream) if stream is not None else None

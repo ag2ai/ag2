@@ -4,7 +4,7 @@
 
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, Required, TypedDict
 
 import httpx2
 from fast_depends.library.serializer import SerializerProto
@@ -20,7 +20,6 @@ from openai.types.chat import (
 )
 from openai.types.chat.chat_completion_message_function_tool_call import ChatCompletionMessageFunctionToolCall
 from openai.types.chat.completion_create_params import PromptCacheOptions, WebSearchOptions
-from typing_extensions import Required
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
@@ -227,6 +226,10 @@ class OpenAIClient(LLMClient):
 
                 for tc in delta.tool_calls or []:
                     ix = tc.index
+                    if ix is None:
+                        # Some OpenAI-compatible servers (e.g. Gemini) omit the index:
+                        # a call carrying an id starts a new entry, anything else continues the last.
+                        ix = len(full_tool_calls) if tc.id or not full_tool_calls else len(full_tool_calls) - 1
                     if ix >= len(full_tool_calls):
                         full_tool_calls.extend(
                             {

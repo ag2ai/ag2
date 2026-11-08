@@ -26,4 +26,4 @@ Two places keep the plain `path` spelling: a list template, `"children": {"compo
 
 To run a function on the renderer, emit a `callRendererFunction` message; the renderer replies with the result, and that reply reaches you as your next input:
 
-`{"version": "v1.0", "callRendererFunction": {"functionCallId": "fc-1", "callFunction": {"@call": "myFunction", "catalogId": "{catalog_id}", "args": {...}}}}`
+`{"version": "{version_string}", "callRendererFunction": {"functionCallId": "fc-1", "callFunction": {"@call": "myFunction", "catalogId": "{catalog_id}", "args": {...}}}}`

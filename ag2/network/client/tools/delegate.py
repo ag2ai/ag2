@@ -13,7 +13,6 @@ flat surface keeps the LLM's tool list short — ``say`` and
 ``Resume.observed`` on terminal completion via the task mirror.
 """
 
-import asyncio
 import contextlib
 from typing import TYPE_CHECKING
 
@@ -181,7 +180,7 @@ def make_delegate_tool(agent_client: "AgentClient") -> object:
                     predicate=_reply_or_terminal_predicate(target_id),
                     timeout=timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return f"Error: delegate to {target!r} timed out after {timeout}s"
             except Exception as exc:
                 return f"Error: delegate to {target!r} failed: {exc}"

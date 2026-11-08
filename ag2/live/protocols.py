@@ -28,3 +28,19 @@ class StreamingTTSConfig(TTSConfig[T2], Protocol[T2]):
     """
 
     def stream(self, text: str) -> AsyncIterator[T2]: ...
+
+
+@runtime_checkable
+class TextStreamingTTSConfig(TTSConfig[T2], Protocol[T2]):
+    """A `TTSConfig` that takes a reply's text as it streams, not sentence by sentence.
+
+    `stream_text` is given every piece of one reply as the model produces it and
+    yields audio until that text runs out, so the provider decides where to cut
+    speech and keeps the voice's context across sentences. `Speech` checks for it
+    before `StreamingTTSConfig` and then skips its own sentence buffer.
+
+    The method is not named `stream`: runtime protocol checks only look at method
+    names, so a `StreamingTTSConfig` would pass for this one.
+    """
+
+    def stream_text(self, text: AsyncIterator[str]) -> AsyncIterator[T2]: ...

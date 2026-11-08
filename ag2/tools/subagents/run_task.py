@@ -2,25 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import copy
-from collections.abc import Awaitable, Callable, Iterable
-from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
+import asyncio
+from collections.abc import Collection, Mapping
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from ag2.annotations import Context
-from ag2.events import (
-    HumanInputRequest,
-    TaskCompleted,
-    TaskFailed,
-    TaskStarted,
-    Usage,
-    UsageEvent,
-)
+from ag2.events import Usage
 from ag2.exceptions import HumanInputError
-from ag2.middleware.builtin.tools.approval import BYPASS_KEY
+from ag2.scopes import derive_child_variables
 from ag2.stream import MemoryStream, Stream
-from ag2.usage import UsageReport, collect_usage_events
+from ag2.utils import CONFIGURED_DEPENDENCIES_CONTEXT_KEY
+
+from ._forwarding import PARENT_CANCELLED, DelegationRegistry, Forwarder
 
 if TYPE_CHECKING:
     from ag2.agent import Agent
@@ -32,101 +27,34 @@ class TaskResult:
     objective: str
     result: str | None
     completed: bool
-    stream: "Stream"
+    stream: Stream
     usage: Usage
-    """Cumulative token usage of the sub-task's stream, like ``AgentReply.usage``.
-
-    On a stream reused across delegations (``persistent_stream()``) this is the
-    worker's running total, not the cost of this call — the ``"subtask"`` rollup
-    emitted onto the parent carries that.
-    """
+    """Cumulative stream snapshot for inspection, never an additive record."""
     error: Exception | None = None
+    cancelled: bool = False
 
 
-def _make_hitl_bridge(parent_context: Context, task_id: str) -> Callable[[HumanInputRequest, Context], Awaitable[None]]:
-    """Forward ``HumanInputRequest`` events from the child stream to the parent.
+def _inherited_dependencies(parent: Mapping[Any, Any], worker_keys: Collection[Any]) -> dict[Any, Any]:
+    """Select the parent's dependencies a worker receives as invocation dependencies.
 
-    A copy stamped with ``task_id`` is forwarded: on the parent's stream it is
-    this delegation asking. A nested delegation's own stamp is replaced, since
-    the parent never saw that one start. The copy keeps the request's ``id``,
-    which is what the answer is matched on.
+    Values the caller supplied for the request (``ask(dependencies=...)`` or set
+    at runtime) override the worker's own. The parent's configuration (its
+    constructor dependencies and plugin defaults) only fills keys the worker
+    does not configure itself, and stays marked as configuration downstream.
     """
-
-    async def _bridge_hitl(event: HumanInputRequest, ctx: Context) -> None:
-        forwarded = copy.copy(event)
-        forwarded.task_id = task_id
-        await parent_context.stream.send(forwarded, ctx)
-
-    return _bridge_hitl
-
-
-async def _emit_rollup(parent_context: Context, agent_name: str, incurred: list[UsageEvent]) -> None:
-    """Emit one ``"subtask"`` rollup for what this invocation spent.
-
-    The sub-agent's per-call ``UsageEvent`` events stay on its private stream;
-    the parent gets this single rollup instead, so ``UsageReport`` — which
-    aggregates additively — sees each delegation once. Nothing spent, no rollup.
-    Shared by the success and the failure path so the two can't drift apart.
-
-    One rollup, always — that is an asserted invariant, not an accident, and
-    emitting one per pair instead would change ``UsageReport``'s by-model and
-    by-provider breakdown for every existing caller. It does carry the
-    ``(provider, model)`` pair when the delegated run used exactly one, so
-    per-model attribution survives a single-configuration delegation; the two
-    fields are declared ``compare=False`` on the event, so this disturbs no
-    existing equality assertion.
-    """
-    usage = _rollup_usage(incurred)
-    if not usage:
-        return
-
-    provider, model = _sole_pair(incurred)
-    await parent_context.send(
-        UsageEvent(
-            usage,
-            kind="subtask",
-            label=agent_name,
-            provider=provider,
-            model=model,
-            parts=_model_calls(incurred),
-        )
-    )
-
-
-def _model_calls(incurred: Iterable[UsageEvent]) -> list[UsageEvent]:
-    """The labelled calls behind this spend, a nested delegation's taken from its own rollup."""
-    return [call for event in incurred if event.usage for call in (event.parts or [event])]
-
-
-def _rollup_usage(incurred: Iterable[UsageEvent]) -> Usage:
-    """One ``Usage`` covering everything the delegation spent.
-
-    Counts are summed. ``total_tokens`` survives only when every call reported
-    one, since a partial sum falls below the counts it is meant to cover.
-    """
-    spent = [event.usage for event in incurred if event.usage]
-    usage = sum(spent, Usage())
-    if any(one.total_tokens is None for one in spent):
-        usage = replace(usage, total_tokens=None)
-    return usage
-
-
-def _sole_pair(incurred: Iterable[UsageEvent]) -> tuple[str | None, str | None]:
-    """The one ``(provider, model)`` behind this spend, or absence when several.
-
-    A mixed-model delegation has no honest label, and guessing one — the
-    parent's config, or the first call's — would show an attribution that is not
-    true. Absence says "this spend is real but unattributable", which a client
-    can render; a wrong label it cannot detect. Records that spent nothing are
-    ignored: they contribute no tokens, so they must not decide whose the
-    tokens are. A sub-agent that itself delegates carries an unlabelled rollup
-    of its own, which counts as a pair and correctly makes the parent's rollup
-    unlabelled too.
-    """
-    pairs = {(event.provider, event.model) for event in incurred if event.usage}
-    if len(pairs) != 1:
-        return None, None
-    return pairs.pop()
+    configured: Mapping[Any, Any] = parent.get(CONFIGURED_DEPENDENCIES_CONTEXT_KEY, {})
+    inherited: dict[Any, Any] = {}
+    inherited_configuration: dict[Any, Any] = {}
+    for key, value in parent.items():
+        if key == CONFIGURED_DEPENDENCIES_CONTEXT_KEY:
+            continue
+        if key in configured and configured[key] is value:
+            if key in worker_keys:
+                continue
+            inherited_configuration[key] = value
+        inherited[key] = value
+    inherited[CONFIGURED_DEPENDENCIES_CONTEXT_KEY] = inherited_configuration
+    return inherited
 
 
 async def run_task(
@@ -135,143 +63,49 @@ async def run_task(
     *,
     parent_context: Context,
     context: str = "",
-    stream: "Stream | None" = None,
+    stream: Stream | None = None,
     emit_events: bool = True,
     task_id: str | None = None,
 ) -> TaskResult:
-    """Run ``agent`` as a sub-task and return its ``TaskResult``.
+    """Run a delegation on its own stream, forwarding all source events upward.
 
-    ``emit_events`` controls whether ``TaskStarted`` / ``TaskCompleted`` /
-    ``TaskFailed`` events are emitted onto ``parent_context.stream``.
-    Keep it at the default (``True``) unless the caller is itself going to
-    emit its own task lifecycle events.
-
-    ``task_id`` lets callers pre-assign the lifecycle id, which is useful for
-    background tools that must return the id before the task completes.
+    ``emit_events`` suppresses only this delegation's lifecycle, never its usage.
+    Source usage is delivered immediately; no subtask rollup is generated.
     """
     task_id = task_id or uuid4().hex
-    task_stream = stream or MemoryStream(
-        storage=parent_context.stream.history.storage,
-    )
-    prompt = objective
-    if context:
-        prompt = f"{objective}\n\n## Context\n{context}"
-
-    if emit_events:
-        await parent_context.send(
-            TaskStarted(
-                task_id=task_id,
-                agent_name=agent.name,
-                objective=objective,
-                parent_tool_call_id=parent_context.tool_call_id,
-            )
-        )
-
-    # Bridge HITL events to the parent stream so the parent's hook can handle
-    # them. If the subagent has its own HITL hook, it is registered as an
-    # interrupter and swallows the event first.
-    sub_id: UUID | None = None
-    if not agent._hitl_hook:
-        sub_id = task_stream.where(HumanInputRequest).subscribe(
-            _make_hitl_bridge(parent_context, task_id),
-            interrupt=True,
-        )
-
-    # Scope the rollup to this invocation. Registered here and removed in the
-    # same ``finally`` as the bridge above, so it cannot outlive the call.
-    # Sequential calls that rebuild the stream object (``persistent_stream()``)
-    # are therefore accounted per call; concurrent delegations handed the *same*
-    # ``Stream`` instance still cross-capture, since the events they emit are
-    # indistinguishable on the one stream they share.
-    incurred: list[UsageEvent] = []
-    usage_sub_id = task_stream.where(UsageEvent).subscribe(collect_usage_events(incurred))
-
+    task_stream = stream or MemoryStream(storage=parent_context.stream.history.storage)
+    prompt = f"{objective}\n\n## Context\n{context}" if context else objective
+    forwarder = Forwarder(parent_context, task_id, agent.name, task_stream, objective, emit_events)
+    registry = DelegationRegistry.for_context(parent_context)
+    registry.register(forwarder)
+    dependencies = _inherited_dependencies(parent_context.dependencies, agent.dependencies.keys())
+    dependencies[Forwarder] = forwarder
     try:
         reply = await agent.ask(
             prompt,
             stream=task_stream,
-            dependencies=parent_context.dependencies.copy(),
-            # Copy variables so concurrent sibling tasks don't interfere.
-            # Mutations made by the child are intentionally not synced back —
-            # with concurrent siblings via asyncio.gather, last-writer-wins
-            # would silently clobber values, so we keep child mutations
-            # scoped to the child run by design. Tool approvals are not
-            # inherited: the sub-task asks again.
-            variables={k: v for k, v in parent_context.variables.items() if k != BYPASS_KEY},
+            dependencies=dependencies,
+            variables=derive_child_variables(parent_context.variables),
         )
-
-        usage = (await reply.usage()).total
-
-        result = TaskResult(
-            task_id=task_id,
-            objective=objective,
-            result=reply.body,
-            completed=True,
-            stream=task_stream,
-            usage=usage,
-        )
-
-        if emit_events:
-            await _emit_rollup(parent_context, agent.name, incurred)
-            await parent_context.send(
-                TaskCompleted(
-                    task_id=task_id,
-                    agent_name=agent.name,
-                    objective=objective,
-                    result=reply.body,
-                    task_stream=task_stream.id,
-                    usage=usage,
-                )
-            )
-
-        return result
-
-    except Exception as e:
-        # The sub-task may already have made billable model calls before it
-        # failed. Those UsageEvents are on its own stream, so read them the same
-        # way the success path does — via ``AgentReply.usage`` — instead of
-        # reporting a failed delegation as free.
-        try:
-            usage = UsageReport.from_events(await task_stream.history.get_events()).total
-        except Exception:
-            # A storage backend that is itself the reason the sub-task died would
-            # raise here too, masking the failure being handled and taking the
-            # TaskFailed event with it. Surfacing the sub-task's own error matters
-            # more than the cumulative reading, so degrade to this invocation's
-            # spend — already in hand, and equal to the cumulative value on
-            # anything but a reused stream.
-            usage = sum((event.usage for event in incurred), Usage())
-
-        if emit_events:
-            await _emit_rollup(parent_context, agent.name, incurred)
-            await parent_context.send(
-                TaskFailed(
-                    task_id=task_id,
-                    agent_name=agent.name,
-                    objective=objective,
-                    error=e,
-                )
-            )
-
-        # A sub-task killed by the human-input channel is the same failure one
-        # level down: reported as a TaskResult it becomes the delegating tool's
-        # output, and the parent's model is told the delegation failed and is
-        # free to try another route to the same effect. The accounting and the
-        # TaskFailed event above still happen — only the swallowing does not.
-        if isinstance(e, HumanInputError):
+    except asyncio.CancelledError as exc:
+        await forwarder.reject(exc)
+        origin = forwarder.origin
+        reason = origin.reason if origin is not None and origin.halted else PARENT_CANCELLED
+        usage = await forwarder.usage()
+        task = asyncio.current_task()
+        cancelling = getattr(task, "cancelling", None)
+        if origin is None or not origin.halted or cancelling is not None and cancelling():
             raise
-
-        return TaskResult(
-            task_id=task_id,
-            objective=objective,
-            result=None,
-            completed=False,
-            stream=task_stream,
-            error=e,
-            usage=usage,
-        )
-
+        return TaskResult(task_id, objective, None, False, task_stream, usage, RuntimeError(reason), cancelled=True)
+    except Exception as exc:
+        await forwarder.reject(exc)
+        usage = await forwarder.usage()
+        if isinstance(exc, HumanInputError):
+            raise
+        return TaskResult(task_id, objective, None, False, task_stream, usage, exc)
+    else:
+        usage = await forwarder.usage()
+        return TaskResult(task_id, objective, reply.body, True, task_stream, usage)
     finally:
-        task_stream.unsubscribe(usage_sub_id)
-        if sub_id:
-            task_stream.unsubscribe(sub_id)
+        forwarder.close()
+        registry.unregister(task_id)

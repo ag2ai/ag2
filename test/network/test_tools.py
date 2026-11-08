@@ -38,7 +38,7 @@ from ag2.network.client.tools.tasks import make_tasks_tool
 from ag2.network.policies import AGENT_CLIENT_DEP, CHANNEL_DEP
 from ag2.network.task_mirror import TaskMirror
 from ag2.stream import MemoryStream
-from ag2.task import TaskMetadata, TaskSpec, TaskState
+from ag2.task import Task, TaskMetadata, TaskSpec, TaskState
 from ag2.testing import TestConfig
 
 
@@ -292,7 +292,9 @@ async def test_tasks_status_and_list_and_wait() -> None:
     mirror = TaskMirror(hub=hub, owner_id=bob.agent_id)
     sub_ids = mirror.attach(stream)
     try:
-        async with bob_agent.task("indexing", context=Context(stream=stream)) as task:
+        async with Task(
+            owner_id=bob_agent.name, spec=TaskSpec(title="indexing"), context=Context(stream=stream)
+        ) as task:
             task_id = task.task_id
             await task.complete(result="ok")
     finally:

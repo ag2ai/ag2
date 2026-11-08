@@ -148,7 +148,7 @@ class FunctionTool(Tool):
         # expiry of this invocation's deadline gets the message below.
         try:
             return await asyncio.wait_for(self._execute(event, context), timeout=self.timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             error = TimeoutError(f"Tool {self.name!r} timed out after {self.timeout} seconds")
             return ToolErrorEvent.from_call(event, error=error)
 
@@ -219,6 +219,11 @@ def tool(
     """
 
     def make_tool(f: Callable[..., Any]) -> FunctionTool:
+        # An object that is callable but is not meant for an agent says so
+        # through its type; otherwise it would fail deep inside signature
+        # inspection with a message naming neither the object nor the fix.
+        if (refusal := getattr(type(f), "__ag2_tool_refusal__", None)) is not None:
+            raise TypeError(refusal)
         call_model = build_model(
             f,
             sync_to_thread=sync_to_thread,

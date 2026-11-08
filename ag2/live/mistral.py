@@ -161,11 +161,16 @@ async def _frames(voice: VoiceInput) -> AsyncIterator[bytes]:
         yield voice.content[start : start + size]
 
 
-# Not exhaustive — any model id string is accepted. Only the model named in
-# Mistral's speech docs is listed.
-SpeechModel = Literal["voxtral-mini-tts-2603",]
+# Not exhaustive — any model id string is accepted. Only models checked against
+# the live API are listed: the realtime speech endpoint accepts only
+# `voxtral-mini-tts-3` (`voxtral-mini-tts-2603` fails the websocket handshake).
+SpeechModel = Literal[
+    "voxtral-mini-tts-2603",
+    "voxtral-mini-tts-3",
+]
 
 DEFAULT_MODEL: SpeechModel = "voxtral-mini-tts-2603"
+DEFAULT_REALTIME_MODEL: SpeechModel = "voxtral-mini-tts-3"
 
 _FLOAT32_SIZE = 4
 _INT16_MAX = 32767
@@ -238,21 +243,29 @@ class StreamingTTSConfig(TTSConfig):
 
     async def stream(self, text: str) -> AsyncIterator[bytes]:
         events = await self._request(text, stream=True)
-
-        # Delta boundaries are not sample-aligned: carry the partial float32 sample over.
-        pending = b""
-        async for event in events:
-            if not isinstance(event.data, SpeechStreamAudioDelta):
-                continue
-
-            pending += base64.b64decode(event.data.audio_data)
-            usable = len(pending) - len(pending) % _FLOAT32_SIZE
-            if usable:
-                yield _float32_to_int16(pending[:usable])
-                pending = pending[usable:]
-
-        if pending:
-            raise ValueError(f"Mistral stream ended mid-sample with {len(pending)} stray bytes")
+        async for chunk in _int16_chunks(_audio_deltas(events)):
+            yield chunk
 
     async def synthesize(self, text: str) -> bytes:
         return b"".join([chunk async for chunk in self.stream(text)])
+
+
+async def _audio_deltas(events: AsyncIterator[Any]) -> AsyncIterator[bytes]:
+    async for event in events:
+        if isinstance(event.data, SpeechStreamAudioDelta):
+            yield base64.b64decode(event.data.audio_data)
+
+
+async def _int16_chunks(float32: AsyncIterator[bytes]) -> AsyncIterator[bytes]:
+    """Convert a stream of float32 PCM deltas to int16 PCM chunks."""
+    # Delta boundaries are not sample-aligned: carry the partial float32 sample over.
+    pending = b""
+    async for delta in float32:
+        pending += delta
+        usable = len(pending) - len(pending) % _FLOAT32_SIZE
+        if usable:
+            yield _float32_to_int16(pending[:usable])
+            pending = pending[usable:]
+
+    if pending:
+        raise ValueError(f"Mistral stream ended mid-sample with {len(pending)} stray bytes")

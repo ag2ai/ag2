@@ -39,7 +39,7 @@ import contextlib
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ag2.knowledge import KnowledgeStore
 
@@ -48,9 +48,7 @@ from .listener import BaseHubListener
 
 
 def _default_clock() -> str:
-    # ``timezone.utc`` instead of ``datetime.UTC`` (Py3.11+) so the
-    # framework keeps its Python 3.10 floor.
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 logger = logging.getLogger(__name__)

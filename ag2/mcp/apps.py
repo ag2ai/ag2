@@ -21,8 +21,9 @@ from the call's arguments. It is a static body registered as a resource; the
 per-call data reaches it as ``structuredContent`` on the result, which the host
 redelivers into the frame as a ``ui/notifications/tool-result`` notification.
 That is the opposite of :mod:`ag2.mcp_ui`, which builds HTML inside the handler
-from the arguments it was given. The two are alternatives; this module does not
-replace that one.
+from the arguments it was given. Prefer this module for new work: MCP-UI's own
+SDK now implements MCP Apps, and :mod:`ag2.mcp_ui` remains for clients that
+only render MCP-UI resources.
 
 Nothing here is a dead end. :attr:`MCPApp.tools` are ordinary
 :class:`~ag2.mcp.MCPFunctionTool`\\ s, :attr:`MCPApp.resource` is an ordinary
@@ -31,6 +32,7 @@ passing those two to ``tools=`` and ``resources=`` by hand.
 """
 
 import json
+import logging
 import os
 import re
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
@@ -57,6 +59,12 @@ from .tools import (
     resolve_context_value,
     to_call_result,
 )
+
+logger = logging.getLogger(__name__)
+
+# A ``str`` body is always literal HTML. One with no markup that ends like an
+# HTML file name was almost certainly meant as a file, so it is warned about.
+_LOOKS_LIKE_HTML_PATH = re.compile(r"^[^<]*\.html?\s*$", re.IGNORECASE)
 
 # The key ``_meta`` reserves for MCP Apps, on a tool and on a resource alike.
 UI_META_KEY = "ui"
@@ -460,6 +468,7 @@ def _replace_tool(tool: MCPFunctionTool, **changes: Any) -> MCPFunctionTool:
     built = replace(tool, **changes)
     object.__setattr__(built, "_resolved_params", tool._resolved_params)
     object.__setattr__(built, "_resolver_plans", tool._resolver_plans)
+    object.__setattr__(built, "_function", tool._function)
     return built
 
 
@@ -549,12 +558,21 @@ def collect_apps(apps: "Iterable[MCPApp]") -> "tuple[tuple[MCPFunctionTool, ...]
 async def _resolve_content(content: AppContent, context: MCPExecutionContext) -> str:
     resolved = resolve_variable(content, context, param_name="content")
     if isinstance(resolved, str):
+        if _LOOKS_LIKE_HTML_PATH.match(resolved):
+            logger.warning(
+                "MCP app content %r is served as literal HTML text, not read as a file. "
+                "Pass Path(%r) to serve the file's contents.",
+                resolved,
+                resolved.strip(),
+            )
         return resolved
     if isinstance(resolved, os.PathLike):
         try:
-            return Path(resolved).read_text()
+            return Path(resolved).read_text(encoding="utf-8-sig")
         except OSError as e:
             raise ValueError(f"Could not read MCP app document from {resolved!s}: {e.strerror or e}") from e
+        except UnicodeDecodeError as e:
+            raise ValueError(f"Could not read MCP app document from {resolved!s}: not valid UTF-8 ({e})") from e
     if callable(resolved):
         value = await call_with_context(resolved, context)
         if isinstance(value, str):

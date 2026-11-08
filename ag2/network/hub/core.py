@@ -34,7 +34,7 @@ import json
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from ag2.knowledge import KnowledgeStore
@@ -160,7 +160,7 @@ class PendingTurn:
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 _ERROR_CODE_MAP: dict[type, str] = {
@@ -1729,7 +1729,7 @@ class Hub:
 
         try:
             return await asyncio.wait_for(waiter, timeout=self._invite_ack_timeout)
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             await self._transition_channel(channel_id, ChannelState.CLOSED, "invite_timeout")
             raise ProtocolError(f"channel {channel_id!r} ack timeout") from exc
         finally:

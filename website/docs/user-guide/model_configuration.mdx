@@ -96,7 +96,7 @@ from ag2.config import GeminiConfig
 
 # Configure a Gemini model
 config = GeminiConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     api_key="...",
     streaming=True
 )
@@ -261,6 +261,21 @@ config = OpenAICompletionsConfig(model="gpt-5-mini", reasoning_effort="low")
 
 The model only returns its thinking when you set `summary`; without it the model still reasons, but no thinking text reaches the stream. The summary is emitted as `ModelReasoning` events (`OpenAIReasoningEvent`, a subclass), and reasoning tokens are reported on `ModelResponse.usage.thinking_tokens`.
 
+### OpenAI Prompt Cache Retention
+
+Set `ttl` in `OpenAIResponsesConfig`'s `prompt_cache_options` to `"12h"` to keep cache entries for at least 12 hours instead of the default 30 minutes (`gpt-5.6` and later). `OpenAICompletionsConfig` takes the same option, but Chat Completions accepts only `"30m"` and rejects `"12h"`. See the [OpenAI prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching){.external-link target="_blank"} for which models support each lifetime:
+
+```python linenums="1"
+from ag2.config import OpenAIResponsesConfig
+
+config = OpenAIResponsesConfig(
+    model="gpt-5.6",
+    prompt_cache_options={"ttl": "12h"},
+)
+```
+
+Cache writes are reported on `ModelResponse.usage.cache_creation_input_tokens`. The Responses API also reports how many of those tokens were written with 12-hour retention, which ag2 exposes as `usage.cache_creation_extended_input_tokens`; 12-hour writes are priced differently, so cost accounting can tell them apart. Anthropic reports its 1-hour cache writes in the same field (see [Anthropic Prompt Cache Retention](/docs/user-guide/model_configuration#anthropic-prompt-cache-retention)).
+
 ### Anthropic Configuration
 
 `AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview){.external-link target="_blank"} through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.15.0,<3`.
@@ -273,6 +288,31 @@ from ag2.config import AnthropicConfig
 # Auth resolved from ANTHROPIC_API_KEY when omitted
 config = AnthropicConfig(model="claude-haiku-4-5-20251001", streaming=True)
 ```
+
+#### Anthropic Prompt Cache Retention
+
+Anthropic cache entries live for 5 minutes by default. To keep a large document cached for an hour, set `ttl` to `"1h"` in its `cache_control` vendor metadata:
+
+```python linenums="1" hl_lines="10"
+from pathlib import Path
+from ag2 import Agent, BinaryInput
+from ag2.config import AnthropicConfig
+from ag2.events import BinaryType
+
+report = BinaryInput(
+    Path("report.pdf").read_bytes(),
+    media_type="application/pdf",
+    kind=BinaryType.DOCUMENT,
+    vendor_metadata={"cache_control": {"type": "ephemeral", "ttl": "1h"}},
+)
+agent = Agent("analyst", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+reply = await agent.ask(report, "Summarize the report.")
+usage = (await reply.usage()).total
+print(usage.cache_creation_input_tokens)  # every token written to the cache
+print(usage.cache_creation_extended_input_tokens)  # the part written with the 1-hour lifetime
+```
+
+1-hour writes are priced differently from 5-minute writes, so `usage.cache_creation_extended_input_tokens` lets cost accounting tell them apart. See the [Anthropic prompt caching guide](https://platform.claude.com/docs/en/build-with-claude/prompt-caching){.external-link target="_blank"} for pricing and minimum cacheable lengths.
 
 #### Inference Speed
 
@@ -380,7 +420,7 @@ Authentication accepts any of the following:
 from ag2.config import VertexAIConfig
 
 config = VertexAIConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     project="my-gcp-project",
     location="us-central1",
     credentials="/path/to/service-account-key.json",
@@ -400,7 +440,7 @@ from ag2.config import VertexAIConfig
 # GOOGLE_APPLICATION_CREDENTIALS points to a key file. With nothing
 # passed to `credentials`, google-genai resolves ADC automatically.
 config = VertexAIConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     project="my-gcp-project",
     location="us-central1",
 )
@@ -417,7 +457,7 @@ creds, _ = google.auth.default(
 )
 
 config = VertexAIConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     project="my-gcp-project",
     location="us-central1",
     credentials=creds,
@@ -452,7 +492,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 from ag2.config import VertexAIConfig
 
 # All Vertex auth parameters resolved from the environment.
-config = VertexAIConfig(model="gemini-3-flash-preview")
+config = VertexAIConfig(model="gemini-3.6-flash")
 ```
 
 ### Controlling Gemini Thinking
@@ -466,13 +506,13 @@ from ag2.config import GeminiConfig, VertexAIConfig
 
 # Gemini 3 — bound thinking with a level
 gemini3 = GeminiConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     thinking_level="low",  # "low" | "medium" | "high"
 )
 
 # Gemini 2.5 — bound thinking with an explicit token budget
 gemini25 = VertexAIConfig(
-    model="gemini-2.5-pro",
+    model="gemini-2.5-flash-lite",
     project="my-gcp-project",
     location="us-central1",
     thinking_budget=512,  # 0 disables thinking entirely
@@ -493,7 +533,7 @@ Set `automatic_continuation=False` on `GeminiConfig` or `VertexAIConfig` to turn
 from ag2.config import GeminiConfig
 
 config = GeminiConfig(
-    model="gemini-3-flash-preview",
+    model="gemini-3.6-flash",
     automatic_continuation=False,
 )
 ```
@@ -587,6 +627,47 @@ Reasoning content is streamed as `ModelReasoning` events, and reasoning tokens a
 !!! note "`extra_body` precedence"
 
     Pass `extra_body` to forward provider-specific keys that have no dedicated field. Explicit top-level fields always win over the same key inside `extra_body` — e.g. a top-level `thinking=True` overrides a `thinking` entry inside `extra_body`, while unrelated `extra_body` keys are merged through untouched.
+
+### xAI Configuration
+
+`XAIConfig` connects to [xAI's Grok models](https://docs.x.ai/docs/overview){.external-link target="_blank"} through the official `xai-sdk`. Install the optional dependency with `pip install "ag2[xai]"`.
+
+If `api_key` is not passed explicitly, the SDK resolves it from the `XAI_API_KEY` environment variable.
+
+```python linenums="1"
+from ag2.config import XAIConfig
+
+# Auth resolved from XAI_API_KEY when omitted
+config = XAIConfig(model="grok-4", streaming=True)
+```
+
+#### Safety Identifier and Moderation Guidelines
+
+`guidelines` tightens moderation per category. Each entry declines one of `nsfw`, `violence` or `profanity`; a category you leave out keeps the model's default behavior.
+
+`safety_identifier` tells xAI which end user is behind a request, so a policy violation is attributed to that user rather than to your whole API key. It must be stable and opaque: send a hash of your internal user ID, never an email address or display name. Because it differs per user, set it per request with `config.copy(...)`. xAI prefers it over the older `user` field, which is still accepted.
+
+```python linenums="1" hl_lines="8-11 16-17"
+import hashlib
+
+from ag2 import Agent
+from ag2.config import XAIConfig
+
+config = XAIConfig(
+    model="grok-4",
+    guidelines=[
+        {"type": "policy", "category": "violence", "behavior": "decline"},
+        {"type": "policy", "category": "profanity", "behavior": "decline"},
+    ],
+)
+agent = Agent("support", config=config)
+
+user_id = "customer-1042"
+safety_id = hashlib.sha256(user_id.encode()).hexdigest()
+reply = await agent.ask("How do I reset my password?", config=config.copy(safety_identifier=safety_id))
+```
+
+An unknown category or behavior raises `ValueError` before the request is sent. The API rejects a request that lists a category twice. It also rejects guidelines on a multi-agent model, together with `stop`, or on a deferred completion.
 
 ### Mistral Configuration
 
