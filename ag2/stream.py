@@ -37,13 +37,16 @@ class _Subscription:
         return await asyncio.wait_for(self._execute(event, context), timeout=self.timeout)
 
     async def _execute(self, event: BaseEvent, context: ConversationContext) -> Any:
+        # `asolve` annotates each positional as a tuple and each keyword as a dict; the values are arbitrary.
+        args: tuple[Any, ...] = (event,)
+        options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}
         async with AsyncExitStack() as stack:
             return await self.model.asolve(
-                event,
+                *args,
                 cache_dependencies={},
                 stack=stack,
                 dependency_provider=context.dependency_provider,
-                **{CONTEXT_OPTION_NAME: context},
+                **options,
             )
 
 
