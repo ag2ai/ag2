@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 import logging
 import math
 import os
@@ -150,7 +149,7 @@ class SpritesSandbox(SandboxBase):
                 # command and deliver its exit status before abandoning transport.
                 timeout=deadline + 10,
             )
-        except (SpriteError, TimeoutError, asyncio.TimeoutError) as error:
+        except (SpriteError, TimeoutError) as error:
             raise _request_error("execution", error) from None
         output = ((result.stdout or b"") + (result.stderr or b"")).decode("utf-8", errors="replace").strip()
         if len(output) > self._max_output:

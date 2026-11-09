@@ -90,7 +90,7 @@ async def test_output_and_env_and_per_call_timeout(sprite: MagicMock) -> None:
     "error",
     [
         SpriteTimeoutError("private diagnostic"),
-        asyncio.TimeoutError(),
+        TimeoutError(),
         NetworkError("private diagnostic"),
         APIError("private diagnostic", status_code=429),
     ],
