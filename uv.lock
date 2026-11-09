@@ -274,6 +274,7 @@ test-core = [
 ]
 types = [
     { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "perplexity", "typesafe", "xai", "zai"] },
+    { name = "bhived" },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "freezegun" },
@@ -509,6 +510,7 @@ types = [
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
     { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
+    { name = "bhived", specifier = ">=0.1.0,<0.2" },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "freezegun", specifier = ">=1.5,<2" },
