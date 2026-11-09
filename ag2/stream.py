@@ -4,7 +4,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
-from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, overload
@@ -15,7 +15,7 @@ from fast_depends.core import CallModel
 from ag2.types import ClassInfo, RequestOrigin, SendableMessage
 
 from .annotations import Context as AnnotatedContext
-from .context import ConversationContext, Stream, StreamId, SubId, drop_background_task
+from .context import ConversationContext, Stream, StreamId, SubId, _EventT, drop_background_task
 from .events import BaseEvent, Input, ModelRequest
 from .events.conditions import Condition, TypeCondition
 from .events.delegation import delivery_of
@@ -37,13 +37,16 @@ class _Subscription:
         return await asyncio.wait_for(self._execute(event, context), timeout=self.timeout)
 
     async def _execute(self, event: BaseEvent, context: ConversationContext) -> Any:
+        # `asolve` annotates each positional as a tuple and each keyword as a dict; the values are arbitrary.
+        args: tuple[Any, ...] = (event,)
+        options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}
         async with AsyncExitStack() as stack:
             return await self.model.asolve(
-                event,
+                *args,
                 cache_dependencies={},
                 stack=stack,
                 dependency_provider=context.dependency_provider,
-                **{CONTEXT_OPTION_NAME: context},
+                **options,
             )
 
 
@@ -99,12 +102,25 @@ class ABCStream(Stream):
             condition = TypeCondition(condition)
         return SubStream(self, condition)
 
+    @overload
+    def get(
+        self,
+        condition: type[_EventT],
+    ) -> AbstractAsyncContextManager[asyncio.Future[_EventT]]: ...
+
+    @overload
+    def get(
+        self,
+        condition: ClassInfo | Condition,
+    ) -> AbstractAsyncContextManager[asyncio.Future[BaseEvent]]: ...
+
     @asynccontextmanager
     async def get(
         self,
         condition: ClassInfo | Condition,
-    ) -> AsyncGenerator[asyncio.Future[BaseEvent]]:
-        result = asyncio.Future[BaseEvent]()
+    ) -> AsyncGenerator[asyncio.Future[Any]]:
+        # Typed per overload: a class condition yields only instances of it.
+        result = asyncio.Future[Any]()
 
         async def wait_result(event: BaseEvent) -> None:
             if not result.done():

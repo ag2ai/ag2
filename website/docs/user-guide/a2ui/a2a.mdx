@@ -12,7 +12,7 @@ A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride 
 
 | A2UI concept | A2A representation |
 |---|---|
-| Validated server→client messages | One `#!python DataPart` (MIME `#!python application/a2ui+json`) carrying the full message list, alongside a text `#!python Part` for the prose |
+| Validated server→client messages | One `#!python DataPart` (MIME `#!python application/a2ui+json`, in both `#!python media_type` and `#!python metadata["mimeType"]`, where the A2UI A2A extension spec and A2A v0.3 peers read it) carrying the full message list, alongside a text `#!python Part` for the prose |
 | Button click / `#!python callAgentFunction` / `#!python rendererFunctionResponse` / client error | An inbound A2UI `#!python DataPart` on the request message — a registered action runs its handler on the server, a `#!python callAgentFunction` is answered on the server; anything else is rewritten into the turn's prompt |
 | Catalog negotiation | `#!python a2uiClientCapabilities` (`#!python a2uiRendererCapabilities` for v1.0) on the A2A message `#!python metadata` |
 | Client data model | `#!python a2uiClientDataModel` (`#!python a2uiRendererDataModel` for v1.0) on the A2A message `#!python metadata`, sent by a renderer for surfaces created with `#!python sendDataModel: true`. Folded into the turn's prompt as untrusted state |
@@ -89,7 +89,7 @@ for part in message.parts:
         messages = get_a2ui_data(part)  # list[dict] — createSurface, updateComponents, ...
 ```
 
-`#!python get_a2ui_data` decodes both the canonical v1.0 form (a JSON array in one `#!python DataPart`) and the legacy form (one object per `#!python DataPart`), returning `#!python None` for any part that is not A2UI-typed.
+`#!python get_a2ui_data` decodes both the canonical v1.0 form (a JSON array in one `#!python DataPart`) and the legacy form (one object per `#!python DataPart`), returning `#!python None` for any part that is not A2UI-typed. `#!python is_a2ui_part` recognises a data part by its `#!python media_type` or by `#!python metadata["mimeType"]`. Only `#!python application/a2ui+json`, the MIME type the A2UI A2A extension specification defines, is recognised.
 
 ## The Click Round-Trip
 

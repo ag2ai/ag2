@@ -6,10 +6,7 @@
   "type": "object",
   "properties": {
     "version": {
-      "enum": [
-        "v0.9",
-        "v0.9.1"
-      ]
+      "enum": ["v0.9", "v0.9.1"]
     },
     "surfaces": {
       "type": "object",
@@ -20,9 +17,6 @@
       }
     }
   },
-  "required": [
-    "version",
-    "surfaces"
-  ],
+  "required": ["version", "surfaces"],
   "additionalProperties": false
 }

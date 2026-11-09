@@ -378,6 +378,17 @@ class TestAnswer:
             )
         )
 
+    @respx.mock
+    async def test_structured_answer_is_an_error(self) -> None:
+        respx.post(f"{EXA_BASE_URL}/answer").mock(
+            return_value=httpx.Response(200, json={"answer": {"name": "AG2"}, "citations": []})
+        )
+        toolkit = ExaToolkit(api_key="test")
+
+        agent = Agent("a", config=_tool_call_config({"query": "What is AG2?"}, tool_name="exa_answer"), tools=[toolkit])
+        with pytest.raises(TypeError, match="without a text answer"):
+            await agent.ask("answer")
+
 
 @pytest.mark.asyncio
 class TestExaToolkitVariable:

@@ -36,7 +36,7 @@ response = await agent.ask("Hello!", stream=my_stream)
 You can listen to events flowing through the stream using the `subscribe` method. To filter which events you receive, you can use the `where` method.
 
 !!! note
-    All event subscribers and interrupters support the same powerful execution context capabilities as [Agent Tools](/docs/user-guide/tools).
+    All event subscribers and interrupters support the same powerful execution context capabilities as [Agent Tools](/docs/user-guide/tools/tools).
 
     By type-hinting the `Context` object (or using `Depends`, `Inject`, `Variable`), your subscribers can access injected dependencies, interact with human-in-the-loop flows, or access conversation variables.
 
@@ -187,6 +187,185 @@ with stream.where(ToolResultEvent).join(max_events=1) as results:
 
 !!! warning "Do not timeout individual `join()` pulls"
     Consume the iterator with a plain `#!python async for`. Avoid wrapping individual pulls such as `#!python await asyncio.wait_for(events.__anext__(), timeout=...)`: cancelling one `__anext__()` closes the current iterator, so later events will not be yielded by that iterator. For bounded consumption, use `#!python join(max_events=N)` or put one `#!python asyncio.timeout(...)` around the whole loop.
+
+## Observe a Delegation Tree
+
+When an agent delegates through [subagent tools](/docs/user-guide/subagents),
+every descendant event reaches every ancestor's stream. Forwarding includes
+grandchildren and transient chunks; register an
+[observer](/docs/user-guide/advanced/observers) on the root agent to observe the
+whole tree without choosing a persistent child stream.
+
+The event type distinguishes observation from local execution:
+
+| Source event | What an ancestor receives | Observer filter |
+|---|---|---|
+| Model requests/responses, tool events, and other operational events | `#!python ChildEvent` containing the original event | `#!python @observer(ChildEvent)`; inspect `#!python event.source_event` |
+| Transient events such as `#!python ModelMessageChunk` | `#!python TransientChildEvent`, a transient subclass of `#!python ChildEvent` | The same `#!python @observer(ChildEvent)` filter |
+| `#!python UsageEvent` and every `#!python TaskEvent` | The source event type, with delegation provenance; both inherit `#!python InertEvent` | `#!python @observer(UsageEvent)`; lifecycle classes such as `#!python @observer((TaskStarted, TaskCompleted, TaskFailed))` |
+
+A `#!python ChildEvent` is non-conversational: it does not enter the ancestor's
+model transcript or trigger its tools, model loop, or HITL handlers. The original
+author's `#!python task_id`, `#!python agent_name`, and `#!python origin_event_id`
+identify its source. Its `#!python path` contains delegation task IDs from the
+outermost invocation to that author. Forwarding through another ancestor keeps
+the same source rather than nesting another observation envelope.
+
+Type filters match the delivered event itself. A parent subscription to
+`#!python ToolCallEvent` receives local tool calls; inspect
+`#!python ChildEvent.source_event` to find calls authored by descendants.
+`#!python BaseEvent.source_event` returns the event itself for a local event,
+so shared inspection code can use that property on either form.
+
+This example streams a worker's reply through the OpenAI Responses API and
+reports actual token usage across the tree. Install `ag2[openai]` and set
+`OPENAI_API_KEY` as described in the [Quick Start](/docs/user-guide/quick-start).
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent, observer
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import ChildEvent, ModelMessageChunk
+
+@observer(ChildEvent)
+def observe_child(event: ChildEvent) -> None:
+    source = event.source_event
+    if isinstance(source, ModelMessageChunk):
+        print(f"{event.agent_name}: {source.content}")
+
+async def main():
+    worker = Agent(
+        "worker",
+        config=OpenAIResponsesConfig(model="gpt-5", streaming=True),
+        prompt="Answer the assigned question in one sentence.",
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=OpenAIResponsesConfig(model="gpt-5", streaming=True),
+        prompt="Delegate the question to task_worker exactly once, then summarize its response.",
+        tools=[worker.as_tool(description="Answer a focused question.")],
+        observers=[observe_child],
+    )
+    reply = await coordinator.ask("Why give each subagent its own conversation history?")
+    print(reply.body)
+    report = await reply.usage()
+    print(f"Total tokens across the tree: {report.total.total_tokens}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Transient observations remain transient, so chunks are delivered live without
+being retained in default history. Normal `#!python persist_all` behavior still
+applies. Forwarding awaits the ancestor's ordinary delivery pipeline: a slow
+subscriber can delay descendants, and subscriber errors follow normal stream
+delivery behavior. Filter broad subscriptions and cadence-based watches when
+they should only process part of the tree.
+
+### Reply to an Event's Author
+
+While the author is executing, `#!python await event.origin.send(reply_event)`
+delivers an event to that exact invocation through its normal event pipeline.
+The handle addresses the original author even when a grandparent observes the
+event or several invocations use the same agent name. There is no name lookup
+or broadcast step.
+
+Use a custom non-conversational event to exchange application guidance without
+starting another model call. In this example, the worker's tool requests guidance,
+the parent responds, and the worker records the response before its tool resumes.
+
+The example uses `#!python OpenAIResponsesConfig`; install `ag2[openai]` and set
+`OPENAI_API_KEY` as described in the [Quick Start](/docs/user-guide/quick-start).
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent, Context, observer, tool
+from ag2.config import OpenAIResponsesConfig
+from ag2.events import BaseEvent, ChildEvent
+
+class GuidanceRequested(BaseEvent):
+    __conversational__ = False
+
+class Guidance(BaseEvent):
+    __conversational__ = False
+    text: str
+
+@observer(ChildEvent)
+async def give_guidance(event: ChildEvent) -> None:
+    if isinstance(event.source_event, GuidanceRequested):
+        await event.origin.send(Guidance(text="Focus on whether worker updates are visible to the parent"))
+
+@observer(Guidance)
+def receive_guidance(event: Guidance, context: Context) -> None:
+    context.variables["guidance"] = event.text
+    print(event.text)
+
+@tool
+async def request_guidance(context: Context) -> str:
+    """Ask the coordinator how to continue."""
+    await context.send(GuidanceRequested())
+    return context.variables.get("guidance", "No guidance received; answer directly.")
+
+async def main():
+    worker = Agent(
+        "worker",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Call request_guidance before answering, then follow its guidance and answer in one sentence.",
+        tools=[request_guidance],
+        observers=[receive_guidance],
+    )
+    coordinator = Agent(
+        "coordinator",
+        config=OpenAIResponsesConfig(model="gpt-5"),
+        prompt="Delegate the question to task_worker exactly once, then summarize its response.",
+        tools=[worker.as_tool(description="Work with guidance from the coordinator.")],
+        observers=[give_guidance],
+    )
+    reply = await coordinator.ask("How do copied and shared variables differ?")
+    print(reply.body)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The receiving pipeline determines the delivered event's effect. In particular,
+sending a model request can start a reentrant model call; delivery adds no
+scheduling barrier. Each delivery also records a `#!python DownEvent` audit
+(or `#!python TransientDownEvent` for a transient event).
+
+Handles belong to one invocation, expire when it ends, and are not serialized.
+Saved history retains source metadata but has no live `#!python origin`; accessing
+it on a replayed observation or a local inert event raises `#!python RuntimeError`.
+Sending through an expired handle raises `#!python DeliveryError` from
+`#!python ag2.tools.subagents` and publishes `#!python DeliveryFailed` on the
+sender's stream. Even a forwarded terminal lifecycle event no longer has an
+executing recipient.
+
+### Account for Descendant Usage
+
+Ancestors receive each descendant's original `#!python UsageEvent` as it arrives,
+including spend before failure or cancellation. Its `#!python event_id`,
+`#!python kind`, provider, and model stay unchanged through forwarding. Descendant
+records additionally carry `#!python task_id`, `#!python agent_name`, and
+`#!python path`; a local record has no delegation task ID and an empty path.
+
+Use `#!python @observer(UsageEvent)` for both local and descendant spend.
+For local-only usage or lifecycle subscriptions, filter the event's
+`#!python path == ()`; excluding `#!python ChildEvent` alone still includes
+descendant inert events.
+
+`#!python await reply.usage()` includes local and descendant costs and
+deduplicates records by source identity. Custom reports should also count each
+`#!python UsageEvent.event_id` once within their reporting scope. New delegations
+produce no `kind="subtask"` rollup or `parts` summary. `#!python ModelResponse.usage`
+and terminal task usage are snapshots for inspection, not additional additive
+records. Existing archived rollups remain readable.
+
+See [TokenMonitor](/docs/user-guide/advanced/observers#tokenmonitor) for budget
+alerts and [Variable Scopes Across Subagents](/docs/user-guide/context/variables#variable-scopes-across-subagents)
+for the separate rules governing shared application state.
 
 ## Query retained history
 

@@ -269,7 +269,7 @@ async def test_function_response_value_is_serialized() -> None:
         "messages": [],
         "a2ui": [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "callAgentFunction": {
                     "surfaceId": "s1",
                     "functionCallId": "a1",
@@ -285,7 +285,7 @@ async def test_function_response_value_is_serialized() -> None:
     lines = [json.loads(line) for line in resp.text.splitlines() if line]
     assert lines == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {"functionCallId": "a1", "value": {"order_id": "O1", "total": 9.5}},
         }
     ]
