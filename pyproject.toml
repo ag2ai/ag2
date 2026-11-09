@@ -265,6 +265,8 @@ types = [
     "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, typesafe, elevenlabs, a2a, ag-ui, acp]",
     # search tools in `ag2/tools/search`, checked under `disallow_any_unimported`
     "ag2[ddgs, perplexity]",
+    # `ag2/extensions/sprites` is checked under `disallow_any_unimported`; the SDK ships `py.typed`.
+    "sprites-py>=0.7.2,<1",
 ]
 
 lint = ["ruff==0.16.10", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -622,6 +624,7 @@ files = [
     "ag2/tools/toolkits/mcp_server/toolkit.py",
     "ag2/tools/toolkits/mcp_server/types.py",
     "ag2/tools/types.py",
+    "ag2/extensions/sprites",
 ]
 
 strict = true
