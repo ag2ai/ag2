@@ -297,6 +297,7 @@ types = [
     { name = "types-aiobotocore", extra = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
+    { name = "unibaseio-membase" },
 ]
 
 [package.metadata]
@@ -543,6 +544,7 @@ types = [
     { name = "types-aiobotocore", extras = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
+    { name = "unibaseio-membase", specifier = ">=0.4.0,<0.5" },
 ]
 
 [[package]]
