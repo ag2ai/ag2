@@ -272,6 +272,13 @@ types = [
     # `ag2/textual.py` subclasses textual's `App`; unresolved, the base class is Any
     # and trips `disallow_any_unimported`. Not an extra: the TUI is an optional demo.
     "textual",
+    # Extensions are not shipped as extras. Unresolved, their packages are Any, which hides
+    # real errors or trips `disallow_any_unimported` in `ag2/extensions/*`.
+    "daytona>=0.171.0,<1",
+    "tenki>=1.4.0,<2",
+    "exa-py>=2.12.1,<3",
+    "nlip-sdk>=0.1.0,<1",
+    "nlip-server>=0.1.3,<1",
 ]
 
 lint = ["ruff==0.16.10", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -447,31 +454,7 @@ files = [
     "ag2/eval",
     "ag2/events",
     "ag2/exceptions.py",
-    "ag2/extensions/__init__.py",
-    "ag2/extensions/compaction_verifier",
-    "ag2/extensions/daytona/__init__.py",
-    "ag2/extensions/docker",
-    "ag2/extensions/mi4afa/__init__.py",
-    "ag2/extensions/mi4afa/prompt.py",
-    "ag2/extensions/mi4afa/scorer.py",
-    "ag2/extensions/mi4afa/trace.py",
-    "ag2/extensions/mi4afa/types.py",
-    "ag2/extensions/nlip/__init__.py",
-    "ag2/extensions/nlip/config.py",
-    "ag2/extensions/nlip/errors.py",
-    "ag2/extensions/nlip/testing.py",
-    "ag2/extensions/tealtiger/__init__.py",
-    "ag2/extensions/tealtiger/types.py",
-    "ag2/extensions/tenki/__init__.py",
-    "ag2/extensions/tenki/environment.py",
-    "ag2/extensions/tools/__init__.py",
-    "ag2/extensions/tools/search/__init__.py",
-    "ag2/extensions/tools/search/firecrawl.py",
-    "ag2/extensions/tools/search/glasser.py",
-    "ag2/extensions/tools/search/keenable.py",
-    "ag2/extensions/tools/search/serply.py",
-    "ag2/extensions/tools/search/tinyfish.py",
-    "ag2/extensions/tools/search/xquik.py",
+    "ag2/extensions",
     "ag2/files",
     "ag2/history.py",
     "ag2/hitl.py",
@@ -569,6 +552,18 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = "mcp_ui_server.*"
 follow_untyped_imports = true
+
+# `nlip-sdk` / `nlip-server` are annotated (pydantic models, typed session hooks) but
+# ship no `py.typed` marker; `ag2/extensions/nlip` subclasses and returns their types.
+[[tool.mypy.overrides]]
+module = ["nlip_sdk.*", "nlip_server.*"]
+follow_untyped_imports = true
+
+# `ag2/extensions/mi4afa` is built on torch / transformers. They are too heavy for the
+# `types` group, so the type-check job runs without them and their types are Any there.
+[[tool.mypy.overrides]]
+module = "ag2.extensions.mi4afa.*"
+disallow_any_unimported = false
 
 # AG-UI's SDK does not ship typing metadata, so values crossing that boundary
 # are Any even though this module's own functions remain checked strictly.
