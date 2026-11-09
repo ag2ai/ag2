@@ -187,6 +187,7 @@ optionals = [
     "mistralai[realtime]>=3.6.0,<4",  # MistralRealtimeTranscriber, MistralRealtimeTTSConfig (ag2.live)
     "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
     "daytona>=0.171.0,<1",
+    "sprites-py>=0.7.2,<1",
     "tenki>=1.4.0,<2",
     "tinyfish>=0.5,<0.6",
     "exa-py>=2.12.1,<3",
@@ -216,6 +217,7 @@ docs = [
     # Extensions are not shipped as extras; install their packages directly so docs can import the modules
     "tinyfish>=0.5,<0.6",
     "daytona>=0.171.0,<1",
+    "sprites-py>=0.7.2,<1",
     "tenki>=1.4.0,<2",
     "exa-py>=2.12.1,<3",
     "firecrawl-py>=4.53,<5",
@@ -263,6 +265,8 @@ types = [
     "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, typesafe, elevenlabs, a2a, ag-ui, acp]",
     # search tools in `ag2/tools/search`, checked under `disallow_any_unimported`
     "ag2[ddgs, perplexity]",
+    # `ag2/extensions/sprites` is checked under `disallow_any_unimported`; the SDK ships `py.typed`.
+    "sprites-py>=0.7.2,<1",
 ]
 
 lint = ["ruff==0.16.10", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -620,6 +624,7 @@ files = [
     "ag2/tools/toolkits/mcp_server/toolkit.py",
     "ag2/tools/toolkits/mcp_server/types.py",
     "ag2/tools/types.py",
+    "ag2/extensions/sprites",
 ]
 
 strict = true
