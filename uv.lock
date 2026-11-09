@@ -151,6 +151,7 @@ zai = [
 [package.dev-dependencies]
 dev = [
     { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
+    { name = "bhived" },
     { name = "codespell" },
     { name = "daytona" },
     { name = "dirty-equals" },
@@ -197,6 +198,7 @@ dev = [
 ]
 docs = [
     { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai"] },
+    { name = "bhived" },
     { name = "daytona" },
     { name = "docker" },
     { name = "exa-py" },
@@ -233,6 +235,7 @@ optionals = [
     { name = "a2a-sdk", extra = ["signing", "sqlite"] },
     { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
     { name = "agent-client-protocol", extra = ["http"] },
+    { name = "bhived" },
     { name = "daytona" },
     { name = "docker" },
     { name = "exa-py" },
@@ -271,6 +274,7 @@ test-core = [
 ]
 types = [
     { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "mistral", "ollama", "openai", "perplexity", "typesafe", "xai", "zai"] },
+    { name = "bhived" },
     { name = "dirty-equals" },
     { name = "docker" },
     { name = "freezegun" },
@@ -347,6 +351,7 @@ dev = [
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
+    { name = "bhived", specifier = ">=0.1.0,<0.2" },
     { name = "codespell", specifier = "==2.4.3" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
@@ -405,6 +410,7 @@ docs = [
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
+    { name = "bhived", specifier = ">=0.1.0,<0.2" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
@@ -461,6 +467,7 @@ optionals = [
     { name = "ag2", extras = ["xai"] },
     { name = "ag2", extras = ["zai"] },
     { name = "agent-client-protocol", extras = ["http"] },
+    { name = "bhived", specifier = ">=0.1.0,<0.2" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
@@ -503,6 +510,7 @@ types = [
     { name = "ag2", extras = ["mcp"] },
     { name = "ag2", extras = ["mcp-ui"] },
     { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
+    { name = "bhived", specifier = ">=0.1.0,<0.2" },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "freezegun", specifier = ">=1.5,<2" },
@@ -942,6 +950,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/29/13/232505664e8e2a0c7a2eb0c505cfade9d715538f89a5d62bc4c272968f62/backrefs-8.0-py312-none-any.whl", hash = "sha256:87f0fae8c5f207fe9f4b2887efc71d42f4900ac78faa1af08d675ef303692dc5", size = 398084, upload-time = "2026-07-26T19:54:19.954Z" },
     { url = "https://files.pythonhosted.org/packages/8a/69/47a3dc20abc4fa5486655fde681bd55e63211b46c886d8c02223d6468431/backrefs-8.0-py313-none-any.whl", hash = "sha256:601ce68ca12385dbda06ce264406b4c4210cf5b79fd0fd627592365c92f29a88", size = 400040, upload-time = "2026-07-26T19:54:21.194Z" },
     { url = "https://files.pythonhosted.org/packages/1c/cf/e5f9b68a5b0e939a2fb933a66c20180d0c9241bf8927f7a47fa48c1675e9/backrefs-8.0-py314-none-any.whl", hash = "sha256:9ec96efa080938be92323e8e730e57718c9c88eb15ad70bbef4e1766df591408", size = 411903, upload-time = "2026-07-26T19:54:23.221Z" },
+]
+
+[[package]]
+name = "bhived"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/55/3f/4667f3f07e2afa5b6ba025b2268337887c9ee2356f5360531379156efce6/bhived-0.1.0.tar.gz", hash = "sha256:6a0e2d81414e4e075963bf4ef492593df3f0443480a81a49c128941fb43057be", size = 33885, upload-time = "2026-11-03T09:56:18.616Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/22/7a882a68e7749afd2cd0a22bb23e2b04e7bd37d21268be8cdc9b5f64eb6e/bhived-0.1.0-py3-none-any.whl", hash = "sha256:8c1494baeb9dfc94bd6685f675eaee97663bea3cadc9f3daa7159fb753048368", size = 31657, upload-time = "2026-11-03T09:56:17.367Z" },
 ]
 
 [[package]]

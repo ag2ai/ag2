@@ -191,6 +191,7 @@ optionals = [
     "tinyfish>=0.5,<0.6",
     "exa-py>=2.12.1,<3",
     "firecrawl-py>=4.53,<5",
+    "bhived>=0.1.0,<0.2",  # BhivedToolkit (ag2.extensions.bhived)
     "torch>=2.5,<3",
     "transformers>=4.57,<6",
     "safetensors>=0.4.3,<1",
@@ -219,6 +220,7 @@ docs = [
     "tenki>=1.4.0,<2",
     "exa-py>=2.12.1,<3",
     "firecrawl-py>=4.53,<5",
+    "bhived>=0.1.0,<0.2",              # BhivedToolkit (ag2.extensions.bhived)
     "docker>=6.0.0,<8",                # Code execution tools are exposed in the public API by the optional `ag2.tools` module
     "nlip-sdk>=0.1.0,<1",              # NLIP is exposed in the public API by the optional `autogen.extensions.nlip` module
     "nlip-server>=0.1.3,<1",
@@ -263,6 +265,9 @@ types = [
     "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, typesafe, elevenlabs, a2a, ag-ui, acp]",
     # search tools in `ag2/tools/search`, checked under `disallow_any_unimported`
     "ag2[ddgs, perplexity]",
+    # `ag2/extensions/bhived` is not shipped as an extra. Unresolved, the `bhived` SDK
+    # is Any and trips `disallow_any_unimported`. It ships `py.typed`, so no override.
+    "bhived>=0.1.0,<0.2",
 ]
 
 lint = ["ruff==0.16.10", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -447,6 +452,7 @@ files = [
     "ag2/eval/pairwise.py",
     "ag2/eval/results/result.py",
     "ag2/eval/scorers/correctness.py",
+    "ag2/extensions/bhived",
     "ag2/network/client/checkpoint.py",
     "ag2/network/transport/frames.py",
     "ag2/policies/conversation.py",
