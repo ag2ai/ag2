@@ -56,7 +56,7 @@ expectations = [
 | `on_violation` | Handler | Effect |
 |---|---|---|
 | `#!python "audit"` | `#!python AuditHandler` | Write to the audit log only. Channel continues. |
-| `#!python "warn"` | `#!python NotifyChannelHandler` | Post `#!python EV_EXPECTATION_VIOLATED` on the channel WAL. |
+| `#!python "notify_channel"` | `#!python NotifyChannelHandler` | Post `#!python EV_EXPECTATION_VIOLATED` on the channel WAL. |
 | `#!python "auto_close"` | `#!python AutoCloseHandler` | Close the channel with `reason="expectation_violated:<name>"`; record to audit. |
 | `#!python "hide"` | (custom) | Hide later turns from the offending participant; not yet implemented as a built-in. |
 
@@ -276,25 +276,31 @@ Same shape as the built-ins:
 
 ```python linenums="1"
 from typing import ClassVar
+from ag2.network import EV_TEXT
+from ag2.network.channel import Expectation
 from ag2.network.hub import (
     ExpectationContext,
-    ExpectationEvaluator,
     Violation,
 )
 
 class TooManyMessagesEvaluator:
     name: ClassVar[str] = "too_many_messages"
 
-    def evaluate(self, ctx: ExpectationContext) -> list[Violation]:
-        threshold = ctx.params["max"]
+    def evaluate(self, expectation: Expectation, ctx: ExpectationContext) -> Violation | None:
+        threshold = expectation.params["max"]
         text_count = sum(1 for e in ctx.wal if e.event_type == EV_TEXT)
         if text_count > threshold:
-            return [Violation(
-                expectation=self.name,
-                channel_id=ctx.channel.channel_id,
-                detail=f"text count {text_count} exceeds {threshold}",
-            )]
-        return []
+            return Violation(
+                expectation=expectation,
+                detail={"text_count": text_count, "threshold": threshold},
+            )
+        return None
 ```
 
-Register on a custom registry and pass to `#!python Hub.open(..., evaluators=registry)`. The default registry can also be mutated via the module-level `#!python register_evaluator(...)` helper.
+Register the evaluator on an open hub:
+
+```python
+hub.register_expectation_evaluator(TooManyMessagesEvaluator())
+```
+
+Add an `#!python Expectation(name="too_many_messages", on_violation="audit", params={"max": 100})` to the channel adapter's manifest. The hub passes this expectation and the current context to the evaluator; return a `#!python Violation` when it fires, or `#!python None` otherwise.
