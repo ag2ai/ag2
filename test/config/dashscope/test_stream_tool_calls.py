@@ -83,3 +83,16 @@ async def test_whole_call_in_one_chunk_without_index() -> None:
     calls = await _run([_chunk([{"id": "a", "function": {"name": "f", "arguments": '{"x": 1}'}}])])
 
     assert calls == [("a", "f", '{"x": 1}')]
+
+
+@pytest.mark.asyncio
+async def test_fallback_keys_do_not_collide_across_chunks() -> None:
+    calls = await _run([
+        _chunk([
+            {"id": "a", "function": {"name": "f", "arguments": "{}"}},
+            {"id": "b", "function": {"name": "g", "arguments": "{}"}},
+        ]),
+        _chunk([{"id": "c", "function": {"name": "h", "arguments": "{}"}}]),
+    ])
+
+    assert calls == [("a", "f", "{}"), ("b", "g", "{}"), ("c", "h", "{}")]
