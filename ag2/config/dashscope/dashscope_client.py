@@ -179,7 +179,7 @@ class DashScopeClient(LLMClient):
 
         full_content: str = ""
         usage = Usage()
-        calls: list[ToolCallEvent] = []
+        tool_accs: dict[int, dict[str, str]] = {}
         finish_reason: str | None = None
 
         async for chunk in responses:
@@ -215,15 +215,26 @@ class DashScopeClient(LLMClient):
                             full_content += text
                             await context.send(ModelMessageChunk(text))
 
-                for tc in msg.get("tool_calls") or []:
-                    args = tc["function"]["arguments"]
-                    calls.append(
-                        ToolCallEvent(
-                            id=tc["id"],
-                            name=tc["function"]["name"],
-                            arguments=args if isinstance(args, str) else json.dumps(args),
-                        )
-                    )
+                # With `incremental_output=True` a tool call arrives in fragments that must be merged by index.
+                for position, tc in enumerate(msg.get("tool_calls") or []):
+                    index = tc.get("index")
+                    if not isinstance(index, int):
+                        index = len(tool_accs) + position
+                    acc = tool_accs.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                    if tc_id := tc.get("id"):
+                        acc["id"] = tc_id
+                    function = tc.get("function") or {}
+                    if name := function.get("name"):
+                        acc["name"] = name
+                    args = function.get("arguments")
+                    if args:
+                        acc["arguments"] += args if isinstance(args, str) else json.dumps(args)
+
+        calls = [
+            ToolCallEvent(id=acc["id"], name=acc["name"], arguments=acc["arguments"] or "{}")
+            for _, acc in sorted(tool_accs.items())
+            if acc["id"] and acc["name"]
+        ]
 
         message: ModelMessage | None = None
         if full_content:
