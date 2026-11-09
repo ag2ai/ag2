@@ -5,6 +5,7 @@
 """Tests for CompactStrategy, CompactTrigger, and built-in strategies."""
 
 import pytest
+from dirty_equals import IsPartialDict
 
 from ag2 import Agent, Context, KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact, TailWindowCompact
@@ -303,6 +304,15 @@ class TestTelemetrySurvivesCompaction:
             ("model_call", 44),
             ("compaction", 525),
         ]
+
+    async def test_completion_reports_the_summarization_usage_as_a_dict(self) -> None:
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        await self._agent().ask("go", stream=stream)
+
+        assert [(c.llm_calls, c.usage) for c in completions] == [(1, IsPartialDict({"total_tokens": 525}))]
 
     async def test_carried_records_do_not_advance_the_compaction_trigger(self) -> None:
         # The records ride along in history but are not conversational (`ADR

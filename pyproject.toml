@@ -269,6 +269,9 @@ types = [
     # without these their imports are Any, which hides real errors (redis) or trips
     # `disallow_any_unimported` (prometheus_client)
     "ag2[redis, metrics]",
+    # `ag2/textual.py` subclasses textual's `App`; unresolved, the base class is Any
+    # and trips `disallow_any_unimported`. Not an extra: the TUI is an optional demo.
+    "textual",
 ]
 
 lint = ["ruff==0.16.10", "codespell==2.4.3", "zizmor==1.30.1"]
@@ -434,7 +437,10 @@ files = [
     "ag2/a2ui",
     "ag2/acp",
     "ag2/ag_ui",
+    "ag2/aggregate.py",
+    "ag2/annotations.py",
     "ag2/assembly.py",
+    "ag2/compact.py",
     "ag2/config",
     "ag2/context.py",
     "ag2/eval",
@@ -467,6 +473,7 @@ files = [
     "ag2/extensions/tools/search/xquik.py",
     "ag2/files",
     "ag2/history.py",
+    "ag2/hitl.py",
     "ag2/knowledge",
     "ag2/live",
     "ag2/mcp",
@@ -505,15 +512,18 @@ files = [
     "ag2/network/views",
     "ag2/network/workflow_helpers.py",
     "ag2/observers",
+    "ag2/plugin.py",
     "ag2/policies",
-    "ag2/response/__init__.py",
-    "ag2/response/decision.py",
-    "ag2/response/proto.py",
+    "ag2/response",
     "ag2/scopes.py",
+    "ag2/spec.py",
+    "ag2/stream.py",
     "ag2/streams",
     "ag2/task.py",
     "ag2/testing.py",
+    "ag2/textual.py",
     "ag2/tools",
+    "ag2/types.py",
     "ag2/usage.py",
     "ag2/utils.py",
     "ag2/version.py",
