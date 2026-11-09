@@ -27,15 +27,17 @@ from ag_ui.core import (
     TextPart,
     ToolCallArgsEvent,
     ToolCallChunkEvent,
+    ToolCallEndEvent,
     ToolCallResultEvent,
+    ToolCallStartEvent,
     ToolMessage,
     UserMessage,
 )
 from dirty_equals import IsInt, IsPartialDict, IsStr
 
-from ag2 import Agent
+from ag2 import Agent, ToolResult
 from ag2.ag_ui import UNSUPPORTED_PROTOCOL_VERSION, AGUIStream
-from ag2.events import ModelMessage, ModelMessageChunk, ModelResponse, ToolCallEvent
+from ag2.events import ModelMessage, ModelMessageChunk, ModelResponse, ToolCallEvent, ToolCallsEvent
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools import tool
 from test.ag_ui.harness import (
@@ -46,6 +48,7 @@ from test.ag_ui.harness import (
     events_of_failing_run,
     exploding_agent,
     kinds_of,
+    recording_history,
     run_input,
     sole,
     weather_tool,
@@ -245,6 +248,105 @@ class TestEmptyModelOutput:
         events = await _events(TestConfig(empty, ModelResponse(empty)))
 
         assert kinds_of(events) == [RunStartedEvent, RunFinishedEvent]
+
+
+@tool
+def escalate(ticket_id: str) -> ToolResult:
+    """Hand the ticket to a person; what it returns is the turn's reply."""
+    return ToolResult(f"Ticket {ticket_id} was escalated.", final=True)
+
+
+@tool
+def forecast() -> str:
+    """Read the forecast."""
+    return "sunny"
+
+
+class TestARepliedTurnNotPublishedAsAModelMessage:
+    """A reply that reaches the turn only inside its `ModelResponse` still goes out as text.
+
+    A provider publishes a `ModelMessage` (or chunks closed by one) for its text, but a final
+    tool result, a middleware answering in the model's place, and a client that only streams
+    chunks produce the `ModelResponse` alone.
+    """
+
+    async def test_a_final_tool_result_is_sent_as_the_reply(self) -> None:
+        call = ToolCallEvent(name="escalate", arguments='{"ticket_id": "42"}')
+        agent = Agent("test_agent", config=TestConfig(call), tools=[escalate])
+
+        events = await dispatch_events(AGUIStream(agent), run_input(UserMessage(id="m1", content="help")))
+
+        assert kinds_of(events) == [
+            RunStartedEvent,
+            ToolCallStartEvent,
+            ToolCallArgsEvent,
+            ToolCallEndEvent,
+            ToolCallResultEvent,
+            TextMessageChunkEvent,
+            RunFinishedEvent,
+        ]
+        assert sole(events, TextMessageChunkEvent).delta == "Ticket 42 was escalated."
+
+    async def test_text_the_model_sent_before_a_final_tool_result_goes_out_once(self) -> None:
+        call = ToolCallEvent(name="escalate", arguments='{"ticket_id": "42"}')
+        said = ModelMessage("Escalating.")
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(said, ModelResponse(said, tool_calls=ToolCallsEvent([call]))),
+            tools=[escalate],
+        )
+
+        events = await dispatch_events(AGUIStream(agent), run_input(UserMessage(id="m1", content="help")))
+
+        assert [event.delta for event in each(events, TextMessageChunkEvent)] == [
+            "Escalating.",
+            "Ticket 42 was escalated.",
+        ]
+
+    async def test_a_middleware_answering_in_the_model_s_place_is_sent_as_the_reply(self) -> None:
+        middleware, _ = recording_history(reply="Answered without the model.")
+
+        events = await dispatch_events(
+            AGUIStream(Agent("test_agent", config=TestConfig("unused"))),
+            run_input(UserMessage(id="m1", content="hi")),
+            middleware=[middleware],
+        )
+
+        assert kinds_of(events) == [RunStartedEvent, TextMessageChunkEvent, RunFinishedEvent]
+        assert sole(events, TextMessageChunkEvent).delta == "Answered without the model."
+
+    async def test_chunks_no_message_closes_end_with_their_model_call(self) -> None:
+        call = ToolCallEvent(name="forecast", arguments="{}")
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(
+                ModelMessageChunk("Checking."),
+                ModelResponse(ModelMessage("Checking."), tool_calls=ToolCallsEvent([call])),
+                ModelMessageChunk("Sunny."),
+                ModelResponse(ModelMessage("Sunny.")),
+            ),
+            tools=[forecast],
+        )
+
+        events = await dispatch_events(AGUIStream(agent), run_input(UserMessage(id="m1", content="weather?")))
+
+        assert kinds_of(events) == [
+            RunStartedEvent,
+            TextMessageStartEvent,
+            TextMessageContentEvent,
+            TextMessageEndEvent,
+            ToolCallStartEvent,
+            ToolCallArgsEvent,
+            ToolCallEndEvent,
+            ToolCallResultEvent,
+            TextMessageStartEvent,
+            TextMessageContentEvent,
+            TextMessageEndEvent,
+            RunFinishedEvent,
+        ]
+        first, second = each(events, TextMessageStartEvent)
+        assert first.message_id != second.message_id
+        assert [event.delta for event in each(events, TextMessageContentEvent)] == ["Checking.", "Sunny."]
 
 
 class TestAFailingRun:

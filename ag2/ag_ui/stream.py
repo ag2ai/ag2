@@ -298,6 +298,8 @@ async def _serve_turn(
 
     streaming_msg_id: str | None = None
     reasoning_msg_id: str | None = None
+    # Whether the model call in progress has published its reply as a ModelMessage.
+    message_sent = False
     # A signature belongs to its call and may only follow the call's start: a
     # consumer may drop a value whose entity it has not seen. A client tool's
     # call is announced later, from its own event.
@@ -305,7 +307,7 @@ async def _serve_turn(
 
     @stream.subscribe
     async def map_events_to_ag_ui(event: events.BaseEvent) -> None:
-        nonlocal streaming_msg_id, reasoning_msg_id
+        nonlocal streaming_msg_id, reasoning_msg_id, message_sent
 
         if isinstance(event, ChildEvent):
             return
@@ -375,7 +377,18 @@ async def _serve_turn(
                 )
             )
 
-        elif isinstance(event, events.ModelMessage):
+        elif isinstance(event, (events.ModelMessage, events.ModelResponse)):
+            # A provider publishes its reply as a ModelMessage, which also closes the
+            # chunks it streamed. A final tool result, a middleware answering in the
+            # model's place, or a client that only streams chunks leaves the reply in
+            # the ModelResponse that ends the model call, so that one goes out instead.
+            if isinstance(event, events.ModelResponse):
+                already_sent, message_sent = message_sent, False
+                if already_sent:
+                    return
+            else:
+                message_sent = True
+
             if streaming_msg_id:
                 await output.send(
                     TextMessageEndEvent(
