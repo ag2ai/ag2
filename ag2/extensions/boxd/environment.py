@@ -6,7 +6,7 @@
 
 import threading
 from collections.abc import AsyncGenerator, Hashable
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
@@ -16,13 +16,10 @@ from boxd import AsyncBoxd
 from ag2.annotations import Variable
 from ag2.tools.builtin._resolve import resolve_variable
 
-from .sandbox import BoxdSandbox
+from .sandbox import BoxdSandbox, check_env_names
 
 if TYPE_CHECKING:
     from ag2.context import ConversationContext
-
-#: Label every machine this extension creates carries, so they can be listed.
-DEFAULT_LABELS = {"created-by": "ag2"}
 
 
 @dataclass(slots=True)
@@ -90,7 +87,9 @@ class BoxdEnvironment:
                 git and Docker.
             env_vars: Environment variables set on every command the sandbox
                 runs. Per-call variables take precedence.
-            labels: Labels added to the machine, on top of ``created-by=ag2``.
+            labels: Labels added to the machine, on top of ``created-by=ag2``,
+                which every machine this extension creates carries so it can
+                be listed. A ``created-by`` key here is overridden.
             resources: Machine size; ``None`` uses the organization's default.
             isolated: Create the machine isolated: no in-machine boxd
                 credential, metadata endpoint or private network peers, so
@@ -126,6 +125,8 @@ class BoxdEnvironment:
         self._workdir = workdir
 
         self._cache: dict[Hashable, BoxdSandbox] = {}
+        # Sandboxes an `aclose` failed to delete, retried by the next `aclose`.
+        self._undeleted: list[BoxdSandbox] = []
         self._cache_lock = threading.Lock()
 
     @property
@@ -181,8 +182,11 @@ class BoxdEnvironment:
         assert isinstance(env_vars, dict)
         assert isinstance(labels, dict)
 
+        # Checked before a client exists, so a bad name leaves nothing to release.
+        check_env_names(env_vars)
+
         resources = self._resources or BoxdResources()
-        all_labels = {**DEFAULT_LABELS, **labels}
+        all_labels = {**labels, "created-by": "ag2"}
         key: Hashable = (
             api_key,
             base_url,
@@ -223,25 +227,28 @@ class BoxdEnvironment:
                 )
                 self._cache[key] = sandbox
 
-        try:
-            await sandbox.__aenter__()
-        except BaseException:
-            with self._cache_lock:
-                if self._cache.get(key) is sandbox:
-                    self._cache.pop(key)
-            with suppress(BaseException):
-                await sandbox.aclose()
-            raise
+        # A failed setup is not closed here: the entry is shared, and closing it
+        # would delete a machine another caller is still creating or using. The
+        # sandbox deletes its own failed setup, and retries a failed delete
+        # before it creates a replacement.
+        await sandbox.__aenter__()
         # The factory owns the lifecycle so cached state survives this scope.
         yield sandbox
 
     async def aclose(self) -> None:
-        """Delete every cached machine. Safe to call multiple times."""
+        """Delete every cached machine. Safe to call multiple times; a call
+        retries the machines a previous one failed to delete."""
         with self._cache_lock:
-            sandboxes = list(self._cache.values())
+            sandboxes = [*self._cache.values(), *self._undeleted]
             self._cache.clear()
-        for sandbox in sandboxes:
-            await sandbox.aclose()
+            self._undeleted = []
+        try:
+            for sandbox in sandboxes:
+                await sandbox.aclose()
+        finally:
+            # Also on cancellation: whatever is not deleted yet stays for the next call.
+            with self._cache_lock:
+                self._undeleted.extend(sandbox for sandbox in sandboxes if sandbox.machine_id is not None)
 
     async def __aenter__(self) -> "BoxdEnvironment":
         return self

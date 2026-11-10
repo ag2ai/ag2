@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
 ## Configure the machine
 
-The default image is Ubuntu 24.04. Commands run as the user `boxd` (with passwordless `sudo`) in `/home/boxd`, and the image ships `python`, `bash`, `node`, `git` and Docker. `BoxdEnvironment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py){.external-link target="_blank"}, so `SandboxShellTool(env)` reports the real working directory to the model on its own, and `SandboxCodeTool(env)` works without a custom `CodeAdapter`.
+The default image is Ubuntu 24.04. Commands run as the user `boxd` (with passwordless `sudo`) in `/home/boxd`, and the image ships `python`, `bash`, `node`, `git` and Docker. `BoxdEnvironment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py){.external-link target="_blank"}, so `SandboxShellTool(env)` reports the real working directory to the model on its own, and `SandboxCodeTool(env)` works without a custom `CodeAdapter`. `SandboxCodeTool` enables `python` and `bash` by default; pass `languages=("python", "bash", "javascript")` to let the model run Node too.
 
 Machines are created **isolated** by default: they have no in-machine boxd credential, no metadata endpoint and no private network peers, so code the model writes cannot reach your boxd account. Outbound internet access stays on. Every machine also gets a one-hour `delete_after` timer, which boxd enforces even if your process dies before it can clean up.
 
@@ -76,14 +76,14 @@ env = BoxdEnvironment(
 | `name` | Picked by boxd | Machine name, unique within the organization |
 | `image` | Ubuntu 24.04 | Guest image |
 | `env_vars` | `{}` | Environment variables set on every command the sandbox runs |
-| `labels` | `{}` | Labels added to the machine, on top of `created-by=ag2` |
+| `labels` | `{}` | Labels added to the machine; `created-by=ag2` is always set on top |
 | `resources` | Organization default | vCPU, memory and disk (sizes: 1 vCPU / 4G, 2 / 8G, 4 / 16G, 8 / 32G) |
 | `isolated` | `True` | Keep the boxd credential and private network away from the machine |
 | `timeout` | `60` seconds | Machine startup and command timeout |
 | `delete_after` | `3600` seconds | Server-enforced lifetime backstop; `None` disables it |
 | `workdir` | `/home/boxd` | Working directory for commands and files, created if missing |
 
-`api_key`, `base_url`, `region`, `name`, `image`, `env_vars` and `labels` accept [`Variable`](/docs/user-guide/context/variables) values for per-request resolution. Always close the environment with `async with` or `await env.aclose()`; `delete_after` is a fail-safe, not the normal cleanup path.
+`api_key`, `base_url`, `region`, `name`, `image`, `env_vars` and `labels` accept [`Variable`](/docs/user-guide/context/variables) values for per-request resolution. Always close the environment with `async with` or `await env.aclose()`; a machine whose delete failed is retried by the next `aclose()`, and `delete_after` is a fail-safe, not the normal cleanup path.
 
 A command that runs past its timeout is killed on the machine and returns exit code `124`. Its partial output is not returned.
 

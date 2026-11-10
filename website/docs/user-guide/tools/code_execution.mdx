@@ -127,7 +127,7 @@ async with env:
     print(await reply.content())
 ```
 
-`BoxdEnvironment` reads `BOXD_API_KEY` and `BOXD_REGION`. The default Ubuntu image ships `python`, `bash` and `node`, so `python`, `bash` and `javascript` work without extra setup. See the [boxd extension guide](/docs/user-guide/extensions/boxd) for lifecycle, isolation and machine size.
+`BoxdEnvironment` reads `BOXD_API_KEY`, `BOXD_BASE_URL` and `BOXD_REGION` from the environment by default. The default Ubuntu image ships `python`, `bash` and `node`, so `python`, `bash` and `javascript` run with the default runners; `javascript` still has to be enabled with `SandboxCodeTool(env, languages=("python", "bash", "javascript"))`. See the [boxd extension guide](/docs/user-guide/extensions/boxd) for lifecycle, isolation and machine size.
   </Tab>
 
   <Tab title="Docker">

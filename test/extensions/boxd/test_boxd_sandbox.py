@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock, call
 
 import pytest
-from boxd import APIStatusError, BoxdError, NotFoundError
+from boxd import APIConnectionError, BoxdError, NotFoundError
 from boxd import ExecResult as BoxdExecResult
 
 from ag2.annotations import Variable
@@ -34,7 +34,7 @@ def _fake_client(*results: BoxdExecResult) -> Any:
             wait_until_ready=AsyncMock(return_value=None),
             exec=AsyncMock(side_effect=[_result(), *results] if results else None, return_value=_result()),
             delete=AsyncMock(return_value=None),
-            files=SimpleNamespace(upload=AsyncMock(return_value=5)),
+            fs=SimpleNamespace(write=AsyncMock(return_value=None)),
         ),
         close=AsyncMock(return_value=None),
     )
@@ -59,7 +59,7 @@ class TestConstruction:
 
     def test_variable_rejected_in_constructor(self) -> None:
         with pytest.raises(TypeError):
-            BoxdSandbox(client=Variable("client"), create_options={})  # type: ignore[arg-type]
+            BoxdSandbox(client=Variable("client"), create_options={})
 
 
 @pytest.mark.asyncio
@@ -136,26 +136,9 @@ class TestExec:
             exit_code=124,
         )
 
-    async def test_deadline_exceeded_is_a_timeout(self) -> None:
-        client = _fake_client()
-        client.machines.exec = AsyncMock(side_effect=[_result(), APIStatusError("deadline", code="deadline_exceeded")])
-        sandbox = BoxdSandbox(client=client, create_options={})
-
-        assert (await sandbox.exec(["sleep", "10"], timeout=2)).exit_code == 124
-
-    async def test_timeout_error_reports_the_budget(self) -> None:
-        client = _fake_client()
-        client.machines.exec = AsyncMock(side_effect=[_result(), TimeoutError("deadline exceeded")])
-        sandbox = BoxdSandbox(client=client, create_options={})
-
-        assert await sandbox.exec(["sleep", "10"], timeout=2) == ExecResult(
-            output="boxd execution timed out after 2s: deadline exceeded",
-            exit_code=124,
-        )
-
     async def test_other_sdk_errors_become_a_failed_result(self) -> None:
         client = _fake_client()
-        client.machines.exec = AsyncMock(side_effect=[_result(), APIStatusError("agent gone", code="unavailable")])
+        client.machines.exec = AsyncMock(side_effect=[_result(), APIConnectionError("agent gone")])
         sandbox = BoxdSandbox(client=client, create_options={})
 
         assert await sandbox.exec(["true"]) == ExecResult(output="boxd error: agent gone", exit_code=1)
@@ -174,13 +157,14 @@ class TestExec:
 
 @pytest.mark.asyncio
 class TestFileIO:
-    async def test_put_file_uploads_under_workdir(self) -> None:
+    async def test_put_file_writes_under_workdir(self) -> None:
         client = _fake_client()
         sandbox = BoxdSandbox(client=client, create_options={}, workdir="/srv")
 
         await sandbox.put_file(PurePosixPath("sub/hello.txt"), b"world")
 
-        client.machines.files.upload.assert_awaited_once_with("m-1", "/srv/sub/hello.txt", b"world")
+        # `fs.write` creates the missing `sub/` directory.
+        client.machines.fs.write.assert_awaited_once_with("m-1", "/srv/sub/hello.txt", b"world")
 
     async def test_remove_file_runs_rm_f_in_workdir(self) -> None:
         client = _fake_client()
@@ -200,13 +184,12 @@ class TestFileIO:
 
 @pytest.mark.asyncio
 class TestLifecycle:
-    async def test_aenter_creates_prepares_workdir_and_aclose_deletes(self) -> None:
+    async def test_scope_creates_prepares_workdir_and_deletes_on_exit(self) -> None:
         client = _fake_client()
         sandbox = BoxdSandbox(client=client, create_options={"name": "n", "isolated": True}, workdir="/home/boxd/w")
 
-        await sandbox.__aenter__()
-        assert sandbox.machine_id == "m-1"
-        await sandbox.aclose()
+        async with sandbox:
+            assert sandbox.machine_id == "m-1"
         await sandbox.aclose()
 
         client.machines.create.assert_awaited_once_with(name="n", isolated=True)
@@ -232,9 +215,9 @@ class TestLifecycle:
 
     async def test_failed_close_is_not_raised_and_stays_retryable(self) -> None:
         client = _fake_client()
-        client.machines.delete = AsyncMock(side_effect=[APIStatusError("unreachable", code="unavailable"), None])
+        client.machines.delete = AsyncMock(side_effect=[APIConnectionError("unreachable"), None])
         sandbox = BoxdSandbox(client=client, create_options={})
-        await sandbox.__aenter__()
+        await sandbox.exec(["true"])
 
         await sandbox.aclose()
 
@@ -250,7 +233,7 @@ class TestLifecycle:
         client = _fake_client()
         client.machines.delete = AsyncMock(side_effect=NotFoundError("gone", code="not_found"))
         sandbox = BoxdSandbox(client=client, create_options={})
-        await sandbox.__aenter__()
+        await sandbox.exec(["true"])
 
         await sandbox.aclose()
 
@@ -263,7 +246,8 @@ class TestLifecycle:
         sandbox = BoxdSandbox(client=client, create_options={})
 
         with pytest.raises(TimeoutError, match="not ready"):
-            await sandbox.__aenter__()
+            async with sandbox:
+                pass
 
         client.machines.delete.assert_awaited_once_with("m-1")
         assert sandbox.machine_id is None
@@ -274,7 +258,8 @@ class TestLifecycle:
         sandbox = BoxdSandbox(client=client, create_options={}, workdir="/root/x")
 
         with pytest.raises(RuntimeError, match="Could not create workdir /root/x.*Permission denied"):
-            await sandbox.__aenter__()
+            async with sandbox:
+                pass
 
         client.machines.delete.assert_awaited_once_with("m-1")
 
@@ -284,6 +269,70 @@ class TestLifecycle:
         sandbox = BoxdSandbox(client=client, create_options={})
 
         with pytest.raises(asyncio.CancelledError):
-            await sandbox.__aenter__()
+            async with sandbox:
+                pass
 
         client.machines.delete.assert_awaited_once_with("m-1")
+
+    async def test_failed_cleanup_keeps_the_machine_for_aclose(self) -> None:
+        client = _fake_client()
+        client.machines.wait_until_ready = AsyncMock(side_effect=TimeoutError("not ready"))
+        client.machines.delete = AsyncMock(side_effect=[APIConnectionError("unreachable"), None])
+        sandbox = BoxdSandbox(client=client, create_options={})
+
+        with pytest.raises(TimeoutError, match="not ready"):
+            async with sandbox:
+                pass
+        assert sandbox.machine_id == "m-1"
+        await sandbox.aclose()
+
+        assert client.machines.delete.await_count == 2
+        assert sandbox.machine_id is None
+        client.close.assert_awaited_once()
+
+    async def test_no_new_machine_while_a_failed_one_is_still_alive(self) -> None:
+        client = _fake_client()
+        client.machines.create = AsyncMock(
+            side_effect=[SimpleNamespace(id="m-1", name="first"), SimpleNamespace(id="m-2", name="second")]
+        )
+        client.machines.wait_until_ready = AsyncMock(side_effect=[TimeoutError("not ready"), None])
+        client.machines.delete = AsyncMock(
+            side_effect=[APIConnectionError("unreachable"), APIConnectionError("unreachable"), None, None]
+        )
+        sandbox = BoxdSandbox(client=client, create_options={})
+
+        with pytest.raises(TimeoutError, match="not ready"):
+            await sandbox.exec(["true"])
+        with pytest.raises(RuntimeError, match="could not be deleted"):
+            await sandbox.exec(["true"])
+        assert (await sandbox.exec(["true"])).exit_code == 0
+        assert sandbox.machine_id == "m-2"
+        await sandbox.aclose()
+
+        assert client.machines.create.await_count == 2
+        assert client.machines.delete.await_args_list == [call("m-1"), call("m-1"), call("m-1"), call("m-2")]
+
+    async def test_close_waits_for_a_machine_being_created(self) -> None:
+        client = _fake_client()
+        gate = asyncio.Event()
+        client.machines.create = AsyncMock(side_effect=_released_by(gate))
+        sandbox = BoxdSandbox(client=client, create_options={})
+
+        running = asyncio.create_task(sandbox.exec(["true"]))
+        await asyncio.sleep(0.01)
+        closing = asyncio.create_task(sandbox.aclose())
+        await asyncio.sleep(0.01)
+        gate.set()
+        await asyncio.gather(running, closing)
+
+        client.machines.delete.assert_awaited_once_with("m-1")
+        assert sandbox.machine_id is None
+
+
+def _released_by(gate: asyncio.Event) -> Any:
+    # A machine creation that takes until the test releases it, like a slow network round-trip.
+    async def create(**kwargs: Any) -> Any:
+        await gate.wait()
+        return SimpleNamespace(id="m-1", name="ag2-test")
+
+    return create

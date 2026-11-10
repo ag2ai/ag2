@@ -278,6 +278,7 @@ types = [
     # real errors or trips `disallow_any_unimported` in `ag2/extensions/*`.
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",
+    "boxd>=0.3.0,<1",
     "exa-py>=2.12.1,<3",
     "nlip-sdk>=0.1.0,<1",
     "nlip-server>=0.1.3,<1",

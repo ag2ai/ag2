@@ -25,16 +25,15 @@ _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 def _is_timeout(error: BoxdError) -> bool:
     """Whether the SDK gave up on an exec because its ``timeout`` ran out.
 
-    The SDK reports a spent ``timeout=`` as a plain ``BoxdError`` with no
-    status code ("exec timed out after 3s"); the server has already killed the
-    remote process group by then.
+    Given a ``timeout=``, the SDK turns a spent deadline into a plain
+    ``BoxdError`` with no status code ("exec timed out after 3s"); the server
+    has already killed the remote process group by then.
     """
-    if error.code == "deadline_exceeded":
-        return True
     return error.code is None and str(error).startswith("exec timed out")
 
 
-def _check_env_names(env: dict[str, str] | None) -> None:
+def check_env_names(env: dict[str, str] | None) -> None:
+    """Raise ``ValueError`` unless every name in ``env`` is a shell identifier."""
     for key in env or {}:
         if not _ENV_NAME.match(key):
             raise ValueError(f"Invalid environment variable name for a boxd sandbox: {key!r}")
@@ -48,8 +47,13 @@ class BoxdSandbox(SandboxBase):
     """Sandbox backed by a boxd machine (a KVM microVM).
 
     Creation is lazy and failure-atomic after the SDK returns a machine ID:
-    readiness errors and cancellation delete the new machine. A finite
-    ``delete_after`` in ``create_options`` remains the server-side backstop.
+    readiness errors and cancellation delete the new machine. A delete that
+    fails keeps the machine handle, so :meth:`aclose`, the next creation
+    attempt and the atexit fallback can retry it. A finite ``delete_after`` in
+    ``create_options`` remains the server-side backstop.
+
+    Use one instance from one event loop at a time; creation and close are
+    serialized per loop.
 
     ``env`` is sent with every command, under the per-call ``env`` of
     :meth:`exec`.
@@ -73,7 +77,7 @@ class BoxdSandbox(SandboxBase):
                 )
         if timeout <= 0:
             raise ValueError("`timeout` must be greater than 0 seconds.")
-        _check_env_names(env)
+        check_env_names(env)
 
         self._client: AsyncBoxd | None = client
         self._create_options = create_options
@@ -136,7 +140,7 @@ class BoxdSandbox(SandboxBase):
     ) -> ExecResult:
         if not argv:
             return ExecResult(output="", exit_code=2)
-        _check_env_names(env)
+        check_env_names(env)
         merged_env = {**self._env, **(env or {})}
 
         client, machine_id = await self._ensure_sandbox()
@@ -149,8 +153,6 @@ class BoxdSandbox(SandboxBase):
                 cwd=str(self._workdir),
                 timeout=exec_timeout,
             )
-        except TimeoutError as e:
-            return ExecResult(output=f"boxd execution timed out after {exec_timeout}s: {e}", exit_code=124)
         except BoxdError as e:
             if _is_timeout(e):
                 return ExecResult(output=f"boxd execution timed out after {exec_timeout}s", exit_code=124)
@@ -169,8 +171,8 @@ class BoxdSandbox(SandboxBase):
         if path.is_absolute():
             raise ValueError(f"Absolute paths are not allowed in put_file: {path}")
         client, machine_id = await self._ensure_sandbox()
-        # The upload creates missing parent directories.
-        await client.machines.files.upload(machine_id, str(self._workdir / path), content)
+        # `fs.write` creates missing parent directories.
+        await client.machines.fs.write(machine_id, str(self._workdir / path), content)
 
     async def _ensure_sandbox(self) -> tuple[AsyncBoxd, str]:
         if self._closed:
@@ -186,6 +188,9 @@ class BoxdSandbox(SandboxBase):
             client = self._client
             if self._machine_id is not None and self._ready:
                 return client, self._machine_id
+            # A machine left behind by a failed setup must be gone before a new one exists.
+            if self._machine_id is not None and not await self._delete():
+                raise RuntimeError("A boxd machine from a failed setup could not be deleted; retry later.")
 
             machine = await client.machines.create(**self._create_options)
             self._machine_id = machine.id
@@ -202,12 +207,9 @@ class BoxdSandbox(SandboxBase):
                     detail = (_text(prepared.stdout) + _text(prepared.stderr)).strip()
                     raise RuntimeError(f"Could not create workdir {self._workdir} in boxd machine: {detail}")
             except BaseException:
-                try:
-                    await asyncio.shield(client.machines.delete(machine.id))
-                except BaseException as cleanup_error:
-                    logger.debug("Failed to delete boxd machine after create error: %s", cleanup_error)
-                self._machine_id = None
-                self._unregister_atexit()
+                # On failure the handle stays for `aclose`, the next attempt
+                # and the atexit fallback to retry.
+                await asyncio.shield(self._delete())
                 raise
 
             self._ready = True
@@ -217,35 +219,40 @@ class BoxdSandbox(SandboxBase):
     async def aclose(self) -> None:
         """Delete the machine and release the client.
 
-        Safe to call repeatedly. A close that fails leaves both the machine
-        handle and the client intact so a later call can retry; the atexit
-        fallback stays armed for the case where no retry comes.
+        Safe to call repeatedly. Waits for a creation in progress on the same
+        event loop, so a machine that is still being created is deleted too. A
+        delete that fails keeps both the machine handle and the client so a
+        later call can retry; the atexit fallback stays armed for the case
+        where no retry comes.
         """
         self._closed = True
-        deleted = True
-        if self._machine_id is not None and self._client is not None:
-            try:
-                await self._client.machines.delete(self._machine_id)
-            except NotFoundError:
-                pass  # already gone, e.g. removed by its `delete_after` timer
-            except Exception as e:
-                deleted = False
-                logger.debug("Suppressed exception during boxd machine delete: %s", e)
-        if deleted:
+        async with self._creation_lock():
+            if self._machine_id is not None and not await self._delete():
+                return
+            if self._client is not None:
+                try:
+                    await self._client.close()
+                except Exception as e:
+                    logger.debug("Suppressed exception during boxd client close: %s", e)
+                self._client = None
+
+    async def _delete(self) -> bool:
+        """Delete the machine this sandbox owns; whether it is gone afterwards."""
+        machine_id = self._machine_id
+        assert machine_id is not None and self._client is not None
+        try:
+            await self._client.machines.delete(machine_id)
+        except NotFoundError:
+            pass  # already gone, e.g. removed by its `delete_after` timer
+        except Exception as e:
+            logger.debug("Suppressed exception during boxd machine delete: %s", e)
+            return False
+        # A shielded delete can finish after a later call already replaced the handle.
+        if self._machine_id == machine_id:
             self._machine_id = None
             self._ready = False
-        # Only disarm the atexit fallback once the machine is really gone: a failed
-        # delete leaves a live machine that still deserves a last attempt at exit.
-        if not deleted:
-            # Keep the client open too, so a later `aclose` can retry the delete.
-            return
-        self._unregister_atexit()
-        if self._client is not None:
-            try:
-                await self._client.close()
-            except Exception as e:
-                logger.debug("Suppressed exception during boxd client close: %s", e)
-            self._client = None
+            self._unregister_atexit()
+        return True
 
     def _register_atexit(self) -> None:
         if not self._atexit_registered:
