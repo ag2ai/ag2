@@ -387,6 +387,7 @@ def normalize_usage(raw: dict[str, Any]) -> Usage:
         prompt_tokens=prompt,
         completion_tokens=completion,
         total_tokens=max(float(total), prompt + completion) if total is not None else prompt + completion,
-        cache_read_input_tokens=float(cache_read) if cache_read else None,
-        cache_creation_input_tokens=float(cache_write) if cache_write else None,
+        # Presence decides, not truthiness: a reported 0 is a measured cache miss.
+        cache_read_input_tokens=None if cache_read is None else float(cache_read),
+        cache_creation_input_tokens=None if cache_write is None else float(cache_write),
     )

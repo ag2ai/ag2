@@ -54,6 +54,24 @@ def test_total_computed_when_missing() -> None:
     assert usage.cache_creation_input_tokens is None
 
 
+def test_a_reported_zero_cache_count_is_kept_apart_from_an_absent_one() -> None:
+    """``0`` is a measured cache miss; only a missing key means the cache was not measured."""
+    usage = normalize_usage({
+        "inputTokens": 3,
+        "outputTokens": 7,
+        "cacheReadInputTokens": 0,
+        "cacheWriteInputTokens": 0,
+    })
+
+    assert usage == Usage(
+        prompt_tokens=3,
+        completion_tokens=7,
+        total_tokens=10,
+        cache_read_input_tokens=0,
+        cache_creation_input_tokens=0,
+    )
+
+
 def test_empty_usage_is_falsy() -> None:
     usage = normalize_usage({})
 

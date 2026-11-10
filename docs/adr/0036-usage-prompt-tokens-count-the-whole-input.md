@@ -9,8 +9,9 @@ date: 2026-11-10
 
 Providers count prompt-cached input in different ways. OpenAI, Gemini, Mistral,
 xAI and Z.ai report a prompt count that already includes the cached tokens.
-Anthropic's `input_tokens` and Bedrock Converse's `inputTokens` count only the
-uncached input, and report cache reads and writes beside it. Each mapper copied
+Anthropic's `input_tokens`, Bedrock Converse's `inputTokens` and ACP's
+`inputTokens` count only the uncached input, and report cache reads and writes
+beside it. Each mapper copied
 its provider's number into `Usage.prompt_tokens`, so the field meant different
 things per provider. On a cached Anthropic call it could be 3 while the model
 read 8,630 tokens.
@@ -49,16 +50,16 @@ output is replaced by that sum.
 
 ## Consequences
 
-For Anthropic and Bedrock, `prompt_tokens`, `total_tokens`, telemetry
+For Anthropic, Bedrock and ACP agents, `prompt_tokens`, `total_tokens`, telemetry
 `gen_ai.usage.input_tokens` and the input-token metric grow by the cached
 tokens. `TokenMonitor` thresholds are reached sooner on prompt-cached
 workloads, and so are eval budgets: `TokenUsage.input` and `total`,
 `token_budget` and `BudgetThresholds.max_tokens_per_task` read the same
 `prompt_tokens`. An eval baseline recorded before this change is not comparable
-on cached Anthropic or Bedrock workloads. Other providers are unchanged. Release
+on cached Anthropic, Bedrock or ACP workloads. Other providers are unchanged. Release
 notes must call this out.
 
-Usage stored by earlier versions is not rewritten. Anthropic and Bedrock
+Usage stored by earlier versions is not rewritten. Anthropic, Bedrock and ACP
 records from before this change keep the uncached count in `prompt_tokens`, and
 a report that mixes old and new records mixes both meanings.
 
