@@ -4,7 +4,7 @@
 
 import asyncio
 import contextlib
-from typing import Any
+from typing import Any, cast
 
 from .base import ChangeCallback, ChangeSubscription, _normalize
 from .polling import PollingChangeWatcher
@@ -81,7 +81,11 @@ class RedisKnowledgeStore:
             await self._client.zrem(self._index_key, *normalized_paths)
 
     async def _index_scan(self) -> dict[str, int]:
-        raw = await self._client.zrange(self._index_key, 0, -1, withscores=True)
+        # `withscores=True` yields (member, score) pairs; redis-py's return type
+        # does not narrow on the flag.
+        raw = cast(
+            "list[tuple[bytes | str, float]]", await self._client.zrange(self._index_key, 0, -1, withscores=True)
+        )
         result: dict[str, int] = {}
         for entry in raw:
             path, score = entry
