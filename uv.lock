@@ -151,6 +151,7 @@ zai = [
 [package.dev-dependencies]
 dev = [
     { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
+    { name = "boxd" },
     { name = "codespell" },
     { name = "daytona" },
     { name = "dirty-equals" },
@@ -200,6 +201,7 @@ dev = [
 ]
 docs = [
     { name = "ag2", extra = ["a2a", "ag-ui", "anthropic", "dashscope", "ddgs", "gemini", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "xai"] },
+    { name = "boxd" },
     { name = "daytona" },
     { name = "docker" },
     { name = "e2b" },
@@ -237,6 +239,7 @@ optionals = [
     { name = "a2a-sdk", extra = ["signing", "sqlite"] },
     { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
     { name = "agent-client-protocol", extra = ["http"] },
+    { name = "boxd" },
     { name = "daytona" },
     { name = "docker" },
     { name = "e2b" },
@@ -276,6 +279,7 @@ test-core = [
 ]
 types = [
     { name = "ag2", extra = ["a2a", "acp", "ag-ui", "anthropic", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "typesafe", "xai", "zai"] },
+    { name = "boxd" },
     { name = "daytona" },
     { name = "dirty-equals" },
     { name = "docker" },
@@ -361,6 +365,7 @@ dev = [
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
+    { name = "boxd", specifier = ">=0.3.0,<1" },
     { name = "codespell", specifier = "==2.4.3" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
@@ -422,6 +427,7 @@ docs = [
     { name = "ag2", extras = ["tavily", "ddgs", "perplexity"] },
     { name = "ag2", extras = ["tracing"] },
     { name = "ag2", extras = ["xai"] },
+    { name = "boxd", specifier = ">=0.3.0,<1" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "e2b", specifier = ">=2.0.0,<3" },
@@ -479,6 +485,7 @@ optionals = [
     { name = "ag2", extras = ["xai"] },
     { name = "ag2", extras = ["zai"] },
     { name = "agent-client-protocol", extras = ["http"] },
+    { name = "boxd", specifier = ">=0.3.0,<1" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "e2b", specifier = ">=2.0.0,<3" },
@@ -523,6 +530,7 @@ types = [
     { name = "ag2", extras = ["mcp-ui"] },
     { name = "ag2", extras = ["openai", "anthropic", "gemini", "mistral", "xai", "zai", "ollama", "dashscope", "typesafe", "elevenlabs", "a2a", "ag-ui", "acp"] },
     { name = "ag2", extras = ["redis", "metrics"] },
+    { name = "boxd", specifier = ">=0.3.0,<1" },
     { name = "daytona", specifier = ">=0.171.0,<1" },
     { name = "dirty-equals", specifier = ">=0.11,<0.12" },
     { name = "docker", specifier = ">=6.0.0,<8" },
@@ -1002,6 +1010,22 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/3f/45/53d662227dc4787b2c854445ee7eb4751cb5d74cfb5c686a6ecbe1f94c17/botocore_stubs-1.43.67.tar.gz", hash = "sha256:853e74014a1f557055c4ffae5fb38d7c65c7c0520e1aab366cac41d5428f419d", size = 42846, upload-time = "2026-08-08T14:57:53.412Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4e/5e/bdbf19967898a032292da65a47d6e25b2eee55865db4e687f861d80b5602/botocore_stubs-1.43.67-py3-none-any.whl", hash = "sha256:c51262bac3341c1cda71f05fa01141fffd3990d7a92c7960e3b755c1bc830373", size = 67244, upload-time = "2026-08-08T14:57:52.01Z" },
+]
+
+[[package]]
+name = "boxd"
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "grpcio" },
+    { name = "httpx" },
+    { name = "protobuf" },
+    { name = "pydantic" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/91/3b/33b32dd1b92215f07e3b880752878961074ef8f0882178dc2f57dc7eac04/boxd-0.3.1.tar.gz", hash = "sha256:723c15e6e611e4a9399f859d45b683efe52e0493ab52a6adcc8e476cb42ca4c0", size = 295610, upload-time = "2026-11-10T16:46:53.221Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/7a/dc92b6b533c87e2f870b293294e41c54c61cc284f6441ec4676dcd0a4230/boxd-0.3.1-py3-none-any.whl", hash = "sha256:9185d3e5196b5c1a788b96bf3a5f2e56df4be55033a4a2e0ef35d54f2577d99e", size = 192156, upload-time = "2026-11-10T16:46:51.937Z" },
 ]
 
 [[package]]
