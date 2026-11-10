@@ -647,6 +647,24 @@ class TestUpstreamAppSdk:
                 "<script>var slash = /[/]/g; var M={initialize:'ui/initialize'};</script>", id="after-a-regex-literal"
             ),
             pytest.param("<div id='card'></div><script>var M={initialize:'ui/initialize'};", id="unclosed-script"),
+            pytest.param(
+                '<script type="module">/* see /docs */ '
+                'import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";</script>',
+                id="after-a-comment-with-a-slash",
+            ),
+            pytest.param(
+                "<script>if (ready) /'/.test(name); var M={initialize:'ui/initialize'};</script>",
+                id="after-a-regex-literal-following-a-condition",
+            ),
+            pytest.param(
+                "<script>const label = `${open ? `x` : \"`\"}`; var M={initialize:'ui/initialize'};</script>",
+                id="after-a-nested-template-literal",
+            ),
+            pytest.param(
+                '<script type="module">const { App } = '
+                "await import(`https://esm.sh/@modelcontextprotocol/ext-apps@${version}`);</script>",
+                id="template-literal-import-with-a-substitution",
+            ),
         ],
     )
     async def test_every_way_of_loading_it_is_served_as_written(self, body: str) -> None:
@@ -700,6 +718,11 @@ class TestUpstreamAppSdk:
             pytest.param("<title><script>'ui/initialize'</script></title>", id="inside-title"),
             pytest.param("<textarea><script>'ui/initialize'</script></textarea>", id="inside-textarea"),
             pytest.param("<div title=\"<script>'ui/initialize'</script>\"></div>", id="inside-an-attribute"),
+            pytest.param('<script language="vbscript">method = "ui/initialize"</script>', id="other-language"),
+            pytest.param(
+                '<script nomodule src="https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps"></script>',
+                id="nomodule-script",
+            ),
         ],
     )
     async def test_a_document_only_mentioning_it_still_gets_ag2ui(self, body: str) -> None:
@@ -743,6 +766,10 @@ class TestUpstreamAppSdk:
         [
             pytest.param("await ag2ui.ready;", id="bare"),
             pytest.param("await window.ag2ui.ready;", id="through-window"),
+            pytest.param("await globalThis.ag2ui.ready;", id="through-globalThis"),
+            pytest.param('await window["ag2ui"].ready;', id="through-a-bracket"),
+            pytest.param("ag2ui?.onToolResult(console.log);", id="optional-chaining"),
+            pytest.param("const { ready } = ag2ui;", id="destructured"),
         ],
     )
     async def test_a_document_mixing_both_gets_ag2ui_and_a_warning(
@@ -756,6 +783,19 @@ class TestUpstreamAppSdk:
 
         assert "window.ag2ui" in served
         assert "ui://shop/card" in caplog.text
+        assert "two handshakes" in caplog.text
+
+    async def test_an_event_handler_calling_ag2ui_gets_it_and_a_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        body = UPSTREAM_CARD.replace(
+            '<div id="card"></div>',
+            '<div id="card"></div><button onclick="ag2ui.callTool(\'add_to_cart\')">Add</button>',
+        )
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            served = await _served_card(server)
+
+        assert "window.ag2ui" in served
         assert "two handshakes" in caplog.text
 
     async def test_a_body_from_a_provider_is_checked_on_every_read(self) -> None:

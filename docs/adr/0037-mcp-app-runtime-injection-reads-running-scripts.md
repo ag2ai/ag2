@@ -31,12 +31,19 @@ specifier naming the package), or its code has `"ui/initialize"` as a string.
   ancestors (`template`, `noscript`, `style`, `title`, `textarea`, …) keeps
   nested and raw-text content out, the same way on every supported Python.
 - Script code is read by a small JavaScript tokenizer. It drops comments, tells
-  strings and regular-expression literals from code, and matches tokens rather
-  than text.
+  strings, template literals (with their `${…}` substitutions) and
+  regular-expression literals from code, and matches tokens rather than text.
+  A `/` after `)` starts a regular expression only when the parentheses held
+  an `if`, `while`, `for` or `with` condition.
+- A `<script>` runs when its `type` (or, without one, its `language`) names
+  JavaScript or `module`, and it is not a classic script marked `nomodule`.
+  Event handler attributes (`onclick="…"`) count as running code too.
 
-When a document that performs its own handshake also calls `ag2ui` without
+When a document that performs its own handshake also uses `ag2ui` without
 defining it (`window.ag2ui = …`), `ag2ui` is injected anyway and a warning is
-logged. That document is broken either way. With injection, the `ag2ui` calls
+logged. A use is a member access (`ag2ui.`, `ag2ui?.`, `ag2ui[`) or an
+assignment from it (`const { ready } = ag2ui`), on its own or through `window`,
+`globalThis` or `self`. That document is broken either way. With injection, the `ag2ui` calls
 work and the host sees two handshakes. Without it, every call throws. The
 warning names the document in both cases. Making `ag2ui` usage the stronger
 signal also turns any remaining misdetection in a document that uses `ag2ui`
@@ -48,7 +55,12 @@ reader does not see:
 - a method name built at run time;
 - an SDK imported under a specifier that does not name the package, such as an
   import-map alias;
-- legacy `<!--` line comments in classic scripts.
+- legacy `<!--` line comments in classic scripts;
+- a `/` the tokenizer reads as division where the code means a regular
+  expression, or the other way round, outside the cases above.
+
+A loader call such as `System.import("…ext-apps…")` counts as loading the SDK:
+it does load it.
 
 ## Consequences
 

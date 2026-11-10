@@ -48,7 +48,7 @@ from ag2.annotations import ContextField, Variable
 from ag2.tools.builtin._resolve import resolve_variable
 
 from ._async import call_user_fn
-from ._document_scripts import read_scripts
+from ._document_scripts import SDK_PACKAGE, read_scripts
 from .errors import MCPAppFrozenError, MCPAppURIError, MCPDuplicateAppURIError
 from .resources import Resource as AG2Resource
 from .tools import (
@@ -329,10 +329,12 @@ class MCPApp:
             # Calling ``ag2ui`` is the stronger signal: without it every call
             # throws, while the extra handshake is something the host can survive.
             logger.warning(
-                "MCP app %s performs its own ui/initialize handshake but also uses ag2ui, so ag2ui is "
-                "injected and the host receives two handshakes. Use either ag2ui or the "
-                "@modelcontextprotocol/ext-apps App.",
+                "MCP app %s loads %s or names the ui/initialize method, and also uses ag2ui, so ag2ui is "
+                "injected. If the document performs its own handshake too, the host receives two handshakes. "
+                "Use either ag2ui or the %s App.",
                 self._uri,
+                SDK_PACKAGE,
+                SDK_PACKAGE,
             )
         return _inject(body, self._script_for(resolve_context_value(self._title, context)))
 
