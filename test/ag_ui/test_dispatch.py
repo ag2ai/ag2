@@ -7,13 +7,14 @@
 import asyncio
 import gc
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Sequence
 from typing import Any
 
 import pytest
 from ag_ui.core import (
     AssistantMessage,
     DataSource,
+    Event,
     ImagePart,
     RunAgentInput,
     RunErrorEvent,
@@ -38,6 +39,7 @@ from dirty_equals import IsInt, IsPartialDict, IsStr
 from ag2 import Agent, ToolResult
 from ag2.ag_ui import UNSUPPORTED_PROTOCOL_VERSION, AGUIStream
 from ag2.events import ModelMessage, ModelMessageChunk, ModelResponse, ToolCallEvent, ToolCallsEvent
+from ag2.middleware import Middleware
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools import tool
 from test.ag_ui.harness import (
@@ -219,6 +221,18 @@ class TestClientToolCallsLeftPending:
 
         assert wire(sole(events, RunFinishedEvent))["outcome"] == {"type": "success"}
 
+    async def test_calls_left_for_the_client_send_no_text(self) -> None:
+        """The executor ends such a call with a text-less `ModelResponse`; it must not open a message."""
+        agent = Agent(
+            "test_agent",
+            config=TestConfig(ToolCallEvent(name="get_weather", arguments='{"location":"Paris"}')),
+        )
+        incoming = run_input(UserMessage(id="m1", content="Paris?"), tools=[weather_tool()])
+
+        events = await dispatch_events(AGUIStream(agent), incoming)
+
+        assert kinds_of(events) == [RunStartedEvent, ToolCallChunkEvent, RunFinishedEvent]
+
 
 class TestEmptyModelOutput:
     """The protocol forbids empty deltas, so an empty chunk or message leaves no text frame behind."""
@@ -285,7 +299,11 @@ class TestARepliedTurnNotPublishedAsAModelMessage:
             TextMessageChunkEvent,
             RunFinishedEvent,
         ]
-        assert sole(events, TextMessageChunkEvent).delta == "Ticket 42 was escalated."
+        assert wire(sole(events, TextMessageChunkEvent)) == {
+            "type": "TEXT_MESSAGE_CHUNK",
+            "messageId": IsStr(),
+            "delta": "Ticket 42 was escalated.",
+        }
 
     async def test_text_the_model_sent_before_a_final_tool_result_goes_out_once(self) -> None:
         call = ToolCallEvent(name="escalate", arguments='{"ticket_id": "42"}')
@@ -313,7 +331,11 @@ class TestARepliedTurnNotPublishedAsAModelMessage:
         )
 
         assert kinds_of(events) == [RunStartedEvent, TextMessageChunkEvent, RunFinishedEvent]
-        assert sole(events, TextMessageChunkEvent).delta == "Answered without the model."
+        assert wire(sole(events, TextMessageChunkEvent)) == {
+            "type": "TEXT_MESSAGE_CHUNK",
+            "messageId": IsStr(),
+            "delta": "Answered without the model.",
+        }
 
     async def test_chunks_no_message_closes_end_with_their_model_call(self) -> None:
         call = ToolCallEvent(name="forecast", arguments="{}")
@@ -347,6 +369,70 @@ class TestARepliedTurnNotPublishedAsAModelMessage:
         first, second = each(events, TextMessageStartEvent)
         assert first.message_id != second.message_id
         assert [event.delta for event in each(events, TextMessageContentEvent)] == ["Checking.", "Sunny."]
+
+
+def _provider_reply() -> tuple[Agent, list[Middleware]]:
+    return Agent("test_agent", config=TestConfig("Hello.")), []
+
+
+def _streamed_provider_reply() -> tuple[Agent, list[Middleware]]:
+    config = TestConfig(ModelMessageChunk("Hello"), ModelMessageChunk(" there."), "Hello there.")
+    return Agent("test_agent", config=config), []
+
+
+def _final_tool_result() -> tuple[Agent, list[Middleware]]:
+    call = ToolCallEvent(name="escalate", arguments='{"ticket_id": "42"}')
+    return Agent("test_agent", config=TestConfig(call), tools=[escalate]), []
+
+
+def _middleware_answer() -> tuple[Agent, list[Middleware]]:
+    middleware, _ = recording_history(reply="Answered without the model.")
+    return Agent("test_agent", config=TestConfig("unused")), [middleware]
+
+
+def _chunks_without_a_closing_message() -> tuple[Agent, list[Middleware]]:
+    config = TestConfig(ModelMessageChunk("Sun"), ModelMessageChunk("ny."), ModelResponse(ModelMessage("Sunny.")))
+    return Agent("test_agent", config=config), []
+
+
+def _text_messages(events: Sequence[Event]) -> list[str]:
+    """Every text message the client can assemble, in order: one whole chunk, or a started message's content."""
+    texts: list[str] = []
+    for event in events:
+        if isinstance(event, TextMessageChunkEvent):
+            texts.append(event.delta or "")
+        elif isinstance(event, TextMessageStartEvent):
+            texts.append("")
+        elif isinstance(event, TextMessageContentEvent):
+            texts[-1] += event.delta
+    return texts
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(_provider_reply, id="provider-message"),
+        pytest.param(_streamed_provider_reply, id="provider-chunks-closed-by-a-message"),
+        pytest.param(_final_tool_result, id="final-tool-result"),
+        pytest.param(_middleware_answer, id="middleware-answering-for-the-model"),
+        pytest.param(_chunks_without_a_closing_message, id="chunks-without-a-closing-message"),
+    ],
+)
+async def test_the_client_receives_the_reply_ask_returns(build: Callable[[], tuple[Agent, list[Middleware]]]) -> None:
+    """However a turn's reply is produced, an AG-UI client sees it once, as its last text message.
+
+    A new way to end a model call that `AGUIStream` does not map shows up here as a missing
+    or duplicated reply, instead of passing every test that only goes through `agent.ask()`.
+    """
+    agent, middleware = build()
+    reply = await agent.ask("hi", middleware=middleware)
+
+    agent, middleware = build()
+    events = await dispatch_events(
+        AGUIStream(agent), run_input(UserMessage(id="m1", content="hi")), middleware=middleware
+    )
+
+    assert _text_messages(events) == [reply.body]
 
 
 class TestAFailingRun:

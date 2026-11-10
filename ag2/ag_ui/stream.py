@@ -377,35 +377,24 @@ async def _serve_turn(
                 )
             )
 
-        elif isinstance(event, (events.ModelMessage, events.ModelResponse)):
+        elif isinstance(event, events.ModelMessage):
             # A provider publishes its reply as a ModelMessage, which also closes the
-            # chunks it streamed. A final tool result, a middleware answering in the
-            # model's place, or a client that only streams chunks leaves the reply in
-            # the ModelResponse that ends the model call, so that one goes out instead.
-            if isinstance(event, events.ModelResponse):
-                already_sent, message_sent = message_sent, False
-                if already_sent:
-                    return
-            else:
-                message_sent = True
+            # chunks it streamed.
+            message_sent = True
+            await _finish_text(output, streaming_msg_id, event.content)
+            streaming_msg_id = None
 
-            if streaming_msg_id:
-                await output.send(
-                    TextMessageEndEvent(
-                        message_id=streaming_msg_id,
-                        timestamp=timestamp_ms(),
-                    )
-                )
-                streaming_msg_id = None
-
-            elif event.content:
-                await output.send(
-                    TextMessageChunkEvent(
-                        message_id=str(uuid4()),
-                        delta=event.content,
-                        timestamp=timestamp_ms(),
-                    )
-                )
+        elif isinstance(event, events.ModelResponse):
+            # Ends every model call. A final tool result, a middleware answering in
+            # the model's place, or a client that only streams chunks publishes no
+            # ModelMessage, so the reply goes out from here instead. Relies on each
+            # ModelMessage being followed by its call's ModelResponse: the flag is
+            # per model call, not per run.
+            if message_sent:
+                message_sent = False
+                return
+            await _finish_text(output, streaming_msg_id, event.content)
+            streaming_msg_id = None
 
         elif isinstance(event, events.ClientToolCallEvent):
             await output.send(
@@ -503,6 +492,18 @@ async def _serve_turn(
 
     if shares_state and (closing := _encode_context(dict(result.context.variables))) != held_by_client:
         await output.send(StateSnapshotEvent(snapshot=closing, timestamp=timestamp_ms()))
+
+
+async def _finish_text(output: "TurnOutput", streaming_msg_id: str | None, content: str | None) -> None:
+    """End a model call's text: close the message its chunks opened, or send its text whole.
+
+    Streamed chunks already carried the text, so only the end frame goes out; the
+    caller resets ``streaming_msg_id`` so the next call's chunks open a new message.
+    """
+    if streaming_msg_id:
+        await output.send(TextMessageEndEvent(message_id=streaming_msg_id, timestamp=timestamp_ms()))
+    elif content:
+        await output.send(TextMessageChunkEvent(message_id=str(uuid4()), delta=content, timestamp=timestamp_ms()))
 
 
 async def _send_signature(output: "TurnOutput", signatures: dict[str, str], call_id: str) -> None:
