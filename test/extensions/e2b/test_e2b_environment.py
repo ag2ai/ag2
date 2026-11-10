@@ -17,7 +17,7 @@ from ag2 import Context, Variable
 from ag2.extensions.e2b import E2BEnvironment
 from ag2.extensions.e2b.sandbox import E2BSandbox
 from ag2.tools import SandboxCodeTool, SandboxShellTool
-from ag2.tools.sandbox import SandboxFactory, WorkdirAware
+from ag2.tools.sandbox import ExecResult, SandboxFactory, WorkdirAware
 
 
 def _fake_remote(sandbox_id: str = "sbx-1") -> Any:
@@ -49,6 +49,20 @@ def _first_call_waits(gate: asyncio.Event) -> Any:
         return True
 
     return call
+
+
+def _released_by(gate: asyncio.Event, remote: Any) -> Any:
+    # A sandbox creation that takes until the test releases it, like a slow network round-trip.
+    async def create(*args: Any, **kwargs: Any) -> Any:
+        await gate.wait()
+        return remote
+
+    return create
+
+
+async def _run_ls(factory: E2BEnvironment) -> ExecResult:
+    async with factory.open() as sandbox:
+        return await sandbox.exec(["ls"])
 
 
 def _patch_create(*remotes: Any) -> Any:
@@ -186,7 +200,19 @@ class TestOpen:
             await factory.aclose()
         assert remote.kill.await_count == 2
 
-    async def test_close_retries_a_sandbox_whose_setup_and_kill_failed(self) -> None:
+    async def test_close_kills_a_sandbox_whose_setup_and_kill_failed(self) -> None:
+        failed = _fake_remote("sbx-failed")
+        failed.files.make_dir = AsyncMock(side_effect=RuntimeError("read-only"))
+        failed.kill = AsyncMock(side_effect=[RuntimeError("network"), True])
+        with _patch_create(failed):
+            factory = E2BEnvironment(workdir="/workspace")
+            with pytest.raises(RuntimeError, match="read-only"):
+                async with factory.open():
+                    pass
+            await factory.aclose()
+        assert failed.kill.await_count == 2
+
+    async def test_no_new_sandbox_while_a_failed_one_is_still_alive(self) -> None:
         failed, fresh = _fake_remote("sbx-failed"), _fake_remote("sbx-fresh")
         failed.files.make_dir = AsyncMock(side_effect=RuntimeError("read-only"))
         failed.kill = AsyncMock(side_effect=[RuntimeError("network"), RuntimeError("network"), True])
@@ -195,12 +221,33 @@ class TestOpen:
             with pytest.raises(RuntimeError, match="read-only"):
                 async with factory.open():
                     pass
-            # A retried open replaces the cache entry; the failed sandbox must not be forgotten.
+            with pytest.raises(RuntimeError, match="could not be killed"):
+                async with factory.open():
+                    pass
             async with factory.open() as sandbox:
                 assert sandbox.sandbox_id == "sbx-fresh"
             await factory.aclose()
         assert failed.kill.await_count == 3
         fresh.kill.assert_awaited_once()
+
+    async def test_cancelled_open_leaves_a_sandbox_another_open_is_creating(self) -> None:
+        remote = _fake_remote()
+        gate = asyncio.Event()
+        create = AsyncMock(side_effect=_released_by(gate, remote))
+        with patch("ag2.extensions.e2b.sandbox.AsyncSandbox.create", create):
+            factory = E2BEnvironment()
+            creating = asyncio.create_task(_run_ls(factory))
+            waiting = asyncio.create_task(_run_ls(factory))
+            await asyncio.sleep(0.01)
+            waiting.cancel()
+            gate.set()
+            result, cancelled = await asyncio.gather(creating, waiting, return_exceptions=True)
+            remote.kill.assert_not_awaited()
+            await factory.aclose()
+
+        assert result == ExecResult(output="ok", exit_code=0)
+        assert isinstance(cancelled, asyncio.CancelledError)
+        create.assert_awaited_once()
 
     async def test_cancelled_close_leaves_the_rest_for_the_next_close(self) -> None:
         first, second = _fake_remote("sbx-a"), _fake_remote("sbx-b")

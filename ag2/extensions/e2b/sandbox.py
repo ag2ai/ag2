@@ -158,6 +158,14 @@ class E2BSandbox(SandboxBase):
         exec_timeout = timeout if timeout is not None else self._default_timeout
         try:
             await self._keep_alive(sandbox, exec_timeout)
+        except NotFoundException as e:
+            return _gone(e)
+        except SandboxException as e:
+            # The command never started, so a failed refresh is not a command
+            # timeout even when the SDK reports it as `TimeoutException`.
+            return ExecResult(output=f"E2B could not extend the sandbox lifetime: {e}", exit_code=1)
+
+        try:
             result = await sandbox.commands.run(
                 shlex.join(argv),
                 envs=env,

@@ -6,7 +6,7 @@
 
 import threading
 from collections.abc import AsyncGenerator, Hashable
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
@@ -91,7 +91,7 @@ class E2BEnvironment:
         self._create_options = dict(create_options or {})
 
         self._cache: dict[Hashable, E2BSandbox] = {}
-        # Sandboxes whose kill failed, retried by the next `aclose`.
+        # Sandboxes an `aclose` failed to kill, retried by the next `aclose`.
         self._unkilled: list[E2BSandbox] = []
         self._cache_lock = threading.Lock()
 
@@ -163,17 +163,11 @@ class E2BEnvironment:
                 )
                 self._cache[key] = sandbox
 
-        try:
-            await sandbox.__aenter__()
-        except BaseException:
-            with suppress(BaseException):
-                await sandbox.aclose()
-            # The closed cache entry is replaced on the next open; if setup and
-            # kill both failed, keep the sandbox for the next `aclose` to retry.
-            if sandbox.sandbox_id is not None:
-                with self._cache_lock:
-                    self._unkilled.append(sandbox)
-            raise
+        # A failed setup is not closed here: the entry is shared, and closing it
+        # would kill a sandbox another caller is still creating. The sandbox
+        # kills its own failed setup, and retries a failed kill before it
+        # creates a replacement.
+        await sandbox.__aenter__()
         # The factory owns the lifecycle so cached state survives this scope.
         yield sandbox
 

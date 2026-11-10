@@ -65,7 +65,7 @@ class TestConstruction:
 
     def test_variable_rejected_in_constructor(self) -> None:
         with pytest.raises(TypeError, match="E2BEnvironment"):
-            E2BSandbox(template=Variable("template"))  # type: ignore[arg-type]
+            E2BSandbox(template=Variable("template"))
 
 
 @pytest.mark.asyncio
@@ -132,6 +132,19 @@ class TestExec:
         assert actual.exit_code == 1
         assert "no longer available" in actual.output
         create.assert_awaited_once()
+
+    async def test_failed_lifetime_refresh_is_not_reported_as_a_command_timeout(self) -> None:
+        # The refresh request itself can time out; the command never ran.
+        remote = _fake_remote()
+        remote.set_timeout = AsyncMock(side_effect=TimeoutException("Request timed out"))
+        with _patch_create(remote):
+            # A command longer than the lifetime left forces a keep-alive call.
+            actual = await E2BSandbox(sandbox_timeout=300).exec(["make"], timeout=600)
+        assert actual == ExecResult(
+            output="E2B could not extend the sandbox lifetime: Request timed out",
+            exit_code=1,
+        )
+        remote.commands.run.assert_not_awaited()
 
     async def test_other_sdk_errors_become_results(self) -> None:
         remote = _fake_remote()
