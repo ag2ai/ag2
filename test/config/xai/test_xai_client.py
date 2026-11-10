@@ -7,7 +7,7 @@ from fast_depends.use import SerializerCls
 from xai_sdk.chat import assistant, user
 from xai_sdk.proto import chat_pb2, sample_pb2
 
-from ag2 import Context
+from ag2 import Agent, Context
 from ag2.config.xai import XAIConfig
 from ag2.config.xai.events import XAIAssistantEvent
 from ag2.events import (
@@ -193,3 +193,71 @@ async def test_response_format_sent_to_server() -> None:
 
         [request] = xai_server.requests
         assert request.response_format.format_type == chat_pb2.FORMAT_TYPE_JSON_SCHEMA
+
+
+@pytest.mark.asyncio
+class TestEndUserSafetyControls:
+    async def test_safety_identifier_sent_to_server(self) -> None:
+        async with fake_xai_server() as xai_server:
+            xai_server.reply(_response(content="ok"))
+            agent = Agent(
+                "assistant",
+                config=XAIConfig(
+                    model="grok-4-fast",
+                    api_key="test",
+                    api_host=xai_server.address,
+                    safety_identifier="user-7f3a9c",
+                ),
+            )
+
+            await agent.ask("hi")
+
+            [request] = xai_server.requests
+            assert request.safety_identifier == "user-7f3a9c"
+
+    async def test_guidelines_sent_to_server(self) -> None:
+        async with fake_xai_server() as xai_server:
+            xai_server.reply(_response(content="ok"))
+            agent = Agent(
+                "assistant",
+                config=XAIConfig(
+                    model="grok-4-fast",
+                    api_key="test",
+                    api_host=xai_server.address,
+                    guidelines=[
+                        {"type": "policy", "category": "violence", "behavior": "decline"},
+                        {"type": "policy", "category": "profanity", "behavior": "decline"},
+                    ],
+                ),
+            )
+
+            await agent.ask("hi")
+
+            [request] = xai_server.requests
+            assert list(request.guidelines) == [
+                chat_pb2.Guideline(
+                    policy=chat_pb2.PolicyGuideline(
+                        category=chat_pb2.GUIDELINE_CATEGORY_VIOLENCE,
+                        behavior=chat_pb2.GUIDELINE_BEHAVIOR_DECLINE,
+                    )
+                ),
+                chat_pb2.Guideline(
+                    policy=chat_pb2.PolicyGuideline(
+                        category=chat_pb2.GUIDELINE_CATEGORY_PROFANITY,
+                        behavior=chat_pb2.GUIDELINE_BEHAVIOR_DECLINE,
+                    )
+                ),
+            ]
+
+    async def test_safety_controls_omitted_by_default(self) -> None:
+        async with fake_xai_server() as xai_server:
+            xai_server.reply(_response(content="ok"))
+            agent = Agent(
+                "assistant", config=XAIConfig(model="grok-4-fast", api_key="test", api_host=xai_server.address)
+            )
+
+            await agent.ask("hi")
+
+            [request] = xai_server.requests
+            assert not request.HasField("safety_identifier")
+            assert list(request.guidelines) == []

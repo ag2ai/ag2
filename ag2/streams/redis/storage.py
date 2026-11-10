@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable
+from typing import cast
 
 import redis.asyncio as aioredis
 
@@ -45,7 +46,8 @@ class RedisStorage(Storage):
         await self._redis.rpush(self._key(stream_id), serialize(event, self._serializer))
 
     async def get_history(self, stream_id: StreamId) -> Iterable[BaseEvent]:
-        raw = await self._redis.lrange(self._key(stream_id), 0, -1)
+        # Entries are bytes unless the URL turns on `decode_responses`, which pickle/JSON payloads do not support.
+        raw = cast("list[bytes]", await self._redis.lrange(self._key(stream_id), 0, -1))
         return [deserialize(item, self._serializer) for item in raw]
 
     async def set_history(self, stream_id: StreamId, events: Iterable[BaseEvent]) -> None:

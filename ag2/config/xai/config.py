@@ -11,7 +11,7 @@ from typing_extensions import Unpack
 from ag2.config.config import ModelConfig, ModelProvider
 
 from .files import XAIFilesClient
-from .xai_client import CreateOptions, IncludeOption, ReasoningEffort, ToolMode, XAIClient
+from .xai_client import CreateOptions, Guideline, IncludeOption, ReasoningEffort, ToolMode, XAIClient
 
 XAI_DEFAULT_API_HOST = "api.x.ai"
 
@@ -32,6 +32,8 @@ class XAIConfigOverrides(TypedDict, total=False):
     seed: int | None
     stop: Sequence[str] | None
     user: str | None
+    safety_identifier: str | None
+    guidelines: Sequence[Guideline] | None
     logprobs: bool | None
     top_logprobs: int | None
     tool_choice: ToolMode | None
@@ -62,6 +64,8 @@ class XAIConfig(ModelConfig):
     seed: int | None = None
     stop: Sequence[str] | None = None
     user: str | None = None
+    safety_identifier: str | None = None
+    guidelines: Sequence[Guideline] | None = None
     logprobs: bool | None = None
     top_logprobs: int | None = None
     tool_choice: ToolMode | None = None
@@ -92,6 +96,8 @@ class XAIConfig(ModelConfig):
             seed=self.seed,
             stop=self.stop,
             user=self.user,
+            safety_identifier=self.safety_identifier,
+            guidelines=self.guidelines,
             logprobs=self.logprobs,
             top_logprobs=self.top_logprobs,
             tool_choice=self.tool_choice,

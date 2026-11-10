@@ -87,12 +87,12 @@ class TempoTraceSource:
         url = f"{self._base_url}{path}"
         if self._client is not None:
             response = await self._client.get(url, params=params, headers=self._headers)
-            response.raise_for_status()
-            return response.json()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params, headers=self._headers)
-            response.raise_for_status()
-            return response.json()
+        else:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params, headers=self._headers)
+        response.raise_for_status()
+        doc: dict[str, Any] = response.json()
+        return doc
 
 
 def _summary_attribute(summary: Mapping[str, Any], key: str) -> str | None:
@@ -101,5 +101,6 @@ def _summary_attribute(summary: Mapping[str, Any], key: str) -> str | None:
         for span in span_set.get("spans", []):
             for attr in span.get("attributes", []):
                 if attr.get("key") == key:
-                    return attr.get("value", {}).get("stringValue")
+                    value: str | None = attr.get("value", {}).get("stringValue")
+                    return value
     return None

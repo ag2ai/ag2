@@ -235,6 +235,34 @@ async def test_accounting_events_survive_the_span_round_trip(otel_provider) -> N
 
 
 @pytest.mark.asyncio()
+@pytest.mark.parametrize("extended", (pytest.param(300, id="extended-writes"), pytest.param(0, id="measured-zero")))
+async def test_extended_cache_writes_survive_the_span_round_trip(otel_provider, extended: int) -> None:
+    """A usage reloaded from traces keeps the extended-retention share of cache writes.
+
+    A measured ``0`` stays ``0``: it says the provider reported the breakdown and
+    nothing was written with extended retention, which ``None`` would not.
+    """
+    exporter, provider = otel_provider
+    usage = Usage(
+        prompt_tokens=11,
+        completion_tokens=4,
+        total_tokens=15,
+        cache_creation_input_tokens=1200,
+        cache_creation_extended_input_tokens=extended,
+    )
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hello there!"), usage=usage)),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", model_name="mock")],
+    )
+
+    await agent.ask("Hi")
+
+    trace = readable_spans_to_trace(exporter.get_finished_spans())
+    assert [e.usage for e in trace.events_of(UsageEvent)] == [usage]
+
+
+@pytest.mark.asyncio()
 async def test_delegated_spend_survives_the_span_round_trip(otel_provider) -> None:
     """Sub-agent spend is the majority of a delegating agent's bill.
 

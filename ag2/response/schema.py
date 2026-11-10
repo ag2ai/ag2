@@ -8,7 +8,7 @@ from types import UnionType
 from typing import Annotated, Any, Union, get_args, get_origin, overload
 
 from fast_depends import Provider
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model
 from typing_extensions import TypeVar as TypeVar313
 
 from ag2.annotations import Context
@@ -82,7 +82,7 @@ class ResponseSchema(ResponseProto[T]):
     def ensure_schema(
         cls,
         obj: "ResponseProto[T]",
-    ) -> "ResponseSchema[T]": ...
+    ) -> "ResponseProto[T]": ...
 
     @overload
     @classmethod
@@ -90,6 +90,13 @@ class ResponseSchema(ResponseProto[T]):
         cls,
         obj: "type[T]",
     ) -> "ResponseSchema[T]": ...
+
+    @overload
+    @classmethod
+    def ensure_schema(
+        cls,
+        obj: ClassInfo,
+    ) -> "ResponseSchema[Any]": ...
 
     @classmethod
     def ensure_schema(
@@ -118,6 +125,11 @@ class ResponseSchema(ResponseProto[T]):
         context: "Context",
         provider: "Provider | None" = None,
     ) -> T:
+        # The constructor's overloads tie `T` to `types`; only the runtime type object knows it.
+        result: T = self._decode(response)
+        return result
+
+    def _decode(self, response: str) -> Any:
         if self._adapter is None:
             return response
         result = self._adapter.validate_json(response)
@@ -155,7 +167,7 @@ class RawSchema(ResponseProto[str]):
         return response
 
 
-def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]:
+def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[Any] | None, bool]:
     # Classify by the bare type, but build the adapter from the full annotated one so metadata is kept.
     bare = strip_annotated(types)
     origin = get_origin(bare)
@@ -165,13 +177,14 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
     if types is str:
         return None, True
 
-    if _is_safe_subclass(bare, (list, tuple)):
-        # Process `T1, T2]` and `(T1, T2)`
-        _final_type = Union[tuple(bare)]  # noqa: UP007
+    final_type: Any
+    if isinstance(bare, list | tuple):
+        # Process `[T1, T2]` and `(T1, T2)`
+        final_type = Union[tuple(bare)]  # noqa: UP007
 
     elif origin and origin in (Union, UnionType):
         # Process `typing.Union[T1, T2]` and `T1 | T2`
-        _final_type = types
+        final_type = types
 
     elif any((
         is_dataclass(bare),
@@ -180,24 +193,23 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
         _is_safe_subclass(bare, dict),
     )):
         embedded_type = False
-        _final_type = types
+        final_type = types
 
     else:
         # Process primitive types
-        _final_type = types
+        final_type = types
 
     if not embed:
         embedded_type = False
 
     if embedded_type:
+        final_type = create_model(
+            "_EmbeddedSchema",
+            __config__=ConfigDict(title="ResponseSchema"),
+            data=(final_type, Field(description='Response with a one-field JSON `"{"data":...}"`')),
+        )
 
-        class _EmbeddedSchema(BaseModel):
-            data: Annotated[_final_type, Field(description='Response with a one-field JSON `"{"data":...}"`')]
-            model_config = {"title": "ResponseSchema"}
-
-        _final_type = _EmbeddedSchema
-
-    return TypeAdapter[T](_final_type), embedded_type
+    return TypeAdapter(final_type), embedded_type
 
 
 def strip_annotated(types: ClassInfo) -> ClassInfo:
@@ -207,8 +219,8 @@ def strip_annotated(types: ClassInfo) -> ClassInfo:
     return types
 
 
-def _is_safe_subclass(cls: type, base: type | tuple[type, ...]) -> bool:
-    try:
-        return issubclass(cls, base)
-    except TypeError:
-        return issubclass(type(cls), base)
+def _is_safe_subclass(obj: object, base: type | tuple[type, ...]) -> bool:
+    """``issubclass`` for a class; for a typing form (``list[int]``, ``Literal[...]``) the type of the form."""
+    if isinstance(obj, type):
+        return issubclass(obj, base)
+    return isinstance(obj, base)

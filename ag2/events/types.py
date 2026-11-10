@@ -31,6 +31,14 @@ class Usage:
     total_tokens: float | None = None
     cache_read_input_tokens: float | None = None
     cache_creation_input_tokens: float | None = None
+    cache_creation_extended_input_tokens: float | None = None
+    """The part of ``cache_creation_input_tokens`` written with the provider's
+    extended cache retention: OpenAI's 12-hour TTL, Anthropic's 1-hour TTL.
+
+    Extended writes are priced differently from default-retention writes; the
+    duration is provider-specific, so read it together with ``UsageEvent.provider``.
+    ``None`` where the provider reported no per-retention breakdown.
+    """
     thinking_tokens: float | None = None
 
     def __bool__(self) -> bool:
@@ -40,6 +48,7 @@ class Usage:
             self.total_tokens,
             self.cache_read_input_tokens,
             self.cache_creation_input_tokens,
+            self.cache_creation_extended_input_tokens,
             self.thinking_tokens,
         ))
 
@@ -54,6 +63,9 @@ class Usage:
             cache_read_input_tokens=_add_tokens(self.cache_read_input_tokens, other.cache_read_input_tokens),
             cache_creation_input_tokens=_add_tokens(
                 self.cache_creation_input_tokens, other.cache_creation_input_tokens
+            ),
+            cache_creation_extended_input_tokens=_add_tokens(
+                self.cache_creation_extended_input_tokens, other.cache_creation_extended_input_tokens
             ),
             thinking_tokens=_add_tokens(self.thinking_tokens, other.thinking_tokens),
         )
@@ -97,7 +109,8 @@ class BinaryResult:
 
     @property
     def name(self) -> str:
-        return self.metadata.get("filename", "generated_file")
+        name: str = self.metadata.get("filename", "generated_file")
+        return name
 
     async def content(self) -> bytes:
         return self.data
@@ -146,7 +159,7 @@ class ModelResponse(ModelEvent):
         return f"ModelResponse({text})"
 
     def to_api(self) -> dict[str, Any]:
-        msg = {
+        msg: dict[str, Any] = {
             "content": self.message.content if self.message else None,
             "role": "assistant",
         }
