@@ -26,13 +26,18 @@ Each evaluator implements:
 
 ```python
 class ExpectationEvaluator(Protocol):
-    name: ClassVar[str]
-    def evaluate(self, ctx: ExpectationContext) -> list[Violation]: ...
+    name: str
+
+    def evaluate(
+        self,
+        expectation: Expectation,
+        context: ExpectationContext,
+    ) -> Violation | None: ...
 ```
 
-`#!python ExpectationContext` is a small dataclass holding the metadata, WAL slice, current time, and the expectation's params. Evaluators are pure — no I/O, no mutation — so they're trivially testable.
+The `#!python Expectation` carries the declared `params` and `on_violation`. `#!python ExpectationContext` is a small dataclass holding the channel metadata, adapter state, WAL, and current time. Evaluators are pure — no I/O, no mutation — so they're trivially testable.
 
-The default registry exposes them as `#!python default_evaluators()`. Custom evaluators register similarly to custom transition targets.
+The default registry exposes them as `#!python default_evaluators()`. Custom evaluators register with `#!python hub.register_expectation_evaluator(...)` — see [Custom Evaluators](#custom-evaluators).
 
 ## Adapter-Declared Expectations
 
@@ -275,16 +280,10 @@ React however you like — retry, escalate, surface to a UI — by registering a
 Same shape as the built-ins:
 
 ```python linenums="1"
-from typing import ClassVar
-from ag2.network import EV_TEXT
-from ag2.network.channel import Expectation
-from ag2.network.hub import (
-    ExpectationContext,
-    Violation,
-)
+from ag2.network import EV_TEXT, Expectation, ExpectationContext, Violation
 
 class TooManyMessagesEvaluator:
-    name: ClassVar[str] = "too_many_messages"
+    name = "too_many_messages"
 
     def evaluate(self, expectation: Expectation, ctx: ExpectationContext) -> Violation | None:
         threshold = expectation.params["max"]
@@ -299,7 +298,11 @@ class TooManyMessagesEvaluator:
 
 Register the evaluator on an open hub:
 
-```python
+```python linenums="1"
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import Hub
+
+hub = await Hub.open(MemoryKnowledgeStore())
 hub.register_expectation_evaluator(TooManyMessagesEvaluator())
 ```
 
