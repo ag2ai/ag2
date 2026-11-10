@@ -330,7 +330,7 @@ Omit it and no `visibility` is advertised at all, leaving the host to its own de
 
 ## Using the upstream `App` SDK instead
 
-`ag2ui` is one way to talk to the host, not the only one. A document written against the `App` class from [`@modelcontextprotocol/ext-apps`](https://github.com/modelcontextprotocol/ext-apps){.external-link target="_blank"} works as it is: **a body with a `<script>` that loads `@modelcontextprotocol/ext-apps` — a `src` or an `import` naming the package — or whose code carries the `"ui/initialize"` method name as a string (a bundle that inlined the SDK) is served without `ag2ui`**, so the host does not see two handshakes. Only `<script>` elements the browser runs are searched: text the page displays, quoted or not, does not count, and neither does a script that is commented out, sits inside `<template>` or `<noscript>`, or has a data `type` such as `application/json`. A document that loads the SDK some other way — from a file whose URL does not name the package — is not recognised; pass `inject_runtime=False` for it. A recognised document that also calls `ag2ui.` logs a warning on `ag2.mcp.apps`, since `ag2ui` will not exist there.
+`ag2ui` is one way to talk to the host, not the only one. A document written against the `App` class from [`@modelcontextprotocol/ext-apps`](https://github.com/modelcontextprotocol/ext-apps){.external-link target="_blank"} works as it is: **a body with a `<script>` that loads `@modelcontextprotocol/ext-apps` — a `src` or an `import` naming the package — or whose code carries the `"ui/initialize"` method name as a string (a bundle that inlined the SDK) is served without `ag2ui`**, so the host does not see two handshakes. Only code the browser runs is searched. Text the page displays, quoted or not, does not count, and neither does an HTML or JavaScript comment, a string that merely mentions the package, a script inside `<template>`, `<noscript>`, `<style>`, `<title>` or `<textarea>`, or a script with a data `type` such as `application/json`. A document that loads the SDK some other way — imports it under a specifier that does not name the package, such as an import-map alias — is not recognised; pass `inject_runtime=False` for it. A recognised document that also calls `ag2ui.` without defining it still gets `ag2ui`, so those calls work, and the server logs a warning on `ag2.mcp.apps`: the host then receives two handshakes.
 
 The two cover the same ground:
 
@@ -436,7 +436,7 @@ The file is read on every resource read, so editing `card.html` needs no server 
 
 ## Bringing your own bundle
 
-A bundle that inlined the upstream SDK is usually recognised by its handshake and served untouched, as above. A hand-written runtime that sends `"ui/initialize"` is recognised the same way. For one that builds the method name at run time, or loads the SDK from a URL that does not name the package, pass `inject_runtime=False`: injection is off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself — a body that already carries it is not given a second copy.
+A bundle that inlined the upstream SDK is usually recognised by its handshake and served untouched, as above. A hand-written runtime that sends `"ui/initialize"` is recognised the same way. For one that builds the method name at run time, or imports the SDK under a specifier that does not name the package, pass `inject_runtime=False`: injection is off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself — a body that already carries it is not given a second copy.
 
 ```python linenums="1"
 from pathlib import Path
@@ -477,7 +477,7 @@ Each of these produces an error or a warning that says what to do:
 - **Giving an app tool to an agent.** `Agent(tools=[show_recipe])` raises a `TypeError`: an `@app.tool` / `@mcp_tool` tool is served to MCP clients through `MCPServer(apps=...)` / `MCPServer(tools=...)`. To give the same function to an agent, decorate it with `@tool` instead.
 - **A file name as a string.** A `str` body is always literal HTML, so `MCPApp("ui://shop/card", "card.html")` serves the text `card.html`. A string with no markup that ends in `.html` / `.htm` logs a warning on `ag2.mcp.apps` suggesting `Path("card.html")`.
 - **Declaring a tool after the server is built** raises `ag2.mcp.errors.MCPAppFrozenError` naming the tool — see [Taking an app apart](#taking-an-app-apart).
-- **Using `ag2ui` in a document built on the upstream `App`.** Such a document is served without `ag2ui`, so the call fails in the browser; the server logs a warning on `ag2.mcp.apps` naming the document. Use one or the other — see [Using the upstream `App` SDK instead](#using-the-upstream-app-sdk-instead).
+- **Using `ag2ui` in a document built on the upstream `App`.** Such a document still gets `ag2ui`, so the host receives two handshakes; the server logs a warning on `ag2.mcp.apps` naming the document. Use one or the other — see [Using the upstream `App` SDK instead](#using-the-upstream-app-sdk-instead).
 - **A host that never renders** — see [When the host shows text only](#when-the-host-shows-text-only).
 
 ## Reference

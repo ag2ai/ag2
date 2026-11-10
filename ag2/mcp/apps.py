@@ -48,6 +48,7 @@ from ag2.annotations import ContextField, Variable
 from ag2.tools.builtin._resolve import resolve_variable
 
 from ._async import call_user_fn
+from ._document_scripts import read_scripts
 from .errors import MCPAppFrozenError, MCPAppURIError, MCPDuplicateAppURIError
 from .resources import Resource as AG2Resource
 from .tools import (
@@ -65,40 +66,6 @@ logger = logging.getLogger(__name__)
 # A ``str`` body is always literal HTML. One with no markup that ends like an
 # HTML file name was almost certainly meant as a file, so it is warned about.
 _LOOKS_LIKE_HTML_PATH = re.compile(r"^[^<]*\.html?\s*$", re.IGNORECASE)
-
-# A document that already performs the ``ui/initialize`` handshake has a
-# ``<script>`` element that loads the upstream ``@modelcontextprotocol/ext-apps``
-# SDK (a ``src`` attribute, or an ``import``/``from`` in its code, naming the
-# package, typically on a CDN), or whose code carries the method name as a string
-# literal (a bundle that inlined the SDK, or ``ag2ui`` placed by hand). A second
-# handshake would answer the host twice, so such a body is served without the
-# runtime. Only script elements the browser runs are searched: text the page
-# displays, quoted or not, is not a handshake, and neither is a script commented
-# out, inside ``<template>`` / ``<noscript>`` / ``<textarea>``, or of a data type
-# such as ``application/json``. The document is scanned left to right, so a
-# ``<!--`` inside a script's code is code, not a comment. A script element ends at
-# the first ``</script``, as in the browser, or at the end of the body.
-_SCRIPT_OR_INERT = re.compile(
-    r"<!--.*?(?:-->|\Z)"
-    r"|<(template|noscript|textarea)\b.*?(?:</\1\s*>|\Z)"
-    r"|<script\b([^>]*)>(.*?)(?:</script\s*>|\Z)",
-    re.IGNORECASE | re.DOTALL,
-)
-_TYPE_ATTRIBUTE = re.compile(r"""(?<![\w-])type\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.IGNORECASE)
-_EXECUTABLE_TYPE = re.compile(
-    r"(?:module|(?:text|application)/(?:x-)?(?:java|ecma)script|text/jscript|text/livescript)?", re.IGNORECASE
-)
-_SDK_SRC = re.compile(r"""(?<![\w-])src\s*=\s*["']?[^"'\s>]*@modelcontextprotocol/ext-apps""", re.IGNORECASE)
-_SDK_CODE = re.compile(
-    r"""(?:\bfrom\s*|\bimport\s*\(?\s*)["'`][^"'`]*@modelcontextprotocol/ext-apps"""
-    r"""|["'`]ui/initialize["'`]"""
-)
-
-# A call into ``ag2ui``, and the assignment that defines it (the runtime placed by
-# hand). A document skipping injection that calls ``ag2ui`` without defining it
-# would fail in the browser.
-_USES_AG2UI = re.compile(r"\bag2ui\.")
-_DEFINES_AG2UI = re.compile(r"\bwindow\.ag2ui\s*=(?!=)")
 
 # The key ``_meta`` reserves for MCP Apps, on a tool and on a resource alike.
 UI_META_KEY = "ui"
@@ -174,12 +141,14 @@ class MCPApp:
     thing in that slot is the binding the decorator itself writes.
 
     ``inject_runtime`` controls injection of the document runtime (see
-    :meth:`runtime_script`). A body that already performs the ``ui/initialize``
-    handshake — one importing the upstream ``@modelcontextprotocol/ext-apps``
-    SDK, or a bundle naming that method — is served without it regardless, so a
-    document never answers the host twice. Turn it off for a runtime that builds
-    the method name at run time, or loads the SDK from a URL that does not name
-    the package: the body is then served byte-for-byte as given.
+    :meth:`runtime_script`). A body whose running scripts already perform the
+    ``ui/initialize`` handshake — importing the upstream
+    ``@modelcontextprotocol/ext-apps`` SDK, or a bundle naming that method — is
+    served without it regardless, so the host is not answered twice; one that
+    also calls ``ag2ui`` without defining it still gets it, with a warning.
+    Turn it off for a runtime that builds the method name at run time, or
+    imports the SDK under a specifier that does not name the package: the body
+    is then served byte-for-byte as given.
     """
 
     __slots__ = (
@@ -298,7 +267,7 @@ class MCPApp:
             raise MCPAppURIError(uri)
         self._uri = uri
         self._content = content
-        self._name = name or uri
+        self._name = name
         self._title = title
         self._description = description
         self._listed = listed
@@ -339,7 +308,7 @@ class MCPApp:
         """
         return AG2Resource(
             uri=self._uri,
-            name=self._name,
+            name=self._name or self._uri,
             read=_AppResourceReader(self),
             title=self._title,
             description=self._description,
@@ -353,14 +322,18 @@ class MCPApp:
         inject_runtime = resolve_context_value(self._inject_runtime, context)
         if not inject_runtime:
             return body
-        if _performs_own_handshake(body):
-            if _USES_AG2UI.search(body) and not _DEFINES_AG2UI.search(body):
-                logger.warning(
-                    "MCP app %s performs its own ui/initialize handshake, so ag2ui is not injected, "
-                    "but the document uses ag2ui. Use either ag2ui or the @modelcontextprotocol/ext-apps App.",
-                    self._uri,
-                )
+        scripts = read_scripts(body)
+        if scripts.performs_handshake and not scripts.needs_ag2ui:
             return body
+        if scripts.performs_handshake:
+            # Calling ``ag2ui`` is the stronger signal: without it every call
+            # throws, while the extra handshake is something the host can survive.
+            logger.warning(
+                "MCP app %s performs its own ui/initialize handshake but also uses ag2ui, so ag2ui is "
+                "injected and the host receives two handshakes. Use either ag2ui or the "
+                "@modelcontextprotocol/ext-apps App.",
+                self._uri,
+            )
         return _inject(body, self._script_for(resolve_context_value(self._title, context)))
 
     def runtime_script(self) -> str:
@@ -686,36 +659,15 @@ def _inject(html: str, script: str) -> str:
     return script + html
 
 
-def _performs_own_handshake(html: str) -> bool:
-    """Whether a ``<script>`` element the browser runs already performs ``ui/initialize``."""
-    for match in _SCRIPT_OR_INERT.finditer(html):
-        attributes, code = match.group(2, 3)
-        if attributes is None or not _is_executable(attributes):
-            continue
-        if _SDK_SRC.search(attributes) or _SDK_CODE.search(code):
-            return True
-    return False
-
-
-def _is_executable(attributes: str) -> bool:
-    """Whether a ``<script>`` with these attributes runs: no ``type``, ``module`` or a JavaScript type."""
-    declared = _TYPE_ATTRIBUTE.search(attributes)
-    if declared is None:
-        return True
-    value = next(group for group in declared.groups() if group is not None)
-    return _EXECUTABLE_TYPE.fullmatch(value.strip()) is not None
-
-
-def _app_info(title: AppText | None, name: str, uri: str) -> dict[str, str]:
+def _app_info(title: AppText | None, name: str | None, uri: str) -> dict[str, str]:
     """The ``appInfo`` the document introduces itself to the host by in ``ui/initialize``.
 
     It is an MCP ``Implementation``: ``name`` is for programmatic use and
     ``title`` for display. ``name`` is the explicit name, else the URI without its
-    scheme — the constructor defaults it to the URI, so only a different value
-    counts as given. ``title`` is the document's title; an empty or unresolved
+    scheme. ``title`` is the document's title; an empty or unresolved
     ``Variable`` one is left out, and the host then displays ``name``.
     """
-    info = {"name": name if name != uri else uri.removeprefix("ui://"), "version": "1"}
+    info = {"name": name or uri.removeprefix("ui://"), "version": "1"}
     if isinstance(title, str) and title:
         info["title"] = title
     return info
