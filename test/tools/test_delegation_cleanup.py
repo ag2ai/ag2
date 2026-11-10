@@ -173,3 +173,32 @@ async def test_ancestor_cancellation_waits_for_already_halted_leaf(cancel_caller
     assert [name for name, _, _ in terminals] == ["leaf", "middle"]
     assert terminals[0] == ("leaf", "leaf stop", True)
     assert all(was_cleaned for _, _, was_cleaned in terminals)
+
+
+@pytest.mark.asyncio
+async def test_cancelling_delegation_propagates_when_halted_child_returns() -> None:
+    cleaning = asyncio.Event()
+    release = asyncio.Event()
+    cleaned = asyncio.Event()
+    starts: list[TaskStarted] = []
+
+    async def record(event: TaskStarted) -> None:
+        starts.append(event)
+
+    child = Agent("child", config=TestConfig("done"), middleware=[CleanupScope(cleaning, release, cleaned)])
+    delegate = child.as_tool(description="Work")
+    stream = MemoryStream()
+    stream.where(TaskStarted).subscribe(record, sync_to_thread=False)
+    call = ToolCallEvent(name=delegate.name, arguments='{"objective":"work"}')
+    waiter = asyncio.create_task(delegate(call, Context(stream)))
+    try:
+        # The reply is ready, but ask is still waiting for middleware cleanup.
+        await asyncio.wait_for(cleaning.wait(), 2)
+        await starts[0].origin.send(HaltEvent(reason="stop", source="test"))
+        waiter.cancel()
+    finally:
+        release.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(waiter, 2)
+    assert cleaned.is_set()

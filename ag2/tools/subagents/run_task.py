@@ -135,4 +135,6 @@ async def _await_invocation(
                 # The owner still propagates cancellation after ask has closed
                 # its middleware, observers, lifecycle and stream turn lock.
                 continue
-        return invocation.result()
+        # Preserve invocation errors without replacing the waiter's cancellation with a reply.
+        invocation.result()
+        raise
