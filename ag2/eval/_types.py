@@ -14,14 +14,16 @@ directly to set the key explicitly or attach a comment.
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 __all__ = (
     "Feedback",
     "MissingTraceError",
     "ScoreValue",
     "ScorerReturnTypeError",
+    "Side",
     "ValueLabel",
+    "Winner",
 )
 
 
@@ -30,6 +32,17 @@ ScoreValue: TypeAlias = bool | int | float | None
 
 ValueLabel: TypeAlias = str | None
 """A categorical label (e.g. ``"completed"`` / ``"timeout"``), used for slicing."""
+
+Side: TypeAlias = Literal["a", "b"]
+"""Which variant of a pairwise comparison: ``"a"`` or ``"b"``."""
+
+Winner: TypeAlias = Literal[Side, "tie"]
+"""The outcome of one pairwise comparison: a :data:`Side`, or ``"tie"``."""
+
+
+def other_side(side: Side) -> Side:
+    """The opposite variant of a pairwise comparison."""
+    return "b" if side == "a" else "a"
 
 
 @dataclass(frozen=True, slots=True)

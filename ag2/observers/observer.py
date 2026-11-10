@@ -172,7 +172,7 @@ class BaseObserver(ABC):
 
 @overload
 def observer(
-    condition: ClassInfo | Condition | None = None,
+    condition: ClassInfo | Condition,
     callback: None = None,
     *,
     interrupt: bool = False,
@@ -183,13 +183,35 @@ def observer(
 
 @overload
 def observer(
-    condition: ClassInfo | Condition | None,
+    condition: None = None,
+    callback: None = None,
+    *,
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+    timeout: float | None = None,
+) -> Callable[[Callable[..., Any]], SimpleObserver]: ...
+
+
+@overload
+def observer(
+    condition: ClassInfo | Condition,
     callback: Callable[..., Any],
     *,
     interrupt: bool = False,
     sync_to_thread: bool = True,
     timeout: float | None = None,
 ) -> StreamObserver: ...
+
+
+@overload
+def observer(
+    condition: None,
+    callback: Callable[..., Any],
+    *,
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+    timeout: float | None = None,
+) -> SimpleObserver: ...
 
 
 def observer(
@@ -199,7 +221,7 @@ def observer(
     interrupt: bool = False,
     sync_to_thread: bool = True,
     timeout: float | None = None,
-) -> StreamObserver | Callable[[Callable[..., Any]], StreamObserver]:
+) -> SimpleObserver | Callable[[Callable[..., Any]], SimpleObserver]:
     """Register an event callback with an optional per-invocation timeout.
 
     ``timeout`` is a finite positive number of seconds or ``None`` (no limit).
@@ -214,7 +236,7 @@ def observer(
     else:
         cond = TypeCondition(condition)
 
-    def decorator(func: Callable[..., Any]) -> StreamObserver:
+    def decorator(func: Callable[..., Any]) -> SimpleObserver:
         if cond is None:
             return SimpleObserver(
                 callback=func,

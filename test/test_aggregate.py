@@ -7,6 +7,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from dirty_equals import IsPartialDict
 
 from ag2 import Agent, KnowledgeConfig
 from ag2 import Context as Context
@@ -48,15 +49,14 @@ class TestConversationSummaryAggregate:
     @pytest.mark.asyncio
     async def test_writes_timestamped_summary(self) -> None:
         """Summary files should be prefixed with a timestamp for chronological sorting."""
-        mock_response = MagicMock()
-        mock_response.content = "This conversation covered X and Y."
-        mock_response.usage = {"input_tokens": 100, "output_tokens": 50}
-
-        mock_client = AsyncMock(return_value=mock_response)
-        mock_config = MagicMock()
-        mock_config.create.return_value = mock_client
-
-        strategy = ConversationSummaryAggregate(config=mock_config)
+        strategy = ConversationSummaryAggregate(
+            config=TestConfig(
+                ModelResponse(
+                    ModelMessage("This conversation covered X and Y."),
+                    usage=Usage(prompt_tokens=100, completion_tokens=50),
+                )
+            ),
+        )
         store = MemoryKnowledgeStore()
         stream = MemoryStream()
         ctx = Context(stream=stream)
@@ -86,20 +86,15 @@ class TestConversationSummaryAggregate:
 
     @pytest.mark.asyncio
     async def test_stores_usage(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = "Summary"
-        mock_response.usage = {"input_tokens": 200}
-
-        mock_client = AsyncMock(return_value=mock_response)
-        mock_config = MagicMock()
-        mock_config.create.return_value = mock_client
-
-        strategy = ConversationSummaryAggregate(config=mock_config)
+        strategy = ConversationSummaryAggregate(
+            config=TestConfig(ModelResponse(ModelMessage("Summary"), usage=Usage(prompt_tokens=200))),
+        )
         store = MemoryKnowledgeStore()
         ctx = Context(stream=MemoryStream())
 
         await strategy.aggregate([ModelRequest([TextInput("hi")])], ctx, store)
-        assert strategy.last_usage == {"input_tokens": 200}
+
+        assert strategy.last_usage == IsPartialDict({"prompt_tokens": 200})
 
     @pytest.mark.asyncio
     async def test_chronological_ordering_of_summaries(self) -> None:
@@ -141,15 +136,11 @@ class TestConversationSummaryAggregate:
 class TestWorkingMemoryAggregate:
     @pytest.mark.asyncio
     async def test_writes_working_memory(self) -> None:
-        mock_response = MagicMock()
-        mock_response.content = "Updated working memory content."
-        mock_response.usage = {"input_tokens": 100}
-
-        mock_client = AsyncMock(return_value=mock_response)
-        mock_config = MagicMock()
-        mock_config.create.return_value = mock_client
-
-        strategy = WorkingMemoryAggregate(config=mock_config)
+        strategy = WorkingMemoryAggregate(
+            config=TestConfig(
+                ModelResponse(ModelMessage("Updated working memory content."), usage=Usage(prompt_tokens=100))
+            ),
+        )
         store = MemoryKnowledgeStore()
         ctx = Context(stream=MemoryStream())
 
@@ -309,6 +300,29 @@ class TestAggregationWiredOnAgent:
         assert strategy.calls == 1
         assert len(completions) == 1
         assert completions[0].agent == "roller"
+
+    @pytest.mark.asyncio
+    async def test_completion_reports_the_summarization_usage_as_a_dict(self) -> None:
+        stream = MemoryStream()
+        completions: list[AggregationCompleted] = []
+        stream.where(AggregationCompleted).subscribe(lambda e: completions.append(e))
+
+        agent = Agent(
+            "roller",
+            config=TestConfig(ModelResponse(ModelMessage("done"))),
+            plugins=[
+                KnowledgePlugin(
+                    store=MemoryKnowledgeStore(),
+                    aggregate=ConversationSummaryAggregate(
+                        config=TestConfig(ModelResponse(ModelMessage("Summary"), usage=Usage(total_tokens=30))),
+                    ),
+                    aggregate_trigger=AggregateTrigger(on_end=True),
+                )
+            ],
+        )
+        await agent.ask("go", stream=stream)
+
+        assert [(c.llm_calls, c.usage) for c in completions] == [(1, IsPartialDict({"total_tokens": 30}))]
 
     @pytest.mark.asyncio
     @pytest.mark.filterwarnings(r"ignore:Agent\(knowledge=:DeprecationWarning")

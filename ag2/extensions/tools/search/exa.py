@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeAlias
 
 from exa_py import AsyncExa
+from exa_py.api import AnswerResponse
 from pydantic import Field
 
 from ag2.annotations import Context, Variable
@@ -313,6 +314,9 @@ class ExaToolkit(Toolkit):
                 raw = await c.answer(query, text=True)
             finally:
                 await c.client.aclose()
+            # Without `stream=True` or an `output_schema`, Exa answers with plain text.
+            if not isinstance(raw, AnswerResponse) or not isinstance(raw.answer, str):
+                raise TypeError(f"Exa answer() returned {type(raw).__name__} without a text answer")
             return ToolResult(
                 ExaAnswerResult(
                     answer=raw.answer,
