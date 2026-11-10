@@ -700,6 +700,21 @@ OpenAI reasoning models spend extra tokens thinking before they answer. Both Ope
 
 The model only returns its thinking when you set `summary`; without it the model still reasons, but no thinking text reaches the stream. The summary is emitted as `ModelReasoning` events (`OpenAIReasoningEvent`, a subclass), and reasoning tokens are reported on `ModelResponse.usage.thinking_tokens`.
 
+### OpenAI Prompt Cache Retention
+
+Set `ttl` in `OpenAIResponsesConfig`'s `prompt_cache_options` to `"12h"` to keep cache entries for at least 12 hours instead of the default 30 minutes (`gpt-5.6` and later). `OpenAICompletionsConfig` takes the same option, but Chat Completions accepts only `"30m"` and rejects `"12h"`. See the [OpenAI prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching) for which models support each lifetime:
+
+```python
+from ag2.config import OpenAIResponsesConfig
+
+config = OpenAIResponsesConfig(
+    model="gpt-5.6",
+    prompt_cache_options={"ttl": "12h"},
+)
+```
+
+Cache writes are reported on `ModelResponse.usage.cache_creation_input_tokens`. The Responses API also reports how many of those tokens were written with 12-hour retention, which ag2 exposes as `usage.cache_creation_extended_input_tokens`; 12-hour writes are priced differently, so cost accounting can tell them apart. Anthropic reports its 1-hour cache writes in the same field (see [Anthropic Prompt Cache Retention](model_configuration.md#anthropic-prompt-cache-retention)).
+
 ### Anthropic Configuration
 
 `AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview) through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.15.0,<3`.
@@ -712,6 +727,31 @@ from ag2.config import AnthropicConfig
 # Auth resolved from ANTHROPIC_API_KEY when omitted
 config = AnthropicConfig(model="claude-haiku-4-5-20251001", streaming=True)
 ```
+
+#### Anthropic Prompt Cache Retention
+
+Anthropic cache entries live for 5 minutes by default. To keep a large document cached for an hour, set `ttl` to `"1h"` in its `cache_control` vendor metadata:
+
+```python
+from pathlib import Path
+from ag2 import Agent, BinaryInput
+from ag2.config import AnthropicConfig
+from ag2.events import BinaryType
+
+report = BinaryInput(
+    Path("report.pdf").read_bytes(),
+    media_type="application/pdf",
+    kind=BinaryType.DOCUMENT,
+    vendor_metadata={"cache_control": {"type": "ephemeral", "ttl": "1h"{{ "}}" }},
+)
+agent = Agent("analyst", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+reply = await agent.ask(report, "Summarize the report.")
+usage = (await reply.usage()).total
+print(usage.cache_creation_input_tokens)  # every token written to the cache
+print(usage.cache_creation_extended_input_tokens)  # the part written with the 1-hour lifetime
+```
+
+1-hour writes are priced differently from 5-minute writes, so `usage.cache_creation_extended_input_tokens` lets cost accounting tell them apart. See the [Anthropic prompt caching guide](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) for pricing and minimum cacheable lengths.
 
 #### Inference Speed
 
@@ -1021,6 +1061,47 @@ Reasoning content is streamed as `ModelReasoning` events, and reasoning tokens a
 !!! note "`extra_body` precedence"
 
     Pass `extra_body` to forward provider-specific keys that have no dedicated field. Explicit top-level fields always win over the same key inside `extra_body` - e.g. a top-level `thinking=True` overrides a `thinking` entry inside `extra_body`, while unrelated `extra_body` keys are merged through untouched.
+
+### xAI Configuration
+
+`XAIConfig` connects to [xAI's Grok models](https://docs.x.ai/docs/overview) through the official `xai-sdk`. Install the optional dependency with `pip install "ag2[xai]"`.
+
+If `api_key` is not passed explicitly, the SDK resolves it from the `XAI_API_KEY` environment variable.
+
+```python
+from ag2.config import XAIConfig
+
+# Auth resolved from XAI_API_KEY when omitted
+config = XAIConfig(model="grok-4", streaming=True)
+```
+
+#### Safety Identifier and Moderation Guidelines
+
+`guidelines` tightens moderation per category. Each entry declines one of `nsfw`, `violence` or `profanity`; a category you leave out keeps the model's default behavior.
+
+`safety_identifier` tells xAI which end user is behind a request, so a policy violation is attributed to that user rather than to your whole API key. It must be stable and opaque: send a hash of your internal user ID, never an email address or display name. Because it differs per user, set it per request with `config.copy(...)`. xAI prefers it over the older `user` field, which is still accepted.
+
+```python
+import hashlib
+
+from ag2 import Agent
+from ag2.config import XAIConfig
+
+config = XAIConfig(
+    model="grok-4",
+    guidelines=[
+        {"type": "policy", "category": "violence", "behavior": "decline"},
+        {"type": "policy", "category": "profanity", "behavior": "decline"},
+    ],
+)
+agent = Agent("support", config=config)
+
+user_id = "customer-1042"
+safety_id = hashlib.sha256(user_id.encode()).hexdigest()
+reply = await agent.ask("How do I reset my password?", config=config.copy(safety_identifier=safety_id))
+```
+
+An unknown category or behavior raises `ValueError` before the request is sent. The API rejects a request that lists a category twice. It also rejects guidelines on a multi-agent model, together with `stop`, or on a deferred completion.
 
 ### Mistral Configuration
 
@@ -4699,10 +4780,10 @@ Prometheus histograms also expose `_bucket`, `_count`, and `_sum` series for eac
 | `outcome` | `success`, `error` | `error` is used for raised exceptions, tool error results, timeouts, and cancellations. |
 | `finish_reason` | Provider finish reason or `unknown` | |
 | `error_type` | Exception class name or empty string | Empty string means the operation succeeded. |
-| `token_type` | `input`, `output`, `total`, `cache_read_input`, `cache_creation_input`, `thinking` | `total` overlaps `input` + `output`. |
+| `token_type` | `input`, `output`, `total`, `cache_read_input`, `cache_creation_input`, `cache_creation_extended_input`, `thinking` | `total` overlaps `input` + `output`; `cache_creation_extended_input` overlaps `cache_creation_input`. |
 | `tool` | Tool name | Derived from the `ToolCallEvent` name. |
 
-Missing or empty label values are normalized to `unknown`, except `error_type`, which is an empty string for successful operations. Token values of zero are not emitted, and missing token fields are not synthesized as zero. Which `token_type` values appear depends on what the provider reports (for example, `thinking` only for reasoning models and `cache_read_input` / `cache_creation_input` only when prompt caching is active).
+Missing or empty label values are normalized to `unknown`, except `error_type`, which is an empty string for successful operations. Token values of zero are not emitted, and missing token fields are not synthesized as zero. Which `token_type` values appear depends on what the provider reports (for example, `thinking` only for reasoning models, `cache_read_input` / `cache_creation_input` only when prompt caching is active, and `cache_creation_extended_input` only for cache writes with extended [prompt cache retention](model_configuration.md#openai-prompt-cache-retention): OpenAI's 12 hours or Anthropic's 1 hour).
 
 ## Configuration
 
@@ -5002,6 +5083,25 @@ async def test_tool_not_found():
 
     with pytest.raises(ToolNotFoundError, match="Tool `unregistered_tool` not found"):
         await agent.ask("Hi!")
+```
+
+## How to test the Files API
+
+`TestFilesClient` is an in-memory Files API. Pass it to `TestConfig(files=...)`, and what your code uploads through `FilesAPI` can be read, listed and deleted without a provider.
+
+```python
+import pytest
+
+from ag2.files import FileContent, FilesAPI
+from ag2.testing import TestConfig, TestFilesClient
+
+@pytest.mark.asyncio
+async def test_upload_report():
+    files = FilesAPI(TestConfig(files=TestFilesClient()))
+
+    uploaded = await files.upload(data=b"report", filename="report.txt")
+
+    assert await files.read(uploaded.file_id) == FileContent(name="report.txt", data=b"report")
 ```
 
 ---
@@ -7627,7 +7727,7 @@ tool = TavilySearchTool(
 `SandboxShellTool` gives an agent the ability to run shell commands inside an environment you choose. With no argument it uses a `LocalEnvironment` with a temporary working directory that is cleaned up on process exit. See the [Sandbox Shell page](local_shell.md) for the full guide.
 
 !!! warning
-    A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run - or a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment` for real isolation.
+    A `LocalEnvironment` executes arbitrary shell commands on your machine. Use `allowed`, `blocked`, or `readonly` to restrict what the agent can run - or a `DockerEnvironment`, `DaytonaEnvironment`, `TenkiEnvironment`, or `E2BEnvironment` for real isolation.
 
 ```python
 from ag2 import Agent
@@ -8081,11 +8181,42 @@ if __name__ == "__main__":
 
 That is the whole of the common case. The agent is exposed as one tool - `ask` - that runs `Agent.ask()` and returns the reply; conversations are kept, and questions the agent raises reach the human behind the calling client. Everything below is opt-in on top of it.
 
+Point a client at **`http://127.0.0.1:8000/mcp`** - exactly the `path` you configured (default `"/mcp"`). It answers there directly. `/mcp/` is answered with a `307` redirect to it, which costs a round trip and which not every client follows, so configure the path without the trailing slash.
+
 The server is also mountable into a host Starlette/FastAPI app, since it is an ordinary ASGI app.
 
 ---
 
 ## Recipes
+
+### Let a browser-based host connect
+
+Hosts that run in a browser - the MCP Inspector, the ext-apps `basic-host`, a web chat - send a CORS preflight before their requests, and the server sends no CORS headers of its own. Wrap the server in Starlette's `CORSMiddleware`:
+
+```python
+import uvicorn
+from starlette.middleware.cors import CORSMiddleware
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+agent = Agent("assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = CORSMiddleware(
+    MCPServer(agent),
+    allow_origins=["http://localhost:6274"],  # the host page's origin, e.g. the MCP Inspector
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=[
+        "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id", "mcp-method", "mcp-name",
+    ],
+    expose_headers=["mcp-session-id"],
+)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+Wrap the server itself rather than mounting it into a `Starlette(middleware=[...])` app: `CORSMiddleware` passes the ASGI `lifespan` through, so the server's session manager still starts. The listed headers cover `mcp-protocol-version`, `mcp-session-id` for session-based clients, and `last-event-id` when a host resumes a dropped stream. Clients using protocol `2026-07-28` also send `mcp-method`, plus `mcp-name` for requests such as `tools/call` and `resources/read`; omitting these from `allow_headers` makes their browser preflight fail. Exposing `mcp-session-id` on responses lets session-based clients read their session ID and send it on subsequent requests. List the host's exact origin rather than `"*"`: a server reachable from any page can be driven by any page.
 
 ### Serve over stdio instead
 
@@ -8634,7 +8765,7 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `tools` | `()` | deterministic `@mcp_tool` tools served next to `ask` |
 | `apps` | `()` | MCP Apps whose tools and interactive documents are served together |
 | `extensions` | `None` | protocol extensions advertised by the server |
-| `path` | `"/mcp"` | the HTTP endpoint path |
+| `path` | `"/mcp"` | the HTTP endpoint path, answered directly; a trailing-slash spelling is redirected to it |
 | `stateless` | `False` | stop the HTTP transport issuing an `mcp-session-id` |
 | `json_response` | `False` | answer with JSON rather than SSE |
 | `transport` | `None` | a `TransportConfig` of streamable-HTTP settings; omitting it is a default-constructed one |
@@ -8666,6 +8797,10 @@ Non-positive bounds are refused when the `TransportConfig` is constructed.
 
 Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `description`, `handler`, `input_schema`, `title`, `annotations`, `output_schema`, and `meta` - and nothing else; resolver metadata is the decorator's own state, not a constructor argument.
 
+A tool made by `@mcp_tool` (or `@app.tool`) stays callable as the function it wraps, so a unit test can call it directly - `await increment(1, by=2)` - with nothing MCP-specific in the way: no schema validation, no resolver, no result mapping. One constructed from a `handler` wraps no function; drive it with `await tool.call(arguments)`.
+
+It is not an agent tool. `Agent(tools=[...])` refuses one with a `TypeError` that names the fix: serve it with `MCPServer(tools=...)` / `apps=...`, or decorate the function with `@tool` to give it to an agent.
+
 ### Names re-exported from `ag2.mcp`
 
 `MCPServer`, `SessionConfig`, `TransportConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
@@ -8676,8 +8811,8 @@ Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the la
 
 ## Beyond the conversational tool
 
-- **MCP-UI** - see [MCP-UI Resources](mcp_ui.md) for returning renderable UI from a `@mcp_tool`.
 - **MCP Apps** - pass `apps=[MCPApp(...)]` to serve an interactive document and its bound tools together; see [MCP Apps](mcp_apps.md).
+- **MCP-UI (legacy)** - see [MCP-UI (legacy embedded resources)](mcp_ui.md) for clients that render only MCP-UI resources; use [MCP Apps](mcp_apps.md) for new work.
 - **Structured custom tools** - a pydantic model or dataclass return annotation supplies `outputSchema`; its value is returned as `structuredContent`, while `__str__` supplies readable text. `output_schema=` can override derivation and `meta=` adds extension metadata.
 - **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`.
 - **Protocol extensions** are advertised with `extensions=` and inspected per request with `client_extension()`.
@@ -8690,21 +8825,637 @@ Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the la
 
 ---
 
-# MCP-UI Resources
+# MCP Apps
+
+Source: https://docs.ag2.ai/docs/user-guide/tools/mcp_apps/
+
+# MCP Apps
+
+[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) - the `io.modelcontextprotocol/ui` extension - lets a server hand a host a **real interface** instead of a wall of text. `ag2.mcp` serves one as an **app**: a document plus the tools that render it, served next to your agent by `MCPServer`.
+
+## Quick start
+
+```bash
+pip install "ag2[mcp,anthropic]" uvicorn
+```
+
+### Write
+
+An agent with a UI: the host's model calls `show_recipe`, the tool asks the agent for a typed `Recipe`, and the host renders it as a card.
+
+```python
+import asyncio
+import sys
+
+import uvicorn
+from pydantic import BaseModel
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPApp, MCPServer
+
+class Recipe(BaseModel):
+    title: str
+    minutes: int
+    ingredients: list[str]
+
+    def __str__(self) -> str:
+        return f"{self.title} ({self.minutes} min): {', '.join(self.ingredients)}"
+
+CARD = """<h2 id="title">Cooking...</h2>
+<ul id="ingredients"></ul>
+<script>
+  ag2ui.onToolResult(function (result) {
+    var recipe = result.structuredContent;
+    document.getElementById("title").textContent = recipe.title + " - " + recipe.minutes + " min";
+    document.getElementById("ingredients").innerHTML = "";
+    recipe.ingredients.forEach(function (name) {
+      var li = document.createElement("li");
+      li.textContent = name;
+      document.getElementById("ingredients").appendChild(li);
+    });
+  });
+</script>"""
+
+chef = Agent(
+    "chef",
+    prompt="You write short home-cooking recipes.",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    response_schema=Recipe,
+)
+cookbook = MCPApp("ui://cookbook/recipe", CARD)
+
+@cookbook.tool
+async def show_recipe(dish: str) -> Recipe:
+    """Show a recipe for a dish as a card."""
+    reply = await chef.ask(f"A recipe for {dish}.")
+    recipe = await reply.content()
+    if recipe is None:
+        raise RuntimeError("The chef returned no recipe.")
+    return recipe
+
+app = MCPServer(chef, apps=[cookbook])
+
+if __name__ == "__main__":
+    if "--stdio" in sys.argv:
+        asyncio.run(app.run_stdio())
+    else:
+        uvicorn.run(app, host="127.0.0.1", port=3001)
+```
+
+`ag2ui` in the HTML is not a package you install: `MCPServer` injects it into the document before serving it, and it performs the handshake a host requires before it shows anything - see [Inside the document](#inside-the-document-ag2ui). The tool's return type is the card's data: its fields arrive in the document as `structuredContent`, and its `__str__` is what the model reads - see [The return type does three jobs](#the-return-type-does-three-jobs).
+
+### Run
+
+```bash
+python recipes.py
+```
+
+The server listens on **`http://127.0.0.1:3001/mcp`**. `python recipes.py --stdio` serves over stdin/stdout instead, for hosts that launch the server themselves.
+
+### See
+
+Connect a host that renders MCP Apps, then ask it for a recipe ("show me a recipe for shakshuka").
+
+!!! warning "Host steps not yet verified"
+    The steps below follow each host's documented configuration and have not yet been checked end to end against this page. If one does not render the card, [check what the server logged](#when-the-host-shows-text-only).
+
+=== "VS Code"
+    Add the server to `.vscode/mcp.json` in your workspace, then start it from the editor's MCP view and use Copilot Chat in agent mode:
+
+    ```json
+    {
+      "servers": {
+        "recipes": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+      }
+    }
+    ```
+
+=== "Claude Desktop"
+    Claude Desktop launches local servers over stdio, with a minimal `PATH`. Add this to `claude_desktop_config.json` (Settings -> Developer -> Edit Config) with absolute paths to the Python interpreter that has `ag2` installed (e.g. your virtualenv's `bin/python`) and to your file, then restart Claude Desktop:
+
+    ```json
+    {
+      "mcpServers": {
+        "recipes": {
+          "command": "/absolute/path/to/.venv/bin/python",
+          "args": ["/absolute/path/to/recipes.py", "--stdio"],
+          "env": { "ANTHROPIC_API_KEY": "sk-ant-..." }
+        }
+      }
+    }
+    ```
+
+=== "MCP Inspector"
+    ```bash
+    npx @modelcontextprotocol/inspector
+    ```
+
+    In the page it opens, pick **Streamable HTTP**, enter `http://127.0.0.1:3001/mcp` and connect. By default the Inspector connects through its own proxy, so no CORS setup is needed; only for a direct browser connection wrap the server as in [Let a browser-based host connect](serving_mcp.md#let-a-browser-based-host-connect). Whether your Inspector version renders the card, rather than only listing the tool and its `_meta.ui`, is part of what is unverified.
+
+### Who calls what
+
+!!! note "Three callers, one server"
+    - **The host's model** calls `show_recipe` - the tool bound to the document. It never calls your HTML.
+    - **The document** calls tools through the host with `ag2ui.callTool(...)`. A tool meant only for it is declared with `visibility=["app"]` - see [Who may call a tool](#who-may-call-a-tool).
+    - **The AG2 agent** is what *your tool* calls with `chef.ask(...)`. To the host it is one more tool, `ask`, which `MCPServer` always lists; the model may call it directly too, and gets text back.
+
+    And the document itself: the host fetches it **in parallel with** the call, so it is a static body, and each call's data reaches it afterwards as the result's `structuredContent`.
+
+An app whose tools do not need a model - a counter, a form, a view over your own data - is the same code with a plain function body. `MCPServer` still takes an agent, and the host's model still sees its `ask` tool next to yours: give that agent a prompt that says what it is for.
+
+### Test without a host
+
+`ag2.mcp.testing.connect` opens an in-process client against the server - here `app` from the quick start. Advertise MCP Apps support the way a host does, and you see exactly what a host would - the binding, the result, the document:
+
+```python
+import asyncio
+
+from ag2.mcp.apps import APP_MIME_TYPE, EXTENSION_ID
+from ag2.mcp.testing import connect
+
+async def main() -> None:
+    async with connect(app, extensions={EXTENSION_ID: {"mimeTypes": [APP_MIME_TYPE]{{ "}}" }}) as session:
+        tools = await session.list_tools()
+        result = await session.call_tool("show_recipe", {"dish": "shakshuka"})
+        card = await session.read_resource("ui://cookbook/recipe")
+
+    print([tool.meta for tool in tools.tools])   # show_recipe carries {"ui": {"resourceUri": ...{{ "}}" }}
+    print(result.structured_content)             # the card's data
+    print(card.contents[0].mime_type)            # text/html;profile=mcp-app
+
+asyncio.run(main())
+```
+
+Leave `extensions=` out to see what a text-only client gets. An app tool also stays callable as the function you wrote, so a unit test can skip MCP altogether - `await show_recipe("shakshuka")` - and give the agent a `ag2.testing.TestConfig` to script its reply.
+
+## MCP Apps or MCP-UI?
+
+Use MCP Apps for new work. [MCP-UI](https://mcpui.dev/)'s own SDK now implements MCP Apps, and the embedded-resource pattern that [`ag2.mcp_ui`](mcp_ui.md) serves - a handler that builds HTML from its arguments and returns it inside the result - is the one a host implementing MCP Apps will not render. `ag2.mcp_ui` remains for clients that only understand MCP-UI resources.
+
+## The return type does three jobs
+
+`Recipe` above is doing more work than it looks. From one annotation the framework derives all three of the things MCP wants:
+
+| From `-> Recipe` | Becomes | Read by |
+|---|---|---|
+| its JSON schema | the tool's `outputSchema` | the client, to validate |
+| its dump | the result's `structuredContent` | your document |
+| its `__str__` | the result's text content | the model, and a text-only client |
+
+Which is why `__str__` is worth writing: a text-only client gets *"Shakshuka (25 min): eggs, tomatoes, ..."* rather than a JSON dump.
+
+Both pydantic models and dataclasses work. This applies to any custom tool, not only a UI-bound one - see [Beyond the conversational tool](serving_mcp.md#beyond-the-conversational-tool).
+
+For Pydantic models, `outputSchema` describes `model_dump(mode="json")`, including serialized field types and each nested model's `serialize_by_alias` policy. Input-only aliases do not become output keys. An explicit `output_schema=` still takes precedence, and a manually returned `CallToolResult` keeps the content you supplied.
+
+### Three levels of control
+
+A handler returns whichever of these fits, in increasing order of control:
+
+```python
+from dataclasses import dataclass
+
+from mcp.types import CallToolResult, TextContent
+
+from ag2.mcp import MCPApp
+
+@dataclass
+class Item:
+    name: str
+    price: int
+
+    def __str__(self) -> str:
+        return f"{self.name} costs ${self.price}."
+
+shop = MCPApp("ui://shop/card", "<div id='card'></div>")
+
+@shop.tool
+async def typed() -> Item:
+    """A typed value: schema, structured content and text all derived."""
+    return Item(name="Espresso cup", price=12)
+
+@shop.tool
+async def mapping() -> dict:
+    """A mapping: structured content verbatim, text a JSON rendering, no schema."""
+    return {"name": "Espresso cup", "price": 12}
+
+@shop.tool
+async def explicit() -> CallToolResult:
+    """A full result: nothing derived. Also how you state text and data separately."""
+    return CallToolResult(
+        content=[TextContent(type="text", text="One espresso cup, $12.")],
+        structuredContent={"name": "Espresso cup", "price": 12},
+    )
+```
+
+The snippets below reuse this `shop` app and `Item`.
+
+!!! note "The schema follows the annotation, not the value"
+    `outputSchema` is decided once, when the tool is declared. Annotating `-> CallToolResult` is what opts a tool out of an advertised schema; returning one from a handler annotated `-> Item` still advertises `Item`'s schema, and MCP requires your `structuredContent` to conform to it. For a Pydantic model this is its serialization schema. If you assemble a different shape by hand, supply an explicit `output_schema=` or annotate the handler `-> CallToolResult`.
+
+## Inside the document: `ag2ui`
+
+A host **discards every message from a view that has not completed the `ui/initialize` handshake**, and tells it nothing. A hand-written button on a document without that handshake is silently dead - which is why the runtime is injected by default. The server places a `<script>` at the head of the document before serving it - inside `<head>` when there is one, after `<html>` when there is not, at the very front of a fragment - so by the time your own script runs the global exists.
+
+It defines one global, `ag2ui`:
+
+```javascript
+await ag2ui.ready;                       // the handshake completed
+
+ag2ui.onToolResult(fn);                  // every result for this document
+ag2ui.onToolResult("show_item", fn);     // only that tool's results
+ag2ui.onToolInput(fn);                   // the call's arguments
+ag2ui.onToolInputPartial(fn);            // arguments while the model is still writing them
+ag2ui.onHostContextChanged(fn);          // theme, display mode, styles, locale...
+ag2ui.onCancelled(fn);
+
+await ag2ui.callTool("add_to_cart", { item_id: "42" });
+await ag2ui.sendMessage("Show me the kettle");   // into the conversation
+await ag2ui.openLink("https://example.com");
+await ag2ui.readResource("ui://shop/card");
+await ag2ui.updateContext({ content: [{ type: "text", text: "Viewing item 42" }] });
+await ag2ui.requestDisplayMode("fullscreen");
+await ag2ui.downloadFile(contents);
+await ag2ui.sampling({ messages: [...] });
+ag2ui.log("info", "rendered");
+ag2ui.reportSize();                      // force a size report; it is automatic otherwise
+
+ag2ui.host.capabilities;     // what the host advertised
+ag2ui.host.context;          // theme, styles, display mode, container size
+ag2ui.host.protocolVersion;  // the dialect revision the host answered with
+ag2ui.host.info;             // the host's name and version
+```
+
+The runtime introduces the document to the host in `ui/initialize` as `appInfo`: its `name` is the app's `name`, else the URI without `ui://` (`shop/card`), and its `title`, the label a host shows people, is the app's `title` when it has one.
+
+Each subscription returns an unsubscribe function. The document's size is reported automatically via a `ResizeObserver`, so the host can size the frame without your writing one.
+
+**Subscribe whenever you like; call only after `ag2ui.ready`.** Registering a handler is local and is safe the moment the document parses - which is why the card above awaits nothing. Everything that *talks* to the host is refused until the handshake completes, so `await ag2ui.ready` before the first `callTool`, `sendMessage` or `readResource`; calling earlier throws rather than posting into a channel the host is still discarding.
+
+**Use what `callTool` returns.** `#!javascript await ag2ui.callTool(...)` resolves with the call's result, so a button renders it directly. Whether the host *also* pushes that result to `onToolResult` subscribers varies by host, so do not wait for it.
+
+Errors arrive on the **same** channel as results - a failed call is a result carrying `isError`, matching how `ag2.mcp` already treats a tool error as a result rather than an exception.
+
+Calling something the host did not advertise **throws in JavaScript before anything is sent**, because a host's own answer to an unadvertised method is silence:
+
+```javascript
+try {
+  await ag2ui.downloadFile(contents);
+} catch (e) {
+  // "the host did not advertise 'downloadFile'" - rather than a button that does nothing.
+}
+```
+
+`requestDisplayMode` refuses locally in the same way, against `ag2ui.host.context.availableDisplayModes` rather than against a capability: asking for a mode the host never offered throws instead of hanging on an answer that will not come.
+
+### Which tool answered
+
+MCP Apps gives the document nothing to correlate with: the notification carrying a result names neither the call nor the tool. With one tool per document that does not matter. With two - a card that renders itself *and* updates after an action - it does.
+
+The server therefore stamps the answering tool's name into the result's `_meta` under `ai.ag2/tool`, and `ag2ui.onToolResult(name, fn)` routes on it:
+
+```javascript
+ag2ui.onToolResult("show_item", renderCard);
+ag2ui.onToolResult("add_to_cart", showConfirmation);
+```
+
+Set that key yourself and your value travels instead, so you can route by your own scheme. This is the one respect in which a `CallToolResult` you assembled yourself is modified; every other key you set travels untouched alongside the stamp.
+
+### Who may call a tool
+
+A tool the document calls through `ag2ui.callTool` need not be one the model can call. `visibility=` says where the host surfaces it - `"model"` in the model's tool list, `"app"` to the document:
+
+```python
+@dataclass
+class CartLine:
+    status: str
+
+    def __str__(self) -> str:
+        return self.status
+
+@shop.tool
+async def show_item(item_id: str) -> Item:
+    """Show a product card."""
+    return Item(name="Espresso cup", price=12)
+
+@shop.tool(visibility=["app"])
+async def add_to_cart(item_id: str) -> CartLine:
+    """Add an item to the cart. Called by the card's button, not by the model."""
+    return CartLine(status="Added to your cart")
+```
+
+Omit it and no `visibility` is advertised at all, leaving the host to its own default. It is a hint about where to *surface* a tool, not an authorization boundary: the tool is served and dispatched exactly like any other, so anything that must not be called by the model has to refuse in the handler.
+
+`examples/mcp/server_apps.py` is a runnable version of this shop, with a button that calls `add_to_cart`.
+
+## Using the upstream `App` SDK instead
+
+`ag2ui` is one way to talk to the host, not the only one. A document written against the `App` class from [`@modelcontextprotocol/ext-apps`](https://github.com/modelcontextprotocol/ext-apps) works as it is: **a body with a `<script>` that loads `@modelcontextprotocol/ext-apps` - a `src` or an `import` naming the package - or whose code carries the `"ui/initialize"` method name as a string (a bundle that inlined the SDK) is served without `ag2ui`**, so the host does not see two handshakes. Only code the browser runs is searched. Text the page displays, quoted or not, does not count, and neither does an HTML or JavaScript comment, a string that merely mentions the package, a script inside `<template>`, `<noscript>`, `<style>`, `<title>` or `<textarea>`, or a script with a data `type` such as `application/json` (or a `language` other than JavaScript), or a classic `nomodule` script. A document that loads the SDK some other way - imports it under a specifier that does not name the package, such as an import-map alias - is not recognised; pass `inject_runtime=False` for it. A recognised document that also uses `ag2ui` without defining it - `ag2ui....`, `ag2ui?....`, `window.ag2ui....`, `const { ready } = ag2ui`, or the same in an `onclick`-style event handler attribute - still gets `ag2ui`, so those calls work, and the server logs a warning on `ag2.mcp.apps`: the host then receives two handshakes.
+
+The two cover the same ground:
+
+| `ag2ui` | `App` from `@modelcontextprotocol/ext-apps` |
+|---|---|
+| injected; `await ag2ui.ready` | `const app = new App({ name, version })`; `await app.connect()` |
+| `ag2ui.onToolResult(fn)` | `app.ontoolresult = fn` |
+| `ag2ui.onToolResult("show_item", fn)` | `app.ontoolresult = fn`, routing on `result._meta["ai.ag2/tool"]` yourself |
+| `ag2ui.onToolInput(fn)` | `app.ontoolinput = fn` |
+| `ag2ui.onToolInputPartial(fn)` | `app.ontoolinputpartial = fn` |
+| `ag2ui.onHostContextChanged(fn)` | `app.onhostcontextchanged = fn` |
+| `ag2ui.onCancelled(fn)` | `app.ontoolcancelled = fn` |
+| `ag2ui.callTool("add_to_cart", { item_id: "42" })` | `app.callServerTool({ name: "add_to_cart", arguments: { item_id: "42" } })` |
+| `ag2ui.sendMessage("Show me the kettle")` | `app.sendMessage({ role: "user", content: [{ type: "text", text: "Show me the kettle" }] })` |
+| `ag2ui.openLink(url)` | `app.openLink({ url })` |
+| `ag2ui.readResource(uri)` | `app.readServerResource({ uri })` |
+| `ag2ui.updateContext({ content })` | `app.updateModelContext({ content })` |
+| `ag2ui.requestDisplayMode("fullscreen")` | `app.requestDisplayMode({ mode: "fullscreen" })` |
+| `ag2ui.downloadFile(contents)` | `app.downloadFile({ contents })` |
+| `ag2ui.sampling({ messages, maxTokens })` | `app.createSamplingMessage({ messages, maxTokens })` |
+| `ag2ui.log("info", "rendered")` | `app.sendLog({ level: "info", data: "rendered" })` |
+| `ag2ui.host.capabilities` / `ag2ui.host.context` | `app.getHostCapabilities()` / `app.getHostContext()` |
+
+One difference in shape: each `ag2ui.on...` call adds a subscriber and returns an unsubscribe function, while each `app.on...` property holds a single handler.
+
+Choose `ag2ui` for a small hand-written document with no build step and no network access; choose `App` when you already use it, want its React bindings and theming helpers, or share the document with servers written in other languages.
+
+Without a bundler, load the SDK's self-contained `app-with-deps` build from a CDN. The example below is the shop card from [above](#who-may-call-a-tool), whole: the document lives in its own `card.html` and talks to the host through `App`, and the server passes its path to `MCPApp` and declares the tools on the same `shop`. The host's default sandbox blocks every external script, so **declare the CDN in `csp=`** or the import fails silently:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Product card</title>
+</head>
+<body>
+  <div id="card">Loading...</div>
+  <button id="add">Add to cart</button>
+  <script type="module">
+    import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";
+
+    const app = new App({ name: "shop/card", title: "Product card", version: "1.0.0" });
+    app.ontoolresult = (result) => {
+      document.getElementById("card").textContent = `${result.structuredContent.name}: $${result.structuredContent.price}`;
+    };
+    await app.connect();
+
+    document.getElementById("add").onclick = async () => {
+      const result = await app.callServerTool({ name: "add_to_cart", arguments: { item_id: "42" } });
+      document.getElementById("card").textContent = result.content[0].text;
+    };
+  </script>
+</body>
+</html>
+```
+
+```python
+from dataclasses import dataclass
+from pathlib import Path
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPApp, MCPServer, ResourceCsp
+
+@dataclass
+class Item:
+    name: str
+    price: int
+
+    def __str__(self) -> str:
+        return f"{self.name} costs ${self.price}."
+
+@dataclass
+class CartLine:
+    status: str
+
+    def __str__(self) -> str:
+        return self.status
+
+shop = MCPApp(
+    "ui://shop/card",
+    Path(__file__).parent / "card.html",
+    title="Product card",
+    csp=ResourceCsp(resource_domains=["https://unpkg.com"]),
+)
+
+@shop.tool
+async def show_item(item_id: str) -> Item:
+    """Show a product card."""
+    return Item(name="Espresso cup", price=12)
+
+@shop.tool(visibility=["app"])
+async def add_to_cart(item_id: str) -> CartLine:
+    """Add an item to the cart. Called by the card's button, not by the model."""
+    return CartLine(status="Added to your cart")
+
+agent = Agent("shop", prompt="You help customers browse the shop.", config=AnthropicConfig(model="claude-sonnet-5"))
+server = MCPServer(agent, apps=[shop])
+```
+
+The file is read on every resource read, so editing `card.html` needs no server restart. Serve `server` exactly as in the [quick start](#run). Register handlers before `app.connect()`, as the SDK's own docs ask: the host may deliver the tool result as soon as the handshake completes.
+
+## Bringing your own bundle
+
+A bundle that inlined the upstream SDK is usually recognised by its handshake and served untouched, as above. A hand-written runtime that sends `"ui/initialize"` is recognised the same way. For one that builds the method name at run time, or imports the SDK under a specifier that does not name the package, pass `inject_runtime=False`: injection is off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself - a body that already carries it is not given a second copy.
+
+```python
+from pathlib import Path
+
+from ag2.mcp import MCPApp
+
+shop = MCPApp("ui://shop/card", Path("dist/card.html"), inject_runtime=False)
+```
+
+## When the host shows text only
+
+**The UI binding is withheld from a client that did not advertise the extension.** It is a promise that the client can read the document and render it; to a client that cannot, it is a promise about a document it will never fetch. There is no switch - this is correctness, not policy.
+
+The server says so. The first `tools/list` from such a client logs a warning on `ag2.mcp.server` naming the tools whose binding was withheld - once per connection. A `stateless=True` HTTP server and a 2026-07-28 client make every request its own connection, so there it repeats per `tools/list`. If your host shows only text, that line tells you whether it advertised `io.modelcontextprotocol/ui` at all.
+
+That client sees the same tool without `_meta.ui`, calls it successfully, and gets the text your `__str__` produced. Because a UI-bound tool always returns text alongside its data, you usually need no branch at all. When you want to word an answer differently:
+
+```python
+from ag2.mcp import MCPRequestContext, client_supports_apps
+
+@shop.tool
+async def describe_item(item_id: str, ctx: MCPRequestContext) -> Item:
+    """Show a product card."""
+    item = Item(name="Espresso cup", price=12)
+    if not client_supports_apps(ctx):
+        ...  # a fuller sentence, since there will be no card
+    return item
+```
+
+A client that advertised the identifier but not the `text/html;profile=mcp-app` MIME type counts as unable to render - advertising the extension alone says nothing about being able to display the one format a document arrives in.
+
+A server holding at least one app also advertises the extension itself, with empty settings. Be clear-eyed about what that is worth: the specification defines only the client direction and says nothing about servers advertising at all, and a handshake-era client never receives a server's `extensions` - that field exists only in the 2026-07-28 wire schema. It is visible in discovery and inert otherwise.
+
+## Common mistakes
+
+Each of these produces an error or a warning that says what to do:
+
+- **Giving an app tool to an agent.** `Agent(tools=[show_recipe])` raises a `TypeError`: an `@app.tool` / `@mcp_tool` tool is served to MCP clients through `MCPServer(apps=...)` / `MCPServer(tools=...)`. To give the same function to an agent, decorate it with `@tool` instead.
+- **A file name as a string.** A `str` body is always literal HTML, so `MCPApp("ui://shop/card", "card.html")` serves the text `card.html`. A string with no markup that ends in `.html` / `.htm` logs a warning on `ag2.mcp.apps` suggesting `Path("card.html")`.
+- **Declaring a tool after the server is built** raises `ag2.mcp.errors.MCPAppFrozenError` naming the tool - see [Taking an app apart](#taking-an-app-apart).
+- **Using `ag2ui` in a document built on the upstream `App`.** Such a document still gets `ag2ui`, so the host receives two handshakes; the server logs a warning on `ag2.mcp.apps` naming the document. Use one or the other - see [Using the upstream `App` SDK instead](#using-the-upstream-app-sdk-instead).
+- **A host that never renders** - see [When the host shows text only](#when-the-host-shows-text-only).
+
+## Reference
+
+### Where the body comes from
+
+`content` takes four forms, told apart **by type alone** - never by looking at the filesystem, so a string is always literal HTML and never a filename:
+
+```python
+from pathlib import Path
+
+from ag2 import Variable
+from ag2.mcp import MCPApp
+
+def render_card() -> str:
+    return "<div id='card'></div>"
+
+MCPApp("ui://shop/card", "<div id='card'></div>")       # inline HTML
+MCPApp("ui://shop/card", Path("dist/card.html"))        # a built bundle, reread per read
+MCPApp("ui://shop/card", Variable("card"))              # a request-scoped variable
+MCPApp("ui://shop/card", render_card)                   # a sync or async callable
+```
+
+There is an overload per form, so an IDE shows you which one you are using.
+
+**A path-like value is reread on every resource read.** Rebuild the bundle and the next read serves it; there is no cache to invalidate and no server to restart. A file that has gone missing fails that read with a message naming the path, rather than at construction - the document is only promised at read time.
+
+```python
+from pathlib import Path
+
+from ag2.mcp import MCPApp
+
+shop = MCPApp("ui://shop/card", Path(__file__).parent / "dist" / "card.html", inject_runtime=False)
+```
+
+### Request-scoped bodies and metadata
+
+An app resolves runtime values from the same `context_provider` the conversational path uses, so a document is not a second dependency system. `content` may be a `Variable`, and a callable body may declare `Variable`, `Depends`/`Inject` and `MCPRequestContext` parameters exactly as a tool does:
+
+```python
+from dataclasses import dataclass
+from typing import Annotated
+
+from ag2 import Agent, Inject, Variable
+from ag2.config import AnthropicConfig
+from ag2.mcp import AskContext, MCPApp, MCPRequestContext, MCPServer
+
+agent = Agent("shopkeeper", config=AnthropicConfig(model="claude-sonnet-5"))
+
+@dataclass
+class Branding:
+    accent: str
+
+async def provider(access) -> AskContext:
+    return AskContext(variables={"tenant": "north"}, dependencies={"branding": Branding(accent="#0a7")})
+
+async def card(
+    tenant: Annotated[str, Variable("tenant")],
+    branding: Annotated[Branding, Inject("branding")],
+    ctx: MCPRequestContext,
+) -> str:
+    return f"<h1 style='color: {branding.accent}'>{tenant}</h1><div id='card'></div>"
+
+shop = MCPApp("ui://shop/card", card, title=Variable("tenant"), listed=True)
+server = MCPServer(agent, apps=[shop], context_provider=provider)
+```
+
+`title`, `description`, `inject_runtime`, the sandbox fields and the values inside `meta=` may each be a `Variable` too, resolved per request for the listing and the read.
+
+!!! warning "The context is request-scoped, not turn-scoped"
+    The host's document read and its tool call are **two separate MCP requests**, made in parallel. Each one calls your provider again and gets its own context; they share no mutable state. Do not use a variable to pass something from the call to the document - that is what `structuredContent` is for.
+
+An ordinary `Resource` and an `@mcp_tool` resolve the same way, which is what keeps [taking an app apart](#taking-an-app-apart) honest.
+
+### The document
+
+```python
+from pathlib import Path
+
+from ag2.mcp import AppSandbox, MCPApp, ResourceCsp, ResourcePermissions
+
+shop = MCPApp(
+    "ui://shop/card",
+    Path("dist/card.html"),
+    title="Product card",
+    description="A product card that can add its item to the cart.",
+    listed=False,
+    sandbox=AppSandbox(
+        csp=ResourceCsp(connect_domains=["https://api.example.com"]),
+        permissions=ResourcePermissions(camera={}),
+        domain="https://shop.example.com",
+    ),
+    prefers_border=True,
+)
+```
+
+- **`ui://` is required.** A host discards any other scheme, so a URI that is not `ui://` raises when the `MCPApp` is constructed, and two apps claiming one URI raise when the server is.
+- **`listed` defaults to `False`.** The document stays out of `resources/list` - a person browsing a server's resources should not meet a file that is not one - while remaining readable by URI, which is how the host gets it. Set `listed=True` for a document meant to be discoverable.
+- **The body has four forms** - inline HTML, a path-like bundle, a `Variable`, or a sync/async callable invoked per read. See [where the body comes from](#where-the-body-comes-from).
+- **Sandbox policy is typed and grouped.** `csp`, `permissions` and `domain` travel together in `sandbox=AppSandbox(...)` and use the SDK's own models, so the wire spelling is never guessed at. They are also accepted as bare keywords for a one-field policy. `prefers_border` stays separate - it is a presentation hint, not a sandbox rule. `meta=` is a raw passthrough merged alongside, for whatever the specification adds next.
+- **The `ui` slot behaves differently on a document and on a tool.** On the document it is shared, so a `ui` key inside `meta=` *merges over* the typed parameters above rather than being refused - the typed parameters are the spelling aid, not the authority. On a tool it is not shared: `@app.tool`'s `meta=` **rejects** a `ui` key outright, because the only thing in that slot is the binding the decorator itself writes. Pass `visibility=` instead, or declare the tool with `@mcp_tool` if it should not be bound to this document at all.
+
+### Taking an app apart
+
+An app is not a special kind of registration. `app.tools` are ordinary `MCPFunctionTool`s and `app.resource` is an ordinary `Resource`. With `agent` and `shop` from the snippet above, this:
+
+```python
+server = MCPServer(agent, apps=[shop])
+```
+
+is defined as shorthand for this:
+
+```python
+server = MCPServer(agent, tools=shop.tools, resources=[shop.resource])
+```
+
+Both produce the same tool list, the same resource listing, the same document and the same results - a test in the suite holds that equivalence so it cannot rot into a lie. Reach for the long form when you need an unusual arrangement; it is a rearrangement, not a rewrite.
+
+Ordinary tools are unaffected throughout. A tool declared with `@mcp_tool` and passed in `tools=` behaves exactly as it did before apps existed, alongside any number of them.
+
+**Registration closes the app's tool list.** Constructing the server is what reads `app.tools`, so a tool declared after that would exist and never be served. Declaring one raises `MCPAppFrozenError` (from `ag2.mcp.errors`) naming the tool, instead of leaving you to find it missing on the wire:
+
+```python
+server = MCPServer(agent, apps=[shop])
+
+@shop.tool                      # MCPAppFrozenError: 'restock' cannot be declared on 'ui://shop/card'
+async def restock() -> str: ...
+```
+
+The app itself stays reusable - registering the same one with a second server is fine; it is the composition that is closed, not the object.
+
+## See also
+
+- [Serving an Agent as an MCP Server](serving_mcp.md) - transports, CORS, conversations, security, and protocol extensions.
+- [MCP-UI (legacy embedded resources)](mcp_ui.md) - the older mechanism, for clients that render only MCP-UI resources.
+- [MCP Servers](mcp_servers.md) - the inverse direction, consuming an MCP server as tools.
+
+---
+
+# MCP-UI (legacy embedded resources)
 
 Source: https://docs.ag2.ai/docs/user-guide/tools/mcp_ui/
 
-# MCP-UI Resources
+# MCP-UI (legacy embedded resources)
 
 [MCP-UI](https://mcpui.dev/) lets an MCP server return a **renderable UI** - raw HTML, an `iframe` URL, or a Remote-DOM script - from a tool result instead of plain text. A UI-capable client (e.g. the JS [`@mcp-ui/client`](https://mcpui.dev/)) renders it inline; a text-only client falls back to the embedded resource.
+
+!!! tip "For new work, use MCP Apps"
+    [MCP Apps](mcp_apps.md) - `ag2.mcp.apps` - is the way to serve UI from an AG2 server. [MCP-UI](https://mcpui.dev/)'s own SDK now implements MCP Apps, and a host implementing MCP Apps does not render the embedded resources this page builds. Keep `ag2.mcp_ui` for clients that render only MCP-UI resources.
 
 AG2 builds these resources and the interactive callbacks (**UI Actions**) in `ag2.mcp_ui`. They are returned from the serving side of `ag2.mcp` - an AG2 `Agent` exposed as an MCP server - so this page starts with the minimum you need to serve one, then focuses on the UI helpers.
 
 !!! note "This is the serving side of MCP"
     `ag2.mcp.MCPServer` exposes an agent **as** an MCP server - see [Serving an Agent as an MCP Server](serving_mcp.md) for transports, conversations and security. This is the inverse of consuming an MCP server as tools with `MCPToolkit` / `MCPServerTool` - see [MCP Servers](mcp_servers.md) for that.
 
-!!! warning "MCP-UI and MCP Apps are alternatives - pick one"
-    [MCP Apps](mcp_apps.md) - `ag2.mcp.apps`, the `io.modelcontextprotocol/ui` extension - is the other mechanism, and it inverts this one. There the document is registered as a resource and read by URI **in parallel with** the call, so it cannot be built from the call's arguments; the per-call data reaches it as the result's `structuredContent` instead. A host implementing MCP Apps will not render UI a handler returned. Choose by the host you are serving.
+!!! note "How MCP Apps differs"
+    [MCP Apps](mcp_apps.md) - `ag2.mcp.apps`, the `io.modelcontextprotocol/ui` extension - inverts this mechanism. There the document is registered as a resource and read by URI **in parallel with** the call, so it cannot be built from the call's arguments; the per-call data reaches it as the result's `structuredContent` instead.
 
 ## Installation
 
@@ -8875,353 +9626,6 @@ Wire both into `MCPServer(agent, tools=[show_greeting, add_to_cart])`. When the 
 
 !!! tip "Runnable example"
     A complete stdio server - greeting card, an iframe of the docs, and the `add_to_cart` loop - lives in `examples/mcp/server_ui.py`.
-
----
-
-# MCP Apps
-
-Source: https://docs.ag2.ai/docs/user-guide/tools/mcp_apps/
-
-# MCP Apps
-
-[MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) - the `io.modelcontextprotocol/ui` extension - lets a served agent hand a host a **real interface** instead of a wall of text. `ag2.mcp.apps` serves one as an **app**: a document plus the tools that render it.
-
-## The constraint that shapes everything
-
-**The host reads the document in parallel with the call that references it.** It does not wait for your handler; it fetches the `ui://` resource as soon as it sees the tool being called, often before.
-
-So the document **cannot be built from the call's arguments**. It is a static body, registered as a resource and read by URI. The per-call data reaches it afterwards, as the result's `structuredContent`, which the host redelivers into the frame as a `ui/notifications/tool-result` notification.
-
-Everything below follows from that one fact: why the HTML is declared next to the tool rather than returned by it, why your return type matters so much, and why a document that serves two tools needs to be told which result just arrived.
-
-!!! warning "MCP Apps and MCP-UI are alternatives - pick one"
-    [`ag2.mcp_ui`](mcp_ui.md) teaches the **opposite** pattern: its handler builds HTML from the arguments it was given and returns it inside the call result. That is exactly what a host implementing MCP Apps will not render, and the parallel read is why.
-
-    The two modules coexist and neither replaces the other. `ag2.mcp_ui` targets [MCP-UI](https://mcpui.dev/) clients and ships as the `ag2[mcp-ui]` extra; `ag2.mcp.apps` targets MCP Apps hosts and needs nothing beyond `ag2[mcp]`. Choose by the host you are serving.
-
-## A first app
-
-`ag2ui` in the HTML below is not imported and not a package you install. It is a global that `ag2.mcp` itself injects: the server places a `<script>` at the head of the document before serving it - inside `<head>` when there is one, after `<html>` when there is not, at the very front of a fragment like the one below - so by the time your own script runs the global exists. What it is and what it exposes is [below](#inside-the-document-ag2ui).
-
-```python
-import asyncio
-from dataclasses import dataclass
-
-from ag2 import Agent
-from ag2.config import AnthropicConfig
-from ag2.mcp import MCPApp, MCPServer
-
-CARD = """<div id="name">Loading...</div>
-<script>
-  ag2ui.onToolResult(function (result) {
-    document.getElementById("name").textContent = result.structuredContent.name;
-  });
-</script>"""
-
-shop = MCPApp("ui://shop/card", CARD)
-
-@dataclass
-class Item:
-    name: str
-    price: int
-
-    def __str__(self) -> str:
-        return f"{self.name} costs ${self.price}."
-
-@shop.tool
-async def show_item(item_id: str) -> Item:
-    """Show a product card."""
-    return Item(name="Espresso cup", price=12)
-
-agent = Agent(name="shopkeeper", config=AnthropicConfig(model="claude-sonnet-5"))
-server = MCPServer(agent, apps=[shop])
-
-if __name__ == "__main__":
-    asyncio.run(server.run_stdio())
-```
-
-That is the whole thing. `MCPServer(agent, apps=[shop])` registers the document as a resource served with `text/html;profile=mcp-app` (the only MIME type a host will render a `ui://` resource under), advertises `_meta.ui.resourceUri` on `show_item`, and injects the document runtime that makes `ag2ui` exist.
-
-`examples/mcp/server_apps.py` is the runnable version, with a button that calls a second tool.
-
-## The return type does three jobs
-
-`Item` above is doing more work than it looks. From one annotation the framework derives all three of the things MCP wants:
-
-| From `-> Item` | Becomes | Read by |
-|---|---|---|
-| its JSON schema | the tool's `outputSchema` | the client, to validate |
-| its dump | the result's `structuredContent` | your document |
-| its `__str__` | the result's text content | the model, and a text-only client |
-
-Which is why `__str__` is worth writing: a text-only client gets *"Espresso cup costs $12."* rather than a JSON dump.
-
-Both pydantic models and dataclasses work. This applies to any custom tool, not only a UI-bound one - see [Structured output](serving_mcp.md#structured-output).
-
-For Pydantic models, `outputSchema` describes `model_dump(mode="json")`, including serialized field types and each nested model's `serialize_by_alias` policy. Input-only aliases do not become output keys. An explicit `output_schema=` still takes precedence, and a manually returned `CallToolResult` keeps the content you supplied.
-
-### Three levels of control
-
-A handler returns whichever of these fits, in increasing order of control:
-
-```python
-from mcp.types import CallToolResult, TextContent
-
-@shop.tool
-async def typed() -> Item:
-    """A typed value: schema, structured content and text all derived."""
-    return Item(name="Espresso cup", price=12)
-
-@shop.tool
-async def mapping() -> dict:
-    """A mapping: structured content verbatim, text a JSON rendering, no schema."""
-    return {"name": "Espresso cup", "price": 12}
-
-@shop.tool
-async def explicit() -> CallToolResult:
-    """A full result: nothing derived. Also how you state text and data separately."""
-    return CallToolResult(
-        content=[TextContent(type="text", text="One espresso cup, $12.")],
-        structuredContent={"name": "Espresso cup", "price": 12},
-    )
-```
-
-!!! note "The schema follows the annotation, not the value"
-    `outputSchema` is decided once, when the tool is declared. Annotating `-> CallToolResult` is what opts a tool out of an advertised schema; returning one from a handler annotated `-> Item` still advertises `Item`'s schema, and MCP requires your `structuredContent` to conform to it. For a Pydantic model this is its serialization schema. If you assemble a different shape by hand, supply an explicit `output_schema=` or annotate the handler `-> CallToolResult`.
-
-## Inside the document: `ag2ui`
-
-A host **discards every message from a view that has not completed the `ui/initialize` handshake**, and tells it nothing. A hand-written button on a document without that handshake is silently dead - which is why the runtime is injected by default.
-
-It defines one global, `ag2ui`:
-
-```javascript
-await ag2ui.ready;                       // the handshake completed
-
-ag2ui.onToolResult(fn);                  // every result for this document
-ag2ui.onToolResult("show_item", fn);     // only that tool's results
-ag2ui.onToolInput(fn);                   // the call's arguments
-ag2ui.onToolInputPartial(fn);            // arguments while the model is still writing them
-ag2ui.onHostContextChanged(fn);          // theme, display mode, styles, locale...
-ag2ui.onCancelled(fn);
-
-await ag2ui.callTool("add_to_cart", { item_id: "42" });
-await ag2ui.sendMessage("Show me the kettle");   // into the conversation
-await ag2ui.openLink("https://example.com");
-await ag2ui.readResource("ui://shop/card");
-await ag2ui.updateContext({ content: [{ type: "text", text: "Viewing item 42" }] });
-await ag2ui.requestDisplayMode("fullscreen");
-await ag2ui.downloadFile(contents);
-await ag2ui.sampling({ messages: [...] });
-ag2ui.log("info", "rendered");
-ag2ui.reportSize();                      // force a size report; it is automatic otherwise
-
-ag2ui.host.capabilities;     // what the host advertised
-ag2ui.host.context;          // theme, styles, display mode, container size
-ag2ui.host.protocolVersion;  // the dialect revision the host answered with
-ag2ui.host.info;             // the host's name and version
-```
-
-Each subscription returns an unsubscribe function. The document's size is reported automatically via a `ResizeObserver`, so the host can size the frame without your writing one.
-
-**Subscribe whenever you like; call only after `ag2ui.ready`.** Registering a handler is local and is safe the moment the document parses - which is why the card above awaits nothing. Everything that *talks* to the host is refused until the handshake completes, so `await ag2ui.ready` before the first `callTool`, `sendMessage` or `readResource`; calling earlier throws rather than posting into a channel the host is still discarding.
-
-Errors arrive on the **same** channel as results - a failed call is a result carrying `isError`, matching how `ag2.mcp` already treats a tool error as a result rather than an exception.
-
-Calling something the host did not advertise **throws in JavaScript before anything is sent**, because a host's own answer to an unadvertised method is silence:
-
-```javascript
-try {
-  await ag2ui.downloadFile(contents);
-} catch (e) {
-  // "the host did not advertise 'downloadFile'" - rather than a button that does nothing.
-}
-```
-
-`requestDisplayMode` refuses locally in the same way, against `ag2ui.host.context.availableDisplayModes` rather than against a capability: asking for a mode the host never offered throws instead of hanging on an answer that will not come.
-
-### Which tool answered
-
-MCP Apps gives the document nothing to correlate with: the notification carrying a result names neither the call nor the tool. With one tool per document that does not matter. With two - a card that renders itself *and* updates after an action - it does.
-
-The server therefore stamps the answering tool's name into the result's `_meta` under `ai.ag2/tool`, and `ag2ui.onToolResult(name, fn)` routes on it:
-
-```javascript
-ag2ui.onToolResult("show_item", renderCard);
-ag2ui.onToolResult("add_to_cart", showConfirmation);
-```
-
-Set that key yourself and your value travels instead, so you can route by your own scheme. This is the one respect in which a `CallToolResult` you assembled yourself is modified; every other key you set travels untouched alongside the stamp.
-
-### Who may call a tool
-
-A tool the document calls through `ag2ui.callTool` need not be one the model can call. `visibility=` says where the host surfaces it - `"model"` in the model's tool list, `"app"` to the document:
-
-```python
-@dataclass
-class CartLine:
-    status: str
-
-    def __str__(self) -> str:
-        return self.status
-
-@shop.tool
-async def show_item(item_id: str) -> Item:
-    """Show a product card."""
-    return Item(name="Espresso cup", price=12)
-
-@shop.tool(visibility=["app"])
-async def add_to_cart(item_id: str) -> CartLine:
-    """Add an item to the cart. Called by the card's button, not by the model."""
-    return CartLine(status="Added to your cart")
-```
-
-Omit it and no `visibility` is advertised at all, leaving the host to its own default. It is a hint about where to *surface* a tool, not an authorization boundary: the tool is served and dispatched exactly like any other, so anything that must not be called by the model has to refuse in the handler.
-
-### Bringing your own bundle
-
-`inject_runtime=False` turns injection off and the body is served byte-for-byte as you wrote it. `app.runtime_script()` returns the same `<script>` element as text if you would rather place it yourself.
-
-```python
-shop = MCPApp("ui://shop/card", BUNDLED_HTML, inject_runtime=False)
-```
-
-## Where the body comes from
-
-`content` takes four forms, told apart **by type alone** - never by looking at the filesystem, so a string is always literal HTML and never a filename:
-
-```python
-from pathlib import Path
-
-from ag2 import Variable
-
-MCPApp("ui://shop/card", CARD)                          # inline HTML
-MCPApp("ui://shop/card", Path("dist/card.html"))        # a built bundle, reread per read
-MCPApp("ui://shop/card", Variable("card"))              # a request-scoped variable
-MCPApp("ui://shop/card", render_card)                   # a sync or async callable
-```
-
-There is an overload per form, so an IDE shows you which one you are using.
-
-**A path-like value is reread on every resource read.** Rebuild the bundle and the next read serves it; there is no cache to invalidate and no server to restart. A file that has gone missing fails that read with a message naming the path, rather than at construction - the document is only promised at read time.
-
-```python
-shop = MCPApp("ui://shop/card", Path(__file__).parent / "dist" / "card.html", inject_runtime=False)
-```
-
-### Request-scoped bodies and metadata
-
-An app resolves runtime values from the same `context_provider` the conversational path uses, so a document is not a second dependency system. `content` may be a `Variable`, and a callable body may declare `Variable`, `Depends`/`Inject` and `MCPRequestContext` parameters exactly as a tool does:
-
-```python
-from typing import Annotated
-
-from ag2 import Inject, Variable
-from ag2.mcp import AskContext, MCPApp, MCPRequestContext, MCPServer
-
-async def provider(access) -> AskContext:
-    return AskContext(variables={"tenant": "north"}, dependencies={"branding": BRANDING})
-
-async def card(
-    tenant: Annotated[str, Variable("tenant")],
-    branding: Annotated[Branding, Inject("branding")],
-    ctx: MCPRequestContext,
-) -> str:
-    return render(tenant, branding)
-
-shop = MCPApp("ui://shop/card", card, title=Variable("tenant"), listed=True)
-server = MCPServer(agent, apps=[shop], context_provider=provider)
-```
-
-`title`, `description`, `inject_runtime`, the sandbox fields and the values inside `meta=` may each be a `Variable` too, resolved per request for the listing and the read.
-
-!!! warning "The context is request-scoped, not turn-scoped"
-    The host's document read and its tool call are **two separate MCP requests**, made in parallel. Each one calls your provider again and gets its own context; they share no mutable state. Do not use a variable to pass something from the call to the document - that is what `structuredContent` is for.
-
-An ordinary `Resource` and an `@mcp_tool` resolve the same way, which is what keeps [taking an app apart](#taking-an-app-apart) honest.
-
-## Degradation
-
-**The UI binding is withheld from a client that did not advertise the extension.** It is a promise that the client can read the document and render it; to a client that cannot, it is a promise about a document it will never fetch. There is no switch - this is correctness, not policy.
-
-That client sees the same tool without `_meta.ui`, calls it successfully, and gets the text your `__str__` produced. Because a UI-bound tool always returns text alongside its data, you usually need no branch at all. When you want to word an answer differently:
-
-```python
-from ag2.mcp import MCPRequestContext, client_supports_apps
-
-@shop.tool
-async def show_item(item_id: str, ctx: MCPRequestContext) -> Item:
-    """Show a product card."""
-    item = Item(name="Espresso cup", price=12)
-    if not client_supports_apps(ctx):
-        ...  # a fuller sentence, since there will be no card
-    return item
-```
-
-A client that advertised the identifier but not the `text/html;profile=mcp-app` MIME type counts as unable to render - advertising the extension alone says nothing about being able to display the one format a document arrives in.
-
-A server holding at least one app also advertises the extension itself, with empty settings. Be clear-eyed about what that is worth: the specification defines only the client direction and says nothing about servers advertising at all, and a handshake-era client never receives it - see [the two directions are not symmetric](serving_mcp.md#the-two-directions-are-not-symmetric). It is visible in discovery and inert otherwise.
-
-## The document
-
-```python
-from ag2.mcp import AppSandbox, MCPApp, ResourceCsp, ResourcePermissions
-
-shop = MCPApp(
-    "ui://shop/card",
-    CARD,
-    title="Product card",
-    description="A product card that can add its item to the cart.",
-    listed=False,
-    sandbox=AppSandbox(
-        csp=ResourceCsp(connect_domains=["https://api.example.com"]),
-        permissions=ResourcePermissions(camera={}),
-        domain="https://shop.example.com",
-    ),
-    prefers_border=True,
-)
-```
-
-- **`ui://` is required.** A host discards any other scheme, so a URI that is not `ui://` raises when the `MCPApp` is constructed, and two apps claiming one URI raise when the server is.
-- **`listed` defaults to `False`.** The document stays out of `resources/list` - a person browsing a server's resources should not meet a file that is not one - while remaining readable by URI, which is how the host gets it. Set `listed=True` for a document meant to be discoverable.
-- **The body has four forms** - inline HTML, a path-like bundle, a `Variable`, or a sync/async callable invoked per read. See [where the body comes from](#where-the-body-comes-from).
-- **Sandbox policy is typed and grouped.** `csp`, `permissions` and `domain` travel together in `sandbox=AppSandbox(...)` and use the SDK's own models, so the wire spelling is never guessed at. They are also accepted as bare keywords for a one-field policy. `prefers_border` stays separate - it is a presentation hint, not a sandbox rule. `meta=` is a raw passthrough merged alongside, for whatever the specification adds next.
-- **The `ui` slot behaves differently on a document and on a tool.** On the document it is shared, so a `ui` key inside `meta=` *merges over* the typed parameters above rather than being refused - the typed parameters are the spelling aid, not the authority. On a tool it is not shared: `@app.tool`'s `meta=` **rejects** a `ui` key outright, because the only thing in that slot is the binding the decorator itself writes. Pass `visibility=` instead, or declare the tool with `@mcp_tool` if it should not be bound to this document at all.
-
-## Taking an app apart
-
-An app is not a special kind of registration. `app.tools` are ordinary `MCPFunctionTool`s and `app.resource` is an ordinary `Resource`, so this:
-
-```python
-server = MCPServer(agent, apps=[shop])
-```
-
-is defined as shorthand for this:
-
-```python
-server = MCPServer(agent, tools=shop.tools, resources=[shop.resource])
-```
-
-Both produce the same tool list, the same resource listing, the same document and the same results - a test in the suite holds that equivalence so it cannot rot into a lie. Reach for the long form when you need an unusual arrangement; it is a rearrangement, not a rewrite.
-
-Ordinary tools are unaffected throughout. A tool declared with `@mcp_tool` and passed in `tools=` behaves exactly as it did before apps existed, alongside any number of them.
-
-**Registration closes the app's tool list.** Constructing the server is what reads `app.tools`, so a tool declared after that would exist and never be served. Declaring one raises `MCPAppFrozenError` naming the tool, instead of leaving you to find it missing on the wire:
-
-```python
-server = MCPServer(agent, apps=[shop])
-
-@shop.tool                      # MCPAppFrozenError: 'restock' cannot be declared on 'ui://shop/card'
-async def restock() -> str: ...
-```
-
-The app itself stays reusable - registering the same one with a second server is fine; it is the composition that is closed, not the object.
-
-## See also
-
-- [Serving an Agent as an MCP Server](serving_mcp.md) - transports, conversations, security, and protocol extensions.
-- [MCP-UI Resources](mcp_ui.md) - the other mechanism, for MCP-UI clients.
-- [MCP Servers](mcp_servers.md) - the inverse direction, consuming an MCP server as tools.
 
 ---
 
@@ -9827,9 +10231,9 @@ AG2 supports two ways to let an agent run code: have the LLM provider execute it
 
 | | Built-in Provider | Remote (`SandboxCodeTool`) |
 | :--- | :--- | :--- |
-| **Where it runs** | Provider's sandbox | A `CodeEnvironment` you supply (Tenki, Daytona, Docker, custom) |
+| **Where it runs** | Provider's sandbox | A `CodeEnvironment` you supply (E2B, Tenki, Daytona, boxd, Docker, custom) |
 | **Setup** | Add the tool, done | Choose / configure a backend |
-| **Cost** | Bundled in provider tokens | Your sandbox bill (Tenki/Daytona) or free (local Docker) |
+| **Cost** | Bundled in provider tokens | Your sandbox bill (E2B/Tenki/Daytona/boxd) or free (local Docker) |
 | **Custom packages, images** | No | Yes |
 | **State persistence** | Provider-defined | Per-environment instance |
 | **Provider support** | Only providers with native code-exec | Any provider |
@@ -9860,12 +10264,12 @@ See the [Built-in Tools page](builtin_tools.md#code-execution) for the provider 
 `SandboxCodeTool` exposes a `run_code(code, language)` function the agent can call. Because it's a regular function tool, it works on **any** model provider. Where the code actually runs is decided by the [`CodeEnvironment`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/code/environment/base.py) you hand it.
 
 !!! note "`environment` is required"
-    `SandboxCodeTool` has no default backend. Pass `TenkiEnvironment().code_environment()`, `DaytonaEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation. Tenki needs the `code_environment()` call because its guest image ships `python3` rather than `python`.
+    `SandboxCodeTool` has no default backend. Pass `E2BEnvironment`, `TenkiEnvironment().code_environment()`, `DaytonaEnvironment`, `BoxdEnvironment`, `DockerEnvironment`, or your own `CodeEnvironment` implementation. Tenki needs the `code_environment()` call because its guest image ships `python3` rather than `python`.
 
 !!! note "When to use this"
     You need custom packages or images, persistent state across calls, your own infrastructure, or you're working with a provider that doesn't have a native code-execution capability.
 
-Three environments are available: **Tenki** and **Daytona** (hosted), plus **Docker** (local container). You can also implement your own - see the **Custom** tab below.
+Five environments are available: **E2B**, **Tenki**, **Daytona** and **boxd** (hosted), plus **Docker** (local container). You can also implement your own - see the **Custom** tab below.
 
 === "Tenki"
     [Tenki](https://tenki.cloud/) provides managed, isolated cloud sandboxes with a bounded server-side lifetime.
@@ -9893,6 +10297,32 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
 
     `TenkiEnvironment` reads `TENKI_API_KEY` and `TENKI_API_URL`. It auto-selects a sole visible workspace; pass `workspace_id` when the key has access to more than one. `code_environment()` supplies a `CodeAdapter` matching the guest image, whose Python interpreter is `python3`. See the [Tenki Sandbox extension guide](../extensions/tenki.md) for lifecycle and resource configuration.
 
+=== "E2B"
+    [E2B](https://e2b.dev/) provides isolated, managed cloud sandboxes with a bounded server-side lifetime.
+
+    ```bash
+    pip install "ag2[anthropic]" "e2b>=2.0.0,<3"
+    ```
+
+    ```python linenums="1"
+    from ag2 import Agent
+    from ag2.config import AnthropicConfig
+    from ag2.extensions.e2b import E2BEnvironment
+    from ag2.tools import SandboxCodeTool
+
+    env = E2BEnvironment()
+    async with env:
+        agent = Agent(
+            "analyst",
+            config=AnthropicConfig(model="claude-sonnet-5"),
+            tools=[SandboxCodeTool(env)],
+        )
+        reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
+        print(await reply.content())
+    ```
+
+    `E2BEnvironment` reads `E2B_API_KEY`. The default template ships `python` and `node`, so `python`, `bash`, and `javascript` work out of the box. See the [E2B Sandbox extension guide](../extensions/e2b.md) for templates, lifetime, and networking options.
+
 === "Daytona"
     [Daytona](https://www.daytona.io/) is a hosted sandbox service. Strongest isolation; pay per use.
 
@@ -9917,6 +10347,32 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
     ```
 
     `DaytonaEnvironment` reads `DAYTONA_API_KEY`, `DAYTONA_API_URL`, and `DAYTONA_TARGET` from the environment by default. Out-of-the-box supported languages: `python`, `bash`, `javascript`, `typescript`.
+
+=== "boxd"
+    [boxd](https://boxd.sh/?ref=ag2) runs each sandbox as a full Linux microVM (KVM) with a persistent disk. A machine starts in about a second.
+
+    ```bash
+    pip install "ag2[anthropic]" "boxd>=0.3.0,<1"
+    ```
+
+    ```python linenums="1"
+    from ag2 import Agent
+    from ag2.config import AnthropicConfig
+    from ag2.extensions.boxd import BoxdEnvironment
+    from ag2.tools import SandboxCodeTool
+
+    env = BoxdEnvironment()
+    async with env:
+        agent = Agent(
+            "analyst",
+            config=AnthropicConfig(model="claude-sonnet-5"),
+            tools=[SandboxCodeTool(env)],
+        )
+        reply = await agent.ask("Compute the 50th Fibonacci number in Python.")
+        print(await reply.content())
+    ```
+
+    `BoxdEnvironment` reads `BOXD_API_KEY`, `BOXD_BASE_URL` and `BOXD_REGION` from the environment by default. The default Ubuntu image ships `python`, `bash` and `node`, so `python`, `bash` and `javascript` run with the default runners; `javascript` still has to be enabled with `SandboxCodeTool(env, languages=("python", "bash", "javascript"))`. See the [boxd extension guide](../extensions/boxd.md) for lifecycle, isolation and machine size.
 
 === "Docker"
     A local container managed via the Docker daemon. Free, cross-platform (Mac/Linux/Win via Docker Desktop), real container isolation.
@@ -9948,7 +10404,7 @@ Three environments are available: **Tenki** and **Daytona** (hosted), plus **Doc
     - `user=None` - runs as the image's default user. For images that ship a `nobody` user, `user="nobody"` is recommended.
 
 === "Custom"
-    `SandboxCodeTool` only depends on the `CodeEnvironment` protocol, so any backend that satisfies it works - e2b, an SSH host, an internal CI runner.
+    `SandboxCodeTool` only depends on the `CodeEnvironment` protocol, so any backend that satisfies it works - an SSH host, an internal CI runner, or another sandbox service.
 
     ```python linenums="1"
     from ag2.tools import SandboxCodeTool
@@ -9989,11 +10445,11 @@ async with DaytonaEnvironment(image="python:3.12") as env:
 # sandbox deleted here
 ```
 
-The same pattern works with `TenkiEnvironment`, `DockerEnvironment` (container stopped + removed), and any other backend that implements `__aenter__` / `__aexit__`.
+The same pattern works with `E2BEnvironment`, `TenkiEnvironment`, `BoxdEnvironment`, `DockerEnvironment` (container stopped + removed), and any other backend that implements `__aenter__` / `__aexit__`.
 
 ### Credentials and runtime config
 
-`DaytonaEnvironment` accepts [`Variable`](../context/variables.md) markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `TenkiEnvironment` accepts them for `api_key`, `api_url`, `workspace_id`, `image`, and `env_vars`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call - useful for multi-tenant setups:
+`DaytonaEnvironment` accepts [`Variable`](../context/variables.md) markers for `api_key`, `api_url`, `target`, `image`, `snapshot`, and `env_vars`. `TenkiEnvironment` accepts them for `api_key`, `api_url`, `workspace_id`, `image`, and `env_vars`. `E2BEnvironment` accepts them for `api_key`, `template`, and `env_vars`. `BoxdEnvironment` accepts them for `api_key`, `base_url`, `region`, `name`, `image`, `env_vars`, and `labels`. `DockerEnvironment` accepts them for `image`, `env_vars`, and `network_mode`. Variables resolve from `context.variables` on the first `run_code` call - useful for multi-tenant setups:
 
 ```python
 from ag2 import Variable
@@ -10027,7 +10483,7 @@ Source: https://docs.ag2.ai/docs/user-guide/tools/local_shell/
 
 # Sandbox Shell Tool
 
-`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose - a local subprocess, a Docker container, a Daytona or Tenki sandbox, or any custom backend. Unlike the provider-hosted [`ShellTool`](builtin_tools.md#shell) (which runs server-side, and only on OpenAI), it executes client-side, so it works with **any model provider**.
+`SandboxShellTool` lets an agent run shell commands inside an **environment** you choose - a local subprocess, a Docker container, an E2B, Daytona, or Tenki sandbox, or any custom backend. Unlike the provider-hosted [`ShellTool`](builtin_tools.md#shell) (which runs server-side, and only on OpenAI), it executes client-side, so it works with **any model provider**.
 
 The design has two orthogonal pieces:
 
@@ -10058,13 +10514,14 @@ With no arguments, `SandboxShellTool` uses a `LocalEnvironment` with a temporary
 
 ## Choosing an Environment
 
-The first argument is the environment. Pass a `LocalEnvironment`, `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment`:
+The first argument is the environment. Pass a `LocalEnvironment`, `DockerEnvironment`, `DaytonaEnvironment`, `TenkiEnvironment`, or `E2BEnvironment`:
 
 ```python
 from ag2.tools import SandboxShellTool, LocalEnvironment
 from ag2.extensions.docker import DockerEnvironment
 from ag2.extensions.daytona import DaytonaEnvironment
 from ag2.extensions.tenki import TenkiEnvironment
+from ag2.extensions.e2b import E2BEnvironment
 
 # Local subprocess in a specific directory
 sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"))
@@ -10077,6 +10534,9 @@ sh = SandboxShellTool(DaytonaEnvironment(image="python:3.12"))
 
 # Tenki hosted sandbox
 sh = SandboxShellTool(TenkiEnvironment())
+
+# E2B hosted sandbox
+sh = SandboxShellTool(E2BEnvironment())
 ```
 
 A `LocalEnvironment` directory is created automatically if it does not exist, and is **not** deleted on exit when an explicit path is given.
@@ -10100,7 +10560,7 @@ sh = SandboxShellTool(
 
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
-| `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment` / `TenkiEnvironment`. `None` -> `LocalEnvironment()` |
+| `environment` | `None` | Backend: `LocalEnvironment` / `DockerEnvironment` / `DaytonaEnvironment` / `TenkiEnvironment` / `E2BEnvironment`. `None` -> `LocalEnvironment()` |
 | `allowed` | `None` | Whitelist of command prefixes, matched word by word. Setting it switches on [restricted mode](#restricted-mode). `None` -> all commands allowed |
 | `blocked` | `None` | Blacklist of command prefixes, matched word by word against the argv. Setting it switches on [restricted mode](#restricted-mode). `None` -> nothing blocked |
 | `ignore` | `None` | Gitignore-style path patterns. Commands referencing matching paths return `"Access denied: <path>"`. Setting it switches on [restricted mode](#restricted-mode) |
@@ -10189,7 +10649,7 @@ reply3 = await reply2.ask("Read the counter and tell me the value")
 ```
 
 !!! warning
-    A `LocalEnvironment` gives the agent direct access to your filesystem and the ability to run arbitrary commands. Always set `allowed`, `blocked`, or `readonly` when exposing it to untrusted prompts, or use a `DockerEnvironment`, `DaytonaEnvironment`, or `TenkiEnvironment` for real isolation.
+    A `LocalEnvironment` gives the agent direct access to your filesystem and the ability to run arbitrary commands. Always set `allowed`, `blocked`, or `readonly` when exposing it to untrusted prompts, or use a `DockerEnvironment`, `DaytonaEnvironment`, `TenkiEnvironment`, or `E2BEnvironment` for real isolation.
 
 ## SandboxShellTool vs ShellTool vs AnthropicBashTool
 
@@ -11264,6 +11724,7 @@ Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/d
 | `gen_ai.usage.input_tokens` | llm | Prompt token count |
 | `gen_ai.usage.output_tokens` | llm | Completion token count |
 | `gen_ai.usage.cache_creation_input_tokens` | llm | Tokens used to create prompt cache (Anthropic) |
+| `gen_ai.usage.cache_creation_extended_input_tokens` | llm | Part of `cache_creation_input_tokens` written with extended [prompt cache retention](../model_configuration.md#openai-prompt-cache-retention) (OpenAI 12h, Anthropic 1h); absent when the provider reports no per-retention breakdown |
 | `gen_ai.usage.cache_read_input_tokens` | llm | Tokens read from prompt cache (Anthropic, OpenAI, Gemini) |
 | `gen_ai.tool.name` | tool | Tool function name |
 | `gen_ai.tool.call.id` | tool | Tool call ID |
@@ -11396,7 +11857,7 @@ agent = Agent(
 
 Since `TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works - Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, Arize AX, Arize Phoenix, and others. Swap the `ConsoleSpanExporter` from the Quick Start above for an `OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
 
-For Arize users, [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing) provides a managed production path for tracing, evaluating, and monitoring AG2 agents, while [Arize Phoenix](https://arize.com/docs/phoenix) is the open-source path for local development or self-hosted inspection. The same traces can support follow-on workflows such as [agent evaluation](https://arize.com/guides/ai-agent-handbook/agent-evaluation/) and [LLM evaluation](https://arize.com/resources/llm-evaluation/).
+For Arize users, [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing) provides a managed production path for tracing, evaluating, and monitoring AG2 agents, while [Arize Phoenix](https://arize.com/docs/phoenix) is the open-source path for local development or self-hosted inspection. The same traces can support follow-on workflows such as [agent evaluation](https://arize.com/ai-agents/agent-evaluation/) and [LLM evaluation](https://arize.com/resources/llm-evaluation/).
 
 ---
 
@@ -12497,7 +12958,7 @@ Reconstruction understands **two span dialects**, auto-detected per trace, so tr
 - the [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) - `gen_ai.*` spans, what AG2's own `TelemetryMiddleware` emits, and
 - [OpenInference](https://github.com/Arize-ai/openinference) - `openinference.span.kind` + `llm.*` / `tool.*`, emitted by Arize Phoenix instrumentors and other OpenInference-compatible instrumentation.
 
-If you are exporting AG2 traces to Arize, use [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing) for managed production observability and evaluation, or [Arize Phoenix](https://arize.com/docs/phoenix) for open-source local or self-hosted workflows. Arize's guides cover how trace data feeds [agent evaluation](https://arize.com/guides/ai-agent-handbook/agent-evaluation/) and [LLM evaluation](https://arize.com/resources/llm-evaluation/).
+If you are exporting AG2 traces to Arize, use [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing) for managed production observability and evaluation, or [Arize Phoenix](https://arize.com/docs/phoenix) for open-source local or self-hosted workflows. Arize's guides cover how trace data feeds [agent evaluation](https://arize.com/ai-agents/agent-evaluation/) and [LLM evaluation](https://arize.com/resources/llm-evaluation/).
 
 ### Bring your own spans
 
@@ -18838,7 +19299,10 @@ The transport applies A2UI behaviour to the plain agent per turn (prompt + valid
 The A2UI transports accept three protocol versions via `protocol_version=`:
 
 - `"v0.9"` (default) and `"v0.9.1"` - server->client surfaces and components, plus server `event` actions.
-- `"v1.0"` - the upstream release candidate (pinned to `main` of 2026-10-19). It adds the role-based function round-trip - `callRendererFunction` / `rendererFunctionResponse` and `callAgentFunction` / `agentFunctionResponse` - lets `createSurface` carry the initial `components` and `dataModel`, and writes data bindings and function calls with the reserved `@path` / `@call` keys. `theme` is gone. The agent may only call renderer functions whose catalog entry sets `allowedCallers` to `agentOnly` or `rendererOrAgent` (the default is `rendererOnly`; the basic catalog has none), and `agentFunctionResponse` is sent by the server, never generated by the LLM - the validator rejects both. It is not wire-compatible with v0.9.x, nor with the earlier v1.0 draft.
+- `"v1.0"` - the current upstream version. Its messages carry the bare wire version `"version": "1.0"`; the protocol is still selected as `protocol_version="v1.0"`. It is not wire-compatible with v0.9.x, nor with renderers built on the earlier v1.0 drafts, which expected `"version": "v1.0"`.
+    - It adds the role-based function round-trip - `callRendererFunction` / `rendererFunctionResponse` and `callAgentFunction` / `agentFunctionResponse`. The agent may only call renderer functions whose catalog entry sets `allowedCallers` to `agentOnly` or `rendererOrAgent` (the default is `rendererOnly`; the basic catalog has none), and `agentFunctionResponse` is sent by the server, never generated by the LLM - the validator rejects both.
+    - `createSurface` may carry the initial `components` and `dataModel`; `theme` is gone. Data bindings and function calls use the reserved `@path` / `@call` keys.
+    - A custom v1.0 catalog may `$ref` only the components, functions and leaf `$defs` it declares (`#/components/...`, `#/functions/...`, `#/$defs/...`) and the standard types the spec lists, as `common_types.json#/$defs/<Type>`; any other `$ref`, such as one into another catalog, is rejected when the catalog is loaded.
 
 !!! note
     A2UI's wire is **transport-agnostic**. The same validated messages serialize identically whether served over the built-in [REST/SSE adapter](server.md), embedded in an [A2A `DataPart`](a2a.md), or carried by AG-UI events.
@@ -18967,7 +19431,7 @@ The adapter speaks a minimal, dependency-free JSON body (no `ag-ui` / `a2a-sdk` 
 | `variables` | Context variables merged into the turn (e.g. locale, user id). |
 | `a2ui` | Client->server envelopes - button clicks (`action`), v1.0 `callAgentFunction` / `rendererFunctionResponse`, and client errors - answered on the server or rewritten into corrective prompts for the turn. See [Actions](actions.md). |
 | `a2uiRendererDataModel` | Optional (`a2uiClientDataModel` before v1.0): `{"version": ..., "surfaces": {"<surfaceId>": {...}}}`, the current data model of surfaces created with `sendDataModel: true`. Folded into the prompt as untrusted, user-editable state - not instructions. |
-| `a2uiClientCapabilities` | Optional catalog negotiation, nested under the protocol version (`a2uiRendererCapabilities` for v1.0). Folded into the prompt so the LLM only targets components the client can render. |
+| `a2uiRendererCapabilities` | Optional (`a2uiClientCapabilities` before v1.0): catalog negotiation, nested under `"1.0"` (`"v0.9"` for v0.9 and v0.9.1). Folded into the prompt so the LLM only targets components the client can render. |
 
 An envelope in `a2ui` that does not match the spec is skipped with a logged warning rather than guessed at: a `callAgentFunction` without a string `surfaceId`, or a `rendererFunctionResponse` without a `functionCallId` or without exactly one of `value` / `error`.
 
@@ -19088,7 +19552,7 @@ A2UI's wire is transport-agnostic, so the same validated A2UI messages can ride 
 
 | A2UI concept | A2A representation |
 |---|---|
-| Validated server->client messages | One `DataPart` (MIME `application/a2ui+json`) carrying the full message list, alongside a text `Part` for the prose |
+| Validated server->client messages | One `DataPart` (MIME `application/a2ui+json`, in both `media_type` and `metadata["mimeType"]`, where the A2UI A2A extension spec and A2A v0.3 peers read it) carrying the full message list, alongside a text `Part` for the prose |
 | Button click / `callAgentFunction` / `rendererFunctionResponse` / client error | An inbound A2UI `DataPart` on the request message - a registered action runs its handler on the server, a `callAgentFunction` is answered on the server; anything else is rewritten into the turn's prompt |
 | Catalog negotiation | `a2uiClientCapabilities` (`a2uiRendererCapabilities` for v1.0) on the A2A message `metadata` |
 | Client data model | `a2uiClientDataModel` (`a2uiRendererDataModel` for v1.0) on the A2A message `metadata`, sent by a renderer for surfaces created with `sendDataModel: true`. Folded into the turn's prompt as untrusted state |
@@ -19165,7 +19629,7 @@ for part in message.parts:
         messages = get_a2ui_data(part)  # list[dict] - createSurface, updateComponents, ...
 ```
 
-`get_a2ui_data` decodes both the canonical v1.0 form (a JSON array in one `DataPart`) and the legacy form (one object per `DataPart`), returning `None` for any part that is not A2UI-typed.
+`get_a2ui_data` decodes both the canonical v1.0 form (a JSON array in one `DataPart`) and the legacy form (one object per `DataPart`), returning `None` for any part that is not A2UI-typed. `is_a2ui_part` recognises a data part by its `media_type` or by `metadata["mimeType"]`. Only `application/a2ui+json`, the MIME type the A2UI A2A extension specification defines, is recognised.
 
 ## The Click Round-Trip
 
@@ -19277,7 +19741,7 @@ A v1.0 renderer that needs a *value* back - verifying an id, a typeahead, an inv
 {
   "a2ui": [
     {
-      "version": "v1.0",
+      "version": "1.0",
       "callAgentFunction": {
         "surfaceId": "s1",
         "functionCallId": "verify-1",
@@ -19289,8 +19753,10 @@ A v1.0 renderer that needs a *value* back - verifying an id, a typeahead, an inv
 ```
 
 ```json
-{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "verify-1", "value": {"valid": true{{ "}}" }}}
+{"version": "1.0", "agentFunctionResponse": {"functionCallId": "verify-1", "value": {"valid": true{{ "}}" }}}
 ```
+
+`verify_provider` does not have to be in the renderer's catalog: a renderer with no local implementation of a function routes the call to the agent. A renderer that rejects functions its catalogs don't name must declare the agent's functions, without implementing them.
 
 Over [AG-UI](server.md#serving-over-ag-ui-copilotkit) the same envelope rides `forwardedProps.a2uiAction` (or in a list under `forwardedProps.a2ui`), and the `agentFunctionResponse` comes back in the run's `ACTIVITY_SNAPSHOT`.
 
@@ -19383,6 +19849,9 @@ server = A2UIServer(
 
 The custom catalog's rules are appended to the basic catalog's rules in the system prompt, and its component schemas are added to the validation registry - so malformed uses of your components are caught and retried just like the built-ins.
 
+!!! note "v1.0 catalogs"
+    A v1.0 catalog may `$ref` only the components, functions and leaf `$defs` it declares (`#/components/...`, `#/functions/...`, `#/$defs/...`) and the standard types the spec lists, written as `common_types.json#/$defs/<Type>` (for example `DynamicString`, `ChildList` or `Action`). A reference into another catalog, the basic one included, is rejected when the catalog is loaded. v1.0 catalogs carry their guidance in an `instructions` field; without `custom_catalog_rules`, the custom catalog's `instructions` are appended instead.
+
 !!! tip
     Two knobs control prompt size: `include_schema_in_prompt` (the full JSON schema - better validation, more tokens) and `include_rules_in_prompt` (the plain-text catalog rules). Both default to `True`; turn them off to trade strictness for a shorter prompt.
 
@@ -19395,7 +19864,7 @@ Negotiation is **advisory**: if the client's supported catalogs don't include th
 How capabilities reach the agent depends on the transport:
 
 === "REST"
-    Send them in the request body under `a2uiClientCapabilities` (`a2uiRendererCapabilities` for v1.0), nested by protocol version (see the [Server](server.md) request contract):
+    Send them in the request body under `a2uiClientCapabilities` (`a2uiRendererCapabilities` for v1.0), nested under `"v0.9"` (also for v0.9.1, which reuses the v0.9 key) or `"1.0"` for v1.0 (see the [Server](server.md) request contract):
 
     ```json
     {
@@ -19403,6 +19872,19 @@ How capabilities reach the agent depends on the transport:
       "a2uiClientCapabilities": {
         "v0.9": {
           "supportedCatalogIds": ["https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"]
+        }
+      }
+    }
+    ```
+
+    For v1.0:
+
+    ```json
+    {
+      "messages": [{"role": "user", "content": "show a booking form"}],
+      "a2uiRendererCapabilities": {
+        "1.0": {
+          "supportedCatalogIds": ["https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"]
         }
       }
     }
@@ -26202,13 +26684,18 @@ Each evaluator implements:
 
 ```python
 class ExpectationEvaluator(Protocol):
-    name: ClassVar[str]
-    def evaluate(self, ctx: ExpectationContext) -> list[Violation]: ...
+    name: str
+
+    def evaluate(
+        self,
+        expectation: Expectation,
+        context: ExpectationContext,
+    ) -> Violation | None: ...
 ```
 
-`ExpectationContext` is a small dataclass holding the metadata, WAL slice, current time, and the expectation's params. Evaluators are pure - no I/O, no mutation - so they're trivially testable.
+The `Expectation` carries the declared `params` and `on_violation`. `ExpectationContext` is a small dataclass holding the channel metadata, adapter state, WAL, and current time. Evaluators are pure - no I/O, no mutation - so they're trivially testable.
 
-The default registry exposes them as `default_evaluators()`. Custom evaluators register similarly to custom transition targets.
+The default registry exposes them as `default_evaluators()`. Custom evaluators register with `hub.register_expectation_evaluator(...)` - see [Custom Evaluators](#custom-evaluators).
 
 ## Adapter-Declared Expectations
 
@@ -26232,7 +26719,7 @@ expectations = [
 | `on_violation` | Handler | Effect |
 |---|---|---|
 | `"audit"` | `AuditHandler` | Write to the audit log only. Channel continues. |
-| `"warn"` | `NotifyChannelHandler` | Post `EV_EXPECTATION_VIOLATED` on the channel WAL. |
+| `"notify_channel"` | `NotifyChannelHandler` | Post `EV_EXPECTATION_VIOLATED` on the channel WAL. |
 | `"auto_close"` | `AutoCloseHandler` | Close the channel with `reason="expectation_violated:<name>"`; record to audit. |
 | `"hide"` | (custom) | Hide later turns from the offending participant; not yet implemented as a built-in. |
 
@@ -26451,29 +26938,33 @@ React however you like - retry, escalate, surface to a UI - by registering a lis
 Same shape as the built-ins:
 
 ```python
-from typing import ClassVar
-from ag2.network.hub import (
-    ExpectationContext,
-    ExpectationEvaluator,
-    Violation,
-)
+from ag2.network import EV_TEXT, Expectation, ExpectationContext, Violation
 
 class TooManyMessagesEvaluator:
-    name: ClassVar[str] = "too_many_messages"
+    name = "too_many_messages"
 
-    def evaluate(self, ctx: ExpectationContext) -> list[Violation]:
-        threshold = ctx.params["max"]
+    def evaluate(self, expectation: Expectation, ctx: ExpectationContext) -> Violation | None:
+        threshold = expectation.params["max"]
         text_count = sum(1 for e in ctx.wal if e.event_type == EV_TEXT)
         if text_count > threshold:
-            return [Violation(
-                expectation=self.name,
-                channel_id=ctx.channel.channel_id,
-                detail=f"text count {text_count} exceeds {threshold}",
-            )]
-        return []
+            return Violation(
+                expectation=expectation,
+                detail={"text_count": text_count, "threshold": threshold},
+            )
+        return None
 ```
 
-Register on a custom registry and pass to `Hub.open(..., evaluators=registry)`. The default registry can also be mutated via the module-level `register_evaluator(...)` helper.
+Register the evaluator on an open hub:
+
+```python
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import Hub
+
+hub = await Hub.open(MemoryKnowledgeStore())
+hub.register_expectation_evaluator(TooManyMessagesEvaluator())
+```
+
+Add an `Expectation(name="too_many_messages", on_violation="audit", params={"max": 100})` to the channel adapter's manifest. The hub passes this expectation and the current context to the evaluator; return a `Violation` when it fires, or `None` otherwise.
 
 ---
 
@@ -28758,6 +29249,102 @@ Check the [Xquik OpenAPI schema](https://xquik.com/openapi.json) for current sea
 
 ---
 
+# boxd Integration
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/boxd/
+
+The `ag2.extensions.boxd` module runs AG2 shell and code tools on [boxd](https://boxd.sh/?ref=ag2) machines. A boxd machine is a full Linux microVM (KVM) with a persistent disk that starts in about a second. The extension implements AG2's native sandbox factory, so one environment keeps its files across tool calls and deletes its machine when you close it.
+
+## Installation
+
+Install AG2, your model provider, and boxd's Python SDK:
+
+```bash
+pip install "ag2[anthropic]" "boxd>=0.3.0,<1"
+```
+
+Create an API key in the [boxd console](https://boxd.sh/?ref=ag2) and export it:
+
+```bash
+export BOXD_API_KEY="your-boxd-api-key"
+```
+
+Set `BOXD_REGION` (for example `fra`) to create machines in a specific region.
+
+## Use boxd with an agent
+
+Use the environment as an async context manager. The machine is reused for every shell or code call inside the scope and deleted when the scope exits.
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.boxd import BoxdEnvironment
+from ag2.tools import SandboxCodeTool, SandboxShellTool
+
+async def main() -> None:
+    env = BoxdEnvironment()
+    async with env:
+        agent = Agent(
+            "developer",
+            config=AnthropicConfig(model="claude-sonnet-5"),
+            tools=[SandboxShellTool(env), SandboxCodeTool(env)],
+        )
+        reply = await agent.ask("Write hello.txt, then read it with Python.")
+        print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Configure the machine
+
+The default image is Ubuntu 24.04. Commands run as the user `boxd` (with passwordless `sudo`) in `/home/boxd`, and the image ships `python`, `bash`, `node`, `git` and Docker. `BoxdEnvironment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py), so `SandboxShellTool(env)` reports the real working directory to the model on its own, and `SandboxCodeTool(env)` works without a custom `CodeAdapter`. `SandboxCodeTool` enables `python` and `bash` by default; pass `languages=("python", "bash", "javascript")` to let the model run Node too.
+
+Machines are created **isolated** by default: they have no in-machine boxd credential, no metadata endpoint and no private network peers, so code the model writes cannot reach your boxd account. Outbound internet access stays on. Every machine also gets a one-hour `delete_after` timer, which boxd enforces even if your process dies before it can clean up.
+
+```python
+from ag2.extensions.boxd import BoxdEnvironment, BoxdResources
+
+env = BoxdEnvironment(
+    region="fra",
+    name="my-agent-sandbox",
+    env_vars={"APP_ENV": "sandbox"},
+    labels={"team": "data"},
+    resources=BoxdResources(vcpu=4, memory="16G"),
+    timeout=60,
+    delete_after=900,
+)
+```
+
+| Parameter | Default | Purpose |
+| :--- | :--- | :--- |
+| `api_key` | `BOXD_API_KEY` | API authentication |
+| `base_url` | `BOXD_BASE_URL` or `boxd.sh` | API endpoint |
+| `region` | `BOXD_REGION` or the endpoint's region | Region to create machines in |
+| `name` | Picked by boxd | Machine name, unique within the organization |
+| `image` | Ubuntu 24.04 | Guest image |
+| `env_vars` | `{}` | Environment variables set on every command the sandbox runs |
+| `labels` | `{}` | Labels added to the machine; `created-by=ag2` is always set on top |
+| `resources` | Organization default | vCPU, memory and disk (sizes: 1 vCPU / 4G, 2 / 8G, 4 / 16G, 8 / 32G) |
+| `isolated` | `True` | Keep the boxd credential and private network away from the machine |
+| `timeout` | `60` seconds | Machine startup and command timeout |
+| `delete_after` | `3600` seconds | Server-enforced lifetime backstop; `None` disables it |
+| `workdir` | `/home/boxd` | Working directory for commands and files, created if missing |
+
+`api_key`, `base_url`, `region`, `name`, `image`, `env_vars` and `labels` accept [`Variable`](../context/variables.md) values for per-request resolution. Always close the environment with `async with` or `await env.aclose()`; a machine whose delete failed is retried by the next `aclose()`, and `delete_after` is a fail-safe, not the normal cleanup path.
+
+A command that runs past its timeout is killed on the machine and returns exit code `124`. Its partial output is not returned.
+
+## Testing
+
+The bundled unit tests mock the boxd SDK and run offline, so no boxd account is needed for the AG2 test suite. Exercising the integration against real machines requires a boxd account and a `BOXD_API_KEY`.
+
+Maintainer: [boxd](https://boxd.sh/?ref=ag2).
+
+---
+
 # Compaction Verifier
 
 Source: https://docs.ag2.ai/docs/user-guide/extensions/compaction_verifier/
@@ -29914,7 +30501,7 @@ for name in ("researcher", "analyst", "writer"):
 
 The kill switch is enforced at both the **turn level** (`on_turn`) and the **tool level** (`on_tool_execution`):
 
-- **ENFORCE mode**: returns `ToolErrorEvent`, blocking the entire turn or tool call
+- **ENFORCE mode**: blocks the whole turn - the agent replies with the `[GOVERNANCE DENIED]` reason instead of calling the model - and each tool call returns a `ToolErrorEvent`
 - **MONITOR mode**: records a DENY decision but allows the action through
 - **OBSERVE mode**: not evaluated (passthrough)
 
@@ -30331,3 +30918,97 @@ All credential and sandbox selection parameters accept [`Variable`](../context/v
 The bundled unit tests mock the Tenki SDK and run offline, so no Tenki account is needed for the AG2 test suite. Exercising the integration against real sandboxes requires a Tenki account and a `TENKI_API_KEY`.
 
 Maintainer: [@camcalaquian](https://github.com/camcalaquian) / Tenki.
+
+---
+
+# E2B Sandbox Integration
+
+Source: https://docs.ag2.ai/docs/user-guide/extensions/e2b/
+
+The `ag2.extensions.e2b` module runs AG2 shell and code tools in isolated [E2B](https://e2b.dev/) cloud sandboxes. It implements AG2's native sandbox factory, so one environment keeps files across tool calls and cleans up deterministically.
+
+## Installation
+
+Install AG2, your model provider, and E2B's Python SDK:
+
+```bash
+pip install "ag2[anthropic]" "e2b>=2.0.0,<3"
+```
+
+Create an API key in the [E2B dashboard](https://e2b.dev/dashboard) and export it:
+
+```bash
+export E2B_API_KEY="e2b_your_api_key"
+```
+
+## Use E2B with an agent
+
+Use the environment as an async context manager. Every shell and code call inside the scope runs in the same sandbox, and the sandbox is killed when the scope exits.
+
+```python
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.e2b import E2BEnvironment
+from ag2.tools import SandboxCodeTool, SandboxShellTool
+
+async def main() -> None:
+    env = E2BEnvironment()
+    async with env:
+        agent = Agent(
+            "developer",
+            config=AnthropicConfig(model="claude-sonnet-5"),
+            tools=[SandboxShellTool(env), SandboxCodeTool(env)],
+        )
+        reply = await agent.ask("Write hello.txt, then read it with Python.")
+        print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The default template ships `python` and `node`, so `SandboxCodeTool(env, languages=("python", "bash", "javascript"))` works without a custom template. TypeScript needs a template with `ts-node`.
+
+## Configure the sandbox
+
+```python
+from ag2.extensions.e2b import E2BEnvironment
+
+env = E2BEnvironment(
+    template="my-template",
+    env_vars={"APP_ENV": "sandbox"},
+    timeout=60,
+    sandbox_timeout=600,
+    workdir="/home/user/project",
+    create_options={"metadata": {"app": "my-agent"}, "allow_internet_access": False},
+)
+```
+
+| Parameter | Default | Purpose |
+| :--- | :--- | :--- |
+| `api_key` | `E2B_API_KEY` | API authentication |
+| `template` | E2B default template | Template name or ID the sandbox starts from |
+| `env_vars` | `{}` | Environment variables set for every command |
+| `timeout` | `60` seconds | Per-command timeout; a command that runs longer is killed and returns exit code `124` |
+| `sandbox_timeout` | E2B default (`300` seconds) | Server-side lifetime that commands keep extending; see [Lifecycle](#lifecycle) |
+| `workdir` | `/home/user` | Working directory for commands and files, created if missing |
+| `create_options` | `{}` | Extra keyword arguments forwarded to `AsyncSandbox.create`, such as `domain`, `metadata`, `secure`, `allow_internet_access`, `network` (`e2b>=2.7.0`), or `lifecycle` (`e2b>=2.15.0`) |
+
+`api_key`, `template`, and `env_vars` accept [`Variable`](../context/variables.md) values for per-request resolution, for example per-tenant credentials. Sandboxes are cached by their resolved values: opens that resolve to different values get different sandboxes, and opens that resolve to the same values share one, whichever conversation makes them.
+
+`E2BEnvironment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py), so `SandboxShellTool(env)` reports the real working directory to the model.
+
+## Lifecycle
+
+E2B reclaims a sandbox once its server-side lifetime runs out. A command extends that lifetime back to `sandbox_timeout` when less than half of it is left, and always far enough to cover the command's own `timeout`, so a running command is not cut off. The lifetime is never shortened. How long an idle sandbox survives after its last command depends on when that command ran relative to the last refresh, so set `sandbox_timeout` with a comfortable margin above the longest pause you expect between tool calls, such as a slow model turn or a human-in-the-loop wait.
+
+Once a sandbox is gone, the next command reports it, and the environment does not silently create a new one, because a new sandbox would not have the old one's files.
+
+Always close the environment with `async with` or `await env.aclose()`. Closing waits for a sandbox that is still being created and kills it too, and calling `aclose()` again retries a kill that failed. An `atexit` fallback kills sandboxes that are still open when the process exits. The server-side lifetime is the backstop when neither runs, for example when a task is cancelled while E2B is still creating its sandbox.
+
+## Testing
+
+The bundled unit tests mock the E2B SDK and run offline, so no E2B account is needed for the AG2 test suite. Exercising the integration against real sandboxes requires an E2B account and an `E2B_API_KEY`.
+
+Maintainer: [@OndrejDrapalik](https://github.com/OndrejDrapalik) / E2B.
