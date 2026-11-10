@@ -5,13 +5,14 @@
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Annotated, Any, Union
+from typing import Annotated, Any, NamedTuple, Union
 
 import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field, ValidationError
 from typing_extensions import TypedDict
 
+from ag2 import Context, MemoryStream
 from ag2.response import ResponseSchema
 from ag2.response.schema import RawSchema
 from ag2.types import ClassInfo
@@ -348,6 +349,17 @@ class TestUnionSchemas:
                 "Success": IsPartialDict({}),
             }),
         })
+
+
+@pytest.mark.asyncio
+async def test_named_tuple_class_is_a_type_not_a_union_of_members() -> None:
+    class Point(NamedTuple):
+        x: int
+        y: int
+
+    schema = ResponseSchema(Point)
+
+    assert await schema.validate('{"data": [1, 2]}', Context(MemoryStream())) == Point(1, 2)
 
 
 class TestNameDescription:

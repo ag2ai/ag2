@@ -106,7 +106,7 @@ def failure_attribution(
         middleware: Middleware for the attributor agent (e.g. ``TelemetryMiddleware``).
     """
     modes = tuple(taxonomy)
-    attributor = (
+    attributor: Agent[_AttributionVerdict] | None = (
         Agent(
             f"attributor_{key}",
             _system_prompt(modes),
@@ -188,7 +188,7 @@ def _mech(
 
 
 async def _llm_attribute(
-    attributor: Agent,
+    attributor: Agent[_AttributionVerdict],
     inputs: dict[str, Any],
     outputs: dict[str, Any],
     reference_outputs: dict[str, Any] | None,
