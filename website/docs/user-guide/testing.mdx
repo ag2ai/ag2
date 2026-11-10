@@ -161,3 +161,22 @@ async def test_tool_not_found():
     with pytest.raises(ToolNotFoundError, match="Tool `unregistered_tool` not found"):
         await agent.ask("Hi!")
 ```
+
+## How to test the Files API
+
+`TestFilesClient` is an in-memory Files API. Pass it to `TestConfig(files=...)`, and what your code uploads through `FilesAPI` can be read, listed and deleted without a provider.
+
+```python linenums="1"
+import pytest
+
+from ag2.files import FileContent, FilesAPI
+from ag2.testing import TestConfig, TestFilesClient
+
+@pytest.mark.asyncio
+async def test_upload_report():
+    files = FilesAPI(TestConfig(files=TestFilesClient()))
+
+    uploaded = await files.upload(data=b"report", filename="report.txt")
+
+    assert await files.read(uploaded.file_id) == FileContent(name="report.txt", data=b"report")
+```

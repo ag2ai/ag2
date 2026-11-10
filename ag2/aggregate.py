@@ -11,9 +11,9 @@ triggered at deterministic milestones to maintain agent effectiveness.
 Unlike compaction (which removes), aggregation creates.
 """
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from fast_depends.pydantic import PydanticSerializer
 
@@ -73,7 +73,7 @@ class ConversationSummaryAggregate:
             pydantic_config={"arbitrary_types_allowed": True},
             use_fastdepends_errors=False,
         )
-        self.last_usage: dict = {}
+        self.last_usage: dict[str, Any] = {}
 
     async def aggregate(
         self,
@@ -101,7 +101,7 @@ class ConversationSummaryAggregate:
             response_schema=None,
             serializer=self._serializer,
         )
-        self.last_usage = response.usage if hasattr(response, "usage") and response.usage else {}
+        self.last_usage = asdict(response.usage) if response.usage else {}
         await _emit_aggregation_usage(response, context)
         return response.content or ""
 
@@ -144,7 +144,7 @@ class WorkingMemoryAggregate:
         class ResearchLessonsAggregate:
             def __init__(self, config: ModelConfig) -> None:
                 self._config = config
-                self.last_usage: dict = {}
+                self.last_usage: dict[str, Any] = {}
 
             async def aggregate(self, events, context, store) -> None:
                 # ...your own logic, your own paths, your own prompts.
@@ -170,7 +170,7 @@ class WorkingMemoryAggregate:
             pydantic_config={"arbitrary_types_allowed": True},
             use_fastdepends_errors=False,
         )
-        self.last_usage: dict = {}
+        self.last_usage: dict[str, Any] = {}
 
     async def aggregate(
         self,
@@ -197,7 +197,7 @@ class WorkingMemoryAggregate:
             response_schema=None,
             serializer=self._serializer,
         )
-        self.last_usage = response.usage if hasattr(response, "usage") and response.usage else {}
+        self.last_usage = asdict(response.usage) if response.usage else {}
         await _emit_aggregation_usage(response, context)
         return response.content or existing
 

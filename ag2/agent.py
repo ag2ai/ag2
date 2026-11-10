@@ -44,6 +44,7 @@ from ._run_lifecycle import RunLifecycle
 from .annotations import Context
 from .assembly import AssemblerMiddleware, AssemblyPolicy
 from .config import LLMClient, ModelConfig
+from .context import StreamId
 from .events import (
     BaseEvent,
     DrainedModelRequest,
@@ -83,7 +84,7 @@ from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
 from .scopes import merge_variables, overlay_variables
-from .stream import MemoryStream, Stream, StreamId
+from .stream import MemoryStream, Stream
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, Toolkit
@@ -754,9 +755,9 @@ def _get_stream_turn_lock(stream: Stream) -> asyncio.Lock:
     # ``_STREAM_TURN_LOCK_ATTR`` is ours, not part of the ``Stream`` protocol,
     # so it has to be read defensively — unlike ``id``, which the protocol
     # guarantees.
-    lock = getattr(stream, _STREAM_TURN_LOCK_ATTR, None)
-    if lock is not None:
-        return lock
+    cached = getattr(stream, _STREAM_TURN_LOCK_ATTR, None)
+    if isinstance(cached, asyncio.Lock):
+        return cached
 
     lock = _stream_locks_by_id.get(stream.id)
     if lock is None:
@@ -869,6 +870,28 @@ class Agent(PluginTarget, Generic[TResult]):
         dependencies: dict[Any, Any] | None = ...,
         variables: Mapping[str, Any] | None = ...,
         response_schema: None = ...,
+        plugins: Iterable["Plugin"] = ...,
+        knowledge: KnowledgeConfig | None = ...,
+        tasks: TaskConfig | Literal[False] = ...,
+        assembly: Iterable[AssemblyPolicy] | None = ...,
+    ) -> None: ...
+
+    # A schema only known at run time (e.g. forwarded from a caller's argument):
+    # the result type cannot be inferred.
+    @overload
+    def __init__(
+        self: "Agent[Any]",
+        name: str,
+        prompt: PromptType | Iterable[PromptType] = ...,
+        *,
+        config: ModelConfig | None = ...,
+        hitl_hook: HumanHook | None = ...,
+        tools: Iterable[Callable[..., Any] | Tool] = ...,
+        middleware: Iterable[MiddlewareFactory] = ...,
+        observers: Iterable[Observer] = ...,
+        dependencies: dict[Any, Any] | None = ...,
+        variables: Mapping[str, Any] | None = ...,
+        response_schema: ResponseProto[Any] | type | types.UnionType | None = ...,
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
@@ -1119,8 +1142,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: SendableMessage | Input,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: Mapping[str, Any] | None = ...,
@@ -1139,8 +1161,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: SendableMessage | Input,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: Mapping[str, Any] | None = ...,
@@ -1159,8 +1180,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: SendableMessage | Input,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: Mapping[str, Any] | None = ...,
@@ -1239,8 +1259,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     def run(
         self,
-        msg: SendableMessage | Input,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: Mapping[str, Any] | None = ...,
@@ -1259,8 +1278,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     def run(
         self,
-        msg: SendableMessage | Input,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: Mapping[str, Any] | None = ...,
@@ -1279,8 +1297,7 @@ class Agent(PluginTarget, Generic[TResult]):
     @overload
     def run(
         self,
-        msg: SendableMessage | Input,
-        *,
+        *msg: SendableMessage | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: Mapping[str, Any] | None = ...,
@@ -1713,7 +1730,8 @@ class Agent(PluginTarget, Generic[TResult]):
             for factory in scoped_factories:
                 if isinstance(factory, ScopedMiddlewareFactory):
                     await scope_stack.enter_async_context(factory.scope(event, context))
-            if response_schema is omit:
+            final_schema: ResponseProto[Any] | None
+            if isinstance(response_schema, Omit):
                 final_schema = self._response_schema
             else:
                 final_schema = ResponseSchema.ensure_schema(response_schema)
@@ -2143,21 +2161,21 @@ def _build_subtask_toolkit(agent: "Agent[Any]") -> Toolkit:
 
 
 def _filter_subtask_tools(
-    tools: Iterable[FunctionTool],
+    tools: Iterable[Tool],
     include: Iterable[str] | None,
     exclude: Iterable[str],
-) -> list[FunctionTool]:
+) -> list[Tool]:
     """Apply ``include_tools`` / ``exclude_tools`` filters to ``tools``.
 
     ``include`` is an allowlist of tool names — ``None`` (the default) lets
     every tool through. ``exclude`` is always applied as a blocklist after
-    the allowlist. Tool identity is by ``schema.function.name``.
+    the allowlist. Tool identity is by ``Tool.name``.
     """
     include_set = set(include) if include is not None else None
     exclude_set = set(exclude)
-    result: list[FunctionTool] = []
+    result: list[Tool] = []
     for t in tools:
-        name = t.schema.function.name
+        name = t.name
         if include_set is not None and name not in include_set:
             continue
         if name in exclude_set:
