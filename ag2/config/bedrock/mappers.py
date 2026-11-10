@@ -375,7 +375,7 @@ def normalize_usage(raw: dict[str, Any]) -> Usage:
     With prompt caching, Converse's ``inputTokens`` counts only the uncached input;
     its prompt-caching guide has the whole input be ``inputTokens`` plus
     ``cacheReadInputTokens`` and ``cacheWriteInputTokens``. ``Usage`` counts the
-    whole input in ``prompt_tokens``, so the cache counts are added here.
+    whole input in ``prompt_tokens`` (ADR 0036), so the cache counts are added here.
     A reported ``totalTokens`` below the whole input plus output is not believed.
     """
     cache_read = raw.get("cacheReadInputTokens")

@@ -26,7 +26,7 @@ def _add_tokens(a: float | None, b: float | None) -> float | None:
 class Usage:
     """Token usage normalized across LLM providers.
 
-    Every provider mapper fills the fields with the same meaning, so a
+    Every provider mapper fills the fields with the same meaning (ADR 0036), so a
     consumer never needs to know which provider reported them.
     """
 

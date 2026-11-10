@@ -4,7 +4,7 @@
 
 """Tests for Converse usage normalization.
 
-``prompt_tokens`` is the whole input: ``inputTokens`` plus both cache counts.
+``prompt_tokens`` is the whole input: ``inputTokens`` plus both cache counts (ADR 0036).
 """
 
 from ag2.config.bedrock.mappers import normalize_usage

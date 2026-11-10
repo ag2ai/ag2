@@ -884,7 +884,7 @@ def normalize_usage(raw: dict[str, Any]) -> Usage:
 
     Anthropic's ``input_tokens`` counts only the input after the last cache
     breakpoint; reads from and writes to the cache are reported beside it. ``Usage``
-    counts the whole input in ``prompt_tokens``, so both cache counts are
+    counts the whole input in ``prompt_tokens`` (ADR 0036), so both cache counts are
     added to it here, and ``input_tokens`` is ``prompt_tokens`` minus them.
     """
     details = raw.get("output_tokens_details") or {}
