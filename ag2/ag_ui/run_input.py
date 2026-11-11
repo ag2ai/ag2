@@ -77,16 +77,16 @@ def _check_base64(incoming: RunAgentInput) -> None:
             for part_index, part in enumerate(message.content):
                 if isinstance(part, TextPart) or not isinstance(part.source, DataSource):
                     continue
-                _decode(part.source.value, f"/messages/{index}/content/{part_index}/source/value")
+                _decode(part.source.value, f"/messages/{index}/content/{part_index}/source/value", validate=True)
         elif isinstance(message, AssistantMessage):
             for call_index, call in enumerate(message.tool_calls or ()):
                 if call.encrypted_value is not None:
                     _decode(call.encrypted_value, f"/messages/{index}/toolCalls/{call_index}/encryptedValue")
 
 
-def _decode(value: str, path: str) -> None:
+def _decode(value: str, path: str, *, validate: bool = False) -> None:
     try:
-        b64decode(value)
+        b64decode(value, validate=validate)
     except (binascii.Error, ValueError) as e:
         raise ValueError(f"malformed base64 at {path}") from e
 
