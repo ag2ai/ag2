@@ -120,6 +120,7 @@ async def gate_invites(envelope) -> None:
         await human.post_envelope(Envelope(
             channel_id=envelope.channel_id,
             sender_id=human.agent_id,
+            audience=None,
             event_type=EV_CHANNEL_INVITE_ACK,
             event_data={"channel_id": envelope.channel_id},
             causation_id=envelope.envelope_id,
