@@ -24,19 +24,22 @@ import asyncio
 import pytest
 from pydantic import BaseModel
 
-from ag2 import Agent, Context, tool
+from ag2 import Agent, Context, ToolResult, tool
 from ag2.events import (
     BaseEvent,
+    ClientToolCallEvent,
     MessageEnqueued,
     ModelMessage,
     ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
+    ToolCallsEvent,
     ToolResultEvent,
 )
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.types import ClientTool
 
 
 def _texts(event: BaseEvent) -> list[str]:
@@ -223,6 +226,48 @@ class TestEnqueue:
 
         seen = [text for call in config.mock.call_args_list for text in _texts(call.args[0])]
         assert "injected message" in seen, "a message enqueued mid-turn must reach a model call in that turn"
+
+    async def test_during_a_final_tool_result_waits_for_the_next_turn(self) -> None:
+        @tool
+        def escalate() -> ToolResult:
+            """Hand the ticket to a person."""
+            return ToolResult("Ticket escalated.", final=True)
+
+        config = TrackingConfig(TestConfig(ToolCallEvent(name="escalate", arguments="{}"), "Your order shipped."))
+        agent = Agent("runner", config=config, tools=[escalate])
+
+        async with agent.run("Hi!") as run:
+
+            @run.stream.where(ToolResultEvent).subscribe
+            async def inject(_event: BaseEvent) -> None:
+                run.enqueue("What about my order?")
+
+            reply = await run.result()
+
+        assert reply.body == "Ticket escalated."
+        assert config.mock.call_count == 1
+
+        await reply.ask("Thanks!")
+
+        assert _texts(config.mock.call_args.args[0]) == ["What about my order?", "Thanks!"]
+
+    async def test_during_a_client_handoff_waits_for_the_next_turn(self) -> None:
+        pick_file = ClientTool(schema={"function": {"name": "pick_file", "description": "desc", "parameters": {}}})
+        handed_off = ToolCallEvent(name="pick_file", arguments="{}")
+        config = TrackingConfig(TestConfig(handed_off, "r2"))
+        agent = Agent("runner", config=config, tools=[pick_file])
+
+        async with agent.run("Hi!") as run:
+
+            @run.stream.where(ClientToolCallEvent).subscribe
+            async def inject(_event: BaseEvent) -> None:
+                run.enqueue("injected message")
+
+            reply = await run.result()
+
+        assert reply.response.tool_calls == ToolCallsEvent([handed_off])
+        assert config.mock.call_count == 1
+        assert run.stream.pending_messages == [ModelRequest.ensure_request(["injected message"])]
 
     async def test_announces_the_message(self) -> None:
         agent = Agent("runner", config=TestConfig("ok"))

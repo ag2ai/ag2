@@ -2040,6 +2040,13 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
                 message = await result
             continue
 
+        if message.response_force:
+            # A final tool result or calls handed to the client end the turn with
+            # this response; another model call would replace the final reply or
+            # drop the client calls. Input enqueued meanwhile stays in the inbox
+            # for the next turn on this stream.
+            return message
+
         # Model has nothing more to do this turn. Drain any leftover enqueued
         # input into one more request to give it a chance to react. Background
         # tasks are not awaited — if they finish in time their enqueue lands
