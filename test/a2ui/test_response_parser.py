@@ -13,31 +13,26 @@ from ag2.a2ui.parser import (
 )
 from ag2.a2ui.schema_manager import A2UISchemaManager
 
+from ._helpers import validating_parser
+
 
 def _text_with_nested_format_string(depth: int, leaf: JsonObject | str) -> JsonObject:
     value: JsonObject | str = leaf
     for _ in range(depth):
         value = {"@call": "formatString", "args": {"value": value}}
     return {
-        "version": "v1.0",
+        "version": "1.0",
         "updateComponents": {"surfaceId": "s", "components": [{"id": "root", "component": "Text", "text": value}]},
     }
 
 
 def _parser_with_functions(functions: JsonObject) -> A2UIResponseParser:
-    manager = A2UISchemaManager(
-        protocol_version="v1.0", custom_catalog={"$id": "https://mycompany.com/cat.json", "functions": functions}
-    )
-    return A2UIResponseParser(
-        version_string=manager.version_string,
-        server_to_client_schema=manager.server_to_client_schema,
-        schema_registry=manager.build_schema_registry(),
-    )
+    return validating_parser("v1.0", {"$id": "https://mycompany.com/cat.json", "functions": functions})
 
 
 def _create_surface_with_extension(key: str) -> JsonObject:
     return {
-        "version": "v1.0",
+        "version": "1.0",
         "createSurface": {
             "surfaceId": "s",
             "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
@@ -284,12 +279,7 @@ class TestA2UIResponseParserV091Validation:
 class TestA2UIResponseParserV1Validation:
     @pytest.fixture()
     def parser_v1(self) -> A2UIResponseParser:
-        manager = A2UISchemaManager(protocol_version="v1.0")
-        return A2UIResponseParser(
-            version_string=manager.version_string,
-            server_to_client_schema=manager.server_to_client_schema,
-            schema_registry=manager.build_schema_registry(),
-        )
+        return validating_parser("v1.0")
 
     @pytest.fixture()
     def parser_v1_agent_function(self) -> A2UIResponseParser:
@@ -319,7 +309,7 @@ class TestA2UIResponseParserV1Validation:
     ) -> None:
         ops = [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "callRendererFunction": {
                     "functionCallId": "fc-1",
                     "callFunction": {"@call": "lookup", "catalogId": "https://mycompany.com/cat.json"},
@@ -334,7 +324,7 @@ class TestA2UIResponseParserV1Validation:
     ) -> None:
         # The envelope's ``oneOf`` alone only says "no branch matched"; the LLM needs the property.
         slider = {"id": "root", "component": "Slider", "min": 1, "max": 3, "step": 1, "value": {"@path": "/n"}}
-        ops = [{"version": "v1.0", message_key: {"surfaceId": "s", "components": [slider]}}]
+        ops = [{"version": "1.0", message_key: {"surfaceId": "s", "components": [slider]}}]
 
         result = parser_v1.validate(ops)
 
@@ -347,7 +337,7 @@ class TestA2UIResponseParserV1Validation:
         # default (rendererOnly): the renderer would reject the agent's call.
         ops = [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "callRendererFunction": {
                     "functionCallId": "fc-1",
                     "callFunction": {
@@ -365,7 +355,7 @@ class TestA2UIResponseParserV1Validation:
         assert "openUrl" in error
 
     def test_agent_function_response_is_not_generated_by_the_llm(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": 42}}]
+        ops = [{"version": "1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": 42}}]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
         assert any("do not emit it" in error for error in result.errors)
@@ -384,7 +374,7 @@ class TestA2UIResponseParserV1Validation:
         # Spec: a FunctionResponse carries exactly one of value | error (oneOf).
         ops = [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "agentFunctionResponse": {
                     "functionCallId": "fc-1",
                     "value": 1,
@@ -396,7 +386,7 @@ class TestA2UIResponseParserV1Validation:
         assert result.is_valid is False
 
     def test_call_renderer_function_requires_function_call_id(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "callRendererFunction": {"callFunction": {"@call": "openUrl"}}}]
+        ops = [{"version": "1.0", "callRendererFunction": {"callFunction": {"@call": "openUrl"}}}]
         result = parser_v1.validate(ops)
         assert result.is_valid is False
 
@@ -409,12 +399,12 @@ class TestA2UIResponseParserV1Validation:
     )
     def test_pre_rc_function_messages_are_rejected(self, parser_v1: A2UIResponseParser, legacy: dict) -> None:
         # ``callFunction`` / ``actionResponse`` were replaced by the RC's role-based messages.
-        assert parser_v1.validate([{"version": "v1.0", **legacy}]).is_valid is False
+        assert parser_v1.validate([{"version": "1.0", **legacy}]).is_valid is False
 
     def test_create_surface_carries_initial_components_and_data_model(self, parser_v1: A2UIResponseParser) -> None:
         ops = [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "createSurface": {
                     "surfaceId": "s1",
                     "components": [{"id": "root", "component": "Text", "text": {"@path": "/greeting"}}],
@@ -428,7 +418,7 @@ class TestA2UIResponseParserV1Validation:
     def test_create_surface_inline_components_need_a_root(self, parser_v1: A2UIResponseParser) -> None:
         ops = [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "createSurface": {"surfaceId": "s1", "components": [{"id": "a", "component": "Text", "text": "hi"}]},
             }
         ]
@@ -439,7 +429,7 @@ class TestA2UIResponseParserV1Validation:
     def test_create_surface_inline_component_errors_are_drilled_into(self, parser_v1: A2UIResponseParser) -> None:
         ops = [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "createSurface": {"surfaceId": "s1", "components": [{"id": "root", "component": "Text", "text": 5}]},
             }
         ]
@@ -448,16 +438,16 @@ class TestA2UIResponseParserV1Validation:
         assert any(error.startswith("Operation 0: Component 'root' (Text)") for error in result.errors)
 
     def test_create_surface_rejects_the_removed_theme(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "createSurface": {"surfaceId": "s1", "theme": {"primaryColor": "#fff"}}}]
+        ops = [{"version": "1.0", "createSurface": {"surfaceId": "s1", "theme": {"primaryColor": "#fff"}}}]
         assert parser_v1.validate(ops).is_valid is False
 
     def test_create_surface_rejects_malformed_extension_keys(self, parser_v1: A2UIResponseParser) -> None:
-        ops = [{"version": "v1.0", "createSurface": {"surfaceId": "s1", "metadata": {"extensions": {"@x": 1}}}}]
+        ops = [{"version": "1.0", "createSurface": {"surfaceId": "s1", "metadata": {"extensions": {"@x": 1}}}}]
         assert parser_v1.validate(ops).is_valid is False
 
     def test_update_data_model_requires_value(self, parser_v1: A2UIResponseParser) -> None:
-        missing = [{"version": "v1.0", "updateDataModel": {"surfaceId": "s1", "path": "/a"}}]
-        deleting = [{"version": "v1.0", "updateDataModel": {"surfaceId": "s1", "path": "/a", "value": None}}]
+        missing = [{"version": "1.0", "updateDataModel": {"surfaceId": "s1", "path": "/a"}}]
+        deleting = [{"version": "1.0", "updateDataModel": {"surfaceId": "s1", "path": "/a", "value": None}}]
         assert parser_v1.validate(missing).is_valid is False
         assert parser_v1.validate(deleting).is_valid is True
 
@@ -466,7 +456,7 @@ class TestA2UIResponseParserV1Validation:
         # with the v1.0 version string and catalog id.
         ops = [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "createSurface": {
                     "surfaceId": "s1",
                     "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
@@ -557,7 +547,7 @@ class TestA2UIResponseParserV1Validation:
             {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": {"@call": "lookup"}}},
             {"id": "label", "component": "Text", "text": "Go"},
         ]
-        ops = [{"version": "v1.0", "createSurface": {"surfaceId": "s", "components": components}}]
+        ops = [{"version": "1.0", "createSurface": {"surfaceId": "s", "components": components}}]
         result = parser_v1_agent_function.validate(ops)
         assert result.errors == ["Operation 0: Component 'root' (Button): unknown @call 'lookup'"]
 
@@ -617,11 +607,11 @@ class TestSurfaceCatalogValidation:
         create: JsonObject = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
         if message_key == "createSurface":
             create["components"] = components
-            operations = [{"version": "v1.0", "createSurface": create}]
+            operations = [{"version": "1.0", "createSurface": create}]
         else:
             operations = [
-                {"version": "v1.0", "createSurface": create},
-                {"version": "v1.0", "updateComponents": {"surfaceId": "s", "components": components}},
+                {"version": "1.0", "createSurface": create},
+                {"version": "1.0", "updateComponents": {"surfaceId": "s", "components": components}},
             ]
 
         result = parser.validate(operations)
@@ -638,14 +628,14 @@ class TestSurfaceCatalogValidation:
         # A parser is shared by clients: this earlier response must not establish
         # a persistent binding for another validation call's identical surface id.
         assert parser.validate([
-            {"version": "v1.0", "createSurface": {"surfaceId": "s", "catalogId": custom_id}}
+            {"version": "1.0", "createSurface": {"surfaceId": "s", "catalogId": custom_id}}
         ]).is_valid
         call: JsonObject = {"@call": "openUrl", "args": {"url": "https://example.com"}}
         if call_catalog is not None:
             call["catalogId"] = basic_id if call_catalog == "basic" else custom_id
         operations = [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "updateComponents": {
                     "surfaceId": "s",
                     "components": [
@@ -665,18 +655,18 @@ class TestSurfaceCatalogValidation:
     def test_surface_catalogs_are_kept_separate_within_a_response(self, parser: A2UIResponseParser) -> None:
         operations = [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "createSurface": {
                     "surfaceId": "basic",
                     "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
                 },
             },
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "createSurface": {"surfaceId": "custom", "catalogId": "https://example.com/catalog.json"},
             },
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "updateComponents": {
                     "surfaceId": "basic",
                     "components": [
@@ -706,7 +696,7 @@ class TestSurfaceCatalogValidation:
         }
         result = parser.validate([
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "createSurface": {
                     "surfaceId": "s",
                     "catalogId": catalogs[surface_catalog],
@@ -749,7 +739,7 @@ def test_component_can_select_basic_catalog_over_custom_surface() -> None:
 
     result = parser.validate([
         {
-            "version": "v1.0",
+            "version": "1.0",
             "createSurface": {
                 "surfaceId": "s",
                 "catalogId": manager.catalog_id,
@@ -813,11 +803,11 @@ class TestComponentCatalogValidation:
         create: JsonObject = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
         if message_key == "createSurface":
             create["components"] = [component]
-            operations = [{"version": "v1.0", "createSurface": create}]
+            operations = [{"version": "1.0", "createSurface": create}]
         else:
             operations = [
-                {"version": "v1.0", "createSurface": create},
-                {"version": "v1.0", "updateComponents": {"surfaceId": "s", "components": [component]}},
+                {"version": "1.0", "createSurface": create},
+                {"version": "1.0", "updateComponents": {"surfaceId": "s", "components": [component]}},
             ]
 
         result = parser.validate(operations)
@@ -831,14 +821,14 @@ class TestComponentCatalogValidation:
     def test_component_catalog_defaults_are_isolated_between_responses(self, parser: A2UIResponseParser) -> None:
         assert parser.validate([
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "createSurface": {"surfaceId": "s", "catalogId": "https://example.com/catalog.json"},
             },
         ]).is_valid
 
         result = parser.validate([
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "updateComponents": {
                     "surfaceId": "s",
                     "components": [{"id": "root", "component": "Text", "text": "Hello"}],
@@ -888,10 +878,10 @@ class TestCatalogFunctionDefinitions:
         )
         call: JsonObject = {"@call": "lookup", "catalogId": manager.catalog_id, "args": {"id": "x"}}
         if call_kind == "rpc":
-            operation = {"version": "v1.0", "callRendererFunction": {"functionCallId": "fc", "callFunction": call}}
+            operation = {"version": "1.0", "callRendererFunction": {"functionCallId": "fc", "callFunction": call}}
         else:
             operation = {
-                "version": "v1.0",
+                "version": "1.0",
                 "createSurface": {
                     "surfaceId": "s",
                     "components": [
@@ -935,7 +925,7 @@ class TestCatalogFunctionDefinitions:
         )
         result = parser.validate([
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "callRendererFunction": {
                     "functionCallId": "fc",
                     "callFunction": {**call, "catalogId": manager.catalog_id},

@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from ._types import A2UIVersion, JsonObject, JsonValue
+from .constants import A2UI_DEFAULT_VERSION
 from .incoming import sanitize_for_prompt
 
 logger = logging.getLogger(__name__)
@@ -21,10 +22,14 @@ A2UI_CLIENT_CAPABILITIES_METADATA_KEY = "a2uiClientCapabilities"
 # v1.0 renamed the client "renderer" (A2A extension spec).
 A2UI_RENDERER_CAPABILITIES_METADATA_KEY = "a2uiRendererCapabilities"
 
-# Default wire-shape version key for the nested capability/data-model objects
-# (the client wraps them under their protocol version, e.g. ``{"v0.9": {...}}``).
-# Callers serving a v0.9.1 / v1.0 agent pass their version via ``version_key``.
-_DEFAULT_VERSION_KEY: A2UIVersion = "v0.9"
+# Where each protocol version's capabilities sit: the metadata key and the version key
+# nested under it. v0.9.1 reuses the v0.9 key (``v0_9_1/spec/client_capabilities.json``);
+# v1.0 uses its bare wire version (``renderer_capabilities.json``).
+_CAPABILITIES_LOCATION: dict[A2UIVersion, tuple[str, str]] = {
+    "v0.9": (A2UI_CLIENT_CAPABILITIES_METADATA_KEY, "v0.9"),
+    "v0.9.1": (A2UI_CLIENT_CAPABILITIES_METADATA_KEY, "v0.9"),
+    "v1.0": (A2UI_RENDERER_CAPABILITIES_METADATA_KEY, "1.0"),
+}
 
 # Cap how many catalog ids / inline-component names we splice into the prompt,
 # bounding the blast radius of a runaway or hostile capabilities payload.
@@ -43,25 +48,24 @@ class A2UIClientCapabilities:
 def parse_client_capabilities(
     metadata: Mapping[str, JsonValue] | None,
     *,
-    version_key: A2UIVersion = _DEFAULT_VERSION_KEY,
+    version_key: A2UIVersion = A2UI_DEFAULT_VERSION,
 ) -> A2UIClientCapabilities | None:
-    """Decode ``metadata.a2uiClientCapabilities.<version_key>``.
+    """Decode the client's capabilities for protocol version ``version_key``.
 
-    ``version_key`` selects the nested version object (defaults to ``"v0.9"``;
-    pass the agent's version, e.g. ``"v1.0"``, when serving a newer client).
-    v1.0 renamed the key to ``a2uiRendererCapabilities``; each version reads
-    only its own.
+    v0.9 and v0.9.1 read ``metadata.a2uiClientCapabilities["v0.9"]``; v1.0 reads
+    ``metadata.a2uiRendererCapabilities["1.0"]``. Callers serving a non-default
+    agent pass its ``protocol_version``.
     Returns ``None`` if the metadata is missing, malformed, or does not declare
     the requested version. ``supportedCatalogIds`` entries are coerced to ``str``
     and non-dict ``inlineCatalogs`` entries are dropped.
     """
     if not metadata:
         return None
-    key = A2UI_RENDERER_CAPABILITIES_METADATA_KEY if version_key == "v1.0" else A2UI_CLIENT_CAPABILITIES_METADATA_KEY
-    caps = metadata.get(key)
+    metadata_key, nested_key = _CAPABILITIES_LOCATION[version_key]
+    caps = metadata.get(metadata_key)
     if not isinstance(caps, dict):
         return None
-    v = caps.get(version_key)
+    v = caps.get(nested_key)
     if not isinstance(v, dict):
         return None
     raw_ids = v.get("supportedCatalogIds")

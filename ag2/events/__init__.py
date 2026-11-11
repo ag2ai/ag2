@@ -5,6 +5,7 @@
 from .alert import HaltEvent, ObserverAlert, Severity
 from .base import BaseEvent, Field, ProviderReplay, is_conversational
 from .conditions import Condition
+from .delegation import ChildEvent, DeliveryFailed, DownEvent, InertEvent, TransientChildEvent, TransientDownEvent
 from .input_events import (
     AudioInput,
     BinaryInput,
@@ -17,6 +18,7 @@ from .input_events import (
     Input,
     MessageEnqueued,
     ModelRequest,
+    StatusObservation,
     TextInput,
     UrlInput,
     VideoInput,
@@ -90,13 +92,16 @@ __all__ = (
     "BinaryType",
     "BuiltinToolCallEvent",
     "BuiltinToolResultEvent",
+    "ChildEvent",
     "ClientToolCallEvent",
     "CompactionCompleted",
     "CompactionFailed",
     "CompactionStarted",
     "Condition",
     "DataInput",
+    "DeliveryFailed",
     "DocumentInput",
+    "DownEvent",
     "DrainedModelRequest",
     "EventLogFailed",
     "Field",
@@ -105,6 +110,7 @@ __all__ = (
     "HumanInputRequest",
     "HumanMessage",
     "ImageInput",
+    "InertEvent",
     "Input",
     "MessageEnqueued",
     "ModelMessage",
@@ -118,6 +124,7 @@ __all__ = (
     "ProviderReplay",
     "RecordedAudioEvent",
     "Severity",
+    "StatusObservation",
     "SynthesizedAudioEvent",
     "TaskCancelled",
     "TaskCompleted",
@@ -136,6 +143,8 @@ __all__ = (
     "ToolResultsEvent",
     "TranscriptionChunkEvent",
     "TranscriptionCompletedEvent",
+    "TransientChildEvent",
+    "TransientDownEvent",
     "UnknownEvent",
     "UrlInput",
     "Usage",

@@ -65,7 +65,7 @@ class AlertConsole(BaseObserver):
         return None  # Don't emit a follow-up alert
 
 async def main() -> None:
-    config = GeminiConfig(model="gemini-3-flash-preview", temperature=0)
+    config = GeminiConfig(model="gemini-3.6-flash", temperature=0)
 
     section("Watchdog — low thresholds so observers trip on a single ask")
 

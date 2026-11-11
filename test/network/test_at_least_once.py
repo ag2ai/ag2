@@ -572,7 +572,7 @@ class TestReplayOnReconnect:
                 welcome = await _drain_frame(raw_client)
                 assert isinstance(welcome, WelcomeFrame)
 
-                with pytest.raises(asyncio.TimeoutError):
+                with pytest.raises(TimeoutError):
                     await _drain_frame(raw_client, timeout=0.25)
             finally:
                 await raw_client.close()
@@ -614,7 +614,7 @@ class TestReplayOnReconnect:
 
                 # Cursor wins over the empty since_envelope_id, so no
                 # replay frames arrive.
-                with pytest.raises(asyncio.TimeoutError):
+                with pytest.raises(TimeoutError):
                     await _drain_frame(raw_client, timeout=0.25)
             finally:
                 await raw_client.close()
@@ -646,7 +646,7 @@ class TestReplayOnReconnect:
                 welcome = await _drain_frame(raw_client)
                 assert isinstance(welcome, WelcomeFrame)
 
-                with pytest.raises(asyncio.TimeoutError):
+                with pytest.raises(TimeoutError):
                     await _drain_frame(raw_client, timeout=0.25)
             finally:
                 await raw_client.close()
@@ -725,7 +725,7 @@ class TestReplayOnReconnect:
                 while True:
                     try:
                         frame = await _drain_frame(raw2, timeout=0.5)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         break
                     if isinstance(frame, NotifyFrame) and frame.envelope.event_type == "ag2.task.progress":
                         steps.append(frame.envelope.event_data.get("step"))

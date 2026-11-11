@@ -109,7 +109,7 @@ async def test_timeout_through_subscription_helpers(registration: str, filtered:
     elif registration == "decorator":
         sub_id = target.subscribe(interrupt=interrupt, timeout=0.02)(handler.handle)
     else:
-        with target.sub_scope(handler.handle, interrupt=interrupt, timeout=0.02), pytest.raises(asyncio.TimeoutError):
+        with target.sub_scope(handler.handle, interrupt=interrupt, timeout=0.02), pytest.raises(TimeoutError):
             await ctx.send(ModelMessage("blocked"))
         stream.subscribe(recorder.handle, sync_to_thread=False)
         await ctx.send(ModelMessage("after scope"))
@@ -118,7 +118,7 @@ async def test_timeout_through_subscription_helpers(registration: str, filtered:
         return
 
     stream.subscribe(recorder.handle, sync_to_thread=False)
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         await ctx.send(ModelMessage("blocked"))
     assert recorder.events == []
     assert handler.started.is_set()
@@ -138,7 +138,7 @@ async def test_timeout_covers_dependencies_and_cleanup(phase: str) -> None:
     ctx = Context(stream, dependencies={"phase": phase, "handler": handler, "cleaned_up": cleaned_up})
     stream.subscribe(_use_resource, timeout=0.02)
 
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         await ctx.send(ModelMessage("blocked"))
 
     assert handler.started.is_set()
@@ -155,7 +155,7 @@ async def test_each_invocation_gets_its_own_timeout() -> None:
 
     for _ in range(2):
         handler.settled.clear()
-        with pytest.raises(asyncio.TimeoutError):
+        with pytest.raises(TimeoutError):
             await ctx.send(ModelMessage("blocked"))
         assert handler.settled.is_set()
 
@@ -198,12 +198,12 @@ async def test_sync_timeout_leaves_thread_running_until_released() -> None:
     task = asyncio.create_task(Context(stream).send(ModelMessage("blocked")))
     try:
         assert await asyncio.to_thread(handler.started.wait, 5)
-        with pytest.raises(asyncio.TimeoutError):
+        with pytest.raises(TimeoutError):
             await task
         assert not handler.settled.is_set()
     finally:
         handler.release.set()
-        with suppress(asyncio.TimeoutError):
+        with suppress(TimeoutError):
             await task
         assert await asyncio.to_thread(handler.settled.wait, 5)
 

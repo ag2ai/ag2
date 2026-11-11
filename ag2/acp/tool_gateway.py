@@ -430,7 +430,7 @@ class ToolGateway:
             # requests; the margin only guards against the server wedging entirely.
             with _quiet_uvicorn_shutdown():
                 await asyncio.wait_for(task, timeout=self._close_timeout + 1.0)
-        except (TimeoutError, asyncio.TimeoutError):  # separate classes on Python 3.10
+        except TimeoutError:
             logger.warning("MCP tool gateway did not shut down within %.1fs; cancelled", self._close_timeout)
         except asyncio.CancelledError:
             raise  # the caller was cancelled — propagate, wait_for already cancelled the task

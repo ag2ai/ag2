@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import locale
+import sys
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -12,6 +14,21 @@ from ag2.tools.sandbox.local import LocalSandbox
 
 @pytest.mark.asyncio
 class TestLocalSandboxExec:
+    @pytest.mark.parametrize("fd", [1, 2])
+    @pytest.mark.parametrize("exit_code", [0, 7])
+    async def test_undecodable_output_keeps_text_and_exit_code(self, tmp_path: Path, fd: int, exit_code: int) -> None:
+        payload = b"before\x81after\n"
+        async with LocalSandbox(tmp_path) as sandbox:
+            result = await sandbox.exec([
+                sys.executable,
+                "-c",
+                f"import os; os.write({fd}, {payload!r}); raise SystemExit({exit_code})",
+            ])
+
+        assert result == ExecResult(
+            output=payload.decode(locale.getpreferredencoding(False), errors="replace").strip(), exit_code=exit_code
+        )
+
     async def test_argv_form_runs_command(self) -> None:
         sandbox = LocalSandbox()
         result = await sandbox.exec(["python3", "-c", "print('hi')"])

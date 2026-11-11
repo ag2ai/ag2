@@ -11,7 +11,7 @@ send, discovery, task ops) crosses the wire as a ``RequestFrame`` RPC
 and every delivery arrives as a ``NotifyFrame`` — the genuinely
 distributed path the cross-process work added. The agents are backed by
 different providers in the same network (Anthropic ``claude-haiku-4-5``,
-OpenAI ``gpt-5.4-mini``, Gemini ``gemini-3.5-flash``), mirroring the
+OpenAI ``gpt-5.4-mini``, Gemini ``gemini-3.6-flash``), mirroring the
 common real-world setting where one hub coordinates heterogeneous
 agents.
 
@@ -88,7 +88,7 @@ except ImportError:
 
 ANTHROPIC_MODEL = "claude-haiku-4-5"
 OPENAI_MODEL = "gpt-5.4-mini"
-GEMINI_MODEL = "gemini-3.5-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 
 def _require(*names: str) -> dict[str, str]:

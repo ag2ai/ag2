@@ -121,6 +121,7 @@ async def _mcp_session(
             streamable_http_client(
                 config.server_url,  # type: ignore[arg-type]  # Variable already resolved by _resolve_config
                 http_client=client,
+                max_sse_event_size=config.max_sse_event_size,
             ) as (read_stream, write_stream),
             ClientSession(read_stream, write_stream, **session_kwargs) as session,
         ):
@@ -424,14 +425,9 @@ def _unwrap(error: Exception) -> Exception:
     call failed for. A group carrying more than one failure is left alone:
     picking one of several would hide the rest.
     """
-    while True:
-        # Recognised by what it carries rather than by ``BaseExceptionGroup``,
-        # which is a 3.11 builtin: on 3.10 the group is the ``exceptiongroup``
-        # backport's class instead, and the name is not there to test against.
-        members = getattr(error, "exceptions", None)
-        if not isinstance(members, tuple) or len(members) != 1 or not isinstance(members[0], Exception):
-            return error
-        error = members[0]
+    while isinstance(error, ExceptionGroup) and len(error.exceptions) == 1:
+        error = error.exceptions[0]
+    return error
 
 
 def _wrap_middleware(hook: "ToolMiddleware", inner: "ToolExecution") -> "ToolExecution":

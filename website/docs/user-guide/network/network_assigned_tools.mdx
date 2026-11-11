@@ -56,7 +56,7 @@ Each grouped tool takes an `#!python action` literal plus action-specific args, 
 
 ### `tasks(action)` — task lifecycle
 
-Two halves: **active actions** (the agent is inside its own `#!python agent.task(...)` block) and **observation actions** (any task the hub has observed).
+Two halves: **active actions** (the agent is inside its own `#!python Task(...)` block) and **observation actions** (any task the hub has observed).
 
 | Action | Half | Args | Returns |
 |---|---|---|---|
@@ -67,7 +67,7 @@ Two halves: **active actions** (the agent is inside its own `#!python agent.task
 | `#!python "wait"` | observation | `#!python task_id, timeout=300, poll_interval=0.1` | Blocks until the task reaches a terminal state. |
 | `#!python "cancel"` | observation | `#!python task_id, reason?` | Posts an `ag2.task.cancel_request` to the task's owner in the task's channel; the owner decides whether to cancel. An agent outside that channel may send one request per task — a retry returns an error. |
 
-`#!python "start"` is intentionally **not** a tool — calling it from the LLM would bypass the `#!python async with agent.task(...)` lifecycle that scopes `#!python TaskInject` correctly. Owners start tasks in their own code; the LLM uses `#!python "progress"`/`#!python "complete"` once a task is active, and `#!python delegate` for one-shot remote work.
+`#!python "start"` is intentionally **not** a tool — calling it from the LLM would bypass the `#!python async with Task(...)` lifecycle that scopes `#!python TaskInject` correctly. Owners start tasks in their own code; the LLM uses `#!python "progress"`/`#!python "complete"` once a task is active, and `#!python delegate` for one-shot remote work.
 
 ### `context(action)` — past content
 
@@ -109,7 +109,7 @@ If you write a custom adapter, override `#!python tools_for` to offer your chann
 
 ## What gets injected, automatically
 
-Every grouped tool accepts `#!python AgentClientInject`, `#!python ChannelInject`, and (for `#!python tasks`) `#!python TaskInject` parameters that the framework resolves from `#!python context.dependencies` when the tool runs inside a notify handler. Your code does not need to wire them up — the default handler stamps them via `#!python stamp_dependencies` before invoking the agent's turn.
+Every grouped tool accepts `#!python AgentClientInject`, `#!python ChannelInject`, and (for `#!python tasks`) `#!python TaskInject` parameters that the framework resolves from the context when the tool runs inside a notify handler (`#!python TaskInject` resolves to the enclosing `#!python Task(...)` block on the same conversation — see [Tasks](/docs/user-guide/tasks)). Your code does not need to wire them up — the default handler stamps them via `#!python stamp_dependencies` before invoking the agent's turn.
 
 If you are testing a tool *outside* the notify-handler context, pass them yourself:
 

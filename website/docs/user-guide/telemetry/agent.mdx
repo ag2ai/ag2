@@ -25,7 +25,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware.builtin import TelemetryMiddleware
 
 # 1. Configure OpenTelemetry
@@ -38,7 +38,7 @@ trace.set_tracer_provider(tracer_provider)
 agent = Agent(
     "assistant",
     prompt="You are a helpful assistant.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     middleware=[
         TelemetryMiddleware(
             tracer_provider=tracer_provider,
@@ -104,6 +104,7 @@ Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/d
 | `gen_ai.usage.input_tokens` | llm | Prompt token count |
 | `gen_ai.usage.output_tokens` | llm | Completion token count |
 | `gen_ai.usage.cache_creation_input_tokens` | llm | Tokens used to create prompt cache (Anthropic) |
+| `gen_ai.usage.cache_creation_extended_input_tokens` | llm | Part of `cache_creation_input_tokens` written with extended [prompt cache retention](/docs/user-guide/model_configuration#openai-prompt-cache-retention) (OpenAI 12h, Anthropic 1h); absent when the provider reports no per-retention breakdown |
 | `gen_ai.usage.cache_read_input_tokens` | llm | Tokens read from prompt cache (Anthropic, OpenAI, Gemini) |
 | `gen_ai.tool.name` | tool | Tool function name |
 | `gen_ai.tool.call.id` | tool | Tool call ID |
@@ -209,7 +210,7 @@ TelemetryMiddleware(
 
 ```python linenums="1"
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.middleware.builtin import TelemetryMiddleware
 from ag2.tools import tool
 
@@ -221,7 +222,7 @@ def get_weather(city: str) -> str:
 agent = Agent(
     "weather_agent",
     prompt="Use the get_weather tool to answer weather questions.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     tools=[get_weather],
     middleware=[
         TelemetryMiddleware(
@@ -236,4 +237,4 @@ agent = Agent(
 
 Since `#!python TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works — Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, Arize AX, Arize Phoenix, and others. Swap the `#!python ConsoleSpanExporter` from the Quick Start above for an `#!python OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
 
-For Arize users, [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing){.external-link target="_blank"} provides a managed production path for tracing, evaluating, and monitoring AG2 agents, while [Arize Phoenix](https://arize.com/docs/phoenix){.external-link target="_blank"} is the open-source path for local development or self-hosted inspection. The same traces can support follow-on workflows such as [agent evaluation](https://arize.com/guides/ai-agent-handbook/agent-evaluation/){.external-link target="_blank"} and [LLM evaluation](https://arize.com/resources/llm-evaluation/){.external-link target="_blank"}.
+For Arize users, [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing){.external-link target="_blank"} provides a managed production path for tracing, evaluating, and monitoring AG2 agents, while [Arize Phoenix](https://arize.com/docs/phoenix){.external-link target="_blank"} is the open-source path for local development or self-hosted inspection. The same traces can support follow-on workflows such as [agent evaluation](https://arize.com/ai-agents/agent-evaluation/){.external-link target="_blank"} and [LLM evaluation](https://arize.com/resources/llm-evaluation/){.external-link target="_blank"}.

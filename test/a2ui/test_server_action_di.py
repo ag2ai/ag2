@@ -4,7 +4,7 @@
 
 import json
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import httpx
@@ -223,7 +223,7 @@ async def test_handler_result_is_serialized_for_wire() -> None:
     # A handler may return a message whose value is a non-JSON-native object
     # (here a datetime). It must be coerced through the serializer before the
     # wire, mirroring how a tool result is encoded — not crash json.dumps.
-    when = datetime(2026, 6, 23, 12, 0, tzinfo=timezone.utc)
+    when = datetime(2026, 6, 23, 12, 0, tzinfo=UTC)
 
     @a2ui_action
     async def stamp() -> dict:
@@ -269,7 +269,7 @@ async def test_function_response_value_is_serialized() -> None:
         "messages": [],
         "a2ui": [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "callAgentFunction": {
                     "surfaceId": "s1",
                     "functionCallId": "a1",
@@ -285,7 +285,7 @@ async def test_function_response_value_is_serialized() -> None:
     lines = [json.loads(line) for line in resp.text.splitlines() if line]
     assert lines == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {"functionCallId": "a1", "value": {"order_id": "O1", "total": 9.5}},
         }
     ]

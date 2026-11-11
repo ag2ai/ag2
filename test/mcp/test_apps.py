@@ -12,6 +12,9 @@ concerned; what it does in a browser is not reachable from this suite and no
 attempt is made to fake it.
 """
 
+import json
+import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
@@ -24,8 +27,16 @@ from mcp.shared.exceptions import MCPError
 from mcp.types import CallToolResult, DiscoverResult, TextContent, TextResourceContents
 from mcp_types.version import LATEST_MODERN_VERSION
 
-from ag2 import Inject, Variable
-from ag2.mcp import AppSandbox, MCPApp, MCPRequestContext, MCPServer, client_supports_apps, mcp_tool
+from ag2 import Agent, Inject, Variable
+from ag2.mcp import (
+    AppSandbox,
+    MCPApp,
+    MCPFunctionTool,
+    MCPRequestContext,
+    MCPServer,
+    client_supports_apps,
+    mcp_tool,
+)
 from ag2.mcp.apps import TOOL_META_KEY
 from ag2.mcp.errors import (
     MCPAppFrozenError,
@@ -40,6 +51,20 @@ from ag2.mcp.testing import connect, connect_modern
 from ._helpers import make_agent, text_of, tool_named
 
 CARD = "<html><head><title>Card</title></head><body><div id='card'></div></body></html>"
+
+# A document written against the upstream SDK, loading it from a CDN.
+UPSTREAM_CARD = """<html><head><title>Card</title></head><body><div id="card"></div>
+<script type="module">
+  import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";
+  const app = new App({ name: "Product card", version: "1.0.0" });
+  app.ontoolresult = (result) => { document.getElementById("card").textContent = result.structuredContent.name; };
+  await app.connect();
+</script></body></html>"""
+
+# The same document after a bundler inlined the SDK: the package name is gone,
+# the handshake's method name is not.
+BUNDLED_CARD = """<html><head><script>var M={initialize:"ui/initialize"};/* … */</script></head>
+<body><div id="card"></div></body></html>"""
 
 # What an MCP Apps client advertises: the extension, listing the one MIME type a
 # ``ui://`` document is ever served under.
@@ -65,6 +90,21 @@ def _card_app(content: Any = CARD, **kwargs: Any) -> MCPApp:
         return Item(name=item_id, price=10)
 
     return app
+
+
+def _app_info_in(served: str) -> dict[str, str]:
+    """The ``appInfo`` the runtime in ``served`` sends the host in ``ui/initialize``."""
+    match = re.search(r"appInfo: (\{.*?\}),", served)
+    assert match is not None, "no ag2ui runtime in the document"
+    app_info: dict[str, str] = json.loads(match.group(1))
+    return app_info
+
+
+async def _served_card(server: MCPServer) -> str:
+    """The body a client reads at ``ui://shop/card``."""
+    async with connect(server) as session:
+        read = await session.read_resource("ui://shop/card")
+    return _body(read.contents[0])
 
 
 def _body(contents: Any) -> str:
@@ -206,6 +246,35 @@ class TestTheDocument:
         assert _body(first.contents[0]) == "<p>first</p>"
         assert _body(second.contents[0]) == "<p>second</p>"
 
+    async def test_a_pathlike_body_is_read_as_utf8(self, tmp_path: Path) -> None:
+        document = tmp_path / "card.html"
+        document.write_bytes("<p>café – 日本語</p>".encode())
+        server = MCPServer(make_agent(), apps=[_card_app(document, inject_runtime=False)])
+
+        async with connect(server) as session:
+            read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == "<p>café – 日本語</p>"
+
+    async def test_a_pathlike_body_saved_with_a_bom_is_served_without_it(self, tmp_path: Path) -> None:
+        document = tmp_path / "card.html"
+        document.write_bytes("\ufeff<p>café</p>".encode())
+        server = MCPServer(make_agent(), apps=[_card_app(document, inject_runtime=False)])
+
+        async with connect(server) as session:
+            read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == "<p>café</p>"
+
+    async def test_a_non_utf8_pathlike_body_fails_on_read(self, tmp_path: Path) -> None:
+        document = tmp_path / "card.html"
+        document.write_bytes(b"<p>calf\xe9</p>")
+        server = MCPServer(make_agent(), apps=[_card_app(document, inject_runtime=False)])
+
+        async with connect(server, raise_exceptions=False) as session:
+            with pytest.raises(MCPError, match="Could not read MCP app document .*: not valid UTF-8"):
+                await session.read_resource("ui://shop/card")
+
     async def test_a_missing_pathlike_body_fails_on_read(self, tmp_path: Path) -> None:
         server = MCPServer(make_agent(), apps=[_card_app(tmp_path / "missing.html")])
 
@@ -345,6 +414,25 @@ class TestTheDocument:
         with pytest.raises(MCPDuplicateAppURIError, match="ui://shop/card"):
             MCPServer(make_agent(), apps=[_card_app(), _card_app()])
 
+    async def test_a_path_like_string_body_warns_to_use_a_path(self, caplog: pytest.LogCaptureFixture) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app("card.html")])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            async with connect(server) as session:
+                await session.read_resource("ui://shop/card")
+
+        [record] = [r for r in caplog.records if r.name == "ag2.mcp.apps"]
+        assert "Path('card.html')" in record.getMessage()
+
+    async def test_a_markup_body_never_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app("<a href='x.html'>x.html</a>")])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            async with connect(server) as session:
+                await session.read_resource("ui://shop/card")
+
+        assert [r for r in caplog.records if r.name == "ag2.mcp.apps"] == []
+
 
 @pytest.mark.asyncio
 class TestTheRuntime:
@@ -435,6 +523,295 @@ class TestTheRuntime:
         app = MCPApp("ui://x/y", "<p>hi</p>", name="</script><script>alert(1)</script>")
 
         assert "</script><script>" not in app.runtime_script()
+
+    async def test_a_document_that_places_it_itself_does_not_get_it_twice(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        placed = "<html><head>" + MCPApp("ui://shop/card", CARD).runtime_script() + "</head><body></body></html>"
+        server = MCPServer(make_agent(), apps=[_card_app(placed)])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            async with connect(server) as session:
+                read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == placed
+        assert caplog.text == ""
+
+
+@pytest.mark.asyncio
+class TestTheNameItIntroducesItselfBy:
+    async def test_it_is_the_uri_path_displayed_as_the_documents_title(self) -> None:
+        app = MCPApp("ui://shop/card", "<div id='card'></div>", title="Product card")
+        server = MCPServer(make_agent(), apps=[app])
+
+        served = await _served_card(server)
+
+        assert _app_info_in(served) == {"name": "shop/card", "version": "1", "title": "Product card"}
+
+    async def test_it_is_a_request_scoped_title_resolved_per_read(self) -> None:
+        async def provider(access: object) -> AskContext:
+            return AskContext(variables={"tenant": "North shop"})
+
+        app = MCPApp("ui://shop/card", "<div id='card'></div>", title=Variable("tenant"))
+        server = MCPServer(make_agent(), apps=[app], context_provider=provider)
+
+        served = await _served_card(server)
+
+        assert _app_info_in(served) == {"name": "shop/card", "version": "1", "title": "North shop"}
+
+    async def test_an_explicit_name_is_kept_even_when_it_is_the_uri(self) -> None:
+        app = MCPApp("ui://shop/card", CARD, name="ui://shop/card")
+
+        assert _app_info_in(app.runtime_script()) == {"name": "ui://shop/card", "version": "1"}
+
+    async def test_an_explicit_name_is_kept_beside_the_title(self) -> None:
+        app = MCPApp("ui://shop/card", CARD, name="card", title="Product card")
+
+        assert _app_info_in(app.runtime_script()) == {"name": "card", "version": "1", "title": "Product card"}
+
+    async def test_without_a_title_it_is_the_name_alone(self) -> None:
+        app = MCPApp("ui://shop/card", CARD, name="card")
+
+        assert _app_info_in(app.runtime_script()) == {"name": "card", "version": "1"}
+
+    async def test_without_either_it_is_the_uri_path(self) -> None:
+        assert _app_info_in(MCPApp("ui://shop/card", CARD).runtime_script()) == {"name": "shop/card", "version": "1"}
+
+    async def test_an_empty_title_is_left_out(self) -> None:
+        app = MCPApp("ui://shop/card", CARD, title="")
+
+        assert _app_info_in(app.runtime_script()) == {"name": "shop/card", "version": "1"}
+
+    async def test_a_request_scoped_title_outside_a_request_is_left_out(self) -> None:
+        app = MCPApp("ui://shop/card", CARD, title=Variable("tenant"))
+
+        assert _app_info_in(app.runtime_script()) == {"name": "shop/card", "version": "1"}
+
+
+@pytest.mark.asyncio
+class TestUpstreamAppSdk:
+    async def test_a_document_importing_it_is_served_as_written(self, caplog: pytest.LogCaptureFixture) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(UPSTREAM_CARD)])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            async with connect(server) as session:
+                read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == UPSTREAM_CARD
+        assert caplog.text == ""
+
+    async def test_a_bundle_carrying_its_own_handshake_is_served_as_written(self) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(BUNDLED_CARD)])
+
+        async with connect(server) as session:
+            read = await session.read_resource("ui://shop/card")
+
+        assert _body(read.contents[0]) == BUNDLED_CARD
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            pytest.param(
+                '<script src="https://cdn.example.com/npm/@modelcontextprotocol/ext-apps@2/dist/app.js"></script>',
+                id="script-src",
+            ),
+            pytest.param(
+                "<script type='module'>import { App } from 'https://esm.sh/@modelcontextprotocol/ext-apps@2';</script>",
+                id="single-quoted-import",
+            ),
+            pytest.param(
+                '<script type="module">import{App}from"https://esm.sh/@modelcontextprotocol/ext-apps@2";</script>',
+                id="minified-import",
+            ),
+            pytest.param(
+                '<script type="module">const { App } = await import("https://esm.sh/@modelcontextprotocol/ext-apps@2");</script>',
+                id="dynamic-import",
+            ),
+            pytest.param("<script>var M={initialize:'ui/initialize'};</script>", id="single-quoted-method"),
+            pytest.param(
+                "<script type='module'>const { App } = await import(`https://esm.sh/@modelcontextprotocol/ext-apps@2`);</script>",
+                id="template-literal-import",
+            ),
+            pytest.param(
+                '<script type="text/javascript">var M={initialize:"ui/initialize"};</script>', id="javascript-type"
+            ),
+            pytest.param(
+                '<script>var html = "<!-- not a comment -->";</script><script>var M={initialize:"ui/initialize"};</script>',
+                id="comment-marker-inside-script",
+            ),
+            pytest.param(
+                "<template><template></template></template><script>var M={initialize:'ui/initialize'};</script>",
+                id="after-nested-templates",
+            ),
+            pytest.param(
+                "<script>var slash = /[/]/g; var M={initialize:'ui/initialize'};</script>", id="after-a-regex-literal"
+            ),
+            pytest.param("<div id='card'></div><script>var M={initialize:'ui/initialize'};", id="unclosed-script"),
+            pytest.param(
+                '<script type="module">/* see /docs */ '
+                'import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";</script>',
+                id="after-a-comment-with-a-slash",
+            ),
+            pytest.param(
+                "<script>if (ready) /'/.test(name); var M={initialize:'ui/initialize'};</script>",
+                id="after-a-regex-literal-following-a-condition",
+            ),
+            pytest.param(
+                "<script>const label = `${open ? `x` : \"`\"}`; var M={initialize:'ui/initialize'};</script>",
+                id="after-a-nested-template-literal",
+            ),
+            pytest.param(
+                '<script type="module">const { App } = '
+                "await import(`https://esm.sh/@modelcontextprotocol/ext-apps@${version}`);</script>",
+                id="template-literal-import-with-a-substitution",
+            ),
+        ],
+    )
+    async def test_every_way_of_loading_it_is_served_as_written(self, body: str) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        assert await _served_card(server) == body
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            pytest.param(
+                "<p>Unlike @modelcontextprotocol/ext-apps, this card performs the ui/initialize handshake through ag2ui.</p>",
+                id="unquoted",
+            ),
+            pytest.param('<p>Install from "@modelcontextprotocol/ext-apps".</p>', id="quoted-package"),
+            pytest.param(
+                '<p>Load it with src="https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps".</p>',
+                id="quoted-src",
+            ),
+            pytest.param('<p>The view sends <code>"ui/initialize"</code> first.</p>', id="quoted-method"),
+            pytest.param(
+                '<img data-src="https://cdn.example.com/@modelcontextprotocol/ext-apps/logo.png">', id="other-src"
+            ),
+            pytest.param('<script type="application/json">{"method": "ui/initialize"}</script>', id="data-script"),
+            pytest.param(
+                '<!-- <script src="https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps"></script> -->',
+                id="commented-out-script",
+            ),
+            pytest.param(
+                "<template><script>var M={initialize:'ui/initialize'};</script></template>", id="template-script"
+            ),
+            pytest.param(
+                "<noscript><script>var M={initialize:'ui/initialize'};</script></noscript>", id="noscript-script"
+            ),
+            pytest.param(
+                "<template><template></template><script>var M={initialize:'ui/initialize'};</script></template>",
+                id="script-between-nested-templates",
+            ),
+            pytest.param(
+                '<script type="module">\n'
+                '// import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";\n'
+                "</script>",
+                id="line-comment",
+            ),
+            pytest.param('<script>/* var M={initialize:"ui/initialize"}; */</script>', id="block-comment"),
+            pytest.param(
+                "<script>console.log(\"import { App } from '@modelcontextprotocol/ext-apps'\");</script>",
+                id="import-inside-a-string",
+            ),
+            pytest.param("<style>/* <script>'ui/initialize'</script> */</style>", id="inside-style"),
+            pytest.param("<title><script>'ui/initialize'</script></title>", id="inside-title"),
+            pytest.param("<textarea><script>'ui/initialize'</script></textarea>", id="inside-textarea"),
+            pytest.param("<div title=\"<script>'ui/initialize'</script>\"></div>", id="inside-an-attribute"),
+            pytest.param('<script language="vbscript">method = "ui/initialize"</script>', id="other-language"),
+            pytest.param(
+                '<script nomodule src="https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps"></script>',
+                id="nomodule-script",
+            ),
+        ],
+    )
+    async def test_a_document_only_mentioning_it_still_gets_ag2ui(self, body: str) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        served = await _served_card(server)
+
+        assert served.endswith(body)
+        assert "window.ag2ui" in served
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            pytest.param(
+                '<script type="module">\n'
+                '// import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2/app-with-deps";\n'
+                "ag2ui.onToolResult(console.log);\n"
+                "</script>",
+                id="commented-out-import",
+            ),
+            pytest.param(
+                "<template><template></template><script>var M={initialize:'ui/initialize'};</script></template>"
+                "<script>ag2ui.onToolResult(console.log);</script>",
+                id="script-between-nested-templates",
+            ),
+        ],
+    )
+    async def test_a_document_calling_ag2ui_gets_it_without_a_warning(
+        self, body: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            served = await _served_card(server)
+
+        assert "window.ag2ui" in served
+        assert caplog.text == ""
+
+    @pytest.mark.parametrize(
+        "use",
+        [
+            pytest.param("await ag2ui.ready;", id="bare"),
+            pytest.param("await window.ag2ui.ready;", id="through-window"),
+            pytest.param("await globalThis.ag2ui.ready;", id="through-globalThis"),
+            pytest.param('await window["ag2ui"].ready;', id="through-a-bracket"),
+            pytest.param("ag2ui?.onToolResult(console.log);", id="optional-chaining"),
+            pytest.param("const { ready } = ag2ui;", id="destructured"),
+        ],
+    )
+    async def test_a_document_mixing_both_gets_ag2ui_and_a_warning(
+        self, use: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        body = UPSTREAM_CARD.replace("await app.connect();", f"await app.connect(); {use}")
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            served = await _served_card(server)
+
+        assert "window.ag2ui" in served
+        assert "ui://shop/card" in caplog.text
+        assert "two handshakes" in caplog.text
+
+    async def test_an_event_handler_calling_ag2ui_gets_it_and_a_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        body = UPSTREAM_CARD.replace(
+            '<div id="card"></div>',
+            '<div id="card"></div><button onclick="ag2ui.callTool(\'add_to_cart\')">Add</button>',
+        )
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.apps"):
+            served = await _served_card(server)
+
+        assert "window.ag2ui" in served
+        assert "two handshakes" in caplog.text
+
+    async def test_a_body_from_a_provider_is_checked_on_every_read(self) -> None:
+        bodies = iter([CARD, UPSTREAM_CARD])
+
+        def body() -> str:
+            return next(bodies)
+
+        server = MCPServer(make_agent(), apps=[_card_app(body)])
+
+        async with connect(server) as session:
+            first = _body((await session.read_resource("ui://shop/card")).contents[0])
+            second = _body((await session.read_resource("ui://shop/card")).contents[0])
+
+        assert "window.ag2ui" in first
+        assert second == UPSTREAM_CARD
 
 
 @pytest.mark.asyncio
@@ -562,6 +939,31 @@ class TestDegradation:
             discovered = DiscoverResult.model_validate(await session.send_discover(LATEST_MODERN_VERSION))
 
         assert discovered.capabilities.extensions is None
+
+    async def test_withholding_the_binding_is_logged_once_per_connection(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app()])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.server"):
+            async with connect(server) as first:
+                await first.list_tools()
+                await first.list_tools()
+            async with connect(server) as second:
+                await second.list_tools()
+
+        withheld = [r.getMessage() for r in caplog.records if r.name == "ag2.mcp.server"]
+        assert len(withheld) == 2
+        assert all("'show_item'" in message and EXTENSION_ID in message for message in withheld)
+
+    async def test_a_client_that_advertised_is_not_warned(self, caplog: pytest.LogCaptureFixture) -> None:
+        server = MCPServer(make_agent(), apps=[_card_app()])
+
+        with caplog.at_level(logging.WARNING, logger="ag2.mcp.server"):
+            async with connect(server, extensions=_UI_AD) as session:
+                await session.list_tools()
+
+        assert [r for r in caplog.records if r.name == "ag2.mcp.server"] == []
 
 
 @pytest.mark.asyncio
@@ -809,3 +1211,41 @@ async def test_an_ordinary_tool_alongside_an_app_keeps_its_shape() -> None:
     assert advertised.output_schema is None
     assert text_of(result) == "hi"
     assert result.meta is None
+
+
+@pytest.mark.asyncio
+class TestAnAppToolOutsideTheServer:
+    """An app tool is still the function it wraps, and is not an agent tool."""
+
+    async def test_it_is_callable_like_the_function_it_wraps(self) -> None:
+        app = MCPApp("ui://counter", CARD)
+
+        @app.tool
+        async def increment(count: int, by: int = 1) -> dict[str, int]:
+            """Add to the counter."""
+            return {"count": count + by}
+
+        assert await increment(1, by=2) == {"count": 3}
+
+    async def test_a_sync_mcp_tool_is_callable_like_its_function(self) -> None:
+        @mcp_tool
+        def double(x: int) -> int:
+            """Double x."""
+            return x * 2
+
+        assert double(4) == 8
+
+    async def test_a_tool_built_from_a_handler_explains_how_to_call_it(self) -> None:
+        async def echo(arguments: dict[str, Any], ctx: Any) -> str:
+            return str(arguments)
+
+        built = MCPFunctionTool("echo", "Echo.", echo)
+
+        with pytest.raises(TypeError, match=r"\.call\("):
+            built()
+
+    async def test_giving_it_to_an_agent_names_the_fix(self) -> None:
+        [show_item] = _card_app().tools
+
+        with pytest.raises(TypeError, match=r"MCPServer\(tools=\.\.\.\).*@tool"):
+            Agent("shop", tools=[show_item])

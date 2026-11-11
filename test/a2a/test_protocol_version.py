@@ -6,6 +6,7 @@
 selected interface advertises an A2A protocol version < 1.0, while still
 accepting interfaces that omit the optional ``protocol_version`` field."""
 
+import httpx
 import pytest
 from a2a.client.client_factory import TransportProtocol
 from a2a.types import AgentCard, AgentInterface
@@ -55,6 +56,18 @@ def _client(card: AgentCard, *, card_url: str = URL, prefer: TransportName | Non
             httpx_client_factory=make_test_client_factory(server, url=URL),
         ),
     )
+
+
+class _RecordingTransport(httpx.AsyncBaseTransport):
+    """In-process transport to ``server`` that records the host of every request."""
+
+    def __init__(self, server: A2AServer) -> None:
+        self._inner = httpx.ASGITransport(app=server.build_jsonrpc(url=URL))
+        self.hosts: list[str] = []
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.hosts.append(request.url.host)
+        return await self._inner.handle_async_request(request)
 
 
 @pytest.mark.asyncio
@@ -111,6 +124,28 @@ class TestInterfaceSelection:
         reply = await _client(card).ask("ping")
 
         assert reply.body == REPLY
+
+    async def test_requests_go_to_the_interface_that_was_checked(self) -> None:
+        # Two current interfaces with the same binding: the one the URL selected (and the gates
+        # checked) is the one the requests go to, not the SDK's own first pick for that binding.
+        card = _card(
+            _iface(url="http://other", version=PROTOCOL_VERSION_CURRENT),
+            _iface(url=URL, version=PROTOCOL_VERSION_CURRENT),
+        )
+        transport = _RecordingTransport(A2AServer(Agent("server", config=TestConfig(REPLY))))
+        client = Agent(
+            "client",
+            config=A2AConfig(
+                card_url=URL,
+                preset_card=card,
+                httpx_client_factory=lambda: httpx.AsyncClient(transport=transport, base_url=URL),
+            ),
+        )
+
+        reply = await client.ask("ping")
+
+        assert reply.body == REPLY
+        assert set(transport.hosts) == {"test"}
 
     async def test_connecting_to_the_legacy_interface_is_refused(self) -> None:
         card = _card(

@@ -113,7 +113,7 @@ class RedisStream(MemoryStream):
                 if subscribed:
                     await pubsub.unsubscribe(self._channel)
             finally:
-                await pubsub.aclose()
+                await pubsub.aclose()  # type: ignore[no-untyped-call]  # unannotated in redis-py
 
     @staticmethod
     def _split_origin(raw: bytes) -> tuple[str | None, bytes]:

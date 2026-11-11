@@ -103,6 +103,7 @@ async def test_subagent_always_does_not_approve_the_parents_call() -> None:
 
 
 @pytest.mark.asyncio()
+@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
 async def test_sibling_always_does_not_approve_the_next_siblings_call() -> None:
     tools, executed = _gated_tools()
     human, asked = _human({"read_logs": "always", "purge_cache": "always"})

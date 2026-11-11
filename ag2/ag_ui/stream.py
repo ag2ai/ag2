@@ -9,7 +9,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, assert_never
 from uuid import uuid4
 
 from ag_ui.core import (
@@ -56,13 +56,12 @@ from ag_ui.core import (
 from ag_ui.encoder import EventEncoder
 from fast_depends.library.serializer import SerializerProto
 from pydantic_core import PydanticSerializationError, to_jsonable_python
-from typing_extensions import assert_never
 
 from ag2 import Agent, Context, MemoryStream, ToolResult, events
 from ag2.config import ModelConfig, ModelProvider
 from ag2.config.input_acceptance import accepts_input
 from ag2.context import strip_reserved_variables
-from ag2.events import BinaryInput, BinaryType, DataInput, FileIdInput, TextInput, UrlInput, UsageEvent
+from ag2.events import BinaryInput, BinaryType, ChildEvent, DataInput, FileIdInput, TextInput, UrlInput, UsageEvent
 from ag2.hitl import HumanHook
 from ag2.middleware.base import AgentTurn, BaseMiddleware, Middleware, MiddlewareFactory
 from ag2.observers import Observer
@@ -299,6 +298,8 @@ async def _serve_turn(
 
     streaming_msg_id: str | None = None
     reasoning_msg_id: str | None = None
+    # Whether the model call in progress has published its reply as a ModelMessage.
+    message_sent = False
     # A signature belongs to its call and may only follow the call's start: a
     # consumer may drop a value whose entity it has not seen. A client tool's
     # call is announced later, from its own event.
@@ -306,7 +307,10 @@ async def _serve_turn(
 
     @stream.subscribe
     async def map_events_to_ag_ui(event: events.BaseEvent) -> None:
-        nonlocal streaming_msg_id, reasoning_msg_id
+        nonlocal streaming_msg_id, reasoning_msg_id, message_sent
+
+        if isinstance(event, ChildEvent):
+            return
 
         if reasoning_msg_id is not None and not isinstance(event, events.ModelReasoning):
             await output.send(
@@ -374,23 +378,23 @@ async def _serve_turn(
             )
 
         elif isinstance(event, events.ModelMessage):
-            if streaming_msg_id:
-                await output.send(
-                    TextMessageEndEvent(
-                        message_id=streaming_msg_id,
-                        timestamp=timestamp_ms(),
-                    )
-                )
-                streaming_msg_id = None
+            # A provider publishes its reply as a ModelMessage, which also closes the
+            # chunks it streamed.
+            message_sent = True
+            await _finish_text(output, streaming_msg_id, event.content)
+            streaming_msg_id = None
 
-            elif event.content:
-                await output.send(
-                    TextMessageChunkEvent(
-                        message_id=str(uuid4()),
-                        delta=event.content,
-                        timestamp=timestamp_ms(),
-                    )
-                )
+        elif isinstance(event, events.ModelResponse):
+            # Ends every model call. A final tool result, a middleware answering in
+            # the model's place, or a client that only streams chunks publishes no
+            # ModelMessage, so the reply goes out from here instead. Relies on each
+            # ModelMessage being followed by its call's ModelResponse: the flag is
+            # per model call, not per run.
+            if message_sent:
+                message_sent = False
+                return
+            await _finish_text(output, streaming_msg_id, event.content)
+            streaming_msg_id = None
 
         elif isinstance(event, events.ClientToolCallEvent):
             await output.send(
@@ -486,8 +490,20 @@ async def _serve_turn(
             stream=stream,
         )
 
-    if shares_state and (closing := _encode_context(result.context.variables)) != held_by_client:
+    if shares_state and (closing := _encode_context(dict(result.context.variables))) != held_by_client:
         await output.send(StateSnapshotEvent(snapshot=closing, timestamp=timestamp_ms()))
+
+
+async def _finish_text(output: "TurnOutput", streaming_msg_id: str | None, content: str | None) -> None:
+    """End a model call's text: close the message its chunks opened, or send its text whole.
+
+    Streamed chunks already carried the text, so only the end frame goes out; the
+    caller resets ``streaming_msg_id`` so the next call's chunks open a new message.
+    """
+    if streaming_msg_id:
+        await output.send(TextMessageEndEvent(message_id=streaming_msg_id, timestamp=timestamp_ms()))
+    elif content:
+        await output.send(TextMessageChunkEvent(message_id=str(uuid4()), delta=content, timestamp=timestamp_ms()))
 
 
 async def _send_signature(output: "TurnOutput", signatures: dict[str, str], call_id: str) -> None:

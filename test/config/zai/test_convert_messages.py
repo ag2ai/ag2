@@ -9,6 +9,7 @@ from ag2 import ToolResult
 from ag2.compact import CompactionSummary
 from ag2.config.zai.mappers import convert_messages
 from ag2.events import (
+    BaseEvent,
     DataInput,
     ImageInput,
     ModelMessage,
@@ -98,6 +99,35 @@ def test_loose_tool_result() -> None:
     )
 
     assert result == [{"role": "tool", "tool_call_id": "tc_1", "content": "ok"}]
+
+
+def test_wrapped_tool_result_replaces_its_loose_copy() -> None:
+    """A finished turn records each result loose and again inside its wrapper."""
+    result = ToolResultEvent(parent_id="tc_1", name="list_items", result=ToolResult("ok"))
+
+    assert convert_messages([], [result, ToolResultsEvent([result])], SerializerCls) == [
+        {"role": "tool", "tool_call_id": "tc_1", "content": "ok"},
+    ]
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_messages([], iter(final_turn_history), SerializerCls) == [
+        {"role": "user", "content": "first turn"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {"id": "final-call", "type": "function", "function": {"name": "finish", "arguments": "{}"}},
+                {"id": "lookup-call", "type": "function", "function": {"name": "lookup", "arguments": "{}"}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "final-call", "content": "sent"},
+        {"role": "tool", "tool_call_id": "lookup-call", "content": "lookup result"},
+        {"role": "assistant", "content": "sent"},
+        {"role": "user", "content": "second turn"},
+        {"role": "assistant", "content": "second reply"},
+    ]
 
 
 def test_compaction_summary() -> None:

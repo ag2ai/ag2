@@ -4,10 +4,9 @@
 
 import json
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Self
 
 import pytest
-from typing_extensions import Self
 
 from ag2 import Agent, Context, MemoryStream, tool
 from ag2.compact import CompactionSummary, SummarizeCompact, TailWindowCompact

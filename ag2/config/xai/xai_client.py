@@ -4,15 +4,14 @@
 
 from collections.abc import Iterable, Sequence
 from itertools import chain
-from typing import Any, TypedDict
+from typing import Any, Required, TypedDict
 
 from fast_depends.library.serializer import SerializerProto
-from typing_extensions import Required
 from xai_sdk import AsyncClient
 from xai_sdk.aio.chat import Chat as XAIChat
 from xai_sdk.chat import Response as XAIResponse
 from xai_sdk.proto import chat_pb2, sample_pb2
-from xai_sdk.types.chat import IncludeOption, ReasoningEffort, ToolMode
+from xai_sdk.types.chat import Guideline, IncludeOption, ReasoningEffort, ToolMode
 
 from ag2.config.client import LLMClient
 from ag2.context import ConversationContext
@@ -39,7 +38,7 @@ from .mappers import (
     tool_to_api,
 )
 
-__all__ = ["CreateOptions", "IncludeOption", "ReasoningEffort", "ToolMode", "XAIClient"]
+__all__ = ["CreateOptions", "Guideline", "IncludeOption", "ReasoningEffort", "ToolMode", "XAIClient"]
 
 
 class CreateOptions(TypedDict, total=False):
@@ -53,6 +52,8 @@ class CreateOptions(TypedDict, total=False):
     seed: int | None
     stop: Sequence[str] | None
     user: str | None
+    safety_identifier: str | None
+    guidelines: Sequence[Guideline] | None
     logprobs: bool | None
     top_logprobs: int | None
     tool_choice: ToolMode | None
@@ -94,7 +95,7 @@ class XAIClient(LLMClient):
         context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:

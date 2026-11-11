@@ -18,11 +18,11 @@ from dirty_equals import IsPartialDict
 from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer
 from ag2.a2a.tasks import get_task, list_tasks
-from ag2.a2a.testing import make_test_client_factory, make_test_rest_client_factory
+from ag2.a2a.testing import ToolRoundsConfig, make_test_client_factory, make_test_rest_client_factory
 from ag2.events import ToolCallEvent, ToolResultEvent, ToolResultsEvent
 from ag2.testing import TestConfig, TrackingConfig
 
-from ._helpers import GatedExecutor, StatelessScript, Switchboard
+from ._helpers import GatedExecutor, Switchboard
 from ._http_server import serve_over_http
 
 pytest.importorskip("aiosqlite")
@@ -124,7 +124,7 @@ async def test_the_unclustered_configurations_still_construct(tmp_path: Path) ->
 @pytest.mark.asyncio
 async def test_a_task_waiting_on_the_client_resumes_on_another_replica(tmp_path: Path) -> None:
     tool_call = ToolCallEvent(name="get_weather", arguments='{"city": "Paris"}')
-    tracking = [TrackingConfig(StatelessScript(tool_call, after_tool="Weather report ready")) for _ in range(2)]
+    tracking = [TrackingConfig(ToolRoundsConfig(tool_call, "Weather report ready")) for _ in range(2)]
 
     async with (
         _replica(tmp_path, Agent("server", config=tracking[0])) as first,

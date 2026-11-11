@@ -54,7 +54,7 @@ async def _wait_text_count(hub: Hub, channel_id: str, expected: int, *, timeout:
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return wal
         await asyncio.sleep(0.1)
-    raise asyncio.TimeoutError(f"channel {channel_id!r} did not reach {expected} EV_TEXT envelopes")
+    raise TimeoutError(f"channel {channel_id!r} did not reach {expected} EV_TEXT envelopes")
 
 
 @pytest.mark.anthropic

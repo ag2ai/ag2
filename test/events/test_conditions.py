@@ -81,6 +81,11 @@ class TestEventConditions:
         assert not condition(TestEvent(field=-5))
         assert not condition(TestEvent(field=15))
 
+    def test_and_short_circuits(self):
+        condition = (TestEvent.field < 0) & (TestEvent.field > "invalid")
+
+        assert not condition(TestEvent(field=5))
+
     def test_or_condition(self):
         condition = (TestEvent.field < 0) | (TestEvent.field > 10)
 
@@ -89,6 +94,11 @@ class TestEventConditions:
         assert not condition(TestEvent(field=0))
         assert not condition(TestEvent(field=5))
         assert not condition(TestEvent(field=10))
+
+    def test_or_short_circuits(self):
+        condition = (TestEvent.field > 0) | (TestEvent.field < "invalid")
+
+        assert condition(TestEvent(field=5))
 
     def test_or_condition_with_class(self):
         condition = (TestEvent.field > 10) | AnotherEvent | (TestEvent.field < 0)
