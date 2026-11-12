@@ -183,7 +183,7 @@ The hub guarantees each envelope is delivered at least once across reconnects:
 hub_client = HubClient(WsLink(url))
 await hub_client.open()
 bob = await hub_client.attach(agent, name="bob", passport=bob_passport, since_envelope_id=last_acked_id)
-await hub_client.resume_pending_turns(bob)
+await bob.resume_pending_turns()
 ```
 
 `#!python attach` re-binds an existing identity to a fresh connection. Pass the identity's own passport (with its `#!python AuthBlock` credential): the hub never returns another agent's — or your own — auth claim, so it cannot be recovered from `#!python get_agent`. Keep the passport you registered with: the `#!python AgentClient.passport` a remote `#!python register` returns has no claim and cannot re-attach a credentialed identity. `#!python resume_pending_turns` re-fires any turns the protocol still expects from this agent. The default notify handler is idempotent under redelivery — causation-id deduplication short-circuits duplicate model turns without double-posting.
@@ -194,17 +194,33 @@ Tasks can be checkpointed through the hub so state survives a process restart:
 
 ```python linenums="1"
 from ag2.network import HubBackedCheckpointStore
+from ag2.task import Task, TaskSpec
 
 checkpoint_store = HubBackedCheckpointStore(hub_client)
 
-# inside a tool or agent turn:
-await task.checkpoint({"step": 3, "partial_result": "..."})
+# Inside the owner's initial task:
+async with Task(
+    owner_id=bob.agent_id,
+    spec=TaskSpec(title="Process a batch"),
+    checkpoint_store=checkpoint_store,
+) as task:
+    task_id = task.task_id
+    await task.checkpoint({"step": 3, "partial_result": "..."})
 
-# on another node, after a restart:
-recovered = await agent.resume_from(task_id, checkpoint_store)
+# On another node, after reconnecting and attaching bob:
+checkpoint_store = HubBackedCheckpointStore(hub_client)
+async with Task(
+    owner_id=bob.agent_id,
+    spec=TaskSpec(title="Continue a batch"),
+    checkpoint_store=checkpoint_store,
+    resume_from=task_id,
+) as recovered:
+    state = recovered.resumed_state
 ```
 
 `#!python HubBackedCheckpointStore` satisfies the `#!python CheckpointStore` Protocol by delegating writes and reads to the hub's `#!python KnowledgeStore`. Pass a `#!python Hub` for in-process durability or a `#!python HubClient` for cross-process. For checkpoints that survive a hub restart, use `#!python DiskKnowledgeStore(path)` on the hub.
+
+Keep the original `#!python task_id` so the restarted owner can pass it as `#!python resume_from`. The new task exposes the saved mapping through `#!python resumed_state` (`#!python None` if no checkpoint exists). The owner uses that state to choose the next step of its work.
 
 ## Production Notes
 
