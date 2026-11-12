@@ -370,16 +370,24 @@ def convert_messages(
 
 
 def normalize_usage(raw: dict[str, Any]) -> Usage:
-    """Normalize Converse usage keys to standard format."""
-    prompt = float(raw.get("inputTokens", 0))
-    completion = float(raw.get("outputTokens", 0))
-    total = raw.get("totalTokens")
+    """Normalize Converse usage keys to standard format.
+
+    With prompt caching, Converse's ``inputTokens`` counts only the uncached input;
+    its prompt-caching guide has the whole input be ``inputTokens`` plus
+    ``cacheReadInputTokens`` and ``cacheWriteInputTokens``. ``Usage`` counts the
+    whole input in ``prompt_tokens`` (ADR 0036), so the cache counts are added here.
+    A reported ``totalTokens`` below the whole input plus output is not believed.
+    """
     cache_read = raw.get("cacheReadInputTokens")
     cache_write = raw.get("cacheWriteInputTokens")
+    prompt = float(raw.get("inputTokens", 0)) + float(cache_read or 0) + float(cache_write or 0)
+    completion = float(raw.get("outputTokens", 0))
+    total = raw.get("totalTokens")
     return Usage(
         prompt_tokens=prompt,
         completion_tokens=completion,
-        total_tokens=float(total) if total is not None else prompt + completion,
-        cache_read_input_tokens=float(cache_read) if cache_read else None,
-        cache_creation_input_tokens=float(cache_write) if cache_write else None,
+        total_tokens=max(float(total), prompt + completion) if total is not None else prompt + completion,
+        # Presence decides, not truthiness: a reported 0 is a measured cache miss.
+        cache_read_input_tokens=None if cache_read is None else float(cache_read),
+        cache_creation_input_tokens=None if cache_write is None else float(cache_write),
     )

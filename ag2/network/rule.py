@@ -9,7 +9,10 @@ changes can talk to anyone, accept any channel type, and has no rate
 limit. Apps tighten by passing a non-default ``Rule`` to
 ``hub_client.register(...)``.
 
-Both blocks are enforced at the **hub**, never the client.
+Both blocks are enforced at the **hub**, never the client. Not every
+field is enforced yet: ``AccessBlock.channel_types`` and
+``LimitsBlock.rate`` are stored on the rule but ignored by the
+in-process hub.
 """
 
 from dataclasses import asdict, dataclass, field
