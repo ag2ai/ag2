@@ -66,9 +66,10 @@ class Stream(Protocol):
 
         The task is not awaited by the agent loop. Tasks deliver their results
         via ``self.enqueue(...)`` — anything enqueued while an ``ask`` is live
-        feeds the next model call; anything enqueued after ``ask`` returned
-        sits in ``pending_messages`` and is consumed by the next ``ask`` on
-        the same stream.
+        feeds the next model call; anything enqueued after ``ask`` returned,
+        or while a turn ends without another model call (a ``final`` tool
+        result or a client-tool handoff), sits in ``pending_messages`` and is
+        consumed by the next ``ask`` on the same stream.
         """
         ...
 

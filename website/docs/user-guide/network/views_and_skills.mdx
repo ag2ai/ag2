@@ -26,7 +26,7 @@ class ViewPolicy(Protocol):
     ) -> list[BaseEvent]: ...
 ```
 
-It takes the WAL up to the current envelope and returns a list of `#!python BaseEvent`s that the framework feeds into the LLM turn as pre-populated stream history. Adapters declare a default; tenants can override per-channel.
+It takes the WAL up to the current envelope and returns a list of `#!python BaseEvent`s that the framework feeds into the LLM turn as pre-populated stream history. Each adapter picks a default view per participant; to use a different one, override the adapter's `#!python default_view_policy` (see [Custom Views](#custom-views)).
 
 Two callables are supplied per call so view policies stay adapter-neutral and identity-aware without depending on hub internals:
 
@@ -49,16 +49,26 @@ All four views honour audience: an envelope addressed only to `[bob]` doesn't ap
 
     In a **3+ party** channel (discussion, workflow), every non-self envelope collapses into the same `#!python role: "user"` stream. Without a sender label the LLM can't tell which peer said which message. The `#!python Named*` variants put `#!python [<sender name>]:` on each non-self line so the orchestrator / next speaker can route accurately. This is the default for N-party adapters precisely because the role bit alone isn't enough.
 
-```python linenums="1"
-from ag2.network import FullTranscript, WindowedSummary
+You can also call a view directly, for example to inspect what a participant would see. Supply the same inputs the default handler does: the channel's WAL and metadata from the hub, the adapter's `#!python render_envelope` normalised with `#!python ensure_parts`, and `#!python Hub.name_for`. Here `hub` is your `#!python Hub`, `channel_id` an existing channel and `carol` the `#!python AgentClient` of one of its participants:
+
+```python linenums="1" hl_lines="12-13"
+from ag2.network import WindowedSummary, ensure_parts
+
+metadata = await hub.get_channel(channel_id)
+wal = await hub.read_wal(channel_id)
+adapter = hub.adapter_for(channel_id)
 
 view = WindowedSummary(recent_n=12)
 projected = await view.project(
-    history=wal_slice,
+    wal,
     participant_id=carol.agent_id,
     channel=metadata,
+    render_envelope=lambda envelope: ensure_parts(adapter.render_envelope(envelope)),
+    name_for=hub.name_for,
 )
 ```
+
+`projected` is the list of events carol's LLM would receive as history: at most 12 visible envelopes, plus a leading `#!python CompactionSummary` when older ones were elided.
 
 ## Resolving the Default
 
@@ -68,11 +78,11 @@ from ag2.network import resolve_view_policy
 policy = resolve_view_policy(client, metadata)
 ```
 
-`#!python resolve_view_policy` reads the adapter manifest's `default_view_policy` and instantiates the matching view from the registry. The default handler calls this once per turn — custom handlers should too, unless they're deliberately bypassing the standard projection model.
+`client` is the participant's `#!python AgentClient` (what `#!python hub.register(...)` returns). `#!python resolve_view_policy` asks the channel's adapter for that participant's view by calling `#!python ChannelAdapter.default_view_policy(metadata, client.agent_id)`, so the adapter can size the view for the channel. For example, discussion and workflow channels use `#!python NamedWindowedSummary(recent_n=max(2 * participant_count, 4))`. The default handler calls this once per turn. Custom handlers should too, unless they're deliberately bypassing the standard projection model.
 
 ## Custom Views
 
-Implement the protocol, give it a unique `name`, and pass to the policy resolver. Common shapes:
+Implement the protocol and give the view a unique `name`. For example, a view that shows only one sender's messages:
 
 ```python linenums="1"
 from typing import ClassVar
@@ -119,11 +129,23 @@ class FromOneOnly(ViewPolicy):
         return out
 ```
 
+There is no separate view registry. To make the default handler use your view, subclass the channel type's adapter, return the view from `#!python default_view_policy`, and register the subclass on the hub. Registering an adapter with the same type and version replaces the built-in one for channels opened afterwards. Here `alice` is the `#!python AgentClient` whose messages everyone should see:
+
+```python linenums="1"
+from ag2.network import ChannelMetadata, ConversationAdapter, ViewPolicy
+
+class FromAliceConversation(ConversationAdapter):
+    def default_view_policy(self, metadata: ChannelMetadata, participant_id: str) -> ViewPolicy:
+        return FromOneOnly(sender_id=alice.agent_id)
+
+hub.register_adapter(FromAliceConversation())
+```
+
 The `#!python BaseEvent` types you emit determine how the LLM sees the history: `#!python ModelRequest` for messages "from the user," `#!python ModelMessage` for messages "from the assistant," and so on. Look at `#!python ag2.events` for the full taxonomy.
 
 ## CompactionSummary
 
-When `#!python WindowedSummary` elides envelopes outside its window, it prepends a `#!python CompactionSummary(text="...elided N turns")` event. This is from `ag2.compact` — the LLM sees it as a system-supplied note that "there is earlier history I'm not showing you." This keeps the LLM's behaviour grounded in long-running discussions without exploding the token budget.
+When `#!python WindowedSummary` (or `#!python NamedWindowedSummary`) elides envelopes outside its window, it prepends a `#!python CompactionSummary` event from `#!python ag2.compact`, for example `#!python CompactionSummary(summary="Earlier in this channel: 8 messages from alice, bob.", event_count=8)`. The summary is a static count of messages and speakers, with no LLM call. `#!python NamedWindowedSummary` lists speakers by `#!python Passport.name`; `#!python WindowedSummary` lists their raw agent ids. Provider clients send it to the LLM as a user turn prefixed with `[Summary of earlier conversation]`, so the model knows earlier history exists without seeing it. This keeps the LLM's behaviour grounded in long-running discussions without exploding the token budget.
 
 ## Skills (Markdown Frontmatter)
 
