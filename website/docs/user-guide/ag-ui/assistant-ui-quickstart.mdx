@@ -1,0 +1,275 @@
+---
+sidebarTitle: assistant-ui Quickstart
+title: "assistant-ui Quickstart for AG-UI"
+description: "Connect an assistant-ui React chat to an AG2 agent served over AG-UI 1.0."
+---
+
+Serve an AG2 agent over AG-UI and chat with it from [assistant-ui](https://www.assistant-ui.com){.external-link target="_blank"}, a React library of chat components. assistant-ui's `@assistant-ui/react-ag-ui` package reads the AG-UI event stream directly from the browser, so no extra runtime process sits between the UI and AG2.
+
+## Prerequisites
+
+- Python 3.11–3.14 and `uv`
+- Node.js 20.9 or newer and `pnpm`
+- An OpenAI API key for the agent
+
+The backend depends on `ag2[ag-ui,openai]>=1.3.1,<2`; the UI on `@assistant-ui/react-ag-ui` 0.1.9 and `@ag-ui/client` 1.0.3.
+
+## Write the AG2 server
+
+Create a directory for the server and add the dependencies:
+
+```bash
+mkdir server && cd server
+uv init --bare
+uv add "ag2[ag-ui,openai]>=1.3.1,<2" fastapi uvicorn
+```
+
+Save the agent and its AG-UI endpoint as `main.py`:
+
+```python title="server/main.py" linenums="1"
+import random
+from typing import Annotated
+
+from ag2 import Agent, Context, tool
+from ag2.ag_ui import AGUIStream, read_run_input
+from ag2.config import OpenAIResponsesConfig
+from ag2.middleware.builtin.tools.approval import ApprovalRequired
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from pydantic import Field
+
+CONDITIONS = ("sunny", "partly cloudy", "overcast", "light rain", "windy")
+
+@tool(description="Get the current weather for a city.")
+def get_weather(
+    city: Annotated[str, Field(description="The city name, e.g. 'Lisbon'")],
+) -> dict[str, str | int]:
+    # A stand-in for a real weather API, seeded by the city so answers are stable.
+    rng = random.Random(city.lower())
+    return {
+        "city": city,
+        "temperature_c": rng.randint(-5, 32),
+        "conditions": rng.choice(CONDITIONS),
+    }
+
+@tool(
+    description=(
+        "Save a city to the user's favorites. Use only when the user asks to save, "
+        "pin or remember a city. The user confirms before anything is saved."
+    ),
+    # The call is held as an AG-UI interrupt until the client approves or rejects it.
+    middleware=[
+        ApprovalRequired("Save {tool_arguments} to your favorites?", allow_always=False)
+    ],
+)
+def save_favorite_city(
+    context: Context,
+    city: Annotated[str, Field(description="The city name to save, e.g. 'Lisbon'")],
+) -> list[str]:
+    # Variables are sent to the client as the shared state snapshot.
+    favorites = [*context.variables.get("favorites", []), city]
+    context.variables["favorites"] = favorites
+    return favorites
+
+agent = Agent(
+    "WeatherAgent",
+    prompt=(
+        "You are a concise weather assistant. Use get_weather for weather questions. "
+        "Use save_favorite_city only when the user asks to save a city. "
+        "After a tool call, answer in one short sentence."
+    ),
+    config=OpenAIResponsesConfig(model="gpt-6-luna"),
+    tools=[get_weather, save_favorite_city],
+)
+
+stream = AGUIStream(agent)
+
+app = FastAPI()
+# The browser calls this server directly, so the Next.js dev server's origin is allowed.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+@app.get("/agent")
+async def capabilities() -> JSONResponse:
+    """Tell the client what the agent supports before a run starts."""
+    return JSONResponse(
+        stream.capabilities().model_dump(by_alias=True, exclude_none=True)
+    )
+
+@app.post("/agent")
+async def run_agent(request: Request) -> Response:
+    """Run the agent on an AG-UI `RunAgentInput` and stream its events as SSE."""
+    try:
+        run_input = read_run_input(await request.body())
+    except ValueError:
+        return JSONResponse(
+            {"error": "invalid AG-UI RunAgentInput body"}, status_code=400
+        )
+    return StreamingResponse(
+        stream.dispatch(run_input, accept=request.headers.get("accept")),
+        media_type="text/event-stream",
+    )
+```
+
+Start it on port `8000`:
+
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+uv run uvicorn main:app --port 8000
+```
+
+`GET /agent` returns the agent's [capabilities](/docs/user-guide/ag-ui/overview#capabilities). `POST /agent` reads the body with `read_run_input` rather than declaring a `RunAgentInput` parameter: a newer client may send fields this server does not know, and `read_run_input` drops them instead of FastAPI refusing the request with `422`. See [Basic server example](/docs/user-guide/ag-ui/overview#basic-server-example) for the same pattern without the tools.
+
+## Start the assistant-ui app
+
+assistant-ui's AG-UI example is a Next.js app already wired to `http://localhost:8000/agent`. Scaffold it in another terminal:
+
+```bash
+npx assistant-ui@latest create my-app -e with-ag-ui
+cd my-app
+pnpm dev
+```
+
+You do not need the example's own Python echo server, `server/agent.py`: the AG2 server above answers on the same URL. Open `http://localhost:3000` and ask for the weather in a city. The reply streams in, and the `get_weather` call appears in the thread with its result.
+
+The whole client wiring is one provider. If you add AG2 to an existing assistant-ui app instead, install `@assistant-ui/react-ag-ui` and `@ag-ui/client` and wrap your thread in:
+
+```tsx title="app/MyRuntimeProvider.tsx" linenums="1"
+"use client";
+
+import { useMemo, type ReactNode } from "react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { HttpAgent } from "@ag-ui/client";
+import { useAgUiRuntime } from "@assistant-ui/react-ag-ui";
+
+export function MyRuntimeProvider({ children }: { children: ReactNode }) {
+  const agent = useMemo(
+    () => new HttpAgent({ url: "http://localhost:8000/agent" }),
+    [],
+  );
+  const runtime = useAgUiRuntime({ agent });
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      {children}
+    </AssistantRuntimeProvider>
+  );
+}
+```
+
+## Render tool results
+
+AG2 runs `get_weather` on the server. To show its result as a card rather than raw JSON, register it as a `backend` tool with a renderer. Add the toolkit to the page that renders the thread:
+
+```tsx title="app/page.tsx" linenums="1"
+import { AuiConfig, AuiProvider, Tools, defineToolkit, useAui } from "@assistant-ui/react";
+
+type Weather = { city: string; temperature_c: number; conditions: string };
+
+const toolkit = defineToolkit({
+  get_weather: {
+    type: "backend",
+    render: ({ args, result }) => {
+      const weather = result as Weather | undefined;
+      return weather ? (
+        <p>{weather.city}: {weather.temperature_c}°C, {weather.conditions}</p>
+      ) : (
+        <p>Looking up {String(args["city"] ?? "…")}</p>
+      );
+    },
+  },
+});
+
+// Inside your page component:
+const aui = useAui();
+const config = AuiConfig({ tools: Tools({ toolkit }) });
+// <AuiProvider extends={aui} config={config}><Thread /></AuiProvider>
+```
+
+Tools that the browser registers with an `execute` function, such as the example's `browser_alert`, reach AG2 as [frontend tools](/docs/user-guide/ag-ui/backend-deepdive#frontend-tools-ui-driven-actions): AG2 ends the run with the call pending, assistant-ui runs it, and the result starts the next run.
+
+## Approve a tool call
+
+`save_favorite_city` is wrapped in `ApprovalRequired`, so AG2 ends the run with an AG-UI interrupt instead of calling it (see [Gating a tool call](/docs/user-guide/ag-ui/overview#gating-a-tool-call-instead-of-asking-a-question)). assistant-ui exposes the open interrupts through `useAgUiInterrupts` and resumes the run with `useAgUiSubmitInterruptResponses`. AG2 reads a boolean payload as the decision, `true` to approve and `false` to deny:
+
+```tsx linenums="1"
+import {
+  useAgUiInterrupts,
+  useAgUiSubmitInterruptResponses,
+} from "@assistant-ui/react-ag-ui";
+
+function PendingApprovals() {
+  const interrupts = useAgUiInterrupts();
+  const submit = useAgUiSubmitInterruptResponses();
+
+  const answer = (approved: boolean) =>
+    submit(
+      interrupts.map((i) => ({
+        interruptId: i.id,
+        status: "resolved" as const,
+        payload: approved,
+      })),
+    );
+
+  return interrupts.map((i) => (
+    <div key={i.id}>
+      <p>{i.message}</p>
+      <button onClick={() => void answer(true)}>Approve</button>
+      <button onClick={() => void answer(false)}>Deny</button>
+    </div>
+  ));
+}
+```
+
+Render `PendingApprovals` anywhere inside the runtime provider, then ask the agent to save a city.
+
+!!! warning "Use a boolean payload"
+
+    AG2 accepts `true`, `false` or a string as the answer to a tool-call approval. An object payload, such as `{ approved: true }`, is refused with `INTERRUPT_PAYLOAD_REFUSED`.
+
+## Show shared state
+
+AG2 sends the agent's `context.variables` to the client as `STATE_SNAPSHOT` events (see [Shared state](/docs/user-guide/ag-ui/overview#shared-state)). Read them with `useAgUiState`:
+
+```tsx linenums="1"
+import { useAgUiState } from "@assistant-ui/react-ag-ui";
+
+function Favorites() {
+  const state = useAgUiState<{ favorites?: string[] }>();
+  return <p>Favorites: {state?.favorites?.join(", ") || "none"}</p>;
+}
+```
+
+After you approve a save, the list updates. assistant-ui sends the latest state back as the next run's `state`, so `context.variables["favorites"]` is already filled when the agent runs again. Because the browser can edit that state, never read permissions or identity from it.
+
+## What works
+
+| AG-UI 1.0 feature | AG2 | assistant-ui |
+| --- | --- | --- |
+| Streaming text | `TEXT_MESSAGE_*` | Rendered as the agent's message |
+| Server tools | `TOOL_CALL_*` and `TOOL_CALL_RESULT` | `defineToolkit` with `type: "backend"` |
+| Frontend tools | Pending call ends the run | `defineToolkit` with `execute` |
+| Interrupts | `ApprovalRequired`, `context.input()` | `useAgUiInterrupts`, `useAgUiSubmitInterruptResponses` |
+| Shared state | `context.variables` as `STATE_SNAPSHOT` | `useAgUiState`, `useAgUiSetState` |
+
+Limits to plan for:
+
+- **Answer the interrupt first.** While an interrupt is open, a message typed in the composer is not sent. Answer it, or use assistant-ui's `useAgUiSteerAway`, which cancels the open interrupts and sends the new message.
+- **Resume proof.** assistant-ui's resume entry carries no `metadata`, so it cannot satisfy a server started with `AGUIStream(agent, require_resume_proof=True)`. Keep the default for this client. See [Asking the human a question](/docs/user-guide/ag-ui/overview#asking-the-human-a-question).
+- **One process per paused run.** `AGUIStream` holds a paused run in the server's memory, so the resume must reach the same process that issued the interrupt.
+
+## Check the connection
+
+If the chat does not stream, check these in order:
+
+1. `curl http://localhost:8000/agent` returns the capabilities JSON.
+2. The `HttpAgent` URL, or `NEXT_PUBLIC_AGUI_AGENT_URL` in the scaffolded example, points to that endpoint.
+3. The browser console shows no CORS error. If the UI runs on another origin, add it to `allow_origins` in `main.py`.
+4. The server log shows `POST /agent` returning `200`. A `400` means the body was not a valid `RunAgentInput`.
+
+The browser talks to the AG2 server directly, so protect that endpoint as you would any public API. See [Authentication](/docs/user-guide/ag-ui/backend-deepdive#authentication).
