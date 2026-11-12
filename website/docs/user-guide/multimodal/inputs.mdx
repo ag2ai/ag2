@@ -93,6 +93,8 @@ If you pass an unsupported input type to a provider, an `#!python UnsupportedInp
 
 ## Provider-Specific Details
 
+Some providers read extra settings from `#!python vendor_metadata` on a binary input — one built from `data=` or `path=`. Set keys on the returned input's `#!python vendor_metadata` dict rather than replacing it, since `path=` already stores the filename there. The per-provider sections below list the keys each one reads.
+
 ### Gemini
 
 Gemini has the broadest multimodal support — it accepts images, audio, video, and documents in all forms (URL, binary, and local file path).
@@ -127,9 +129,7 @@ reply = await agent.ask("Describe this video.", video)
 
 #### Vendor Metadata
 
-Gemini supports provider-specific settings via `#!python vendor_metadata` on binary inputs.
-
-The `#!python ImageInput`, `#!python VideoInput`, and `#!python DocumentInput` factories do not accept a `#!python vendor_metadata` argument. For raw bytes or local files, update `#!python vendor_metadata` on the returned `#!python BinaryInput` instead. This preserves metadata such as the filename added by a local-file factory. These settings map to Gemini Part fields:
+Gemini maps these `#!python vendor_metadata` keys to Gemini Part fields:
 
 | Key | Type | Description |
 | :--- | :--- | :--- |
