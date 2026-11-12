@@ -106,29 +106,39 @@ await human.post_envelope(envelope)
 
 When an agent opens a channel to a human, the hub waits for the human's `#!python EV_CHANNEL_INVITE_ACK` before the channel reaches `ACTIVE`. With `#!python auto_ack_invites=True` (the default) the `#!python HumanClient` acks automatically the moment the invite arrives — the channel handshake completes with no UI round-trip, exactly like the default agent handler.
 
-Pass `#!python auto_ack_invites=False` if you want a human to *decide* whether to join (an "accept invite?" prompt). If so, your UI is responsible for emitting the ack:
+Pass `#!python auto_ack_invites=False` if you want a human to *decide* whether to join (an "accept invite?" prompt). Your app then answers each invite itself: `#!python EV_CHANNEL_INVITE_ACK` to join, `#!python EV_CHANNEL_INVITE_REJECT` to decline.
 
 ```python linenums="1"
-from ag2.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, Envelope
+from ag2.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, EV_CHANNEL_INVITE_REJECT, Envelope
 
 human = await hc.register_human(Passport(name="operator"), auto_ack_invites=False)
 
-async def gate_invites(envelope) -> None:
-    if envelope.event_type != EV_CHANNEL_INVITE:
-        return
-    if await ui.confirm(f"Join channel {envelope.channel_id}?"):
-        await human.post_envelope(Envelope(
-            channel_id=envelope.channel_id,
-            sender_id=human.agent_id,
-            audience=None,
-            event_type=EV_CHANNEL_INVITE_ACK,
-            event_data={"channel_id": envelope.channel_id},
-            causation_id=envelope.envelope_id,
-        ))
-    # otherwise let the hub's invite-ack timeout close the channel
+async def show_invites(envelope) -> None:
+    if envelope.event_type == EV_CHANNEL_INVITE:
+        await ui.show_invite(envelope)  # display the prompt and return; don't wait for the answer here
 
-human.on_envelope(gate_invites)
+human.on_envelope(show_invites)
+
+# Call this from your UI's "Accept" / "Decline" handler.
+async def answer_invite(invite: Envelope, accepted: bool) -> None:
+    await human.post_envelope(Envelope(
+        channel_id=invite.channel_id,
+        sender_id=human.agent_id,
+        audience=None,
+        event_type=EV_CHANNEL_INVITE_ACK if accepted else EV_CHANNEL_INVITE_REJECT,
+        event_data={"channel_id": invite.channel_id},
+        causation_id=invite.envelope_id,
+    ))
 ```
+
+What the initiator sees:
+
+- **Accept** — the channel becomes `ACTIVE` and `#!python open()` returns the `#!python Channel`.
+- **Decline** — the hub closes the channel right away and `#!python open()` raises `#!python ProtocolError` (`invite_rejected`).
+- **No answer in time** — the human has `#!python invite_ack_timeout` to answer: 30 seconds by default, set it with `#!python Hub.open(store, invite_ack_timeout=120.0)`. After that the hub closes the channel and `#!python open()` raises `#!python ProtocolError`. A late `#!python answer_invite(...)` raises `#!python ProtocolError` as well, because the channel is already closed.
+
+!!! warning "Don't wait for the human's answer inside `on_envelope`"
+    With an in-process hub (`#!python HubClient(LocalLink(hub), hub=hub)`), envelopes reach the human one at a time: the next one is delivered only after your callback returns. If the callback awaits the human's decision, messages from the human's other channels are held back until they click. Show the prompt, return, and send the answer from your UI handler.
 
 ## Hooking up a UI
 
