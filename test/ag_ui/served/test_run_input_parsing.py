@@ -83,7 +83,7 @@ _VALID_INPUTS: dict[str, dict[str, Any]] = {
     "minimal": _RUN,
     "every-role": {**_RUN, "messages": _EVERY_ROLE},
     "base64-data-source": _data_source_input("aGk="),
-    "opaque-encrypted-value": _encrypted_value_input("aG!k="),
+    "base64-encrypted-value": _encrypted_value_input("aGk="),
     "full": {
         **_RUN,
         "runId": "r2",
@@ -112,6 +112,7 @@ _INVALID_INPUTS: dict[str, dict[str, Any]] = {
     "data-source-not-base64": _data_source_input("a"),
     "encrypted-value-not-base64": _encrypted_value_input("a"),
     "data-source-base64-invalid-character": _data_source_input("aG!k="),
+    "encrypted-value-base64-invalid-character": _encrypted_value_input("aG!k="),
 }
 
 

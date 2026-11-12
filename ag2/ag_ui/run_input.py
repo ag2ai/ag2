@@ -77,16 +77,21 @@ def _check_base64(incoming: RunAgentInput) -> None:
             for part_index, part in enumerate(message.content):
                 if isinstance(part, TextPart) or not isinstance(part.source, DataSource):
                     continue
-                _decode(part.source.value, f"/messages/{index}/content/{part_index}/source/value", validate=True)
+                _decode(part.source.value, f"/messages/{index}/content/{part_index}/source/value")
         elif isinstance(message, AssistantMessage):
             for call_index, call in enumerate(message.tool_calls or ()):
                 if call.encrypted_value is not None:
                     _decode(call.encrypted_value, f"/messages/{index}/toolCalls/{call_index}/encryptedValue")
 
 
-def _decode(value: str, path: str, *, validate: bool = False) -> None:
+def _decode(value: str, path: str) -> None:
+    # Strict, since a lenient decode drops characters outside the alphabet and a
+    # corrupted value would pass here as other bytes. A data source's value is
+    # contentEncoding base64, which JSON Schema 2020-12 reads as RFC 4648, and
+    # §3.3 there says to reject such characters. An encryptedValue is opaque to
+    # AG-UI, but this server writes it as base64 and decodes it the same way.
     try:
-        b64decode(value, validate=validate)
+        b64decode(value, validate=True)
     except (binascii.Error, ValueError) as e:
         raise ValueError(f"malformed base64 at {path}") from e
 

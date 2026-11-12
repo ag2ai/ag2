@@ -564,7 +564,7 @@ def map_agui_content_to_input(content: ContentPart, *, provider: ModelProvider |
     inp: events.Input
     if isinstance(source, DataSource):
         inp = events.BinaryInput(
-            b64decode(source.value),
+            b64decode(source.value, validate=True),
             media_type=source.mime_type,
             kind=kind,
         )
