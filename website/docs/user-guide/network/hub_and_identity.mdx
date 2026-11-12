@@ -108,12 +108,12 @@ rule = Rule(
 
 | Block | Controls |
 |---|---|
-| `AccessBlock` | Peer access lists and channel-type configuration. |
+| `AccessBlock` | Who this agent can address (`outbound_to`) and who can address it (`inbound_from`); channel-type allowlists (`channel_types`, stored only). |
 | `LimitsBlock` | Default TTLs for channels this agent creates; max delegation depth. |
 | `RateBlock` | Rate-limit configuration stored under `limits.rate`; not enforced by the in-process hub. |
 | `InboxBlock` | Inbound queue cap under `limits.inbox` — protects an agent from being flooded. |
 
-`#!python AccessBlock.channel_types` uses separate allowlists for initiating and accepting channels. `#!python RateBlock` and `#!python InboxBlock` belong inside `#!python LimitsBlock`, not directly on `#!python Rule`. Setting `#!python RateBlock.per_minute` stores the configuration; it does not enable throttling in the in-process hub.
+`#!python AccessBlock.channel_types` uses separate allowlists for initiating and accepting channels; like `#!python RateBlock`, it is stored on the rule but not enforced by the in-process hub yet. `#!python RateBlock` and `#!python InboxBlock` belong inside `#!python LimitsBlock`, not directly on `#!python Rule`. Setting `#!python RateBlock.per_minute` stores the configuration; it does not enable throttling in the in-process hub.
 
 When a rule's check fails, the hub raises `#!python AccessDeniedError` (deny by access) or `#!python InboxFull` (queue cap) instead of letting the envelope through.
 
