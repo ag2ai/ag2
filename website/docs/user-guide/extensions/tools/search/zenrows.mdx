@@ -1,0 +1,157 @@
+---
+title: Zenrows
+sidebarTitle: Zenrows
+---
+
+`ZenRowsToolkit` gives an agent two tools powered by [Zenrows](https://www.zenrows.com/){.external-link target="_blank"}: read one page, and read one page's structured data. Zenrows fetches the page through rotating proxies with anti-bot bypass, so the agent reads sites that block a plain HTTP client.
+
+!!! note
+    Needs no extra package. Zenrows is reached over HTTP with `httpx`, which AG2 already depends on. You can create an API key in the [Zenrows dashboard](https://app.zenrows.com/register){.external-link target="_blank"}.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import ZenRowsToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[ZenRowsToolkit(api_key=os.environ["ZENROWS_API_KEY"])],
+)
+```
+
+If `api_key` is omitted, `ZENROWS_API_KEY` is read from the environment when a tool runs, so building the toolkit never needs a key.
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `zenrows_scrape` | Read one `http` or `https` URL as markdown, plaintext or HTML, or as named fields when the call carries `css_extractor` |
+| `zenrows_extract` | Read one `http` or `https` URL as the structured data Zenrows already knows how to pull from that domain |
+
+The model sees `url` on both tools, and `css_extractor` on `zenrows_scrape`. Everything else is set by you, on the toolkit or on a factory method.
+
+## Shared defaults
+
+Constructor defaults are applied to the toolkit's default tools:
+
+```python linenums="1"
+toolkit = ZenRowsToolkit(
+    api_key=...,
+    response_type="markdown",  # "markdown" | "plaintext" | "html", for zenrows_scrape
+    max_characters=20_000,     # cap the content each tool returns
+    timeout=60.0,              # seconds, for each HTTP request
+)
+```
+
+The constructor also accepts `outputs`, `js_render`, `premium_proxy`, `proxy_country` and `api_url`.
+
+## Adaptive Stealth Mode
+
+By default both tools send `mode=auto`. Zenrows then picks rendering and proxies per request, starting with the cheapest configuration, escalating only when the page needs it, and billing only for the configuration that succeeded.
+
+Setting `js_render` or `premium_proxy` turns that mode off, because the API rejects the two together. Do that only when you know a page needs it. Both bill at a higher rate, up to 25 times the base rate for a rendered premium request.
+
+```python linenums="1"
+# Adaptive Stealth Mode, the default
+toolkit = ZenRowsToolkit(api_key=...)
+
+# a page that only renders in a browser, from a residential US IP
+toolkit = ZenRowsToolkit(api_key=..., js_render=True, premium_proxy=True, proxy_country="us")
+```
+
+Neither flag is on either tool's schema, so a model cannot turn them on. A model offered a boolean named `js_render` turns it on to be safe, and every request is then billed at the higher rate.
+
+`proxy_country` works on its own under Adaptive Stealth Mode. Once `js_render` or `premium_proxy` is set, it needs `premium_proxy=True`, and the toolkit raises `ValueError` rather than sending a request the API rejects.
+
+## Named fields instead of a page
+
+Two options return named fields rather than the page content, and both come back as `ZenRowsData`.
+
+`css_extractor` is on the model's schema, because it is the documented fix for most `zenrows_extract` refusals. The model passes CSS selectors keyed by the field name:
+
+```json
+{"title": "h1", "price": ".price", "links": "a @href"}
+```
+
+`outputs` is yours to set, and asks Zenrows for its own named outputs:
+
+```python linenums="1"
+toolkit = ZenRowsToolkit(api_key=..., outputs=["headings", "links"])
+```
+
+`response_type` and `outputs` cannot both be set; the toolkit raises `ValueError`. `css_extractor` combines with either, and wins.
+
+## Limiting result size
+
+`max_characters` defaults to 20,000 and bounds the content only, never a refusal and never metadata. Text is cut to that many characters. Structured data is cut by whole entries, so what the model reads back is still parseable JSON rather than a truncated string. A result that was cut carries `truncated=True`. Pass `None` to turn the bound off.
+
+```python linenums="1"
+toolkit = ZenRowsToolkit(api_key=...)
+
+scrape_tool = toolkit.scrape(max_characters=50_000)
+extract_tool = toolkit.extract(max_characters=None)
+```
+
+## Picking a subset of tools
+
+Each tool is a factory method on the toolkit (`toolkit.scrape()`, `toolkit.extract()`). Call the method and pass only the tools you need:
+
+```python linenums="1"
+toolkit = ZenRowsToolkit(api_key=...)
+
+agent = Agent(
+    "researcher",
+    config=config,
+    tools=[toolkit.scrape(response_type="plaintext", max_characters=10_000)],
+)
+```
+
+Every option except `api_key`, `api_url` and `timeout` accepts a `Variable` for deferred context resolution.
+
+## Refusals
+
+A refusal is a verdict on the one URL the model chose. It is not charged, an identical call gives an identical answer, and the model is the only party that can act on it, so it comes back as a result rather than a raised traceback. Each one carries a `next_step` the model can follow now.
+
+| `reason` | What happened |
+| :--- | :--- |
+| `unsupported_url_scheme` | The URL is not `http` or `https`. No request was sent |
+| `domain_not_prepared` | Extract does not serve this domain yet |
+| `page_not_recognised` | Extract serves the domain but not this page |
+| `domain_not_enabled` | Extract is not enabled for this domain, and preparing it does not change that |
+| `not_extractable` | Extract could not read this page |
+| `no_data_extracted` | Extract read the page and filled no field |
+
+Both tools refuse an unsupported URL scheme. The other five are `zenrows_extract` only.
+
+`domain_not_prepared` names a manual step. Preparing a domain for Extract runs for minutes, needs several example URLs of the same page type, and spends one of the account's monthly slots, so it is an operator's decision in the [Zenrows dashboard](https://app.zenrows.com/){.external-link target="_blank"} rather than a third tool a model can call. Until it is done, `zenrows_scrape` with `css_extractor` reads the same page.
+
+## Errors
+
+Everything that is not a refusal is raised: a parameter combination the API rejects, a missing or invalid API key, rate limits, and any other API or transport failure. Errors raised while a tool runs reach the model as tool errors.
+
+The API key travels as an `X-API-Key` header and never as a query parameter, no HTTP client is kept on the toolkit, redirects are not followed, and error messages are rebuilt from the API's own problem body rather than by `raise_for_status()`, which embeds the request URL. The key therefore reaches no URL, no error message and no other origin.
+
+## Result
+
+`zenrows_scrape` returns a `ZenRowsPage` for a page read as text:
+
+| Field | Description |
+| :--- | :--- |
+| `url` | Final URL of the page, after any redirect Zenrows followed |
+| `format` | `markdown`, `plaintext` or `html` |
+| `content` | The page content |
+| `truncated` | `True` when `max_characters` cut the content |
+| `request_id` | The `X-Request-Id` Zenrows assigned, for support |
+
+With `css_extractor` or `outputs`, and from `zenrows_extract`, the result is a `ZenRowsData` with `data` in place of `format` and `content`. `zenrows_extract` returns the extracted fields only. The API also returns the whole page source alongside them, and the toolkit drops it: one recorded capture was 61 KB, which is the opposite of why anyone asks for structured data.
+
+A refused call returns a `ZenRowsRefusal` with `url`, `reason`, `next_step`, `detail` and `request_id`.
+
+## Out of scope
+
+This extension wraps the single page endpoint. Zenrows' Batch, Crawl, browser sessions, screenshots, `js_instructions`, `session_id`, `block_resources`, `allowed_status_codes`, `original_status` and the prepared-domains endpoints are not exposed here.
+
+!!! tip
+    Reach for `zenrows_extract` first on a domain Zenrows already serves, and fall back to `zenrows_scrape` with `css_extractor` when it refuses. In a loop, an agent can scrape the page as markdown first and write the selectors from what it read.
