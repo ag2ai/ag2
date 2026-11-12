@@ -35,7 +35,7 @@ keywords = ["ai", "agent", "autogen", "ag2", "ag2.ai", "ag2ai", "agentic"]
 
 requires-python = ">=3.11"
 
-version = "1.3.0"
+version = "1.3.1"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -70,7 +70,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Each extra below corresponds to a `missing_optional_dependency(..., "<extra>", ...)`
-# fallback in the codebase. Extension packages (docker, daytona, sounddevice, exa-py,
+# fallback in the codebase. Extension packages (docker, daytona, e2b, sounddevice, exa-py,
 # tinyfish, ...) use `missing_additional_dependency` and are installed directly, not as extras.
 
 # === Agent protocols ===
@@ -188,6 +188,8 @@ optionals = [
     "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",
+    "boxd>=0.3.0,<1",
+    "e2b>=2.0.0,<3",
     "tinyfish>=0.5,<0.6",
     "exa-py>=2.12.1,<3",
     "firecrawl-py>=4.53,<5",
@@ -217,6 +219,8 @@ docs = [
     "tinyfish>=0.5,<0.6",
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",
+    "boxd>=0.3.0,<1",
+    "e2b>=2.0.0,<3",
     "exa-py>=2.12.1,<3",
     "firecrawl-py>=4.53,<5",
     "docker>=6.0.0,<8",                # Code execution tools are exposed in the public API by the optional `ag2.tools` module
@@ -276,9 +280,11 @@ types = [
     # real errors or trips `disallow_any_unimported` in `ag2/extensions/*`.
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",
+    "boxd>=0.3.0,<1",
     "exa-py>=2.12.1,<3",
     "nlip-sdk>=0.1.0,<1",
     "nlip-server>=0.1.3,<1",
+    "e2b>=2.0.0,<3",
 ]
 
 lint = ["ruff==0.16.10", "codespell==2.4.3", "zizmor==1.30.1"]

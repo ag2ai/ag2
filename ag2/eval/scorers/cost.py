@@ -14,9 +14,9 @@ def token_budget(max_tokens: int) -> Scorer:
     """Pass iff a task's total ``input + output`` tokens stay at or under ``max_tokens``.
 
     The check is **per task** — ``trace.tokens.total`` is one task's usage. Cache
-    tokens are excluded; they're reported separately on
-    :class:`~ag2.eval.trace.TokenUsage` and priced differently by most
-    providers. This emits a pass/fail signal into the run's pass-rate aggregate;
+    reads and writes count, once, as part of ``input``; their split is reported
+    on :class:`~ag2.eval.trace.TokenUsage` because most providers price them
+    differently. This emits a pass/fail signal into the run's pass-rate aggregate;
     for the same per-task limit recorded as a dedicated ``budget_violation`` count
     instead, use :class:`~ag2.eval.BudgetThresholds` (also observational —
     neither aborts the run).

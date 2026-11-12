@@ -48,6 +48,7 @@ from ag2.annotations import ContextField, Variable
 from ag2.tools.builtin._resolve import resolve_variable
 
 from ._async import call_user_fn
+from ._document_scripts import SDK_PACKAGE, read_scripts
 from .errors import MCPAppFrozenError, MCPAppURIError, MCPDuplicateAppURIError
 from .resources import Resource as AG2Resource
 from .tools import (
@@ -140,8 +141,14 @@ class MCPApp:
     thing in that slot is the binding the decorator itself writes.
 
     ``inject_runtime`` controls injection of the document runtime (see
-    :meth:`runtime_script`). Turn it off for a document that brings its own
-    bundle: the body is then served byte-for-byte as given.
+    :meth:`runtime_script`). A body whose running scripts already perform the
+    ``ui/initialize`` handshake — importing the upstream
+    ``@modelcontextprotocol/ext-apps`` SDK, or a bundle naming that method — is
+    served without it regardless, so the host is not answered twice; one that
+    also calls ``ag2ui`` without defining it still gets it, with a warning.
+    Turn it off for a runtime that builds the method name at run time, or
+    imports the SDK under a specifier that does not name the package: the body
+    is then served byte-for-byte as given.
     """
 
     __slots__ = (
@@ -260,7 +267,7 @@ class MCPApp:
             raise MCPAppURIError(uri)
         self._uri = uri
         self._content = content
-        self._name = name or uri
+        self._name = name
         self._title = title
         self._description = description
         self._listed = listed
@@ -301,7 +308,7 @@ class MCPApp:
         """
         return AG2Resource(
             uri=self._uri,
-            name=self._name,
+            name=self._name or self._uri,
             read=_AppResourceReader(self),
             title=self._title,
             description=self._description,
@@ -313,7 +320,23 @@ class MCPApp:
     async def _read(self, context: MCPExecutionContext) -> str:
         body = await _resolve_content(self._content, context)
         inject_runtime = resolve_context_value(self._inject_runtime, context)
-        return _inject(body, self.runtime_script()) if inject_runtime else body
+        if not inject_runtime:
+            return body
+        scripts = read_scripts(body)
+        if scripts.performs_handshake and not scripts.needs_ag2ui:
+            return body
+        if scripts.performs_handshake:
+            # Calling ``ag2ui`` is the stronger signal: without it every call
+            # throws, while the extra handshake is something the host can survive.
+            logger.warning(
+                "MCP app %s loads %s or names the ui/initialize method, and also uses ag2ui, so ag2ui is "
+                "injected. If the document performs its own handshake too, the host receives two handshakes. "
+                "Use either ag2ui or the %s App.",
+                self._uri,
+                SDK_PACKAGE,
+                SDK_PACKAGE,
+            )
+        return _inject(body, self._script_for(resolve_context_value(self._title, context)))
 
     def runtime_script(self) -> str:
         """The ``<script>`` element performing the MCP Apps handshake, as text.
@@ -330,10 +353,20 @@ class MCPApp:
         ``ag2ui.host.capabilities`` and ``ag2ui.host.context``; an ``ag2ui.ready``
         promise; and automatic size reporting.
 
+        The script introduces the document to the host by an ``appInfo`` whose
+        ``name`` is the explicit ``name``, else the URI without its scheme, and
+        whose ``title``, shown to people, is the document's ``title``. A
+        ``Variable`` title is resolved per read when injecting; here, without a
+        request, it is left out.
+
         This is the same text injection uses, exposed for a document that would
-        rather place it itself (with ``inject_runtime=False``).
+        rather place it itself. Injection skips a body that already performs the
+        handshake, so placing this text yourself needs no ``inject_runtime=False``.
         """
-        return _runtime_script(self._name)
+        return self._script_for(self._title)
+
+    def _script_for(self, title: AppText | None) -> str:
+        return _runtime_script(_app_info(title, self._name, self._uri))
 
     @overload
     def tool(
@@ -628,13 +661,27 @@ def _inject(html: str, script: str) -> str:
     return script + html
 
 
+def _app_info(title: AppText | None, name: str | None, uri: str) -> dict[str, str]:
+    """The ``appInfo`` the document introduces itself to the host by in ``ui/initialize``.
+
+    It is an MCP ``Implementation``: ``name`` is for programmatic use and
+    ``title`` for display. ``name`` is the explicit name, else the URI without its
+    scheme. ``title`` is the document's title; an empty or unresolved
+    ``Variable`` one is left out, and the host then displays ``name``.
+    """
+    info = {"name": name or uri.removeprefix("ui://"), "version": "1"}
+    if isinstance(title, str) and title:
+        info["title"] = title
+    return info
+
+
 def _js(value: object) -> str:
     """``value`` as a JavaScript literal that cannot close the surrounding script."""
     return json.dumps(value).replace("</", "<\\/")
 
 
-def _runtime_script(app_name: str) -> str:
-    """The document runtime, specialised with the app's name for the handshake.
+def _runtime_script(app_info: dict[str, str]) -> str:
+    """The document runtime, specialised with the app's ``appInfo`` for the handshake.
 
     Written to the constraints the specification's own CSP imposes: inline
     script is permitted and is how the ecosystem ships, but ``eval`` and dynamic
@@ -647,7 +694,7 @@ def _runtime_script(app_name: str) -> str:
     """
     return (
         _RUNTIME_TEMPLATE
-        .replace("__AG2_APP_NAME__", _js(app_name))
+        .replace("__AG2_APP_INFO__", _js(app_info))
         .replace("__AG2_TOOL_KEY__", _js(TOOL_META_KEY))
         .replace("__AG2_PROTOCOL_VERSION__", _js(APP_PROTOCOL_VERSION))
     )
@@ -856,7 +903,7 @@ _RUNTIME_TEMPLATE = """<script>
   };
 
   request("ui/initialize", {
-    appInfo: { name: __AG2_APP_NAME__, version: "1" },
+    appInfo: __AG2_APP_INFO__,
     // Every display mode, because a document that reports its own size lays
     // out in any of them. Declaring none is not the safe default it looks
     // like: a host may decline a mode the view never claimed.

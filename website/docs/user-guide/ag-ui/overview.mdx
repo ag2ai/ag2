@@ -214,8 +214,8 @@ entries from different providers add up:
   token the call was charged for, including tokens read from and written to the
   provider's cache. Output counts every generated token, reasoning included.
   Where a provider reports these counts beside a smaller figure, AG2 adds them
-  in before the entry leaves: Anthropic's cache counts go into the input, and
-  Gemini's thinking tokens into the output.
+  in when it normalizes the provider's usage: Anthropic's and Bedrock's cache
+  counts go into the input, and Gemini's thinking tokens into the output.
 - **`cachedInputTokens`, `cacheWriteInputTokens` and `reasoningTokens` are parts
   of those totals**, never additions to them. Cache reads and writes are
   reported apart, because providers price them differently.
@@ -225,10 +225,10 @@ entries from different providers add up:
   absent means "never measured"; `0` means the provider measured no cache hit.
   An input or output the provider did not report leaves `totalTokens` absent too.
 
-The correction applies only to what reaches the wire. `AgentReply.usage()` keeps
-each provider's own figures, so a server-side total can differ from the AG-UI
-one for the same run: for Anthropic, `prompt_tokens` excludes the cache counts
-that `inputTokens` includes.
+`AgentReply.usage()` counts input and output the same way: for the same run,
+`report.total.prompt_tokens` equals the sum of the entries' `inputTokens`, and
+`completion_tokens` the sum of their `outputTokens`. `total_tokens` can exceed
+the summed `totalTokens`, because it keeps the provider's own total.
 
 One entry is emitted per distinct provider/model pair, in order of first
 appearance in the run. A delegated sub-agent's calls are attributed to the

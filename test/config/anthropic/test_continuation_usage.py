@@ -108,9 +108,10 @@ async def test_usage_includes_every_continuation(streaming: bool, pauses: int) -
     assert response.response_id == f"msg_{count}"
     total = count * (count + 1) // 2
     expected = Usage(
-        prompt_tokens=10 * total,
+        # input_tokens plus both cache counts (ADR 0036).
+        prompt_tokens=17 * total,
         completion_tokens=2 * total,
-        total_tokens=12 * total,
+        total_tokens=19 * total,
         cache_creation_input_tokens=3 * total,
         cache_read_input_tokens=4 * total,
         thinking_tokens=total,

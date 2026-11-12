@@ -30,12 +30,10 @@ def _billable_tokens(usage: Usage) -> int:
     provider whose total legitimately exceeds the two counts (reasoning tokens,
     for instance).
 
-    Cache tokens are left out, as they were before this read ``UsageEvent``.
-    That understates a prompt-cached turn on any provider whose prompt count
-    excludes them, and changing it would move every cached workload's threshold
-    — a behaviour change that belongs on its own, not folded into a change of
-    accounting *source*. See :class:`TokenMonitor` for what the guard's total
-    does and does not cover.
+    Cache tokens are counted, once: ``prompt_tokens`` already includes the
+    tokens read from and written to the cache on every provider (ADR 0036), so
+    the cache fields are not added on top of it. See :class:`TokenMonitor` for
+    what the guard's total does and does not cover.
     """
     counted = int(usage.prompt_tokens or 0) + int(usage.completion_tokens or 0)
     if usage.total_tokens is None:
@@ -52,13 +50,11 @@ class TokenMonitor(BaseObserver):
     session clients — the same source ``UsageReport`` reads, so the guard sees
     every unit of work the report does.
 
-    It does not count the same *tokens*: :func:`_billable_tokens` reads the
-    prompt and completion counts and ignores the cache fields, which
-    ``UsageReport.total`` keeps. On a provider whose reported prompt count
-    excludes cached tokens — Anthropic's ``input_tokens`` does — a heavily
-    prompt-cached turn moves this guard by a fraction of what it bills. Treat
-    the threshold as a bound on uncached spend, and read ``UsageReport`` for the
-    bill.
+    It counts every input token at the same weight, cached or not: the
+    threshold bounds how much the model read and wrote, not what that cost. A
+    heavily prompt-cached turn moves the guard by more than it bills, since
+    cache reads are priced below fresh input. Read ``UsageReport`` with a price
+    catalog for the bill.
 
     Deliberately *not* ``ModelResponse`` or ``TaskCompleted``. Those are derived
     events and reading them made the guard wrong three ways: a sub-task that
