@@ -433,6 +433,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.usage.output_tokens", int(usage.completion_tokens))
             if usage.cache_creation_input_tokens:
                 span.set_attribute("gen_ai.usage.cache_creation_input_tokens", int(usage.cache_creation_input_tokens))
+            if usage.cache_creation_extended_input_tokens is not None:
+                span.set_attribute(
+                    "gen_ai.usage.cache_creation_extended_input_tokens", int(usage.cache_creation_extended_input_tokens)
+                )
             if usage.cache_read_input_tokens:
                 span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage.cache_read_input_tokens))
             if usage.thinking_tokens:
@@ -497,6 +501,10 @@ class _TelemetryMiddlewareInstance(BaseMiddleware):
                 span.set_attribute("gen_ai.usage.output_tokens", int(usage.completion_tokens))
             if usage.cache_creation_input_tokens:
                 span.set_attribute("gen_ai.usage.cache_creation_input_tokens", int(usage.cache_creation_input_tokens))
+            if usage.cache_creation_extended_input_tokens is not None:
+                span.set_attribute(
+                    "gen_ai.usage.cache_creation_extended_input_tokens", int(usage.cache_creation_extended_input_tokens)
+                )
             if usage.cache_read_input_tokens:
                 span.set_attribute("gen_ai.usage.cache_read_input_tokens", int(usage.cache_read_input_tokens))
             if usage.thinking_tokens:

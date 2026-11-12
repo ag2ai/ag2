@@ -12,9 +12,7 @@
         "supportedCatalogIds": {
           "type": "array",
           "description": "An array of strings, where each string is an ID identifying a Catalog Definition Schema that the server can generate. This is not necessarily a resolvable URI.",
-          "items": {
-            "type": "string"
-          }
+          "items": {"type": "string"}
         },
         "acceptsInlineCatalogs": {
           "type": "boolean",
@@ -24,7 +22,5 @@
       }
     }
   },
-  "required": [
-    "v0.9"
-  ]
+  "required": ["v0.9"]
 }

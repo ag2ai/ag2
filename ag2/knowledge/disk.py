@@ -15,6 +15,10 @@ from watchdog.observers.polling import PollingObserver
 from .base import ChangeCallback, ChangeSubscription, NoopChangeSubscription, _normalize
 
 
+async def _deliver(callback: ChangeCallback, path: str) -> None:
+    await callback(path)
+
+
 class _DiskChangeHandler:
     """watchdog ``FileSystemEventHandler`` that bridges to an async callback.
 
@@ -58,7 +62,7 @@ class _DiskChangeHandler:
         virtual = self._virtual_path_for(src_path)
         if virtual is None:
             return
-        coro = self._callback(virtual)
+        coro = _deliver(self._callback, virtual)
         try:
             asyncio.run_coroutine_threadsafe(coro, self._loop)
         except RuntimeError:
