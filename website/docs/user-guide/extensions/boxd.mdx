@@ -1,0 +1,94 @@
+---
+title: boxd Integration
+sidebarTitle: boxd
+---
+
+The `ag2.extensions.boxd` module runs AG2 shell and code tools on [boxd](https://boxd.sh/?ref=ag2){.external-link target="_blank"} machines. A boxd machine is a full Linux microVM (KVM) with a persistent disk that starts in about a second. The extension implements AG2's native sandbox factory, so one environment keeps its files across tool calls and deletes its machine when you close it.
+
+## Installation
+
+Install AG2, your model provider, and boxd's Python SDK:
+
+```bash
+pip install "ag2[anthropic]" "boxd>=0.3.0,<1"
+```
+
+Create an API key in the [boxd console](https://boxd.sh/?ref=ag2){.external-link target="_blank"} and export it:
+
+```bash
+export BOXD_API_KEY="your-boxd-api-key"
+```
+
+Set `BOXD_REGION` (for example `fra`) to create machines in a specific region.
+
+## Use boxd with an agent
+
+Use the environment as an async context manager. The machine is reused for every shell or code call inside the scope and deleted when the scope exits.
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.boxd import BoxdEnvironment
+from ag2.tools import SandboxCodeTool, SandboxShellTool
+
+async def main() -> None:
+    env = BoxdEnvironment()
+    async with env:
+        agent = Agent(
+            "developer",
+            config=AnthropicConfig(model="claude-sonnet-5"),
+            tools=[SandboxShellTool(env), SandboxCodeTool(env)],
+        )
+        reply = await agent.ask("Write hello.txt, then read it with Python.")
+        print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Configure the machine
+
+The default image is Ubuntu 24.04. Commands run as the user `boxd` (with passwordless `sudo`) in `/home/boxd`, and the image ships `python`, `bash`, `node`, `git` and Docker. `BoxdEnvironment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py){.external-link target="_blank"}, so `SandboxShellTool(env)` reports the real working directory to the model on its own, and `SandboxCodeTool(env)` works without a custom `CodeAdapter`. `SandboxCodeTool` enables `python` and `bash` by default; pass `languages=("python", "bash", "javascript")` to let the model run Node too.
+
+Machines are created **isolated** by default: they have no in-machine boxd credential, no metadata endpoint and no private network peers, so code the model writes cannot reach your boxd account. Outbound internet access stays on. Every machine also gets a one-hour `delete_after` timer, which boxd enforces even if your process dies before it can clean up.
+
+```python linenums="1"
+from ag2.extensions.boxd import BoxdEnvironment, BoxdResources
+
+env = BoxdEnvironment(
+    region="fra",
+    name="my-agent-sandbox",
+    env_vars={"APP_ENV": "sandbox"},
+    labels={"team": "data"},
+    resources=BoxdResources(vcpu=4, memory="16G"),
+    timeout=60,
+    delete_after=900,
+)
+```
+
+| Parameter | Default | Purpose |
+| :--- | :--- | :--- |
+| `api_key` | `BOXD_API_KEY` | API authentication |
+| `base_url` | `BOXD_BASE_URL` or `boxd.sh` | API endpoint |
+| `region` | `BOXD_REGION` or the endpoint's region | Region to create machines in |
+| `name` | Picked by boxd | Machine name, unique within the organization |
+| `image` | Ubuntu 24.04 | Guest image |
+| `env_vars` | `{}` | Environment variables set on every command the sandbox runs |
+| `labels` | `{}` | Labels added to the machine; `created-by=ag2` is always set on top |
+| `resources` | Organization default | vCPU, memory and disk (sizes: 1 vCPU / 4G, 2 / 8G, 4 / 16G, 8 / 32G) |
+| `isolated` | `True` | Keep the boxd credential and private network away from the machine |
+| `timeout` | `60` seconds | Machine startup and command timeout |
+| `delete_after` | `3600` seconds | Server-enforced lifetime backstop; `None` disables it |
+| `workdir` | `/home/boxd` | Working directory for commands and files, created if missing |
+
+`api_key`, `base_url`, `region`, `name`, `image`, `env_vars` and `labels` accept [`Variable`](/docs/user-guide/context/variables) values for per-request resolution. Always close the environment with `async with` or `await env.aclose()`; a machine whose delete failed is retried by the next `aclose()`, and `delete_after` is a fail-safe, not the normal cleanup path.
+
+A command that runs past its timeout is killed on the machine and returns exit code `124`. Its partial output is not returned.
+
+## Testing
+
+The bundled unit tests mock the boxd SDK and run offline, so no boxd account is needed for the AG2 test suite. Exercising the integration against real machines requires a boxd account and a `BOXD_API_KEY`.
+
+Maintainer: [boxd](https://boxd.sh/?ref=ag2){.external-link target="_blank"}.

@@ -12,7 +12,14 @@ from typing import TypeGuard, cast
 from referencing import Registry
 from referencing.exceptions import Unresolvable
 
-from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue, ServerToClientMessage, server_to_client_payload_keys
+from ._types import (
+    A2UIWireVersion,
+    JsonObject,
+    JsonSchema,
+    JsonValue,
+    ServerToClientMessage,
+    server_to_client_payload_keys,
+)
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 from .diagnostics import MessageChecker
 from .schema_manager import _registry_for_surface_catalog
@@ -160,7 +167,7 @@ class A2UIResponseParser:
 
     def __init__(
         self,
-        version_string: A2UIVersion,
+        version_string: A2UIWireVersion,
         server_to_client_schema: JsonSchema | None = None,
         schema_registry: Registry | None = None,
     ) -> None:
@@ -172,7 +179,7 @@ class A2UIResponseParser:
         self._registry = schema_registry
 
     @property
-    def version_string(self) -> A2UIVersion:
+    def version_string(self) -> A2UIWireVersion:
         return self._version_string
 
     def parse(self, response: str) -> A2UIParseResult:
@@ -268,7 +275,7 @@ class A2UIResponseParser:
         for i, op in enumerate(objects):
             try:
                 checker = self._checker
-                if self._version_string == "v1.0" and self._registry is not None and self._schema is not None:
+                if self._version_string == "1.0" and self._registry is not None and self._schema is not None:
                     catalog_id = _surface_catalog(op, surface_catalogs, self._registry)
                     if catalog_id is not None:
                         if catalog_id not in catalog_checkers:
