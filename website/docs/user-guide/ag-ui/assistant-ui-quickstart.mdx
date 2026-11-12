@@ -79,7 +79,7 @@ agent = Agent(
         "Use save_favorite_city only when the user asks to save a city. "
         "After a tool call, answer in one short sentence."
     ),
-    config=OpenAIResponsesConfig(model="gpt-6-luna"),
+    config=OpenAIResponsesConfig(model="gpt-6-luna", streaming=True),
     tools=[get_weather, save_favorite_city],
 )
 
