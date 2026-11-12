@@ -10,7 +10,7 @@ chosen by CSS selectors, or as the structured data its extractor already knows h
 to read on that domain. This extension wraps that single endpoint as two tools, one
 for reading a page and one for its structured data.
 
-Maintainer: ZenRows (@ZenRows-Hub)
+Maintainer: Zenrows (@ZenRows)
 Docs: https://docs.ag2.ai/docs/user-guide/extensions/tools/search/zenrows/
 """
 
