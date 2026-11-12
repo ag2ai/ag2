@@ -159,22 +159,39 @@ def test_content_blocks_to_files_decodes_image() -> None:
 
 
 def test_map_usage() -> None:
+    usage = map_usage(schema.Usage(input_tokens=10, output_tokens=5, total_tokens=15, thought_tokens=3))
+    assert usage == Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15, thinking_tokens=3)
+
+
+def test_map_usage_adds_the_cache_to_the_input() -> None:
+    """ACP's ``inputTokens`` leaves out the cache, which ``totalTokens`` adds beside it.
+
+    The figures are the protocol's own example: 35000 + 12000 + 5000 + 1000 = 53000.
+    ``prompt_tokens`` is the whole input, cache included (ADR 0036).
+    """
     usage = map_usage(
         schema.Usage(
-            input_tokens=10,
-            output_tokens=5,
-            total_tokens=15,
-            cached_read_tokens=2,
-            thought_tokens=3,
+            input_tokens=35000,
+            output_tokens=12000,
+            total_tokens=53000,
+            thought_tokens=5000,
+            cached_read_tokens=5000,
+            cached_write_tokens=1000,
         )
     )
     assert usage == Usage(
-        prompt_tokens=10,
-        completion_tokens=5,
-        total_tokens=15,
-        cache_read_input_tokens=2,
-        thinking_tokens=3,
+        prompt_tokens=41000,
+        completion_tokens=12000,
+        total_tokens=53000,
+        cache_read_input_tokens=5000,
+        cache_creation_input_tokens=1000,
+        thinking_tokens=5000,
     )
+
+
+def test_map_usage_does_not_believe_a_total_below_input_plus_output() -> None:
+    usage = map_usage(schema.Usage(input_tokens=10, output_tokens=5, total_tokens=15, cached_read_tokens=20))
+    assert usage == Usage(prompt_tokens=30, completion_tokens=5, total_tokens=35, cache_read_input_tokens=20)
 
 
 def test_map_usage_none() -> None:

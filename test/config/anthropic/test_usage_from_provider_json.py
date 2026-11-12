@@ -183,9 +183,9 @@ class TestCacheWriteRetention:
         )
 
         assert usage == Usage(
-            prompt_tokens=12,
+            prompt_tokens=1012,
             completion_tokens=8,
-            total_tokens=20,
+            total_tokens=1020,
             cache_creation_input_tokens=1000,
             cache_creation_extended_input_tokens=800,
         )
@@ -205,9 +205,9 @@ class TestCacheWriteRetention:
         )
 
         assert usage == Usage(
-            prompt_tokens=12,
+            prompt_tokens=1012,
             completion_tokens=8,
-            total_tokens=20,
+            total_tokens=1020,
             cache_creation_input_tokens=1000,
             cache_creation_extended_input_tokens=800,
         )
@@ -215,7 +215,28 @@ class TestCacheWriteRetention:
     async def test_an_absent_breakdown_leaves_extended_writes_absent(self) -> None:
         usage = await _usage_of(_message({"input_tokens": 12, "output_tokens": 8, "cache_creation_input_tokens": 1000}))
 
-        assert usage == Usage(prompt_tokens=12, completion_tokens=8, total_tokens=20, cache_creation_input_tokens=1000)
+        assert usage == Usage(
+            prompt_tokens=1012, completion_tokens=8, total_tokens=1020, cache_creation_input_tokens=1000
+        )
+
+
+async def test_cache_reads_and_writes_both_join_the_input() -> None:
+    usage = await _usage_of(
+        _message({
+            "input_tokens": 12,
+            "output_tokens": 8,
+            "cache_creation_input_tokens": 100,
+            "cache_read_input_tokens": 50,
+        })
+    )
+
+    assert usage == Usage(
+        prompt_tokens=162,
+        completion_tokens=8,
+        total_tokens=170,
+        cache_creation_input_tokens=100,
+        cache_read_input_tokens=50,
+    )
 
 
 async def test_request_counts_and_routing_labels_do_not_enter_usage() -> None:
