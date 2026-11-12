@@ -315,7 +315,10 @@ the empty string. Each removal logs one warning on the `ag2.ag_ui` logger, namin
 such as `/messages/0/content/1`. Open objects — `state`, `forwardedProps`,
 `metadata`, a tool's `parameters` — are values rather than protocol members and
 are passed on whole. A known field carrying a value the schema rejects is
-malformed, not unrecognised, and the body is refused with `400`. `dispatch` strips
+malformed, not unrecognised, and the body is refused with `400`. That includes
+a data source's `value` or a tool call's `encryptedValue` that is not strict
+base64: a character outside the alphabet, whitespace or a line break refuses
+it rather than being skipped. `dispatch` strips
 unknown properties from a `RunAgentInput` you validated yourself, but a role or
 part type your own validation rejected never reaches it.
 

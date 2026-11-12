@@ -632,9 +632,12 @@ class AgentRun(Generic[TResult, TAgent]):
         final model call, so a message enqueued while the turn is driving is
         consumed by that turn; one enqueued before ``result()`` merges into the
         first model call; one enqueued after the turn completes waits for the
-        next turn on this stream. Safe to call from a stream subscriber (inline
-        during the drive) or a concurrent task — it appends at once and
-        announces the message with ``MessageEnqueued`` from a background task.
+        next turn on this stream. A turn that ends without another model call —
+        on a ``final`` tool result or with calls handed to a client tool —
+        leaves the message for the next turn too. Safe to call from a stream
+        subscriber (inline during the drive) or a concurrent task — it appends
+        at once and announces the message with ``MessageEnqueued`` from a
+        background task.
 
         The message counts as user input: when the turn consumes it, a new
         ``History.since_last_user_input()`` interval starts.
@@ -2029,7 +2032,14 @@ async def _execute_turn(event: BaseEvent, context: Context) -> ModelResponse:
         message: ModelResponse = await result
 
     while True:
-        if message.tool_calls and not message.response_force:
+        if message.response_force:
+            # A final tool result or calls handed to the client end the turn with
+            # this response; another model call would replace the final reply or
+            # drop the client calls. Input enqueued meanwhile stays in the inbox
+            # for the next turn on this stream.
+            return message
+
+        if message.tool_calls:
             # Sending tool_calls triggers the tool executor, which produces a
             # ToolResultsEvent (or, for `final` tool results, a ModelResponse
             # directly). _call_client (auto-subscribed to ToolResultsEvent)
