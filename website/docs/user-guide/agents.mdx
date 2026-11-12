@@ -235,6 +235,8 @@ print(await reply.content())
 * **while the turn is running** → consumed by that same turn's next or final model call;
 * **after** the turn finishes → waits for the next turn on this stream.
 
+A turn that ends without another model call — a tool returned `ToolResult(..., final=True)`, or the model called a `ClientTool` and the calls go back to the client — has no model call left to consume the message, so it waits for the next turn on this stream as well. When the client resumes with the tool results, the message reaches the model right after them.
+
 A message sent with `run.enqueue` counts as user input, so it starts a new
 interval for [history queries scoped to the current user input](/docs/user-guide/advanced/stream#scope-to-the-current-user-input).
 
