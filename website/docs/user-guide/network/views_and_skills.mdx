@@ -50,13 +50,15 @@ All four views honour audience: an envelope addressed only to `[bob]` doesn't ap
     In a **3+ party** channel (discussion, workflow), every non-self envelope collapses into the same `#!python role: "user"` stream. Without a sender label the LLM can't tell which peer said which message. The `#!python Named*` variants put `#!python [<sender name>]:` on each non-self line so the orchestrator / next speaker can route accurately. This is the default for N-party adapters precisely because the role bit alone isn't enough.
 
 ```python linenums="1"
-from ag2.network import FullTranscript, WindowedSummary
+from ag2.network import FullTranscript, WindowedSummary, ensure_parts
 
+adapter = hub.adapter_for(metadata.channel_id)
 view = WindowedSummary(recent_n=12)
 projected = await view.project(
-    history=wal_slice,
+    wal=wal_slice,
     participant_id=carol.agent_id,
     channel=metadata,
+    render_envelope=lambda envelope: ensure_parts(adapter.render_envelope(envelope)),
 )
 ```
 
