@@ -155,10 +155,10 @@ If `api_key` is omitted, the Perplexity SDK reads the `PERPLEXITY_API_KEY` envir
 | Tool | Description |
 | :--- | :--- |
 | `perplexity_search` | Raw web search via the [Search API](https://docs.perplexity.ai/docs/search/quickstart){.external-link target="_blank"} — ranked title/url/snippet/date results, no LLM hop |
-| `perplexity_answer` | LLM-generated answer with citations via [Sonar Chat Completions](https://docs.perplexity.ai/docs/sonar/openai-compatibility){.external-link target="_blank"} — also returns search results, citations, and optional images |
+| `perplexity_answer` | LLM-generated answer with citations via [Sonar Chat Completions](https://docs.perplexity.ai/api-reference/sonar-post){.external-link target="_blank"} — also returns search results, citations, and optional images |
 
-!!! warning "Sonar compatibility during the Agent API migration"
-    `perplexity_answer` sends requests to synchronous Sonar Chat Completions. These requests remain available through automatic routing to Perplexity's Agent API; using an async Python client does not mean the tool uses the discontinued Sonar async endpoints. Perplexity does not guarantee exact compatibility for every Sonar-specific parameter or response field, so verify the options and results your application depends on. The toolkit's `PerplexitySearchResponse` does not include suggested follow-up questions. See [Perplexity's AG2 integration guidance](https://docs.perplexity.ai/docs/getting-started/integrations/ag2){.external-link target="_blank"} and [Sonar migration guide](https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/how-to){.external-link target="_blank"}.
+!!! warning "Sonar Chat Completions support has ended"
+    Perplexity ended support for Sonar Chat Completions on September 27, 2026. The synchronous requests that `perplexity_answer` sends still work: Perplexity is gradually reformulating them as Agent API requests, model by model, and does not guarantee that every Sonar-specific parameter or response field survives. Some Sonar options, such as `return_related_questions` and `search_mode="academic"`, have no direct Agent API equivalent, so test the options your application depends on. See [Perplexity's AG2 integration notes](https://docs.perplexity.ai/docs/getting-started/integrations/ag2){.external-link target="_blank"} and the [Sonar migration guide](https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/how-to){.external-link target="_blank"}.
 
 ### Picking a subset of tools
 
