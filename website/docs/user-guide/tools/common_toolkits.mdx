@@ -155,7 +155,10 @@ If `api_key` is omitted, the Perplexity SDK reads the `PERPLEXITY_API_KEY` envir
 | Tool | Description |
 | :--- | :--- |
 | `perplexity_search` | Raw web search via the [Search API](https://docs.perplexity.ai/docs/search/quickstart){.external-link target="_blank"} — ranked title/url/snippet/date results, no LLM hop |
-| `perplexity_answer` | LLM-generated answer with citations via [Sonar Chat Completions](https://docs.perplexity.ai/docs/sonar/openai-compatibility){.external-link target="_blank"} — also returns search results, citations, and optional images |
+| `perplexity_answer` | LLM-generated answer with citations via [Sonar Chat Completions](https://docs.perplexity.ai/api-reference/sonar-post){.external-link target="_blank"} — also returns search results, citations, and optional images |
+
+!!! warning "Sonar Chat Completions support has ended"
+    Perplexity ended support for Sonar Chat Completions on September 27, 2026. The synchronous requests that `perplexity_answer` sends still work: Perplexity is gradually reformulating them as Agent API requests, model by model, and does not guarantee that every Sonar-specific parameter or response field survives. Some Sonar options, such as `return_related_questions` and `search_mode="academic"`, have no direct Agent API equivalent, so test the options your application depends on. See [Perplexity's AG2 integration notes](https://docs.perplexity.ai/docs/getting-started/integrations/ag2){.external-link target="_blank"} and the [Sonar migration guide](https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/how-to){.external-link target="_blank"}.
 
 ### Picking a subset of tools
 
@@ -194,7 +197,6 @@ answer_tool = toolkit.answer(
     search_mode="academic",         # "web" | "academic" | "sec"
     search_recency_filter="month",  # "hour" | "day" | "week" | "month" | "year"
     return_images=True,             # include image URLs in the response
-    return_related_questions=True,  # include suggested follow-up questions
     search_domain_filter=["arxiv.org", "nature.com"],
 )
 
