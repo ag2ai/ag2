@@ -168,6 +168,40 @@ def test_explicit_schema_is_preserved() -> None:
     }
 
 
+def test_explicit_schema_keeps_the_callers_title() -> None:
+    explicit = {
+        "title": "Shared input schema",
+        "type": "object",
+        "properties": {"x": {"title": "X", "type": "string"}},
+        "required": ["x"],
+    }
+
+    @tool(schema=explicit)
+    def my_tool(x: str) -> str:
+        """Tool description."""
+        return x
+
+    assert explicit == {
+        "title": "Shared input schema",
+        "type": "object",
+        "properties": {"x": {"title": "X", "type": "string"}},
+        "required": ["x"],
+    }
+    assert asdict(my_tool.schema) == {
+        "function": {
+            "description": "Tool description.",
+            "name": "my_tool",
+            "parameters": {
+                "type": "object",
+                "properties": {"x": {"title": "X", "type": "string"}},
+                "required": ["x"],
+            },
+        },
+        "type": "function",
+        "defer_loading": False,
+    }
+
+
 def test_create_dynamic_options() -> None:
     @tool
     def my_tool(a: str | None = None, **kwargs: Any) -> str:
