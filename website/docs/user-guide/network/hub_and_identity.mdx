@@ -120,25 +120,53 @@ When a rule's check fails, the hub raises `#!python AccessDeniedError` (deny by 
 ## Authentication
 
 ```python linenums="1"
-from ag2.network import AuthAdapter, AuthRegistry, NoAuth
+import os
 
-# default: NoAuth registered for the empty scheme
-hub = await Hub.open(store)
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import ApiKeyAuth, AuthBlock, AuthRegistry, Hub, Passport
 
-# explicit:
-auth = AuthRegistry()
-auth.register("hmac", MyHMACAdapter())
-hub = await Hub.open(store, auth=auth)
+# Set ALICE_API_KEY to the shared secret before running this example.
+token = os.environ["ALICE_API_KEY"]
+auth = AuthRegistry([ApiKeyAuth(keys={"alice": token})])
+hub = await Hub.open(MemoryKnowledgeStore(), auth=auth)
+try:
+    alice = await hub.register(
+        Agent("alice"),
+        passport=Passport(
+            name="alice",
+            auth=AuthBlock(scheme="api_key", claim={"token": token}),
+        ),
+    )
+    # Use alice to open channels and send messages here.
+finally:
+    await hub.close()
 ```
 
-`#!python AuthAdapter` is a `#!python Protocol`:
+Pass adapters to the `#!python AuthRegistry` constructor; each adapter's
+`#!python scheme` is its lookup key. This registry accepts only `#!python "api_key"`.
+Add `#!python NoAuth()` to the list only when unauthenticated registration should
+also be allowed. `#!python AuthRegistry.default()` contains only `#!python NoAuth()`,
+under the `#!python "none"` scheme used by a default `#!python AuthBlock()`.
+
+Custom adapters implement the `#!python AuthAdapter` protocol:
 
 ```python
+from typing import Any, Protocol
+
+from ag2.network import Passport
+
 class AuthAdapter(Protocol):
-    async def verify(self, passport: Passport, credentials: AuthBlock) -> None: ...
+    scheme: str
+
+    async def validate(self, passport: Passport, claim: dict[str, Any]) -> None: ...
 ```
 
-Hub calls `verify(...)` at registration. Raise `#!python AuthError` to reject. The default registry registers `#!python NoAuth` for the empty scheme so the simple in-process flow works with no setup.
+The hub calls `#!python validate(...)` at registration and at a transport's
+`#!python HelloFrame` re-attach. Raise `#!python AuthError` to reject. Validate the
+supplied `#!python claim` against the adapter's configured secrets: the hub stores
+the passport without its claim, so `#!python passport.auth.claim` is empty on
+re-attach.
 
 ## Audit Log
 
@@ -174,7 +202,7 @@ The kind set is **open** — tenants and hub subclasses can write their own kind
 |---|---|
 | `#!python await hub.get_channel(channel_id)` | `#!python ChannelMetadata` snapshot. |
 | `#!python await hub.get_resume(agent_id)` | Current `#!python Resume`. |
-| `#!python await hub.get_passport(agent_id)` | Current `#!python Passport`. |
+| `#!python await hub.get_agent(name_or_id)` | Current `#!python Passport`, looked up by name or id. |
 | `#!python await hub.read_wal(channel_id)` | Ordered list of `#!python Envelope`s in that channel. |
 | `#!python hub.audit_log` | The `#!python AuditLog` instance — `#!python await hub.audit_log.read_all()` for every record, `#!python hub.audit_log.subscribe(cb)` to live-tail. |
 | `#!python hub.health()` | Cheap in-memory operational snapshot (`active_channels`, `registered_agents`, `pending_inbox_total`, `max_pending_inbox_depth`, `registered_listeners`, `adapters_loaded`, `audit_log_bytes`). |
