@@ -46,14 +46,13 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import AG2Error, UnsupportedInputError, UnsupportedToolError
-from ag2.response import DecisionSpec, NotADecisionError, ResponseProto
+from ag2.response import DecisionSet, DecisionSpec, NotADecisionError, ResponseProto
+from ag2.response.decision import ANSWER_KEY, DecisionValue
 from ag2.tools.schemas import ToolSchema
 
 from .mappers import _RESPONSES_IMAGE_DETAILS, _image_detail, _kind_label
 
 PROVIDER = "openai-decisions"
-
-ANSWER_KEY = "answer"  # Name of the single question sent per request
 
 
 class UnsupportedResponseSchemaError(NotADecisionError):
@@ -62,8 +61,8 @@ class UnsupportedResponseSchemaError(NotADecisionError):
     def __init__(self, reason: str) -> None:
         super().__init__(
             f"{reason} The OpenAI Decisions API is decision-only: use `bool`, an `Enum` of strings, "
-            "an `IntEnum` numbered from 0, or a `0..1` number schema from `ResponseSchema.from_schema` "
-            "as `response_schema`."
+            "an `IntEnum` numbered from 0, a `0..1` number schema from `ResponseSchema.from_schema`, "
+            "or a flat class whose required fields are each one of those as `response_schema`."
         )
 
 
@@ -199,8 +198,46 @@ def response_proto_to_question(
     serializer: SerializerProto,
     descriptions: Mapping[str, str] | None = None,
 ) -> Question:
-    """Convert a ``response_schema`` to the single Decisions question: predicate, choice or score."""
+    """Convert a scalar ``response_schema`` to the single Decisions question: predicate, choice or score."""
     spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
+    return _spec_to_question(
+        spec, name=ANSWER_KEY, instructions=instructions, serializer=serializer, descriptions=descriptions
+    )
+
+
+def response_proto_to_questions(
+    response: ResponseProto[Any] | None,
+    *,
+    instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None,
+    serializer: SerializerProto,
+    descriptions: Mapping[str, str] | None = None,
+) -> list[Question]:
+    """Convert a ``response_schema`` to the questions of one request.
+
+    A scalar schema is one question named ``"answer"``; a flat class is one question per field,
+    each led by the shared ``instructions``.
+    """
+    decisions = DecisionSet.from_response(response, error=UnsupportedResponseSchemaError)
+    if not decisions.is_scalar and descriptions:
+        raise ValueError(
+            "`OpenAIDecisionsConfig(descriptions=...)` is keyed by option value, so it only applies to a "
+            "single-question `response_schema`: describe each field's options with "
+            "`Annotated[..., Question(options=...)]`."
+        )
+    return [
+        _spec_to_question(spec, name=name, instructions=instructions, serializer=serializer, descriptions=descriptions)
+        for name, spec in decisions.items()
+    ]
+
+
+def _spec_to_question(
+    spec: DecisionSpec,
+    *,
+    name: str,
+    instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None,
+    serializer: SerializerProto,
+    descriptions: Mapping[str, str] | None,
+) -> Question:
     instructions_param = _question_instructions(instructions, spec.question, serializer)
     if not instructions_param:
         # Every question type requires instructions; fail before the request with a way out.
@@ -212,7 +249,7 @@ def response_proto_to_question(
     descriptions = descriptions or {}
 
     if spec.kind == "predicate":
-        return QuestionQuestionParamPredicate(type="predicate", name=ANSWER_KEY, instructions=instructions_param)
+        return QuestionQuestionParamPredicate(type="predicate", name=name, instructions=instructions_param)
 
     if spec.kind == "choice":
         choices: list[QuestionQuestionParamChoiceChoice] = []
@@ -221,9 +258,7 @@ def response_proto_to_question(
             if description := descriptions.get(str(option.value)) or option.description:
                 choice["description"] = description
             choices.append(choice)
-        return QuestionQuestionParamChoice(
-            type="choice", name=ANSWER_KEY, instructions=instructions_param, choices=choices
-        )
+        return QuestionQuestionParamChoice(type="choice", name=name, instructions=instructions_param, choices=choices)
 
     # The API numbers levels by position, so the rubric must already be 0..n-1.
     if not spec.is_rubric or len(spec.options) < 2:
@@ -234,11 +269,11 @@ def response_proto_to_question(
         if description := descriptions.get(str(option.value)) or option.description:
             level["description"] = description
         levels.append(level)
-    return QuestionQuestionParamScore(type="score", name=ANSWER_KEY, instructions=instructions_param, levels=levels)
+    return QuestionQuestionParamScore(type="score", name=name, instructions=instructions_param, levels=levels)
 
 
 def find_answer(decision: Decision) -> Answer:
-    """The answer to the one question sent, raising if the API declined it."""
+    """The answer to the one question a scalar schema sends, raising if the API declined it."""
     answer = next((a for a in decision.answers if a.name == ANSWER_KEY), None)
     if answer is None:
         if len(decision.answers) != 1:
@@ -252,19 +287,47 @@ def find_answer(decision: Decision) -> Answer:
 def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, boolean_threshold: float = 0.5) -> str:
     """Render a Decisions answer as the JSON the ``response_schema`` validates."""
     spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
+    return spec.render(_answer_value(spec, answer, boolean_threshold=boolean_threshold))
 
-    value: bool | int | float | str
+
+def answers_to_reply(
+    response: ResponseProto[Any] | None, decision: Decision, *, boolean_threshold: float = 0.5
+) -> tuple[str, dict[str, Any]]:
+    """Render the answers to every question as the schema's JSON, with the metadata for ``ModelMessage``.
+
+    A refusal of any question fails the whole reply with ``DecisionRefusedError``. The metadata
+    is the answer itself for a single question, and ``{field: answer}`` for a class.
+    """
+    decisions = DecisionSet.from_response(response, error=UnsupportedResponseSchemaError)
+    if decisions.is_scalar:
+        answer = find_answer(decision)
+        value = _answer_value(decisions[ANSWER_KEY], answer, boolean_threshold=boolean_threshold)
+        return decisions.render({ANSWER_KEY: value}), answer_metadata(answer)
+
+    by_name = {a.name: a for a in decision.answers if a.name in decisions}
+    # A declined question has no value of the schema, so the whole reply fails, whatever else is missing.
+    if refused := next((a for a in by_name.values() if isinstance(a, AnswerAnswerResourceRefusal)), None):
+        raise DecisionRefusedError(refused.name)
+
+    values: dict[str, DecisionValue] = {}
+    metadata: dict[str, Any] = {}
+    for name, spec in decisions.items():
+        if (named := by_name.get(name)) is None:
+            raise ValueError(f"OpenAI Decisions returned no answer for question {name!r}.")
+        values[name] = _answer_value(spec, named, boolean_threshold=boolean_threshold)
+        metadata[name] = answer_metadata(named)
+    return decisions.render(values), metadata
+
+
+def _answer_value(spec: DecisionSpec, answer: Answer, *, boolean_threshold: float) -> DecisionValue:
     if isinstance(answer, AnswerAnswerResourcePredicate):
-        value = spec.predicate_value(answer.probability, threshold=boolean_threshold)
-    elif isinstance(answer, AnswerAnswerResourceChoice):
-        value = answer.choice
-    elif isinstance(answer, AnswerAnswerResourceRefusal):
+        return spec.predicate_value(answer.probability, threshold=boolean_threshold)
+    if isinstance(answer, AnswerAnswerResourceChoice):
+        return answer.choice
+    if isinstance(answer, AnswerAnswerResourceRefusal):
         raise DecisionRefusedError(answer.name)
-    else:
-        # `score` is the probability-weighted mean of the level indices; snap to the nearest level.
-        value = spec.snap_score(answer.score)
-
-    return spec.render(value)
+    # `score` is the probability-weighted mean of the level indices; snap to the nearest level.
+    return spec.snap_score(answer.score)
 
 
 def answer_metadata(answer: Answer) -> dict[str, Any]:

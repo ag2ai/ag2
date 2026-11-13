@@ -5,6 +5,11 @@ date: 2026-09-23
 
 # 0018. The TypeSafe provider is decision-only: the response schema is the question
 
+> **Amended by [0038](0038-decision-schema-class-is-several-questions-in-one-request.md):**
+> a flat class as `response_schema` is several questions, one per field, sent in one request.
+> The "one `ask()` is one question" rule in decision 1 now holds only for a scalar schema;
+> everything else below stands.
+
 ## Context
 
 TypeSafe AI's Jev model does not generate text. Its System One API takes a

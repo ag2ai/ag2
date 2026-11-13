@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any
+from typing import Annotated, Any
 
 import httpx2
 import pytest
@@ -16,6 +17,7 @@ from ag2.config import TypeSafeConfig
 from ag2.config.typesafe import BoundingBox, TypeSafeClient
 from ag2.events import Usage
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.response import Question
 from ag2.tools import tool
 
 
@@ -29,6 +31,13 @@ class Severity(IntEnum):
     """Cosmetic."""
     HIGH = 1
     """Outage."""
+
+
+@dataclass
+class Triage:
+    is_spam: Annotated[bool, Question("Is this message spam?")]
+    department: Annotated[Department, Question("Which team should handle this ticket?")]
+    severity: Annotated[Severity, Question("How severe is this?")]
 
 
 @tool
@@ -312,3 +321,60 @@ async def test_api_errors_propagate() -> None:
         await router.ask("My payouts are failing.")
 
     assert len(requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_agent_asks_every_field_of_a_class_in_one_request() -> None:
+    requests: list[dict[str, Any]] = []
+    answers = {
+        "is_spam": {"type": "noul", "noul": 0.04},
+        "department": {"type": "choice", "choice": "billing", "confidence": 0.74, "probabilities": {"billing": 0.8}},
+        "severity": {
+            "type": "score",
+            "score": 0.9,
+            "confidence": 0.6,
+            "legend": {"0": "Cosmetic.", "1": "Outage."},
+            "probabilities": {"0": 0.1, "1": 0.9},
+        },
+    }
+    triage = Agent(
+        "triage",
+        prompt="You triage support tickets.",
+        config=TypeSafeConfig(api_key="test-key", http_client=_fake_api(requests, answers)),
+        response_schema=Triage,
+    )
+
+    reply = await triage.ask("I was charged twice for my order.")
+
+    assert await reply.content() == Triage(is_spam=False, department=Department.BILLING, severity=Severity.HIGH)
+    assert reply.response.metadata == {
+        "is_spam": {"noul": 0.04},
+        "department": {"choice": "billing", "confidence": 0.74, "probabilities": {"billing": 0.8}},
+        "severity": {
+            "score": 0.9,
+            "confidence": 0.6,
+            "legend": {0: "Cosmetic.", 1: "Outage."},
+            "probabilities": {0: 0.1, 1: 0.9},
+        },
+    }
+    assert requests == [
+        IsPartialDict({
+            "state": [{"role": "user", "content": "I was charged twice for my order."}],
+            "questions": {
+                "is_spam": IsPartialDict({
+                    "type": "noul",
+                    "instructions": "You triage support tickets.\n\nIs this message spam?",
+                }),
+                "department": {
+                    "type": "choice",
+                    "instructions": "You triage support tickets.\n\nWhich team should handle this ticket?",
+                    "criteria": {"billing": None, "technical": None},
+                },
+                "severity": IsPartialDict({
+                    "type": "score",
+                    "instructions": "You triage support tickets.\n\nHow severe is this?",
+                    "criteria": ["Cosmetic.", "Outage."],
+                }),
+            },
+        })
+    ]

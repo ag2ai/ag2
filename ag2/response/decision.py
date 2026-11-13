@@ -2,31 +2,42 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Read a decision question out of a ``response_schema``, for the decision-only providers.
+"""Read decision questions out of a ``response_schema``, for the decision-only providers.
 
-TypeSafe's Jev and OpenAI's Decisions API both answer one typed question instead of
-generating text, and both take the question from the agent's ``response_schema``. The
-schema is classified once here; how it becomes a request is up to the provider.
+TypeSafe's Jev and OpenAI's Decisions API both answer typed questions instead of
+generating text, and both take the questions from the agent's ``response_schema``: a
+scalar is one question, a flat class is one question per field, all sent in one request.
+The schema is classified once here; how it becomes a request is up to the provider.
 """
 
 import ast
 import inspect
 import json
 import textwrap
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache
-from typing import Annotated, Any, Literal, get_args, get_origin
+from typing import Annotated, Any, Literal, get_args, get_origin, get_type_hints
 
 from ag2.exceptions import AG2Error
 
 from .proto import ResponseProto
 from .schema import ResponseSchema, strip_annotated
 
-__all__ = ("DecisionKind", "DecisionOption", "DecisionSpec", "NotADecisionError", "Question")
+__all__ = (
+    "DecisionKind",
+    "DecisionOption",
+    "DecisionSet",
+    "DecisionSpec",
+    "NotADecisionError",
+    "Question",
+)
 
 DecisionKind = Literal["predicate", "choice", "score"]
+DecisionValue = bool | int | float | str
+
+ANSWER_KEY = "answer"  # Name of the question a scalar ``response_schema`` is sent under
 
 
 class NotADecisionError(AG2Error):
@@ -78,6 +89,20 @@ class DecisionSpec:
         enum_type = _enum_type(response)
         markers = _markers(response)
         question = _question(response, node, enum_type, markers)
+        return cls._classify(node, question, enum_type, markers, embedded=embedded, error=error)
+
+    @classmethod
+    def _classify(
+        cls,
+        node: Mapping[str, Any],
+        question: str | None,
+        enum_type: type[Enum] | None,
+        markers: list[Question],
+        *,
+        embedded: bool,
+        error: type[NotADecisionError],
+        subject: str = "`response_schema`",
+    ) -> "DecisionSpec":
         values = node.get("enum")
         _check_option_keys(markers, values or [])
 
@@ -93,7 +118,7 @@ class DecisionSpec:
             # The score APIs number levels by position, so order them by value, not by declaration.
             return cls("score", question, _options(sorted(values), enum_type, markers), False, embedded)
 
-        raise error("`response_schema` is not a decision type.")
+        raise error(f"{subject} is not a decision type.")
 
     @property
     def is_rubric(self) -> bool:
@@ -108,9 +133,122 @@ class DecisionSpec:
         """For a score: the nearest valid level, clamped to the rubric."""
         return min(max(round(score), 0), len(self.options) - 1)
 
-    def render(self, value: bool | int | float | str) -> str:
+    def render(self, value: DecisionValue) -> str:
         """The JSON the ``response_schema`` validates."""
         return json.dumps({"data": value} if self.embedded else value)
+
+
+class DecisionSet(Mapping[str, DecisionSpec]):
+    """A ``response_schema`` read as the named questions of one request.
+
+    A scalar schema (``bool``, a string ``Enum``, an ``IntEnum``, a ``0..1`` number) is one
+    question named ``"answer"``. A flat class (a dataclass, a ``TypedDict``, a Pydantic model)
+    is one question per field, named after the field and asked by its ``Question(...)``,
+    ``Field(description=...)`` or ``Enum`` docstring.
+    """
+
+    __slots__ = ("_scalar", "_specs")
+
+    def __init__(self, specs: Mapping[str, DecisionSpec], *, scalar: bool) -> None:
+        self._specs = dict(specs)
+        self._scalar = scalar
+
+    @classmethod
+    def from_response(
+        cls, response: ResponseProto[Any] | None, *, error: type[NotADecisionError] = NotADecisionError
+    ) -> "DecisionSet":
+        """Read ``response``, raising ``error`` (a provider's own subclass, say) if it is not a decision."""
+        root = response.json_schema if response is not None else None
+        if response is None or not root or not _is_object_schema(response, root):
+            return cls({ANSWER_KEY: DecisionSpec.from_response(response, error=error)}, scalar=True)
+        return cls(_field_specs(response, root, error), scalar=False)
+
+    @property
+    def is_scalar(self) -> bool:
+        """Whether the schema is one value asked as ``"answer"``, rather than a class of fields."""
+        return self._scalar
+
+    def render(self, values: Mapping[str, DecisionValue]) -> str:
+        """The JSON the ``response_schema`` validates, from each question's value."""
+        if self._scalar:
+            return self._specs[ANSWER_KEY].render(values[ANSWER_KEY])
+        return json.dumps({name: values[name] for name in self._specs})
+
+    def __getitem__(self, name: str) -> DecisionSpec:
+        return self._specs[name]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._specs)
+
+    def __len__(self) -> int:
+        return len(self._specs)
+
+    def __repr__(self) -> str:
+        return f"DecisionSet({self._specs!r}, scalar={self._scalar!r})"
+
+
+def _is_object_schema(response: ResponseProto[Any], root: Mapping[str, Any]) -> bool:
+    """Whether ``root`` is a class of fields, as opposed to a scalar or ``ResponseSchema``'s ``{"data": ...}`` envelope."""
+    if root.get("type") != "object" or not isinstance(root.get("properties"), Mapping):
+        return False
+    if isinstance(response, ResponseSchema):
+        # A class with a single ``data`` field looks like the envelope; the schema knows which it built.
+        return not response._embedded_type
+    return set(root["properties"]) != {"data"}
+
+
+def _field_specs(
+    response: ResponseProto[Any], root: Mapping[str, Any], error: type[NotADecisionError]
+) -> dict[str, DecisionSpec]:
+    if root.get("additionalProperties") not in (None, False):
+        raise error("`response_schema` allows additional properties; each question must be a declared field.")
+
+    if not root["properties"]:
+        # Both APIs reject a request without questions.
+        raise error("`response_schema` has no fields; a class needs at least one question.")
+
+    required = set(root.get("required", ()))
+    hints = _field_hints(response)
+    specs: dict[str, DecisionSpec] = {}
+    for name, prop in root["properties"].items():
+        subject = f"Field {name!r} of `response_schema`"
+        if name not in required:
+            raise error(f"{subject} is optional or has a default; every question must be a required field.")
+
+        hint = hints.get(name)
+        bare = strip_annotated(hint) if hint is not None else None
+        enum_type = bare if isinstance(bare, type) and issubclass(bare, Enum) else None
+        markers = [m for m in get_args(hint)[1:] if isinstance(m, Question)] if get_origin(hint) is Annotated else []
+
+        node = _resolve_ref(root, prop)
+        marked = next((m.question for m in reversed(markers) if m.question), None)
+        # ``Field(description=)`` sits on the property, an ``Enum`` docstring on the definition it refers to.
+        question = marked or prop.get("description") or node.get("description")
+        spec = DecisionSpec._classify(node, question, enum_type, markers, embedded=False, error=error, subject=subject)
+        if not question:
+            # OpenAI requires instructions on every question, and the prompt is shared by all fields.
+            raise ValueError(
+                f"{subject} has no question: annotate it with `Annotated[..., Question('...')]` "
+                "or `Field(description=...)`, or document its `Enum`."
+            )
+        specs[name] = spec
+    return specs
+
+
+def _field_hints(response: ResponseProto[Any]) -> dict[str, Any]:
+    """The class's annotations with ``Annotated`` kept: the ``Question`` marker does not reach the JSON schema."""
+    if not isinstance(response, ResponseSchema):
+        return {}
+    cls = strip_annotated(response.types)
+    return get_type_hints(cls, include_extras=True) if isinstance(cls, type) else {}
+
+
+def _resolve_ref(root: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[str, Any]:
+    ref = node.get("$ref")
+    if isinstance(ref, str) and ref.startswith("#/$defs/"):
+        resolved: Mapping[str, Any] = root.get("$defs", {}).get(ref.removeprefix("#/$defs/"), node)
+        return resolved
+    return node
 
 
 def _decision_node(root: Mapping[str, Any]) -> tuple[Mapping[str, Any], bool]:
@@ -122,10 +260,7 @@ def _decision_node(root: Mapping[str, Any]) -> tuple[Mapping[str, Any], bool]:
         # The envelope's description is ag2 boilerplate, not a question for the model.
         node = {k: v for k, v in properties["data"].items() if k != "description"}
 
-    ref = node.get("$ref")
-    if isinstance(ref, str) and ref.startswith("#/$defs/"):
-        node = root.get("$defs", {}).get(ref.removeprefix("#/$defs/"), node)
-    return node, embedded
+    return _resolve_ref(root, node), embedded
 
 
 def _enum_type(response: ResponseProto[Any]) -> type[Enum] | None:

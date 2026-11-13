@@ -4,8 +4,8 @@
 
 import json
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any
+from enum import Enum, IntEnum
+from typing import Annotated, Any
 
 import httpx2
 import pytest
@@ -16,6 +16,7 @@ from ag2.config import OpenAIDecisionsConfig
 from ag2.config.openai import DecisionRefusedError, OpenAIDecisionsClient
 from ag2.events import Usage
 from ag2.exceptions import UnsupportedToolError
+from ag2.response import Question
 from ag2.tools import tool
 
 USAGE = {
@@ -34,6 +35,40 @@ class Department(Enum):
     """Payments, invoices, and refunds."""
     TECHNICAL = "technical"
     """Problems using the product."""
+
+
+class Urgency(IntEnum):
+    LOW = 0
+    HIGH = 1
+
+
+@dataclass
+class Triage:
+    is_spam: Annotated[bool, Question("Is this message spam?")]
+    department: Department
+    urgency: Annotated[Urgency, Question("How urgent is this ticket?")]
+
+
+TRIAGE_ANSWERS = (
+    {"type": "predicate", "name": "is_spam", "probability": 0.03},
+    {
+        "type": "choice",
+        "name": "department",
+        "choice": "billing",
+        "confidence": 0.74,
+        "probabilities": [{"value": "billing", "probability": 0.8}, {"value": "technical", "probability": 0.2}],
+    },
+    {
+        "type": "score",
+        "name": "urgency",
+        "score": 0.2,
+        "confidence": 0.8,
+        "probabilities": [
+            {"value": 0, "label": "Low", "probability": 0.8},
+            {"value": 1, "label": "High", "probability": 0.2},
+        ],
+    },
+)
 
 
 @tool
@@ -267,3 +302,76 @@ async def test_tools_are_rejected_before_the_request() -> None:
     with pytest.raises(UnsupportedToolError, match="openai-decisions"):
         await agent.ask("hi")
     assert requests == []
+
+
+@pytest.mark.asyncio
+async def test_agent_asks_every_field_of_a_class_in_one_request() -> None:
+    requests: list[httpx2.Request] = []
+    triage = Agent(
+        "triage",
+        prompt="You triage support tickets.",
+        config=OpenAIDecisionsConfig(api_key="test-key", http_client=_fake_api(requests, *TRIAGE_ANSWERS)),
+        response_schema=Triage,
+    )
+
+    reply = await triage.ask("I was charged twice for my order.")
+
+    assert await reply.content() == Triage(is_spam=False, department=Department.BILLING, urgency=Urgency.LOW)
+    assert reply.response.metadata == {
+        "is_spam": {"probability": 0.03},
+        "department": {
+            "choice": "billing",
+            "confidence": 0.74,
+            "probabilities": [{"value": "billing", "probability": 0.8}, {"value": "technical", "probability": 0.2}],
+        },
+        "urgency": {
+            "score": 0.2,
+            "confidence": 0.8,
+            "probabilities": [
+                {"value": 0, "label": "Low", "probability": 0.8},
+                {"value": 1, "label": "High", "probability": 0.2},
+            ],
+        },
+    }
+    [request] = requests
+    assert json.loads(request.content)["questions"] == [
+        {
+            "type": "predicate",
+            "name": "is_spam",
+            "instructions": "You triage support tickets.\n\nIs this message spam?",
+        },
+        {
+            "type": "choice",
+            "name": "department",
+            "instructions": "You triage support tickets.\n\nWhich department should handle this complaint?",
+            "choices": [
+                {"value": "billing", "description": "Payments, invoices, and refunds."},
+                {"value": "technical", "description": "Problems using the product."},
+            ],
+        },
+        {
+            "type": "score",
+            "name": "urgency",
+            "instructions": "You triage support tickets.\n\nHow urgent is this ticket?",
+            "levels": [{"label": "Low"}, {"label": "High"}],
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_refusal_of_one_field_fails_the_whole_reply() -> None:
+    is_spam, department, _ = TRIAGE_ANSWERS
+    triage = Agent(
+        "triage",
+        prompt="You triage support tickets.",
+        config=OpenAIDecisionsConfig(
+            api_key="test-key",
+            http_client=_fake_api([], is_spam, department, {"type": "refusal", "name": "urgency"}),
+        ),
+        response_schema=Triage,
+    )
+
+    with pytest.raises(DecisionRefusedError) as refused:
+        await triage.ask("I was charged twice for my order.")
+
+    assert refused.value.name == "urgency"
