@@ -112,6 +112,25 @@ class TestMemoryKnowledgeStore:
         await store.write("/watched/file.txt", "second")
         assert received == ["/watched/file.txt"]
 
+    async def test_closed_subscription_is_skipped_in_current_notification(self) -> None:
+        store = MemoryKnowledgeStore()
+        received: list[tuple[str, str]] = []
+
+        async def close_other(path: str) -> None:
+            received.append(("first", path))
+            await other.close()
+
+        async def record_other(path: str) -> None:
+            received.append(("second", path))
+
+        await store.on_change("/watched", close_other)
+        other = await store.on_change("/watched", record_other)
+
+        await store.write("/watched/first", "one")
+        await store.append("/watched/second", "two")
+
+        assert received == [("first", "/watched/first"), ("first", "/watched/second")]
+
 
 @pytest.mark.asyncio
 class TestEventLogWriter:
