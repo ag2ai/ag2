@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, make_dataclass
 from enum import Enum, IntEnum
 from typing import Annotated, Any
 
@@ -13,7 +13,7 @@ from dirty_equals import IsPartialDict
 
 from ag2 import Agent, DataInput, ImageInput, ResponseSchema
 from ag2.config import OpenAIDecisionsConfig
-from ag2.config.openai import DecisionRefusedError, OpenAIDecisionsClient
+from ag2.config.openai import DecisionRefusedError, OpenAIDecisionsClient, UnsupportedResponseSchemaError
 from ag2.events import Usage
 from ag2.exceptions import UnsupportedToolError
 from ag2.response import Question
@@ -375,3 +375,39 @@ async def test_refusal_of_one_field_fails_the_whole_reply() -> None:
         await triage.ask("I was charged twice for my order.")
 
     assert refused.value.name == "urgency"
+
+
+@pytest.mark.asyncio
+async def test_option_descriptions_apply_only_to_a_single_question() -> None:
+    requests: list[httpx2.Request] = []
+    triage = Agent(
+        "triage",
+        prompt="You triage support tickets.",
+        config=OpenAIDecisionsConfig(
+            api_key="test-key",
+            http_client=_fake_api(requests, *TRIAGE_ANSWERS),
+            descriptions={"billing": "Money."},
+        ),
+        response_schema=Triage,
+    )
+
+    with pytest.raises(ValueError, match="single-question"):
+        await triage.ask("I was charged twice for my order.")
+
+    assert requests == []
+
+
+@pytest.mark.asyncio
+async def test_more_fields_than_one_request_takes_are_rejected() -> None:
+    requests: list[httpx2.Request] = []
+    checklist = make_dataclass("Checklist", [(f"q{i}", Annotated[bool, Question(f"Check {i}?")]) for i in range(401)])
+    agent = Agent(
+        "checklist",
+        config=OpenAIDecisionsConfig(api_key="test-key", http_client=_fake_api(requests)),
+        response_schema=checklist,
+    )
+
+    with pytest.raises(UnsupportedResponseSchemaError, match="at most 400 questions"):
+        await agent.ask("I was charged twice for my order.")
+
+    assert requests == []

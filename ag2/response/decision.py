@@ -18,7 +18,11 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache
-from typing import Annotated, Any, Literal, get_args, get_origin, get_type_hints
+from typing import Annotated, Any, Literal, NotRequired, Required, get_args, get_origin, get_type_hints
+
+from pydantic import AliasChoices
+from pydantic.fields import FieldInfo
+from typing_extensions import ReadOnly
 
 from ag2.exceptions import AG2Error
 
@@ -26,10 +30,12 @@ from .proto import ResponseProto
 from .schema import ResponseSchema, strip_annotated
 
 __all__ = (
+    "ANSWER_KEY",
     "DecisionKind",
     "DecisionOption",
     "DecisionSet",
     "DecisionSpec",
+    "DecisionValue",
     "NotADecisionError",
     "Question",
 )
@@ -147,11 +153,15 @@ class DecisionSet(Mapping[str, DecisionSpec]):
     ``Field(description=...)`` or ``Enum`` docstring.
     """
 
-    __slots__ = ("_scalar", "_specs")
+    __slots__ = ("_keys", "_scalar", "_specs")
 
-    def __init__(self, specs: Mapping[str, DecisionSpec], *, scalar: bool) -> None:
+    def __init__(
+        self, specs: Mapping[str, DecisionSpec], *, scalar: bool, keys: Mapping[str, str] | None = None
+    ) -> None:
         self._specs = dict(specs)
         self._scalar = scalar
+        # The JSON key of each field where it differs from the field name: a Pydantic alias.
+        self._keys = dict(keys or {})
 
     @classmethod
     def from_response(
@@ -161,7 +171,14 @@ class DecisionSet(Mapping[str, DecisionSpec]):
         root = response.json_schema if response is not None else None
         if response is None or not root or not _is_object_schema(response, root):
             return cls({ANSWER_KEY: DecisionSpec.from_response(response, error=error)}, scalar=True)
-        return cls(_field_specs(response, root, error), scalar=False)
+        if _class_question(response):
+            # Each field is its own question; a question on the class would have nowhere to go.
+            raise ValueError(
+                "A class `response_schema` is one question per field, so the class takes no question of its "
+                "own: put what the fields share in the agent prompt and each field's in `Question(...)`."
+            )
+        specs, keys = _field_specs(response, root, error)
+        return cls(specs, scalar=False, keys=keys)
 
     @property
     def is_scalar(self) -> bool:
@@ -172,7 +189,7 @@ class DecisionSet(Mapping[str, DecisionSpec]):
         """The JSON the ``response_schema`` validates, from each question's value."""
         if self._scalar:
             return self._specs[ANSWER_KEY].render(values[ANSWER_KEY])
-        return json.dumps({name: values[name] for name in self._specs})
+        return json.dumps({self._keys.get(name, name): values[name] for name in self._specs})
 
     def __getitem__(self, name: str) -> DecisionSpec:
         return self._specs[name]
@@ -184,7 +201,7 @@ class DecisionSet(Mapping[str, DecisionSpec]):
         return len(self._specs)
 
     def __repr__(self) -> str:
-        return f"DecisionSet({self._specs!r}, scalar={self._scalar!r})"
+        return f"DecisionSet({self._specs!r}, scalar={self._scalar!r}, keys={self._keys!r})"
 
 
 def _is_object_schema(response: ResponseProto[Any], root: Mapping[str, Any]) -> bool:
@@ -193,13 +210,21 @@ def _is_object_schema(response: ResponseProto[Any], root: Mapping[str, Any]) -> 
         return False
     if isinstance(response, ResponseSchema):
         # A class with a single ``data`` field looks like the envelope; the schema knows which it built.
-        return not response._embedded_type
+        return not response.embedded
     return set(root["properties"]) != {"data"}
+
+
+def _class_question(response: ResponseProto[Any]) -> bool:
+    """Whether the caller asked the class itself a question: ``description=`` or an ``Annotated`` ``Question``."""
+    if not isinstance(response, ResponseSchema):
+        return bool(response.description)
+    return bool(response.explicit_description or _markers(response))
 
 
 def _field_specs(
     response: ResponseProto[Any], root: Mapping[str, Any], error: type[NotADecisionError]
-) -> dict[str, DecisionSpec]:
+) -> tuple[dict[str, DecisionSpec], dict[str, str]]:
+    """Each field's question by field name, and the JSON key of each field whose key is an alias."""
     if root.get("additionalProperties") not in (None, False):
         raise error("`response_schema` allows additional properties; each question must be a declared field.")
 
@@ -208,14 +233,16 @@ def _field_specs(
         raise error("`response_schema` has no fields; a class needs at least one question.")
 
     required = set(root.get("required", ()))
-    hints = _field_hints(response)
+    fields = _fields_by_key(response)
     specs: dict[str, DecisionSpec] = {}
-    for name, prop in root["properties"].items():
+    keys: dict[str, str] = {}
+    for key, prop in root["properties"].items():
+        field: tuple[str, Any] = fields.get(key, (key, None))
+        name, hint = field
         subject = f"Field {name!r} of `response_schema`"
-        if name not in required:
+        if key not in required:
             raise error(f"{subject} is optional or has a default; every question must be a required field.")
 
-        hint = hints.get(name)
         bare = strip_annotated(hint) if hint is not None else None
         enum_type = bare if isinstance(bare, type) and issubclass(bare, Enum) else None
         markers = [m for m in get_args(hint)[1:] if isinstance(m, Question)] if get_origin(hint) is Annotated else []
@@ -225,22 +252,62 @@ def _field_specs(
         # ``Field(description=)`` sits on the property, an ``Enum`` docstring on the definition it refers to.
         question = marked or prop.get("description") or node.get("description")
         spec = DecisionSpec._classify(node, question, enum_type, markers, embedded=False, error=error, subject=subject)
-        if not question:
+        if not question or not question.strip():
             # OpenAI requires instructions on every question, and the prompt is shared by all fields.
             raise ValueError(
                 f"{subject} has no question: annotate it with `Annotated[..., Question('...')]` "
                 "or `Field(description=...)`, or document its `Enum`."
             )
         specs[name] = spec
-    return specs
+        if key != name:
+            keys[name] = key
+    return specs, keys
 
 
-def _field_hints(response: ResponseProto[Any]) -> dict[str, Any]:
-    """The class's annotations with ``Annotated`` kept: the ``Question`` marker does not reach the JSON schema."""
+def _fields_by_key(response: ResponseProto[Any]) -> dict[str, tuple[str, Any]]:
+    """Each field of the class by its JSON key, as its name and its annotation with ``Annotated`` kept.
+
+    The ``Question`` marker does not reach the JSON schema, so it is read from the annotations,
+    which are keyed by field name; the schema is keyed by alias where a field has one.
+    """
     if not isinstance(response, ResponseSchema):
         return {}
     cls = strip_annotated(response.types)
-    return get_type_hints(cls, include_extras=True) if isinstance(cls, type) else {}
+    if not isinstance(cls, type):
+        return {}
+
+    pydantic_fields: Mapping[str, FieldInfo] = getattr(cls, "__pydantic_fields__", None) or {}
+    fields: dict[str, tuple[str, Any]] = {}
+    for name, hint in get_type_hints(cls, include_extras=True).items():
+        hint = _strip_qualifiers(hint)
+        info = pydantic_fields.get(name) or _annotated_field_info(hint)
+        fields[_json_key(name, info)] = (name, hint)
+    return fields
+
+
+def _strip_qualifiers(hint: Any) -> Any:
+    """The annotation under ``TypedDict`` qualifiers, which ``get_type_hints`` keeps around ``Annotated``."""
+    while get_origin(hint) in (Required, NotRequired, ReadOnly):
+        hint = get_args(hint)[0]
+    return hint
+
+
+def _annotated_field_info(hint: Any) -> FieldInfo | None:
+    if get_origin(hint) is not Annotated:
+        return None
+    return next((m for m in reversed(get_args(hint)[1:]) if isinstance(m, FieldInfo)), None)
+
+
+def _json_key(name: str, info: FieldInfo | None) -> str:
+    """The key Pydantic validates the field under, as its validation-mode JSON schema names it."""
+    if info is None:
+        return name
+    alias = info.validation_alias
+    if isinstance(alias, AliasChoices):
+        alias = alias.choices[0]
+    if isinstance(alias, str):
+        return alias
+    return info.alias or name
 
 
 def _resolve_ref(root: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[str, Any]:

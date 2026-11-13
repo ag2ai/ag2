@@ -53,6 +53,7 @@ from ag2.tools.schemas import ToolSchema
 from .mappers import _RESPONSES_IMAGE_DETAILS, _image_detail, _kind_label
 
 PROVIDER = "openai-decisions"
+MAX_QUESTIONS = 400  # The API's limit on questions per request
 
 
 class UnsupportedResponseSchemaError(NotADecisionError):
@@ -191,20 +192,6 @@ def _instruction_part(
     return item
 
 
-def response_proto_to_question(
-    response: ResponseProto[Any] | None,
-    *,
-    instructions: str | Sequence[str | Input | DecisionQuestionInputPart] | None,
-    serializer: SerializerProto,
-    descriptions: Mapping[str, str] | None = None,
-) -> Question:
-    """Convert a scalar ``response_schema`` to the single Decisions question: predicate, choice or score."""
-    spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
-    return _spec_to_question(
-        spec, name=ANSWER_KEY, instructions=instructions, serializer=serializer, descriptions=descriptions
-    )
-
-
 def response_proto_to_questions(
     response: ResponseProto[Any] | None,
     *,
@@ -223,6 +210,10 @@ def response_proto_to_questions(
             "`OpenAIDecisionsConfig(descriptions=...)` is keyed by option value, so it only applies to a "
             "single-question `response_schema`: describe each field's options with "
             "`Annotated[..., Question(options=...)]`."
+        )
+    if len(decisions) > MAX_QUESTIONS:
+        raise UnsupportedResponseSchemaError(
+            f"`response_schema` has {len(decisions)} fields; one request takes at most {MAX_QUESTIONS} questions."
         )
     return [
         _spec_to_question(spec, name=name, instructions=instructions, serializer=serializer, descriptions=descriptions)
@@ -282,12 +273,6 @@ def find_answer(decision: Decision) -> Answer:
     if isinstance(answer, AnswerAnswerResourceRefusal):
         raise DecisionRefusedError(answer.name)
     return answer
-
-
-def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, boolean_threshold: float = 0.5) -> str:
-    """Render a Decisions answer as the JSON the ``response_schema`` validates."""
-    spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
-    return spec.render(_answer_value(spec, answer, boolean_threshold=boolean_threshold))
 
 
 def answers_to_reply(

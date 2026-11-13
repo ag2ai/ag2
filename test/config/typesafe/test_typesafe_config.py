@@ -378,3 +378,19 @@ async def test_agent_asks_every_field_of_a_class_in_one_request() -> None:
             },
         })
     ]
+
+
+@pytest.mark.asyncio
+async def test_criteria_apply_only_to_a_single_question() -> None:
+    requests: list[dict[str, Any]] = []
+    triage = Agent(
+        "triage",
+        prompt="You triage support tickets.",
+        config=TypeSafeConfig(api_key="test-key", http_client=_fake_api(requests, {}), criteria={"billing": "Money."}),
+        response_schema=Triage,
+    )
+
+    with pytest.raises(ValueError, match="single-question"):
+        await triage.ask("I was charged twice for my order.")
+
+    assert requests == []

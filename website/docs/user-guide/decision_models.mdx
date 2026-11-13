@@ -645,11 +645,14 @@ reply.response.metadata["department"]["confidence"]  # 0.74
 </Tabs>
 
 - **Question per field.** A field's question comes from `Annotated[..., Question("...")]`, then `Field(description=...)`, then the `Enum` class docstring. A field with none of them raises `ValueError` before any request.
+- **The class takes no question of its own.** `ResponseSchema(TicketTriage, description=...)` or `Annotated[TicketTriage, Question(...)]` raises `ValueError`: put what the fields share in the agent `prompt`.
+- **Questions are named after the fields.** A Pydantic alias (`Field(alias="isSpam")`) changes only the JSON the class is validated from; the question and its metadata keep the field name.
 - **Mutually exclusive options belong in one `Enum` field.** Each field is answered independently, so three `bool` fields `is_billing`, `is_technical`, `is_sales` can all come back `True`. Ask "which one" as a single `Enum` field.
 - **Metadata is keyed by field.** `reply.response.metadata` is `{field: answer}`, each answer in the same per-provider shape as a single question's metadata (see [Set up](#set-up)).
 - **Options are described per field**, with `Question(options={...})` or member docstrings. Two fields may share option values, so `descriptions=` (OpenAI) and `criteria=` (TypeSafe) on the config apply to single-question schemas only and raise `ValueError` with a class.
 - **`boolean_threshold`** applies to every `bool` field.
 - **A refusal fails the whole reply.** If OpenAI declines any one question, `DecisionRefusedError` names that field; no partial result is returned.
+- **OpenAI takes at most 400 questions** per request; a class with more fields raises `UnsupportedResponseSchemaError`.
 - **Dependent questions** (where one question only makes sense after another's answer) still need separate `ask()` calls.
 
 ## Image inspection
