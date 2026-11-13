@@ -15,7 +15,8 @@ import inspect
 import json
 import textwrap
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, is_dataclass
+from dataclasses import fields as dataclass_fields
 from enum import Enum
 from functools import cache
 from typing import Annotated, Any, Literal, NotRequired, Required, get_args, get_origin, get_type_hints
@@ -237,11 +238,16 @@ def _field_specs(
     specs: dict[str, DecisionSpec] = {}
     keys: dict[str, str] = {}
     for key, prop in root["properties"].items():
-        field: tuple[str, Any] = fields.get(key, (key, None))
-        name, hint = field
+        field = fields.get(key) or _Field(key, None, key)
+        name, hint = field.name, field.hint
         subject = f"Field {name!r} of `response_schema`"
         if key not in required:
             raise error(f"{subject} is optional or has a default; every question must be a required field.")
+        if field.input_key is None:
+            raise error(
+                f"{subject} is validated from a nested path (`AliasPath`), not a key of its own; "
+                "each question must be a flat field."
+            )
 
         bare = strip_annotated(hint) if hint is not None else None
         enum_type = bare if isinstance(bare, type) and issubclass(bare, Enum) else None
@@ -259,16 +265,24 @@ def _field_specs(
                 "or `Field(description=...)`, or document its `Enum`."
             )
         specs[name] = spec
-        if key != name:
-            keys[name] = key
+        if field.input_key != name:
+            keys[name] = field.input_key
     return specs, keys
 
 
-def _fields_by_key(response: ResponseProto[Any]) -> dict[str, tuple[str, Any]]:
-    """Each field of the class by its JSON key, as its name and its annotation with ``Annotated`` kept.
+@dataclass(frozen=True, slots=True)
+class _Field:
+    name: str
+    hint: Any  # the annotation with ``Annotated`` kept
+    input_key: str | None  # the key validation reads the field from; ``None`` for a nested ``AliasPath``
+
+
+def _fields_by_key(response: ResponseProto[Any]) -> dict[str, _Field]:
+    """Each field of the class by its JSON schema key.
 
     The ``Question`` marker does not reach the JSON schema, so it is read from the annotations,
-    which are keyed by field name; the schema is keyed by alias where a field has one.
+    which are keyed by field name; the schema is keyed by alias where a field has one. The key an
+    answer is rendered under is the one validation reads, which the class config can make the name.
     """
     if not isinstance(response, ResponseSchema):
         return {}
@@ -277,12 +291,25 @@ def _fields_by_key(response: ResponseProto[Any]) -> dict[str, tuple[str, Any]]:
         return {}
 
     pydantic_fields: Mapping[str, FieldInfo] = getattr(cls, "__pydantic_fields__", None) or {}
-    fields: dict[str, tuple[str, Any]] = {}
+    assigned = _assigned_field_infos(cls)
+    config: Mapping[str, Any] = getattr(cls, "model_config", None) or getattr(cls, "__pydantic_config__", None) or {}
+    by_alias = config.get("validate_by_alias", True)
+    by_name = config.get("validate_by_name", config.get("populate_by_name", False))
+
+    fields: dict[str, _Field] = {}
     for name, hint in get_type_hints(cls, include_extras=True).items():
         hint = _strip_qualifiers(hint)
-        info = pydantic_fields.get(name) or _annotated_field_info(hint)
-        fields[_json_key(name, info)] = (name, hint)
+        info = pydantic_fields.get(name) or assigned.get(name) or _annotated_field_info(hint)
+        key = _json_key(name, info)
+        fields[key] = _Field(name, hint, _input_key(name, key, info, by_alias=by_alias, by_name=by_name))
     return fields
+
+
+def _assigned_field_infos(cls: type) -> dict[str, FieldInfo]:
+    """``Field(...)`` assigned as a standard dataclass field's default, where Pydantic reads it from."""
+    if not is_dataclass(cls):
+        return {}
+    return {f.name: f.default for f in dataclass_fields(cls) if isinstance(f.default, FieldInfo)}
 
 
 def _strip_qualifiers(hint: Any) -> Any:
@@ -308,6 +335,26 @@ def _json_key(name: str, info: FieldInfo | None) -> str:
     if isinstance(alias, str):
         return alias
     return info.alias or name
+
+
+def _input_key(name: str, key: str, info: FieldInfo | None, *, by_alias: bool, by_name: bool) -> str | None:
+    """The flat key validation reads the field from: its schema ``key`` if accepted, else its name.
+
+    ``None`` when neither is accepted: the field is read only from a nested ``AliasPath``.
+    """
+    alias = info.validation_alias if info is not None else None
+    aliases = alias.choices if isinstance(alias, AliasChoices) else [alias] if alias is not None else []
+    if alias is None and info is not None and info.alias:
+        aliases = [info.alias]
+
+    accepted: set[str] = set()
+    if by_alias:
+        accepted.update(a for a in aliases if isinstance(a, str))
+    if by_name or not aliases:
+        accepted.add(name)
+    if key in accepted:
+        return key
+    return name if name in accepted else None
 
 
 def _resolve_ref(root: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[str, Any]:

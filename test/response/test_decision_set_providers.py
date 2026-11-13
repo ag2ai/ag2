@@ -9,7 +9,7 @@ from enum import Enum, IntEnum
 from typing import Annotated, Any, Required, TypedDict
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasPath, BaseModel, ConfigDict, Field
 
 pytest.importorskip("openai")
 pytest.importorskip("typesafe_sdk")
@@ -73,6 +73,21 @@ class TicketTriageModel(BaseModel):
 
 class AliasedTriage(BaseModel):
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="isSpam")
+
+
+@dataclass
+class AliasedTriageDataclass:
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="isSpam")
+
+
+class NamedTriage(BaseModel):
+    model_config = ConfigDict(validate_by_alias=False, validate_by_name=True)
+
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="isSpam")
+
+
+class PathTriage(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("flags", 0))
 
 
 class QualifiedTriage(TypedDict, total=False):
@@ -339,10 +354,19 @@ class TestSeveralQuestions:
         assert await reply.content() == Pick(pick=Plain.B)
         assert provider.questions == {"pick": Asked("Pick one", {"a": "First", "b": "Second"})}
 
-    async def test_aliased_field_is_asked_by_its_name(self, provider: Provider) -> None:
-        reply = await provider.ask(AliasedTriage, {"is_spam": provider.predicate(0.9)}, prompt="Q")
+    @pytest.mark.parametrize(
+        ("schema", "expected"),
+        [
+            (AliasedTriage, AliasedTriage(isSpam=True)),
+            (AliasedTriageDataclass, AliasedTriageDataclass(is_spam=True)),
+            (NamedTriage, NamedTriage(is_spam=True)),
+        ],
+        ids=["base-model", "dataclass", "validated-by-name"],
+    )
+    async def test_aliased_field_is_asked_by_its_name(self, provider: Provider, schema: Any, expected: Any) -> None:
+        reply = await provider.ask(schema, {"is_spam": provider.predicate(0.9)}, prompt="Q")
 
-        assert await reply.content() == AliasedTriage(isSpam=True)
+        assert await reply.content() == expected
         assert provider.questions == {"is_spam": Asked("Q\n\nIs this message spam?", {})}
         assert set(reply.response.metadata) == {"is_spam"}
 
@@ -366,6 +390,12 @@ class TestRejections:
     async def test_field_that_is_not_a_decision(self, provider: Provider, schema: Any) -> None:
         with pytest.raises(provider.unsupported, match="Field '.+' of `response_schema`"):
             await provider.ask(schema, {}, prompt="Q")
+
+        assert provider.requests == 0
+
+    async def test_field_validated_from_a_nested_path(self, provider: Provider) -> None:
+        with pytest.raises(provider.unsupported, match="Field 'is_spam' .+ nested path"):
+            await provider.ask(PathTriage, {}, prompt="Q")
 
         assert provider.requests == 0
 
