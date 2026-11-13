@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ag2._import_utils import optional_import_block
 
@@ -12,8 +12,13 @@ with optional_import_block() as _textual_import:
     from textual.containers import ScrollableContainer
     from textual.widgets import Header, Input, Markdown
 
-if not _textual_import.is_successful:
-    App = object  # type: ignore[assignment,misc]
+# Runtime-only stand-ins so the module imports without textual; the type checker
+# always sees the real textual API.
+if not TYPE_CHECKING and not _textual_import.is_successful:
+
+    class App:
+        def __class_getitem__(cls, item: Any) -> type["App"]:
+            return cls
 
     def on(*args: Any, **kwargs: Any) -> Any:
         def decorator(func: Any) -> Any:
@@ -32,7 +37,7 @@ from ag2.events import ModelMessageChunk, ModelReasoning
 __all__ = ("TUIAgent",)
 
 
-class TUIAgent(App):  # type: ignore[misc]
+class TUIAgent(App[None]):
     def __init__(self, agent: Agent):
         super().__init__()
 

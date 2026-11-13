@@ -13,12 +13,12 @@ from .tools import ApprovalRequired, approval_required
 try:
     from .telemetry import TelemetryMiddleware
 except ImportError as e:
-    TelemetryMiddleware = missing_optional_dependency("TelemetryMiddleware", "tracing", e)
+    TelemetryMiddleware = missing_optional_dependency("TelemetryMiddleware", "tracing", e)  # type: ignore[misc]
 
 try:
     from .metrics import MetricsMiddleware
 except ImportError as e:
-    MetricsMiddleware = missing_optional_dependency("MetricsMiddleware", "metrics", e)
+    MetricsMiddleware = missing_optional_dependency("MetricsMiddleware", "metrics", e)  # type: ignore[misc]
 
 __all__ = (
     "ApprovalRequired",

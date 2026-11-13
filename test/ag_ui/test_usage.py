@@ -379,7 +379,7 @@ class TestCompletedRun:
                 ModelResponse(
                     ModelMessage("done"),
                     usage=Usage(
-                        prompt_tokens=10,
+                        prompt_tokens=530,
                         completion_tokens=4,
                         cache_creation_input_tokens=512,
                         cache_read_input_tokens=8,
@@ -574,25 +574,9 @@ def _answering(usage: Usage, *, provider: str, model: str = "m") -> Agent:
 class TestProtocolAccounting:
     """AG-UI's input and output are totals, and its cache and reasoning counts parts of them.
 
-    Corrected per provider where usage leaves for the wire; ``Usage`` itself keeps the
-    provider's own figures.
+    ``Usage`` already counts that way on every provider (ADR 0036), so it reaches the
+    wire unchanged.
     """
-
-    async def test_a_missing_cache_count_adds_nothing(self) -> None:
-        agent = _answering(
-            Usage(prompt_tokens=10, completion_tokens=2, cache_read_input_tokens=4), provider="anthropic"
-        )
-
-        assert (await _finished(agent)).usage == [
-            TokenUsage(
-                provider="anthropic",
-                model="m",
-                input_tokens=14,
-                output_tokens=2,
-                total_tokens=16,
-                cached_input_tokens=4,
-            )
-        ]
 
     async def test_a_missing_prompt_count_leaves_input_absent_whatever_was_cached(self) -> None:
         """Cache counts alone are not the input: they are only part of it."""
@@ -609,28 +593,10 @@ class TestProtocolAccounting:
             TokenUsage(provider="google", model="m", input_tokens=5, reasoning_tokens=30)
         ]
 
-    async def test_bedrock_cache_is_added_to_its_input(self) -> None:
-        """Converse's `inputTokens` leaves out what was read from and written to the cache."""
-        usage = Usage(
-            prompt_tokens=100, completion_tokens=30, cache_read_input_tokens=64, cache_creation_input_tokens=8
-        )
-
-        assert (await _finished(_answering(usage, provider="bedrock"))).usage == [
-            TokenUsage(
-                provider="bedrock",
-                model="m",
-                input_tokens=172,
-                output_tokens=30,
-                total_tokens=202,
-                cached_input_tokens=64,
-                cache_write_input_tokens=8,
-            )
-        ]
-
-    @pytest.mark.parametrize("provider", ["openai", "xai"])
-    async def test_other_providers_are_reported_as_they_count(self, provider: str) -> None:
-        """OpenAI and xAI count reasoning inside the normalized completion already,
-        so it is not added in again.
+    @pytest.mark.parametrize("provider", ["anthropic", "bedrock", "openai", "xai"])
+    async def test_every_provider_is_reported_as_normalized(self, provider: str) -> None:
+        """The normalized prompt already holds the cache counts, and the completion
+        the reasoning, so neither is added in again.
         """
         usage = Usage(
             prompt_tokens=100,
@@ -653,21 +619,9 @@ class TestProtocolAccounting:
             )
         ]
 
-    async def test_ag2_s_own_usage_figures_stay_as_the_provider_reported_them(self) -> None:
-        agent = _answering(
-            Usage(prompt_tokens=10, completion_tokens=2, total_tokens=12, cache_read_input_tokens=100),
-            provider="anthropic",
-        )
-
-        reply = await agent.ask("go")
-
-        assert (await reply.usage()).total == Usage(
-            prompt_tokens=10, completion_tokens=2, total_tokens=12, cache_read_input_tokens=100
-        )
-
-    async def test_a_delegation_across_two_models_is_corrected_call_by_call(self) -> None:
-        """Its rollup names neither model, so it is counted from the calls it sums."""
-        cached = Usage(prompt_tokens=10, completion_tokens=2, cache_read_input_tokens=100)
+    async def test_a_delegation_across_two_models_is_attributed_call_by_call(self) -> None:
+        """Each call is reported under its own model."""
+        cached = Usage(prompt_tokens=110, completion_tokens=2, cache_read_input_tokens=100)
         worker = Agent(
             "worker",
             config=TestConfig(

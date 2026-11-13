@@ -214,8 +214,8 @@ entries from different providers add up:
   token the call was charged for, including tokens read from and written to the
   provider's cache. Output counts every generated token, reasoning included.
   Where a provider reports these counts beside a smaller figure, AG2 adds them
-  in before the entry leaves: Anthropic's cache counts go into the input, and
-  Gemini's thinking tokens into the output.
+  in when it normalizes the provider's usage: Anthropic's and Bedrock's cache
+  counts go into the input, and Gemini's thinking tokens into the output.
 - **`cachedInputTokens`, `cacheWriteInputTokens` and `reasoningTokens` are parts
   of those totals**, never additions to them. Cache reads and writes are
   reported apart, because providers price them differently.
@@ -225,10 +225,10 @@ entries from different providers add up:
   absent means "never measured"; `0` means the provider measured no cache hit.
   An input or output the provider did not report leaves `totalTokens` absent too.
 
-The correction applies only to what reaches the wire. `AgentReply.usage()` keeps
-each provider's own figures, so a server-side total can differ from the AG-UI
-one for the same run: for Anthropic, `prompt_tokens` excludes the cache counts
-that `inputTokens` includes.
+`AgentReply.usage()` counts input and output the same way: for the same run,
+`report.total.prompt_tokens` equals the sum of the entries' `inputTokens`, and
+`completion_tokens` the sum of their `outputTokens`. `total_tokens` can exceed
+the summed `totalTokens`, because it keeps the provider's own total.
 
 One entry is emitted per distinct provider/model pair, in order of first
 appearance in the run. A delegated sub-agent's calls are attributed to the
@@ -315,7 +315,10 @@ the empty string. Each removal logs one warning on the `ag2.ag_ui` logger, namin
 such as `/messages/0/content/1`. Open objects — `state`, `forwardedProps`,
 `metadata`, a tool's `parameters` — are values rather than protocol members and
 are passed on whole. A known field carrying a value the schema rejects is
-malformed, not unrecognised, and the body is refused with `400`. `dispatch` strips
+malformed, not unrecognised, and the body is refused with `400`. That includes
+a data source's `value` or a tool call's `encryptedValue` that is not strict
+base64: a character outside the alphabet, whitespace or a line break refuses
+it rather than being skipped. `dispatch` strips
 unknown properties from a `RunAgentInput` you validated yourself, but a role or
 part type your own validation rejected never reaches it.
 
@@ -672,6 +675,8 @@ For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs bec
 
 Start from the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart).
 
+To keep the browser talking to the AG2 endpoint directly, with no runtime process in between, use assistant-ui instead: see the [assistant-ui quickstart](/docs/user-guide/ag-ui/assistant-ui-quickstart).
+
 The same endpoint can also power a bot in Slack and other messaging platforms — see [Channels](/docs/user-guide/ag-ui/channels).
 
 ## AG-UI Dojo
@@ -683,6 +688,6 @@ For protocol-level testing and event inspection, use the AG2 Dojo profile:
 ## Next steps
 
 1. Build the AG-UI endpoint from the minimal example above.
-2. Follow the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart) to connect a React/Next.js client.
+2. Follow the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart) or the [assistant-ui quickstart](/docs/user-guide/ag-ui/assistant-ui-quickstart) to connect a React/Next.js client.
 3. Validate runtime behavior with the [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat){.external-link target="_blank"}.
 4. Run the same endpoint as a bot in Slack and other messaging platforms with [Channels](/docs/user-guide/ag-ui/channels).
