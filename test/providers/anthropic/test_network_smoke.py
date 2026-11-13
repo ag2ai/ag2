@@ -6,7 +6,7 @@
 
 LLM-driven agents call ``peers`` / ``delegate`` / ``say`` /
 ``channels`` to coordinate via the network. They use
-``claude-haiku-4-5`` for cost.
+``claude-haiku-5-5`` for cost.
 
 The tests load ``.env`` from the repo root so they run without shell
 env setup; they ``pytest.skip`` if ``ANTHROPIC_API_KEY`` is absent.
@@ -47,7 +47,7 @@ def anthropic_config() -> AnthropicConfig:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         pytest.skip("ANTHROPIC_API_KEY not set")
-    return AnthropicConfig(model="claude-haiku-4-5", api_key=api_key)
+    return AnthropicConfig(model="claude-haiku-5-5", api_key=api_key)
 
 
 async def _wait_for_text_count(
