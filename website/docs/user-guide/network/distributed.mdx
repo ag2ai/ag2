@@ -129,9 +129,11 @@ For deployments where agents must authenticate at the WebSocket handshake, build
 ```python linenums="1"
 from ag2.network import ApiKeyAuth, AuthRegistry, Hub
 
-auth = AuthRegistry([ApiKeyAuth(keys={"token-alice", "token-bob"})])
+auth = AuthRegistry([ApiKeyAuth(keys={"alice": "token-alice", "bob": "token-bob"})])
 hub = await Hub.open(store, auth=auth)
 ```
+
+`keys` maps each agent's passport name to its token. See [Authentication](/docs/user-guide/network/hub_and_identity#authentication) for how schemes and claims work, loading tokens from a secret store, and writing a custom adapter.
 
 Each agent passes its token inside `#!python Passport.auth`:
 
