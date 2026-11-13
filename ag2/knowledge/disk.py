@@ -14,6 +14,9 @@ from watchdog.observers.polling import PollingObserver
 
 from .base import ChangeCallback, ChangeSubscription, NoopChangeSubscription, _normalize
 
+if os.name == "posix":
+    import fcntl
+
 
 async def _deliver(callback: ChangeCallback, path: str) -> None:
     await callback(path)
@@ -206,11 +209,18 @@ class DiskKnowledgeStore:
 
     async def append(self, path: str, content: str) -> int:
         target = self._resolve(path)
+        return await asyncio.to_thread(self._append, target, content.encode("utf-8"))
+
+    @staticmethod
+    def _append(target: Path, payload: bytes) -> int:
         target.parent.mkdir(parents=True, exist_ok=True)
-        payload = content.encode("utf-8")
         with target.open("ab") as fh:
-            offset = fh.tell()
+            if os.name == "posix":
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            # Another writer may have advanced EOF while this handle waited.
+            offset = fh.seek(0, os.SEEK_END)
             fh.write(payload)
+            # Closing flushes the write and releases the lock.
         return offset
 
     async def read_range(self, path: str, start: int, end: int | None = None) -> str:
