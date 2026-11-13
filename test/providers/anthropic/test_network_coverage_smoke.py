@@ -16,7 +16,7 @@ the LLM-driven paths actually work end-to-end:
 * Multi-tool workflow graph — graph with two ``ToolCalled`` transitions
   materialises two distinct handoff tools and the LLM picks the right one.
 
-Uses ``claude-haiku-4-5`` for cost.
+Uses ``claude-haiku-5-5`` for cost.
 """
 
 import asyncio
@@ -68,7 +68,7 @@ def anthropic_config() -> AnthropicConfig:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         pytest.skip("ANTHROPIC_API_KEY not set")
-    return AnthropicConfig(model="claude-haiku-4-5", api_key=api_key)
+    return AnthropicConfig(model="claude-haiku-5-5", api_key=api_key)
 
 
 async def _wait_for_text_count(
