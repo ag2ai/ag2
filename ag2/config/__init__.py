@@ -2,12 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.exceptions import missing_optional_dependency
+from typing import TYPE_CHECKING
+
+from ag2._lazy import LazyExport, lazy_exports
 
 from .client import LLMClient
 from .config import ModelConfig, ModelProvider
 
-try:
+if TYPE_CHECKING:
+    from .anthropic import AnthropicConfig
+    from .bedrock import BedrockConfig
+    from .dashscope import DashScopeConfig
+    from .gemini import GeminiConfig, VertexAIConfig
+    from .mistral import MistralConfig
+    from .ollama import OllamaConfig
     from .openai import (
         ContainerInfo,
         ContainerManager,
@@ -17,60 +25,34 @@ try:
         OpenAIDecisionsConfig,
         OpenAIResponsesConfig,
     )
-except ImportError as e:
-    OpenAICompletionsConfig = missing_optional_dependency("OpenAICompletionsConfig", "openai", e)  # type: ignore[misc]
-    OpenAIConfig = missing_optional_dependency("OpenAIConfig", "openai", e)  # type: ignore[misc]
-    OpenAIResponsesConfig = missing_optional_dependency("OpenAIResponsesConfig", "openai", e)  # type: ignore[misc]
-    OpenAIDecisionsConfig = missing_optional_dependency("OpenAIDecisionsConfig", "openai", e)  # type: ignore[misc]
-    ContainerManager = missing_optional_dependency("ContainerManager", "openai", e)  # type: ignore[misc]
-    ContainerInfo = missing_optional_dependency("ContainerInfo", "openai", e)  # type: ignore[misc]
-    ExpiresAfter = missing_optional_dependency("ExpiresAfter", "openai", e)  # type: ignore[misc]
-
-try:
-    from .anthropic import AnthropicConfig
-except ImportError as e:
-    AnthropicConfig = missing_optional_dependency("AnthropicConfig", "anthropic", e)  # type: ignore[misc]
-
-try:
-    from .bedrock import BedrockConfig
-except ImportError as e:
-    BedrockConfig = missing_optional_dependency("BedrockConfig", "bedrock", e)  # type: ignore[misc]
-
-try:
-    from .dashscope import DashScopeConfig
-except ImportError as e:
-    DashScopeConfig = missing_optional_dependency("DashScopeConfig", "dashscope", e)  # type: ignore[misc]
-
-try:
-    from .gemini import GeminiConfig, VertexAIConfig
-except ImportError as e:
-    GeminiConfig = missing_optional_dependency("GeminiConfig", "gemini", e)  # type: ignore[misc]
-    VertexAIConfig = missing_optional_dependency("VertexAIConfig", "gemini", e)  # type: ignore[misc]
-
-try:
-    from .mistral import MistralConfig
-except ImportError as e:
-    MistralConfig = missing_optional_dependency("MistralConfig", "mistral", e)  # type: ignore[misc]
-
-try:
-    from .ollama import OllamaConfig
-except ImportError as e:
-    OllamaConfig = missing_optional_dependency("OllamaConfig", "ollama", e)  # type: ignore[misc]
-
-try:
     from .typesafe import TypeSafeConfig
-except ImportError as e:
-    TypeSafeConfig = missing_optional_dependency("TypeSafeConfig", "typesafe", e)  # type: ignore[misc]
-
-try:
     from .xai import XAIConfig
-except ImportError as e:
-    XAIConfig = missing_optional_dependency("XAIConfig", "xai", e)  # type: ignore[misc]
-
-try:
     from .zai import ZAIConfig
-except ImportError as e:
-    ZAIConfig = missing_optional_dependency("ZAIConfig", "zai", e)  # type: ignore[misc]
+
+# Provider SDKs load on first use; see docs/adr/0036-provider-exports-load-on-first-use.md.
+_OPENAI = LazyExport(".openai", "openai")
+_GEMINI = LazyExport(".gemini", "gemini")
+_LAZY_EXPORTS = {
+    "AnthropicConfig": LazyExport(".anthropic", "anthropic"),
+    "BedrockConfig": LazyExport(".bedrock", "bedrock"),
+    "ContainerInfo": _OPENAI,
+    "ContainerManager": _OPENAI,
+    "DashScopeConfig": LazyExport(".dashscope", "dashscope"),
+    "ExpiresAfter": _OPENAI,
+    "GeminiConfig": _GEMINI,
+    "MistralConfig": LazyExport(".mistral", "mistral"),
+    "OllamaConfig": LazyExport(".ollama", "ollama"),
+    "OpenAICompletionsConfig": _OPENAI,
+    "OpenAIConfig": _OPENAI,
+    "OpenAIDecisionsConfig": _OPENAI,
+    "OpenAIResponsesConfig": _OPENAI,
+    "TypeSafeConfig": LazyExport(".typesafe", "typesafe"),
+    "VertexAIConfig": _GEMINI,
+    "XAIConfig": LazyExport(".xai", "xai"),
+    "ZAIConfig": LazyExport(".zai", "zai"),
+}
+
+__getattr__ = lazy_exports(__name__, globals(), _LAZY_EXPORTS)
 
 __all__ = (
     "AnthropicConfig",
