@@ -3,7 +3,7 @@ import asyncio
 import uvicorn
 
 from ag2 import Agent
-from ag2.a2a import A2AServer, build_card
+from ag2.a2a import A2AServer
 from ag2.config import AnthropicConfig
 from ag2.tools import tool
 
@@ -22,8 +22,7 @@ agent = Agent(
 
 async def main() -> None:
     server = A2AServer(agent)
-    card = build_card(agent, url="http://127.0.0.1:8000")
-    asgi = server.build_jsonrpc(url="http://127.0.0.1:8000", card=card)
+    asgi = server.build_jsonrpc(url="http://127.0.0.1:8000")
 
     await uvicorn.Server(uvicorn.Config(asgi, host="127.0.0.1", port=8000)).serve()
 
