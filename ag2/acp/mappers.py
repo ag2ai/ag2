@@ -87,19 +87,28 @@ def _textual_block_text(block: ContentBlock | None) -> str | None:
 
 
 def block_to_files(block: ContentBlock | None) -> list[BinaryResult]:
-    """Decode a single ``image``/``audio``/blob-resource content block into binary results."""
+    """Decode a single ``image``/``audio``/blob-resource content block into binary results.
+
+    An image that only points at a ``uri`` carries no bytes, so it is not a file.
+    """
     if isinstance(block, (schema.ImageContentBlock, schema.AudioContentBlock)):
+        if not block.data:
+            return []
         return [BinaryResult(data=base64.b64decode(block.data), metadata={"mimeType": block.mime_type})]
+    blob = _embedded_blob(block)
+    if blob is not None:
+        data, mime_type = blob
+        return [BinaryResult(data=data, metadata={"mimeType": mime_type})]
+    return []
+
+
+def _embedded_blob(block: ContentBlock | None) -> tuple[bytes, str] | None:
+    """The bytes and MIME type of an embedded blob resource, or ``None`` for any other block."""
     if isinstance(block, schema.EmbeddedResourceContentBlock) and isinstance(
         block.resource, schema.BlobResourceContents
     ):
-        return [
-            BinaryResult(
-                data=base64.b64decode(block.resource.blob),
-                metadata={"mimeType": block.resource.mime_type or "application/octet-stream"},
-            )
-        ]
-    return []
+        return base64.b64decode(block.resource.blob), block.resource.mime_type or "application/octet-stream"
+    return None
 
 
 def content_blocks_to_files(blocks: list[ContentBlock] | None) -> list[BinaryResult]:
@@ -222,15 +231,12 @@ def block_to_input(block: ContentBlock) -> Input | None:
     if isinstance(block, schema.AudioContentBlock):
         return AudioInput(data=base64.b64decode(block.data), media_type=cast(Any, block.mime_type))
 
-    if isinstance(block, schema.EmbeddedResourceContentBlock) and isinstance(
-        block.resource, schema.BlobResourceContents
-    ):
+    blob = _embedded_blob(block)
+    if blob is not None:
         # A blob the Client inlined — its bytes travelled with the prompt, so
         # using them reads nothing from the host filesystem.
-        return DocumentInput(
-            data=base64.b64decode(block.resource.blob),
-            media_type=cast(Any, block.resource.mime_type or "application/octet-stream"),
-        )
+        data, mime_type = blob
+        return DocumentInput(data=data, media_type=cast(Any, mime_type))
 
     return None
 

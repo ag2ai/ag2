@@ -156,7 +156,7 @@ class BridgeState:
         self.context: ConversationContext | None = None  # updated by ACPClient before each turn
         # One entry per message the agent sent, each reassembled from its own chunks.
         self._turn_messages: list[str] = []
-        self._last_message_id: str | None = None
+        self._current_message_id: str | None = None
         self._turn_files: list[BinaryResult] = []
         self._turn_worked = False
         # Set when a tool served over the gateway asked a human and could not
@@ -172,7 +172,7 @@ class BridgeState:
 
     def begin_turn(self) -> None:
         self._turn_messages = []
-        self._last_message_id = None
+        self._current_message_id = None
         self._turn_files = []
         self._turn_worked = False
         self.channel_failure = None
@@ -237,11 +237,11 @@ class BridgeState:
         """
         if not text:
             return
-        if self._turn_messages and message_id == self._last_message_id:
+        if self._turn_messages and message_id == self._current_message_id:
             self._turn_messages[-1] += text
         else:
             self._turn_messages.append(text)
-        self._last_message_id = message_id
+        self._current_message_id = message_id
 
     @property
     def _fs_root(self) -> str:

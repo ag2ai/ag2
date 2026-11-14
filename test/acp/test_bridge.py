@@ -14,6 +14,7 @@ from acp import RequestError, schema
 from acp.agent.connection import AgentSideConnection
 
 from ag2 import Agent
+from ag2.acp.config import PermissionPolicy
 from ag2.acp.testing import duplex_acp_config
 
 SESSION_ID = "calling-session"
@@ -43,13 +44,15 @@ class CallingAgent:
         return schema.PromptResponse(stop_reason="end_turn")
 
 
-async def agent_asks(act: Act, workspace: Path, **config: Any) -> Any:
+async def agent_asks(act: Act, workspace: Path, permission_policy: PermissionPolicy = "ask") -> Any:
     """Run one turn in which the agent does ``act``, and return what ``act`` returned.
 
     A request the client refuses comes back as the ``RequestError`` the agent got.
     """
     outcome: list[Any] = []
-    cfg = duplex_acp_config(lambda conn: CallingAgent(conn, act, outcome), cwd=str(workspace), **config)
+    cfg = duplex_acp_config(
+        lambda conn: CallingAgent(conn, act, outcome), cwd=str(workspace), permission_policy=permission_policy
+    )
     try:
         await Agent("acp", config=cfg).ask("go")
     finally:
@@ -106,7 +109,7 @@ class TestFiles:
 class TestPermission:
     OPTIONS = [schema.PermissionOption(option_id="ok", kind="allow_once", name="Allow")]
 
-    async def ask_permission(self, workspace: Path, policy: str) -> Any:
+    async def ask_permission(self, workspace: Path, policy: PermissionPolicy) -> Any:
         async def act(conn: AgentSideConnection, sid: str) -> schema.RequestPermissionResponse:
             return await conn.request_permission(
                 session_id=sid,

@@ -460,6 +460,30 @@ class TestEmptyTurnWarning:
         assert len(reply.response.files) == 1
         assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
+    async def test_an_image_that_only_points_at_a_uri_is_not_a_file(self) -> None:
+        cfg = fake_acp_config(
+            ACPTurn(
+                updates=[
+                    _text_update("see the chart"),
+                    schema.AgentMessageChunk(
+                        session_update="agent_message_chunk",
+                        content=schema.ImageContentBlock(
+                            type="image", data="", uri="https://example.com/chart.png", mime_type="image/png"
+                        ),
+                    ),
+                ]
+            ),
+            permission_policy="auto",
+        )
+
+        try:
+            reply = await Agent("acp", config=cfg).ask("draw something")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == "see the chart"
+        assert reply.response.files == []
+
     async def test_text_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
         cfg = fake_acp_config(_hi_turn(), permission_policy="auto")
         agent = Agent("acp", config=cfg)
