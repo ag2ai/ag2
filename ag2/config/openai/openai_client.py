@@ -201,6 +201,7 @@ class OpenAIClient(LLMClient):
 
         # Accumulate tool calls by index (streaming sends partial updates per index)
         full_tool_calls: list[dict[str, str]] = []
+        slots: dict[int, int] = {}
 
         async for chunk in response_stream:
             # Usage is available only in the last chunk
@@ -225,21 +226,17 @@ class OpenAIClient(LLMClient):
                     await context.send(ModelMessageChunk(c))
 
                 for tc in delta.tool_calls or []:
-                    ix = tc.index
-                    if ix is None:
-                        # Some OpenAI-compatible servers (e.g. Gemini) omit the index:
-                        # a call carrying an id starts a new entry, anything else continues the last.
-                        ix = len(full_tool_calls) if tc.id or not full_tool_calls else len(full_tool_calls) - 1
-                    if ix >= len(full_tool_calls):
-                        full_tool_calls.extend(
-                            {
-                                "id": "",
-                                "name": "",
-                                "arguments": "",
-                            }
-                            for _ in range(ix - len(full_tool_calls) + 1)
-                        )
-                    acc = full_tool_calls[ix]
+                    # A new id under an occupied index starts a separate call.
+                    # Indexless fragments continue the latest call unless they carry a new id.
+                    slot = slots.get(tc.index) if isinstance(tc.index, int) else None
+                    if tc.index is None and not tc.id and full_tool_calls:
+                        slot = len(full_tool_calls) - 1
+                    if slot is None or (tc.id and full_tool_calls[slot]["id"] and tc.id != full_tool_calls[slot]["id"]):
+                        slot = len(full_tool_calls)
+                        if isinstance(tc.index, int):
+                            slots[tc.index] = slot
+                        full_tool_calls.append({"id": "", "name": "", "arguments": ""})
+                    acc = full_tool_calls[slot]
                     if tc.id is not None:
                         acc["id"] = tc.id
                     if tc.function is not None:
