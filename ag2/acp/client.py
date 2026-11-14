@@ -235,11 +235,14 @@ class ACPClient:
         # that cannot answer at all — exactly the case the warning below is for.
         model = session.model or self.config.model
 
-        replies = [ModelMessage(text) for text in state.turn_messages]
-        for reply in replies:
+        # The bridge closed every earlier message as its successor began; only the
+        # last one is still open, and the turn being over is what closes it.
+        texts = state.turn_messages
+        reply = ModelMessage(texts[-1]) if texts else None
+        if reply is not None:
             await context.send(reply)
 
-        if finish_reason == "end_turn" and not replies and not state.turn_files and not state.turn_worked:
+        if finish_reason == "end_turn" and reply is None and not state.turn_files and not state.turn_worked:
             # The agent reported a clean finish yet emitted nothing at all. Some
             # CLI agents end a turn this way when the provider call failed on
             # their side (an unauthorized model, or one that cannot do text) —
@@ -254,7 +257,7 @@ class ACPClient:
             )
 
         return ModelResponse(
-            message=replies[-1] if replies else None,
+            message=reply,
             usage=map_usage(response.usage if response is not None else None),
             files=state.turn_files,
             finish_reason=finish_reason,

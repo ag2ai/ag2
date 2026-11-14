@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 import acp
 from acp import schema
 
-from ag2.events.types import BinaryResult
+from ag2.events.types import BinaryResult, ModelMessage
 from ag2.exceptions import HumanInputError
 
 from .dispatch import InOrderUpdates
@@ -213,7 +213,11 @@ class BridgeState:
     async def handle_update(self, update: SessionUpdate) -> None:
         """Route one ``session/update`` to the stream + accumulate agent output."""
         if isinstance(update, schema.AgentMessageChunk):
-            self._add_message_text(block_text(update.content), update.message_id)
+            closed = self._add_message_text(block_text(update.content), update.message_id)
+            if closed is not None and self.context is not None:
+                # Close the previous message before its successor's chunks go out:
+                # consumers read a `ModelMessage` as the end of the chunks before it.
+                await self.context.send(ModelMessage(closed))
             self._turn_files.extend(block_to_files(update.content))
         if isinstance(
             update,
@@ -228,20 +232,26 @@ class BridgeState:
         if event is not None and self.context is not None:
             await self.context.send(event)
 
-    def _add_message_text(self, text: str, message_id: str | None) -> None:
+    def _add_message_text(self, text: str, message_id: str | None) -> str | None:
         """File a chunk's text under the message it belongs to.
 
         Chunks are the pieces of one message, so they are put back together; a chunk
         that names a different message starts the next one rather than being run into
         it. An agent that names no message gets all of a turn's chunks as one message.
+
+        Returns the text of the message this chunk closes, if it starts a new one
+        after an earlier message of the turn. The turn's last message is never
+        closed here: the client closes it once the turn is over.
         """
         if not text:
-            return
+            return None
         if self._turn_messages and message_id == self._current_message_id:
             self._turn_messages[-1] += text
-        else:
-            self._turn_messages.append(text)
+            return None
+        closed = self._turn_messages[-1] if self._turn_messages else None
+        self._turn_messages.append(text)
         self._current_message_id = message_id
+        return closed
 
     @property
     def _fs_root(self) -> str:

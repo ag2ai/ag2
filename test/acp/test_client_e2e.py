@@ -14,7 +14,15 @@ from mcp.client.streamable_http import streamable_http_client
 from ag2 import Agent, Context
 from ag2.acp import MCPCapabilityError
 from ag2.acp.testing import ACPTurn, fake_acp_config
-from ag2.events import BaseEvent, ModelMessage, ModelReasoning, ModelResponse, ToolCallEvent, ToolResultEvent
+from ag2.events import (
+    BaseEvent,
+    ModelMessage,
+    ModelMessageChunk,
+    ModelReasoning,
+    ModelResponse,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent, ToolResult
 from ag2.exceptions import HumanInputNotProvidedError, UnsupportedToolError
 from ag2.history import HUMAN_INPUT_ABANDONED_TOOL_RESULT
@@ -178,6 +186,32 @@ async def test_messages_the_agent_names_apart_are_not_run_together() -> None:
 
     assert [e.content for e in seen if isinstance(e, ModelMessage)] == ["Let me check.", "Done: it works."]
     assert result.body == "Done: it works."  # the last message is the response's, as with other providers
+
+
+@pytest.mark.asyncio
+async def test_each_message_is_closed_before_the_next_one_streams() -> None:
+    cfg = fake_acp_config(
+        ACPTurn(
+            updates=[_text_update("Let me check.", "m1"), _text_update("Done: ", "m2"), _text_update("it works.", "m2")]
+        ),
+        permission_policy="auto",
+    )
+    seen: list[BaseEvent] = []
+
+    try:
+        async with Agent("acp", config=cfg).run("hi") as run:
+            run.stream.subscribe(lambda e: seen.append(e))
+            await run.result()
+    finally:
+        await cfg.aclose()
+
+    assert [(type(e), e.content) for e in seen if isinstance(e, (ModelMessageChunk, ModelMessage))] == [
+        (ModelMessageChunk, "Let me check."),
+        (ModelMessage, "Let me check."),
+        (ModelMessageChunk, "Done: "),
+        (ModelMessageChunk, "it works."),
+        (ModelMessage, "Done: it works."),
+    ]
 
 
 @pytest.mark.asyncio
