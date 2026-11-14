@@ -19,6 +19,7 @@ from ag2.events import (
     DataInput,
     ModelMessage,
     ModelMessageChunk,
+    ModelReasoning,
     ModelResponse,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
@@ -356,6 +357,9 @@ async def _handle_server_content(
         for part in content.model_turn.parts or ():
             if part.inline_data is not None and part.inline_data.data:
                 await context.send(SynthesizedAudioEvent(part.inline_data.data))
+            elif part.thought and part.text:
+                # Thought summaries are reasoning, not reply text.
+                await context.send(ModelReasoning(part.text))
             elif part.text:
                 # Non-native-audio models stream text directly here rather
                 # than via output_audio_transcription.
