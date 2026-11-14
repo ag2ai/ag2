@@ -4,12 +4,13 @@
 
 import json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import Annotated, Any, Required
 
 import pytest
-from pydantic import AliasPath, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, AliasPath, BaseModel, ConfigDict, Field, model_validator
+from pydantic.alias_generators import to_camel
 from typing_extensions import TypedDict
 
 pytest.importorskip("openai")
@@ -79,6 +80,49 @@ class AliasedTriage(BaseModel):
 @dataclass
 class AliasedTriageDataclass:
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="isSpam")
+
+
+class ChoiceTriage(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(
+        validation_alias=AliasChoices(AliasPath("nested", "spam"), "isSpam")
+    )
+
+
+@dataclass
+class MetadataTriage:
+    is_spam: Annotated[bool, Question("Is this message spam?")] = field(metadata={"alias": "isSpam"})
+
+
+@dataclass
+class DescribedMetadataTriage:
+    is_spam: Annotated[bool, Question("Is this message spam?"), Field(description="Spam?")] = field(
+        metadata={"alias": "isSpam"}
+    )
+
+
+@dataclass
+class GeneratedAliasDataclass:
+    __pydantic_config__ = ConfigDict(alias_generator=to_camel)
+
+    is_spam: Annotated[bool, Question("Is this message spam?")]
+
+
+class GeneratedAliasModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel)
+
+    is_spam: Annotated[bool, Question("Is this message spam?")]
+
+
+class AliasedTriageDict(TypedDict):
+    is_spam: Annotated[bool, Question("Is this message spam?"), Field(alias="isSpam")]
+
+
+class ValidatedTriage(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="isSpam")
+
+    @model_validator(mode="after")
+    def _check(self) -> "ValidatedTriage":
+        return self
 
 
 class NamedTriage(BaseModel):
@@ -371,8 +415,26 @@ class TestSeveralQuestions:
             (AliasedTriage, AliasedTriage(isSpam=True)),
             (AliasedTriageDataclass, AliasedTriageDataclass(is_spam=True)),
             (NamedTriage, NamedTriage(is_spam=True)),
+            (ChoiceTriage, ChoiceTriage.model_validate({"isSpam": True})),
+            (MetadataTriage, MetadataTriage(is_spam=True)),
+            (DescribedMetadataTriage, DescribedMetadataTriage(is_spam=True)),
+            (GeneratedAliasDataclass, GeneratedAliasDataclass(is_spam=True)),
+            (GeneratedAliasModel, GeneratedAliasModel.model_validate({"isSpam": True})),
+            (AliasedTriageDict, {"is_spam": True}),
+            (ValidatedTriage, ValidatedTriage(isSpam=True)),
         ],
-        ids=["base-model", "dataclass", "validated-by-name"],
+        ids=[
+            "base-model",
+            "dataclass",
+            "validated-by-name",
+            "alias-choices-after-a-path",
+            "dataclass-field-metadata",
+            "dataclass-field-metadata-with-description",
+            "dataclass-alias-generator",
+            "base-model-alias-generator",
+            "typed-dict",
+            "model-validator",
+        ],
     )
     async def test_aliased_field_is_asked_by_its_name(self, provider: Provider, schema: Any, expected: Any) -> None:
         reply = await provider.ask(schema, {"is_spam": provider.predicate(0.9)}, prompt="Q")

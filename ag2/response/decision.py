@@ -15,14 +15,12 @@ import inspect
 import json
 import textwrap
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, is_dataclass
-from dataclasses import fields as dataclass_fields
+from dataclasses import dataclass
 from enum import Enum
 from functools import cache
 from typing import Annotated, Any, Literal, NotRequired, Required, get_args, get_origin, get_type_hints
 
-from pydantic import AliasChoices
-from pydantic.fields import FieldInfo
+from pydantic import TypeAdapter
 from typing_extensions import ReadOnly
 
 from ag2.exceptions import AG2Error
@@ -281,28 +279,33 @@ def _fields_by_key(response: ResponseProto[Any], error: type[NotADecisionError])
     """Each field of the class by its JSON schema key.
 
     The ``Question`` marker does not reach the JSON schema, so it is read from the annotations,
-    which are keyed by field name; the schema is keyed by alias where a field has one. The key an
-    answer is rendered under is the one validation reads, which the class config can make the name.
-    Two fields under one key would share a question and its answer, so that is rejected.
+    which are keyed by field name; the schema is keyed by alias where a field has one. Aliases are
+    read from Pydantic's core schema, where every way of declaring one (``Field``, a dataclass
+    field's ``metadata``, an ``alias_generator``, ``AliasChoices``) is already resolved to the keys
+    validation reads. The key an answer is rendered under is the one validation reads, which the
+    class config can make the name. Two fields under one key would share a question and its
+    answer, so that is rejected.
     """
     if not isinstance(response, ResponseSchema):
         return {}
     cls = strip_annotated(response.types)
     if not isinstance(cls, type):
         return {}
+    class_fields = _class_fields(TypeAdapter(response.types).core_schema)
+    if class_fields is None:
+        return {}
 
-    pydantic_fields: Mapping[str, FieldInfo] = getattr(cls, "__pydantic_fields__", None) or {}
-    assigned = _assigned_field_infos(cls)
-    config: Mapping[str, Any] = getattr(cls, "model_config", None) or getattr(cls, "__pydantic_config__", None) or {}
+    core_fields, config = class_fields
     by_alias = config.get("validate_by_alias", True)
-    by_name = config.get("validate_by_name", config.get("populate_by_name", False))
+    by_name = config.get("validate_by_name", False)
+    hints = get_type_hints(cls, include_extras=True)
 
     fields: dict[str, _Field] = {}
-    for name, hint in get_type_hints(cls, include_extras=True).items():
-        hint = _strip_qualifiers(hint)
-        info = pydantic_fields.get(name) or assigned.get(name) or _annotated_field_info(hint)
-        key = _json_key(name, info)
-        field = _Field(name, hint, _input_key(name, key, info, by_alias=by_alias, by_name=by_name))
+    for name, core_field in core_fields:
+        alias = core_field.get("validation_alias")
+        key = _schema_key(name, alias)
+        input_key = _input_key(name, key, _alias_paths(alias), by_alias=by_alias, by_name=by_name)
+        field = _Field(name, _strip_qualifiers(hints.get(name)), input_key)
         if key in fields:
             raise error(
                 f"Fields {fields[key].name!r} and {name!r} of `response_schema` are both validated from key "
@@ -315,11 +318,35 @@ def _fields_by_key(response: ResponseProto[Any], error: type[NotADecisionError])
     return fields
 
 
-def _assigned_field_infos(cls: type) -> dict[str, FieldInfo]:
-    """``Field(...)`` assigned as a standard dataclass field's default, where Pydantic reads it from."""
-    if not is_dataclass(cls):
-        return {}
-    return {f.name: f.default for f in dataclass_fields(cls) if isinstance(f.default, FieldInfo)}
+def _class_fields(
+    schema: Mapping[str, Any],
+) -> tuple[list[tuple[str, Mapping[str, Any]]], Mapping[str, Any]] | None:
+    """The fields of the class a core ``schema`` validates, by name, with the class's validation config.
+
+    ``None`` for a class whose fields Pydantic does not validate itself, such as one with a plain validator.
+    """
+    definitions: dict[str, Mapping[str, Any]] = {}
+    config: Mapping[str, Any] = {}
+    while True:
+        kind = schema.get("type")
+        config = schema.get("config") or config
+        if kind in ("model-fields", "typed-dict"):
+            return list(schema["fields"].items()), config
+        if kind == "dataclass-args":
+            return [(f["name"], f) for f in schema["fields"]], config
+        if kind == "definitions":
+            definitions.update((d["ref"], d) for d in schema["definitions"])
+            schema = schema["schema"]
+        elif kind == "definition-ref" and schema["schema_ref"] in definitions:
+            schema = definitions[schema["schema_ref"]]
+        elif kind in _WRAPPER_SCHEMAS:
+            # A model or dataclass around its fields, or a ``model_validator`` around the class.
+            schema = schema["schema"]
+        else:
+            return None
+
+
+_WRAPPER_SCHEMAS = frozenset(("model", "dataclass", "function-before", "function-after", "function-wrap"))
 
 
 def _strip_qualifiers(hint: Any) -> Any:
@@ -329,42 +356,46 @@ def _strip_qualifiers(hint: Any) -> Any:
     return hint
 
 
-def _annotated_field_info(hint: Any) -> FieldInfo | None:
-    if get_origin(hint) is not Annotated:
-        return None
-    return next((m for m in reversed(get_args(hint)[1:]) if isinstance(m, FieldInfo)), None)
+def _schema_key(name: str, alias: Any) -> str:
+    """The key a core ``validation_alias`` gives the field in the validation-mode JSON schema.
 
-
-def _json_key(name: str, info: FieldInfo | None) -> str:
-    """The key Pydantic validates the field under, as its validation-mode JSON schema names it."""
-    if info is None:
-        return name
-    alias = info.validation_alias
-    if isinstance(alias, AliasChoices):
-        alias = alias.choices[0]
+    Pydantic names the property after the alias, or the first flat choice of an ``AliasChoices``;
+    a field read only from nested paths keeps its name.
+    """
     if isinstance(alias, str):
         return alias
-    return info.alias or name
+    if isinstance(alias, list):
+        for path in alias:
+            if isinstance(path, list) and len(path) == 1 and isinstance(path[0], str):
+                return path[0]
+    return name
 
 
-def _input_key(name: str, key: str, info: FieldInfo | None, *, by_alias: bool, by_name: bool) -> str | None:
-    """The flat key validation reads the field from: its schema ``key`` if accepted, else its name.
+def _alias_paths(alias: Any) -> list[list[str | int]]:
+    """A core ``validation_alias`` as its alternative paths: ``"a"``, ``["a", 0]`` or ``[["a"], ["b", 0]]``."""
+    if alias is None:
+        return []
+    if isinstance(alias, str):
+        return [[alias]]
+    if alias and isinstance(alias[0], list):
+        return [list(path) for path in alias]
+    return [list(alias)]
 
-    ``None`` when neither is accepted: the field is read only from a nested ``AliasPath``.
+
+def _input_key(name: str, key: str, paths: list[list[str | int]], *, by_alias: bool, by_name: bool) -> str | None:
+    """The flat key validation reads the field from: its schema ``key`` if accepted, else its name or a flat alias.
+
+    ``None`` when none is accepted: the field is read only from a nested ``AliasPath``.
     """
-    alias = info.validation_alias if info is not None else None
-    aliases = alias.choices if isinstance(alias, AliasChoices) else [alias] if alias is not None else []
-    if alias is None and info is not None and info.alias:
-        aliases = [info.alias]
-
-    accepted: set[str] = set()
-    if by_alias:
-        accepted.update(a for a in aliases if isinstance(a, str))
-    if by_name or not aliases:
+    flat = [path[0] for path in paths if len(path) == 1 and isinstance(path[0], str)]
+    accepted = set(flat) if by_alias else set()
+    if by_name or not paths:
         accepted.add(name)
     if key in accepted:
         return key
-    return name if name in accepted else None
+    if name in accepted:
+        return name
+    return next((alias for alias in flat if alias in accepted), None)
 
 
 def _resolve_ref(root: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[str, Any]:
