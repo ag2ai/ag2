@@ -38,7 +38,7 @@ from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 from .bridge import make_bridge
-from .mappers import map_usage
+from .mappers import map_usage, text_block
 from .session import ACPSession, new_prompt_blocks
 from .tool_gateway import GATEWAY_SERVER_NAME, ToolGateway, partition_tools
 from .transport import ACPTransportError
@@ -190,7 +190,7 @@ class ACPClient:
                 # ACP 0.11 dropped PromptRequest.message_id; extra kwargs would only
                 # end up in the request's `_meta`, so send none.
                 return await conn.prompt(
-                    prompt=blocks or [schema.TextContentBlock(type="text", text="")],
+                    prompt=blocks or [text_block("")],
                     session_id=session_id,
                 )
             except self.config._transport_errors as e:

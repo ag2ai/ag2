@@ -156,7 +156,7 @@ class BridgeState:
         self.context: ConversationContext | None = None  # updated by ACPClient before each turn
         # One entry per message the agent sent, each reassembled from its own chunks.
         self._turn_messages: list[str] = []
-        self._message_key: str | None = None
+        self._last_message_id: str | None = None
         self._turn_files: list[BinaryResult] = []
         self._turn_worked = False
         # Set when a tool served over the gateway asked a human and could not
@@ -172,7 +172,7 @@ class BridgeState:
 
     def begin_turn(self) -> None:
         self._turn_messages = []
-        self._message_key = None
+        self._last_message_id = None
         self._turn_files = []
         self._turn_worked = False
         self.channel_failure = None
@@ -232,16 +232,16 @@ class BridgeState:
         """File a chunk's text under the message it belongs to.
 
         Chunks are the pieces of one message, so they are put back together; a chunk
-        that names a different message (or, for agents that name none, follows
-        a gap) starts the next one rather than being run into it.
+        that names a different message starts the next one rather than being run into
+        it. An agent that names no message gets all of a turn's chunks as one message.
         """
         if not text:
             return
-        if self._turn_messages and message_id == self._message_key:
+        if self._turn_messages and message_id == self._last_message_id:
             self._turn_messages[-1] += text
         else:
             self._turn_messages.append(text)
-        self._message_key = message_id
+        self._last_message_id = message_id
 
     @property
     def _fs_root(self) -> str:

@@ -10,19 +10,31 @@ provenance, say — so that data must not be able to name the session a prompt r
 against.
 """
 
+from typing import Any
+
 import pytest
 from acp import schema
+from acp.core import ClientSideConnection
 from acp.exceptions import RequestError
 
 from ag2 import Agent
 from ag2.acp import ACPAgent
 from ag2.acp.guard import colliding_meta_keys
-from ag2.acp.testing import connect, send_raw
+from ag2.acp.testing import connect
 from ag2.testing import TestConfig
 
 
 def _agent(*turns: str) -> Agent:
     return Agent("workie", config=TestConfig(*(turns or ("ok",))))
+
+
+async def _send_raw(conn: ClientSideConnection, method: str, params: dict[str, Any]) -> Any:
+    """Send ``method`` with ``params`` exactly as given, which the typed client will not.
+
+    The SDK has no public way to send an arbitrary method on a connection (``ext_method``
+    prefixes the name with ``_``), so this reaches for its JSON-RPC layer.
+    """
+    return await conn._conn.send_request(method, params)
 
 
 class TestCollisionDetection:
@@ -55,7 +67,7 @@ class TestOverrideIsRefused:
             mine = (await conn.new_session(cwd="/tmp")).session_id
 
             with pytest.raises(RequestError):
-                await send_raw(
+                await _send_raw(
                     conn,
                     "session/prompt",
                     {
@@ -75,7 +87,7 @@ class TestOverrideIsRefused:
             session = await conn.new_session(cwd="/tmp")
 
             with pytest.raises(RequestError):
-                await send_raw(
+                await _send_raw(
                     conn,
                     "session/prompt",
                     {
@@ -90,7 +102,7 @@ class TestOverrideIsRefused:
 
         async with connect(server) as (conn, _):
             with pytest.raises(RequestError):
-                await send_raw(
+                await _send_raw(
                     conn,
                     "session/new",
                     {"cwd": "/tmp", "mcpServers": [], "_meta": {"cwd": "/etc"}},
@@ -104,7 +116,7 @@ class TestOverrideIsRefused:
             mine = (await conn.new_session(cwd="/tmp")).session_id
 
             with pytest.raises(RequestError) as caught:
-                await send_raw(
+                await _send_raw(
                     conn,
                     "session/load",
                     {"sessionId": mine, "cwd": "/tmp", "mcpServers": [], "_meta": {"sessionId": victim}},
@@ -117,7 +129,7 @@ class TestOverrideIsRefused:
 
         async with connect(server) as (conn, _):
             with pytest.raises(RequestError) as caught:
-                await send_raw(
+                await _send_raw(
                     conn,
                     "session/new",
                     {"cwd": "/tmp", "mcpServers": [], "_meta": {"cwd": "/etc"}},

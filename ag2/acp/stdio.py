@@ -4,6 +4,7 @@
 """Launching an ACP agent as a subprocess and talking to it over its stdio."""
 
 import asyncio
+import os
 import sys
 from asyncio.subprocess import Process
 from collections.abc import Mapping
@@ -32,12 +33,12 @@ class StdioConnection:
         command: str,
         *args: str,
         env: Mapping[str, str] | None = None,
-        cwd: str | Path | None = None,
+        cwd: str | os.PathLike[str] | None = None,
     ) -> None:
         self._client = client
         self._launch = (command, *args)
         self._env = env
-        self._cwd = cwd
+        self._cwd = Path(cwd) if cwd is not None else None
         self._transport: (
             AbstractAsyncContextManager[tuple[asyncio.StreamReader, asyncio.StreamWriter, Process]] | None
         ) = None
