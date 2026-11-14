@@ -261,12 +261,22 @@ async def _send_tool_result(
 def normalize_realtime_usage(metadata: "gtypes.UsageMetadata | None") -> Usage:
     if metadata is None:
         return Usage()
+    thinking = metadata.thoughts_token_count
+    completion = metadata.response_token_count
+    total = metadata.total_token_count
+    if thinking:
+        # The Live API reports thoughts beside the response, as the batch API
+        # reports them beside the candidates; completion includes both, with
+        # thinking_tokens retained as the reasoning breakdown. A reported total
+        # that leaves the thoughts out is raised to prompt plus completion (ADR 0036).
+        completion = (completion or 0) + thinking
+        total = max(total or 0, (metadata.prompt_token_count or 0) + completion)
     return Usage(
         prompt_tokens=metadata.prompt_token_count,
-        completion_tokens=metadata.response_token_count,
-        total_tokens=metadata.total_token_count,
+        completion_tokens=completion,
+        total_tokens=total,
         cache_read_input_tokens=metadata.cached_content_token_count,
-        thinking_tokens=metadata.thoughts_token_count,
+        thinking_tokens=thinking,
     )
 
 
