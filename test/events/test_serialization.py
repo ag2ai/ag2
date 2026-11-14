@@ -5,19 +5,22 @@
 """Tests for the shared event-serialization layer."""
 
 import datetime
+import json
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import BaseModel
 
-from ag2.events import BaseEvent, BinaryInput, BinaryType, ModelMessage, ModelRequest, ToolCallEvent
+from ag2.events import BaseEvent, BinaryInput, BinaryType, DataInput, ModelMessage, ModelRequest, ToolCallEvent
 from ag2.events._serialization import (
     deserialize_value,
     import_event_class,
     serialize_value,
 )
+from ag2.knowledge import EventLogWriter, MemoryKnowledgeStore
 
 
 class _Outer:
@@ -151,12 +154,12 @@ class TestUnknownTypePassthrough:
     """
 
     def test_unknown_type_passes_through(self) -> None:
-        when = datetime.datetime(2026, 4, 29)
-        assert serialize_value(when) is when
+        unknown = object()
+        assert serialize_value(unknown) is unknown
 
     def test_unknown_type_inside_dict_passes_through(self) -> None:
-        when = datetime.datetime(2026, 4, 29)
-        assert serialize_value({"when": when}) == {"when": when}
+        unknown = object()
+        assert serialize_value({"value": unknown}) == {"value": unknown}
 
 
 class TestEventRoundTrip:
@@ -182,3 +185,30 @@ class TestEventRoundTrip:
         assert isinstance(part, BinaryInput)
         assert part.kind is BinaryType.IMAGE
         assert part.data == b"\x89PNG"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        Decimal("124.001203300"),
+        datetime.datetime(2026, 11, 14, 8, 30, tzinfo=datetime.timezone(datetime.timedelta(hours=5, minutes=30))),
+        datetime.datetime(2026, 11, 14, 8, 30),
+    ],
+)
+def test_nested_model_input_round_trips_through_json(value: Decimal | datetime.datetime) -> None:
+    request = ModelRequest([DataInput({"value": value})])
+    restored = ModelRequest.from_dict(json.loads(json.dumps(request.to_dict())))
+
+    assert restored == request
+
+
+@pytest.mark.asyncio
+async def test_event_log_restores_decimal_and_datetime_inputs() -> None:
+    writer = EventLogWriter(MemoryKnowledgeStore())
+    stream_id = uuid4()
+    data = {"amount": Decimal("4.1250"), "when": datetime.datetime(2026, 11, 14, tzinfo=datetime.UTC)}
+    request = ModelRequest([DataInput(data)])
+
+    await writer.persist(stream_id, [request])
+
+    assert await writer.load(stream_id) == [request]
