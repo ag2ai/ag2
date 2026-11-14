@@ -65,7 +65,18 @@ def strip_markdown_fences(text: str) -> str:
     """
     text = text.strip()
     if text.startswith("```"):
-        text = text.split("\n", 1)[-1] if "\n" in text else _SINGLE_LINE_FENCE_INFO_STRING_RE.sub("", text[3:], count=1)
+        if "\n" in text:
+            opening, rest = text[3:].split("\n", 1)
+            # The regex only matches when the info string is followed by a
+            # payload. If the remaining lines are just a standalone closing
+            # fence, the payload was written on the opening line; dropping it
+            # via ``rest`` would silently discard the whole message.
+            if _SINGLE_LINE_FENCE_INFO_STRING_RE.match(opening) and not rest.strip().strip("`").strip():
+                text = _SINGLE_LINE_FENCE_INFO_STRING_RE.sub("", opening, count=1)
+            else:
+                text = rest
+        else:
+            text = _SINGLE_LINE_FENCE_INFO_STRING_RE.sub("", text[3:], count=1)
     if text.endswith("```"):
         text = text[:-3]
     return text.strip()
