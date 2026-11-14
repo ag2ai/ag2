@@ -118,6 +118,24 @@ class SqliteKnowledgeStore:
                 children.add(remainder)
         return sorted(children)
 
+    def _sync_compare_and_swap(self, normalized: str, expected: str | None, payload: bytes) -> bool:
+        conn = self._ensure_connected()
+        # Reserve the writer only for this short transaction, never for an LLM call.
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,)).fetchone()
+            current = row[0].decode("utf-8") if row is not None else None
+            if current != expected:
+                return False
+            maximum = conn.execute("SELECT COALESCE(MAX(version), 0) FROM entries").fetchone()[0]
+            version = max(self._version_counter, maximum) + 1
+            conn.execute(
+                "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
+                (normalized, payload, version),
+            )
+            self._version_counter = max(self._version_counter, version)
+        return True
+
     def _sync_delete(self, normalized: str, prefix: str) -> None:
         conn = self._ensure_connected()
         conn.execute("DELETE FROM entries WHERE path = ?", (normalized,))
@@ -195,6 +213,25 @@ class SqliteKnowledgeStore:
         prefix = _normalize(path).rstrip("/") + "/"
         async with self._lock:
             return await self._run(functools.partial(self._sync_list, prefix))
+
+    async def compare_and_swap(self, path: str, expected: str | None, content: str) -> bool:
+        async with self._lock:
+            operation = asyncio.create_task(
+                self._run(
+                    functools.partial(self._sync_compare_and_swap, _normalize(path), expected, content.encode("utf-8"))
+                )
+            )
+            try:
+                return await asyncio.shield(operation)
+            except asyncio.CancelledError:
+                # An executor transaction keeps running after its caller is cancelled.
+                # Keep the connection lock until it finishes, including repeated cancels.
+                while not operation.done():
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await asyncio.shield(operation)
+                if not operation.cancelled():
+                    operation.exception()
+                raise
 
     async def delete(self, path: str) -> None:
         normalized = _normalize(path)

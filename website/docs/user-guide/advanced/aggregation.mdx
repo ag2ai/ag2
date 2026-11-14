@@ -90,6 +90,26 @@ Token usage is recorded on the strategy instance as `#!python strategy.last_usag
 
 Updates `/memory/working.md` — the agent's single persistent state document. Reads the existing file, merges in context from recent events, writes the updated version back. The companion to [`WorkingMemoryPolicy`](/docs/user-guide/advanced/assembly#workingmemorypolicy).
 
+Concurrent updates use a conditional replacement: if another writer changed the
+document during inference, the strategy rereads the latest memory and asks the
+model to merge again. `max_attempts` (default `3`) bounds the total model calls
+per aggregation. Each retry can incur model cost. Exhaustion raises without
+overwriting the newer document; the knowledge plugin reports `AggregationFailed`.
+Every attempt's reported tokens remain in the usage event log.
+
+All built-in knowledge stores implement the optional `CompareAndSwapStore`
+capability. Custom stores used with this strategy must also implement
+`compare_and_swap(path, expected, content) -> bool`, atomically comparing against
+`expected` and replacing only on a match (`None` means missing, distinct from
+an empty string). Alternatively, use `LockedKnowledgeStore` with a shared lock
+and route all writers through adapters using that lock. The adapter's short
+read/compare/write operation must finish within its 30-second lease; model
+inference happens outside it. An unsupported store fails before model inference.
+
+For DiskKnowledgeStore, cooperating handles use a POSIX advisory lock on the root
+directory; clearing `/` preserves the root directory. Direct external filesystem
+writes and filesystems without compatible directory locks are not coordinated.
+
 ```python linenums="1" hl_lines="6 9"
 from ag2.aggregate import WorkingMemoryAggregate
 from ag2.config import OpenAICompletionsConfig

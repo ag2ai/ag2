@@ -24,6 +24,19 @@ redis.call('ZADD', KEYS[2], version, ARGV[2])
 return size
 """
 
+_COMPARE_AND_SWAP_SCRIPT = """
+local current = redis.call('GET', KEYS[1])
+if ARGV[1] == 'missing' then
+    if current then return 0 end
+elseif current ~= ARGV[2] then
+    return 0
+end
+redis.call('SET', KEYS[1], ARGV[3])
+local version = redis.call('INCR', KEYS[3])
+redis.call('ZADD', KEYS[2], version, ARGV[4])
+return 1
+"""
+
 
 class RedisKnowledgeStore:
     """Redis-backed :class:`KnowledgeStore`.
@@ -67,6 +80,7 @@ class RedisKnowledgeStore:
         self._index_key = f"{self._key_prefix}:__index"
         self._version_key = f"{self._key_prefix}:__version_counter"
         self._append_script = self._client.register_script(_APPEND_SCRIPT)
+        self._compare_and_swap_script = self._client.register_script(_COMPARE_AND_SWAP_SCRIPT)
         self._poll_interval_s = poll_interval_s
         self._lock = asyncio.Lock()
 
@@ -120,6 +134,15 @@ class RedisKnowledgeStore:
             else:
                 children.add(remainder)
         return sorted(children)
+
+    async def compare_and_swap(self, path: str, expected: str | None, content: str) -> bool:
+        normalized = _normalize(path)
+        return bool(
+            await self._compare_and_swap_script(
+                keys=[self._key(normalized), self._index_key, self._version_key],
+                args=["missing" if expected is None else "present", expected or "", content, normalized],
+            )
+        )
 
     async def delete(self, path: str) -> None:
         normalized = _normalize(path)

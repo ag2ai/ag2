@@ -18,9 +18,9 @@ from typing import Any, Protocol, runtime_checkable
 from fast_depends.pydantic import PydanticSerializer
 
 from .annotations import Context
-from .config import ModelConfig
+from .config import LLMClient, ModelConfig
 from .events import BaseEvent, ModelRequest, UsageEvent, render_for_prompt
-from .knowledge import CONVERSATIONS_PREFIX, WORKING_MEMORY_PATH, KnowledgeStore
+from .knowledge import CONVERSATIONS_PREFIX, WORKING_MEMORY_PATH, CompareAndSwapStore, KnowledgeStore
 from .stream import MemoryStream
 
 
@@ -149,13 +149,16 @@ class WorkingMemoryAggregate:
             async def aggregate(self, events, context, store) -> None:
                 # ...your own logic, your own paths, your own prompts.
 
-    Costs one LLM call per aggregation.
+    Costs one LLM call without contention; retries incur additional calls.
 
     Args:
         config: Model config used for the merge LLM call.
         prompt: Optional override template. Use ``{existing}`` and
             ``{events}`` placeholders. Defaults to
             :data:`DEFAULT_WORKING_MEMORY_PROMPT`.
+        max_attempts: Maximum merge attempts after concurrent memory updates.
+            Each attempt costs one model call. Exhaustion raises instead of
+            overwriting newer memory. The store must support CompareAndSwapStore.
     """
 
     def __init__(
@@ -163,9 +166,13 @@ class WorkingMemoryAggregate:
         config: ModelConfig,
         *,
         prompt: str = DEFAULT_WORKING_MEMORY_PROMPT,
+        max_attempts: int = 3,
     ) -> None:
+        if isinstance(max_attempts, bool) or not isinstance(max_attempts, int) or max_attempts < 1:
+            raise ValueError("max_attempts must be a positive integer")
         self._config = config
         self._prompt_template = prompt
+        self._max_attempts = max_attempts
         self._serializer = PydanticSerializer(
             pydantic_config={"arbitrary_types_allowed": True},
             use_fastdepends_errors=False,
@@ -180,12 +187,20 @@ class WorkingMemoryAggregate:
     ) -> None:
         if not events:
             return
-        existing = await store.read(WORKING_MEMORY_PATH) or ""
-        updated = await self._merge(existing, events, context)
-        await store.write(WORKING_MEMORY_PATH, updated)
-
-    async def _merge(self, existing: str, events: list[BaseEvent], context: Context) -> str:
+        if not isinstance(store, CompareAndSwapStore):
+            raise TypeError(
+                "WorkingMemoryAggregate requires a store with compare_and_swap; "
+                "implement CompareAndSwapStore or wrap the store in LockedKnowledgeStore with a shared lock"
+            )
         client = self._config.create()
+        for _ in range(self._max_attempts):
+            existing = await store.read(WORKING_MEMORY_PATH)
+            updated = await self._merge(existing or "", events, context, client)
+            if await store.compare_and_swap(WORKING_MEMORY_PATH, existing, updated):
+                return
+        raise RuntimeError(f"Working memory changed during all {self._max_attempts} merge attempts")
+
+    async def _merge(self, existing: str, events: list[BaseEvent], context: Context, client: LLMClient) -> str:
         prompt = self._prompt_template.format(
             existing=existing or "(empty)",
             events="\n".join(render_for_prompt(e) for e in events),

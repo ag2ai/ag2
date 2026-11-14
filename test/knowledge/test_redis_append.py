@@ -26,6 +26,25 @@ pytestmark = [
 _CONNECTIONS = 20
 
 
+async def test_compare_and_swap_across_connections(redis_socket: str) -> None:
+    clients = [Redis(unix_socket_path=redis_socket) for _ in range(2)]
+    stores = [RedisKnowledgeStore(client, key_prefix="cas") for client in clients]
+    try:
+        assert await stores[0].compare_and_swap("/note", None, "") is True
+        assert await stores[1].compare_and_swap("/note", None, "wrong") is False
+        outcomes = await asyncio.gather(
+            *(store.compare_and_swap("/note", "", value) for store, value in zip(stores, ("雪", "☃")))
+        )
+        assert sorted(outcomes) == [False, True]
+        assert await stores[0].read("/note") == ("雪" if outcomes[0] else "☃")
+        before = await stores[0].list_versions_under("/")
+        assert await stores[1].compare_and_swap("/note", "stale", "wrong") is False
+        assert await stores[0].list_versions_under("/") == before
+    finally:
+        for client in clients:
+            await client.aclose()
+
+
 @pytest.fixture(scope="module")
 def redis_socket() -> Iterator[str]:
     executable = shutil.which("redis-server")
