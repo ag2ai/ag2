@@ -588,3 +588,36 @@ async def test_request_store_overrides_worker_plugin_store() -> None:
 
     assert await tenant_store.read("/note") == "tenant"
     assert await shared_store.read("/note") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("override", [False, True])
+async def test_failed_bootstrap_is_retried(override: bool) -> None:
+    class FlakyBootstrap:
+        def __init__(self) -> None:
+            self.attempts = 0
+
+        async def bootstrap(self, store: KnowledgeStore, actor_name: str) -> None:
+            self.attempts += 1
+            if self.attempts == 1:
+                raise OSError("bootstrap temporarily unavailable")
+            await store.write("/ready", actor_name)
+
+    bootstrap = FlakyBootstrap()
+    store = MemoryKnowledgeStore()
+    plugin = KnowledgePlugin(
+        MemoryKnowledgeStore() if override else store,
+        bootstrap=bootstrap,
+        write_event_log=False,
+    )
+    agent = Agent("initializer", config=TestConfig("ok"), plugins=[plugin])
+    dependencies = {KnowledgeStore: store} if override else {}
+
+    with pytest.raises(OSError, match="temporarily unavailable"):
+        await agent.ask("initialize", dependencies=dependencies)
+
+    await agent.ask("retry", dependencies=dependencies)
+    assert await store.read("/ready") == "initializer"
+
+    await agent.ask("already initialized", dependencies=dependencies)
+    assert bootstrap.attempts == 2
