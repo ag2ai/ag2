@@ -2,88 +2,82 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from contextlib import asynccontextmanager
-
 import pytest
 from acp import schema
 
-from ag2.acp import MCPCapabilityError
-from ag2.acp.bridge import make_bridge
-from ag2.acp.session import ACPSession
+from ag2 import Agent
+from ag2.acp import ACPConfig, MCPCapabilityError
 from ag2.acp.testing import ACPTurn, fake_acp_config
+from ag2.tools.builtin.mcp_server import MCPServerTool
 
 
-def _msg(text: str) -> schema.AgentMessageChunk:
-    return schema.AgentMessageChunk(
-        session_update="agent_message_chunk",
-        content=schema.TextContentBlock(type="text", text=text),
+def _says(text: str) -> ACPTurn:
+    return ACPTurn(
+        updates=[
+            schema.AgentMessageChunk(
+                session_update="agent_message_chunk",
+                content=schema.TextContentBlock(type="text", text=text),
+            )
+        ]
     )
 
 
 @pytest.mark.asyncio
-async def test_ensure_passes_mcp_servers_to_new_session() -> None:
-    server = schema.HttpMcpServer(type="http", name="ext", url="http://127.0.0.1:1/mcp", headers=[])
-    cfg = fake_acp_config(ACPTurn(updates=[_msg("hi")]), permission_policy="auto")
+async def test_each_turn_sends_the_agent_only_what_it_has_not_seen() -> None:
+    prompts: list[str] = []
+    cfg = fake_acp_config(_says("one"), _says("two"), permission_policy="auto", prompt_calls=prompts)
 
-    session = ACPSession()
-    session.bridge = make_bridge(cfg)
-    await session.ensure(
-        session.bridge,
-        connect=cfg.connect,
-        cwd=".",
-        protocol_version=1,
-        mcp_servers=[server],
-    )
-    try:
-        assert session.conn.new_session_kwargs["mcp_servers"] == [server]
-    finally:
-        await session.close()
+    async with cfg:
+        reply = await Agent("acp", config=cfg).ask("first")
+        await reply.ask("second")
+
+    assert prompts == ["first", "second"]
 
 
 @pytest.mark.asyncio
-async def test_ensure_rejects_agent_without_http_mcp() -> None:
-    server = schema.HttpMcpServer(type="http", name="ext", url="http://127.0.0.1:1/mcp", headers=[])
+async def test_external_mcp_server_is_refused_when_the_agent_cannot_reach_http_mcp() -> None:
     cfg = fake_acp_config(
-        ACPTurn(updates=[_msg("hi")]),
+        _says("hi"),
         permission_policy="auto",
         agent_capabilities=schema.AgentCapabilities(),  # mcp http defaults to False
     )
+    agent = Agent("acp", config=cfg, tools=[MCPServerTool(server_url="https://example.com/mcp", server_label="ext")])
 
-    conns = []
+    async with cfg:
+        with pytest.raises(MCPCapabilityError):
+            await agent.ask("hello")
 
-    @asynccontextmanager
-    async def connect(client):
-        async with cfg.connect(client) as (conn, proc):
-            conns.append(conn)
-            yield conn, proc
-
-    session = ACPSession()
-    session.bridge = make_bridge(cfg)
-    with pytest.raises(MCPCapabilityError):
-        await session.ensure(
-            session.bridge,
-            connect=connect,
-            cwd=".",
-            protocol_version=1,
-            mcp_servers=[server],
-        )
-    assert session.started is False
-    (conn,) = conns
-    assert conn.closed  # ensure tore the connection down, not just left it dangling
+        assert cfg.sessions == {}  # the refused session was torn down, not left dangling
 
 
 @pytest.mark.asyncio
-async def test_ensure_skips_capability_check_without_servers() -> None:
+async def test_agent_without_http_mcp_is_fine_when_nothing_needs_it() -> None:
     cfg = fake_acp_config(
-        ACPTurn(updates=[_msg("hi")]),
+        _says("hi"),
         permission_policy="auto",
         agent_capabilities=schema.AgentCapabilities(),  # http False, but nothing to expose
     )
 
-    session = ACPSession()
-    session.bridge = make_bridge(cfg)
-    await session.ensure(session.bridge, connect=cfg.connect, cwd=".", protocol_version=1)
-    try:
-        assert session.started is True
-    finally:
-        await session.close()
+    async with cfg:
+        reply = await Agent("acp", config=cfg).ask("hello")
+
+    assert reply.body == "hi"
+
+
+@pytest.mark.asyncio
+async def test_agent_that_cannot_be_launched_surfaces_the_failure() -> None:
+    cfg = ACPConfig(command=["ag2-no-such-acp-agent"], permission_policy="auto")
+
+    async with cfg:
+        with pytest.raises(FileNotFoundError):
+            await Agent("acp", config=cfg).ask("hello")
+
+
+@pytest.mark.asyncio
+async def test_relative_workspace_paths_reach_the_agent_as_absolute_ones() -> None:
+    cfg = fake_acp_config(_says("hi"), permission_policy="auto", cwd=".", additional_directories=["."])
+
+    async with cfg:
+        reply = await Agent("acp", config=cfg).ask("hello")
+
+    assert reply.body == "hi"

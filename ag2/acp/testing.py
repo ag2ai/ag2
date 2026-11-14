@@ -18,6 +18,7 @@ from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from functools import cache
+from pathlib import PurePath
 from typing import TYPE_CHECKING, Any, cast
 
 import acp
@@ -116,6 +117,7 @@ class _FakeConnection:
         agent_capabilities: "schema.AgentCapabilities | None" = None,
         config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
         config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+        prompt_calls: "list[str] | None" = None,
         initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
         initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
         elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
@@ -131,6 +133,7 @@ class _FakeConnection:
         self.config_option_calls: list[tuple[str, str | bool]] = (
             config_option_calls if config_option_calls is not None else []
         )
+        self.prompt_calls: list[str] = prompt_calls if prompt_calls is not None else []
         self.initialize_calls: list[schema.ClientCapabilities | None] = (
             initialize_calls if initialize_calls is not None else []
         )
@@ -147,6 +150,11 @@ class _FakeConnection:
         )
 
     async def new_session(self, **kwargs: Any) -> schema.NewSessionResponse:
+        # Real adapters reject relative paths here; so does the double, or a config
+        # left on its default `cwd` would pass every test and fail on first real use.
+        for path in [kwargs["cwd"], *(kwargs.get("additional_directories") or [])]:
+            if not PurePath(path).is_absolute():
+                raise acp.RequestError.invalid_params({"path": f"must be an absolute path, but received: {path}"})
         self.new_session_kwargs = kwargs
         return schema.NewSessionResponse(
             session_id=FAKE_SESSION_ID,
@@ -184,7 +192,8 @@ class _FakeConnection:
     async def cancel(self, **kwargs: Any) -> None:
         self._cancelled.set()
 
-    async def prompt(self, *, session_id: str, **kwargs: Any) -> schema.PromptResponse:
+    async def prompt(self, *, session_id: str, prompt: Sequence[Any] = (), **kwargs: Any) -> schema.PromptResponse:
+        self.prompt_calls.append("".join(block.text for block in prompt if isinstance(block, schema.TextContentBlock)))
         turn = next(self._turns)
         if turn.on_prompt is not None:
             await turn.on_prompt()
@@ -252,6 +261,7 @@ def _scripted_connect(
     agent_capabilities: "schema.AgentCapabilities | None" = None,
     config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
     config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    prompt_calls: "list[str] | None" = None,
     initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
     initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
     elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
@@ -269,6 +279,7 @@ def _scripted_connect(
             agent_capabilities=agent_capabilities,
             config_options=config_options,
             config_option_calls=config_option_calls,
+            prompt_calls=prompt_calls,
             initialize_calls=initialize_calls,
             initialize_elicitations=initialize_elicitations,
             elicitation_responses=elicitation_responses,
@@ -286,6 +297,7 @@ def fake_acp_config(
     agent_capabilities: "schema.AgentCapabilities | None" = None,
     config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
     config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    prompt_calls: "list[str] | None" = None,
     initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
     initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
     elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
@@ -301,7 +313,8 @@ def fake_acp_config(
     ``config_options`` are advertised in the ``session/new`` response (the
     agent's model picker et al.); ``session/set_config_option`` calls are
     appended to the caller-supplied ``config_option_calls`` list as
-    ``(config_id, value)`` tuples.
+    ``(config_id, value)`` tuples. The text of each ``session/prompt`` the agent
+    receives is appended to ``prompt_calls``.
 
     The elicitation seam works the same way — one field for what the agent asks,
     one list for what the client answered:
@@ -323,6 +336,7 @@ def fake_acp_config(
         agent_capabilities=agent_capabilities,
         config_options=config_options,
         config_option_calls=config_option_calls,
+        prompt_calls=prompt_calls,
         initialize_calls=initialize_calls,
         initialize_elicitations=initialize_elicitations,
         elicitation_responses=elicitation_responses,
@@ -336,6 +350,7 @@ def fake_remote_acp_config(
     agent_capabilities: "schema.AgentCapabilities | None" = None,
     config_options: "Sequence[schema.SessionConfigOptionSelect] | None" = None,
     config_option_calls: "list[tuple[str, str | bool]] | None" = None,
+    prompt_calls: "list[str] | None" = None,
     initialize_calls: "list[schema.ClientCapabilities | None] | None" = None,
     initialize_elicitations: "Sequence[ScriptedElicitation]" = (),
     elicitation_responses: "list[schema.CreateElicitationResponse] | None" = None,
@@ -353,6 +368,7 @@ def fake_remote_acp_config(
         agent_capabilities=agent_capabilities,
         config_options=config_options,
         config_option_calls=config_option_calls,
+        prompt_calls=prompt_calls,
         initialize_calls=initialize_calls,
         initialize_elicitations=initialize_elicitations,
         elicitation_responses=elicitation_responses,

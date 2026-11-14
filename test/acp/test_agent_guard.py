@@ -12,8 +12,9 @@ against.
 
 from typing import Any
 
-import acp
 import pytest
+from acp import schema
+from acp.core import ClientSideConnection
 from acp.exceptions import RequestError
 
 from ag2 import Agent
@@ -27,8 +28,13 @@ def _agent(*turns: str) -> Agent:
     return Agent("workie", config=TestConfig(*(turns or ("ok",))))
 
 
-def _raw(conn: Any) -> Any:
-    return conn._conn if hasattr(conn, "_conn") else conn._connection
+async def _send_raw(conn: ClientSideConnection, method: str, params: dict[str, Any]) -> Any:
+    """Send ``method`` with ``params`` exactly as given, which the typed client will not.
+
+    The SDK has no public way to send an arbitrary method on a connection (``ext_method``
+    prefixes the name with ``_``), so this reaches for its JSON-RPC layer.
+    """
+    return await conn._conn.send_request(method, params)
 
 
 class TestCollisionDetection:
@@ -61,7 +67,8 @@ class TestOverrideIsRefused:
             mine = (await conn.new_session(cwd="/tmp")).session_id
 
             with pytest.raises(RequestError):
-                await _raw(conn).send_request(
+                await _send_raw(
+                    conn,
                     "session/prompt",
                     {
                         "sessionId": mine,
@@ -80,7 +87,8 @@ class TestOverrideIsRefused:
             session = await conn.new_session(cwd="/tmp")
 
             with pytest.raises(RequestError):
-                await _raw(conn).send_request(
+                await _send_raw(
+                    conn,
                     "session/prompt",
                     {
                         "sessionId": session.session_id,
@@ -94,7 +102,8 @@ class TestOverrideIsRefused:
 
         async with connect(server) as (conn, _):
             with pytest.raises(RequestError):
-                await _raw(conn).send_request(
+                await _send_raw(
+                    conn,
                     "session/new",
                     {"cwd": "/tmp", "mcpServers": [], "_meta": {"cwd": "/etc"}},
                 )
@@ -107,7 +116,8 @@ class TestOverrideIsRefused:
             mine = (await conn.new_session(cwd="/tmp")).session_id
 
             with pytest.raises(RequestError) as caught:
-                await _raw(conn).send_request(
+                await _send_raw(
+                    conn,
                     "session/load",
                     {"sessionId": mine, "cwd": "/tmp", "mcpServers": [], "_meta": {"sessionId": victim}},
                 )
@@ -119,7 +129,8 @@ class TestOverrideIsRefused:
 
         async with connect(server) as (conn, _):
             with pytest.raises(RequestError) as caught:
-                await _raw(conn).send_request(
+                await _send_raw(
+                    conn,
                     "session/new",
                     {"cwd": "/tmp", "mcpServers": [], "_meta": {"cwd": "/etc"}},
                 )
@@ -133,11 +144,8 @@ class TestLegitimateMetadataStillWorks:
         server = ACPAgent(_agent())
 
         async with connect(server) as (conn, _):
-            response = await _raw(conn).send_request(
-                "session/new",
-                {"cwd": "/tmp", "mcpServers": [], "_meta": {"ag2.space": {"room": "!r"}}},
-            )
-            session = await server.sessions.get(response["sessionId"])
+            created = await conn.new_session(cwd="/tmp", **{"ag2.space": {"room": "!r"}})
+            session = await server.sessions.get(created.session_id)
 
         assert session.meta == {"ag2.space": {"room": "!r"}}
 
@@ -146,7 +154,7 @@ class TestLegitimateMetadataStillWorks:
             session = await conn.new_session(cwd="/tmp")
             response = await conn.prompt(
                 session_id=session.session_id,
-                prompt=[acp.text_block("what's 100 + 100")],
+                prompt=[schema.TextContentBlock(type="text", text="what's 100 + 100")],
             )
 
         assert response.stop_reason == "end_turn"
