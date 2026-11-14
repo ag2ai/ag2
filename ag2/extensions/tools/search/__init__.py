@@ -22,6 +22,7 @@ except ImportError as e:
 from .glasser import GlasserResult, GlasserToolkit
 from .keenable import KeenableSearchToolkit
 from .serply import SerplySearchToolkit
+from .specstream import SpecStreamSearchToolkit
 from .xquik import XquikSearchToolkit
 
 __all__ = (
@@ -31,6 +32,7 @@ __all__ = (
     "GlasserToolkit",
     "KeenableSearchToolkit",
     "SerplySearchToolkit",
+    "SpecStreamSearchToolkit",
     "TinyFishSearchToolkit",
     "XquikSearchToolkit",
 )

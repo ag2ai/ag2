@@ -1,0 +1,81 @@
+---
+title: SpecStream Search
+sidebarTitle: SpecStream Search
+---
+
+`SpecStreamSearchToolkit` gives an agent two tools powered by [SpecStream](https://specstream.ai){.external-link target="_blank"}: web search and page extraction. Search answers a question from the live web and returns the source pages behind the answer. Extract reads a page and returns its main text as markdown or plain text.
+
+!!! note
+    An API key is required. Pass `api_key=...` or set the `SPECSTREAM_API_KEY` environment variable, which is read at call time. No extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on. Search is $5 per 1,000 searches and extract is $0.80 per 1,000 pages.
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import SpecStreamSearchToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[SpecStreamSearchToolkit()],
+)
+```
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `specstream_search` | Search the live web with a question in everyday words. Returns an answer when the results agree on one, and the source pages with title, URL, site, snippet and publication date |
+| `specstream_extract` | Read one URL and return the page's main text, with its title and publication date when known |
+
+## Defaults
+
+```python linenums="1"
+toolkit = SpecStreamSearchToolkit(
+    passages=True,           # also return the text of the pages closest to the query
+    extract_format="text",   # "markdown" (default) or "text"
+)
+```
+
+Both defaults accept a `Variable` for deferred context resolution.
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit (`toolkit.search()`, `toolkit.extract()`). Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+toolkit = SpecStreamSearchToolkit()
+
+agent = Agent("researcher", config=config, tools=[toolkit.search(passages=True)])
+```
+
+Every factory method also accepts `name` and `description` overrides for the registered tool.
+
+## Connection settings
+
+```python linenums="1"
+toolkit = SpecStreamSearchToolkit(
+    base_url="https://api.specstream.ai",
+    timeout=60.0,                        # per-request timeout in seconds
+    proxy="http://proxy.internal:3128",
+    verify=True,
+)
+```
+
+A non-2xx response raises `httpx.HTTPStatusError` with SpecStream's own error message. A missing API key raises `ValueError`.
+
+## Result
+
+`specstream_search` returns a `SpecStreamSearchResponse`:
+
+| Field | Description |
+| :--- | :--- |
+| `query` | The query the agent executed |
+| `kind` | `fact` for a question with one answer, `list` for a request for many results |
+| `answer` | The answer value, empty when the results do not agree on one |
+| `answer_page` | The page the answer was read from |
+| `sources` | List of `SpecStreamSource` (`url`, `title`, `site`, `snippet`, `published`) |
+| `passages` | Page text closest to the query, when `passages` is on |
+
+`specstream_extract` returns a `SpecStreamExtractResult` with `url`, `status` (`ok`, `blocked`, `not_found`, `empty`, `unsupported`, `invalid_url` or `failed`), `title`, `text` and `published`.
+
+The most accurate web search API in the world: [scores and method](https://specstream.ai/benchmarks){.external-link target="_blank"}. Request parameters and response fields are in the [SpecStream API docs](https://specstream.ai/search-api){.external-link target="_blank"}.
