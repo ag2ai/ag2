@@ -13,6 +13,7 @@ import asyncio
 import datetime
 import functools
 import logging
+from bisect import bisect_left
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, runtime_checkable
 from uuid import uuid4
@@ -429,6 +430,8 @@ def _parse_cron_field(spec: str, min_val: int, max_val: int, *, allow_names: boo
             values.add(_DOW_NAMES[part.upper()])
         else:
             values.add(int(part))
+    if not values or min(values) < min_val or max(values) > max_val:
+        raise ValueError(f"Invalid cron field {spec!r}: expected values from {min_val} to {max_val}")
     return values
 
 
@@ -451,15 +454,15 @@ class CronWatch(_BaseWatch):
         self._callback: WatchCallback | None = None
 
     def arm(self, stream: Stream, callback: WatchCallback) -> None:
+        next_fire = self._next_fire_time(datetime.datetime.now())
         self._stream = stream
         self._callback = callback
         self._armed = True
-        self._task = asyncio.ensure_future(self._run(stream))
+        self._task = asyncio.ensure_future(self._run(stream, next_fire))
 
-    async def _run(self, stream: Stream) -> None:
+    async def _run(self, stream: Stream, next_fire: datetime.datetime) -> None:
         while True:
             now = datetime.datetime.now()
-            next_fire = self._next_fire_time(now)
             delay = (next_fire - now).total_seconds()
             if delay > 0:
                 await asyncio.sleep(delay)
@@ -470,7 +473,9 @@ class CronWatch(_BaseWatch):
                 except Exception:
                     logger.exception("CronWatch %s callback failed", self._id)
 
-    def _next_fire_time(self, now: Any) -> Any:
+            next_fire = self._next_fire_time(datetime.datetime.now())
+
+    def _next_fire_time(self, now: datetime.datetime) -> datetime.datetime:
         """Calculate next fire time from cron expression.
 
         Simple implementation: parses the 5 fields and finds the next
@@ -488,21 +493,24 @@ class CronWatch(_BaseWatch):
         months = _parse_cron_field(month_spec, 1, 12)
         dow_set = {v % 7 for v in _parse_cron_field(dow_spec, 0, 7, allow_names=True)}  # 0=Sun..6=Sat; 7→0
 
-        # Search forward from now + 1 minute
+        # The Gregorian date and weekday pattern repeats every 400 years.
+        # Skip whole days that cannot match instead of scanning every minute.
         candidate = now.replace(second=0, microsecond=0) + datetime.timedelta(minutes=1)
-        for _ in range(525960):  # Max ~1 year of minutes
-            if (
-                candidate.minute in minutes
-                and candidate.hour in hours
-                and candidate.day in doms
-                and candidate.month in months
-                and candidate.isoweekday() % 7 in dow_set
-            ):
-                return candidate
-            candidate += datetime.timedelta(minutes=1)
+        midnight = candidate.replace(hour=0, minute=0)
+        times = sorted(hour * 60 + minute for hour in hours for minute in minutes)
+        if times:
+            for _ in range(146_098):
+                if midnight.month in months and midnight.day in doms and midnight.isoweekday() % 7 in dow_set:
+                    earliest = candidate.hour * 60 + candidate.minute if midnight.date() == candidate.date() else 0
+                    index = bisect_left(times, earliest)
+                    if index < len(times):
+                        hour, minute = divmod(times[index], 60)
+                        return midnight.replace(hour=hour, minute=minute)
+                if midnight.date() == datetime.date.max:
+                    break
+                midnight += datetime.timedelta(days=1)
 
-        # Fallback: 1 hour from now
-        return now + datetime.timedelta(hours=1)
+        raise ValueError(f"Invalid cron expression: {self._expression!r} has no matching date")
 
     def disarm(self) -> None:
         if self._task is not None:
