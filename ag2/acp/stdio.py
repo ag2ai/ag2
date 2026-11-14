@@ -65,7 +65,8 @@ class StdioConnection:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        assert self._transport is not None and self._conn is not None, "closed before it was opened"
+        if self._transport is None or self._conn is None:
+            raise RuntimeError("StdioConnection closed before it was opened")
         try:
             await self._conn.close()
         finally:

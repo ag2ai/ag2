@@ -9,7 +9,7 @@ against the real SDK types rather than stringly-typed dicts.
 
 Both directions live here:
 
-* **ACP -> AG2** (:func:`map_session_update`, :func:`content_blocks_to_text`, …)
+* **ACP -> AG2** (:func:`map_session_update`, :func:`block_text`, …)
   serves the *client* side — AG2 driving an external CLI agent.
 * **AG2 -> ACP** (:func:`prompt_to_inputs`, :func:`event_to_session_update`,
   :func:`history_to_session_updates`) serves the *serving* side —
@@ -64,6 +64,16 @@ def block_text(block: ContentBlock | None) -> str:
     Text, a text resource and a resource link all read as text; media and blob
     resources do not (see :func:`block_to_files`).
     """
+    return _textual_block_text(block) or ""
+
+
+def _textual_block_text(block: ContentBlock | None) -> str | None:
+    """The text a textual block reads as, or ``None`` for a block that is not textual.
+
+    The one place that decides which blocks are text, shared by :func:`block_text`
+    and :func:`block_to_input`. Resource *links* are named, never fetched: a URI
+    named by a Client is context, not authorization to dereference it.
+    """
     if isinstance(block, schema.TextContentBlock):
         return block.text
     if isinstance(block, schema.EmbeddedResourceContentBlock) and isinstance(
@@ -71,8 +81,9 @@ def block_text(block: ContentBlock | None) -> str:
     ):
         return block.resource.text
     if isinstance(block, schema.ResourceContentBlock):
-        return _resource_link_text(block)
-    return ""
+        label = block.name or block.title or block.uri
+        return f"[resource] {label} ({block.uri})"
+    return None
 
 
 def block_to_files(block: ContentBlock | None) -> list[BinaryResult]:
@@ -199,8 +210,9 @@ def block_to_input(block: ContentBlock) -> Input | None:
     context, not authorization to dereference it. The link is passed through as
     text so the model can see it was referenced.
     """
-    if isinstance(block, schema.TextContentBlock):
-        return TextInput(block.text)
+    text = _textual_block_text(block)
+    if text is not None:
+        return TextInput(text)
 
     if isinstance(block, schema.ImageContentBlock):
         if block.data:
@@ -210,27 +222,17 @@ def block_to_input(block: ContentBlock) -> Input | None:
     if isinstance(block, schema.AudioContentBlock):
         return AudioInput(data=base64.b64decode(block.data), media_type=cast(Any, block.mime_type))
 
-    if isinstance(block, schema.EmbeddedResourceContentBlock):
-        resource = block.resource
-        if isinstance(resource, schema.TextResourceContents):
-            return TextInput(resource.text)
+    if isinstance(block, schema.EmbeddedResourceContentBlock) and isinstance(
+        block.resource, schema.BlobResourceContents
+    ):
         # A blob the Client inlined — its bytes travelled with the prompt, so
         # using them reads nothing from the host filesystem.
         return DocumentInput(
-            data=base64.b64decode(resource.blob),
-            media_type=cast(Any, resource.mime_type or "application/octet-stream"),
+            data=base64.b64decode(block.resource.blob),
+            media_type=cast(Any, block.resource.mime_type or "application/octet-stream"),
         )
 
-    if isinstance(block, schema.ResourceContentBlock):
-        return TextInput(_resource_link_text(block))
-
     return None
-
-
-def _resource_link_text(block: schema.ResourceContentBlock) -> str:
-    """A resource link as text: named, never fetched (see :func:`block_to_input`)."""
-    label = block.name or block.title or block.uri
-    return f"[resource] {label} ({block.uri})"
 
 
 def prompt_to_inputs(blocks: "Sequence[ContentBlock]") -> list[Input]:
@@ -265,17 +267,14 @@ def input_to_prompt_block(part: Input, capabilities: "schema.PromptCapabilities 
     """
     caps = capabilities or schema.PromptCapabilities()
     if isinstance(part, BinaryInput):
-        data = base64.b64encode(part.data).decode()
-        if part.kind is BinaryType.IMAGE and caps.image:
-            return schema.ImageContentBlock(type="image", data=data, mime_type=str(part.media_type))
-        if part.kind is BinaryType.AUDIO and caps.audio:
-            return schema.AudioContentBlock(type="audio", data=data, mime_type=str(part.media_type))
+        if (part.kind is BinaryType.IMAGE and caps.image) or (part.kind is BinaryType.AUDIO and caps.audio):
+            return input_to_block(part)
         if part.kind is BinaryType.DOCUMENT and caps.embedded_context:
             name = str(part.vendor_metadata.get("filename") or "document")
             return schema.EmbeddedResourceContentBlock(
                 type="resource",
                 resource=schema.BlobResourceContents(
-                    blob=data, mime_type=str(part.media_type), uri=f"attachment:{name}"
+                    blob=base64.b64encode(part.data).decode(), mime_type=str(part.media_type), uri=f"attachment:{name}"
                 ),
             )
         logger.warning("ACP agent did not advertise %s prompts; sent a placeholder", part.kind.value)
