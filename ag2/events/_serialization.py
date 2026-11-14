@@ -5,6 +5,7 @@
 """Event serialization utilities."""
 
 import base64
+import binascii
 import importlib
 from dataclasses import fields, is_dataclass
 from enum import Enum
@@ -101,7 +102,14 @@ def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
                 nested_data = {k: deserialize_value(v, event_registry) for k, v in value.items() if k != "__event__"}
                 return event_cls(**nested_data)
         if "__bytes__" in value:
-            return base64.b64decode(value["__bytes__"])
+            try:
+                return base64.b64decode(value["__bytes__"])
+            except (binascii.Error, ValueError):
+                # A plain dict whose key merely happens to be "__bytes__"
+                # (e.g. tool-call metadata) is not a serialized bytes payload.
+                # Fall through to the plain-dict handling below instead of
+                # crashing the whole deserialization.
+                pass
         if "__uuid__" in value:
             return UUID(value["__uuid__"])
         if "__enum__" in value:

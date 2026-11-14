@@ -76,6 +76,20 @@ class TestBytes:
         assert _round_trip(payload) == payload
 
 
+class TestBytesKeyCollision:
+    """A plain dict whose key happens to be the reserved ``__bytes__`` must
+    not be mistaken for a serialized bytes payload (which would crash
+    ``base64.b64decode`` on non-base64 data)."""
+
+    def test_plain_dict_with_bytes_key_is_not_decoded(self) -> None:
+        payload = {"__bytes__": "not-base64"}
+        assert _round_trip(payload) == payload
+
+    def test_plain_dict_with_bytes_key_inside_nested(self) -> None:
+        payload = {"meta": {"__bytes__": "hello"}}
+        assert _round_trip(payload) == payload
+
+
 class TestUUID:
     def test_uuid_round_trip(self) -> None:
         u = uuid4()
