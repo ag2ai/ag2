@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from dirty_equals import IsPartialDict
 
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent, KnowledgeConfig, tool
 from ag2 import Context as Context
 from ag2.aggregate import (
     AggregateTrigger,
@@ -24,6 +24,7 @@ from ag2.events import (
     ModelRequest,
     ModelResponse,
     TextInput,
+    ToolCallEvent,
     Usage,
 )
 from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
@@ -495,3 +496,29 @@ class TestAggregationLifecycleEvents:
         assert failures[0].error_type == "RuntimeError"
         assert "aggregate boom" in failures[0].error
         assert completions == []
+
+
+@pytest.mark.asyncio
+async def test_aggregation_counts_user_turns_without_tool_service_input() -> None:
+    @tool
+    async def queue_note(context: Context) -> str:
+        """Add a service notification during a tool round."""
+        context.enqueue("internal notification")
+        return "queued"
+
+    store = MemoryKnowledgeStore()
+    strategy = _RecordingAggregate()
+    agent = Agent(
+        "journal",
+        config=TestConfig(ToolCallEvent(name="queue_note", arguments="{}"), "first answer", "second answer"),
+        tools=[queue_note],
+        plugins=[
+            KnowledgePlugin(store, aggregate=strategy, aggregate_trigger=AggregateTrigger(every_n_turns=2)),
+        ],
+    )
+
+    first = await agent.ask("first question")
+    assert strategy.calls == 0
+
+    await first.ask("second question")
+    assert strategy.calls == 1
