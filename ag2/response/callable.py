@@ -5,9 +5,11 @@
 import inspect
 from collections.abc import Awaitable, Callable, Coroutine
 from contextlib import AsyncExitStack
-from typing import Any, TypeAlias, overload
+from functools import wraps
+from typing import Any, TypeAlias, cast, overload
 
 from fast_depends import Provider
+from fast_depends.utils import is_coroutine_callable
 from pydantic import create_model
 from typing_extensions import TypeVar as TypeVar313
 
@@ -126,7 +128,7 @@ def _unwrap_message_to_fast_depends_decorator(
 ) -> tuple[ResponseValidator[T], ResponseSchema[Any]]:
     """Wrap ``func`` as a response validator. The returned schema describes the
     model's reply, which is ``func``'s input — not its ``T`` result."""
-    model = build_model(func, sync_to_thread=sync_to_thread)
+    model = build_model(_adapt_positional_only(func), sync_to_thread=sync_to_thread)
 
     async def execute(*args: Any, _dep_provider_: "Provider | None", **kwargs: Any) -> T:
         async with AsyncExitStack() as stack:
@@ -182,3 +184,37 @@ def _unwrap_message_to_fast_depends_decorator(
             )
 
     return decode_wrapper, schema
+
+
+def _adapt_positional_only(func: ResponseHook[T]) -> ResponseHook[T]:
+    """Adapt Python's positional-only arguments to the dependency solver's keyword calls."""
+    signature = inspect.signature(func)
+    positional_names = tuple(
+        param.name for param in signature.parameters.values() if param.kind is inspect.Parameter.POSITIONAL_ONLY
+    )
+    if not positional_names:
+        return func
+
+    @wraps(func)
+    def sync_adapter(*extra: Any, **kwargs: Any) -> T:
+        args = [kwargs.pop(name) for name in positional_names]
+        return cast(Callable[..., T], func)(*args, *extra, **kwargs)
+
+    @wraps(func)
+    async def async_adapter(*extra: Any, **kwargs: Any) -> T:
+        args = [kwargs.pop(name) for name in positional_names]
+        return await cast(Callable[..., Coroutine[Any, Any, T]], func)(*args, *extra, **kwargs)
+
+    adapter: ResponseHook[T] = async_adapter if is_coroutine_callable(func) else sync_adapter
+
+    setattr(
+        adapter,
+        "__signature__",
+        signature.replace(
+            parameters=[
+                param.replace(kind=inspect.Parameter.POSITIONAL_OR_KEYWORD) if param.name in positional_names else param
+                for param in signature.parameters.values()
+            ]
+        ),
+    )
+    return adapter
