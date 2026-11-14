@@ -85,8 +85,13 @@ def _check_base64(incoming: RunAgentInput) -> None:
 
 
 def _decode(value: str, path: str) -> None:
+    # Strict, since a lenient decode drops characters outside the alphabet and a
+    # corrupted value would pass here as other bytes. A data source's value is
+    # contentEncoding base64, which JSON Schema 2020-12 reads as RFC 4648, and
+    # §3.3 there says to reject such characters. An encryptedValue is opaque to
+    # AG-UI, but this server writes it as base64 and decodes it the same way.
     try:
-        b64decode(value)
+        b64decode(value, validate=True)
     except (binascii.Error, ValueError) as e:
         raise ValueError(f"malformed base64 at {path}") from e
 

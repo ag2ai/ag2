@@ -14,11 +14,9 @@ from dirty_equals import IsPartialDict, IsStr
 from ag2 import Agent, AudioInput, DocumentInput, ImageInput
 from ag2.a2a import A2AConfig, A2AServer, build_card
 from ag2.a2a.extension import MIME_HISTORY, MIME_TOOL_CALL, MIME_TOOL_RESULT, MIME_TOOL_SCHEMAS
-from ag2.a2a.testing import make_test_client_factory, make_test_rest_client_factory, pick_free_port
+from ag2.a2a.testing import ToolRoundsConfig, make_test_client_factory, make_test_rest_client_factory, pick_free_port
 from ag2.events import BinaryInput, BinaryType, ModelRequest, ToolCallEvent
 from ag2.testing import TestConfig, TrackingConfig
-
-from ._helpers import StatelessScript
 
 CARD_PATHS = ("/.well-known/agent-card.json", "/.well-known/agent.json")
 
@@ -94,7 +92,7 @@ class TestValidateInputModes:
     async def test_ag2_client_round_trip_with_validation_on(self) -> None:
         server_agent = Agent(
             "srv",
-            config=StatelessScript(ToolCallEvent(name="get_weather", arguments='{"city": "Paris"}'), "done"),
+            config=ToolRoundsConfig(ToolCallEvent(name="get_weather", arguments='{"city": "Paris"}'), "done"),
         )
         server = A2AServer(server_agent, validate_input_modes=True)
         client = Agent(

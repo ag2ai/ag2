@@ -7,7 +7,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Self
 
 from mcp.client.session import ClientRequestContext
 from mcp.server.streamable_http import CONTENT_TYPE_JSON, CONTENT_TYPE_SSE
@@ -22,7 +22,6 @@ from mcp.types import (
 from mcp.types import Tool as MCPTool
 from mcp_types.version import LATEST_HANDSHAKE_VERSION
 from pydantic import BaseModel
-from typing_extensions import Self
 
 from ag2 import Agent, Context
 from ag2.config.client import LLMClient

@@ -57,6 +57,7 @@ class CreateConfig(TypedDict, total=False):
     response_modalities: list[str] | None
     image_config: types.ImageConfig | None
     thinking_config: types.ThinkingConfig | None
+    automatic_continuation: bool | None
 
 
 def _credentials_from_file(path: str) -> google.auth.credentials.Credentials:
@@ -121,7 +122,7 @@ class GeminiClient(LLMClient):
         context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
         # `list` is invariant, so the SDK's wider element type needs a list of its own.

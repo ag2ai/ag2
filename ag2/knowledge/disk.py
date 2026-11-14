@@ -15,6 +15,10 @@ from watchdog.observers.polling import PollingObserver
 from .base import ChangeCallback, ChangeSubscription, NoopChangeSubscription, _normalize
 
 
+async def _deliver(callback: ChangeCallback, path: str) -> None:
+    await callback(path)
+
+
 class _DiskChangeHandler:
     """watchdog ``FileSystemEventHandler`` that bridges to an async callback.
 
@@ -58,7 +62,7 @@ class _DiskChangeHandler:
         virtual = self._virtual_path_for(src_path)
         if virtual is None:
             return
-        coro = self._callback(virtual)
+        coro = _deliver(self._callback, virtual)
         try:
             asyncio.run_coroutine_threadsafe(coro, self._loop)
         except RuntimeError:
@@ -82,8 +86,10 @@ class _DiskChangeHandler:
     def on_moved(self, event: Any) -> None:
         if getattr(event, "is_directory", False):
             return
+        self._dispatch(event.src_path)
         dest = getattr(event, "dest_path", None) or event.src_path
-        self._dispatch(dest)
+        if dest != event.src_path:
+            self._dispatch(dest)
 
     def dispatch(self, event: Any) -> None:
         """watchdog's entry point. Delegates to the per-type hooks above."""
@@ -175,12 +181,25 @@ class DiskKnowledgeStore:
                 children.append(entry.name)
         return children
 
+    def _prune_empty_parents(self, start: Path, root: Path) -> None:
+        """Remove empty directories from ``start`` up to, but never including, ``root``."""
+        current = start
+        while current != root and current.is_relative_to(root):
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     async def delete(self, path: str) -> None:
         target = self._resolve(path)
         if target.is_file():
             target.unlink()
         elif target.is_dir():
             shutil.rmtree(target)
+        else:
+            return
+        self._prune_empty_parents(target.parent, self._root.resolve())
 
     async def exists(self, path: str) -> bool:
         return self._resolve(path).exists()

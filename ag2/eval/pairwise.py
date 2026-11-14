@@ -25,15 +25,16 @@ import os
 import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 from uuid import uuid4
 
 from ag2.context import ConversationContext
 from ag2.stream import Stream
 
+from ._types import Winner
 from .dataset import Suite, Task
 from .events import PairwiseCompared, PairwiseCompleted, PairwiseStarted
 from .sources import TraceRef, TraceSource
@@ -63,7 +64,7 @@ class PairwiseOutcome:
     such as the per-order verdicts behind a swapped LLM judgment.
     """
 
-    winner: Literal["a", "b", "tie"]
+    winner: Winner
     reasoning: str | None = None
     detail: Mapping[str, Any] = field(default_factory=dict)
 
@@ -91,7 +92,7 @@ class PairwiseCase:
 
     task_id: str
     key: str
-    winner: Literal["a", "b", "tie"]
+    winner: Winner
     reasoning: str | None = None
     detail: Mapping[str, Any] = field(default_factory=dict)
 
@@ -315,7 +316,7 @@ async def evaluate_pairwise(
 
     semaphore = asyncio.Semaphore(max(1, concurrency))
     actual_run_id = run_id if run_id is not None else uuid4().hex
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     started = time.perf_counter()
 
     if stream is not None:

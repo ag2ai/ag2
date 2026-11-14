@@ -127,6 +127,7 @@ def make_a2a_client(  # type: ignore[no-any-unimported]
     card: AgentCard,
     httpx_client: httpx.AsyncClient,
     streaming: bool,
+    interface: AgentInterface,
     transport: TransportName,
     interceptors: Sequence[ClientCallInterceptor] = (),
     grpc_channel_factory: Callable[[str], "grpc.aio.Channel"] | None = None,
@@ -150,4 +151,10 @@ def make_a2a_client(  # type: ignore[no-any-unimported]
         supported_protocol_bindings=[_TRANSPORT_BINDINGS[transport]],
         grpc_channel_factory=grpc_channel_factory,
     )
-    return ClientFactory(config).create(card, interceptors=list(interceptors) if interceptors else None)
+    # The SDK picks its own interface for the binding (the first listed); hand it only the one
+    # ``select_interface`` chose, so requests go where the version and URL checks looked.
+    selected = AgentCard()
+    selected.CopyFrom(card)
+    selected.ClearField("supported_interfaces")
+    selected.supported_interfaces.append(interface)
+    return ClientFactory(config).create(selected, interceptors=list(interceptors) if interceptors else None)

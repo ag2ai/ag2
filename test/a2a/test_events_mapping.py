@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from a2a.types import (
@@ -154,6 +154,26 @@ class TestSdkToA2A:
 
         assert ev == A2ATextArtifact(update=update, append=True, last_chunk=False, text="streamed")
 
+    @pytest.mark.parametrize(
+        ("parts", "text"),
+        [
+            ([Part(text="")], ""),
+            ([Part(text=""), Part(text="body")], "body"),
+            ([Part(text="body"), Part(text="")], "body"),
+            ([Part(text=""), Part(text="body"), Part(text="")], "body"),
+        ],
+    )
+    def test_empty_text_parts_are_still_text_artifacts(self, parts: list[Part], text: str) -> None:
+        update = TaskArtifactUpdateEvent(
+            task_id="t",
+            context_id="c",
+            artifact=Artifact(artifact_id="a", parts=parts),
+        )
+
+        ev = parse_stream_response(StreamResponse(artifact_update=update))
+
+        assert ev == A2ATextArtifact(update=update, append=False, last_chunk=False, text=text)
+
     def test_tool_call_artifact(self) -> None:
         payload = {"id": "c-1", "name": "lookup", "arguments": json.dumps({"q": "x"})}
         update = TaskArtifactUpdateEvent(
@@ -235,10 +255,10 @@ class TestParseTaskArtifact:
                 context_id="c",
                 artifact=artifact,
                 append=False,
-                last_chunk=True,
+                last_chunk=False,
             ),
             append=False,
-            last_chunk=True,
+            last_chunk=False,
             text="final text",
         )
 
@@ -257,10 +277,10 @@ class TestParseTaskArtifact:
                 context_id="c",
                 artifact=artifact,
                 append=False,
-                last_chunk=True,
+                last_chunk=False,
             ),
             append=False,
-            last_chunk=True,
+            last_chunk=False,
             call=ToolCallEvent(id="c-1", name="f", arguments="{}"),
         )
 
@@ -273,26 +293,24 @@ class TestParseTaskArtifact:
         assert type(polled) is type(streamed)
 
 
-@pytest.mark.asyncio
-class TestRoundTrip:
-    async def test_chunk_artifact_roundtrip(self) -> None:
-        original = chunk_to_text_artifact(
-            ModelMessageChunk("hello"),
-            artifact_id="a-1",
-            task_id="t-1",
-            context_id="c-1",
-            append=True,
-            last_chunk=True,
-        )
+def test_chunk_artifact_roundtrip() -> None:
+    original = chunk_to_text_artifact(
+        ModelMessageChunk("hello"),
+        artifact_id="a-1",
+        task_id="t-1",
+        context_id="c-1",
+        append=True,
+        last_chunk=True,
+    )
 
-        reparsed = parse_stream_response(StreamResponse(artifact_update=a2a_event_to_sdk(original)))
+    reparsed = parse_stream_response(StreamResponse(artifact_update=a2a_event_to_sdk(original)))
 
-        assert reparsed == original
+    assert reparsed == original
 
 
 class TestWireMetadata:
     def test_status_update_timestamp_propagates(self) -> None:
-        ts = datetime(2026, 5, 11, 12, 30, 45, tzinfo=timezone.utc)
+        ts = datetime(2026, 5, 11, 12, 30, 45, tzinfo=UTC)
         ev = task_state_to_status_update(
             TaskState.TASK_STATE_COMPLETED,
             task_id="t",

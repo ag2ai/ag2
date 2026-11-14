@@ -53,12 +53,8 @@ LiveVoice = Literal[
     "Zephyr",
 ]
 ModelName = Literal[
-    "gemini-2.0-flash-live-001",
-    "gemini-live-2.5-flash-preview",
-    "gemini-2.5-flash-preview-native-audio-dialog",
-    "gemini-2.5-flash-native-audio-preview-09-2025",
-    "gemini-2.5-flash-native-audio-preview-12-2025",
-    "gemini-3.1-flash-live-preview",
+    "gemini-3.8-live",
+    "gemini-3.8-live-extended-thinking",
 ]
 
 
@@ -82,6 +78,9 @@ class TextOutput:
 
     Selects the ``TEXT`` modality; the model returns raw text via
     ``ModelMessageChunk`` events with no audio playback.
+
+    ``gemini-3.8-live`` accepts only the ``AUDIO`` modality; use
+    ``AudioOutput`` there and read the text from its transcription.
     """
 
 
@@ -262,12 +261,22 @@ async def _send_tool_result(
 def normalize_realtime_usage(metadata: "gtypes.UsageMetadata | None") -> Usage:
     if metadata is None:
         return Usage()
+    thinking = metadata.thoughts_token_count
+    completion = metadata.response_token_count
+    total = metadata.total_token_count
+    if thinking:
+        # The Live API reports thoughts beside the response, as the batch API
+        # reports them beside the candidates; completion includes both, with
+        # thinking_tokens retained as the reasoning breakdown. A reported total
+        # that leaves the thoughts out is raised to prompt plus completion (ADR 0036).
+        completion = (completion or 0) + thinking
+        total = max(total or 0, (metadata.prompt_token_count or 0) + completion)
     return Usage(
         prompt_tokens=metadata.prompt_token_count,
-        completion_tokens=metadata.response_token_count,
-        total_tokens=metadata.total_token_count,
+        completion_tokens=completion,
+        total_tokens=total,
         cache_read_input_tokens=metadata.cached_content_token_count,
-        thinking_tokens=metadata.thoughts_token_count,
+        thinking_tokens=thinking,
     )
 
 

@@ -68,12 +68,12 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ag2 import Agent
 from ag2.ag_ui import AGUIStream, read_run_input
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 
 agent = Agent(
     name="support_bot",
     prompt="You help users with billing questions.",
-    config=OpenAIConfig(model="gpt-4o-mini"),
+    config=OpenAICompletionsConfig(model="gpt-4o-mini"),
 )
 
 stream = AGUIStream(agent)
@@ -118,14 +118,14 @@ uvicorn run_ag_ui:app --reload --port 8000
     ```python linenums="1"
     from ag2 import Agent
     from ag2.ag_ui import AGUIStream
-    from ag2.config import OpenAIConfig
+    from ag2.config import OpenAICompletionsConfig
     from fastapi import FastAPI
     from starlette.routing import Route
 
     agent = Agent(
         name="support_bot",
         prompt="You help users with billing questions.",
-        config=OpenAIConfig(model="gpt-4o-mini"),
+        config=OpenAICompletionsConfig(model="gpt-4o-mini"),
     )
     app = FastAPI()
     stream = AGUIStream(agent)
@@ -214,8 +214,8 @@ entries from different providers add up:
   token the call was charged for, including tokens read from and written to the
   provider's cache. Output counts every generated token, reasoning included.
   Where a provider reports these counts beside a smaller figure, AG2 adds them
-  in before the entry leaves: Anthropic's cache counts go into the input, and
-  Gemini's thinking tokens into the output.
+  in when it normalizes the provider's usage: Anthropic's and Bedrock's cache
+  counts go into the input, and Gemini's thinking tokens into the output.
 - **`cachedInputTokens`, `cacheWriteInputTokens` and `reasoningTokens` are parts
   of those totals**, never additions to them. Cache reads and writes are
   reported apart, because providers price them differently.
@@ -225,10 +225,10 @@ entries from different providers add up:
   absent means "never measured"; `0` means the provider measured no cache hit.
   An input or output the provider did not report leaves `totalTokens` absent too.
 
-The correction applies only to what reaches the wire. `AgentReply.usage()` keeps
-each provider's own figures, so a server-side total can differ from the AG-UI
-one for the same run: for Anthropic, `prompt_tokens` excludes the cache counts
-that `inputTokens` includes.
+`AgentReply.usage()` counts input and output the same way: for the same run,
+`report.total.prompt_tokens` equals the sum of the entries' `inputTokens`, and
+`completion_tokens` the sum of their `outputTokens`. `total_tokens` can exceed
+the summed `totalTokens`, because it keeps the provider's own total.
 
 One entry is emitted per distinct provider/model pair, in order of first
 appearance in the run. A delegated sub-agent's calls are attributed to the
@@ -273,7 +273,7 @@ endpoint on both routes as shown in the simpler example above.
 | `transport` | `streaming: true` | Always |
 | `tools` | `supported: true`, `clientProvided: true` | `clientProvided` on `AGUIStream` only: the A2UI transport ignores `RunAgentInput.tools` |
 | `state` | `snapshots: true` | `AGUIStream` only |
-| `multiAgent` | `supported: true`, `delegation: true`; named `subagents` for `as_tool` | The agent is built with `tasks=TaskConfig(...)` or has delegation tools |
+| `multiAgent` | `supported: true`, `delegation: true`; named `subagents` for `as_tool` | The agent has delegation tools or uses the deprecated `tasks=TaskConfig(...)` API (removed in 1.4.0) |
 | `reasoning` | `encrypted: true` for Gemini function-call signatures | Gemini agents only |
 | `multimodal` | `input`: media the configured provider mapper accepts | Always |
 | `humanInTheLoop` | `supported: true`, `interrupts` | `interrupts` is `false` when the agent has its own `hitl_hook` |
@@ -315,7 +315,10 @@ the empty string. Each removal logs one warning on the `ag2.ag_ui` logger, namin
 such as `/messages/0/content/1`. Open objects — `state`, `forwardedProps`,
 `metadata`, a tool's `parameters` — are values rather than protocol members and
 are passed on whole. A known field carrying a value the schema rejects is
-malformed, not unrecognised, and the body is refused with `400`. `dispatch` strips
+malformed, not unrecognised, and the body is refused with `400`. That includes
+a data source's `value` or a tool call's `encryptedValue` that is not strict
+base64: a character outside the alphabet, whitespace or a line break refuses
+it rather than being skipped. `dispatch` strips
 unknown properties from a `RunAgentInput` you validated yourself, but a role or
 part type your own validation rejected never reaches it.
 
@@ -398,6 +401,9 @@ answers its call: the model sees the empty string.
 Each delegation to a sub-agent (`agent.as_tool(...)`, `run_subtask`) reaches the
 client as a subagent invocation with its own `subagentRunId`, so two parallel
 delegations to the same agent can be told apart:
+
+!!! warning "Legacy automatic subtask tools"
+    `run_subtask` / `run_subtasks` enabled by `TaskConfig` are deprecated and will be removed in **1.4.0**. Use [explicit delegation](/docs/user-guide/subagents#migrating-from-taskconfig) through `Agent.as_tool()`; its AG-UI capabilities and lifecycle reporting remain supported.
 
 ```text
 SUBAGENT_STARTED  {"subagentRunId":"4f1c...","name":"researcher","description":"<the objective>"}
@@ -669,6 +675,8 @@ For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs bec
 
 Start from the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart).
 
+To keep the browser talking to the AG2 endpoint directly, with no runtime process in between, use assistant-ui instead: see the [assistant-ui quickstart](/docs/user-guide/ag-ui/assistant-ui-quickstart).
+
 The same endpoint can also power a bot in Slack and other messaging platforms — see [Channels](/docs/user-guide/ag-ui/channels).
 
 ## AG-UI Dojo
@@ -680,6 +688,6 @@ For protocol-level testing and event inspection, use the AG2 Dojo profile:
 ## Next steps
 
 1. Build the AG-UI endpoint from the minimal example above.
-2. Follow the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart) to connect a React/Next.js client.
+2. Follow the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart) or the [assistant-ui quickstart](/docs/user-guide/ag-ui/assistant-ui-quickstart) to connect a React/Next.js client.
 3. Validate runtime behavior with the [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat){.external-link target="_blank"}.
 4. Run the same endpoint as a bot in Slack and other messaging platforms with [Channels](/docs/user-guide/ag-ui/channels).

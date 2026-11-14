@@ -22,6 +22,7 @@ is wasteful and itself biasing) — unlike the LLM judge's dual-order swap.
 
 import inspect
 import json
+import os
 import random
 from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
@@ -29,6 +30,7 @@ from typing import Any
 
 from ag2.events import ModelResponse
 
+from .._types import Side, Winner, other_side
 from ..dataset import Suite, Task
 from ..pairwise import PairwiseComparator, PairwiseOutcome
 from ..sources import TraceRef, TraceSource
@@ -97,7 +99,7 @@ async def export_pairwise_cases(
     return path
 
 
-def human_labels(path: str, *, criterion: str, key: str) -> PairwiseComparator:
+def human_labels(path: str | os.PathLike[str], *, criterion: str, key: str) -> PairwiseComparator:
     """A comparator reading human labels for one criterion from a manifest JSONL."""
     return _HumanLabels(path, criterion, key)
 
@@ -110,7 +112,7 @@ def human_pairwise(*, key: str, ask: AskHuman | None = None, seed: int | None = 
 class _HumanLabels:
     """Offline human comparator: reads de-blinded labels lazily on first use."""
 
-    def __init__(self, path: str, criterion: str, key: str) -> None:
+    def __init__(self, path: str | os.PathLike[str], criterion: str, key: str) -> None:
         self.key = key
         self._path = Path(path)
         self._criterion = criterion
@@ -167,13 +169,21 @@ class _HumanInline:
         )
 
 
-def _deblind(preferred: Any, first_variant: str) -> str:
-    other = "b" if first_variant == "a" else "a"
+def _deblind(preferred: Any, first_variant: str) -> Winner:
+    first = _as_side(first_variant)
     if str(preferred) == "1":
-        return first_variant
+        return first
     if str(preferred) == "2":
-        return other
+        return other_side(first)
     return "tie"
+
+
+def _as_side(value: str) -> Side:
+    if value == "a":
+        return "a"
+    if value == "b":
+        return "b"
+    raise ValueError(f"first_variant must be 'a' or 'b', got {value!r}")
 
 
 def _final_text(trace: Trace) -> str:

@@ -90,8 +90,8 @@ class LiveAgent(PluginTarget):
             tools=tools,
             middleware=middleware,
             observers=observers,
-            dependencies=dependencies or {},
-            variables=variables or {},
+            dependencies=dependencies,
+            variables=variables,
             plugins=plugins,
         )
         self._config = config

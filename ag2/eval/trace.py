@@ -37,10 +37,11 @@ _E = TypeVar("_E", bound=BaseEvent)
 class TokenUsage:
     """Token counts summed across every model call in one task.
 
-    Cache tokens are reported separately from ``input`` / ``output`` so
-    that scorers and dashboards can attribute prompt-cache savings
-    without affecting raw input counts. :attr:`total` covers only
-    input + output, matching what most provider price tables charge for.
+    ``input`` is the whole input, cache included (ADR 0036).
+    ``cache_creation`` and ``cache_read`` are parts of ``input``, reported
+    separately so that scorers and dashboards can attribute prompt-cache
+    savings; the uncached input is ``input`` minus both. :attr:`total` is
+    input + output.
     """
 
     input: int = 0
@@ -50,7 +51,7 @@ class TokenUsage:
 
     @property
     def total(self) -> int:
-        """Sum of ``input`` and ``output`` tokens (cache tokens excluded)."""
+        """Sum of ``input`` and ``output`` tokens; cache tokens are counted once, inside ``input``."""
         return self.input + self.output
 
 
@@ -104,7 +105,7 @@ class Trace:
         maintaining a parallel summation.
 
         Deliberately *not* :class:`ModelResponse`. Most spend never produces
-        one: a delegating agent's workers report through a ``"subtask"`` rollup,
+        one: a delegating agent's workers report original UsageEvent records,
         history compaction and memory aggregation report usage alone, and live
         sessions map realtime usage straight to the accounting event. Counting
         responses *as well* would double every main-loop call, which emits both.
@@ -137,5 +138,9 @@ class Trace:
             A tuple preserving original event order.
         """
         if name is None:
-            return tuple(e for e in self._events if isinstance(e, event_type))
-        return tuple(e for e in self._events if isinstance(e, event_type) and getattr(e, "name", None) == name)
+            return tuple(e for e in (event.source_event for event in self._events) if isinstance(e, event_type))
+        return tuple(
+            e
+            for e in (event.source_event for event in self._events)
+            if isinstance(e, event_type) and getattr(e, "name", None) == name
+        )

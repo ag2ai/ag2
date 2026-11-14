@@ -11,6 +11,6 @@ def test_payload_keys_are_read_off_the_message_types() -> None:
         "updateComponents",
         "updateDataModel",
         "deleteSurface",
-        "callFunction",
-        "actionResponse",
+        "callRendererFunction",
+        "agentFunctionResponse",
     }

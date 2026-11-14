@@ -24,8 +24,11 @@ from ag2.events import ImageInput, AudioInput, VideoInput, DocumentInput
 # From a URL
 image = ImageInput("https://example.com/photo.jpg")
 
-# From a local file path
+# From a local file path (the type is inferred from the extension)
 image = ImageInput(path="photo.jpg")
+
+# An explicit media_type takes precedence over the extension
+image = ImageInput(path="download.jpg", media_type="image/png")
 
 # From raw bytes
 image = ImageInput(data=raw_bytes, media_type="image/png")
@@ -48,7 +51,7 @@ from ag2.events import ImageInput
 agent = Agent(
     "vision_agent",
     "You are a helpful assistant that describes images.",
-    config=GeminiConfig(model="gemini-3-flash-preview"),
+    config=GeminiConfig(model="gemini-3.6-flash"),
 )
 
 image = ImageInput("https://example.com/photo.jpg")
@@ -90,6 +93,8 @@ If you pass an unsupported input type to a provider, an `#!python UnsupportedInp
 
 ## Provider-Specific Details
 
+Some providers read extra settings from `#!python vendor_metadata` on a binary input — one built from `data=` or `path=`. Set keys on the returned input's `#!python vendor_metadata` dict rather than replacing it, since `path=` already stores the filename there. The per-provider sections below list the keys each one reads.
+
 ### Gemini
 
 Gemini has the broadest multimodal support — it accepts images, audio, video, and documents in all forms (URL, binary, and local file path).
@@ -124,7 +129,7 @@ reply = await agent.ask("Describe this video.", video)
 
 #### Vendor Metadata
 
-Gemini supports provider-specific settings via `#!python vendor_metadata` on binary inputs. These map to Gemini Part fields:
+Gemini maps these `#!python vendor_metadata` keys to Gemini Part fields:
 
 | Key | Type | Description |
 | :--- | :--- | :--- |
@@ -141,8 +146,8 @@ from ag2.events import ImageInput
 image = ImageInput(
     data=raw_bytes,
     media_type="image/jpeg",
-    vendor_metadata={"media_resolution": "MEDIA_RESOLUTION_LOW"},
 )
+image.vendor_metadata["media_resolution"] = "MEDIA_RESOLUTION_LOW"
 ```
 
 Available values: `MEDIA_RESOLUTION_LOW`, `MEDIA_RESOLUTION_MEDIUM`, `MEDIA_RESOLUTION_HIGH`, `MEDIA_RESOLUTION_ULTRA_HIGH`.
@@ -155,8 +160,8 @@ from ag2.events import ImageInput
 image = ImageInput(
     data=raw_bytes,
     media_type="image/jpeg",
-    vendor_metadata={"media_resolution": {"level": "MEDIA_RESOLUTION_MEDIUM"}},
 )
+image.vendor_metadata["media_resolution"] = {"level": "MEDIA_RESOLUTION_MEDIUM"}
 ```
 
 !!! warning "Setting both keys is rejected"
@@ -168,16 +173,12 @@ image = ImageInput(
 ```python linenums="1"
 from ag2.events import VideoInput
 
-video = VideoInput(
-    path="lecture.mp4",
-    vendor_metadata={
-        "video_metadata": {
-            "start_offset": "60s",
-            "end_offset": "120s",
-            "fps": 0.5,
-        },
-    },
-)
+video = VideoInput(path="lecture.mp4")
+video.vendor_metadata["video_metadata"] = {
+    "start_offset": "60s",
+    "end_offset": "120s",
+    "fps": 0.5,
+}
 reply = await agent.ask("Summarize this section of the video.", video)
 ```
 
@@ -186,10 +187,8 @@ reply = await agent.ask("Summarize this section of the video.", video)
 ```python linenums="1"
 from ag2.events import DocumentInput
 
-doc = DocumentInput(
-    path="report.pdf",
-    vendor_metadata={"display_name": "Q4 Financial Report"},
-)
+doc = DocumentInput(path="report.pdf")
+doc.vendor_metadata["display_name"] = "Q4 Financial Report"
 ```
 
 ### OpenAI
@@ -206,8 +205,8 @@ from ag2.events import ImageInput
 image = ImageInput(
     data=raw_bytes,
     media_type="image/png",
-    vendor_metadata={"detail": "low"},  # "low", "high", or "auto"
 )
+image.vendor_metadata["detail"] = "low"  # "low", "high", or "auto"
 ```
 
 ### Anthropic
@@ -239,10 +238,8 @@ Anthropic supports `#!python vendor_metadata` for prompt caching on content bloc
 ```python linenums="1"
 from ag2.events import DocumentInput
 
-doc = DocumentInput(
-    path="report.pdf",
-    vendor_metadata={"cache_control": {"type": "ephemeral"}},
-)
+doc = DocumentInput(path="report.pdf")
+doc.vendor_metadata["cache_control"] = {"type": "ephemeral"}
 ```
 
 ### xAI

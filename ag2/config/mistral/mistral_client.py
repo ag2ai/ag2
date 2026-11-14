@@ -146,7 +146,7 @@ class MistralClient(LLMClient):
         context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema and response_schema.system_prompt:
@@ -311,6 +311,8 @@ class MistralClient(LLMClient):
                 usage = normalize_usage(chunk.usage)
 
             for choice in chunk.choices or []:
+                if choice.index != 0:
+                    continue
                 if choice.finish_reason:
                     finish_reason = choice.finish_reason
 

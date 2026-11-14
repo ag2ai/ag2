@@ -9,7 +9,6 @@ aggregation — every opt-in Agent primitive exercised against a real LLM.
 import pytest
 
 from ag2 import Agent
-from ag2.agent import KnowledgeConfig
 from ag2.aggregate import (
     AggregateTrigger,
     ConversationSummaryAggregate,
@@ -28,6 +27,7 @@ from ag2.events import (
 )
 from ag2.knowledge import (
     DefaultBootstrap,
+    KnowledgePlugin,
     MemoryKnowledgeStore,
 )
 from ag2.policies import (
@@ -37,7 +37,7 @@ from ag2.policies import (
 )
 from ag2.stream import MemoryStream
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")]
 
 
 async def test_conversation_policy_basic(provider_config) -> None:
@@ -163,7 +163,7 @@ async def test_knowledge_tool_via_actor(provider_config) -> None:
             "to remember or recall things."
         ),
         config=provider_config,
-        knowledge=KnowledgeConfig(store=store),
+        plugins=[KnowledgePlugin(store=store)],
     )
 
     r1 = await agent.ask(
@@ -192,7 +192,7 @@ async def test_bootstrap_runs_once(provider_config) -> None:
     agent = Agent(
         "bootstrapped",
         config=provider_config,
-        knowledge=KnowledgeConfig(store=store, bootstrap=DefaultBootstrap()),
+        plugins=[KnowledgePlugin(store=store, bootstrap=DefaultBootstrap())],
     )
     await agent.ask("Say 'ok'.")
 
@@ -212,11 +212,13 @@ async def test_tail_window_compact_triggers(provider_config) -> None:
         "compactor",
         prompt="Reply in one short sentence.",
         config=provider_config,
-        knowledge=KnowledgeConfig(
-            store=store,
-            compact=TailWindowCompact(target=3),
-            compact_trigger=CompactTrigger(max_events=4),
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=store,
+                compact=TailWindowCompact(target=3),
+                compact_trigger=CompactTrigger(max_events=4),
+            )
+        ],
     )
 
     # Burn through enough turns to trigger compaction
@@ -244,11 +246,13 @@ async def test_summarize_compact_uses_llm(provider_config) -> None:
         "summarizer",
         prompt="Very short answers.",
         config=provider_config,
-        knowledge=KnowledgeConfig(
-            store=store,
-            compact=SummarizeCompact(target=2, config=provider_config),
-            compact_trigger=CompactTrigger(max_events=4),
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=store,
+                compact=SummarizeCompact(target=2, config=provider_config),
+                compact_trigger=CompactTrigger(max_events=4),
+            )
+        ],
     )
 
     r = await agent.ask("Say 'a'.", stream=stream)
@@ -274,11 +278,13 @@ async def test_on_end_aggregation(provider_config) -> None:
         "aggregator",
         prompt="Brief answer.",
         config=provider_config,
-        knowledge=KnowledgeConfig(
-            store=store,
-            aggregate=ConversationSummaryAggregate(config=provider_config),
-            aggregate_trigger=AggregateTrigger(on_end=True),
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=store,
+                aggregate=ConversationSummaryAggregate(config=provider_config),
+                aggregate_trigger=AggregateTrigger(on_end=True),
+            )
+        ],
     )
 
     await agent.ask("Tell me one fact about the moon.", stream=stream)
@@ -311,11 +317,13 @@ async def test_every_n_turns_aggregation(provider_config) -> None:
         "periodic",
         prompt="One word answers.",
         config=provider_config,
-        knowledge=KnowledgeConfig(
-            store=store,
-            aggregate=WorkingMemoryAggregate(config=provider_config),
-            aggregate_trigger=AggregateTrigger(every_n_turns=2, on_end=False),
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=store,
+                aggregate=WorkingMemoryAggregate(config=provider_config),
+                aggregate_trigger=AggregateTrigger(every_n_turns=2, on_end=False),
+            )
+        ],
     )
 
     r = await agent.ask("Say 'a'.", stream=stream)  # turn 1
@@ -350,11 +358,13 @@ async def test_every_n_events_aggregation(provider_config) -> None:
         "event-counter",
         prompt="Very short.",
         config=provider_config,
-        knowledge=KnowledgeConfig(
-            store=store,
-            aggregate=WorkingMemoryAggregate(config=provider_config),
-            aggregate_trigger=AggregateTrigger(every_n_events=3, on_end=False),
-        ),
+        plugins=[
+            KnowledgePlugin(
+                store=store,
+                aggregate=WorkingMemoryAggregate(config=provider_config),
+                aggregate_trigger=AggregateTrigger(every_n_events=3, on_end=False),
+            )
+        ],
     )
 
     r = await agent.ask("Say 'w'.", stream=stream)  # 0→2, no crossing

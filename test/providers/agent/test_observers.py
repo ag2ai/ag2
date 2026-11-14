@@ -26,7 +26,7 @@ from ag2.policies import AlertPolicy
 from ag2.stream import MemoryStream
 from ag2.watch import EventWatch
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")]
 
 
 async def test_stream_observer_decorator_sees_responses(provider_config) -> None:
@@ -166,7 +166,7 @@ async def test_alert_policy_fatal_halts_llm(provider_config) -> None:
     """A FATAL ObserverAlert + AlertPolicy short-circuits the LLM call.
 
     Flow: observer emits FATAL → AlertPolicy routes → HaltEvent fires →
-    _HaltCheckMiddleware swaps the LLM call for a synthetic HALTED reply.
+    HaltCheckMiddleware swaps the LLM call for a synthetic HALTED reply.
     """
     halt_events: list[HaltEvent] = []
 

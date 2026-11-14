@@ -4,15 +4,18 @@
 
 import json
 import os
+from collections.abc import Collection
 from pathlib import Path
 from typing import TypedDict
+from urllib.parse import urljoin
 
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
-from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue
+from ._types import A2UIVersion, A2UIWireVersion, JsonObject, JsonSchema, JsonValue
 from .actions import A2UIEventAction
 from .constants import A2UI_DEFAULT_CATALOG_ID_BY_VERSION, A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
+from .diagnostics import XID_FORMAT
 
 _VERSIONS_DIR = Path(__file__).parent
 
@@ -29,10 +32,289 @@ def _as_object(value: "JsonValue | None") -> JsonObject:
     return value if isinstance(value, dict) else {}
 
 
+# v1.0 constrains extension keys with Unicode property escapes, which Python's ``re``
+# (what ``jsonschema`` matches patterns with) rejects. Check those keys with a format
+# instead, at load time, leaving the vendored files byte-faithful.
+_XID_KEYS = r"^[\p{XID_Start}_][\p{XID_Continue}]*$"
+_IMPLICIT_FUNCTION_SCHEMA_URI = "urn:ag2:a2ui:implicit-renderer-function"
+_IMPLICIT_COMPONENT_SCHEMA_URI = "urn:ag2:a2ui:implicit-component"
+
+
+def _xid_property_names(schema: JsonValue) -> JsonValue:
+    """Rewrite objects whose keys must be UAX #31 identifiers to a ``propertyNames`` format check."""
+    if isinstance(schema, list):
+        return [_xid_property_names(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    if schema.get("patternProperties") == {_XID_KEYS: {}} and schema.get("additionalProperties") is False:
+        rest = {key: value for key, value in schema.items() if key not in ("patternProperties", "additionalProperties")}
+        return {**rest, "propertyNames": {"format": XID_FORMAT}}
+    return {key: _xid_property_names(value) for key, value in schema.items()}
+
+
+# A schema with any of these can take properties from outside its own ``properties``.
+_COMPOSING_KEYWORDS = ("$ref", "allOf", "oneOf", "if", "dependentSchemas", "patternProperties", "additionalProperties")
+
+
+def _closed_objects(schema: JsonValue) -> JsonValue:
+    """Rewrite ``unevaluatedProperties: false`` as ``additionalProperties: false`` on self-contained objects.
+
+    ``unevaluatedProperties`` makes ``jsonschema`` re-walk whatever matched, which compounds with every nested call.
+    """
+    if isinstance(schema, list):
+        return [_closed_objects(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    closed = {key: _closed_objects(value) for key, value in schema.items()}
+    branches = closed.get("anyOf")
+    adds_nothing = (
+        all(isinstance(b, dict) and set(b) <= {"required"} for b in branches) if isinstance(branches, list) else True
+    )
+    if (
+        closed.get("unevaluatedProperties") is False
+        and isinstance(closed.get("properties"), dict)
+        and adds_nothing
+        and not any(key in closed for key in _COMPOSING_KEYWORDS)
+    ):
+        del closed["unevaluatedProperties"]
+        closed["additionalProperties"] = False
+    return closed
+
+
+def _instructions_of(catalog: JsonSchema) -> str:
+    """Return a catalog's embedded ``instructions`` text (v1.0), or ``""``."""
+    instructions = catalog.get("instructions")
+    return instructions.strip() if isinstance(instructions, str) else ""
+
+
+def _pointer_token(key: str) -> str:
+    return key.replace("~", "~0").replace("/", "~1")
+
+
+def _pointer_key(token: str) -> str:
+    return token.replace("~1", "/").replace("~0", "~")
+
+
+def _catalog_definition_ref(catalog_id: str, collection: str, key: str) -> str:
+    return f"{catalog_id}#/{collection}/{_pointer_token(key)}"
+
+
+# The ``common_types.json`` definitions a v1.0 catalog may ``$ref`` (a2ui_protocol.md, "Restricted $ref Targets").
+_CATALOG_COMMON_TYPES = frozenset({
+    "ComponentId",
+    "Child",
+    "ChildList",
+    "DynamicString",
+    "DynamicNumber",
+    "DynamicBoolean",
+    "DynamicStringList",
+    "DynamicValue",
+    "AccessibilityAttributes",
+    "CheckRule",
+    "Checkable",
+    "Action",
+    "DataBinding",
+    "FunctionCall",
+})
+
+
+_COMMON_TYPES_REF_PREFIX = "common_types.json#/$defs/"
+
+# The catalog sections whose definitions are checked and may be ``$ref``-ed as ``#/<section>/<name>``.
+_CATALOG_SECTIONS = ("components", "functions", "$defs")
+
+# Keys whose values are annotations or literal data rather than subschemas, so a ``$ref`` inside them
+# is not a reference. Mirrors upstream ``specification/v1_0/test/run_tests.py``.
+_NON_SCHEMA_KEYS = frozenset({"metadata", "examples", "const", "default", "enum", "description"})
+
+
+def _is_allowed_catalog_reference(catalog: JsonSchema, ref: str) -> bool:
+    """Whether a v1.0 catalog may ``$ref`` ``ref`` (a2ui_protocol.md, "Restricted $ref Targets").
+
+    A local target names a component, function or leaf ``$defs`` entry the catalog declares
+    (``anyComponent`` / ``anyFunction`` excluded); an external one names a listed standard type
+    as ``common_types.json#/$defs/<TypeName>``.
+    """
+    if ref.startswith(_COMMON_TYPES_REF_PREFIX):
+        return ref.removeprefix(_COMMON_TYPES_REF_PREFIX) in _CATALOG_COMMON_TYPES
+    for section in _CATALOG_SECTIONS:
+        prefix = f"#/{section}/"
+        if ref.startswith(prefix):
+            name = _pointer_key(ref.removeprefix(prefix))
+            if section == "$defs" and name in ("anyComponent", "anyFunction"):
+                return False
+            return name in _as_object(catalog.get(section))
+    return False
+
+
+def _check_catalog_references(catalog: JsonSchema) -> None:
+    """Reject a v1.0 catalog with a ``$ref`` the spec does not allow.
+
+    The spec makes such a catalog invalid and requires reporting it at load time, not fetching the target.
+    """
+    for section in _CATALOG_SECTIONS:
+        for name, definition in _as_object(catalog.get(section)).items():
+            _check_definition_references(catalog, definition, f"/{section}/{_pointer_token(name)}")
+
+
+def _check_definition_references(catalog: JsonSchema, schema: JsonValue, pointer: str) -> None:
+    if isinstance(schema, list):
+        for index, item in enumerate(schema):
+            _check_definition_references(catalog, item, f"{pointer}/{index}")
+        return
+    if not isinstance(schema, dict):
+        return
+    ref = schema.get("$ref")
+    if isinstance(ref, str) and not _is_allowed_catalog_reference(catalog, ref):
+        raise ValueError(
+            f"Unsupported $ref '{ref}' at {pointer}/$ref: a v1.0 catalog may only reference the components, "
+            "functions and leaf $defs it declares (#/components/..., #/functions/..., #/$defs/...) "
+            f"and the standard types in {_COMMON_TYPES_REF_PREFIX}..."
+        )
+    for key, value in schema.items():
+        if key == "properties" and isinstance(value, dict):
+            # Declared properties are subschemas whatever they are named.
+            for name, subschema in value.items():
+                _check_definition_references(catalog, subschema, f"{pointer}/properties/{_pointer_token(name)}")
+        elif key not in _NON_SCHEMA_KEYS:
+            _check_definition_references(catalog, value, f"{pointer}/{_pointer_token(key)}")
+
+
+def _catalog_selection(catalog_id: str, *, explicit: bool) -> JsonSchema:
+    if explicit:
+        return {"properties": {"catalogId": {"const": catalog_id}}, "required": ["catalogId"]}
+    return {"not": {"required": ["catalogId"]}}
+
+
+def _catalog_component_variant(catalog: JsonSchema, *, explicit: bool) -> JsonSchema:
+    catalog_id = str(catalog["$id"])
+    return {"allOf": [{"$ref": f"{catalog_id}#/$defs/anyComponent"}, _catalog_selection(catalog_id, explicit=explicit)]}
+
+
+_CALL_ENVELOPE = ("@call", "catalogId")
+
+# Keywords a function definition may carry and still be closed by listing its ``properties``; anything else
+# (``anyOf``, ``not``, ``then``, ...) may admit properties it does not list.
+_PLAIN_DEFINITION_KEYWORDS = frozenset((
+    "type",
+    "title",
+    "description",
+    "returnType",
+    "properties",
+    "required",
+    "allowedCallers",
+    "requiresUserActivation",
+))
+
+
+def _call_tag_is(tag: str) -> JsonSchema:
+    """Match a call whose ``@call`` is ``tag``."""
+    return {"properties": {"@call": {"const": tag}}, "required": ["@call"]}
+
+
+def _call_tag(key: str, definition: JsonValue) -> str:
+    """The ``@call`` value a function answers to: the ``const`` the spec requires, else its catalog key."""
+    properties = _as_object(_as_object(definition).get("properties"))
+    tag = _as_object(properties.get("@call")).get("const")
+    return tag if isinstance(tag, str) else key
+
+
+def _callable_by(definition: JsonValue, *, agent_initiated: bool) -> bool:
+    """Whether the function's ``allowedCallers`` admits a caller in this position."""
+    callers = _as_object(definition).get("allowedCallers", "rendererOnly")
+    if agent_initiated:
+        return callers in ("agentOnly", "rendererOrAgent")
+    return callers != "agentOnly"
+
+
+def _function_body(ref: str, definition: JsonValue) -> JsonSchema:
+    """The function's schema, closed over the properties a call may carry: the envelope and its own."""
+    body = _as_object(definition)
+    properties = _as_object(body.get("properties"))
+    if properties and set(body) <= _PLAIN_DEFINITION_KEYWORDS:
+        declared: JsonObject = dict.fromkeys((*_CALL_ENVELOPE, *properties), True)
+        return {"allOf": [{"$ref": ref}], "properties": declared, "additionalProperties": False}
+    envelope: JsonObject = dict.fromkeys(_CALL_ENVELOPE, True)
+    return {"allOf": [{"properties": envelope}, {"$ref": ref}], "unevaluatedProperties": False}
+
+
+def _catalog_function_variant(
+    catalog: JsonSchema, *, agent_initiated: bool, explicit: bool, owned: Collection[str] | None = None
+) -> JsonSchema:
+    """Validate a call against only the function its ``@call`` names, among the ``owned`` ones (default: all).
+
+    Trying every function's ``args`` compounds with each level of nested calls.
+    """
+    catalog_id = str(catalog["$id"])
+    functions = _as_object(catalog.get("functions"))
+    tags = {key: _call_tag(key, definition) for key, definition in functions.items()}
+    callable_here = {
+        key: _callable_by(definition, agent_initiated=agent_initiated) for key, definition in functions.items()
+    }
+    allowed: list[JsonValue] = [_call_tag_is(tags[key]) for key in functions if callable_here[key]]
+    answered = [key for key in functions if owned is None or key in owned]
+    dispatch: list[JsonValue] = []
+    for key in answered:
+        ref = _catalog_definition_ref(catalog_id, "functions", key)
+        body = _function_body(ref, functions[key])
+        if not callable_here[key]:
+            # Report malformed arguments before the caller restriction.
+            body = {"allOf": [body, {"if": {"$ref": ref}, "then": {"anyOf": allowed} if allowed else {"not": {}}}]}
+        dispatch.append({"if": _call_tag_is(tags[key]), "then": body})
+    selection = _catalog_selection(catalog_id, explicit=explicit)
+    return {
+        "if": selection,
+        "then": {
+            "allOf": [{"oneOf": [_call_tag_is(tag) for tag in dict.fromkeys(tags[key] for key in answered)]}, *dispatch]
+        },
+        "else": selection,
+    }
+
+
+def _owned_functions(catalogs: list[JsonSchema]) -> list[tuple[JsonSchema, set[str] | None]]:
+    """Pair each catalog with the functions no earlier catalog defines identically (``None``: all of them).
+
+    A custom catalog contains the basic one, so checking both would repeat the shared functions at every level.
+    """
+    seen: dict[str, JsonValue] = {}
+    pairs: list[tuple[JsonSchema, set[str] | None]] = []
+    for index, catalog in enumerate(catalogs):
+        functions = _as_object(catalog.get("functions"))
+        owned = {key for key, definition in functions.items() if seen.get(key) != definition}
+        seen.update(functions)
+        if index == 0 or owned:
+            pairs.append((catalog, None if index == 0 else owned))
+    return pairs
+
+
+def _registry_for_surface_catalog(registry: Registry, catalog_id: str) -> Registry:
+    """Select the surface's component and function defaults in a request-local registry."""
+    catalog = registry.get(catalog_id)
+    schema = (
+        _catalog_function_variant(catalog.contents, agent_initiated=False, explicit=False)
+        if catalog is not None
+        else {"not": {}}
+    )
+    return registry.with_resources([
+        (_IMPLICIT_FUNCTION_SCHEMA_URI, Resource.from_contents(schema, default_specification=DRAFT202012)),
+        (
+            _IMPLICIT_COMPONENT_SCHEMA_URI,
+            Resource.from_contents(
+                _catalog_component_variant(catalog.contents, explicit=False) if catalog is not None else {"not": {}},
+                default_specification=DRAFT202012,
+            ),
+        ),
+    ])
+
+
 class _VersionConfigEntry(TypedDict):
     default_catalog_id: str
     schema_base_uri: str
-    version_string: A2UIVersion
+    version_string: A2UIWireVersion
+    # Vendored file names of the two message schemas. Upstream renamed
+    # server/client to agent/renderer in v1.0; the wire direction is the same.
+    server_to_client_file: str
+    client_to_server_file: str
 
 
 # Catalog ids / schema base uris are the canonical A2UI identifiers (they
@@ -45,16 +327,22 @@ _VERSION_CONFIG: dict[A2UIVersion, _VersionConfigEntry] = {
         "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9"],
         "schema_base_uri": "https://a2ui.org/specification/v0_9/",
         "version_string": "v0.9",
+        "server_to_client_file": "server_to_client.json",
+        "client_to_server_file": "client_to_server.json",
     },
     "v0.9.1": {
         "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9.1"],
         "schema_base_uri": "https://a2ui.org/specification/v0_9/",
         "version_string": "v0.9.1",
+        "server_to_client_file": "server_to_client.json",
+        "client_to_server_file": "client_to_server.json",
     },
     "v1.0": {
         "default_catalog_id": A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v1.0"],
         "schema_base_uri": "https://a2ui.org/specification/v1_0/",
-        "version_string": "v1.0",
+        "version_string": "1.0",
+        "server_to_client_file": "agent_to_renderer.json",
+        "client_to_server_file": "renderer_to_agent.json",
     },
 }
 
@@ -67,6 +355,9 @@ class A2UISchemaManager:
 
     A custom catalog (file path or dict) extends the basic catalog; its
     components are merged into the schema registry and listed in the prompt.
+    In v1.0 the custom catalog's own ``$ref``s may target only what it declares
+    and the standard types in ``common_types.json`` (a2ui_protocol.md,
+    "Restricted $ref Targets"), not the basic catalog's components.
     """
 
     def __init__(
@@ -114,11 +405,14 @@ class A2UISchemaManager:
         if self._loaded:
             return
 
-        self._server_to_client = self._load_spec_json("server_to_client.json")
-        self._client_to_server = self._load_spec_json("client_to_server.json")
-        self._common_types = self._load_spec_json("common_types.json")
+        config = _VERSION_CONFIG[self._protocol_version]
+        self._server_to_client = self._load_spec_json(config["server_to_client_file"])
+        self._client_to_server = self._load_spec_json(config["client_to_server_file"])
+        self._common_types = _as_object(_xid_property_names(self._load_spec_json("common_types.json")))
         self._basic_catalog = self._load_spec_json("basic_catalog.json")
-        self._catalog_rules = self._load_spec_text("basic_catalog_rules.txt")
+        # v0.9.x ships the catalog guidance as a separate rules file; v1.0 embeds
+        # it in the catalog's own ``instructions`` field.
+        self._catalog_rules = self._load_spec_text("basic_catalog_rules.txt") or _instructions_of(self._basic_catalog)
 
         self._prompt_example = self._load_version_json("prompt_example.json")
         self._prompt_message_types = self._load_version_text("prompt_message_types.md")
@@ -139,6 +433,8 @@ class A2UISchemaManager:
                     raise ValueError(f"Custom catalog file {path} is not valid JSON: {e}") from e
 
         if self._custom_catalog is not None:
+            if self._protocol_version == "v1.0":
+                _check_catalog_references(self._custom_catalog)
             if "$id" not in self._custom_catalog:
                 raise ValueError(
                     "Custom catalog must include a '$id' field. "
@@ -156,6 +452,59 @@ class A2UISchemaManager:
             self._catalog_id = str(_VERSION_CONFIG[self._protocol_version]["default_catalog_id"])
 
         self._loaded = True
+        if self._protocol_version == "v1.0":
+            self._restrict_catalog_references()
+
+    def _restrict_catalog_references(self) -> None:
+        """Select component and function definitions from their declared catalogs.
+
+        Restrict schema references rather than walking component JSON: data models,
+        extension metadata and custom literal properties can legitimately contain
+        an object with an ``@call`` key. The top-level renderer RPC uses the
+        agent-callable definition; renderer-evaluated bindings exclude agent-only
+        functions. Component overrides leave nested functions' surface defaults intact.
+        """
+        self._basic_catalog["functions"] = _closed_objects(self._basic_catalog.get("functions"))
+        definitions = _as_object(self._common_types.get("$defs"))
+        definitions["IndexSystemFunction"] = _closed_objects(definitions.get("IndexSystemFunction"))
+        active = self._get_active_catalog()
+        catalogs = {str(self._basic_catalog["$id"]): self._basic_catalog, str(active["$id"]): active}
+        function_call = _as_object(definitions.get("FunctionCall"))
+        for name, agent_initiated in (("FunctionCall", False), ("AgentFunctionCall", True)):
+            variants: list[JsonValue] = [
+                _catalog_function_variant(catalog, agent_initiated=agent_initiated, explicit=True)
+                for catalog in catalogs.values()
+            ]
+            if agent_initiated:
+                variants.append(_catalog_function_variant(active, agent_initiated=True, explicit=False))
+            else:
+                variants.append({"$ref": _IMPLICIT_FUNCTION_SCHEMA_URI})
+                variants.append({"$ref": "#/$defs/IndexSystemFunction"})
+            # Each variant closes its own property set, so the call-wide ``unevaluatedProperties`` goes.
+            definitions[name] = {
+                **{key: value for key, value in function_call.items() if key != "unevaluatedProperties"},
+                "allOf": [{"$ref": "#/$defs/FunctionCommon"}, {"oneOf": variants}],
+            }
+
+        message_definitions = _as_object(self._server_to_client.get("$defs"))
+        component = _as_object(message_definitions.get("Component"))
+        component["allOf"] = [
+            {"$ref": "common_types.json#/$defs/ComponentCommon"},
+            {
+                "oneOf": [
+                    *[_catalog_component_variant(catalog, explicit=True) for catalog in catalogs.values()],
+                    {"$ref": _IMPLICIT_COMPONENT_SCHEMA_URI},
+                ],
+            },
+            {"properties": {"component": {"not": {"const": "Surface"}}}},
+        ]
+        message = _as_object(message_definitions.get("CallRendererFunctionMessage"))
+        payload = _as_object(_as_object(message.get("properties")).get("callRendererFunction"))
+        call = _as_object(_as_object(payload.get("properties")).get("callFunction"))
+        call["allOf"] = [
+            {"$ref": "common_types.json#/$defs/AgentFunctionCall"},
+            {"required": ["catalogId"]},
+        ]
 
     @property
     def protocol_version(self) -> A2UIVersion:
@@ -187,8 +536,8 @@ class A2UISchemaManager:
         return self._common_types
 
     @property
-    def version_string(self) -> A2UIVersion:
-        """The version string used in A2UI messages (e.g., 'v0.9')."""
+    def version_string(self) -> A2UIWireVersion:
+        """The version string used in A2UI messages (e.g., ``"v0.9"``; ``"1.0"`` for v1.0)."""
         return _VERSION_CONFIG[self._protocol_version]["version_string"]
 
     def _get_active_catalog(self) -> JsonSchema:
@@ -222,12 +571,12 @@ class A2UISchemaManager:
         defs.update(_as_object(self._custom_catalog.get("$defs")))
         if components:
             defs["anyComponent"] = {
-                "oneOf": [{"$ref": f"#/components/{name}"} for name in components],
+                "oneOf": [{"$ref": _catalog_definition_ref("", "components", name)} for name in components],
                 "discriminator": {"propertyName": "component"},
             }
         if functions:
             defs["anyFunction"] = {
-                "oneOf": [{"$ref": f"#/functions/{name}"} for name in functions],
+                "oneOf": [{"$ref": _catalog_definition_ref("", "functions", name)} for name in functions],
             }
         merged["$defs"] = defs
 
@@ -274,6 +623,15 @@ class A2UISchemaManager:
             schema_id = schema.get("$id")
             if isinstance(schema_id, str):
                 resources.append((schema_id, Resource.from_contents(schema, default_specification=DRAFT202012)))
+        # v1.0 catalogs reference the shared types by a bare ``common_types.json``,
+        # which resolves next to the catalog's own ``$id``.
+        for catalog in [self._basic_catalog, active_catalog]:
+            catalog_uri = catalog.get("$id")
+            if isinstance(catalog_uri, str):
+                resources.append((
+                    urljoin(catalog_uri, "common_types.json"),
+                    Resource.from_contents(self._common_types, default_specification=DRAFT202012),
+                ))
         if self._custom_catalog is not None:
             custom_id = self._custom_catalog.get("$id")
             if isinstance(custom_id, str):
@@ -283,6 +641,39 @@ class A2UISchemaManager:
                     custom_id,
                     Resource.from_contents(active_catalog, default_specification=DRAFT202012),
                 ))
+        if self._protocol_version == "v1.0":
+            catalogs = {
+                str(self._basic_catalog["$id"]): self._basic_catalog,
+                str(active_catalog["$id"]): active_catalog,
+            }
+            # With no surface context a stateless validator can only establish
+            # that an implicit call is valid in at least one configured catalog.
+            # The parser narrows this resource when createSurface supplies one.
+            resources.append((
+                _IMPLICIT_FUNCTION_SCHEMA_URI,
+                Resource.from_contents(
+                    {
+                        "anyOf": [
+                            _catalog_function_variant(catalog, agent_initiated=False, explicit=False, owned=owned)
+                            for catalog, owned in _owned_functions(list(catalogs.values()))
+                        ]
+                    },
+                    default_specification=DRAFT202012,
+                ),
+            ))
+            resources.append((
+                _IMPLICIT_COMPONENT_SCHEMA_URI,
+                Resource.from_contents(
+                    # Prefer the active catalog's diagnostics when both branches fail.
+                    {
+                        "anyOf": [
+                            _catalog_component_variant(catalog, explicit=False)
+                            for catalog in reversed(catalogs.values())
+                        ],
+                    },
+                    default_specification=DRAFT202012,
+                ),
+            ))
         return Registry().with_resources(resources)
 
     def _load_json_file(self, path: Path) -> "list[JsonValue] | JsonSchema":
@@ -329,7 +720,7 @@ class A2UISchemaManager:
         """Build the prompt example JSON string from the version-specific template."""
         self._ensure_loaded()
         raw = json.dumps(self._prompt_example, separators=(",", ": "))
-        return raw.replace("{catalog_id}", self._catalog_id)
+        return raw.replace("{catalog_id}", self._catalog_id).replace("{version_string}", self.version_string)
 
     def generate_prompt_section(
         self,
@@ -339,14 +730,14 @@ class A2UISchemaManager:
     ) -> str:
         """Generate the A2UI portion of the system prompt."""
         self._ensure_loaded()
-        v = self._protocol_version
+        protocol_version = self._protocol_version
         sections: list[str] = []
 
         example_json = self._build_prompt_example()
 
         sections.append(
-            f"## A2UI Response Format ({v})\n\n"
-            f"You can generate rich UI responses using the A2UI {v} protocol. "
+            f"## A2UI Response Format ({protocol_version})\n\n"
+            f"You can generate rich UI responses using the A2UI {protocol_version} protocol. "
             "When you want to display a UI, write your conversational text first, "
             f"then wrap a JSON array of A2UI message objects between the "
             f"`{A2UI_JSON_OPEN_TAG}` and `{A2UI_JSON_CLOSE_TAG}` tags.\n\n"
@@ -360,7 +751,7 @@ class A2UISchemaManager:
         )
 
         message_types = self._prompt_message_types.replace("{catalog_id}", self._catalog_id).replace(
-            "{version_string}", v
+            "{version_string}", self.version_string
         )
         sections.append(f"\n\n## A2UI Message Types\n\n{message_types}")
 
@@ -398,6 +789,8 @@ class A2UISchemaManager:
                 rules_parts.append(self._catalog_rules)
             if self._custom_catalog_rules:
                 rules_parts.append(self._custom_catalog_rules)
+            elif self._custom_catalog is not None and (custom_instructions := _instructions_of(self._custom_catalog)):
+                rules_parts.append(custom_instructions)
             if rules_parts:
                 sections.append("\n\n## Component Rules\n\n" + "\n\n".join(rules_parts))
 
@@ -424,7 +817,7 @@ class A2UISchemaManager:
 
         if include_schema:
             schema_str = json.dumps(self._server_to_client, indent=2)
-            sections.append(f"\n\n## A2UI Message Schema ({v})\n\n```json\n{schema_str}\n```")
+            sections.append(f"\n\n## A2UI Message Schema ({protocol_version})\n\n```json\n{schema_str}\n```")
 
         return "\n".join(sections)
 

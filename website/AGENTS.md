@@ -29,9 +29,9 @@ Example:
 <Tabs>
   <Tab title="OpenAI">
 ```python linenums="1"
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAIResponsesConfig
 
-config = OpenAIConfig(model="gpt-5")
+config = OpenAIResponsesConfig(model="gpt-5")
 ```
   </Tab>
 

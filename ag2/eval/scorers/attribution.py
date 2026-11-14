@@ -106,7 +106,7 @@ def failure_attribution(
         middleware: Middleware for the attributor agent (e.g. ``TelemetryMiddleware``).
     """
     modes = tuple(taxonomy)
-    attributor = (
+    attributor: Agent[_AttributionVerdict] | None = (
         Agent(
             f"attributor_{key}",
             _system_prompt(modes),
@@ -145,7 +145,7 @@ def failure_attribution(
 
 
 def _detect_mechanical(trace: Trace, agent_name: str | None) -> Attribution | None:
-    """Attribute unambiguous mechanical failures; ``None`` to defer to the LLM."""
+    """Attribute mechanical failures using the final model response; ``None`` to defer to the LLM."""
     events = trace.events
 
     if trace.exception is not None:
@@ -157,7 +157,8 @@ def _detect_mechanical(trace: Trace, agent_name: str | None) -> Attribution | No
             f"run raised {type(trace.exception).__name__}: {trace.exception}",
         )
 
-    has_answer = any(r.content for r in trace.events_of(ModelResponse))
+    responses = trace.events_of(ModelResponse)
+    has_answer = bool(responses and responses[-1].content)
     tool_errors = trace.events_of(ToolErrorEvent)
     if tool_errors and not has_answer:
         return _mech(
@@ -187,7 +188,7 @@ def _mech(
 
 
 async def _llm_attribute(
-    attributor: Agent,
+    attributor: Agent[_AttributionVerdict],
     inputs: dict[str, Any],
     outputs: dict[str, Any],
     reference_outputs: dict[str, Any] | None,

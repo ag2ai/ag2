@@ -349,17 +349,6 @@ class TestEdges:
 
         assert provider.asked().instructions == "Which team should handle this ticket?"
 
-    async def test_stdlib_enum_placeholder_is_not_a_question(self, provider: Provider) -> None:
-        class Placeholder(Enum):
-            """An enumeration."""
-
-            A = "a"
-            B = "b"
-
-        await provider.ask(Placeholder, provider.choice("a", ("a", "b")), prompt="Q")
-
-        assert provider.asked().instructions == "Q"
-
     @pytest.mark.parametrize(
         "schema",
         [

@@ -115,13 +115,20 @@ def _tool_call_result(content: list[ToolCallContent] | None, status: str | None)
 
 
 def map_usage(usage: schema.Usage | None) -> Usage:
-    """Map an ACP ``Usage`` onto AG2's :class:`Usage` (absent -> empty)."""
+    """Map an ACP ``Usage`` onto AG2's :class:`Usage` (absent -> empty).
+
+    ACP's ``inputTokens`` leaves out the cache: its ``totalTokens`` sums input,
+    output and both cache counts. ``Usage`` counts the whole input in
+    ``prompt_tokens`` (ADR 0036), so both cache counts are added to it here. A
+    reported total below the whole input plus output is not believed.
+    """
     if usage is None:
         return Usage()
+    prompt = usage.input_tokens + (usage.cached_read_tokens or 0) + (usage.cached_write_tokens or 0)
     return Usage(
-        prompt_tokens=usage.input_tokens,
+        prompt_tokens=prompt,
         completion_tokens=usage.output_tokens,
-        total_tokens=usage.total_tokens,
+        total_tokens=max(usage.total_tokens, prompt + usage.output_tokens),
         cache_read_input_tokens=usage.cached_read_tokens,
         cache_creation_input_tokens=usage.cached_write_tokens,
         thinking_tokens=usage.thought_tokens,

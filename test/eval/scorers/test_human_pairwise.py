@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_pairwise
+from ag2.eval import InMemoryTraceSource, PairwiseCase, TraceRef, evaluate_pairwise
 from ag2.eval.scorers import export_pairwise_cases, human_labels, human_pairwise
 from ag2.eval.trace import Trace
 from ag2.events import ModelMessage, ModelResponse
@@ -37,7 +37,7 @@ async def test_offline_export_label_import_roundtrip(tmp_path) -> None:
         out_lines.append(json.dumps(rec))
     labeled.write_text("\n".join(out_lines) + "\n")
 
-    comp = human_labels(str(labeled), criterion="correctness", key="correctness@human")
+    comp = human_labels(labeled, criterion="correctness", key="correctness@human")
     result = await evaluate_pairwise(src_a, src_b, comparators=[comp], variant_a="A", variant_b="B", store_dir=tmp_path)
 
     assert result.tally("correctness@human") == (2, 0, 0)  # A wins both
@@ -80,3 +80,23 @@ async def test_human_labels_missing_label_is_tie(tmp_path) -> None:
 
     result = await evaluate_pairwise(_src("A", ("t1",)), _src("B", ("t1",)), comparators=[comp], store_dir=tmp_path)
     assert result.tally("c") == (0, 0, 1)  # no 'preferred' -> tie
+
+
+@pytest.mark.asyncio()
+async def test_human_labels_unknown_first_variant_is_rejected(tmp_path) -> None:
+    labeled = tmp_path / "labeled.jsonl"
+    labeled.write_text(json.dumps({"task_id": "t1", "criterion": "c", "first_variant": "A", "preferred": "1"}) + "\n")
+    comp = human_labels(str(labeled), criterion="c", key="c")
+
+    result = await evaluate_pairwise(_src("A", ("t1",)), _src("B", ("t1",)), comparators=[comp], store_dir=tmp_path)
+
+    # a malformed label must not be read as a decisive winner: the comparator fails and the case is a tie
+    assert result.cases == (
+        PairwiseCase(
+            task_id="t1",
+            key="c",
+            winner="tie",
+            reasoning="comparator raised: ValueError: first_variant must be 'a' or 'b', got 'A'",
+            detail={"error": True},
+        ),
+    )

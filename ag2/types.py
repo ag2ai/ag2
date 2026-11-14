@@ -74,6 +74,8 @@ VideoMediaType: TypeAlias = Literal[
 
 MediaType: TypeAlias = AudioMediaType | ImageMediaType | DocumentMediaType | VideoMediaType
 
+RequestOrigin: TypeAlias = Literal["user", "service"]
+
 ClassInfo: TypeAlias = type | types.UnionType | tuple["ClassInfo", ...]
 
 
@@ -86,7 +88,7 @@ omit = Omit()
 
 _T = TypeVar("_T")
 
-Omittable = _T | Omit
+Omittable: TypeAlias = _T | Omit
 
 
 JsonDecodable: TypeAlias = bool | bytes | bytearray | float | int | str | None

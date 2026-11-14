@@ -15,12 +15,12 @@ import pytest
 pytest.importorskip("watchdog")
 
 from ag2 import Agent
-from ag2.agent import KnowledgeConfig
 from ag2.events import ModelMessage, ModelRequest, ModelResponse, TaskCompleted, TextInput, UnknownEvent
 from ag2.knowledge import (
     DefaultBootstrap,
     DiskKnowledgeStore,
     EventLogWriter,
+    KnowledgePlugin,
     LockedKnowledgeStore,
     MemoryKnowledgeStore,
     SqliteKnowledgeStore,
@@ -89,6 +89,28 @@ class TestMemoryKnowledgeStore:
         store = MemoryKnowledgeStore()
         entries = await store.list("/")
         assert entries == []
+
+    @pytest.mark.parametrize("resubscribe", [False, True])
+    async def test_repeated_close_preserves_other_subscription(self, resubscribe: bool) -> None:
+        store = MemoryKnowledgeStore()
+        received: list[str] = []
+
+        async def callback(path: str) -> None:
+            received.append(path)
+
+        old = await store.on_change("/watched", callback)
+        if resubscribe:
+            await old.close()
+        active = await store.on_change("/watched", callback)
+
+        await old.close()
+        await old.close()
+        await store.write("/watched/file.txt", "first")
+        assert received == ["/watched/file.txt"]
+
+        await active.close()
+        await store.write("/watched/file.txt", "second")
+        assert received == ["/watched/file.txt"]
 
 
 @pytest.mark.asyncio
@@ -264,8 +286,8 @@ class TestDefaultBootstrap:
     async def test_does_not_write_sentinel(self) -> None:
         """``DefaultBootstrap`` writes SKILL.md files but not ``/.initialized``.
 
-        The sentinel is owned by ``Agent`` (it writes it before calling
-        bootstrap, see ``Agent._bootstrap_store_once``).
+        The sentinel is owned by the knowledge scope (it writes it before
+        calling bootstrap, see ``ag2.knowledge._maintenance``).
         """
         store = MemoryKnowledgeStore()
         await DefaultBootstrap().bootstrap(store, "test-agent")
@@ -296,7 +318,7 @@ class TestAgentBootstrapsOnce:
                 ModelResponse(ModelMessage("ok-2")),
                 ModelResponse(ModelMessage("ok-3")),
             ),
-            knowledge=KnowledgeConfig(store=store, bootstrap=counter),
+            plugins=[KnowledgePlugin(store=store, bootstrap=counter)],
         )
 
         await asyncio.gather(
@@ -323,7 +345,7 @@ class TestAgentBootstrapsOnce:
         agent = Agent(
             "later",
             config=TestConfig(ModelResponse(ModelMessage("ok"))),
-            knowledge=KnowledgeConfig(store=store, bootstrap=counter),
+            plugins=[KnowledgePlugin(store=store, bootstrap=counter)],
         )
         await agent.ask("hi")
 
@@ -374,6 +396,41 @@ class TestDiskKnowledgeStore:
         await store.delete("/test.txt")
         assert not (tmp_path / "test.txt").exists()
         assert await store.read("/test.txt") is None
+
+    async def test_delete_file_prunes_empty_parent_directories(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/dir/a.txt", "a")
+        await store.delete("/dir/a.txt")
+        assert await store.list("/") == []
+        assert await store.exists("/dir") is False
+
+        await store.write("/a/b/c/deep.txt", "x")
+        await store.delete("/a/b/c/deep.txt")
+        assert await store.list("/") == []
+        assert await store.exists("/a") is False
+        assert await store.exists("/a/b") is False
+
+    async def test_delete_file_keeps_non_empty_parent_directories(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/dir/sub/a.txt", "a")
+        await store.write("/dir/b.txt", "b")
+        await store.delete("/dir/sub/a.txt")
+        assert await store.exists("/dir/sub") is False
+        assert await store.read("/dir/b.txt") == "b"
+
+    async def test_delete_directory_prunes_empty_parent_directories(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/a/b/c/x.txt", "x")
+        await store.delete("/a/b/c")
+        assert await store.list("/") == []
+
+    async def test_delete_never_removes_store_root(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.write("/a.txt", "a")
+        await store.delete("/a.txt")
+        assert await store.exists("/") is True
+        await store.write("/b.txt", "b")
+        assert await store.list("/") == ["b.txt"]
 
     async def test_delete_directory_recursively(self, tmp_path: Path) -> None:
         store = DiskKnowledgeStore(str(tmp_path))
@@ -444,7 +501,7 @@ class TestDiskKnowledgeStore:
             # watchdog delivers asynchronously via a background thread
             try:
                 await asyncio.wait_for(event.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pytest.skip("watchdog backend did not deliver event in time")
             assert any("file.txt" in p for p in received)
         finally:
@@ -882,3 +939,29 @@ class TestLockedKnowledgeStore:
             assert lock.acquired == []
         finally:
             await sub.close()
+
+    @pytest.mark.parametrize("alias", ["log/events.jsonl", "//log//events.jsonl/", "/log/events.jsonl/"])
+    async def test_aliased_path_takes_the_canonical_lock(self, alias: str) -> None:
+        lock = _FakeLock()
+        locked = LockedKnowledgeStore(MemoryKnowledgeStore(), lock)
+
+        await locked.write(alias, "hello")
+        await locked.append(alias, " world")
+        await locked.delete(alias)
+
+        canonical = "store:write:/log/events.jsonl"
+        assert lock.acquired == [(canonical, 30.0)] * 3
+        assert lock.released == [canonical] * 3
+
+    @pytest.mark.parametrize("alias", ["log/events.jsonl", "//log//events.jsonl/", "/log/events.jsonl/"])
+    async def test_aliased_path_releases_the_canonical_lock_on_inner_exception(self, alias: str) -> None:
+        class ExplodingStore:
+            async def write(self, path: str, content: str) -> None:
+                raise ValueError("boom")
+
+        lock = _FakeLock()
+        locked = LockedKnowledgeStore(ExplodingStore(), lock)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="boom"):
+            await locked.write(alias, "hello")
+        assert lock.released == ["store:write:/log/events.jsonl"]

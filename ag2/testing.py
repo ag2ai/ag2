@@ -3,11 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeAlias
+from copy import deepcopy
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Self, TypeAlias
 from unittest.mock import MagicMock
-
-from typing_extensions import Self
 
 from ag2 import Context
 from ag2.config import LLMClient, ModelConfig, ModelProvider
@@ -20,6 +19,7 @@ from ag2.events import (
     ToolCallsEvent,
     ToolErrorEvent,
 )
+from ag2.files import FileContent, UploadedFile
 from ag2.tools.schemas import ToolSchema
 
 if TYPE_CHECKING:
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 __all__ = (
     "ModelCall",
     "TestConfig",
+    "TestFilesClient",
     "TrackingConfig",
     "Turn",
 )
@@ -99,12 +100,18 @@ class TestClient(LLMClient):
 
 @dataclass(frozen=True, slots=True)
 class ModelCall:
-    """What the framework handed the LLM for one call: the prompt, tools and context at that moment."""
+    """What the framework handed the LLM for one attempt.
+
+    ``messages`` is a detached snapshot of the complete ordered input, including
+    mutable event payloads. It does not participate in equality, preserving
+    comparisons with settings-only ``ModelCall`` values constructed by callers.
+    """
 
     prompt: tuple[str, ...]
     tools: tuple[ToolSchema, ...]
     dependencies: Mapping[Any, Any]
     variables: Mapping[Any, Any]
+    messages: tuple[BaseEvent, ...] = field(default=(), compare=False)
 
 
 class TrackingClient(LLMClient):
@@ -129,6 +136,7 @@ class TrackingClient(LLMClient):
                 tools=tools,
                 dependencies=dict(context.dependencies),
                 variables=dict(context.variables),
+                messages=deepcopy(tuple(messages)),
             )
         )
         return await self.client(messages, context=context, **kwargs)
@@ -158,6 +166,42 @@ class TrackingConfig(ModelConfig):
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
 
 
+class TestFilesClient:
+    """In-memory Files API: what is uploaded can be read, listed and deleted.
+
+    Pass it to ``TestConfig(files=...)`` to exercise ``FilesAPI`` without a provider.
+    Provider-specific upload options are accepted and ignored, as real clients do
+    with options they do not recognize.
+    """
+
+    __test__ = False
+
+    def __init__(self) -> None:
+        self._files: dict[str, tuple[UploadedFile, bytes]] = {}
+        self._uploads = 0
+
+    async def upload(self, data: bytes, filename: str, purpose: str | None = None, **options: Any) -> UploadedFile:
+        self._uploads += 1
+        uploaded = UploadedFile(
+            file_id=f"file-{self._uploads}",
+            filename=filename,
+            bytes_count=len(data),
+            purpose=purpose,
+        )
+        self._files[uploaded.file_id] = (uploaded, data)
+        return uploaded
+
+    async def read(self, file_id: str) -> FileContent:
+        uploaded, data = self._files[file_id]
+        return FileContent(name=uploaded.filename, data=data)
+
+    async def list(self) -> list[UploadedFile]:
+        return [uploaded for uploaded, _ in self._files.values()]
+
+    async def delete(self, file_id: str) -> None:
+        del self._files[file_id]
+
+
 class TestConfig(ModelConfig):
     __test__ = False
 
@@ -167,6 +211,7 @@ class TestConfig(ModelConfig):
         provider: ModelProvider | None = None,
         model: str | None = None,
         raise_tool_errors: bool = True,
+        files: TestFilesClient | None = None,
     ) -> None:
         """Script the LLM, one :data:`Turn` per positional event.
 
@@ -182,8 +227,11 @@ class TestConfig(ModelConfig):
         handed a failed tool call as an ordinary result and carries on: a test
         asserting that something **ends the turn** needs that, or it is
         asserting this double's behaviour rather than the agent's.
+
+        ``files`` backs ``FilesAPI(config)``; without it the Files API is unsupported.
         """
         self.events = events
+        self._files = files
         self._provider = provider
         self._model = model
         self._raise_tool_errors = raise_tool_errors
@@ -207,4 +255,6 @@ class TestConfig(ModelConfig):
         return TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
 
     def create_files_client(self) -> "FilesClient":
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        if self._files is None:
+            raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        return self._files

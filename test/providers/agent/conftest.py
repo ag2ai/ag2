@@ -47,16 +47,15 @@ def openai_config() -> OpenAIConfig:
 @pytest.fixture()
 def anthropic_config() -> AnthropicConfig:
     return AnthropicConfig(
-        model="claude-haiku-4-5",
+        model="claude-haiku-5-5",
         api_key=_require("ANTHROPIC_API_KEY"),
-        temperature=0,
     )
 
 
 @pytest.fixture()
 def gemini_config() -> GeminiConfig:
     return GeminiConfig(
-        model="gemini-3.1-flash-lite",
+        model="gemini-3.5-flash-lite",
         api_key=_require_gemini_key(),
         temperature=0,
     )
@@ -105,9 +104,8 @@ def streaming_config(request):
         )
     if request.param == "anthropic":
         return AnthropicConfig(
-            model="claude-haiku-4-5",
+            model="claude-haiku-5-5",
             api_key=_require("ANTHROPIC_API_KEY"),
-            temperature=0,
             streaming=True,
         )
     if request.param == "zai":
@@ -127,7 +125,7 @@ def streaming_config(request):
             streaming=True,
         )
     return GeminiConfig(
-        model="gemini-3.1-flash-lite",
+        model="gemini-3.5-flash-lite",
         api_key=_require_gemini_key(),
         temperature=0,
         streaming=True,

@@ -12,9 +12,10 @@ from ag2.config.gemini.events import (
     GeminiServerToolCallEvent,
     GeminiServerToolResultEvent,
 )
-from ag2.config.gemini.mappers import convert_messages
+from ag2.config.gemini.mappers import SKIP_THOUGHT_SIGNATURE, convert_messages
 from ag2.events import (
     AudioInput,
+    BaseEvent,
     BinaryInput,
     DocumentInput,
     FileIdInput,
@@ -50,7 +51,12 @@ class TestConvertMessagesEmptyArguments:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "model",
-            "parts": [{"function_call": {"name": "list_items", "args": {}}}],
+            "parts": [
+                {
+                    "function_call": {"id": "tc_1", "name": "list_items", "args": {}},
+                    "thought_signature": SKIP_THOUGHT_SIGNATURE,
+                }
+            ],
         }
 
     def test_valid_arguments_are_preserved(self) -> None:
@@ -58,7 +64,12 @@ class TestConvertMessagesEmptyArguments:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "model",
-            "parts": [{"function_call": {"name": "list_items", "args": {"category": "books"}}}],
+            "parts": [
+                {
+                    "function_call": {"id": "tc_1", "name": "list_items", "args": {"category": "books"}},
+                    "thought_signature": SKIP_THOUGHT_SIGNATURE,
+                }
+            ],
         }
 
 
@@ -308,7 +319,7 @@ class TestToolResult:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
-            "parts": [{"function_response": {"name": "t", "response": {"result": "hello"}}}],
+            "parts": [{"function_response": {"id": "tc_1", "name": "t", "response": {"result": "hello"}}}],
         }
 
     def test_multiple_text_chunks_become_list(self) -> None:
@@ -317,7 +328,7 @@ class TestToolResult:
 
         assert content.model_dump(exclude_none=True) == {
             "role": "user",
-            "parts": [{"function_response": {"name": "t", "response": {"result": ["a", "b"]}}}],
+            "parts": [{"function_response": {"id": "tc_1", "name": "t", "response": {"result": ["a", "b"]}}}],
         }
 
     def test_url_image(self) -> None:
@@ -331,6 +342,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {},
                         "parts": [{"file_data": {"file_uri": self.IMG_URL, "mime_type": "image/png"}}],
@@ -356,6 +368,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {},
                         "parts": [{"inline_data": {"data": self.PNG, "mime_type": "image/png"}}],
@@ -375,6 +388,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {},
                         "parts": [{"file_data": {"file_uri": self.PDF_URL, "mime_type": "application/pdf"}}],
@@ -400,6 +414,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {},
                         "parts": [{"inline_data": {"data": self.PDF, "mime_type": "application/pdf"}}],
@@ -425,6 +440,7 @@ class TestToolResult:
             "parts": [
                 {
                     "function_response": {
+                        "id": "tc_1",
                         "name": "t",
                         "response": {"result": "caption"},
                         "parts": [{"file_data": {"file_uri": self.IMG_URL, "mime_type": "image/png"}}],
@@ -522,6 +538,7 @@ def test_hallucinated_tool_call_maps_with_error_text() -> None:
         "parts": [
             {
                 "function_response": {
+                    "id": "tc_1",
                     "name": "ghost_tool",
                     "response": {"result": "ag2.exceptions.ToolNotFoundError: Tool `ghost_tool` not found\n"},
                 }
@@ -556,3 +573,35 @@ class TestConvertMessagesCompactionSummary:
         contents = convert_messages(events, SerializerCls)
 
         assert contents[0].role == "user"
+
+
+def test_final_tool_history_replays_each_result_once(final_turn_history: list[BaseEvent]) -> None:
+    """A ``final=True`` turn replays both results of its batch exactly once."""
+    assert convert_messages(final_turn_history, SerializerCls) == [
+        types.Content(role="user", parts=[types.Part(text="first turn")]),
+        types.Content(
+            role="model",
+            parts=[
+                types.Part(function_call=types.FunctionCall(id="final-call", name="finish", args={})),
+                types.Part(function_call=types.FunctionCall(id="lookup-call", name="lookup", args={})),
+            ],
+        ),
+        types.Content(
+            role="user",
+            parts=[
+                types.Part(
+                    function_response=types.FunctionResponse(
+                        id="final-call", name="finish", response={"result": "sent"}
+                    )
+                ),
+                types.Part(
+                    function_response=types.FunctionResponse(
+                        id="lookup-call", name="lookup", response={"result": "lookup result"}
+                    )
+                ),
+            ],
+        ),
+        types.Content(role="model", parts=[types.Part(text="sent")]),
+        types.Content(role="user", parts=[types.Part(text="second turn")]),
+        types.Content(role="model", parts=[types.Part(text="second reply")]),
+    ]

@@ -7,7 +7,7 @@
 The default notify handler engages an agent's LLM via
 ``_process_text`` when a substantive envelope lands. These tests
 drive the consulting / conversation / discussion adapters through
-that handler with real ``claude-haiku-4-5`` agents — registration,
+that handler with real ``claude-haiku-5-5`` agents — registration,
 invite handshake, dispatch, fold, auto-close, and round-robin
 rotation are all exercised against real LLM latency and reply
 shapes.
@@ -39,7 +39,7 @@ def anthropic_config() -> AnthropicConfig:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         pytest.skip("ANTHROPIC_API_KEY not set")
-    return AnthropicConfig(model="claude-haiku-4-5", api_key=api_key, temperature=0)
+    return AnthropicConfig(model="claude-haiku-5-5", api_key=api_key)
 
 
 def _agent(name: str, prompt: str, config: AnthropicConfig) -> Agent:
@@ -54,7 +54,7 @@ async def _wait_text_count(hub: Hub, channel_id: str, expected: int, *, timeout:
         if sum(1 for e in wal if e.event_type == EV_TEXT) >= expected:
             return wal
         await asyncio.sleep(0.1)
-    raise asyncio.TimeoutError(f"channel {channel_id!r} did not reach {expected} EV_TEXT envelopes")
+    raise TimeoutError(f"channel {channel_id!r} did not reach {expected} EV_TEXT envelopes")
 
 
 @pytest.mark.anthropic

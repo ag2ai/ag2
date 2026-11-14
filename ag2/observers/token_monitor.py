@@ -6,6 +6,7 @@
 
 from ag2.annotations import Context
 from ag2.events import BaseEvent, ObserverAlert, Severity, Usage, UsageEvent
+from ag2.usage import usage_event_from
 from ag2.watch import EventWatch
 
 from .observer import BaseObserver
@@ -29,12 +30,10 @@ def _billable_tokens(usage: Usage) -> int:
     provider whose total legitimately exceeds the two counts (reasoning tokens,
     for instance).
 
-    Cache tokens are left out, as they were before this read ``UsageEvent``.
-    That understates a prompt-cached turn on any provider whose prompt count
-    excludes them, and changing it would move every cached workload's threshold
-    — a behaviour change that belongs on its own, not folded into a change of
-    accounting *source*. See :class:`TokenMonitor` for what the guard's total
-    does and does not cover.
+    Cache tokens are counted, once: ``prompt_tokens`` already includes the
+    tokens read from and written to the cache on every provider (ADR 0036), so
+    the cache fields are not added on top of it. See :class:`TokenMonitor` for
+    what the guard's total does and does not cover.
     """
     counted = int(usage.prompt_tokens or 0) + int(usage.completion_tokens or 0)
     if usage.total_tokens is None:
@@ -47,22 +46,20 @@ class TokenMonitor(BaseObserver):
 
     Observes ``UsageEvent`` — the framework's accounting record, emitted at the
     point tokens are spent by every unit of billable work: the main agent loop,
-    each sub-task rollup, history compaction, memory aggregation and the live
+    descendant source records, history compaction, memory aggregation and live
     session clients — the same source ``UsageReport`` reads, so the guard sees
     every unit of work the report does.
 
-    It does not count the same *tokens*: :func:`_billable_tokens` reads the
-    prompt and completion counts and ignores the cache fields, which
-    ``UsageReport.total`` keeps. On a provider whose reported prompt count
-    excludes cached tokens — Anthropic's ``input_tokens`` does — a heavily
-    prompt-cached turn moves this guard by a fraction of what it bills. Treat
-    the threshold as a bound on uncached spend, and read ``UsageReport`` for the
-    bill.
+    It counts every input token at the same weight, cached or not: the
+    threshold bounds how much the model read and wrote, not what that cost. A
+    heavily prompt-cached turn moves the guard by more than it bills, since
+    cache reads are priced below fresh input. Read ``UsageReport`` with a price
+    catalog for the bill.
 
     Deliberately *not* ``ModelResponse`` or ``TaskCompleted``. Those are derived
     events and reading them made the guard wrong three ways: a sub-task that
     billed and then failed was invisible (``TaskFailed`` carries no usage, and
-    the rollup is a ``UsageEvent``); ``TaskCompleted.usage`` is a *cumulative
+    usage is a source record); ``TaskCompleted.usage`` is a *cumulative
     snapshot* of the sub-task's stream, so accumulating it with ``+=`` inflated
     the total whenever the stream was reused; and compaction, aggregation and
     live sessions report usage without ever producing a ``ModelResponse``.
@@ -77,6 +74,8 @@ class TokenMonitor(BaseObserver):
         Total tokens at which a CRITICAL alert is emitted.
     name:
         Observer display name.
+    timeout:
+        Per-call limit for ``process`` in seconds, or ``None`` for no limit.
     """
 
     def __init__(
@@ -85,11 +84,13 @@ class TokenMonitor(BaseObserver):
         alert_threshold: int = 100_000,
         *,
         name: str = "token-monitor",
+        timeout: float | None = None,
     ) -> None:
-        super().__init__(name, watch=EventWatch(UsageEvent))
+        super().__init__(name, watch=EventWatch(UsageEvent), timeout=timeout)
         self._warn_threshold = warn_threshold
         self._alert_threshold = alert_threshold
         self._total_tokens: int = 0
+        self._seen_usage: set[str] = set()
         self._warned = False
         self._alerted = False
 
@@ -99,8 +100,10 @@ class TokenMonitor(BaseObserver):
 
     async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
-            if isinstance(event, UsageEvent):
-                usage = event.usage
+            record = usage_event_from(event)
+            if record is not None and record.event_id not in self._seen_usage:
+                self._seen_usage.add(record.event_id)
+                usage = record.usage
                 if usage:
                     self._total_tokens += _billable_tokens(usage)
 
@@ -133,5 +136,6 @@ class TokenMonitor(BaseObserver):
     def reset(self) -> None:
         """Reset counters for a fresh session."""
         self._total_tokens = 0
+        self._seen_usage.clear()
         self._warned = False
         self._alerted = False

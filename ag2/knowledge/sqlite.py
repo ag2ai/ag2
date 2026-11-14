@@ -9,7 +9,7 @@ import os
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TypeVar
 
 from .base import ChangeCallback, ChangeSubscription, _normalize
 from .polling import PollingChangeWatcher
@@ -18,6 +18,8 @@ from .polling import PollingChangeWatcher
 # this: it treats ``_`` and ``%`` as wildcards and folds ASCII case, while the
 # other stores compare prefixes literally and case-sensitively.
 _PREFIX_MATCH = "substr(path, 1, ?) = ?"
+
+_T = TypeVar("_T")
 
 
 class SqliteKnowledgeStore:
@@ -80,7 +82,7 @@ class SqliteKnowledgeStore:
         self._version_counter += 1
         return self._version_counter
 
-    async def _run(self, func: Callable[[], Any]) -> Any:
+    async def _run(self, func: Callable[[], _T]) -> _T:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, func)
 
@@ -90,7 +92,8 @@ class SqliteKnowledgeStore:
         row = cur.fetchone()
         if row is None:
             return None
-        return row[0].decode("utf-8")
+        content: bytes = row[0]
+        return content.decode("utf-8")
 
     def _sync_write(self, normalized: str, payload: bytes, version: int) -> None:
         conn = self._ensure_connected()
@@ -137,16 +140,19 @@ class SqliteKnowledgeStore:
 
     def _sync_append(self, normalized: str, payload: bytes, version: int) -> int:
         conn = self._ensure_connected()
-        cur = conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
-        row = cur.fetchone()
-        existing = row[0] if row else b""
-        offset = len(existing)
-        combined = existing + payload
-        conn.execute(
-            "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
-            (normalized, combined, version),
-        )
-        conn.commit()
+        # Reserve the writer before reading: other store instances have their own
+        # asyncio locks and must not append from the same stale content snapshot.
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            cur = conn.execute("SELECT content FROM entries WHERE path = ?", (normalized,))
+            row = cur.fetchone()
+            existing = row[0] if row else b""
+            offset = len(existing)
+            combined = existing + payload
+            conn.execute(
+                "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
+                (normalized, combined, version),
+            )
         return offset
 
     def _sync_read_range(self, normalized: str, start: int, end: int | None) -> str:

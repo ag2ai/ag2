@@ -32,7 +32,10 @@ class GeminiFilesClient:
     __slots__ = ("_client",)
 
     def __init__(self, config: "GeminiConfig") -> None:
-        self._client = genai.Client(api_key=config.api_key)
+        http_options = (
+            types.HttpOptions(httpx_async_client=config.http_client) if config.http_client is not None else None
+        )
+        self._client = genai.Client(api_key=config.api_key, vertexai=False, http_options=http_options)
 
     async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:
         mime_type, _ = mimetypes.guess_type(filename)
@@ -76,7 +79,7 @@ class GeminiFilesClient:
                 purpose=None,
                 created_at=_created_at_to_float(f.create_time),
             )
-            for f in pager.page
+            async for f in pager
         ]
 
     async def delete(self, file_id: str) -> None:
