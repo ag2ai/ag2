@@ -1,0 +1,70 @@
+---
+title: Community Packages
+sidebarTitle: Community Packages
+---
+
+Community packages are built and maintained outside the AG2 repository. They use AG2's documented extension points, but AG2 does not review, maintain, or endorse them. Treat them like any other third-party dependency: check the license and tests, pin a version, and report problems to the package's maintainer.
+
+| Package | What it does | Maintainer |
+| :--- | :--- | :--- |
+| [`ag2-acgs`](https://github.com/acgs-ai/ag2-acgs){.external-link target="_blank"} | Checks tool calls in the agent's process against [ACGS](https://pypi.org/project/acgs-lite/){.external-link target="_blank"} rules before the tool runs, blocking calls or routing them to human approval. | [@dislovelhl](https://github.com/dislovelhl){.external-link target="_blank"} |
+
+## Tool-call governance with ag2-acgs
+
+[`ag2-acgs`](https://github.com/acgs-ai/ag2-acgs){.external-link target="_blank"} (Apache-2.0, on [PyPI](https://pypi.org/project/ag2-acgs/){.external-link target="_blank"}) is one [middleware](/docs/user-guide/middleware) that evaluates tool calls against [ACGS](https://pypi.org/project/acgs-lite/){.external-link target="_blank"} constitution rules. It builds on two documented hooks: [`BaseMiddleware.on_tool_execution()`](/docs/user-guide/middleware#on_tool_execution) and `context.ask(ToolApprovalRequest(...))`, the human-input request used by [`approval_required()`](/docs/user-guide/tools/approval_required). The rule matching itself lives in `acgs-lite`; the package is a thin adapter over its public API.
+
+```bash
+pip install ag2-acgs
+```
+
+It requires Python 3.10 or later and `ag2>=1.2.0,<2`; `acgs-lite` is installed as a dependency.
+
+Pass the guard's middleware to the agent:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2_acgs import ACGSGuard
+
+
+def send_email(to: str, body: str) -> str:
+    """Send an email."""
+    return f"sent to {to}"
+
+
+guard = ACGSGuard()
+agent = Agent(
+    "assistant",
+    config=OpenAIResponsesConfig(model="gpt-5"),
+    tools=[send_email],
+    middleware=[guard.middleware],
+)
+```
+
+`ACGSGuard()` enforces `acgs_lite.Constitution.default()`. Pass `constitution=` with your own rules to enforce them instead, or add a second guard to require both. To govern a single ask, pass `middleware=[guard.middleware]` to `agent.ask(...)` instead of the agent.
+
+### What happens to a call
+
+| ACGS outcome | Result |
+| :--- | :--- |
+| No blocking rule matched | The tool runs unchanged |
+| Only review rules matched | The call is put to a human and runs only on `yes`, `y`, or `1` |
+| Any blocking rule matched | The call is denied and does not run |
+| Rule lookup or evaluation error | The call is denied (fail-closed) |
+
+A denied call returns `Tool call '<name>' was not executed. <reason>` as its tool result, so the model reads why and can continue without that result. A review is sent through `context.ask(ToolApprovalRequest(...))` to the agent's or the ask's `hitl_hook`, the same path as `approval_required()`; no hook, a hook error, or a timeout denies the call.
+
+Before the model is called, the middleware also refuses a turn whose agent has tools it cannot check — provider-hosted tools, `tasks=TaskConfig(...)` sub-tasks, or sub-agents without their own guard — raising `ag2_acgs.UngovernedToolsError`. Pass `allow_ungoverned=True` to run them with a logged warning instead.
+
+### Known limits
+
+- Provider-hosted tools in `#!python ag2.tools.builtin` run at the provider. They are refused for the turn, but one added per ask through `agent.ask(tools=[...])` is only detected after the provider has run it.
+- Middleware listed after the guard, and tool-level middleware, run after the check and can still change a call.
+- Calls from one model turn run in parallel, so a denial does not cancel its siblings.
+- Only tool calls are checked. User input, model output, and tool results are not.
+
+Report bugs and feature requests for this package to [acgs-ai/ag2-acgs](https://github.com/acgs-ai/ag2-acgs/issues){.external-link target="_blank"}, not to the AG2 repository.
+
+## Adding a package to this page
+
+Community packages that build on AG2's documented extension points are listed here so users can find them. Open an issue or pull request against [ag2ai/ag2](https://github.com/ag2ai/ag2){.external-link target="_blank"} with the package, its license, the hooks it uses, and its maintainer. Packages that cannot name a maintainer, or that patch AG2 internals instead of using documented hooks, will not be listed.
