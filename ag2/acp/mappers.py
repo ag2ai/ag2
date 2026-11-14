@@ -61,10 +61,25 @@ DEFAULT_TOOL_KIND: "schema.ToolKind" = "other"
 def block_text(block: ContentBlock | None) -> str:
     """The text of a single content block, or ``""`` if it carries no text.
 
-    Text, a text resource and a resource link all read as text; media and blob
-    resources do not (see :func:`block_to_files`).
+    Text, a text resource, a resource link and an image that only names a ``uri``
+    all read as text; media with bytes and blob resources do not (see
+    :func:`block_to_files`).
     """
-    return _textual_block_text(block) or ""
+    text = _textual_block_text(block)
+    if text is not None:
+        return text
+    uri = _image_uri(block)
+    return f"[image] {uri}" if uri else ""
+
+
+def _image_uri(block: ContentBlock | None) -> str | None:
+    """The ``uri`` of an image block that carries no bytes, or ``None`` otherwise.
+
+    Such an image is a link, not a file: it is read as text and never fetched.
+    """
+    if isinstance(block, schema.ImageContentBlock) and not block.data:
+        return block.uri or None
+    return None
 
 
 def _textual_block_text(block: ContentBlock | None) -> str | None:
@@ -89,7 +104,8 @@ def _textual_block_text(block: ContentBlock | None) -> str | None:
 def block_to_files(block: ContentBlock | None) -> list[BinaryResult]:
     """Decode a single ``image``/``audio``/blob-resource content block into binary results.
 
-    An image that only points at a ``uri`` carries no bytes, so it is not a file.
+    An image or audio block with empty ``data`` carries no bytes, so it is not a
+    file; an image that names a ``uri`` reads as text instead (see :func:`block_text`).
     """
     if isinstance(block, (schema.ImageContentBlock, schema.AudioContentBlock)):
         if not block.data:
@@ -119,16 +135,18 @@ def content_blocks_to_files(blocks: list[ContentBlock] | None) -> list[BinaryRes
     return files
 
 
-def _tool_call_result(content: list[ToolCallContent] | None, status: str | None) -> ToolResult:
+def _tool_call_result(content: list[ToolCallContent] | None, status: "schema.ToolCallStatus | None") -> ToolResult:
     """A tool call's ``content`` list as a result, one part per content item.
 
-    Only ``ContentToolCallContent`` items carry content blocks; the status stands
-    in when there is none.
+    Only ``ContentToolCallContent`` items carry content blocks, and an empty text
+    block carries nothing; the status stands in when no item has content.
     """
     parts = [
         part
         for item in (content or ())
-        if isinstance(item, schema.ContentToolCallContent) and (part := block_to_input(item.content)) is not None
+        if isinstance(item, schema.ContentToolCallContent)
+        and (part := block_to_input(item.content)) is not None
+        and not (isinstance(part, TextInput) and not part.content)
     ]
     return ToolResult(parts=parts) if parts else ToolResult(status or "")
 
@@ -226,9 +244,12 @@ def block_to_input(block: ContentBlock) -> Input | None:
     if isinstance(block, schema.ImageContentBlock):
         if block.data:
             return ImageInput(data=base64.b64decode(block.data), media_type=cast(Any, block.mime_type))
-        return ImageInput(block.uri) if block.uri else None
+        uri = _image_uri(block)
+        return ImageInput(uri) if uri else None
 
     if isinstance(block, schema.AudioContentBlock):
+        if not block.data:
+            return None
         return AudioInput(data=base64.b64decode(block.data), media_type=cast(Any, block.mime_type))
 
     blob = _embedded_blob(block)

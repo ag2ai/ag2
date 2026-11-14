@@ -15,7 +15,7 @@ from ag2 import Agent, Context
 from ag2.acp import MCPCapabilityError
 from ag2.acp.testing import ACPTurn, fake_acp_config
 from ag2.events import BaseEvent, ModelMessage, ModelReasoning, ModelResponse, ToolCallEvent, ToolResultEvent
-from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
+from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent, ToolResult
 from ag2.exceptions import HumanInputNotProvidedError, UnsupportedToolError
 from ag2.history import HUMAN_INPUT_ABANDONED_TOOL_RESULT
 from ag2.stream import MemoryStream
@@ -28,8 +28,8 @@ def _text(text: str) -> schema.TextContentBlock:
     return schema.TextContentBlock(type="text", text=text)
 
 
-def _text_update(text: str) -> schema.AgentMessageChunk:
-    return schema.AgentMessageChunk(session_update="agent_message_chunk", content=_text(text))
+def _text_update(text: str, message_id: str | None = None) -> schema.AgentMessageChunk:
+    return schema.AgentMessageChunk(session_update="agent_message_chunk", message_id=message_id, content=_text(text))
 
 
 def _model_option(current: str, *values: str) -> schema.SessionConfigOptionSelect:
@@ -114,13 +114,38 @@ async def test_ask_streams_thoughts_tools_and_returns_text() -> None:
     assert any(isinstance(e, BuiltinToolResultEvent) for e in seen)
 
 
-def _chunk(text: str, message_id: str | None = None) -> schema.AgentMessageChunk:
-    return schema.AgentMessageChunk(session_update="agent_message_chunk", message_id=message_id, content=_text(text))
+@pytest.mark.asyncio
+async def test_a_tool_result_with_only_empty_text_reports_its_status() -> None:
+    cfg = fake_acp_config(
+        ACPTurn(
+            updates=[
+                schema.ToolCallStart(session_update="tool_call", tool_call_id="t1", title="Echo", status="pending"),
+                schema.ToolCallProgress(
+                    session_update="tool_call_update",
+                    tool_call_id="t1",
+                    status="completed",
+                    content=[schema.ContentToolCallContent(type="content", content=_text(""))],
+                ),
+                _text_update("done"),
+            ]
+        ),
+        permission_policy="auto",
+    )
+    seen: list[BaseEvent] = []
+
+    try:
+        async with Agent("acp", config=cfg).run("hello") as run:
+            run.stream.subscribe(lambda e: seen.append(e))
+            await run.result()
+    finally:
+        await cfg.aclose()
+
+    assert [e.result for e in seen if isinstance(e, BuiltinToolResultEvent)] == [ToolResult("completed")]
 
 
 @pytest.mark.asyncio
 async def test_chunks_of_one_message_make_one_message() -> None:
-    cfg = fake_acp_config(ACPTurn(updates=[_chunk("Hello "), _chunk("world")]), permission_policy="auto")
+    cfg = fake_acp_config(ACPTurn(updates=[_text_update("Hello "), _text_update("world")]), permission_policy="auto")
     seen: list[BaseEvent] = []
 
     try:
@@ -137,7 +162,9 @@ async def test_chunks_of_one_message_make_one_message() -> None:
 @pytest.mark.asyncio
 async def test_messages_the_agent_names_apart_are_not_run_together() -> None:
     cfg = fake_acp_config(
-        ACPTurn(updates=[_chunk("Let me check.", "m1"), _chunk("Done: ", "m2"), _chunk("it works.", "m2")]),
+        ACPTurn(
+            updates=[_text_update("Let me check.", "m1"), _text_update("Done: ", "m2"), _text_update("it works.", "m2")]
+        ),
         permission_policy="auto",
     )
     seen: list[BaseEvent] = []
@@ -159,7 +186,7 @@ async def test_thoughts_are_not_part_of_the_message() -> None:
         ACPTurn(
             updates=[
                 schema.AgentThoughtChunk(session_update="agent_thought_chunk", content=_text("thinking")),
-                _chunk("answer"),
+                _text_update("answer"),
             ]
         ),
         permission_policy="auto",
@@ -460,12 +487,13 @@ class TestEmptyTurnWarning:
         assert len(reply.response.files) == 1
         assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
-    async def test_an_image_that_only_points_at_a_uri_is_not_a_file(self) -> None:
+    async def test_an_image_that_only_points_at_a_uri_is_its_link_not_a_file(self) -> None:
         cfg = fake_acp_config(
             ACPTurn(
                 updates=[
-                    _text_update("see the chart"),
+                    _text_update("see the chart", "m1"),
                     schema.AgentMessageChunk(
+                        message_id="m2",
                         session_update="agent_message_chunk",
                         content=schema.ImageContentBlock(
                             type="image", data="", uri="https://example.com/chart.png", mime_type="image/png"
@@ -481,7 +509,29 @@ class TestEmptyTurnWarning:
         finally:
             await cfg.aclose()
 
-        assert reply.body == "see the chart"
+        assert reply.body == "[image] https://example.com/chart.png"
+        assert reply.response.files == []
+
+    async def test_an_audio_block_with_no_data_is_not_a_file(self) -> None:
+        cfg = fake_acp_config(
+            ACPTurn(
+                updates=[
+                    _text_update("listen"),
+                    schema.AgentMessageChunk(
+                        session_update="agent_message_chunk",
+                        content=schema.AudioContentBlock(type="audio", data="", mime_type="audio/wav"),
+                    ),
+                ]
+            ),
+            permission_policy="auto",
+        )
+
+        try:
+            reply = await Agent("acp", config=cfg).ask("play something")
+        finally:
+            await cfg.aclose()
+
+        assert reply.body == "listen"
         assert reply.response.files == []
 
     async def test_text_turn_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:

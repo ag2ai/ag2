@@ -36,7 +36,8 @@ class StdioConnection:
         cwd: str | os.PathLike[str] | None = None,
     ) -> None:
         self._client = client
-        self._launch = (command, *args)
+        self._command = command
+        self._args = args
         self._env = env
         self._cwd = Path(cwd) if cwd is not None else None
         self._transport: (
@@ -45,8 +46,7 @@ class StdioConnection:
         self._conn: ClientSideConnection | None = None
 
     async def __aenter__(self) -> tuple[ClientSideConnection, Process]:
-        command, *args = self._launch
-        self._transport = spawn_stdio_transport(command, *args, env=self._env, cwd=self._cwd)
+        self._transport = spawn_stdio_transport(self._command, *self._args, env=self._env, cwd=self._cwd)
         reader, writer, process = await self._transport.__aenter__()
         try:
             # `use_unstable_protocol` is what registers the `elicitation/*` routes on the

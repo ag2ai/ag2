@@ -14,7 +14,7 @@ from acp import RequestError, schema
 from acp.agent.connection import AgentSideConnection
 
 from ag2 import Agent
-from ag2.acp.config import PermissionPolicy
+from ag2.acp import PermissionPolicy
 from ag2.acp.testing import duplex_acp_config
 
 SESSION_ID = "calling-session"
