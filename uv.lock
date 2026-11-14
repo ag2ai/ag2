@@ -195,6 +195,7 @@ dev = [
     { name = "types-aiobotocore", extra = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
+    { name = "unibaseio-membase" },
     { name = "watchdog" },
     { name = "websockets" },
     { name = "zizmor" },
@@ -227,6 +228,7 @@ docs = [
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
     { name = "transformers" },
     { name = "typer" },
+    { name = "unibaseio-membase" },
     { name = "watchdog" },
     { name = "websockets" },
 ]
@@ -252,6 +254,7 @@ optionals = [
     { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
     { name = "transformers" },
+    { name = "unibaseio-membase" },
     { name = "watchdog" },
     { name = "websockets" },
 ]
@@ -302,6 +305,7 @@ types = [
     { name = "types-aiobotocore", extra = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
+    { name = "unibaseio-membase" },
 ]
 
 [package.metadata]
@@ -409,6 +413,7 @@ dev = [
     { name = "types-aiobotocore", extras = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
+    { name = "unibaseio-membase", specifier = ">=0.4.0,<0.5" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
     { name = "zizmor", specifier = "==1.30.1" },
@@ -453,6 +458,7 @@ docs = [
     { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.5,<3", index = "https://download.pytorch.org/whl/cpu" },
     { name = "transformers", specifier = ">=4.57,<6" },
     { name = "typer", specifier = ">=0.22,<0.28" },
+    { name = "unibaseio-membase", specifier = ">=0.4.0,<0.5" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
 ]
@@ -498,6 +504,7 @@ optionals = [
     { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.5,<3" },
     { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.5,<3", index = "https://download.pytorch.org/whl/cpu" },
     { name = "transformers", specifier = ">=4.57,<6" },
+    { name = "unibaseio-membase", specifier = ">=0.4.0,<0.5" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
 ]
@@ -553,6 +560,7 @@ types = [
     { name = "types-aiobotocore", extras = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
+    { name = "unibaseio-membase", specifier = ">=0.4.0,<0.5" },
 ]
 
 [[package]]
@@ -6367,6 +6375,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/92/ff/5a28bdfd8c3ebec42564ac7d0e54ca3db65044a9314a97f9564fa7a1e926/tzdata-2026.3.tar.gz", hash = "sha256:4a1518b8993086a7982523e071643f3c0e5f213e75b21318e78bcabfff9d1415", size = 198674, upload-time = "2026-07-10T08:50:37.887Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/6d/b53b99a9f2766d095985947a5782f1702cabb129a34f7a802d7197af832f/tzdata-2026.3-py2.py3-none-any.whl", hash = "sha256:dc096730c87af6cab1b171c9d532be840741ff5d459015e7f6947bd7d7e54931", size = 348168, upload-time = "2026-07-10T08:50:36.46Z" },
+]
+
+[[package]]
+name = "unibaseio-membase"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/92/4c/38134f7a30d4f1a4408da195fc246d1c2c3d7d18377a2dfb61ae17577d1d/unibaseio_membase-0.4.0.tar.gz", hash = "sha256:12ce4b9876e2f823cc97f45c46149e004fe12ce0de05729ae33e8a9d692f9cec", size = 41069, upload-time = "2026-11-04T01:58:31.628Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/63/20a52eb05206d2a4e9128dd0476b255e8120c78f0ad4f1a413aca5ff574e/unibaseio_membase-0.4.0-py3-none-any.whl", hash = "sha256:9960254a48791d976fb81693c8753b057859139300bc651a952508d6fe0b85a5", size = 51360, upload-time = "2026-11-04T01:58:30.308Z" },
 ]
 
 [[package]]
