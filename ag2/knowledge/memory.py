@@ -11,11 +11,17 @@ from .base import ChangeCallback, ChangeSubscription, _normalize
 class _MemoryChangeSubscription:
     """Subscription handle for :class:`MemoryKnowledgeStore`."""
 
-    def __init__(self, subscribers: dict[str, list[ChangeCallback]], key: str, callback: ChangeCallback) -> None:
+    def __init__(
+        self, subscribers: dict[str, list["_MemoryChangeSubscription"]], key: str, callback: ChangeCallback
+    ) -> None:
         self._subscribers = subscribers
         self._key = key
         self._callback = callback
         self._closed = False
+
+    async def notify(self, path: str) -> None:
+        if not self._closed:
+            await self._callback(path)
 
     async def close(self) -> None:
         if self._closed:
@@ -25,7 +31,7 @@ class _MemoryChangeSubscription:
         if not bucket:
             return
         with contextlib.suppress(ValueError):
-            bucket.remove(self._callback)
+            bucket.remove(self)
         if not bucket:
             self._subscribers.pop(self._key, None)
 
@@ -40,7 +46,7 @@ class MemoryKnowledgeStore:
     def __init__(self) -> None:
         self._data: dict[str, str] = {}
         self._append_lock = asyncio.Lock()
-        self._subscribers: dict[str, list[ChangeCallback]] = {}
+        self._subscribers: dict[str, list[_MemoryChangeSubscription]] = {}
 
     async def read(self, path: str) -> str | None:
         return self._data.get(_normalize(path))
@@ -106,11 +112,12 @@ class MemoryKnowledgeStore:
 
     async def on_change(self, path: str, callback: ChangeCallback) -> ChangeSubscription:
         normalized = _normalize(path)
-        self._subscribers.setdefault(normalized, []).append(callback)
-        return _MemoryChangeSubscription(self._subscribers, normalized, callback)
+        subscription = _MemoryChangeSubscription(self._subscribers, normalized, callback)
+        self._subscribers.setdefault(normalized, []).append(subscription)
+        return subscription
 
     async def _notify(self, changed_path: str) -> None:
-        for subscribed_path, callbacks in list(self._subscribers.items()):
+        for subscribed_path, subscriptions in list(self._subscribers.items()):
             if changed_path == subscribed_path or changed_path.startswith(subscribed_path.rstrip("/") + "/"):
-                for callback in list(callbacks):
-                    await callback(changed_path)
+                for subscription in list(subscriptions):
+                    await subscription.notify(changed_path)
