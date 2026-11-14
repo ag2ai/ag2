@@ -250,6 +250,40 @@ class TestEventLogWriter:
             UnknownEvent(type_name="nonexistent.module.FakeEvent", data={"key": "val"})
         ]
 
+    async def test_torn_line_degrades_to_unknown_event(self) -> None:
+        store = MemoryKnowledgeStore()
+        writer = EventLogWriter(store)
+        stream_id = uuid4()
+        # The middle record was cut off mid-write (crash, full disk): one unterminated line.
+        lines = [
+            json.dumps({"type": "nonexistent.module.Before", "data": {"k": 1}}),
+            '{"type": "nonexistent.module.Torn", "data": {"k":',
+            json.dumps({"type": "nonexistent.module.After", "data": {"k": 3}}),
+        ]
+        await store.write(f"/log/{stream_id}.jsonl", "\n".join(lines))
+
+        # The whole log stays loadable: the torn line degrades, its raw text is preserved.
+        assert await writer.load(stream_id) == [
+            UnknownEvent(type_name="nonexistent.module.Before", data={"k": 1}),
+            UnknownEvent(type_name="", data={"raw": lines[1]}),
+            UnknownEvent(type_name="nonexistent.module.After", data={"k": 3}),
+        ]
+
+    async def test_non_object_line_degrades_to_unknown_event(self) -> None:
+        store = MemoryKnowledgeStore()
+        writer = EventLogWriter(store)
+        stream_id = uuid4()
+        lines = [
+            json.dumps({"type": "nonexistent.module.Good", "data": {"k": 1}}),
+            json.dumps(["not", "a", "record"]),
+        ]
+        await store.write(f"/log/{stream_id}.jsonl", "\n".join(lines))
+
+        assert await writer.load(stream_id) == [
+            UnknownEvent(type_name="nonexistent.module.Good", data={"k": 1}),
+            UnknownEvent(type_name="", data={"raw": lines[1]}),
+        ]
+
 
 @pytest.mark.asyncio
 class TestDefaultBootstrap:
