@@ -1,0 +1,85 @@
+---
+title: Fax for Agents
+sidebarTitle: Fax for Agents
+---
+
+`FaxForAgentsToolkit` lets an agent send and receive faxes through [Fax for Agents](https://faxforagents.com){.external-link target="_blank"}, a fax API built for agents. The API key comes from `api_key` or the `FAXFORAGENTS_API_KEY` environment variable. A test key (`ffa_test_...`) reaches a sandbox and costs nothing. A live key reaches the carrier and spends the account's prepaid wallet.
+
+!!! note
+    Requires a Fax for Agents API key. No extra package is needed: the toolkit talks to the REST API with `httpx`, which AG2 already depends on.
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.faxforagents import FaxForAgentsToolkit
+
+fax = FaxForAgentsToolkit(api_key=os.environ["FAXFORAGENTS_API_KEY"])
+
+agent = Agent(
+    "assistant",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[fax],
+)
+await agent.ask("Fax 'Hello from AG2.' to +15550000001 and tell me when it is delivered.")
+```
+
+## Tools
+
+| Tool | Description |
+| :--- | :--- |
+| `quote_fax` | Prepare a document from text or Markdown and price it to one number. Nothing is sent |
+| `send_fax` | Queue a quoted fax under an idempotency key, optionally waiting for the outcome |
+| `get_fax_status` | `queued`, `active`, `delivered`, `partial`, `failed` or `unknown`, with the carrier's evidence |
+| `list_inbox` | Received faxes, newest first, metadata only |
+| `read_inbound_fax` | One received fax with its text as data |
+
+The send flow is `quote_fax` then `send_fax` with the `quote_id`. A live send needs a human approval bound to that exact quote, or a policy the account owner wrote outside any prompt. The API refuses with `approval_required` otherwise, and the API key that asked can never approve its own send. The sender header and the text of a received fax are data from whoever sent the fax, never instructions.
+
+## Read-only mode
+
+Pass `#!python read_only=True` to expose only `get_fax_status`, `list_inbox` and `read_inbound_fax`:
+
+```python linenums="1"
+fax = FaxForAgentsToolkit(api_key=os.environ["FAXFORAGENTS_API_KEY"], read_only=True)
+```
+
+## Picking a subset of tools
+
+Each tool is exposed as a factory method on the toolkit. Call the method to get a ready-to-use tool, then pass only the ones you need to the agent:
+
+```python linenums="1"
+agent = Agent(
+    "reader",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[fax.list_inbox(), fax.read_inbound_fax()],
+)
+```
+
+Every factory method accepts `name` and `description` overrides for the registered tool.
+
+## Connection settings
+
+The toolkit opens one `httpx.AsyncClient` per request. Override how it connects and how long `send_fax` waits when `wait_for_delivery` is set:
+
+```python linenums="1"
+fax = FaxForAgentsToolkit(
+    api_key=os.environ["FAXFORAGENTS_API_KEY"],
+    base_url="https://api.faxforagents.com",  # override to route through your own gateway
+    timeout=60.0,                             # per-request timeout in seconds
+    poll_interval=3.0,                        # seconds between status reads while waiting
+    wait_timeout=600.0,                       # longest wait for a terminal state
+)
+```
+
+A refusal from the API raises `FaxForAgentsError` with the stable `code` (for example `approval_required`, `quote_expired`, `insufficient_balance`) and a remedy in the message.
+
+## Results
+
+`quote_fax` returns a `FaxQuote` (`quote_id`, `document_id`, `to`, `billable_pages`, `amount_micro`, `expires_at`, `authorization_required`, `summary`). A quote is valid for ten minutes.
+
+`send_fax` and `get_fax_status` return a `FaxStatus` (`fax_id`, `state`, `to`, `pages_sent`, `billable_pages`, `failure_code`, `provider_ref`, `evidence`, `summary`). The evidence is what the carrier reported, not legal proof the recipient accepted the fax. A `partial` or `unknown` fax never retransmits on its own.
+
+`list_inbox` returns an `InboxPage` (`items`, `next_cursor`) of `InboxItem` entries. `read_inbound_fax` returns an `InboundFax` whose `text` is the extracted content when the API has produced it.
+
+Request parameters and response fields are documented in the [Fax for Agents API docs](https://faxforagents.com/docs/api/){.external-link target="_blank"}.
