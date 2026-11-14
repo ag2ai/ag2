@@ -13,7 +13,7 @@ class EpisodicMemoryPolicy:
     """Injects past conversation summaries from the knowledge store.
 
     Reads /memory/conversations/ and injects the most recent summaries
-    into the system prompt. This gives the agent context about past episodes.
+    into the system prompt. Set ``max_episodes=0`` to omit past episodes.
     """
 
     name = "episodic_memory"
@@ -28,6 +28,9 @@ class EpisodicMemoryPolicy:
         events: list[BaseEvent],
         context: Context,
     ) -> tuple[list[str], list[BaseEvent]]:
+        if self._max == 0:
+            return prompts, events
+
         store = context.dependencies.get(KnowledgeStore)
         if not store:
             return prompts, events
