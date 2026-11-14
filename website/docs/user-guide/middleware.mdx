@@ -410,7 +410,7 @@ agent = Agent(..., middleware=[HistoryLimiter(max_events=100)])
 ```
 
 Trims the event history to a maximum number of events before the model call.
-It preserves the first `ModelRequest` when possible, and drops whatever the cut orphaned so the trimmed history still replays.
+It preserves the first `ModelRequest` when possible and drops events the cut orphaned so the trimmed history still replays. With `max_events=1`, it keeps the latest user request and subsequent events needed to continue its turn.
 
 `max_events` is a target rather than a hard cap, for the same reason it is one on the reduction policies — see [Reduction limits are targets](/docs/user-guide/advanced/assembly#reduction-limits-are-targets).
 

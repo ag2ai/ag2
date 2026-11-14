@@ -49,16 +49,21 @@ class _HistoryLimiter(BaseMiddleware):
             return await call_next(events, context)
 
         first = events[0]
-        if isinstance(first, ModelRequest):
-            if self._max_events == 1:
-                trimmed: Sequence[BaseEvent] = [first]
-            else:
-                # Reduced over the tail rather than the whole list: `first` is
-                # re-attached below, and a span widened past index 0 of the full
-                # list would duplicate it. Nothing is lost by excluding it — a
-                # ModelRequest answers no call and anchors no builtin one.
-                tail = events[1:]
-                trimmed = [first, *replayable_span(tail, len(tail) - (self._max_events - 1))]
+        if self._max_events == 1:
+            cut = next(
+                (
+                    len(events) - offset - 1
+                    for offset, request in enumerate(reversed(events))
+                    if isinstance(request, ModelRequest) and request.origin == "user"
+                ),
+                len(events) - 1,
+            )
+            # Preserve the current question and its tool round when present.
+            trimmed: Sequence[BaseEvent] = replayable_span(events, cut)
+        elif isinstance(first, ModelRequest):
+            # Reduce over the tail so replay can widen without duplicating first.
+            tail = events[1:]
+            trimmed = [first, *replayable_span(tail, len(tail) - (self._max_events - 1))]
         else:
             trimmed = replayable_span(events, len(events) - self._max_events)
 
