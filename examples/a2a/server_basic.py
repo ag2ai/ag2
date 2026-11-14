@@ -22,7 +22,7 @@ agent = Agent(
 
 async def main() -> None:
     server = A2AServer(agent)
-    card = build_card(agent)
+    card = build_card(agent, url="http://127.0.0.1:8000")
     asgi = server.build_jsonrpc(url="http://127.0.0.1:8000", card=card)
 
     await uvicorn.Server(uvicorn.Config(asgi, host="127.0.0.1", port=8000)).serve()
