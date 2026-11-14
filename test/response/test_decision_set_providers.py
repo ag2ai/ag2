@@ -6,10 +6,11 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Annotated, Any, Required, TypedDict
+from typing import Annotated, Any, Required
 
 import pytest
 from pydantic import AliasPath, BaseModel, ConfigDict, Field
+from typing_extensions import TypedDict
 
 pytest.importorskip("openai")
 pytest.importorskip("typesafe_sdk")

@@ -302,6 +302,9 @@ def _fields_by_key(response: ResponseProto[Any]) -> dict[str, _Field]:
         info = pydantic_fields.get(name) or assigned.get(name) or _annotated_field_info(hint)
         key = _json_key(name, info)
         fields[key] = _Field(name, hint, _input_key(name, key, info, by_alias=by_alias, by_name=by_name))
+    # Pydantic versions differ on whether a class validated by name has its schema keyed by name or alias.
+    for field in list(fields.values()):
+        fields.setdefault(field.name, field)
     return fields
 
 
