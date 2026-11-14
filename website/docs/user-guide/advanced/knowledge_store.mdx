@@ -176,3 +176,73 @@ store = LockedKnowledgeStore(inner, lock=your_distributed_lock)
 
 !!! note
     Reads are not locked (safe for concurrent access on all backends). Only `write`, `delete`, and `append` acquire the lock. Lock keys are of the form `store:write:{path}`.
+
+## Retrieval memory — relevance-based recall over the store
+
+Everything so far retrieves by *path* and *recency*. The optional retrieval layer (`ag2.knowledge.retrieval`) adds retrieval by *meaning*: it indexes the store's memory files as chunk vectors and answers text queries with the closest chunks.
+
+```python linenums="1"
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.knowledge.retrieval import (
+    HashingEmbedder,
+    KnowledgeIndexer,
+    MemoryRetriever,
+    StoreBackedIndex,
+)
+
+store = MemoryKnowledgeStore()
+embedder = HashingEmbedder()  # dependency-free; wrap a real model via CallableEmbedder
+index = StoreBackedIndex(store, embedder_name=embedder.name, dimension=embedder.dimension)
+indexer = KnowledgeIndexer(store, index, embedder)
+await indexer.sync()
+
+retriever = MemoryRetriever(index, embedder, indexer)
+memories = await retriever.retrieve("how do we deploy the service?", k=5)
+# memories[i].path / .score / .text — attributed, ranked, deduplicated per file
+```
+
+The index persists *through the store* as a sidecar under `/memory/.index/` (see `docs/adr/0036-retrieval-memory-index-lives-in-the-knowledge-store.md`), so the same code works over the memory, disk, sqlite, and redis backends. The header pins the embedder name and dimension: loading an index written by a different embedder yields an empty index with `needs_rebuild=True` and the next `indexer.sync()` rebuilds it — vector spaces are never mixed.
+
+### Facts with a lifecycle
+
+`FactStore` records durable statements one JSON file per fact under `/memory/facts/`, each with provenance, a status (`active` / `superseded` / `forgotten`), and supersession links — so a corrected preference replaces its stale version instead of coexisting with it:
+
+```python linenums="1"
+from ag2.knowledge import Fact, FactStore
+
+facts = FactStore(store)
+old = Fact(text="User prefers tea.", subject="user", kind="preference")
+await facts.put(old)
+
+replacement = Fact(text="User prefers coffee.", subject="user", kind="preference")
+await facts.supersede(old.id, replacement)  # old is kept, but never injected again
+```
+
+`FactExtractionAggregate` closes the loop: wire it as an aggregation strategy and it extracts candidate facts from each conversation (one structured-output model call, or a deterministic `extractor=` plug-in), reconciles them against the stored facts (add / update / supersede / noop), and syncs the index so the new facts are retrievable immediately.
+
+### Injecting retrieved memory
+
+`RetrievalMemoryPolicy` (in `ag2.policies`) is an assembly policy that retrieves for the current request — the latest user input — under a token budget, never injecting superseded or forgotten facts, and attributing every item to its source path:
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.assembly import AssemblerMiddleware
+from ag2.config import OpenAICompletionsConfig
+from ag2.knowledge import KnowledgePlugin
+from ag2.middleware import Middleware
+from ag2.policies import RetrievalMemoryPolicy
+
+agent = Agent(
+    "assistant",
+    config=OpenAICompletionsConfig(model="gpt-5"),
+    plugins=[KnowledgePlugin(store)],
+    middleware=[
+        Middleware(
+            AssemblerMiddleware,
+            policies=[RetrievalMemoryPolicy(retriever, k_facts=8, token_budget=1500)],
+        ),
+    ],
+)
+```
+
+With `transparent=True` (the default), each injection is attributed inline — `(source: /memory/facts/<id>.json, score 0.82)` — and published as a `MemoryInjected` event on the stream, which the memory scorers in `ag2.eval.scorers` grade: `memory_recall`, `memory_precision`, and `stale_fact_injection`.

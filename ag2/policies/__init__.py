@@ -7,6 +7,7 @@
 from .alert import AlertPolicy
 from .conversation import ConversationPolicy
 from .episodic_memory import EpisodicMemoryPolicy
+from .retrieval_memory import RetrievalMemoryPolicy
 from .sliding_window import SlidingWindowPolicy
 from .token_budget import TokenBudgetPolicy
 from .working_memory import WorkingMemoryPolicy
@@ -15,6 +16,7 @@ __all__ = (
     "AlertPolicy",
     "ConversationPolicy",
     "EpisodicMemoryPolicy",
+    "RetrievalMemoryPolicy",
     "SlidingWindowPolicy",
     "TokenBudgetPolicy",
     "WorkingMemoryPolicy",
