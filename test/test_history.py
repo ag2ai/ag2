@@ -4,8 +4,8 @@
 
 import pytest
 
-from ag2 import Agent
-from ag2.events import ModelRequest, ModelResponse
+from ag2 import Agent, MemoryStream
+from ag2.events import ModelRequest, ModelResponse, TextInput
 from ag2.testing import TestConfig
 
 
@@ -70,3 +70,20 @@ async def test_history_preserves_user_assistant_alternation() -> None:
 
     roles = [type(e).__name__ for e in events if isinstance(e, (ModelRequest, ModelResponse))]
     assert roles == ["ModelRequest", "ModelResponse"] * 3
+
+
+@pytest.mark.asyncio
+async def test_editing_retrieved_events_does_not_change_memory_history() -> None:
+    stream = MemoryStream()
+    original = ModelRequest([TextInput("Keep this message")])
+    await stream.history.replace([original])
+
+    events = await stream.history.get_events()
+    # A backend may return a mutable result. Editing that result must stay local.
+    if isinstance(events, list):
+        events.clear()
+
+    assert list(await stream.history.get_events()) == [original]
+
+    await stream.history.replace([])
+    assert list(await stream.history.get_events()) == []
