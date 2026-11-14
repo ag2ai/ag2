@@ -1116,6 +1116,13 @@ class TestStripMarkdownFences:
     def test_single_line_fence_with_language_tag(self) -> None:
         assert strip_markdown_fences('```json {"key": "value"}```') == '{"key": "value"}'
 
+    def test_single_line_fence_with_language_tag_and_standalone_closing_fence(self) -> None:
+        # A payload written on the opening line may still be followed by a
+        # closing fence on its own line. It must not be silently discarded.
+        assert strip_markdown_fences('```json {"key": "value"}\n```') == '{"key": "value"}'
+        assert strip_markdown_fences("```json[1, 2]\n```") == "[1, 2]"
+        assert strip_markdown_fences('```JSON {"a": 1}\r\n```') == '{"a": 1}'
+
     def test_single_line_fence_with_language_tag_before_array(self) -> None:
         assert strip_markdown_fences("```json[1, 2]```") == "[1, 2]"
 
