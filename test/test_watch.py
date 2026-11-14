@@ -622,3 +622,28 @@ class TestCronWatchExpressions:
         watch_zero = CronWatch("0 9 * * 0")
         now = datetime.datetime(2026, 3, 21, 10, 0, 0)
         assert watch_seven._next_fire_time(now) == watch_zero._next_fire_time(now)
+
+    def test_leap_day_beyond_one_year(self) -> None:
+        cron = CronWatch("0 9 29 2 *")
+        now = datetime.datetime(2026, 11, 14, 9)
+        assert cron._next_fire_time(now) == datetime.datetime(2028, 2, 29, 9)
+
+    def test_impossible_date_does_not_fall_back_to_unmatched_time(self) -> None:
+        cron = CronWatch("0 9 30 2 *")
+        with pytest.raises(ValueError, match="no matching date"):
+            cron._next_fire_time(datetime.datetime(2026, 11, 14, 9))
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("expression", ["0 9 30 2 *", "60 9 * * *"])
+    async def test_invalid_schedule_cannot_be_armed(self, expression: str) -> None:
+        watch = CronWatch(expression)
+
+        async def callback(_events: list, _ctx: Context) -> None:
+            pytest.fail("an invalid schedule must never fire")
+
+        try:
+            with pytest.raises(ValueError, match="Invalid cron"):
+                watch.arm(MemoryStream(), callback)
+            assert not watch.is_armed
+        finally:
+            watch.disarm()
