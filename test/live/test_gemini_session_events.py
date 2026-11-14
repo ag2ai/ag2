@@ -24,29 +24,29 @@ from ag2.events import (
 )
 from ag2.live import gemini
 
-pytestmark = pytest.mark.asyncio
-
-AUDIO = b"\x00\x01"
-THOUGHT = gtypes.Part(text="Planning a short greeting.", thought=True)
-TURN_COMPLETE = gtypes.LiveServerMessage(server_content=gtypes.LiveServerContent(turn_complete=True))
+pytestmark = [pytest.mark.asyncio, pytest.mark.gemini]
 
 
 class FakeSession:
     """Stands in for `google.genai.live.AsyncSession`: replays one model turn, then closes."""
 
-    def __init__(self, turn: tuple[gtypes.LiveServerMessage, ...]) -> None:
+    def __init__(self, turn: tuple[gtypes.LiveServerContent, ...]) -> None:
         # `receive()` covers one turn per call; an empty one is a closed connection.
         self._turns = [turn, ()]
 
     async def receive(self) -> AsyncGenerator[gtypes.LiveServerMessage]:
-        for message in self._turns.pop(0):
-            yield message
+        for content in self._turns.pop(0):
+            yield gtypes.LiveServerMessage(server_content=content)
 
 
 class FakeClient:
-    """Stands in for `google.genai.Client`: `client.aio.live.connect(...)` opens a `FakeSession`."""
+    """Stands in for `google.genai.Client`: `client.aio.live.connect(...)` opens a `FakeSession`.
 
-    def __init__(self, *turn: gtypes.LiveServerMessage) -> None:
+    The SDK always dials `wss://`, so a local websocket server (as in the Mistral
+    tests) would need a TLS certificate; a duck-typed client is the lighter seam.
+    """
+
+    def __init__(self, *turn: gtypes.LiveServerContent) -> None:
         self._turn = turn
         self.aio = self
         self.live = self
@@ -56,65 +56,51 @@ class FakeClient:
         yield FakeSession(self._turn)
 
 
-def model_turn(*parts: gtypes.Part, transcription: str | None = None) -> gtypes.LiveServerMessage:
-    """A server message with `parts` of the model turn and, optionally, the transcription of its audio."""
-    return gtypes.LiveServerMessage(
-        server_content=gtypes.LiveServerContent(
-            model_turn=gtypes.Content(role="model", parts=list(parts)),
-            output_transcription=gtypes.Transcription(text=transcription) if transcription else None,
-        ),
-    )
+class Recorder:
+    """Collects every event put on the stream."""
+
+    def __init__(self) -> None:
+        self.seen: list[BaseEvent] = []
+
+    async def record(self, event: BaseEvent) -> None:
+        self.seen.append(event)
 
 
-async def run_turn(config: gemini.RealTimeConfig) -> list[BaseEvent]:
-    """Run one model turn and return what the session put on the stream."""
-    context = ConversationContext(stream=MemoryStream())
-    seen: list[BaseEvent] = []
-
-    async def collect(event: BaseEvent) -> None:
-        seen.append(event)
-
-    context.stream.subscribe(collect)
-    async with context.stream.get(ModelResponse) as turn_done, config.session(context, serializer=None):  # type: ignore[arg-type]
-        await turn_done
-
-    return seen
-
-
-async def test_thought_summary_is_reasoning_not_reply_text() -> None:
+async def test_thought_summaries_are_reasoning_not_reply_text() -> None:
+    # The message layout of one real turn of this model, with no thinking config
+    # set: each thought summary arrives in a message of its own, then the
+    # transcription and the audio of the reply.
     client = FakeClient(
-        model_turn(THOUGHT),
-        model_turn(
-            gtypes.Part(inline_data=gtypes.Blob(data=AUDIO, mime_type="audio/pcm;rate=24000")),
-            transcription="Hello there.",
+        gtypes.LiveServerContent(
+            model_turn=gtypes.Content(parts=[gtypes.Part(text="**Analyzing the Problem**", thought=True)]),
         ),
-        TURN_COMPLETE,
-    )
-    config = gemini.RealTimeConfig("gemini-3.8-live-extended-thinking", client=client)  # type: ignore[arg-type]
-
-    assert await run_turn(config) == [
-        ModelReasoning("Planning a short greeting."),
-        ModelMessageChunk("Hello there."),
-        SynthesizedAudioEvent(AUDIO),
-        ModelResponse(ModelMessage("Hello there.")),
-    ]
-
-
-async def test_text_parts_beside_a_thought_summary_are_the_reply_text() -> None:
-    client = FakeClient(
-        model_turn(THOUGHT, gtypes.Part(text="Hello ")),
-        model_turn(gtypes.Part(text="there.")),
-        TURN_COMPLETE,
+        gtypes.LiveServerContent(
+            model_turn=gtypes.Content(parts=[gtypes.Part(text="**Calculating the Solution**", thought=True)]),
+        ),
+        gtypes.LiveServerContent(output_transcription=gtypes.Transcription(text="The ball")),
+        gtypes.LiveServerContent(output_transcription=gtypes.Transcription(text=" costs 0.05.")),
+        gtypes.LiveServerContent(
+            model_turn=gtypes.Content(parts=[gtypes.Part(inline_data=gtypes.Blob(data=b"\x00\x01"))]),
+        ),
+        gtypes.LiveServerContent(turn_complete=True),
     )
     config = gemini.RealTimeConfig(
-        "gemini-3.8-live",
-        output=gemini.TextOutput(),
+        "gemini-2.5-flash-native-audio-preview-09-2025",
         client=client,  # type: ignore[arg-type]
     )
 
-    assert await run_turn(config) == [
-        ModelReasoning("Planning a short greeting."),
-        ModelMessageChunk("Hello "),
-        ModelMessageChunk("there."),
-        ModelResponse(ModelMessage("Hello there.")),
+    context = ConversationContext(stream=MemoryStream())
+    recorder = Recorder()
+    context.stream.subscribe(recorder.record)
+
+    async with context.stream.get(ModelResponse) as turn_done, config.session(context, serializer=None):  # type: ignore[arg-type]
+        await turn_done
+
+    assert recorder.seen == [
+        ModelReasoning("**Analyzing the Problem**"),
+        ModelReasoning("**Calculating the Solution**"),
+        ModelMessageChunk("The ball"),
+        ModelMessageChunk(" costs 0.05."),
+        SynthesizedAudioEvent(b"\x00\x01"),
+        ModelResponse(ModelMessage("The ball costs 0.05.")),
     ]
