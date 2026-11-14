@@ -234,7 +234,7 @@ def _field_specs(
         raise error("`response_schema` has no fields; a class needs at least one question.")
 
     required = set(root.get("required", ()))
-    fields = _fields_by_key(response)
+    fields = _fields_by_key(response, error)
     specs: dict[str, DecisionSpec] = {}
     keys: dict[str, str] = {}
     for key, prop in root["properties"].items():
@@ -277,12 +277,13 @@ class _Field:
     input_key: str | None  # the key validation reads the field from; ``None`` for a nested ``AliasPath``
 
 
-def _fields_by_key(response: ResponseProto[Any]) -> dict[str, _Field]:
+def _fields_by_key(response: ResponseProto[Any], error: type[NotADecisionError]) -> dict[str, _Field]:
     """Each field of the class by its JSON schema key.
 
     The ``Question`` marker does not reach the JSON schema, so it is read from the annotations,
     which are keyed by field name; the schema is keyed by alias where a field has one. The key an
     answer is rendered under is the one validation reads, which the class config can make the name.
+    Two fields under one key would share a question and its answer, so that is rejected.
     """
     if not isinstance(response, ResponseSchema):
         return {}
@@ -301,7 +302,13 @@ def _fields_by_key(response: ResponseProto[Any]) -> dict[str, _Field]:
         hint = _strip_qualifiers(hint)
         info = pydantic_fields.get(name) or assigned.get(name) or _annotated_field_info(hint)
         key = _json_key(name, info)
-        fields[key] = _Field(name, hint, _input_key(name, key, info, by_alias=by_alias, by_name=by_name))
+        field = _Field(name, hint, _input_key(name, key, info, by_alias=by_alias, by_name=by_name))
+        if key in fields:
+            raise error(
+                f"Fields {fields[key].name!r} and {name!r} of `response_schema` are both validated from key "
+                f"{key!r}; each question must be a field with a key of its own."
+            )
+        fields[key] = field
     # Pydantic versions differ on whether a class validated by name has its schema keyed by name or alias.
     for field in list(fields.values()):
         fields.setdefault(field.name, field)
