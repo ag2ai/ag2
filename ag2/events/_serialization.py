@@ -7,6 +7,8 @@
 import base64
 import importlib
 from dataclasses import fields, is_dataclass
+from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeGuard
 from uuid import UUID
@@ -63,6 +65,10 @@ def serialize_value(value: Any) -> Any:
         return [serialize_value(v) for v in value]
     if isinstance(value, (bytes, bytearray)):
         return {"__bytes__": base64.b64encode(value).decode("ascii")}
+    if isinstance(value, Decimal):
+        return {"__decimal__": str(value)}
+    if isinstance(value, datetime):
+        return {"__datetime__": value.isoformat()}
     if isinstance(value, UUID):
         return {"__uuid__": str(value)}
     if is_dataclass(value) and not isinstance(value, type):
@@ -102,6 +108,10 @@ def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
                 return event_cls(**nested_data)
         if "__bytes__" in value:
             return base64.b64decode(value["__bytes__"])
+        if value.keys() == {"__decimal__"} and isinstance(value["__decimal__"], str):
+            return Decimal(value["__decimal__"])
+        if value.keys() == {"__datetime__"} and isinstance(value["__datetime__"], str):
+            return datetime.fromisoformat(value["__datetime__"])
         if "__uuid__" in value:
             return UUID(value["__uuid__"])
         if "__enum__" in value:
