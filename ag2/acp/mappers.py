@@ -9,7 +9,7 @@ against the real SDK types rather than stringly-typed dicts.
 
 Both directions live here:
 
-* **ACP -> AG2** (:func:`map_session_update`, :func:`content_blocks_to_text`, …)
+* **ACP -> AG2** (:func:`map_session_update`, :func:`block_text`, …)
   serves the *client* side — AG2 driving an external CLI agent.
 * **AG2 -> ACP** (:func:`prompt_to_inputs`, :func:`event_to_session_update`,
   :func:`history_to_session_updates`) serves the *serving* side —
@@ -22,7 +22,6 @@ import logging
 from collections.abc import Sequence
 from typing import Any, cast
 
-import acp
 from acp import schema
 
 from ag2.events import (
@@ -60,35 +59,96 @@ DEFAULT_TOOL_KIND: "schema.ToolKind" = "other"
 
 
 def block_text(block: ContentBlock | None) -> str:
-    """The text of a single content block, or ``""`` if it carries no text."""
-    return block.text if isinstance(block, schema.TextContentBlock) else ""
+    """The text of a single content block, or ``""`` if it carries no text.
+
+    Text, a text resource, a resource link and an image that only names a ``uri``
+    all read as text; media with bytes and blob resources do not (see
+    :func:`block_to_files`).
+    """
+    text = _textual_block_text(block)
+    if text is not None:
+        return text
+    uri = _image_uri(block)
+    return f"[image] {uri}" if uri else ""
+
+
+def _image_uri(block: ContentBlock | None) -> str | None:
+    """The ``uri`` of an image block that carries no bytes, or ``None`` otherwise.
+
+    Such an image is a link, not a file: it is read as text and never fetched.
+    """
+    if isinstance(block, schema.ImageContentBlock) and not block.data:
+        return block.uri or None
+    return None
+
+
+def _textual_block_text(block: ContentBlock | None) -> str | None:
+    """The text a textual block reads as, or ``None`` for a block that is not textual.
+
+    The one place that decides which blocks are text, shared by :func:`block_text`
+    and :func:`block_to_input`. Resource *links* are named, never fetched: a URI
+    named by a Client is context, not authorization to dereference it.
+    """
+    if isinstance(block, schema.TextContentBlock):
+        return block.text
+    if isinstance(block, schema.EmbeddedResourceContentBlock) and isinstance(
+        block.resource, schema.TextResourceContents
+    ):
+        return block.resource.text
+    if isinstance(block, schema.ResourceContentBlock):
+        label = block.name or block.title or block.uri
+        return f"[resource] {label} ({block.uri})"
+    return None
 
 
 def block_to_files(block: ContentBlock | None) -> list[BinaryResult]:
-    """Decode a single ``image``/``audio`` content block into binary results."""
+    """Decode a single ``image``/``audio``/blob-resource content block into binary results.
+
+    An image or audio block with empty ``data`` carries no bytes, so it is not a
+    file; an image that names a ``uri`` reads as text instead (see :func:`block_text`).
+    """
     if isinstance(block, (schema.ImageContentBlock, schema.AudioContentBlock)):
+        if not block.data:
+            return []
         return [BinaryResult(data=base64.b64decode(block.data), metadata={"mimeType": block.mime_type})]
+    blob = _embedded_blob(block)
+    if blob is not None:
+        data, mime_type = blob
+        return [BinaryResult(data=data, metadata={"mimeType": mime_type})]
     return []
 
 
-def content_blocks_to_text(blocks: list[ContentBlock] | None) -> str:
-    """Concatenate the text of any ``text`` content blocks; ignore the rest."""
-    return "".join(block_text(b) for b in (blocks or ()))
+def _embedded_blob(block: ContentBlock | None) -> tuple[bytes, str] | None:
+    """The bytes and MIME type of an embedded blob resource, or ``None`` for any other block."""
+    if isinstance(block, schema.EmbeddedResourceContentBlock) and isinstance(
+        block.resource, schema.BlobResourceContents
+    ):
+        return base64.b64decode(block.resource.blob), block.resource.mime_type or "application/octet-stream"
+    return None
 
 
 def content_blocks_to_files(blocks: list[ContentBlock] | None) -> list[BinaryResult]:
-    """Decode ``image``/``audio`` content blocks into binary results."""
+    """Decode the binary content blocks (image, audio, blob resource) into binary results."""
     files: list[BinaryResult] = []
     for b in blocks or ():
         files.extend(block_to_files(b))
     return files
 
 
-def _tool_content_text(content: list[ToolCallContent] | None) -> str:
-    """Extract text from a tool call's ``content`` list (``ContentToolCallContent``)."""
-    return "".join(
-        block_text(item.content) for item in (content or ()) if isinstance(item, schema.ContentToolCallContent)
-    )
+def _tool_call_result(content: list[ToolCallContent] | None, status: "schema.ToolCallStatus | None") -> ToolResult:
+    """A tool call's ``content`` list as a result, one part per content item.
+
+    Only ``ContentToolCallContent`` items carry content blocks, and an empty text
+    block carries nothing; the status stands in when no item has content.
+    """
+    parts = [
+        part
+        for item in (content or ())
+        if isinstance(item, schema.ContentToolCallContent)
+        and (part := block_to_input(item.content)) is not None
+        and not (isinstance(part, TextInput) and not part.content)
+    ]
+    return ToolResult(parts=parts) if parts else ToolResult(status or "")
 
 
 def map_usage(usage: schema.Usage | None) -> Usage:
@@ -134,11 +194,10 @@ def map_session_update(update: SessionUpdate) -> BaseEvent | None:
         )
 
     if isinstance(update, schema.ToolCallProgress):
-        text = _tool_content_text(update.content) or (update.status or "")
         return BuiltinToolResultEvent(
             parent_id=update.tool_call_id,
             name=update.title,
-            result=ToolResult(text),
+            result=_tool_call_result(update.content, update.status),
         )
 
     if isinstance(update, schema.AgentPlanUpdate):
@@ -178,31 +237,27 @@ def block_to_input(block: ContentBlock) -> Input | None:
     context, not authorization to dereference it. The link is passed through as
     text so the model can see it was referenced.
     """
-    if isinstance(block, schema.TextContentBlock):
-        return TextInput(block.text)
+    text = _textual_block_text(block)
+    if text is not None:
+        return TextInput(text)
 
     if isinstance(block, schema.ImageContentBlock):
         if block.data:
             return ImageInput(data=base64.b64decode(block.data), media_type=cast(Any, block.mime_type))
-        return ImageInput(block.uri) if block.uri else None
+        uri = _image_uri(block)
+        return ImageInput(uri) if uri else None
 
     if isinstance(block, schema.AudioContentBlock):
+        if not block.data:
+            return None
         return AudioInput(data=base64.b64decode(block.data), media_type=cast(Any, block.mime_type))
 
-    if isinstance(block, schema.EmbeddedResourceContentBlock):
-        resource = block.resource
-        if isinstance(resource, schema.TextResourceContents):
-            return TextInput(resource.text)
+    blob = _embedded_blob(block)
+    if blob is not None:
         # A blob the Client inlined — its bytes travelled with the prompt, so
         # using them reads nothing from the host filesystem.
-        return DocumentInput(
-            data=base64.b64decode(resource.blob),
-            media_type=cast(Any, resource.mime_type or "application/octet-stream"),
-        )
-
-    if isinstance(block, schema.ResourceContentBlock):
-        label = block.name or block.title or block.uri
-        return TextInput(f"[resource] {label} ({block.uri})")
+        data, mime_type = blob
+        return DocumentInput(data=data, media_type=cast(Any, mime_type))
 
     return None
 
@@ -239,20 +294,20 @@ def input_to_prompt_block(part: Input, capabilities: "schema.PromptCapabilities 
     """
     caps = capabilities or schema.PromptCapabilities()
     if isinstance(part, BinaryInput):
-        data = base64.b64encode(part.data).decode()
-        if part.kind is BinaryType.IMAGE and caps.image:
-            return acp.image_block(data, str(part.media_type))
-        if part.kind is BinaryType.AUDIO and caps.audio:
-            return acp.audio_block(data, str(part.media_type))
+        if (part.kind is BinaryType.IMAGE and caps.image) or (part.kind is BinaryType.AUDIO and caps.audio):
+            return input_to_block(part)
         if part.kind is BinaryType.DOCUMENT and caps.embedded_context:
             name = str(part.vendor_metadata.get("filename") or "document")
-            return acp.resource_block(
-                schema.BlobResourceContents(blob=data, mime_type=str(part.media_type), uri=f"attachment:{name}")
+            return schema.EmbeddedResourceContentBlock(
+                type="resource",
+                resource=schema.BlobResourceContents(
+                    blob=base64.b64encode(part.data).decode(), mime_type=str(part.media_type), uri=f"attachment:{name}"
+                ),
             )
         logger.warning("ACP agent did not advertise %s prompts; sent a placeholder", part.kind.value)
-        return acp.text_block(f"[{part.kind.value}]")
+        return text_block(f"[{part.kind.value}]")
     if isinstance(part, UrlInput):
-        return acp.resource_link_block(name=part.url, uri=part.url)
+        return schema.ResourceContentBlock(type="resource_link", name=part.url, uri=part.url)
     return input_to_block(part)
 
 
@@ -271,10 +326,10 @@ def event_to_session_update(event: BaseEvent, *, stream_thoughts: bool = False) 
     the reply twice.
     """
     if isinstance(event, ModelMessageChunk):
-        return acp.update_agent_message_text(event.content)
+        return schema.AgentMessageChunk(content=text_block(event.content))
 
     if isinstance(event, ModelReasoning):
-        return acp.update_agent_thought_text(event.content) if stream_thoughts else None
+        return schema.AgentThoughtChunk(content=text_block(event.content)) if stream_thoughts else None
 
     if isinstance(event, ToolResultEvent):
         return _tool_result_update(event)
@@ -286,8 +341,8 @@ def event_to_session_update(event: BaseEvent, *, stream_thoughts: bool = False) 
 
 
 def _tool_call_start(event: ToolCallEvent) -> SessionUpdate:
-    return acp.start_tool_call(
-        event.id,
+    return schema.ToolCallStart(
+        tool_call_id=event.id,
         title=event.name,
         kind=DEFAULT_TOOL_KIND,
         status="in_progress",
@@ -298,18 +353,27 @@ def _tool_call_start(event: ToolCallEvent) -> SessionUpdate:
 def _tool_result_update(event: ToolResultEvent) -> SessionUpdate:
     # ToolErrorEvent subclasses ToolResultEvent, so it must be tested first.
     if isinstance(event, ToolErrorEvent):
-        return acp.update_tool_call(
-            event.parent_id,
+        return schema.ToolCallProgress(
+            tool_call_id=event.parent_id,
             title=event.name,
             status="failed",
-            content=[acp.tool_content(acp.text_block(str(event.error)))],
+            content=[_text_tool_content(str(event.error))],
         )
-    return acp.update_tool_call(
-        event.parent_id,
+    return schema.ToolCallProgress(
+        tool_call_id=event.parent_id,
         title=event.name,
         status="completed",
-        content=[acp.tool_content(acp.text_block(tool_result_text(event.result)))],
+        content=[_text_tool_content(tool_result_text(event.result))],
     )
+
+
+def text_block(text: str) -> schema.TextContentBlock:
+    """A plain ACP text content block."""
+    return schema.TextContentBlock(type="text", text=text)
+
+
+def _text_tool_content(text: str) -> schema.ContentToolCallContent:
+    return schema.ContentToolCallContent(type="content", content=text_block(text))
 
 
 def input_to_block(part: Input) -> ContentBlock:
@@ -321,21 +385,21 @@ def input_to_block(part: Input) -> ContentBlock:
     binary parts: the Client is being reminded what it sent, not re-sent it.
     """
     if isinstance(part, TextInput):
-        return acp.text_block(part.content)
+        return text_block(part.content)
     if isinstance(part, DataInput):
-        return acp.text_block(_render_data(part.data))
+        return text_block(_render_data(part.data))
     if isinstance(part, BinaryInput):
         data = base64.b64encode(part.data).decode()
         if part.kind is BinaryType.IMAGE:
             return schema.ImageContentBlock(type="image", data=data, mime_type=str(part.media_type))
         if part.kind is BinaryType.AUDIO:
             return schema.AudioContentBlock(type="audio", data=data, mime_type=str(part.media_type))
-        return acp.text_block(f"[{part.kind.value}]")
+        return text_block(f"[{part.kind.value}]")
     if isinstance(part, UrlInput):
-        return acp.text_block(f"[{part.kind.value}] {part.url}")
+        return text_block(f"[{part.kind.value}] {part.url}")
     if isinstance(part, FileIdInput):
-        return acp.text_block(f"[file] {part.filename or part.file_id}")
-    return acp.text_block(f"[{getattr(part, 'kind', 'input')}]")
+        return text_block(f"[file] {part.filename or part.file_id}")
+    return text_block(f"[{getattr(part, 'kind', 'input')}]")
 
 
 def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str) -> list[SessionUpdate]:
@@ -400,7 +464,7 @@ def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str
                     schema.AgentMessageChunk(
                         session_update="agent_message_chunk",
                         message_id=f"{session_id}:a{agent_turns}",
-                        content=acp.text_block(event.message.content),
+                        content=text_block(event.message.content),
                     )
                 )
             for call in event.tool_calls.calls:
@@ -421,7 +485,7 @@ def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str
                 schema.AgentMessageChunk(
                     session_update="agent_message_chunk",
                     message_id=f"{session_id}:a{agent_turns}",
-                    content=acp.text_block(event.content),
+                    content=text_block(event.content),
                 )
             )
         elif isinstance(event, HumanMessage):
@@ -430,7 +494,7 @@ def history_to_session_updates(events: "Sequence[BaseEvent]", *, session_id: str
                 schema.UserMessageChunk(
                     session_update="user_message_chunk",
                     message_id=f"{session_id}:u{user_turns}",
-                    content=acp.text_block(event.content),
+                    content=text_block(event.content),
                 )
             )
     return updates

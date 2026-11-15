@@ -5,8 +5,8 @@
 
 from typing import Any
 
-import acp
 import pytest
+from acp import schema
 from acp.exceptions import RequestError
 from dirty_equals import IsPartialDict
 
@@ -63,7 +63,9 @@ class TestWithoutAHook:
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError) as caught:
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         assert caught.value.data == IsPartialDict({
             "type": "HumanInputUnsupportedError",
@@ -78,7 +80,9 @@ class TestWithoutAHook:
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError) as caught:
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         assert "hitl_hook" in caught.value.data["reason"]  # type: ignore[index]
 
@@ -94,7 +98,9 @@ class TestWithoutAHook:
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError):
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         assert answers == []
 
@@ -109,7 +115,9 @@ class TestWithAHook:
 
         async with connect(ACPAgent(agent, hitl_hook=answer)) as (conn, recorder):
             session = await conn.new_session(cwd="/tmp")
-            response = await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+            response = await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+            )
 
         assert response.stop_reason == "end_turn"
         assert answers == ["blue"]
@@ -124,7 +132,7 @@ class TestWithAHook:
 
         async with connect(ACPAgent(agent, hitl_hook=answer)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
 
         assert asked == [QUESTION]
 
@@ -137,7 +145,7 @@ class TestWithAHook:
 
         async with connect(ACPAgent(agent, hitl_hook=answer)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
 
         assert answers == ["green"]
 
@@ -150,7 +158,7 @@ class TestWithAHook:
 
         async with connect(ACPAgent(agent, hitl_hook=answer)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
 
         assert answers == ["ada"]
 
@@ -165,8 +173,8 @@ class TestWithAHook:
         async with connect(ACPAgent(agent, hitl_hook=answer)) as (conn, _):
             one = await conn.new_session(cwd="/tmp")
             two = await conn.new_session(cwd="/tmp")
-            await conn.prompt(session_id=one.session_id, prompt=[acp.text_block("go")])
-            await conn.prompt(session_id=two.session_id, prompt=[acp.text_block("go")])
+            await conn.prompt(session_id=one.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
+            await conn.prompt(session_id=two.session_id, prompt=[schema.TextContentBlock(type="text", text="go")])
 
         assert answers == ["first", "second"]
 
@@ -237,7 +245,9 @@ class TestAnUnanswerableQuestionReachesTheClient:
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError) as caught:
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         assert caught.value.data == IsPartialDict({"type": "HumanInputUnsupportedError"})
         assert answers == []
@@ -258,7 +268,9 @@ class TestAnUnanswerableQuestionReachesTheClient:
         async with connect(ACPAgent(agent, hitl_hook=unreachable)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError) as caught:
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         assert caught.value.data == IsPartialDict({
             "type": "HumanInputFailedError",
@@ -283,7 +295,9 @@ class TestAnUnanswerableQuestionReachesTheClient:
         async with connect(ACPAgent(agent)) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError) as caught:
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
         assert "category" not in caught.value.data
 
@@ -299,7 +313,9 @@ class TestAnUnanswerableQuestionReachesTheClient:
         async with connect(acp_agent) as (conn, _):
             session = await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError):
-                await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("go")])
+                await conn.prompt(
+                    session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="go")]
+                )
 
             stored = await acp_agent.sessions.get(session.session_id)
             history = list(await acp_agent.sessions.stream(stored).history.get_events())

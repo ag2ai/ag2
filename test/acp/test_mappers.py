@@ -13,12 +13,11 @@ from dirty_equals import IsPartialDict
 from ag2.acp.events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
 from ag2.acp.mappers import (
     content_blocks_to_files,
-    content_blocks_to_text,
     map_session_update,
     map_usage,
 )
 from ag2.acp.types import SessionUpdate
-from ag2.events import ModelMessageChunk, ModelReasoning
+from ag2.events import ImageInput, ModelMessageChunk, ModelReasoning, TextInput
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
 from ag2.events.types import Usage
 
@@ -142,13 +141,24 @@ def test_unhandled_updates_return_none() -> None:
     assert map_session_update(schema.UserMessageChunk(session_update="user_message_chunk", content=_text("hi"))) is None
 
 
-def test_content_blocks_to_text_concatenates() -> None:
-    text = content_blocks_to_text([
-        _text("a"),
-        schema.ImageContentBlock(type="image", data="x", mime_type="image/png"),
-        _text("b"),
-    ])
-    assert text == "ab"
+def test_tool_progress_keeps_each_content_item_as_its_own_part() -> None:
+    event = map_session_update(
+        schema.ToolCallProgress(
+            session_update="tool_call_update",
+            tool_call_id="t1",
+            status="completed",
+            content=[
+                schema.ContentToolCallContent(type="content", content=_text("a")),
+                schema.ContentToolCallContent(
+                    type="content", content=schema.ImageContentBlock(type="image", data="aW1n", mime_type="image/png")
+                ),
+                schema.ContentToolCallContent(type="content", content=_text("b")),
+            ],
+        )
+    )
+
+    assert isinstance(event, BuiltinToolResultEvent)
+    assert event.result.parts == [TextInput("a"), ImageInput(data=b"img", media_type="image/png"), TextInput("b")]
 
 
 def test_content_blocks_to_files_decodes_image() -> None:
