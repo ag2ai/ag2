@@ -448,6 +448,8 @@ print(await reply.content())
 * **while the turn is running** -> consumed by that same turn's next or final model call;
 * **after** the turn finishes -> waits for the next turn on this stream.
 
+A turn that ends without another model call - a tool returned `ToolResult(..., final=True)`, or the model called a `ClientTool` and the calls go back to the client - has no model call left to consume the message, so it waits for the next turn on this stream as well. When the client resumes with the tool results, the message reaches the model right after them.
+
 A message sent with `run.enqueue` counts as user input, so it starts a new
 interval for [history queries scoped to the current user input](advanced/stream.md#scope-to-the-current-user-input).
 
@@ -1169,7 +1171,7 @@ The image URL is a short-lived signed link, so download it promptly if you need 
 
 `OpenAIDecisionsConfig` connects to OpenAI's [Decisions API](https://developers.openai.com/api/docs/guides/decisions) (`POST /v1/decisions`), which is in public beta. It ships with the `openai` extra (`openai>=3.27.0`), and like the other OpenAI configs reads `OPENAI_API_KEY` when `api_key` is not passed. `model` defaults to `gpt-6-luna`, the only model the endpoint serves today.
 
-Like [TypeSafe's Jev](#typesafe-jev-configuration), the Decisions API does not generate text. It answers **one typed question** about the conversation: the probability that a condition is true, one option out of several, or a score on an ordered rubric, along with the probabilities behind it. Use it to classify, route or grade cheaply, then hand the text work to a generative agent.
+Like [TypeSafe's Jev](#typesafe-jev-configuration), the Decisions API does not generate text. It answers **typed questions** about the conversation: the probability that a condition is true, one option out of several, or a score on an ordered rubric, along with the probabilities behind it. Use it to classify, route or grade cheaply, then hand the text work to a generative agent.
 
 ```python
 from enum import Enum
@@ -1209,8 +1211,9 @@ An agent on `OpenAIDecisionsConfig` **must** set `response_schema`, and the sche
 | a number schema bounded to `0..1`, e.g. `ResponseSchema.from_schema({"type": "number", "minimum": 0, "maximum": 1}, name="churn", description="How likely is churn?")` | `predicate` | the probability as JSON text, unparsed; `reply.response.metadata["probability"]` has it as a `float` |
 | an `Enum` of strings | `choice` | the selected member |
 | an `IntEnum` numbered `0..n-1` (at least two levels) | `score` | the member nearest the returned score |
+| a flat class (dataclass, `TypedDict`, `BaseModel`) whose required fields are each one of the above | one question per field, in one request | an instance of the class; `metadata` is `{field: answer}` |
 
-Anything else (`str`, `int`, a dataclass, a Pydantic model, a `PromptedSchema`) raises `UnsupportedResponseSchemaError` before a request is sent.
+Anything else (`str`, `int`, a nested or optional field, a list, a `PromptedSchema`) raises `UnsupportedResponseSchemaError` before a request is sent. See [Several questions at once](decision_models.md#several-questions-at-once) for the class form.
 
 The agent `prompt` and the schema's description (an explicit `ResponseSchema(..., description=...)`, an `Annotated[..., Question("...")]` marker, or an `Enum`'s class docstring, in that order of precedence) are joined into the question's `instructions`. Every question type requires instructions, so a schema with no description on an agent with no prompt raises `ValueError` locally.
 
@@ -1253,12 +1256,12 @@ Images that every question should carry, such as a reference photo, go in `quest
 
 #### Refusals and what the Decisions API does not do
 
-- **Refusals.** The API may decline a question. That raises `DecisionRefusedError` (from `ag2.config.openai`) rather than returning a made-up answer.
+- **Refusals.** The API may decline a question. That raises `DecisionRefusedError` (from `ag2.config.openai`) rather than returning a made-up answer. With a class schema, a refusal of any one field fails the whole reply, and the error's `name` is that field.
 - **Tools.** Passing any tool raises `UnsupportedToolError`.
 - **Streaming.** There is no `streaming` field; the answer arrives as one `ModelMessage`.
 - **Files API.** `create_files_client()` raises `NotImplementedError`.
 - **History roles.** The endpoint takes only user messages, so earlier assistant replies and tool results are sent as user text tagged `[Assistant]` / `[Tool result]`.
-- **Batching.** The API can answer several independent questions in one request; each `ask()` sends exactly one.
+- **Dependent questions.** A class schema batches independent questions into one request; questions that depend on an earlier answer still need separate `ask()` calls.
 
 `safety_identifier`, `extra_body` and the usual client options (`base_url`, `organization`, `project`, `timeout`, `max_retries`, `default_headers`, `http_client`) are forwarded to the OpenAI SDK. Usage lands on `ModelResponse.usage`. Decisions bill input tokens only.
 
@@ -1270,7 +1273,7 @@ For recipes covering classification, routing, detection, scoring, ranking, verif
 
 For task recipes with Jev, see [Decision Models](decision_models.md).
 
-Jev is not a text generator. It answers **one typed question** about the conversation so far - yes or no, one label out of several, a level on a rubric, or where something is in an image - and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
+Jev is not a text generator. It answers **typed questions** about the conversation so far - yes or no, one label out of several, a level on a rubric, or where something is in an image - and returns the answer together with its confidence and the probability of every option. That makes it a cheap, predictable front for a generative agent: route a ticket, gate a reply, grade a draft, then hand the text work to another provider.
 
 If `api_key` and `base_url` are not passed explicitly, the SDK resolves them from the `TYPESAFE_API_KEY` and `TYPESAFE_BASE_URL` environment variables. `model` defaults to `jev-latest`.
 
@@ -1312,8 +1315,9 @@ There is no free-text path, so an agent on `TypeSafeConfig` **must** set `respon
 | an `Enum` of strings | a choice between its members | the selected member |
 | an `IntEnum` numbered `0..n-1` with 2-10 levels | a score on that rubric | the member nearest Jev's expected score |
 | `BoundingBox` | where something is in an image (see [Locating things in an image](#locating-things-in-an-image)) | the `BoundingBox`: each edge as a `0..1` fraction of the image |
+| a flat class (dataclass, `TypedDict`, `BaseModel`) whose required fields are each a `bool`, `0..1` float, `Enum` or `IntEnum` | one question per field, in one request | an instance of the class; `metadata` is `{field: answer}` |
 
-Anything else - `str`, `int`, a dataclass, another Pydantic model, a `PromptedSchema` - raises `UnsupportedResponseSchemaError` before any request is sent.
+Anything else - `str`, `int`, a nested or optional field, a list, a `PromptedSchema` - raises `UnsupportedResponseSchemaError` before any request is sent. See [Several questions at once](decision_models.md#several-questions-at-once) for the class form; `criteria` on the config applies to single-question schemas only.
 
 The agent `prompt` frames the question; the schema's own description asks it. That is an explicit `ResponseSchema(..., description=...)`, an `Annotated[..., Question("...")]` marker, or an `Enum`'s class docstring, in that order of precedence. The prompt and the question are joined, so the router above asks *"You triage customer support tickets. Which team should handle this ticket?"*.
 
@@ -2270,7 +2274,7 @@ Source: https://docs.ag2.ai/docs/user-guide/decision_models/
 
 # Decision Models
 
-A decision model answers **one typed question** instead of generating text: is this true, which of these options, or where does it sit on a rubric. AG2 supports two of them, [OpenAI's Decisions API](model_configuration.md#openai-decisions-configuration) and [TypeSafe's Jev](model_configuration.md#typesafe-jev-configuration). This page collects recipes for the everyday jobs they are built for.
+A decision model answers **typed questions** instead of generating text: is this true, which of these options, or where does it sit on a rubric. AG2 supports two of them, [OpenAI's Decisions API](model_configuration.md#openai-decisions-configuration) and [TypeSafe's Jev](model_configuration.md#typesafe-jev-configuration). This page collects recipes for the everyday jobs they are built for.
 
 On a decision model the agent's `response_schema` is not a format hint, it **is** the question. The prompt and the schema's description become the question text, and the answer comes back as a value of that schema together with the probabilities behind it.
 
@@ -2286,8 +2290,9 @@ On a decision model the agent's `response_schema` is not a format hint, it **is*
 | [Verification](#verification): check an artifact against a source | `bool`, one per failure mode | `True` / `False` per check |
 | [Feature extraction](#feature-extraction): signals for a downstream model | `bool`, one per signal | the probabilities as features |
 | [Image inspection](#image-inspection): a question about a photo | `bool` (OpenAI), `BoundingBox` (TypeSafe) | `True` / `False` plus the raw probability, or the box |
+| [Several questions at once](#several-questions-at-once): independent questions over the same input | a flat class whose fields are each one of the types above | an instance of the class, plus each field's answer |
 
-Anything else (`str`, a dataclass, another Pydantic model) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
+Anything else (`str`, a nested or optional field, a list) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
 
 ## Set up
 
@@ -2787,6 +2792,101 @@ Purchase intent, churn signals, competitive pressure. Each signal is a yes/no qu
     features = {d.name: r.response.metadata["noul"] for d, r in zip(detectors, replies)}
     # {"purchase_intent": 0.12, "churn_risk": 0.81, "competitor": 0.97}
     ```
+
+## Several questions at once
+
+Triage, intake forms, multi-signal checks. When several **independent** questions are asked about the same input, make the `response_schema` a flat class instead of running one agent per question. Each field is one question named after the field, and all of them go out in a single request, so the shared input is sent and billed once.
+
+A dataclass, a `TypedDict` or a Pydantic `BaseModel` all work. Every field must be required and must be a decision type (`bool`, a `0..1` float, an `Enum` of strings, an `IntEnum` numbered from `0`); the agent `prompt` is the shared context and is joined in front of each field's question.
+
+=== "OpenAI Decisions"
+    ```python linenums="1" hl_lines="20-23 29"
+    from dataclasses import dataclass
+    from enum import Enum, IntEnum
+    from typing import Annotated
+
+    from ag2 import Agent
+    from ag2.config import OpenAIDecisionsConfig
+    from ag2.response import Question
+
+    class Department(Enum):
+        BILLING = "billing"
+        """Payments, invoicing, refunds."""
+        TECHNICAL = "technical"
+        """Bugs, outages, integrations."""
+
+    class Urgency(IntEnum):
+        LOW = 0
+        HIGH = 1
+
+    @dataclass
+    class TicketTriage:
+        is_spam: Annotated[bool, Question("Is this message spam?")]
+        department: Annotated[Department, Question("Which team should handle this ticket?")]
+        urgency: Annotated[Urgency, Question("How urgent is this ticket?")]
+
+    triage = Agent(
+        "triage",
+        prompt="You triage support tickets.",
+        config=OpenAIDecisionsConfig(),
+        response_schema=TicketTriage,
+    )
+
+    reply = await triage.ask("I was charged twice this month.")
+    await reply.content()  # TicketTriage(is_spam=False, department=Department.BILLING, urgency=Urgency.HIGH)
+    reply.response.metadata["department"]["confidence"]  # 0.74
+    ```
+
+=== "TypeSafe"
+    ```python linenums="1" hl_lines="22-25 31"
+    from dataclasses import dataclass
+    from enum import Enum, IntEnum
+    from typing import Annotated
+
+    from ag2 import Agent
+    from ag2.config import TypeSafeConfig
+    from ag2.response import Question
+
+    class Department(Enum):
+        BILLING = "billing"
+        """Payments, invoicing, refunds."""
+        TECHNICAL = "technical"
+        """Bugs, outages, integrations."""
+
+    class Urgency(IntEnum):
+        LOW = 0
+        """Can wait a week."""
+        HIGH = 1
+        """Needs an answer today."""
+
+    @dataclass
+    class TicketTriage:
+        is_spam: Annotated[bool, Question("Is this message spam?")]
+        department: Annotated[Department, Question("Which team should handle this ticket?")]
+        urgency: Annotated[Urgency, Question("How urgent is this ticket?")]
+
+    triage = Agent(
+        "triage",
+        prompt="You triage support tickets.",
+        config=TypeSafeConfig(),
+        response_schema=TicketTriage,
+    )
+
+    reply = await triage.ask("I was charged twice this month.")
+    await reply.content()  # TicketTriage(is_spam=False, department=Department.BILLING, urgency=Urgency.HIGH)
+    reply.response.metadata["department"]["confidence"]  # 0.74
+    ```
+
+- **Question per field.** A field's question comes from `Annotated[..., Question("...")]`, then `Field(description=...)`, then the `Enum` class docstring. A field with none of them raises `ValueError` before any request.
+- **The class takes no question of its own.** `ResponseSchema(TicketTriage, description=...)` or `Annotated[TicketTriage, Question(...)]` raises `ValueError`: put what the fields share in the agent `prompt`.
+- **Questions are named after the fields.** A Pydantic alias (`Field(alias="isSpam")`) changes only the JSON the class is validated from; the question and its metadata keep the field name.
+- **Mutually exclusive options belong in one `Enum` field.** Each field is answered independently, so three `bool` fields `is_billing`, `is_technical`, `is_sales` can all come back `True`. Ask "which one" as a single `Enum` field.
+- **Metadata is keyed by field.** `reply.response.metadata` is `{field: answer}`, each answer in the same per-provider shape as a single question's metadata (see [Set up](#set-up)).
+- **Options are described per field**, with `Question(options={...})` or member docstrings. Two fields may share option values, so `descriptions=` (OpenAI) and `criteria=` (TypeSafe) on the config apply to single-question schemas only and raise `ValueError` with a class.
+- **`boolean_threshold`** applies to every `bool` field.
+- **A refusal fails the whole reply.** If OpenAI declines any one question, `DecisionRefusedError` names that field; no partial result is returned.
+- **OpenAI takes at most 400 questions** per request; a class with more fields raises `UnsupportedResponseSchemaError`.
+- **Dependent questions** (where one question only makes sense after another's answer) still need separate `ask()` calls.
 
 ## Image inspection
 
@@ -4780,7 +4880,7 @@ Prometheus histograms also expose `_bucket`, `_count`, and `_sum` series for eac
 | `outcome` | `success`, `error` | `error` is used for raised exceptions, tool error results, timeouts, and cancellations. |
 | `finish_reason` | Provider finish reason or `unknown` | |
 | `error_type` | Exception class name or empty string | Empty string means the operation succeeded. |
-| `token_type` | `input`, `output`, `total`, `cache_read_input`, `cache_creation_input`, `cache_creation_extended_input`, `thinking` | `total` overlaps `input` + `output`; `cache_creation_extended_input` overlaps `cache_creation_input`. |
+| `token_type` | `input`, `output`, `total`, `cache_read_input`, `cache_creation_input`, `cache_creation_extended_input`, `thinking` | `total` overlaps `input` + `output`; `cache_read_input` and `cache_creation_input` overlap `input`; `cache_creation_extended_input` overlaps `cache_creation_input`. |
 | `tool` | Tool name | Derived from the `ToolCallEvent` name. |
 
 Missing or empty label values are normalized to `unknown`, except `error_type`, which is an empty string for successful operations. Token values of zero are not emitted, and missing token fields are not synthesized as zero. Which `token_type` values appear depends on what the provider reports (for example, `thinking` only for reasoning models, `cache_read_input` / `cache_creation_input` only when prompt caching is active, and `cache_creation_extended_input` only for cache writes with extended [prompt cache retention](model_configuration.md#openai-prompt-cache-retention): OpenAI's 12 hours or Anthropic's 1 hour).
@@ -6414,6 +6514,8 @@ If you pass an unsupported input type to a provider, an `UnsupportedInputError` 
 
 ## Provider-Specific Details
 
+Some providers read extra settings from `vendor_metadata` on a binary input - one built from `data=` or `path=`. Set keys on the returned input's `vendor_metadata` dict rather than replacing it, since `path=` already stores the filename there. The per-provider sections below list the keys each one reads.
+
 ### Gemini
 
 Gemini has the broadest multimodal support - it accepts images, audio, video, and documents in all forms (URL, binary, and local file path).
@@ -6448,7 +6550,7 @@ reply = await agent.ask("Describe this video.", video)
 
 #### Vendor Metadata
 
-Gemini supports provider-specific settings via `vendor_metadata` on binary inputs. These map to Gemini Part fields:
+Gemini maps these `vendor_metadata` keys to Gemini Part fields:
 
 | Key | Type | Description |
 | :--- | :--- | :--- |
@@ -6465,8 +6567,8 @@ from ag2.events import ImageInput
 image = ImageInput(
     data=raw_bytes,
     media_type="image/jpeg",
-    vendor_metadata={"media_resolution": "MEDIA_RESOLUTION_LOW"},
 )
+image.vendor_metadata["media_resolution"] = "MEDIA_RESOLUTION_LOW"
 ```
 
 Available values: `MEDIA_RESOLUTION_LOW`, `MEDIA_RESOLUTION_MEDIUM`, `MEDIA_RESOLUTION_HIGH`, `MEDIA_RESOLUTION_ULTRA_HIGH`.
@@ -6479,8 +6581,8 @@ from ag2.events import ImageInput
 image = ImageInput(
     data=raw_bytes,
     media_type="image/jpeg",
-    vendor_metadata={"media_resolution": {"level": "MEDIA_RESOLUTION_MEDIUM"{{ "}}" }},
 )
+image.vendor_metadata["media_resolution"] = {"level": "MEDIA_RESOLUTION_MEDIUM"}
 ```
 
 !!! warning "Setting both keys is rejected"
@@ -6492,16 +6594,12 @@ image = ImageInput(
 ```python
 from ag2.events import VideoInput
 
-video = VideoInput(
-    path="lecture.mp4",
-    vendor_metadata={
-        "video_metadata": {
-            "start_offset": "60s",
-            "end_offset": "120s",
-            "fps": 0.5,
-        },
-    },
-)
+video = VideoInput(path="lecture.mp4")
+video.vendor_metadata["video_metadata"] = {
+    "start_offset": "60s",
+    "end_offset": "120s",
+    "fps": 0.5,
+}
 reply = await agent.ask("Summarize this section of the video.", video)
 ```
 
@@ -6510,10 +6608,8 @@ reply = await agent.ask("Summarize this section of the video.", video)
 ```python
 from ag2.events import DocumentInput
 
-doc = DocumentInput(
-    path="report.pdf",
-    vendor_metadata={"display_name": "Q4 Financial Report"},
-)
+doc = DocumentInput(path="report.pdf")
+doc.vendor_metadata["display_name"] = "Q4 Financial Report"
 ```
 
 ### OpenAI
@@ -6530,8 +6626,8 @@ from ag2.events import ImageInput
 image = ImageInput(
     data=raw_bytes,
     media_type="image/png",
-    vendor_metadata={"detail": "low"},  # "low", "high", or "auto"
 )
+image.vendor_metadata["detail"] = "low"  # "low", "high", or "auto"
 ```
 
 ### Anthropic
@@ -6563,10 +6659,8 @@ Anthropic supports `vendor_metadata` for prompt caching on content blocks:
 ```python
 from ag2.events import DocumentInput
 
-doc = DocumentInput(
-    path="report.pdf",
-    vendor_metadata={"cache_control": {"type": "ephemeral"{{ "}}" }},
-)
+doc = DocumentInput(path="report.pdf")
+doc.vendor_metadata["cache_control"] = {"type": "ephemeral"}
 ```
 
 ### xAI
@@ -7573,7 +7667,10 @@ If `api_key` is omitted, the Perplexity SDK reads the `PERPLEXITY_API_KEY` envir
 | Tool | Description |
 | :--- | :--- |
 | `perplexity_search` | Raw web search via the [Search API](https://docs.perplexity.ai/docs/search/quickstart) - ranked title/url/snippet/date results, no LLM hop |
-| `perplexity_answer` | LLM-generated answer with citations via [Sonar Chat Completions](https://docs.perplexity.ai/docs/sonar/openai-compatibility) - also returns search results, citations, and optional images |
+| `perplexity_answer` | LLM-generated answer with citations via [Sonar Chat Completions](https://docs.perplexity.ai/api-reference/sonar-post) - also returns search results, citations, and optional images |
+
+!!! warning "Sonar Chat Completions support has ended"
+    Perplexity ended support for Sonar Chat Completions on September 27, 2026. The synchronous requests that `perplexity_answer` sends still work: Perplexity is gradually reformulating them as Agent API requests, model by model, and does not guarantee that every Sonar-specific parameter or response field survives. Some Sonar options, such as `return_related_questions` and `search_mode="academic"`, have no direct Agent API equivalent, so test the options your application depends on. See [Perplexity's AG2 integration notes](https://docs.perplexity.ai/docs/getting-started/integrations/ag2) and the [Sonar migration guide](https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/how-to).
 
 ### Picking a subset of tools
 
@@ -7612,7 +7709,6 @@ answer_tool = toolkit.answer(
     search_mode="academic",         # "web" | "academic" | "sec"
     search_recency_filter="month",  # "hour" | "day" | "week" | "month" | "year"
     return_images=True,             # include image URLs in the response
-    return_related_questions=True,  # include suggested follow-up questions
     search_domain_filter=["arxiv.org", "nature.com"],
 )
 
@@ -11721,11 +11817,11 @@ Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/d
 | `gen_ai.request.model` | agent, llm | Model name (e.g. `gpt-4o-mini`) -- auto-detected |
 | `gen_ai.response.model` | llm | Resolved model name from response |
 | `gen_ai.response.finish_reasons` | llm | Finish reasons (e.g. `["stop"]`, `["tool_calls"]`) |
-| `gen_ai.usage.input_tokens` | llm | Prompt token count |
+| `gen_ai.usage.input_tokens` | llm | Prompt token count, including tokens read from and written to the prompt cache |
 | `gen_ai.usage.output_tokens` | llm | Completion token count |
-| `gen_ai.usage.cache_creation_input_tokens` | llm | Tokens used to create prompt cache (Anthropic) |
+| `gen_ai.usage.cache_creation_input_tokens` | llm | Part of `input_tokens` written to the prompt cache (Anthropic, Bedrock, OpenAI) |
 | `gen_ai.usage.cache_creation_extended_input_tokens` | llm | Part of `cache_creation_input_tokens` written with extended [prompt cache retention](../model_configuration.md#openai-prompt-cache-retention) (OpenAI 12h, Anthropic 1h); absent when the provider reports no per-retention breakdown |
-| `gen_ai.usage.cache_read_input_tokens` | llm | Tokens read from prompt cache (Anthropic, OpenAI, Gemini) |
+| `gen_ai.usage.cache_read_input_tokens` | llm | Part of `input_tokens` read from the prompt cache (Anthropic, Bedrock, OpenAI, Gemini, Mistral, xAI, Z.ai) |
 | `gen_ai.tool.name` | tool | Tool function name |
 | `gen_ai.tool.call.id` | tool | Tool call ID |
 | `gen_ai.tool.type` | tool | Tool type (always `function`) |
@@ -15445,7 +15541,7 @@ agent = Agent(
 
 #### TokenMonitor
 
-Tracks cumulative token usage across `UsageEvent` - the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, source events forwarded from descendants (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Descendant usage arrives while the sub-task runs, without a generated rollup; see [Account for Descendant Usage](stream.md#account-for-descendant-usage). Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
+Tracks cumulative token usage across `UsageEvent` - the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, source events forwarded from descendants (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Descendant usage arrives while the sub-task runs, without a generated rollup; see [Account for Descendant Usage](stream.md#account-for-descendant-usage). Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed. Input counts every prompt token, including tokens read from and written to the prompt cache, so a threshold bounds tokens processed, not cost.
 
 ```python
 from ag2 import Agent
@@ -16892,8 +16988,8 @@ entries from different providers add up:
   token the call was charged for, including tokens read from and written to the
   provider's cache. Output counts every generated token, reasoning included.
   Where a provider reports these counts beside a smaller figure, AG2 adds them
-  in before the entry leaves: Anthropic's cache counts go into the input, and
-  Gemini's thinking tokens into the output.
+  in when it normalizes the provider's usage: Anthropic's and Bedrock's cache
+  counts go into the input, and Gemini's thinking tokens into the output.
 - **`cachedInputTokens`, `cacheWriteInputTokens` and `reasoningTokens` are parts
   of those totals**, never additions to them. Cache reads and writes are
   reported apart, because providers price them differently.
@@ -16903,10 +16999,10 @@ entries from different providers add up:
   absent means "never measured"; `0` means the provider measured no cache hit.
   An input or output the provider did not report leaves `totalTokens` absent too.
 
-The correction applies only to what reaches the wire. `AgentReply.usage()` keeps
-each provider's own figures, so a server-side total can differ from the AG-UI
-one for the same run: for Anthropic, `prompt_tokens` excludes the cache counts
-that `inputTokens` includes.
+`AgentReply.usage()` counts input and output the same way: for the same run,
+`report.total.prompt_tokens` equals the sum of the entries' `inputTokens`, and
+`completion_tokens` the sum of their `outputTokens`. `total_tokens` can exceed
+the summed `totalTokens`, because it keeps the provider's own total.
 
 One entry is emitted per distinct provider/model pair, in order of first
 appearance in the run. A delegated sub-agent's calls are attributed to the
@@ -16993,7 +17089,10 @@ the empty string. Each removal logs one warning on the `ag2.ag_ui` logger, namin
 such as `/messages/0/content/1`. Open objects - `state`, `forwardedProps`,
 `metadata`, a tool's `parameters` - are values rather than protocol members and
 are passed on whole. A known field carrying a value the schema rejects is
-malformed, not unrecognised, and the body is refused with `400`. `dispatch` strips
+malformed, not unrecognised, and the body is refused with `400`. That includes
+a data source's `value` or a tool call's `encryptedValue` that is not strict
+base64: a character outside the alphabet, whitespace or a line break refuses
+it rather than being skipped. `dispatch` strips
 unknown properties from a `RunAgentInput` you validated yourself, but a role or
 part type your own validation rejected never reaches it.
 
@@ -17350,6 +17449,8 @@ For React/Next.js UIs, CopilotKit is the recommended client path in AG2 docs bec
 
 Start from the [CopilotKit UI quickstart](copilotkit-quickstart.md).
 
+To keep the browser talking to the AG2 endpoint directly, with no runtime process in between, use assistant-ui instead: see the [assistant-ui quickstart](assistant-ui-quickstart.md).
+
 The same endpoint can also power a bot in Slack and other messaging platforms - see [Channels](channels.md).
 
 ## AG-UI Dojo
@@ -17361,7 +17462,7 @@ For protocol-level testing and event inspection, use the AG2 Dojo profile:
 ## Next steps
 
 1. Build the AG-UI endpoint from the minimal example above.
-2. Follow the [CopilotKit UI quickstart](copilotkit-quickstart.md) to connect a React/Next.js client.
+2. Follow the [CopilotKit UI quickstart](copilotkit-quickstart.md) or the [assistant-ui quickstart](assistant-ui-quickstart.md) to connect a React/Next.js client.
 3. Validate runtime behavior with the [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat).
 4. Run the same endpoint as a bot in Slack and other messaging platforms with [Channels](channels.md).
 
@@ -17375,7 +17476,7 @@ Run an AG2 agent behind an AG-UI 1.0 endpoint and connect a CopilotKit UI to it.
 
 ## Prerequisites
 
-- Python 3.11-3.14 and `uv`
+- Python 3.11-3.15 and `uv`
 - Node.js 20.9 or newer and `pnpm`
 - An OpenAI API key for the sample agent
 
@@ -17487,6 +17588,282 @@ If chat does not stream, check these in order:
 5. If the browser calls AG2 directly, allow the frontend origin and required headers in the backend's CORS settings.
 
 For frontend tools, shared state, and human input, see [Backend deep dive](backend-deepdive.md), [Shared state](overview.md#shared-state), and [Asking the human a question](overview.md#asking-the-human-a-question). A client that resumes an AG2 interrupt on a server with `require_resume_proof=True` must copy the interrupt's `metadata` into its resume entry.
+
+---
+
+# assistant-ui Quickstart for AG-UI
+
+Source: https://docs.ag2.ai/docs/user-guide/ag-ui/assistant-ui-quickstart/
+
+Serve an AG2 agent over AG-UI and chat with it from [assistant-ui](https://www.assistant-ui.com), a React library of chat components. assistant-ui's `@assistant-ui/react-ag-ui` package reads the AG-UI event stream directly from the browser, so no extra runtime process sits between the UI and AG2.
+
+## Prerequisites
+
+- Python 3.11-3.15 and `uv`
+- Node.js 20.9 or newer and `pnpm`
+- An OpenAI API key for the agent
+
+The backend depends on `ag2[ag-ui,openai]>=1.3.1,<2`; the UI on `@assistant-ui/react-ag-ui` 0.1.9 and `@ag-ui/client` 1.0.3.
+
+## Write the AG2 server
+
+Create a directory for the server and add the dependencies:
+
+```bash
+mkdir server && cd server
+uv init --bare
+uv add "ag2[ag-ui,openai]>=1.3.1,<2" fastapi uvicorn
+```
+
+Save the agent and its AG-UI endpoint as `main.py`:
+
+```python
+import random
+from typing import Annotated
+
+from ag2 import Agent, Context, tool
+from ag2.ag_ui import AGUIStream, read_run_input
+from ag2.config import OpenAIResponsesConfig
+from ag2.middleware.builtin.tools.approval import ApprovalRequired
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from pydantic import Field
+
+CONDITIONS = ("sunny", "partly cloudy", "overcast", "light rain", "windy")
+
+@tool(description="Get the current weather for a city.")
+def get_weather(
+    city: Annotated[str, Field(description="The city name, e.g. 'Lisbon'")],
+) -> dict[str, str | int]:
+    # A stand-in for a real weather API, seeded by the city so answers are stable.
+    rng = random.Random(city.lower())
+    return {
+        "city": city,
+        "temperature_c": rng.randint(-5, 32),
+        "conditions": rng.choice(CONDITIONS),
+    }
+
+@tool(
+    description=(
+        "Save a city to the user's favorites. Use only when the user asks to save, "
+        "pin or remember a city. The user confirms before anything is saved."
+    ),
+    # The call is held as an AG-UI interrupt until the client approves or rejects it.
+    middleware=[
+        ApprovalRequired("Save {tool_arguments} to your favorites?", allow_always=False)
+    ],
+)
+def save_favorite_city(
+    context: Context,
+    city: Annotated[str, Field(description="The city name to save, e.g. 'Lisbon'")],
+) -> list[str]:
+    # Variables are sent to the client as the shared state snapshot.
+    favorites = [*context.variables.get("favorites", []), city]
+    context.variables["favorites"] = favorites
+    return favorites
+
+agent = Agent(
+    "WeatherAgent",
+    prompt=(
+        "You are a concise weather assistant. Use get_weather for weather questions. "
+        "Use save_favorite_city only when the user asks to save a city. "
+        "After a tool call, answer in one short sentence."
+    ),
+    config=OpenAIResponsesConfig(model="gpt-6-luna", streaming=True),
+    tools=[get_weather, save_favorite_city],
+)
+
+stream = AGUIStream(agent)
+
+app = FastAPI()
+# The browser calls this server directly, so the Next.js dev server's origin is allowed.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+@app.get("/agent")
+async def capabilities() -> JSONResponse:
+    """Tell the client what the agent supports before a run starts."""
+    return JSONResponse(
+        stream.capabilities().model_dump(by_alias=True, exclude_none=True)
+    )
+
+@app.post("/agent")
+async def run_agent(request: Request) -> Response:
+    """Run the agent on an AG-UI `RunAgentInput` and stream its events as SSE."""
+    try:
+        run_input = read_run_input(await request.body())
+    except ValueError:
+        return JSONResponse(
+            {"error": "invalid AG-UI RunAgentInput body"}, status_code=400
+        )
+    return StreamingResponse(
+        stream.dispatch(run_input, accept=request.headers.get("accept")),
+        media_type="text/event-stream",
+    )
+```
+
+Start it on port `8000`:
+
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+uv run uvicorn main:app --port 8000
+```
+
+`GET /agent` returns the agent's [capabilities](overview.md#capabilities). `POST /agent` reads the body with `read_run_input` rather than declaring a `RunAgentInput` parameter: a newer client may send fields this server does not know, and `read_run_input` drops them instead of FastAPI refusing the request with `422`. See [Basic server example](overview.md#basic-server-example) for the same pattern without the tools.
+
+## Start the assistant-ui app
+
+assistant-ui's AG-UI example is a Next.js app already wired to `http://localhost:8000/agent`. Scaffold it in another terminal:
+
+```bash
+npx assistant-ui@latest create my-app -e with-ag-ui
+cd my-app
+pnpm dev
+```
+
+You do not need the example's own Python echo server, `server/agent.py`: the AG2 server above answers on the same URL. Open `http://localhost:3000` and ask for the weather in a city. The reply streams in, and the `get_weather` call appears in the thread with its result.
+
+The whole client wiring is one provider. If you add AG2 to an existing assistant-ui app instead, install `@assistant-ui/react-ag-ui` and `@ag-ui/client` and wrap your thread in:
+
+```tsx
+"use client";
+
+import { useMemo, type ReactNode } from "react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { HttpAgent } from "@ag-ui/client";
+import { useAgUiRuntime } from "@assistant-ui/react-ag-ui";
+
+export function MyRuntimeProvider({ children }: { children: ReactNode }) {
+  const agent = useMemo(
+    () => new HttpAgent({ url: "http://localhost:8000/agent" }),
+    [],
+  );
+  const runtime = useAgUiRuntime({ agent });
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      {children}
+    </AssistantRuntimeProvider>
+  );
+}
+```
+
+## Render tool results
+
+AG2 runs `get_weather` on the server. To show its result as a card rather than raw JSON, register it as a `backend` tool with a renderer. Add the toolkit to the page that renders the thread:
+
+```tsx
+import { AuiConfig, AuiProvider, Tools, defineToolkit, useAui } from "@assistant-ui/react";
+
+type Weather = { city: string; temperature_c: number; conditions: string };
+
+const toolkit = defineToolkit({
+  get_weather: {
+    type: "backend",
+    render: ({ args, result }) => {
+      const weather = result as Weather | undefined;
+      return weather ? (
+        <p>{weather.city}: {weather.temperature_c}°C, {weather.conditions}</p>
+      ) : (
+        <p>Looking up {String(args["city"] ?? "...")}</p>
+      );
+    },
+  },
+});
+
+// Inside your page component:
+const aui = useAui();
+const config = AuiConfig({ tools: Tools({ toolkit }) });
+// <AuiProvider extends={aui} config={config}><Thread /></AuiProvider>
+```
+
+Tools that the browser registers with an `execute` function, such as the example's `browser_alert`, reach AG2 as [frontend tools](backend-deepdive.md#frontend-tools-ui-driven-actions): AG2 ends the run with the call pending, assistant-ui runs it, and the result starts the next run.
+
+## Approve a tool call
+
+`save_favorite_city` is wrapped in `ApprovalRequired`, so AG2 ends the run with an AG-UI interrupt instead of calling it (see [Gating a tool call](overview.md#gating-a-tool-call-instead-of-asking-a-question)). assistant-ui exposes the open interrupts through `useAgUiInterrupts` and resumes the run with `useAgUiSubmitInterruptResponses`. AG2 reads a boolean payload as the decision, `true` to approve and `false` to deny:
+
+```tsx
+import {
+  useAgUiInterrupts,
+  useAgUiSubmitInterruptResponses,
+} from "@assistant-ui/react-ag-ui";
+
+function PendingApprovals() {
+  const interrupts = useAgUiInterrupts();
+  const submit = useAgUiSubmitInterruptResponses();
+
+  const answer = (approved: boolean) =>
+    submit(
+      interrupts.map((i) => ({
+        interruptId: i.id,
+        status: "resolved" as const,
+        payload: approved,
+      })),
+    );
+
+  return interrupts.map((i) => (
+    <div key={i.id}>
+      <p>{i.message}</p>
+      <button onClick={() => void answer(true)}>Approve</button>
+      <button onClick={() => void answer(false)}>Deny</button>
+    </div>
+  ));
+}
+```
+
+Render `PendingApprovals` anywhere inside the runtime provider, then ask the agent to save a city.
+
+!!! warning "Use a boolean payload"
+
+    AG2 accepts `true`, `false` or a string as the answer to a tool-call approval. An object payload, such as `{ approved: true }`, is refused with `INTERRUPT_PAYLOAD_REFUSED`.
+
+## Show shared state
+
+AG2 sends the agent's `context.variables` to the client as `STATE_SNAPSHOT` events (see [Shared state](overview.md#shared-state)). Read them with `useAgUiState`:
+
+```tsx
+import { useAgUiState } from "@assistant-ui/react-ag-ui";
+
+function Favorites() {
+  const state = useAgUiState<{ favorites?: string[] }>();
+  return <p>Favorites: {state?.favorites?.join(", ") || "none"}</p>;
+}
+```
+
+After you approve a save, the list updates. assistant-ui sends the latest state back as the next run's `state`, so `context.variables["favorites"]` is already filled when the agent runs again. Because the browser can edit that state, never read permissions or identity from it.
+
+## What works
+
+| AG-UI 1.0 feature | AG2 | assistant-ui |
+| --- | --- | --- |
+| Streaming text | `TEXT_MESSAGE_*` | Rendered as the agent's message |
+| Server tools | `TOOL_CALL_*` and `TOOL_CALL_RESULT` | `defineToolkit` with `type: "backend"` |
+| Frontend tools | Pending call ends the run | `defineToolkit` with `execute` |
+| Interrupts | `ApprovalRequired`, `context.input()` | `useAgUiInterrupts`, `useAgUiSubmitInterruptResponses` |
+| Shared state | `context.variables` as `STATE_SNAPSHOT` | `useAgUiState`, `useAgUiSetState` |
+
+Limits to plan for:
+
+- **Answer the interrupt first.** While an interrupt is open, a message typed in the composer is not sent. Answer it, or use assistant-ui's `useAgUiSteerAway`, which cancels the open interrupts and sends the new message.
+- **Resume proof.** assistant-ui's resume entry carries no `metadata`, so it cannot satisfy a server started with `AGUIStream(agent, require_resume_proof=True)`. Keep the default for this client. See [Asking the human a question](overview.md#asking-the-human-a-question).
+- **One process per paused run.** `AGUIStream` holds a paused run in the server's memory, so the resume must reach the same process that issued the interrupt.
+
+## Check the connection
+
+If the chat does not stream, check these in order:
+
+1. `curl http://localhost:8000/agent` returns the capabilities JSON.
+2. The `HttpAgent` URL, or `NEXT_PUBLIC_AGUI_AGENT_URL` in the scaffolded example, points to that endpoint.
+3. The browser console shows no CORS error. If the UI runs on another origin, add it to `allow_origins` in `main.py`.
+4. The server log shows `POST /agent` returning `200`. A `400` means the body was not a valid `RunAgentInput`.
+
+The browser talks to the AG2 server directly, so protect that endpoint as you would any public API. See [Authentication](backend-deepdive.md#authentication).
 
 ---
 
@@ -20144,10 +20521,7 @@ indistinguishable from an id that was never issued - and is answered the same wa
     is running elsewhere is refused. Across processes it is the client's contract to
     keep, and a client that spawns one agent process per turn keeps it by construction.
 
-Over stdio and WebSocket this all just works. The ACP SDK's HTTP/SSE server, as of 0.12,
-does not register a *loaded* session's stream the way it does a new one, so a
-`session/prompt` on a loaded session over that transport is answered with a 404 -
-serve resumable sessions over one of the other two.
+This works the same over stdio, WebSocket and HTTP/SSE.
 
 ## Cancelling
 
@@ -20387,7 +20761,6 @@ inside the test process - genuine protocol, no subprocess to manage and no port 
 Pair it with `TestConfig` so no provider is called.
 
 ```python
-import acp
 import pytest
 from acp import schema
 
@@ -20404,7 +20777,7 @@ async def test_the_agent_answers() -> None:
         session = await client.new_session(cwd=".")
         response = await client.prompt(
             session_id=session.session_id,
-            prompt=[acp.text_block("what's 100 + 100")],
+            prompt=[schema.TextContentBlock(type="text", text="what's 100 + 100")],
         )
 
     assert response.stop_reason == "end_turn"
@@ -20452,14 +20825,17 @@ launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
 from ag2 import Agent
 from ag2.acp import ClaudeCodeConfig
 
-agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
+config = ClaudeCodeConfig(cwd="/path/to/repo")
+agent = Agent("coder", config=config)
 
 reply = await agent.ask("Refactor the auth module and add tests")
 print(reply.body)
 ```
 
 A single `ask()`/`run()` maps to one ACP *prompt turn*: the CLI agent runs its
-own internal tool loop and AG2 streams every step as it happens.
+own internal tool loop and AG2 streams every step as it happens. The config is
+used like any other model config; for when its subprocess ends, see
+[Lifecycle](#lifecycle).
 
 ## Choosing an agent
 
@@ -20630,8 +21006,6 @@ from ag2.events import ModelMessageChunk, ModelReasoning
 from ag2.events.tool_events import BuiltinToolCallEvent
 from ag2.acp.events import ACPPlan
 
-agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
-
 def observe(event):
     if isinstance(event, ModelReasoning):
         print("💭", event.content)
@@ -20642,6 +21016,8 @@ def observe(event):
     elif isinstance(event, ACPPlan):
         for step in event.entries:
             print(f"  [{step.status}] {step.content}")
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/path/to/repo"))
 
 async with agent.run("Add a healthcheck endpoint") as run:
     run.stream.subscribe(observe)  # subscribe before driving
@@ -20674,14 +21050,14 @@ def get_ticket(ticket_id: str) -> dict:
     """Fetch a ticket from the internal tracker."""
     return {"id": ticket_id, "status": "open"}
 
-async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
-    agent = Agent("dev", config=config, tools=[get_ticket])
-    # Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
-    reply = await agent.ask("Look up ticket ACME-4211.")
+config = ClaudeCodeConfig(cwd="./repo", permission_policy="auto")
+agent = Agent("dev", config=config, tools=[get_ticket])
+# Claude Code now sees `get_ticket` as an MCP tool and can call it mid-task.
+reply = await agent.ask("Look up ticket ACME-4211.")
 ```
 
-The `async with` matters once tools are exposed: the MCP server serving them
-lives until the config is closed. See [Lifecycle](#lifecycle).
+The MCP server serving the tools lives as long as the session does. See
+[Lifecycle](#lifecycle).
 
 What reaches the CLI agent:
 
@@ -20765,11 +21141,8 @@ def answer(event: HumanInputRequest) -> str:
     """Show the agent's question and return the human's answer."""
     return input(f"{event.content}\n> ")
 
-agent = Agent(
-    "coder",
-    config=ClaudeCodeConfig(cwd="/repo"),  # elicitation_policy="ask" by default
-    hitl_hook=answer,
-)
+config = ClaudeCodeConfig(cwd="/repo")  # elicitation_policy="ask" by default
+agent = Agent("coder", config=config, hitl_hook=answer)
 reply = await agent.ask("Split this module up - ask me before choosing a layout.")
 ```
 
@@ -20944,8 +21317,14 @@ outlives the `agent.run()` that created it - `reply.ask()` continues the same
 session. So the session's lifetime is the *conversation's*, and only you know
 when that ends.
 
-Use the config as an async context manager, and everything it started - the
-subprocess and the tool gateway - is torn down on exit:
+There is nothing to manage in a script: the subprocess and the tool gateway end
+when the event loop does (the end of `asyncio.run`).
+
+A long-lived process, such as a server that handles many conversations, should
+end sessions itself. Nothing ends one before the loop does, so a config used
+across many runs without that accumulates live subprocesses - and, when tools
+are exposed, a listening MCP server per session. Close everything the config
+started with `await config.aclose()`, or scope it with `async with`:
 
 ```python
 from ag2 import Agent
@@ -20960,11 +21339,6 @@ async with ClaudeCodeConfig(cwd="./repo", permission_policy="auto") as config:
     follow_up = await reply.ask("What priority is it?")
 # subprocess and gateway are gone here, including if the block raised
 ```
-
-`await config.aclose()` does the same thing explicitly. One or the other is
-required: nothing reclaims a session implicitly, so a config used across many
-runs without it accumulates live subprocesses - and, when tools are exposed,
-a listening MCP server per session.
 
 ---
 
@@ -21259,57 +21633,154 @@ resume = Resume(
 Optional per-agent policy. Pass to `hub.register(agent, passport, resume, rule=...)`.
 
 ```python
-from ag2.network import Rule, AccessBlock, LimitsBlock, RateBlock, InboxBlock
+from ag2.network import Rule, AccessBlock, ChannelTypeAccess, LimitsBlock, RateBlock, InboxBlock
 
 rule = Rule(
     access=AccessBlock(
         outbound_to=["bob", "carol"],   # whitelist who this agent can address
-        channel_types_allowed=["consulting", "discussion"],
+        channel_types=ChannelTypeAccess(
+            initiate=["consulting", "discussion"],
+            accept=["consulting", "discussion"],
+        ),
     ),
     limits=LimitsBlock(
         channel_ttl_default="4h",
         delegation_depth=2,
-    ),
-    rate=RateBlock(
-        envelopes_per_minute=60,
-    ),
-    inbox=InboxBlock(
-        max_pending=100,
+        rate=RateBlock(per_minute=60),
+        inbox=InboxBlock(max_pending=100),
     ),
 )
 ```
 
 | Block | Controls |
 |---|---|
-| `AccessBlock` | Who this agent can talk to; which channel types it can create or join. |
+| `AccessBlock` | Who this agent can address (`outbound_to`) and who can address it (`inbound_from`); channel-type allowlists (`channel_types`, stored only). |
 | `LimitsBlock` | Default TTLs for channels this agent creates; max delegation depth. |
-| `RateBlock` | Rate limits on outbound envelopes. |
-| `InboxBlock` | Inbound queue cap - protects an agent from being flooded. |
+| `RateBlock` | Rate-limit configuration stored under `limits.rate`; not enforced by the in-process hub. |
+| `InboxBlock` | Inbound queue cap under `limits.inbox` - protects an agent from being flooded. |
+
+`AccessBlock.channel_types` uses separate allowlists for initiating and accepting channels; like `RateBlock`, it is stored on the rule but not enforced by the in-process hub yet. `RateBlock` and `InboxBlock` belong inside `LimitsBlock`, not directly on `Rule`. Setting `RateBlock.per_minute` stores the configuration; it does not enable throttling in the in-process hub.
 
 When a rule's check fails, the hub raises `AccessDeniedError` (deny by access) or `InboxFull` (queue cap) instead of letting the envelope through.
 
 ## Authentication
 
+Authentication decides whether a participant may register under the name in its passport. By default the hub accepts everyone: `Hub.open(store)` uses `AuthRegistry.default()`, which holds only `NoAuth`. That is fine while every agent runs inside your own process, because the hub then holds only agents your code created.
+
+Turn authentication on once other processes can connect to the hub. Over the network, `NoAuth` lets any client act as any agent, so `serve_ws` refuses to bind a hub that still accepts it to a non-loopback address - see [Distributed Networks](distributed.md#authentication).
+
+### How it fits together
+
+Authentication has two halves:
+
+- **The hub** is opened with an `AuthRegistry` - a list of adapters. Each adapter handles one **scheme**, a short string such as `"api_key"`.
+- **Each agent** presents a credential in its passport: `Passport(auth=AuthBlock(scheme=..., claim=...))`. The `scheme` names the adapter that should check it; the `claim` is the credential itself, a dict whose shape that adapter defines.
+
+At registration the hub looks up the adapter for `passport.auth.scheme` and calls its `validate(passport, claim)`. If the adapter raises `AuthError`, or no adapter is registered for that scheme, `hub.register(...)` raises `AuthError` and the agent is not registered.
+
+A passport built without `auth=` carries `AuthBlock()`, whose scheme is `"none"` - the scheme `NoAuth` handles. That is why plain registration works on a default hub, and why it is rejected once `NoAuth` is gone.
+
+### API keys
+
+`ApiKeyAuth` is the built-in adapter: each agent name has one secret token. Configure the tokens on the hub, and have each agent send its own token as `{"token": ...}`:
+
 ```python
-from ag2.network import AuthAdapter, AuthRegistry, NoAuth
+import os
 
-# default: NoAuth registered for the empty scheme
-hub = await Hub.open(store)
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import ApiKeyAuth, AuthBlock, AuthRegistry, Hub, Passport
 
-# explicit:
-auth = AuthRegistry()
-auth.register("hmac", MyHMACAdapter())
-hub = await Hub.open(store, auth=auth)
+auth = AuthRegistry([ApiKeyAuth(keys={"alice": os.environ["ALICE_API_KEY"]})])
+hub = await Hub.open(MemoryKnowledgeStore(), auth=auth)
+
+alice = await hub.register(
+    Agent("alice"),
+    passport=Passport(
+        name="alice",
+        auth=AuthBlock(scheme="api_key", claim={"token": os.environ["ALICE_API_KEY"]}),
+    ),
+)
 ```
 
-`AuthAdapter` is a `Protocol`:
+Lines 7-8 are the hub's side: `keys` maps a passport **name** to the token expected for it. Lines 12-15 are the agent's side. Both run in one process here to keep the example short; in a real deployment the agent registers from another process through a `HubClient` and reads its token from its own configuration.
+
+Registration fails with `AuthError` when the token is wrong, when the name has no key, or when the passport has no `api_key` credential at all - for example `await hub.register(Agent("bob"))` on this hub raises `AuthError: unknown auth scheme: 'none'`.
+
+When tokens live in a secret manager or a database, pass an async `resolver` instead of (or in addition to) `keys`. It receives the passport name and returns the expected token, or `None` for an unknown name; `keys` is checked first:
 
 ```python
-class AuthAdapter(Protocol):
-    async def verify(self, passport: Passport, credentials: AuthBlock) -> None: ...
+import os
+
+from ag2.network import ApiKeyAuth, AuthRegistry
+
+async def lookup_api_key(name: str) -> str | None:
+    # Replace with a call to your secret store.
+    return os.environ.get(f"{name.upper()}_API_KEY")
+
+auth = AuthRegistry([ApiKeyAuth(resolver=lookup_api_key)])
 ```
 
-Hub calls `verify(...)` at registration. Raise `AuthError` to reject. The default registry registers `NoAuth` for the empty scheme so the simple in-process flow works with no setup.
+### Mixing authenticated and open registration
+
+A registry may hold several adapters, and each agent picks one through its passport's scheme. To keep accepting agents without credentials alongside API-key agents, add `NoAuth()`:
+
+```python
+from ag2.network import ApiKeyAuth, AuthRegistry, NoAuth
+
+auth = AuthRegistry([NoAuth(), ApiKeyAuth(keys={"alice": "..."})])
+```
+
+Note that with `NoAuth` present, any client can still register under any name the API keys don't cover, and `serve_ws` treats the hub as unauthenticated.
+
+### Writing a custom adapter
+
+Write your own adapter when agents already hold credentials from another system - for example, JWTs issued by your identity provider. An adapter is any class with a `scheme` attribute and an async `validate(passport, claim)` method; it satisfies the `AuthAdapter` protocol structurally, with no base class.
+
+This adapter accepts agents that present a JWT signed by your identity provider. It uses [PyJWT](https://pyjwt.readthedocs.io/) (`pip install "pyjwt[crypto]"`) to check the signature, expiry and audience:
+
+```python
+from typing import Any
+
+import jwt
+
+from ag2.network import AuthError, AuthRegistry, Passport
+
+class JwtAuth:
+    scheme = "jwt"
+
+    def __init__(self, public_key: str, audience: str) -> None:
+        self._public_key = public_key
+        self._audience = audience
+
+    async def validate(self, passport: Passport, claim: dict[str, Any]) -> None:
+        try:
+            payload = jwt.decode(
+                claim.get("token", ""),
+                self._public_key,
+                algorithms=["RS256"],
+                audience=self._audience,
+            )
+        except jwt.InvalidTokenError as exc:
+            raise AuthError(f"invalid token for {passport.name!r}") from exc
+        if payload.get("sub") != passport.name:
+            raise AuthError(f"token was not issued to {passport.name!r}")
+
+auth = AuthRegistry([JwtAuth(public_key=IDP_PUBLIC_KEY, audience="ag2-hub")])
+```
+
+`IDP_PUBLIC_KEY` stands for your identity provider's public key, loaded from configuration. The hub only verifies tokens and never holds a signing secret. Each agent registers with the token it got from the provider:
+
+```python
+passport = Passport(name="alice", auth=AuthBlock(scheme="jwt", claim={"token": alice_jwt}))
+```
+
+What the example shows, and what any adapter needs to get right:
+
+- **Return `None` to accept, raise `AuthError` to reject.** Turn your library's errors into `AuthError`, as the `except` block does. The message reaches the client, so don't put secrets in it.
+- **Tie the credential to the passport.** A valid token proves only that its holder is *somebody*. The `sub` check is what stops Alice's token from registering an agent named `bob`. Whatever your credential identifies (a subject, a tenant, a certificate), compare it to `passport.name` or `passport.owner`.
+- **Read the credential from `claim`, not from `passport.auth.claim`.** The hub doesn't store credentials. When a remote agent reconnects with [`attach`](distributed.md#at-least-once-delivery), the hub calls `validate` again with the stored passport, whose claim is empty, and passes the newly sent credential in `claim`. The reconnect must use the scheme the agent registered with.
+- **Leave the cryptography to a library.** Verifying signatures, expiry and audience is the library's job. Your adapter maps its result onto the hub's identity.
 
 ## Audit Log
 
@@ -21345,7 +21816,7 @@ The kind set is **open** - tenants and hub subclasses can write their own kinds 
 |---|---|
 | `await hub.get_channel(channel_id)` | `ChannelMetadata` snapshot. |
 | `await hub.get_resume(agent_id)` | Current `Resume`. |
-| `await hub.get_passport(agent_id)` | Current `Passport`. |
+| `await hub.get_agent(name_or_id)` | Current `Passport`, looked up by name or id. |
 | `await hub.read_wal(channel_id)` | Ordered list of `Envelope`s in that channel. |
 | `hub.audit_log` | The `AuditLog` instance - `await hub.audit_log.read_all()` for every record, `hub.audit_log.subscribe(cb)` to live-tail. |
 | `hub.health()` | Cheap in-memory operational snapshot (`active_channels`, `registered_agents`, `pending_inbox_total`, `max_pending_inbox_depth`, `registered_listeners`, `adapters_loaded`, `audit_log_bytes`). |
@@ -21658,28 +22129,39 @@ await human.post_envelope(envelope)
 
 When an agent opens a channel to a human, the hub waits for the human's `EV_CHANNEL_INVITE_ACK` before the channel reaches `ACTIVE`. With `auto_ack_invites=True` (the default) the `HumanClient` acks automatically the moment the invite arrives - the channel handshake completes with no UI round-trip, exactly like the default agent handler.
 
-Pass `auto_ack_invites=False` if you want a human to *decide* whether to join (an "accept invite?" prompt). If so, your UI is responsible for emitting the ack:
+Pass `auto_ack_invites=False` if you want a human to *decide* whether to join (an "accept invite?" prompt). Your app then answers each invite itself: `EV_CHANNEL_INVITE_ACK` to join, `EV_CHANNEL_INVITE_REJECT` to decline.
 
 ```python
-from ag2.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, Envelope
+from ag2.network import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, EV_CHANNEL_INVITE_REJECT, Envelope
 
 human = await hc.register_human(Passport(name="operator"), auto_ack_invites=False)
 
-async def gate_invites(envelope) -> None:
-    if envelope.event_type != EV_CHANNEL_INVITE:
-        return
-    if await ui.confirm(f"Join channel {envelope.channel_id}?"):
-        await human.post_envelope(Envelope(
-            channel_id=envelope.channel_id,
-            sender_id=human.agent_id,
-            event_type=EV_CHANNEL_INVITE_ACK,
-            event_data={"channel_id": envelope.channel_id},
-            causation_id=envelope.envelope_id,
-        ))
-    # otherwise let the hub's invite-ack timeout close the channel
+async def show_invites(envelope) -> None:
+    if envelope.event_type == EV_CHANNEL_INVITE:
+        await ui.show_invite(envelope)  # display the prompt and return; don't wait for the answer here
 
-human.on_envelope(gate_invites)
+human.on_envelope(show_invites)
+
+# Call this from your UI's "Accept" / "Decline" handler.
+async def answer_invite(invite: Envelope, accepted: bool) -> None:
+    await human.post_envelope(Envelope(
+        channel_id=invite.channel_id,
+        sender_id=human.agent_id,
+        audience=None,
+        event_type=EV_CHANNEL_INVITE_ACK if accepted else EV_CHANNEL_INVITE_REJECT,
+        event_data={"channel_id": invite.channel_id},
+        causation_id=invite.envelope_id,
+    ))
 ```
+
+What the initiator sees:
+
+- **Accept** - the channel becomes `ACTIVE` and `open()` returns the `Channel`.
+- **Decline** - the hub closes the channel right away and `open()` raises `ProtocolError` (`invite_rejected`).
+- **No answer in time** - the human has `invite_ack_timeout` to answer: 30 seconds by default, set it with `Hub.open(store, invite_ack_timeout=120.0)`. After that the hub closes the channel and `open()` raises `ProtocolError`. A late `answer_invite(...)` raises `ProtocolError` as well, because the channel is already closed.
+
+!!! warning "Don't wait for the human's answer inside `on_envelope`"
+    With an in-process hub (`HubClient(LocalLink(hub), hub=hub)`), envelopes reach the human one at a time: the next one is delivered only after your callback returns. If the callback awaits the human's decision, messages from the human's other channels are held back until they click. Show the prompt, return, and send the answer from your UI handler.
 
 ## Hooking up a UI
 
@@ -27176,7 +27658,7 @@ class ViewPolicy(Protocol):
     ) -> list[BaseEvent]: ...
 ```
 
-It takes the WAL up to the current envelope and returns a list of `BaseEvent`s that the framework feeds into the LLM turn as pre-populated stream history. Adapters declare a default; tenants can override per-channel.
+It takes the WAL up to the current envelope and returns a list of `BaseEvent`s that the framework feeds into the LLM turn as pre-populated stream history. Each adapter picks a default view per participant; to use a different one, override the adapter's `default_view_policy` (see [Custom Views](#custom-views)).
 
 Two callables are supplied per call so view policies stay adapter-neutral and identity-aware without depending on hub internals:
 
@@ -27199,16 +27681,26 @@ All four views honour audience: an envelope addressed only to `[bob]` doesn't ap
 
     In a **3+ party** channel (discussion, workflow), every non-self envelope collapses into the same `role: "user"` stream. Without a sender label the LLM can't tell which peer said which message. The `Named*` variants put `[<sender name>]:` on each non-self line so the orchestrator / next speaker can route accurately. This is the default for N-party adapters precisely because the role bit alone isn't enough.
 
+You can also call a view directly, for example to inspect what a participant would see. Supply the same inputs the default handler does: the channel's WAL and metadata from the hub, the adapter's `render_envelope` normalised with `ensure_parts`, and `Hub.name_for`. Here `hub` is your `Hub`, `channel_id` an existing channel and `carol` the `AgentClient` of one of its participants:
+
 ```python
-from ag2.network import FullTranscript, WindowedSummary
+from ag2.network import WindowedSummary, ensure_parts
+
+metadata = await hub.get_channel(channel_id)
+wal = await hub.read_wal(channel_id)
+adapter = hub.adapter_for(channel_id)
 
 view = WindowedSummary(recent_n=12)
 projected = await view.project(
-    history=wal_slice,
+    wal,
     participant_id=carol.agent_id,
     channel=metadata,
+    render_envelope=lambda envelope: ensure_parts(adapter.render_envelope(envelope)),
+    name_for=hub.name_for,
 )
 ```
+
+`projected` is the list of events carol's LLM would receive as history: at most 12 visible envelopes, plus a leading `CompactionSummary` when older ones were elided.
 
 ## Resolving the Default
 
@@ -27218,11 +27710,11 @@ from ag2.network import resolve_view_policy
 policy = resolve_view_policy(client, metadata)
 ```
 
-`resolve_view_policy` reads the adapter manifest's `default_view_policy` and instantiates the matching view from the registry. The default handler calls this once per turn - custom handlers should too, unless they're deliberately bypassing the standard projection model.
+`client` is the participant's `AgentClient` (what `hub.register(...)` returns). `resolve_view_policy` asks the channel's adapter for that participant's view by calling `ChannelAdapter.default_view_policy(metadata, client.agent_id)`, so the adapter can size the view for the channel. For example, discussion and workflow channels use `NamedWindowedSummary(recent_n=max(2 * participant_count, 4))`. The default handler calls this once per turn. Custom handlers should too, unless they're deliberately bypassing the standard projection model.
 
 ## Custom Views
 
-Implement the protocol, give it a unique `name`, and pass to the policy resolver. Common shapes:
+Implement the protocol and give the view a unique `name`. For example, a view that shows only one sender's messages:
 
 ```python
 from typing import ClassVar
@@ -27269,11 +27761,23 @@ class FromOneOnly(ViewPolicy):
         return out
 ```
 
+There is no separate view registry. To make the default handler use your view, subclass the channel type's adapter, return the view from `default_view_policy`, and register the subclass on the hub. Registering an adapter with the same type and version replaces the built-in one for channels opened afterwards. Here `alice` is the `AgentClient` whose messages everyone should see:
+
+```python
+from ag2.network import ChannelMetadata, ConversationAdapter, ViewPolicy
+
+class FromAliceConversation(ConversationAdapter):
+    def default_view_policy(self, metadata: ChannelMetadata, participant_id: str) -> ViewPolicy:
+        return FromOneOnly(sender_id=alice.agent_id)
+
+hub.register_adapter(FromAliceConversation())
+```
+
 The `BaseEvent` types you emit determine how the LLM sees the history: `ModelRequest` for messages "from the user," `ModelMessage` for messages "from the assistant," and so on. Look at `ag2.events` for the full taxonomy.
 
 ## CompactionSummary
 
-When `WindowedSummary` elides envelopes outside its window, it prepends a `CompactionSummary(text="...elided N turns")` event. This is from `ag2.compact` - the LLM sees it as a system-supplied note that "there is earlier history I'm not showing you." This keeps the LLM's behaviour grounded in long-running discussions without exploding the token budget.
+When `WindowedSummary` (or `NamedWindowedSummary`) elides envelopes outside its window, it prepends a `CompactionSummary` event from `ag2.compact`, for example `CompactionSummary(summary="Earlier in this channel: 8 messages from alice, bob.", event_count=8)`. The summary is a static count of messages and speakers, with no LLM call. `NamedWindowedSummary` lists speakers by `Passport.name`; `WindowedSummary` lists their raw agent ids. Provider clients send it to the LLM as a user turn prefixed with `[Summary of earlier conversation]`, so the model knows earlier history exists without seeing it. This keeps the LLM's behaviour grounded in long-running discussions without exploding the token budget.
 
 ## Skills (Markdown Frontmatter)
 
@@ -27475,9 +27979,11 @@ For deployments where agents must authenticate at the WebSocket handshake, build
 ```python
 from ag2.network import ApiKeyAuth, AuthRegistry, Hub
 
-auth = AuthRegistry([ApiKeyAuth(keys={"token-alice", "token-bob"})])
+auth = AuthRegistry([ApiKeyAuth(keys={"alice": "token-alice", "bob": "token-bob"})])
 hub = await Hub.open(store, auth=auth)
 ```
+
+`keys` maps each agent's passport name to its token. See [Authentication](hub_and_identity.md#authentication) for how schemes and claims work, loading tokens from a secret store, and writing a custom adapter.
 
 Each agent passes its token inside `Passport.auth`:
 
@@ -27529,28 +28035,43 @@ The hub guarantees each envelope is delivered at least once across reconnects:
 hub_client = HubClient(WsLink(url))
 await hub_client.open()
 bob = await hub_client.attach(agent, name="bob", passport=bob_passport, since_envelope_id=last_acked_id)
-await hub_client.resume_pending_turns(bob)
+await bob.resume_pending_turns()
 ```
 
 `attach` re-binds an existing identity to a fresh connection. Pass the identity's own passport (with its `AuthBlock` credential): the hub never returns another agent's - or your own - auth claim, so it cannot be recovered from `get_agent`. Keep the passport you registered with: the `AgentClient.passport` a remote `register` returns has no claim and cannot re-attach a credentialed identity. `resume_pending_turns` re-fires any turns the protocol still expects from this agent. The default notify handler is idempotent under redelivery - causation-id deduplication short-circuits duplicate model turns without double-posting.
 
 ## Task Durability
 
-Tasks can be checkpointed through the hub so state survives a process restart:
+A task can save its state to the hub, so the work survives a restart of the owner's process. Pass a `HubBackedCheckpointStore` to the task and call `checkpoint()`:
 
 ```python
 from ag2.network import HubBackedCheckpointStore
+from ag2.task import Task, TaskSpec
 
-checkpoint_store = HubBackedCheckpointStore(hub_client)
-
-# inside a tool or agent turn:
-await task.checkpoint({"step": 3, "partial_result": "..."})
-
-# on another node, after a restart:
-recovered = await agent.resume_from(task_id, checkpoint_store)
+async with Task(
+    owner_id=bob.agent_id,
+    spec=TaskSpec(title="Process a batch"),
+    checkpoint_store=HubBackedCheckpointStore(hub_client),
+) as task:
+    saved_task_id = task.task_id  # store it outside this process
+    await task.checkpoint({"next_step": 4})
 ```
 
-`HubBackedCheckpointStore` satisfies the `CheckpointStore` Protocol by delegating writes and reads to the hub's `KnowledgeStore`. Pass a `Hub` for in-process durability or a `HubClient` for cross-process. For checkpoints that survive a hub restart, use `DiskKnowledgeStore(path)` on the hub.
+After a restart, re-attach bob as shown in [At-Least-Once Delivery](#at-least-once-delivery) and pass the saved ID as `resume_from`:
+
+```python
+async with Task(
+    owner_id=bob.agent_id,
+    spec=TaskSpec(title="Process a batch"),
+    checkpoint_store=HubBackedCheckpointStore(hub_client),
+    resume_from=saved_task_id,
+) as task:
+    next_step = (task.resumed_state or {}).get("next_step", 0)
+```
+
+`task.resumed_state` is the dict from the last `checkpoint()` call, or `None` if there is none. The resumed task gets a new `task_id`, and its own checkpoints are saved under it - store that ID too if the work may need to resume again. Over the wire, only the agent that wrote a checkpoint can read it; resume as a different agent and the hub raises `AccessDeniedError`.
+
+Checkpoints live in the hub's `KnowledgeStore`; to keep them across a hub restart, open the hub with `DiskKnowledgeStore(path)`. See [Checkpoint and Recovery](../tasks.md#checkpoint-and-recovery) for the full API.
 
 ## Production Notes
 
