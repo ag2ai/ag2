@@ -301,17 +301,21 @@ def _fields_by_key(response: ResponseProto[Any], error: type[NotADecisionError])
     hints = get_type_hints(cls, include_extras=True)
 
     fields: dict[str, _Field] = {}
+    input_fields: dict[str, _Field] = {}
     for name, core_field in core_fields:
         alias = core_field.get("validation_alias")
         key = _schema_key(name, alias)
         input_key = _input_key(name, key, _alias_paths(alias), by_alias=by_alias, by_name=by_name)
         field = _Field(name, _strip_qualifiers(hints.get(name)), input_key)
-        if key in fields:
-            raise error(
-                f"Fields {fields[key].name!r} and {name!r} of `response_schema` are both validated from key "
-                f"{key!r}; each question must be a field with a key of its own."
-            )
-        fields[key] = field
+        for field_key, keyed_fields in ((key, fields), (input_key, input_fields)):
+            if field_key is None:
+                continue
+            if field_key in keyed_fields:
+                raise error(
+                    f"Fields {keyed_fields[field_key].name!r} and {name!r} of `response_schema` are both validated "
+                    f"from key {field_key!r}; each question must be a field with a key of its own."
+                )
+            keyed_fields[field_key] = field
     # Pydantic versions differ on whether a class validated by name has its schema keyed by name or alias.
     for field in list(fields.values()):
         fields.setdefault(field.name, field)

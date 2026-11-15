@@ -8,10 +8,10 @@ from enum import Enum, IntEnum
 from typing import Annotated
 
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import AliasPath, BaseModel, Field
 
-from ag2 import ResponseSchema
-from ag2.response import DecisionSet, Question
+from ag2 import Context, MemoryStream, ResponseSchema
+from ag2.response import DecisionSet, NotADecisionError, Question
 
 
 class Department(Enum):
@@ -36,6 +36,26 @@ class TicketTriage:
 class AliasedTriage(BaseModel):
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="isSpam")
     department: Department = Field(alias="team")
+
+
+class SharedPathTriage(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("shared"))
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(validation_alias=AliasPath("shared"))
+
+
+class MixedPathTriage(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("shared"))
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="shared")
+
+
+class PathToAnotherField(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("is_urgent"))
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")]
+
+
+class DistinctPathTriage(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("spam"))
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(validation_alias=AliasPath("urgent"))
 
 
 @dataclass
@@ -85,6 +105,30 @@ def test_aliased_fields_are_named_by_field_and_rendered_by_alias() -> None:
         "isSpam": True,
         "team": "billing",
     }
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [SharedPathTriage, MixedPathTriage, PathToAnotherField],
+    ids=["shared-path", "path-and-alias", "path-to-field-name"],
+)
+def test_fields_sharing_an_input_key_are_rejected(schema: type[BaseModel]) -> None:
+    with pytest.raises(NotADecisionError, match="Fields 'is_spam' and 'is_urgent' .+ both validated from key"):
+        DecisionSet.from_response(ResponseSchema(schema))
+
+
+@pytest.mark.asyncio
+async def test_distinct_flat_paths_keep_each_answer() -> None:
+    schema = ResponseSchema(DistinctPathTriage)
+    decisions = DecisionSet.from_response(schema)
+
+    content = decisions.render({"is_spam": True, "is_urgent": False})
+
+    assert json.loads(content) == {"spam": True, "urgent": False}
+    assert await schema.validate(content, Context(stream=MemoryStream())) == DistinctPathTriage.model_validate({
+        "spam": True,
+        "urgent": False,
+    })
 
 
 def test_blank_question_is_no_question() -> None:

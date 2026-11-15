@@ -145,6 +145,21 @@ class AliasOfAnotherField(BaseModel):
     is_urgent: Annotated[bool, Question("Is this ticket urgent?")]
 
 
+class SharedPath(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("shared"))
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(validation_alias=AliasPath("shared"))
+
+
+class MixedPathAlias(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("shared"))
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="shared")
+
+
+class PathAliasOfAnotherField(BaseModel):
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("is_urgent"))
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")]
+
+
 class QualifiedTriage(TypedDict, total=False):
     is_spam: Required[Annotated[bool, Question("Is this message spam?")]]
 
@@ -472,7 +487,11 @@ class TestRejections:
 
         assert provider.requests == 0
 
-    @pytest.mark.parametrize("schema", [SharedAlias, AliasOfAnotherField], ids=lambda s: s.__name__)
+    @pytest.mark.parametrize(
+        "schema",
+        [SharedAlias, AliasOfAnotherField, SharedPath, MixedPathAlias, PathAliasOfAnotherField],
+        ids=lambda s: s.__name__,
+    )
     async def test_fields_validated_from_one_key(self, provider: Provider, schema: Any) -> None:
         with pytest.raises(provider.unsupported, match="Fields 'is_spam' and 'is_urgent' .+ both validated from key"):
             await provider.ask(schema, {}, prompt="Q")
