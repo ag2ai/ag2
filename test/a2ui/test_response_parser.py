@@ -1123,6 +1123,22 @@ class TestStripMarkdownFences:
         assert strip_markdown_fences("```json[1, 2]\n```") == "[1, 2]"
         assert strip_markdown_fences('```JSON {"a": 1}\r\n```') == '{"a": 1}'
 
+    def test_single_line_fence_without_language_tag_and_standalone_closing_fence(self) -> None:
+        assert strip_markdown_fences('```{"key": "value"}\n```') == '{"key": "value"}'
+        assert strip_markdown_fences("```[1, 2]\r\n```") == "[1, 2]"
+
+    def test_info_string_attributes_before_empty_block_are_not_payload(self) -> None:
+        assert strip_markdown_fences("```json title=x\n```") == ""
+
+    def test_info_string_with_trailing_whitespace_before_multi_line_payload(self) -> None:
+        assert strip_markdown_fences("```json \n[1, 2]\n```") == "[1, 2]"
+
+    def test_info_string_attributes_before_multi_line_payload(self) -> None:
+        assert strip_markdown_fences("```json title=x\n[1, 2]\n```") == "[1, 2]"
+
+    def test_multi_line_payload_starting_on_opening_line(self) -> None:
+        assert strip_markdown_fences('```json [\n  {"a": 1}\n]\n```') == '[\n  {"a": 1}\n]'
+
     def test_single_line_fence_with_language_tag_before_array(self) -> None:
         assert strip_markdown_fences("```json[1, 2]```") == "[1, 2]"
 
@@ -1166,6 +1182,18 @@ class TestParseWithMarkdownFences:
         response = (
             "Here is your UI.\n<a2ui-json>\n```json "
             '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]```\n</a2ui-json>'
+        )
+        result = parser.parse(response)
+        assert result.has_a2ui is True
+        assert len(result.operations) == 1
+        assert result.parse_error is None
+
+    @pytest.mark.parametrize("opening", ["```json ", "```"])
+    def test_parse_single_line_fence_with_standalone_closing_fence(self, opening: str) -> None:
+        parser = A2UIResponseParser(version_string="v0.9")
+        response = (
+            f"Here is your UI.\n<a2ui-json>\n{opening}"
+            '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]\n```\n</a2ui-json>'
         )
         result = parser.parse(response)
         assert result.has_a2ui is True
