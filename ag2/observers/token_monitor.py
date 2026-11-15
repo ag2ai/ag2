@@ -4,9 +4,10 @@
 
 """TokenMonitor — tracks cumulative token usage and alerts when thresholds are exceeded."""
 
+from ag2._import_utils import require_optional_import
 from ag2.annotations import Context
 from ag2.events import BaseEvent, ObserverAlert, Severity, Usage, UsageEvent
-from ag2.usage import usage_event_from
+from ag2.usage import price_usage, usage_event_from
 from ag2.watch import EventWatch
 
 from .observer import BaseObserver
@@ -41,6 +42,11 @@ def _billable_tokens(usage: Usage) -> int:
     return max(int(usage.total_tokens), counted)
 
 
+@require_optional_import("llm_prices", "pricing")
+def _require_pricing() -> None:
+    """Fail at construction, not on the first event, when ``max_usd`` cannot be priced."""
+
+
 class TokenMonitor(BaseObserver):
     """Tracks cumulative token usage and alerts when thresholds are exceeded.
 
@@ -53,8 +59,10 @@ class TokenMonitor(BaseObserver):
     It counts every input token at the same weight, cached or not: the
     threshold bounds how much the model read and wrote, not what that cost. A
     heavily prompt-cached turn moves the guard by more than it bills, since
-    cache reads are priced below fresh input. Read ``UsageReport`` with a price
-    catalog for the bill.
+    cache reads are priced below fresh input. To bound the bill instead, pass
+    ``max_usd``: every record is then priced with :func:`ag2.usage.price_usage`
+    (the ``pricing`` extra), cache reads, cache writes and long-context tiers at
+    their own prices, the same figure :meth:`ag2.usage.UsageReport.cost` reports.
 
     Deliberately *not* ``ModelResponse`` or ``TaskCompleted``. Those are derived
     events and reading them made the guard wrong three ways: a sub-task that
@@ -72,6 +80,12 @@ class TokenMonitor(BaseObserver):
         Total tokens at which a WARNING alert is emitted.
     alert_threshold:
         Total tokens at which a CRITICAL alert is emitted.
+    max_usd:
+        Total list-price cost in USD at which a CRITICAL alert is emitted, or
+        ``None`` (the default) to track tokens only. Requires the ``pricing``
+        extra. Spend the price catalog cannot price (a local model, a model it
+        does not list) is not counted; the first such record raises a WARNING
+        alert naming the model, so the gap is never silent.
     name:
         Observer display name.
     timeout:
@@ -83,20 +97,33 @@ class TokenMonitor(BaseObserver):
         warn_threshold: int = 50_000,
         alert_threshold: int = 100_000,
         *,
+        max_usd: float | None = None,
         name: str = "token-monitor",
         timeout: float | None = None,
     ) -> None:
+        if max_usd is not None:
+            _require_pricing()
         super().__init__(name, watch=EventWatch(UsageEvent), timeout=timeout)
         self._warn_threshold = warn_threshold
         self._alert_threshold = alert_threshold
+        self._max_usd = max_usd
         self._total_tokens: int = 0
+        self._total_usd: float = 0.0
+        self._unpriced: UsageEvent | None = None
         self._seen_usage: set[str] = set()
         self._warned = False
         self._alerted = False
+        self._cost_alerted = False
+        self._unpriced_warned = False
 
     @property
     def total_tokens(self) -> int:
         return self._total_tokens
+
+    @property
+    def total_usd(self) -> float:
+        """List-price cost counted so far; stays ``0.0`` unless ``max_usd`` is set."""
+        return self._total_usd
 
     async def process(self, events: list[BaseEvent], ctx: Context) -> ObserverAlert | None:
         for event in events:
@@ -106,6 +133,20 @@ class TokenMonitor(BaseObserver):
                 usage = record.usage
                 if usage:
                     self._total_tokens += _billable_tokens(usage)
+                    if self._max_usd is not None:
+                        self._count_cost(record)
+
+        if self._max_usd is not None and not self._cost_alerted and self._total_usd >= self._max_usd:
+            self._cost_alerted = True
+            return ObserverAlert(
+                source=self.name,
+                severity=Severity.CRITICAL,
+                message=(
+                    f"Cost critical: ${self._total_usd:,.4f} at list price "
+                    f"(limit: ${self._max_usd:,.2f}). "
+                    "Consider wrapping up to control costs."
+                ),
+            )
 
         if not self._alerted and self._total_tokens >= self._alert_threshold:
             self._alerted = True
@@ -131,11 +172,35 @@ class TokenMonitor(BaseObserver):
                 ),
             )
 
+        if self._unpriced is not None and not self._unpriced_warned:
+            self._unpriced_warned = True
+            return ObserverAlert(
+                source=self.name,
+                severity=Severity.WARNING,
+                message=(
+                    f"Cost not tracked for model {self._unpriced.model!r} "
+                    f"(provider {self._unpriced.provider!r}): the price catalog has no price for it, "
+                    "so max_usd does not cover its spend."
+                ),
+            )
+
         return None
+
+    def _count_cost(self, record: UsageEvent) -> None:
+        usd = price_usage(record.usage, model=record.model, provider=record.provider)
+        if usd is None:
+            if self._unpriced is None:
+                self._unpriced = record
+        else:
+            self._total_usd += usd
 
     def reset(self) -> None:
         """Reset counters for a fresh session."""
         self._total_tokens = 0
+        self._total_usd = 0.0
+        self._unpriced = None
         self._seen_usage.clear()
         self._warned = False
         self._alerted = False
+        self._cost_alerted = False
+        self._unpriced_warned = False

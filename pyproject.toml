@@ -115,6 +115,8 @@ redis = ["redis>=5.0,<9"]
 # caller's choice to install.
 tracing = ["opentelemetry-sdk>=1.20"]
 metrics = ["prometheus-client>=0.20.0,<0.30.0"]
+# Dollar cost of usage (ag2.usage): a dated, source-cited per-model price table
+pricing = ["llm-prices>=1.3.0,<2"]
 
 # === Search tools ===
 tavily = ["tavily-python>=0.7.4,<0.9"]
@@ -178,6 +180,7 @@ optionals = [
     "ag2[acp]",
     "ag2[tracing]",
     "ag2[metrics]",
+    "ag2[pricing]", # UsageReport.cost(), TokenMonitor(max_usd=...), cost_budget
     # search tools
     "ag2[tavily,ddgs,perplexity]",
     # extensions are not shipped as extras; install their packages directly for testing
@@ -274,6 +277,8 @@ types = [
     # without these their imports are Any, which hides real errors (redis) or trips
     # `disallow_any_unimported` (prometheus_client)
     "ag2[redis, metrics]",
+    # `ag2/usage.py` prices usage with llm_prices; unresolved, its rows are Any
+    "ag2[pricing]",
     # `ag2/textual.py` subclasses textual's `App`; unresolved, the base class is Any
     # and trips `disallow_any_unimported`. Not an extra: the TUI is an optional demo.
     "textual",

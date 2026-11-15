@@ -117,7 +117,7 @@ def under_token_budget(trace) -> bool:
 
 ## Prebuilt scorers
 
-Six ship under `ag2.eval.scorers`. Four are simple, deterministic checks (below); two richer ones — `agent_judge` and `failure_attribution` — get their own sections after.
+Seven ship under `ag2.eval.scorers`. Five are simple, deterministic checks (below); two richer ones — `agent_judge` and `failure_attribution` — get their own sections after.
 
 | Scorer | Question | Type | When to use |
 |---|---|---|---|
@@ -125,6 +125,7 @@ Six ship under `ag2.eval.scorers`. Four are simple, deterministic checks (below)
 | `no_tool_errors()` | Were there zero `ToolErrorEvent`s? | bool | Catch tools that exploded. |
 | `final_answer_matches(field, matcher)` | Does the answer match `reference_outputs[field]`? | bool | Closed-form correctness. Matcher: `"exact"`, `"casefold"`, `"contains"`. |
 | `token_budget(max_tokens)` | Did the run stay under `max_tokens` total? | bool | Cost discipline as a pass/fail signal. |
+| `cost_budget(max_usd)` | Did the run's list-price cost stay at or under `max_usd`? | bool | Cost discipline in dollars, with cache reads and writes priced at their own rates. Needs `ag2[pricing]`; ungraded (`None`) when a model has no price. |
 
 Each is a *factory* — calling it returns a `Scorer`. Drop them straight into the `scorers=` list:
 
