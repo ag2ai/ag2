@@ -53,6 +53,14 @@ class PathToAnotherField(BaseModel):
     is_urgent: Annotated[bool, Question("Is this ticket urgent?")]
 
 
+class PopulatedPathToAnotherField(PathToAnotherField):
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PopulatedMixedPathTriage(MixedPathTriage):
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class DistinctPathTriage(BaseModel):
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("spam"))
     is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(validation_alias=AliasPath("urgent"))
@@ -130,8 +138,8 @@ def test_aliased_fields_are_named_by_field_and_rendered_by_alias() -> None:
 
 @pytest.mark.parametrize(
     "schema",
-    [SharedPathTriage, MixedPathTriage, PathToAnotherField],
-    ids=["shared-path", "path-and-alias", "path-to-field-name"],
+    [SharedPathTriage, MixedPathTriage, PathToAnotherField, PopulatedPathToAnotherField, PopulatedMixedPathTriage],
+    ids=["shared-path", "path-and-alias", "path-to-field-name", "populated-path-to-field", "populated-path-and-alias"],
 )
 def test_fields_sharing_an_input_key_are_rejected(schema: type[BaseModel]) -> None:
     with pytest.raises(NotADecisionError, match="Fields 'is_spam' and 'is_urgent' .+ both validated from key"):

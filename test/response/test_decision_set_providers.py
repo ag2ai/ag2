@@ -181,6 +181,14 @@ class PathAliasOfAnotherField(BaseModel):
     is_urgent: Annotated[bool, Question("Is this ticket urgent?")]
 
 
+class PopulatedPathAliasOfAnotherField(PathAliasOfAnotherField):
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PopulatedMixedPathAlias(MixedPathAlias):
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class QualifiedTriage(TypedDict, total=False):
     is_spam: Required[Annotated[bool, Question("Is this message spam?")]]
 
@@ -525,7 +533,15 @@ class TestRejections:
 
     @pytest.mark.parametrize(
         "schema",
-        [SharedAlias, AliasOfAnotherField, SharedPath, MixedPathAlias, PathAliasOfAnotherField],
+        [
+            SharedAlias,
+            AliasOfAnotherField,
+            SharedPath,
+            MixedPathAlias,
+            PathAliasOfAnotherField,
+            PopulatedPathAliasOfAnotherField,
+            PopulatedMixedPathAlias,
+        ],
         ids=lambda s: s.__name__,
     )
     async def test_fields_validated_from_one_key(self, provider: Provider, schema: Any) -> None:

@@ -307,8 +307,7 @@ def _fields_by_name(response: ResponseProto[Any], error: type[NotADecisionError]
     input_fields: dict[str, _Field] = {}
     for name, core_field in core_fields:
         alias = core_field.get("validation_alias")
-        key = _schema_key(name, alias)
-        input_key = _input_key(name, key, _alias_paths(alias), by_alias=by_alias, by_name=by_name)
+        input_key = _input_key(name, _alias_paths(alias), by_alias=by_alias, by_name=by_name)
         field = _Field(name, _strip_qualifiers(hints.get(name)), input_key)
         if input_key is not None:
             if input_key in input_fields:
@@ -359,21 +358,6 @@ def _strip_qualifiers(hint: Any) -> Any:
     return hint
 
 
-def _schema_key(name: str, alias: Any) -> str:
-    """The key a core ``validation_alias`` gives the field in the validation-mode JSON schema.
-
-    Pydantic names the property after the alias, or the first flat choice of an ``AliasChoices``;
-    a field read only from nested paths keeps its name.
-    """
-    if isinstance(alias, str):
-        return alias
-    if isinstance(alias, list):
-        for path in alias:
-            if isinstance(path, list) and len(path) == 1 and isinstance(path[0], str):
-                return path[0]
-    return name
-
-
 def _alias_paths(alias: Any) -> list[list[str | int]]:
     """A core ``validation_alias`` as its alternative paths: ``"a"``, ``["a", 0]`` or ``[["a"], ["b", 0]]``."""
     if alias is None:
@@ -385,20 +369,17 @@ def _alias_paths(alias: Any) -> list[list[str | int]]:
     return [list(alias)]
 
 
-def _input_key(name: str, key: str, paths: list[list[str | int]], *, by_alias: bool, by_name: bool) -> str | None:
-    """The flat key validation reads the field from: its schema ``key`` if accepted, else its name or a flat alias.
+def _input_key(name: str, paths: list[list[str | int]], *, by_alias: bool, by_name: bool) -> str | None:
+    """The first accepted flat alias, or the field name when validation falls back to it.
 
     ``None`` when none is accepted: the field is read only from a nested ``AliasPath``.
     """
     flat = [path[0] for path in paths if len(path) == 1 and isinstance(path[0], str)]
-    accepted = set(flat) if by_alias else set()
+    if by_alias and flat:
+        return flat[0]
     if by_name or not paths:
-        accepted.add(name)
-    if key in accepted:
-        return key
-    if name in accepted:
         return name
-    return next((alias for alias in flat if alias in accepted), None)
+    return None
 
 
 def _resolve_ref(root: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[str, Any]:
