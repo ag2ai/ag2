@@ -129,6 +129,11 @@ class ResponseSchema(ResponseProto[T]):
         result: T = self._decode(response)
         return result
 
+    @property
+    def embedded(self) -> bool:
+        """Whether the value is wrapped as ``{"data": ...}`` because the type is not an object."""
+        return self._embedded_type
+
     def _decode(self, response: str) -> Any:
         if self._adapter is None:
             return response
