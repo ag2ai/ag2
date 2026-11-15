@@ -8,7 +8,7 @@ from enum import Enum, IntEnum
 from typing import Annotated
 
 import pytest
-from pydantic import AliasPath, BaseModel, Field
+from pydantic import AliasPath, BaseModel, ConfigDict, Field
 
 from ag2 import Context, MemoryStream, ResponseSchema
 from ag2.response import DecisionSet, NotADecisionError, Question
@@ -56,6 +56,27 @@ class PathToAnotherField(BaseModel):
 class DistinctPathTriage(BaseModel):
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("spam"))
     is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(validation_alias=AliasPath("urgent"))
+
+
+class NamedAliasChain(BaseModel):
+    model_config = ConfigDict(validate_by_alias=False, validate_by_name=True)
+
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="is_urgent")
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="critical")
+
+
+class NamedAliasCycle(BaseModel):
+    model_config = ConfigDict(validate_by_alias=False, validate_by_name=True)
+
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="is_urgent")
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="is_spam")
+
+
+class NamedSharedAlias(BaseModel):
+    model_config = ConfigDict(validate_by_alias=False, validate_by_name=True)
+
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="shared")
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="shared")
 
 
 @dataclass
@@ -129,6 +150,22 @@ async def test_distinct_flat_paths_keep_each_answer() -> None:
         "spam": True,
         "urgent": False,
     })
+
+
+@pytest.mark.parametrize("model", [NamedAliasChain, NamedAliasCycle, NamedSharedAlias], ids=lambda m: m.__name__)
+@pytest.mark.asyncio
+async def test_name_validation_keeps_each_question_and_answer(model: type[BaseModel]) -> None:
+    schema = ResponseSchema(model)
+    decisions = DecisionSet.from_response(schema)
+
+    assert {name: spec.question for name, spec in decisions.items()} == {
+        "is_spam": "Is this message spam?",
+        "is_urgent": "Is this ticket urgent?",
+    }
+    values = {"is_spam": True, "is_urgent": False}
+    content = decisions.render(values)
+    assert json.loads(content) == values
+    assert await schema.validate(content, Context(stream=MemoryStream())) == model.model_validate(values)
 
 
 def test_blank_question_is_no_question() -> None:

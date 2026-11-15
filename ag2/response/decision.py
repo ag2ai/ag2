@@ -18,7 +18,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache
-from typing import Annotated, Any, Literal, NotRequired, Required, get_args, get_origin, get_type_hints
+from typing import Annotated, Any, Literal, NotRequired, Required, cast, get_args, get_origin, get_type_hints
 
 from pydantic import TypeAdapter
 from typing_extensions import ReadOnly
@@ -224,6 +224,9 @@ def _field_specs(
     response: ResponseProto[Any], root: Mapping[str, Any], error: type[NotADecisionError]
 ) -> tuple[dict[str, DecisionSpec], dict[str, str]]:
     """Each field's question by field name, and the JSON key of each field whose key is an alias."""
+    if isinstance(response, ResponseSchema):
+        # Questions follow field names; aliases only determine the keys used to validate answers.
+        root = TypeAdapter[Any](cast(Any, response.types)).json_schema(by_alias=False)
     if root.get("additionalProperties") not in (None, False):
         raise error("`response_schema` allows additional properties; each question must be a declared field.")
 
@@ -232,7 +235,7 @@ def _field_specs(
         raise error("`response_schema` has no fields; a class needs at least one question.")
 
     required = set(root.get("required", ()))
-    fields = _fields_by_key(response, error)
+    fields = _fields_by_name(response, error)
     specs: dict[str, DecisionSpec] = {}
     keys: dict[str, str] = {}
     for key, prop in root["properties"].items():
@@ -275,11 +278,11 @@ class _Field:
     input_key: str | None  # the key validation reads the field from; ``None`` for a nested ``AliasPath``
 
 
-def _fields_by_key(response: ResponseProto[Any], error: type[NotADecisionError]) -> dict[str, _Field]:
-    """Each field of the class by its JSON schema key.
+def _fields_by_name(response: ResponseProto[Any], error: type[NotADecisionError]) -> dict[str, _Field]:
+    """Each field of the class by name, with the key used to validate its answer.
 
     The ``Question`` marker does not reach the JSON schema, so it is read from the annotations,
-    which are keyed by field name; the schema is keyed by alias where a field has one. Aliases are
+    which are keyed by field name, like the schema generated with ``by_alias=False``. Aliases are
     read from Pydantic's core schema, where every way of declaring one (``Field``, a dataclass
     field's ``metadata``, an ``alias_generator``, ``AliasChoices``) is already resolved to the keys
     validation reads. The key an answer is rendered under is the one validation reads, which the
@@ -291,7 +294,7 @@ def _fields_by_key(response: ResponseProto[Any], error: type[NotADecisionError])
     cls = strip_annotated(response.types)
     if not isinstance(cls, type):
         return {}
-    class_fields = _class_fields(TypeAdapter(response.types).core_schema)
+    class_fields = _class_fields(TypeAdapter[Any](cast(Any, response.types)).core_schema)
     if class_fields is None:
         return {}
 
@@ -307,18 +310,14 @@ def _fields_by_key(response: ResponseProto[Any], error: type[NotADecisionError])
         key = _schema_key(name, alias)
         input_key = _input_key(name, key, _alias_paths(alias), by_alias=by_alias, by_name=by_name)
         field = _Field(name, _strip_qualifiers(hints.get(name)), input_key)
-        for field_key, keyed_fields in ((key, fields), (input_key, input_fields)):
-            if field_key is None:
-                continue
-            if field_key in keyed_fields:
+        if input_key is not None:
+            if input_key in input_fields:
                 raise error(
-                    f"Fields {keyed_fields[field_key].name!r} and {name!r} of `response_schema` are both validated "
-                    f"from key {field_key!r}; each question must be a field with a key of its own."
+                    f"Fields {input_fields[input_key].name!r} and {name!r} of `response_schema` are both validated "
+                    f"from key {input_key!r}; each question must be a field with a key of its own."
                 )
-            keyed_fields[field_key] = field
-    # Pydantic versions differ on whether a class validated by name has its schema keyed by name or alias.
-    for field in list(fields.values()):
-        fields.setdefault(field.name, field)
+            input_fields[input_key] = field
+        fields[name] = field
     return fields
 
 

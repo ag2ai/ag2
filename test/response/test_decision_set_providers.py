@@ -131,6 +131,27 @@ class NamedTriage(BaseModel):
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="isSpam")
 
 
+class NamedAliasChain(BaseModel):
+    model_config = ConfigDict(validate_by_alias=False, validate_by_name=True)
+
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="is_urgent")
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="critical")
+
+
+class NamedAliasCycle(BaseModel):
+    model_config = ConfigDict(validate_by_alias=False, validate_by_name=True)
+
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="is_urgent")
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="is_spam")
+
+
+class NamedSharedAlias(BaseModel):
+    model_config = ConfigDict(validate_by_alias=False, validate_by_name=True)
+
+    is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="shared")
+    is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="shared")
+
+
 class PathTriage(BaseModel):
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(validation_alias=AliasPath("flags", 0))
 
@@ -463,6 +484,21 @@ class TestSeveralQuestions:
 
         assert await reply.content() == {"is_spam": True}
         assert provider.questions == {"is_spam": Asked("Is this message spam?", {})}
+
+    @pytest.mark.parametrize("schema", [NamedAliasChain, NamedAliasCycle, NamedSharedAlias], ids=lambda s: s.__name__)
+    async def test_name_validation_keeps_both_fields(self, provider: Provider, schema: type[BaseModel]) -> None:
+        reply = await provider.ask(
+            schema,
+            {"is_spam": provider.predicate(0.9), "is_urgent": provider.predicate(0.1)},
+        )
+
+        assert await reply.content() == schema.model_validate({"is_spam": True, "is_urgent": False})
+        assert provider.requests == 1
+        assert provider.questions == {
+            "is_spam": Asked("Is this message spam?", {}),
+            "is_urgent": Asked("Is this ticket urgent?", {}),
+        }
+        assert set(reply.response.metadata) == {"is_spam", "is_urgent"}
 
     async def test_a_missing_answer_names_the_field(self, provider: Provider) -> None:
         answers = provider.triage()
