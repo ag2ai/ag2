@@ -328,11 +328,13 @@ class TestWorkingMemoryPolicy:
 
 
 @pytest.mark.asyncio
-async def test_zero_episode_limit_leaves_prompt_and_history_untouched() -> None:
+@pytest.mark.parametrize("max_episodes", [0, -1])
+async def test_nonpositive_episode_limit_leaves_prompt_and_history_untouched(max_episodes: int) -> None:
     store = MemoryKnowledgeStore()
     await store.write("/memory/conversations/20260101T120000_session.md", "An earlier conversation")
+    await store.write("/memory/conversations/20260102T120000_session.md", "A later conversation")
     context = Context(stream=MemoryStream(), dependencies={KnowledgeStore: store})
     prompts = ["Current instructions"]
     events = [ModelRequest([TextInput("Current question")])]
 
-    assert await EpisodicMemoryPolicy(max_episodes=0).apply(prompts, events, context) == (prompts, events)
+    assert await EpisodicMemoryPolicy(max_episodes=max_episodes).apply(prompts, events, context) == (prompts, events)
