@@ -284,6 +284,19 @@ class TestEventLogWriter:
             UnknownEvent(type_name="", data={"raw": lines[1]}),
         ]
 
+    async def test_non_string_type_degrades_to_unknown_event(self) -> None:
+        store = MemoryKnowledgeStore()
+        writer = EventLogWriter(store)
+        stream_id = uuid4()
+        # JSON `null` for the type is not a name to look up: splitting it would raise
+        # outside the malformed-line guard and take the whole load down.
+        lines = [json.dumps({"type": None, "data": {}})]
+        await store.write(f"/log/{stream_id}.jsonl", "\n".join(lines))
+
+        assert await writer.load(stream_id) == [
+            UnknownEvent(type_name="", data={"raw": lines[0]}),
+        ]
+
 
 @pytest.mark.asyncio
 class TestDefaultBootstrap:
