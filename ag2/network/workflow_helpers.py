@@ -20,7 +20,7 @@ async def classify_billing(reason: str, channel: ChannelInject) -> str:
 ```
 """
 
-from typing import Any
+from pydantic import JsonValue
 
 from .adapters.workflow import WORKFLOW_TYPE
 from .client.channel import Channel
@@ -40,7 +40,7 @@ def _ensure_workflow(channel: Channel, helper_name: str) -> None:
         )
 
 
-async def set_context(channel: Channel, key: str, value: Any) -> None:
+async def set_context(channel: Channel, key: str, value: JsonValue) -> None:
     """Set one workflow ``context_vars`` entry.
 
     Emits an ``EV_CONTEXT_SET`` envelope under the hood; visible to

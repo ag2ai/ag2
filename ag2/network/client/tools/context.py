@@ -16,11 +16,12 @@ existing ``KnowledgeStore`` infrastructure when configured; the tool
 surface stays the same.
 """
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field
 
 from ag2.tools import tool
+from ag2.tools.final import FunctionTool
 
 from ...envelope import EV_TEXT, Envelope, visible_to
 from ..inject import AgentClientInject, ChannelInject
@@ -41,7 +42,7 @@ def _excerpt(envelope: Envelope, max_chars: int = 240) -> str:
     return text[: max_chars - 1] + "…"
 
 
-def make_context_tool(agent_client: "AgentClient") -> object:
+def make_context_tool(agent_client: "AgentClient") -> FunctionTool:
     """Return a closure-bound ``context`` tool."""
 
     @tool
@@ -56,7 +57,7 @@ def make_context_tool(agent_client: "AgentClient") -> object:
         channel_id: str | None = None,
         client: AgentClientInject = None,
         channel: ChannelInject = None,
-    ) -> list[dict] | str:
+    ) -> list[dict[str, Any]] | str:
         """Read from past content.
 
         ``search``: args query, scope="channel"|"knowledge", limit
@@ -81,7 +82,7 @@ def make_context_tool(agent_client: "AgentClient") -> object:
                     wal = await hub.read_wal(sid)
                 except Exception:
                     return f"Error: channel {sid!r} not found"
-                results: list[dict] = []
+                results: list[dict[str, Any]] = []
                 for env in wal:
                     if env.event_type != EV_TEXT:
                         continue
@@ -122,7 +123,7 @@ def make_context_tool(agent_client: "AgentClient") -> object:
                 wal = await hub.read_wal(sid)
             except Exception:
                 return f"Error: channel {sid!r} not found"
-            picks: list[dict] = []
+            picks: list[dict[str, Any]] = []
             for env in reversed(wal):
                 if env.event_type != EV_TEXT:
                     continue

@@ -16,7 +16,9 @@ Two actions:
 from typing import TYPE_CHECKING, Any, Literal
 
 from ag2.tools import tool
+from ag2.tools.final import FunctionTool
 
+from ...identity import Passport, Resume
 from ..inject import AgentClientInject
 from ..skill_render import render_fallback_skill
 
@@ -26,7 +28,7 @@ if TYPE_CHECKING:
 __all__ = ("make_peers_tool",)
 
 
-def _passport_summary(passport: Any, resume: Any) -> dict[str, Any]:
+def _passport_summary(passport: Passport, resume: Resume) -> dict[str, Any]:
     completed = sum(stat.completed for stat in resume.observed.values())
     total = sum(stat.n for stat in resume.observed.values())
     success_rate = (completed / total) if total else None
@@ -48,7 +50,7 @@ def _passport_summary(passport: Any, resume: Any) -> dict[str, Any]:
     }
 
 
-def make_peers_tool(agent_client: "AgentClient") -> object:
+def make_peers_tool(agent_client: "AgentClient") -> FunctionTool:
     """Return a closure-bound ``peers`` tool."""
 
     @tool
@@ -61,7 +63,7 @@ def make_peers_tool(agent_client: "AgentClient") -> object:
         name: str | None = None,
         limit: int = 20,
         client: AgentClientInject = None,
-    ) -> list[dict] | dict | str:
+    ) -> list[dict[str, Any]] | dict[str, Any] | str:
         """Discover and describe peers.
 
         ``find``:    args query?, capability?, sort_by?, limit
@@ -71,10 +73,10 @@ def make_peers_tool(agent_client: "AgentClient") -> object:
         hub = actual._hub_client
         if action == "find":
             passports = await hub.list_agents(capability=capability, query=query, limit=limit)
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
             for p in passports:
-                if p.agent_id == actual.agent_id:
-                    continue  # don't include the calling agent
+                if p.agent_id is None or p.agent_id == actual.agent_id:
+                    continue  # don't include the calling agent (or an unregistered passport)
                 resume = await hub.get_resume(p.agent_id)
                 results.append(_passport_summary(p, resume))
             if sort_by == "name":

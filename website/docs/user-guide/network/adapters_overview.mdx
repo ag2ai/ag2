@@ -25,18 +25,18 @@ An adapter exposes **three concentric layers** of surface:
 3. **LLM tools** — what the *AG2 agent loop* sees: `#!python tools_for`. The presentation layer; the default handler merges its result with the identity-level tools `#!python NetworkPlugin` attaches. Adapters that take no LLM input (e.g. workflow, where handoff tools are user-authored) return `#!python []`.
 
 ```python
-class ChannelAdapter(Protocol):
+class ChannelAdapter(Protocol[StateT]):
     manifest: ChannelManifest
 
     # Layer 1 — capabilities (hub-called)
-    def initial_state(self, metadata: ChannelMetadata) -> AdapterState: ...
-    def fold(self, envelope: Envelope, state: AdapterState) -> AdapterState: ...
+    def initial_state(self, metadata: ChannelMetadata) -> StateT: ...
+    def fold(self, envelope: Envelope, state: StateT) -> StateT: ...
     def validate_create(self, metadata: ChannelMetadata) -> None: ...
     def validate_send(
-        self, metadata: ChannelMetadata, envelope: Envelope, state: AdapterState
+        self, metadata: ChannelMetadata, envelope: Envelope, state: StateT
     ) -> None: ...
     def on_accepted(
-        self, metadata: ChannelMetadata, envelope: Envelope, state: AdapterState
+        self, metadata: ChannelMetadata, envelope: Envelope, state: StateT
     ) -> AdapterResult: ...
 
     # Layer 2 — envelope helpers (any client)
@@ -46,16 +46,18 @@ class ChannelAdapter(Protocol):
     ) -> Envelope: ...
     def build_packet_envelope(
         self, channel_id: str, sender_id: str, body: str, *,
-        handoff: Handoff | None = None, context_set: dict | None = None,
+        handoff: Handoff | None = None, context_set: Mapping[str, object] | None = None,
         audience: list[str] | None = None, causation_id: str | None = None,
     ) -> Envelope: ...
 
     # Layer 3 — LLM tools (agent loop)
     def tools_for(
         self, client: AgentClient, metadata: ChannelMetadata,
-        state: AdapterState, participant_id: str,
+        state: StateT, participant_id: str,
     ) -> list[Tool]: ...
 ```
+
+The protocol is generic over the state the adapter folds: a concrete adapter defines its own state dataclass (for example `#!python ConsultingState`) and takes it in every `#!python state` parameter, so `#!python ConsultingAdapter` is a `#!python ChannelAdapter[ConsultingState]`.
 
 Each method runs at a specific moment:
 
@@ -95,11 +97,11 @@ env = adapter.build_packet_envelope(
 await hub.post_envelope(env)
 
 # The workflow's transition graph advanced state purely from the bridge-supplied envelope.
-state = hub.adapter_state(channel.channel_id)
-assert state.expected_next_speaker == bob.agent_id
+state = hub.adapter_state(channel.channel_id, WorkflowState)
+assert state is not None and state.expected_next_speaker == bob.agent_id
 ```
 
-`#!python hub.adapter_for(channel_id)` returns the bound adapter; `#!python hub.adapter_state(channel_id)` returns the current fold state (and stays available after the channel closes — useful for post-mortem inspection). A bridge that pre-builds envelopes offline can skip the adapter lookup entirely and call `#!python default_build_packet_envelope(...)` directly.
+`#!python hub.adapter_for(channel_id)` returns the bound adapter; `#!python hub.adapter_state(channel_id, WorkflowState)` returns the current fold state typed as the class you name, and raises `#!python TypeError` if the channel folds another state class. Without the class it returns the state untyped (`#!python object`). The state stays available after the channel closes, which is useful for post-mortem inspection. A bridge that pre-builds envelopes offline can skip the adapter lookup entirely and call `#!python default_build_packet_envelope(...)` directly.
 
 ## Channel Lifecycle
 

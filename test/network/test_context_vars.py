@@ -14,21 +14,25 @@ Pins the contract that ``EV_CONTEXT_SET`` envelopes:
 """
 
 import pytest
+from pydantic import JsonValue
 
 from ag2 import Agent
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_CHANNEL_CLOSED,
     EV_CONTEXT_SET,
+    EV_PACKET,
     WORKFLOW_TYPE,
     AgentTarget,
     ContextEquals,
     Envelope,
     FromSpeaker,
     Hub,
+    ProtocolError,
     TerminateTarget,
     Transition,
     TransitionGraph,
+    WorkflowState,
 )
 from ag2.testing import TestConfig
 
@@ -314,3 +318,54 @@ class TestContextVars:
         assert after.expected_next_speaker == before_speaker
 
         await hub.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event_type", "event_data"),
+    [
+        pytest.param(EV_CONTEXT_SET, {"set": "oops"}, id="context-set-not-an-object"),
+        pytest.param(EV_CONTEXT_SET, {"delete": "k1"}, id="context-delete-not-a-list"),
+        pytest.param(EV_CONTEXT_SET, {"delete": [1]}, id="context-delete-not-strings"),
+        pytest.param(EV_PACKET, {"body": "hi", "context_updates": {"set": ["k"]}}, id="packet-set-not-an-object"),
+        pytest.param(EV_PACKET, {"body": "hi", "routing": "handoff"}, id="packet-routing-not-an-object"),
+    ],
+)
+async def test_malformed_workflow_envelope_is_rejected_before_the_wal(
+    event_type: str, event_data: dict[str, JsonValue]
+) -> None:
+    """A malformed context mutation or routing is a protocol error: it never
+    reaches the WAL, so the channel state is untouched and the hub reopens."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    graph = TransitionGraph(
+        initial_speaker=alice.agent_id,
+        transitions=[Transition(when=FromSpeaker(alice.agent_id), then=AgentTarget(bob.agent_id))],
+        default_target=TerminateTarget(reason="done"),
+        max_turns=10,
+    )
+    channel = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+
+    with pytest.raises(ProtocolError):
+        await hub.post_envelope(
+            Envelope(
+                channel_id=channel.channel_id,
+                sender_id=alice.agent_id,
+                audience=None,
+                event_type=event_type,
+                event_data=event_data,
+            )
+        )
+    await hub.close()
+
+    reopened = await Hub.open(store, ttl_sweep_interval=0)
+    state = reopened.adapter_state(channel.channel_id)
+    assert isinstance(state, WorkflowState)
+    assert (state.context_vars, state.turn_count, state.expected_next_speaker) == ({}, 0, alice.agent_id)
+    await reopened.close()

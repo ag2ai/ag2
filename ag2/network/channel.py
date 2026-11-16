@@ -23,6 +23,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
+from pydantic import JsonValue
+
 __all__ = (
     "ChannelManifest",
     "ChannelMetadata",
@@ -177,7 +179,7 @@ class ChannelMetadata:
     closed_at: str | None = None
     close_reason: str = ""
     parent_channel_id: str | None = None  # nested channels
-    knobs: dict[str, Any] = field(default_factory=dict)
+    knobs: dict[str, JsonValue] = field(default_factory=dict)
     labels: dict[str, str] = field(default_factory=dict)
 
     # Multi-party handshake state (only meaningful while state == PENDING)

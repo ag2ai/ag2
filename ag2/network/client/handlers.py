@@ -22,7 +22,7 @@ so user-supplied overrides can replace only the parts they care about.
 import contextlib
 import functools
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ag2._telemetry_consts import TRACEPARENT_DEP_KEY
 from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, TextInput
@@ -41,6 +41,8 @@ from ..views.base import EnvelopeRenderer, NameResolver, ViewPolicy
 from .channel import Channel
 
 if TYPE_CHECKING:
+    from ag2.tools.tool import Tool
+
     from ..adapters.base import ChannelAdapter
     from .agent_client import AgentClient
 
@@ -59,11 +61,11 @@ def _is_task_event(event_type: str) -> bool:
     return event_type.startswith("ag2.task.")
 
 
-def _render_parts(adapter: "ChannelAdapter", envelope: Envelope) -> list[Input] | None:
+def _render_parts(adapter: "ChannelAdapter[Any]", envelope: Envelope) -> list[Input] | None:
     return ensure_parts(adapter.render_envelope(envelope)) or None
 
 
-def _renderer(adapter: "ChannelAdapter") -> EnvelopeRenderer:
+def _renderer(adapter: "ChannelAdapter[Any]") -> EnvelopeRenderer:
     """Hand views the adapter's rendering as ``Input`` parts, whatever shape the adapter produced."""
     return functools.partial(_render_parts, adapter)
 
@@ -71,7 +73,7 @@ def _renderer(adapter: "ChannelAdapter") -> EnvelopeRenderer:
 async def _render_current_input(
     view: ViewPolicy,
     envelope: Envelope,
-    adapter: "ChannelAdapter",
+    adapter: "ChannelAdapter[Any]",
     participant_id: str,
     metadata: ChannelMetadata,
     name_for: NameResolver,
@@ -267,7 +269,7 @@ async def _process_substantive(envelope: Envelope, client: "AgentClient") -> Non
         # consulting / discussion). Resolution is cached on the adapter
         # so the schema build cost is paid once per (adapter, client)
         # — see ``ChannelAdapter.tools_for`` default implementation.
-        adapter_tools: list = []
+        adapter_tools: list[Tool] = []
         try:
             adapter_tools = list(adapter.tools_for(client, metadata, state, client.agent_id))
         except Exception:

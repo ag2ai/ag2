@@ -29,9 +29,11 @@ Three layers of surface per adapter:
   workflow, where handoff tools are user-authored) return ``[]``.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Protocol, TypeAlias, TypeVar
+
+from pydantic import JsonValue
 
 from ag2.events import Input, TextInput
 from ag2.types import SendableMessage
@@ -44,10 +46,10 @@ from ..views.base import ViewPolicy
 if TYPE_CHECKING:
     from ag2.agent import AgentReply
     from ag2.events import BaseEvent
-    from ag2.tools import Tool
+    from ag2.tools.tool import Tool
 
     from ..client.agent_client import AgentClient
-    from ..hub.core import Hub
+    from ..client.hub_client import HubClient
 
 __all__ = (
     "AdapterResult",
@@ -95,6 +97,11 @@ class AdapterState(Protocol):
     """
 
 
+StateT = TypeVar("StateT")
+"""The state type one adapter folds. Each adapter is a ``ChannelAdapter[ItsState]``;
+the hub keeps adapters of every channel type side by side as ``ChannelAdapter[Any]``."""
+
+
 @dataclass(slots=True)
 class AdapterResult:
     """What an adapter wants the hub to do after accepting an envelope.
@@ -124,8 +131,26 @@ class ExpectedTurn:
     triggering_envelope_id: str | None = None
 
 
-class ChannelAdapter(Protocol):
+AdapterStateT = TypeVar("AdapterStateT")
+
+
+def _narrow_state(channel_id: str, state: object, state_type: type[AdapterStateT]) -> AdapterStateT | None:
+    """Return ``state`` as ``state_type`` (``None`` stays ``None``).
+
+    Backs ``adapter_state(channel_id, state_type)`` on ``Hub`` and
+    ``HubClient``: the hub keeps every channel's state opaquely, so the
+    caller names the type it expects and gets a ``TypeError`` on a mismatch.
+    """
+    if state is None or isinstance(state, state_type):
+        return state
+    raise TypeError(f"channel {channel_id!r} folds {type(state).__name__}, not {state_type.__name__}")
+
+
+class ChannelAdapter(Protocol[StateT]):
     """Code half of the manifest/adapter split.
+
+    Generic over the state the adapter folds (``StateT``): a concrete adapter
+    declares its own state dataclass and takes it in every state parameter.
 
     Adapters are looked up at channel-create time by
     ``(manifest.type, manifest.version)``. Re-registering an adapter
@@ -135,11 +160,11 @@ class ChannelAdapter(Protocol):
 
     manifest: ChannelManifest
 
-    def initial_state(self, metadata: ChannelMetadata) -> AdapterState:
+    def initial_state(self, metadata: ChannelMetadata) -> StateT:
         """Empty state for a fresh channel."""
         ...
 
-    def fold(self, envelope: Envelope, state: AdapterState) -> AdapterState:
+    def fold(self, envelope: Envelope, state: StateT) -> StateT:
         """Append ``envelope`` into the derived state. Pure function.
 
         Called once per WAL append by the hub. Must be deterministic so
@@ -155,7 +180,7 @@ class ChannelAdapter(Protocol):
         self,
         metadata: ChannelMetadata,
         envelope: Envelope,
-        state: AdapterState,
+        state: StateT,
     ) -> None:
         """Raise if this envelope is not allowed by the protocol at this point.
 
@@ -167,7 +192,7 @@ class ChannelAdapter(Protocol):
         self,
         metadata: ChannelMetadata,
         envelope: Envelope,
-        state: AdapterState,
+        state: StateT,
     ) -> AdapterResult:
         """Decide post-accept transitions.
 
@@ -178,7 +203,7 @@ class ChannelAdapter(Protocol):
     def expected_next(
         self,
         metadata: ChannelMetadata,
-        state: AdapterState,
+        state: StateT,
     ) -> "ExpectedTurn | None":
         """Identify the participant the protocol expects to act next.
 
@@ -219,8 +244,8 @@ class ChannelAdapter(Protocol):
         sender_id: str,
         reply: "AgentReply",
         events: "list[BaseEvent]",
-        state: AdapterState,
-        hub: "Hub",
+        state: StateT,
+        hub: "HubClient",
     ) -> Envelope | None:
         """Build the envelope that captures one ``Agent.ask`` round.
 
@@ -257,7 +282,7 @@ class ChannelAdapter(Protocol):
         self,
         client: "AgentClient",
         metadata: ChannelMetadata,
-        state: AdapterState,
+        state: StateT,
         participant_id: str,
     ) -> "list[Tool]":
         """Return the LLM tools this adapter offers a participant.
@@ -301,7 +326,7 @@ class ChannelAdapter(Protocol):
         body: str,
         *,
         handoff: "Handoff | None" = None,
-        context_set: dict | None = None,
+        context_set: Mapping[str, JsonValue] | None = None,
         audience: list[str] | None = None,
         causation_id: str | None = None,
     ) -> Envelope:
@@ -333,7 +358,7 @@ def default_build_round_envelope(
     reply: "AgentReply",
     events: "list[BaseEvent]",
     state: AdapterState,
-    hub: "Hub",
+    hub: "HubClient",
 ) -> Envelope | None:
     """Default ``build_round_envelope``: emit ``EV_TEXT(body)`` or
     ``None``.
@@ -420,7 +445,7 @@ def default_build_packet_envelope(
     body: str,
     *,
     handoff: "Handoff | None" = None,
-    context_set: dict | None = None,
+    context_set: Mapping[str, JsonValue] | None = None,
     audience: list[str] | None = None,
     causation_id: str | None = None,
 ) -> Envelope:
@@ -428,16 +453,18 @@ def default_build_packet_envelope(
     optional routing.
 
     ``routing`` carries ``{"kind": "handoff", "target": ..., "reason": ...}``
-    when ``handoff`` is set. ``context_set`` populates ``context``.
+    when ``handoff`` is set. ``context_set`` goes into
+    ``context_updates.set``, the field the workflow adapter folds into
+    ``context_vars`` before it selects the next speaker.
     """
-    event_data: dict[str, object] = {"body": body}
+    event_data: dict[str, JsonValue] = {"body": body}
     if handoff is not None:
-        routing: dict[str, object] = {"kind": "handoff", "target": handoff.target}
+        routing: dict[str, JsonValue] = {"kind": "handoff", "target": handoff.target}
         if handoff.reason:
             routing["reason"] = handoff.reason
         event_data["routing"] = routing
     if context_set:
-        event_data["context"] = dict(context_set)
+        event_data["context_updates"] = {"set": dict(context_set), "delete": []}
     return Envelope(
         channel_id=channel_id,
         sender_id=sender_id,
