@@ -75,8 +75,9 @@ _V0_9_BASE = "https://a2ui.org/specification/v0_9/"
 _V1_0_BASE = "https://a2ui.org/specification/v1_0/"
 
 # v0.9.1 is a backward-compatible patch over v0.9: same spec files, schema ``$id``s, catalog
-# (the upstream v0.9.1 catalog file declares the v0_9 ``$id``) and capabilities key. Its spec
-# differs only in descriptions and in accepting ``"v0.9.1"`` as the ``version``.
+# (the upstream v0.9.1 catalog file declares the v0_9 ``$id``) and capabilities key. Upstream's
+# v0.9.1 files differ only in accepting ``"v0.9.1"`` as the ``version`` and in lacking the newer
+# ``List.listStyle`` (see ``v0_9/spec/README.md``).
 PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
     "v0.9": A2UIProtocol(
         version="v0.9",

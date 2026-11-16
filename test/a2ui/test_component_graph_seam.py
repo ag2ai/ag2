@@ -205,6 +205,28 @@ async def test_a_later_message_may_update_a_component_from_an_earlier_one(versio
     assert turn.feedback == []
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", VERSIONS)
+async def test_a_new_surface_needs_a_root_component(version: str) -> None:
+    messages = [_create(version), _update(version, _text("t"))]
+
+    turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version=version)
+
+    assert len(turn.feedback) == 1
+    assert "- No component with id 'root' found on surface 's'" in turn.feedback[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", VERSIONS)
+async def test_a_partial_update_to_an_earlier_surface_needs_no_root(version: str) -> None:
+    messages = [_update(version, _text("t"))]
+
+    turn = await serve_turn(a2ui_reply(messages), protocol_version=version)
+
+    assert turn.feedback == []
+    assert turn.ui == messages
+
+
 def _panel_catalog(child_schema: dict[str, Any]) -> dict[str, Any]:
     return {
         "$id": "https://example.com/cat.json",
@@ -220,30 +242,56 @@ def _panel_catalog(child_schema: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "child_schema",
-    [{"$ref": "#/$defs/Kid"}, {"type": "string"}],
-    ids=["via-local-def", "plain-string-named-child"],
-)
-async def test_custom_child_references_are_found_without_a_direct_component_id_ref(
-    child_schema: dict[str, Any],
-) -> None:
+async def test_custom_child_references_are_found_through_a_local_definition() -> None:
     messages = [
         _create("v1.0", catalog_id="https://example.com/cat.json"),
         _update("v1.0", {"id": "root", "component": "Panel", "child": "t"}, _text("t")),
     ]
 
-    turn = await serve_turn(a2ui_reply(messages), protocol_version="v1.0", custom_catalog=_panel_catalog(child_schema))
+    turn = await serve_turn(
+        a2ui_reply(messages), protocol_version="v1.0", custom_catalog=_panel_catalog({"$ref": "#/$defs/Kid"})
+    )
 
     assert turn.feedback == []
 
 
 @pytest.mark.asyncio
-async def test_schema_errors_are_not_followed_by_graph_errors() -> None:
+async def test_a_plain_string_property_is_static_text_even_when_named_child() -> None:
+    # The spec: a raw string type for an id is treated as static text, whatever the property is called.
+    messages = [
+        _create("v1.0", catalog_id="https://example.com/cat.json"),
+        _update("v1.0", {"id": "root", "component": "Panel", "child": "not a component id"}),
+    ]
+
+    turn = await serve_turn(
+        a2ui_reply(messages), protocol_version="v1.0", custom_catalog=_panel_catalog({"type": "string"})
+    )
+
+    assert turn.feedback == []
+
+
+@pytest.mark.asyncio
+async def test_an_inline_template_schema_is_a_child_reference() -> None:
+    template = {"type": "object", "properties": {"componentId": {"type": "string"}, "path": {"type": "string"}}}
+    messages = [
+        _create("v1.0", catalog_id="https://example.com/cat.json"),
+        _update("v1.0", {"id": "root", "component": "Panel", "child": {"componentId": "missing", "path": "/items"}}),
+    ]
+
+    turn = await serve_turn(
+        a2ui_reply(messages), "Plain text.", protocol_version="v1.0", custom_catalog=_panel_catalog(template)
+    )
+
+    assert len(turn.feedback) == 1
+    assert "- Surface 's': component 'root' references missing component 'missing'\n" in turn.feedback[0]
+
+
+@pytest.mark.asyncio
+async def test_schema_and_graph_errors_are_reported_in_one_retry() -> None:
     messages = [_create("v0.9"), _update("v0.9", {"id": "root", "component": "Column", "children": "a"}, _text("a"))]
 
     turn = await serve_turn(a2ui_reply(messages), "Plain text.")
 
     assert len(turn.feedback) == 1
     assert "not of type 'array'" in turn.feedback[0]
-    assert "Surface 's'" not in turn.feedback[0]
+    assert "- Surface 's': component 'a' is not reachable from 'root'\n" in turn.feedback[0]

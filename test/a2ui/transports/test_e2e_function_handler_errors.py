@@ -100,7 +100,7 @@ async def test_backend_validation_error_is_a_function_failure(
             "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "backend-1",
-                "error": {"code": "FUNCTION_FAILED", "message": "Function 'read_backend' failed."},
+                "error": {"code": "EXECUTION_ERROR", "message": "Function 'read_backend' failed."},
             },
         }
     ]

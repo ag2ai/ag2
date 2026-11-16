@@ -63,7 +63,7 @@ from ag2.ag_ui.stream import (
 from ag2.ag_ui.thought_signature import encrypted_signature_of, signature_event
 from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
 
-from .._messages import is_client_envelope
+from .._messages import CLIENT_TO_SERVER_KEYS
 from .._types import JsonObject, JsonValue, ServerToClientMessage
 from ..dispatch import A2UIMessageFrame, A2UIProseFrame, TaskEvent
 from ..incoming import decode_envelopes, incoming_prompts
@@ -189,7 +189,8 @@ def _client_envelopes(forwarded_props: JsonValue) -> list[JsonObject]:
                     "context": context if isinstance(context, dict) else {},
                 },
             })
-        elif is_client_envelope(a2ui_action):
+        elif any(key in a2ui_action for key in CLIENT_TO_SERVER_KEYS):
+            # Any envelope key passes, so ``decode_envelopes`` warns about a malformed one rather than it vanishing.
             envelopes.append(a2ui_action)
     a2ui = forwarded_props.get("a2ui")
     if isinstance(a2ui, list):

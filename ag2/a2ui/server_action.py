@@ -18,7 +18,7 @@ instead. That runs the same registered action (its ``args`` become the keyword
 arguments) and always answers with an ``agentFunctionResponse`` that echoes the
 call's ``functionCallId``: the returned value on success, or an ``error``
 (``UNKNOWN_FUNCTION`` when nothing is registered under that name,
-``INVALID_FUNCTION_CALL`` when the arguments do not fit, ``FUNCTION_FAILED``
+``INVALID_FUNCTION_CALL`` when the arguments do not fit, ``EXECUTION_ERROR``
 when the handler raised). Messages the handler returns are emitted too, ahead
 of the response.
 
@@ -186,7 +186,7 @@ async def run_agent_function(
         context: The conversation context supplying dependencies, variables, and
             the ``dependency_provider`` (see :func:`build_server_action_context`).
         validator: Checks the messages the handler returns; invalid ones fail the call
-            (``FUNCTION_FAILED``). ``None`` sends them unchecked (validation off).
+            (``EXECUTION_ERROR``). ``None`` sends them unchecked (validation off).
 
     Returns:
         Any messages the handler returned, then the response correlated by
@@ -309,7 +309,7 @@ def _function_failed(call: A2UIIncomingFunctionCall, version: A2UIWireVersion) -
     return _function_response(
         call.function_call_id,
         version,
-        error={"code": "FUNCTION_FAILED", "message": f"Function {call.call!r} failed."},
+        error={"code": "EXECUTION_ERROR", "message": f"Function {call.call!r} failed."},
     )
 
 

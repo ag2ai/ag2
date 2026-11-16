@@ -44,18 +44,6 @@ _IMPLICIT_FUNCTION_SCHEMA_URI = "urn:ag2:a2ui:implicit-renderer-function"
 _IMPLICIT_COMPONENT_SCHEMA_URI = "urn:ag2:a2ui:implicit-component"
 
 
-# Component properties that are envelope, not the component's own: v0.9 spells them bare, v1.0 with ``@``.
-_ENVELOPE_PROPERTIES = frozenset((
-    "id",
-    "component",
-    "accessibility",
-    "@accessibility",
-    "@catalogId",
-    "@metadata",
-    "@checks",
-))
-
-
 def _xid_property_names(schema: JsonValue) -> JsonValue:
     """Rewrite objects whose keys must be UAX #31 identifiers to a ``propertyNames`` format check."""
     if isinstance(schema, list):
@@ -774,14 +762,17 @@ class A2UISchemaManager:
         if isinstance(raw_desc, str) and raw_desc:
             return raw_desc
 
+        # The envelope every component shares (``ComponentCommon``: v0.9 ``accessibility``, v1.0 ``@catalogId``, ...).
+        common = _as_object(_as_object(self._common_types.get("$defs")).get("ComponentCommon"))
+        envelope = {"component", *_as_object(common.get("properties"))}
         props: set[str] = set()
         all_of = comp_def.get("allOf")
         if isinstance(all_of, list):
             for item in all_of:
                 item_props = _as_object(item.get("properties")) if isinstance(item, dict) else {}
-                props.update(k for k in item_props if k not in _ENVELOPE_PROPERTIES)
+                props.update(k for k in item_props if k not in envelope)
         own_props = _as_object(comp_def.get("properties"))
-        props.update(k for k in own_props if k not in _ENVELOPE_PROPERTIES)
+        props.update(k for k in own_props if k not in envelope)
 
         if props:
             return f"Properties: {', '.join(sorted(props))}"

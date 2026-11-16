@@ -379,7 +379,7 @@ class TestCallAgentFunction:
                 "version": "1.0",
                 "agentFunctionResponse": {
                     "functionCallId": "fc-1",
-                    "error": {"code": "FUNCTION_FAILED", "message": "Function 'boom' failed."},
+                    "error": {"code": "EXECUTION_ERROR", "message": "Function 'boom' failed."},
                 },
             },
         ]
@@ -522,7 +522,7 @@ class TestHandlerMessagesAreValidated:
                 "version": "1.0",
                 "agentFunctionResponse": {
                     "functionCallId": "fc-1",
-                    "error": {"code": "FUNCTION_FAILED", "message": "Function 'refresh' failed."},
+                    "error": {"code": "EXECUTION_ERROR", "message": "Function 'refresh' failed."},
                 },
             },
         ]

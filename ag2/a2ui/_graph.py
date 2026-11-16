@@ -31,17 +31,17 @@ ComponentReferences: TypeAlias = Mapping[str, tuple[_Reference, ...]]
 """Where each component type holds references to other components, by component type."""
 
 
-# A ``child`` / ``children`` property is a reference even when its schema does not say so (e.g. a plain string).
-_NAMED_REFERENCES = (_Reference(("child",), "id"), _Reference(("children",), "list"))
-
-
 def component_references(catalog: JsonObject) -> ComponentReferences:
-    """Read, from a catalog, where each of its component types references other components."""
+    """Read, from a catalog, where each of its component types references other components.
+
+    As the spec says, only a property whose schema ``$ref``s ``ComponentId``, ``Child`` or ``ChildList`` is a
+    reference; a plain string is static text. Like the official SDK, an inline object schema with ``componentId``
+    and ``path`` (or ``dataBinding``) also counts, as a template child list.
+    """
     components = catalog.get("components")
     references: dict[str, tuple[_Reference, ...]] = {}
     for key, definition in components.items() if isinstance(components, dict) else ():
-        found = list(dict.fromkeys(_references_in(definition, (), catalog, frozenset())))
-        found += [named for named in _NAMED_REFERENCES if all(ref.path != named.path for ref in found)]
+        found = dict.fromkeys(_references_in(definition, (), catalog, frozenset()))
         references[_component_type(definition) or key] = tuple(found)
     return references
 
@@ -76,6 +76,9 @@ def _references_in(schema: JsonValue, path: _Path, catalog: JsonObject, seen: fr
         for branch in branches if isinstance(branches, list) else ():
             yield from _references_in(branch, path, catalog, seen)
     properties = schema.get("properties")
+    if isinstance(properties, dict) and "componentId" in properties and properties.keys() & {"path", "dataBinding"}:
+        yield _Reference(path, "list")
+        return
     for name, subschema in properties.items() if isinstance(properties, dict) else ():
         yield from _references_in(subschema, (*path, name), catalog, seen)
     yield from _references_in(schema.get("items"), (*path, _ANY_ITEM), catalog, seen)

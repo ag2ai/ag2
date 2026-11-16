@@ -167,7 +167,8 @@ def _components_of(update_components: JsonValue) -> list[JsonValue]:
     return components if isinstance(components, list) else []
 
 
-def _surface_catalog(operation: JsonValue, surfaces: dict[str, str], registry: Registry) -> str | None:
+def _surface_catalog(operation: JsonValue, surfaces: dict[str, str], default_catalog_id: str | None) -> str | None:
+    """The catalog of the surface ``operation`` targets; a ``createSurface`` without ``catalogId`` uses the agent's."""
     if not isinstance(operation, dict):
         return None
     for key in ("createSurface", "updateComponents", "callRendererFunction", "deleteSurface"):
@@ -176,9 +177,8 @@ def _surface_catalog(operation: JsonValue, surfaces: dict[str, str], registry: R
             continue
         if key == "createSurface":
             catalog_id = payload.get("catalogId")
-            default = registry.get("catalog.json")
             if not isinstance(catalog_id, str):
-                catalog_id = default.id() if default is not None else None
+                catalog_id = default_catalog_id
             if catalog_id is not None:
                 surfaces[surface_id] = catalog_id
         elif key == "deleteSurface":
@@ -210,6 +210,11 @@ class A2UIResponseParser:
         self._schema = server_to_client_schema
         self._registry = schema_registry
         self._component_references = component_references
+        # ``catalog.json`` next to the message schema names the agent's catalog (see ``build_schema_registry``).
+        default_catalog = (
+            schema_registry.get(f"{protocol.schema_base_uri}catalog.json") if schema_registry is not None else None
+        )
+        self._default_catalog_id = default_catalog.id() if default_catalog is not None else None
 
     @property
     def protocol(self) -> A2UIProtocol:
@@ -303,7 +308,7 @@ class A2UIResponseParser:
             try:
                 checker = self._checker
                 if self._protocol.per_surface_catalogs and self._registry is not None and self._schema is not None:
-                    catalog_id = _surface_catalog(op, surface_catalogs, self._registry)
+                    catalog_id = _surface_catalog(op, surface_catalogs, self._default_catalog_id)
                     if catalog_id is not None:
                         if catalog_id not in catalog_checkers:
                             catalog_checkers[catalog_id] = MessageChecker(
@@ -318,8 +323,7 @@ class A2UIResponseParser:
 
         errors.extend(self._check_function_messages(operations))
         errors.extend(_data_path_errors(objects))
-        # A tree is only worth checking once its messages are well-formed; otherwise each mistake echoes.
-        if self._component_references is not None and not errors:
+        if self._component_references is not None:
             errors.extend(component_graph_errors(objects, self._component_references))
 
         errors.extend(_missing_root_errors(objects))

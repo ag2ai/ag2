@@ -5721,6 +5721,63 @@
    ]
   },
   {
+   "id": "custom:v10_override_default_catalog_text",
+   "version": "v1.0",
+   "note": "no catalogId: the surface uses the agent's catalog, whose Text needs customText",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): '@catalogId' is a required property",
+   "catalog": "text_override_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_override_default_catalog_customText_ok",
+   "version": "v1.0",
+   "note": "no catalogId: the agent's catalog accepts its own Text",
+   "expect": "frames",
+   "catalog": "text_override_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "customText": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
    "id": "custom:v10_override_explicit_basic",
    "version": "v1.0",
    "note": "Text text with catalogId=basic on custom surface",

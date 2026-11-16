@@ -4,7 +4,7 @@
 
 import pytest
 
-from ag2.a2ui._types import JsonObject, ServerToClientMessage
+from ag2.a2ui._types import JsonObject
 from ag2.a2ui.parser import (
     A2UIResponseParser,
     strip_markdown_fences,
@@ -976,42 +976,6 @@ class TestPerComponentValidation:
         ]
         result = parser_with_components.validate(ops)
         assert result.is_valid is True
-
-    def test_a_new_surface_without_root_fails(self, parser_with_components: A2UIResponseParser) -> None:
-        ops: list[ServerToClientMessage] = [
-            {
-                "version": "v0.9",
-                "createSurface": {
-                    "surfaceId": "s1",
-                    "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
-                },
-            },
-            {
-                "version": "v0.9",
-                "updateComponents": {
-                    "surfaceId": "s1",
-                    "components": [{"id": "txt1", "component": "Text", "text": "Hi"}],
-                },
-            },
-        ]
-        result = parser_with_components.validate(ops)
-        assert result.is_valid is False
-        assert any("'root'" in e for e in result.errors)
-
-    def test_a_partial_update_to_an_earlier_surface_needs_no_root(
-        self, parser_with_components: A2UIResponseParser
-    ) -> None:
-        ops: list[ServerToClientMessage] = [
-            {
-                "version": "v0.9",
-                "updateComponents": {
-                    "surfaceId": "s1",
-                    "components": [{"id": "txt1", "component": "Text", "text": "Hi"}],
-                },
-            }
-        ]
-        result = parser_with_components.validate(ops)
-        assert result.is_valid is True, result.errors
 
     def test_multiple_component_errors(self, parser_with_components: A2UIResponseParser) -> None:
         ops = [

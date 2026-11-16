@@ -32,8 +32,10 @@ The differences come from what core is, not from bugs:
 - `a2ui-a2a` pins `a2a-sdk<0.4`; ag2 requires `>=1.3`.
 - Every package is 0.x and ships breaking changes every one to three weeks.
 
-ag2's vendored agent→renderer schemas for v0.9.1 and v1.0 are identical to core's published ones;
-for v0.9 only descriptions differ. The `beta` attempt needed a workaround layer (replaying operations
+When this was decided (core 0.6.0, upstream before a2ui-project/a2ui#4044), ag2's vendored
+agent→renderer schemas for v0.9.1 and v1.0 were identical to core's published ones, and for v0.9 only
+descriptions differed. Later re-vendoring may run ahead of core's releases;
+`test/a2ui/test_schema_drift.py` lists each known difference. The `beta` attempt needed a workaround layer (replaying operations
 one at a time, synthesising `createSurface` messages, folding `updateComponents`) to hide core's
 nature.
 
