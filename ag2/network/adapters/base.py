@@ -90,14 +90,18 @@ def ensure_parts(content: Rendered | None) -> list[Input]:
 
 
 class AdapterState(Protocol):
-    """Marker Protocol — concrete adapters define their own dataclass.
+    """The state one adapter folds, as seen by the hub.
 
-    Empty by design: the hub treats adapter state opaquely and only
-    passes it back into ``fold`` / ``validate_send`` / ``on_accepted``.
+    Concrete adapters define their own dataclass (``WorkflowState``,
+    ``ConsultingState``, …). The Protocol is empty by design: the hub
+    keeps every channel's state under this type and only passes it back
+    into ``fold`` / ``validate_send`` / ``on_accepted`` of the adapter
+    that produced it. Name the concrete class in
+    ``adapter_state(channel_id, WorkflowState)`` to read its fields.
     """
 
 
-StateT = TypeVar("StateT")
+StateT = TypeVar("StateT", bound=AdapterState)
 """The state type one adapter folds. Each adapter is a ``ChannelAdapter[ItsState]``;
 the hub keeps adapters of every channel type side by side as ``ChannelAdapter[Any]``."""
 
@@ -131,10 +135,7 @@ class ExpectedTurn:
     triggering_envelope_id: str | None = None
 
 
-AdapterStateT = TypeVar("AdapterStateT")
-
-
-def _narrow_state(channel_id: str, state: object, state_type: type[AdapterStateT]) -> AdapterStateT | None:
+def _narrow_state(channel_id: str, state: AdapterState | None, state_type: type[StateT]) -> StateT | None:
     """Return ``state`` as ``state_type`` (``None`` stays ``None``).
 
     Backs ``adapter_state(channel_id, state_type)`` on ``Hub`` and

@@ -42,7 +42,7 @@ from pydantic import JsonValue
 from ag2.knowledge import KnowledgeStore
 from ag2.task import TERMINAL_TASK_STATES, TaskMetadata, TaskState
 
-from ..adapters.base import AdapterStateT, ChannelAdapter, _narrow_state
+from ..adapters.base import AdapterState, ChannelAdapter, StateT, _narrow_state
 from ..adapters.consulting import ConsultingAdapter
 from ..adapters.conversation import ConversationAdapter
 from ..adapters.discussion import DiscussionAdapter
@@ -411,7 +411,7 @@ class Hub:
         # Channel caches.
         self._channels: dict[str, ChannelMetadata] = {}
         self._active_channels: dict[str, ChannelMetadata] = {}
-        self._adapter_states: dict[str, object] = {}
+        self._adapter_states: dict[str, AdapterState] = {}
         self._channel_open_waiters: dict[str, asyncio.Future[ChannelMetadata]] = {}
 
         # Task caches (observed; not owned).
@@ -1813,12 +1813,12 @@ class Hub:
         return self._adapter_for(metadata.manifest.type, metadata.manifest.version)
 
     @overload
-    def adapter_state(self, channel_id: str) -> object | None: ...
+    def adapter_state(self, channel_id: str, state_type: None = None) -> AdapterState | None: ...
 
     @overload
-    def adapter_state(self, channel_id: str, state_type: type[AdapterStateT]) -> AdapterStateT | None: ...
+    def adapter_state(self, channel_id: str, state_type: type[StateT]) -> StateT | None: ...
 
-    def adapter_state(self, channel_id: str, state_type: type[object] = object) -> object | None:
+    def adapter_state(self, channel_id: str, state_type: type[AdapterState] | None = None) -> AdapterState | None:
         """Return ``channel_id``'s current folded adapter state, or
         ``None`` if the channel has none cached.
 
@@ -1828,7 +1828,10 @@ class Hub:
         Pass ``state_type`` (e.g. ``WorkflowState``) to get the state typed
         as that class; a channel of another type raises ``TypeError``.
         """
-        return _narrow_state(channel_id, self._adapter_states.get(channel_id), state_type)
+        state = self._adapter_states.get(channel_id)
+        if state_type is None:
+            return state
+        return _narrow_state(channel_id, state, state_type)
 
     async def list_channels(
         self,

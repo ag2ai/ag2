@@ -398,7 +398,7 @@ Custom targets and conditions persist via `#!python TransitionGraph.to_dict()` �
 
 ## Packet execution model
 
-Each `#!python Agent.ask` round on a workflow channel commits to the WAL atomically as a single `#!python EV_PACKET` envelope. The packet carries the agent's routing decision (`routing.tool` matched against `#!python ToolCalled` rules, or a pre-resolved `routing.target` from a typed `#!python Handoff` return), the round's body text, and a reserved `context_updates` slot. State mutations from tool calls (via `#!python set_context(channel, ...)`) land as separate `#!python EV_CONTEXT_SET` envelopes during tool execution — they're folded before the packet, so a `#!python ContextEquals` rule on the same fold sees the just-set value.
+Each `#!python Agent.ask` round on a workflow channel commits to the WAL atomically as a single `#!python EV_PACKET` envelope. The packet carries the agent's routing decision (`routing.tool` matched against `#!python ToolCalled` rules, or a pre-resolved `routing.target` from a typed `#!python Handoff` return), the round's body text, and an optional `context_updates` mutation (`{"set": {...}, "delete": [...]}`, filled by `#!python build_packet_envelope(context_set=...)`). A packet whose `routing` or `context_updates` has the wrong shape is rejected with `#!python ProtocolError` before it reaches the WAL. State mutations from tool calls (via `#!python set_context(channel, ...)`) land as separate `#!python EV_CONTEXT_SET` envelopes during tool execution — they're folded before the packet, so a `#!python ContextEquals` rule on the same fold sees the just-set value.
 
 ### External side-effects and packet retry
 

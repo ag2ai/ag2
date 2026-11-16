@@ -239,7 +239,7 @@ class ContextEquals:
     name: ClassVar[str] = "context_equals"
 
     def evaluate(self, state: "WorkflowState", envelope: Envelope) -> bool:
-        return bool(state.context_vars.get(self.key) == self.value)
+        return state.context_vars.get(self.key) == self.value
 
 
 # ── Registry ────────────────────────────────────────────────────────────────
@@ -375,7 +375,9 @@ class TransitionGraph:
         when you need isolation (e.g. multi-tenant tests) or a registry
         seeded with custom targets / conditions.
         """
-        parsed: dict[str, Any] = json.loads(data) if isinstance(data, str) else data
+        parsed = json.loads(data) if isinstance(data, str) else data
+        if not isinstance(parsed, dict):
+            raise ValueError(f"a transition graph must be a JSON object, got {type(parsed).__name__}")
         reg = registry if registry is not None else TransitionRegistry.default()
         return cls(
             initial_speaker=parsed["initial_speaker"],

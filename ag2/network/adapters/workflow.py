@@ -116,16 +116,21 @@ def _is_substantive(envelope: Envelope) -> bool:
 def _context_updates(data: JsonValue) -> tuple[dict[str, JsonValue], list[str]] | None:
     """Read a ``{"set": {...}, "delete": [...]}`` context mutation.
 
-    Absent or empty fields mean no change. Returns ``None`` when the
-    shape is wrong: ``validate_send`` rejects such an envelope, and
+    An absent or ``null`` field means no change. Returns ``None`` when the
+    shape is wrong (including falsy values of the wrong type, such as
+    ``{"set": []}``): ``validate_send`` rejects such an envelope, and
     ``fold`` ignores it so a WAL that already holds one still replays.
     """
     if data is None:
         return {}, []
     if not isinstance(data, dict):
         return None
-    to_set = data.get("set") or {}
-    to_delete = data.get("delete") or []
+    to_set = data.get("set")
+    to_delete = data.get("delete")
+    if to_set is None:
+        to_set = {}
+    if to_delete is None:
+        to_delete = []
     if not isinstance(to_set, dict) or not isinstance(to_delete, list):
         return None
     keys: list[str] = []
@@ -134,6 +139,10 @@ def _context_updates(data: JsonValue) -> tuple[dict[str, JsonValue], list[str]] 
             return None
         keys.append(key)
     return to_set, keys
+
+
+def _malformed_context_updates(metadata: ChannelMetadata, field: str) -> str:
+    return f"workflow {metadata.channel_id!r} {field} needs 'set' as an object and 'delete' as a list of strings"
 
 
 def _routing(envelope: Envelope) -> dict[str, JsonValue]:
@@ -349,21 +358,16 @@ class WorkflowAdapter:
                     f"from participants, got {envelope.sender_id!r}"
                 )
             if _context_updates(envelope.event_data) is None:
-                raise ProtocolError(
-                    f"workflow {metadata.channel_id!r} EV_CONTEXT_SET needs 'set' as an object "
-                    "and 'delete' as a list of strings"
-                )
+                raise ProtocolError(_malformed_context_updates(metadata, "EV_CONTEXT_SET"))
             return
         if not _is_substantive(envelope):
             return
         if envelope.event_type == EV_PACKET:
-            if not isinstance(envelope.event_data.get("routing", {}), dict):
+            routing = envelope.event_data.get("routing")
+            if routing is not None and not isinstance(routing, dict):
                 raise ProtocolError(f"workflow {metadata.channel_id!r} EV_PACKET 'routing' must be an object")
             if _context_updates(envelope.event_data.get("context_updates")) is None:
-                raise ProtocolError(
-                    f"workflow {metadata.channel_id!r} EV_PACKET 'context_updates' needs 'set' as an object "
-                    "and 'delete' as a list of strings"
-                )
+                raise ProtocolError(_malformed_context_updates(metadata, "EV_PACKET 'context_updates'"))
         if state.expected_next_speaker and envelope.sender_id != state.expected_next_speaker:
             raise ProtocolError(
                 f"workflow {metadata.channel_id!r} expects "
@@ -522,7 +526,7 @@ class WorkflowAdapter:
         causation_id: str | None = None,
     ) -> Envelope:
         """Workflow's native round-end shape — handoff + context_set
-        live in ``routing`` / ``context`` fields."""
+        live in ``routing`` / ``context_updates`` fields."""
         return default_build_packet_envelope(
             channel_id,
             sender_id,

@@ -34,6 +34,7 @@ from ag2.network import (
     TransitionGraph,
     WorkflowState,
 )
+from ag2.network.hub import wal_path
 from ag2.testing import TestConfig
 
 
@@ -320,24 +321,8 @@ class TestContextVars:
         await hub.close()
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("event_type", "event_data"),
-    [
-        pytest.param(EV_CONTEXT_SET, {"set": "oops"}, id="context-set-not-an-object"),
-        pytest.param(EV_CONTEXT_SET, {"delete": "k1"}, id="context-delete-not-a-list"),
-        pytest.param(EV_CONTEXT_SET, {"delete": [1]}, id="context-delete-not-strings"),
-        pytest.param(EV_PACKET, {"body": "hi", "context_updates": {"set": ["k"]}}, id="packet-set-not-an-object"),
-        pytest.param(EV_PACKET, {"body": "hi", "routing": "handoff"}, id="packet-routing-not-an-object"),
-    ],
-)
-async def test_malformed_workflow_envelope_is_rejected_before_the_wal(
-    event_type: str, event_data: dict[str, JsonValue]
-) -> None:
-    """A malformed context mutation or routing is a protocol error: it never
-    reaches the WAL, so the channel state is untouched and the hub reopens."""
-    store = MemoryKnowledgeStore()
-    hub = await Hub.open(store, ttl_sweep_interval=0)
+async def _open_workflow(hub: Hub) -> tuple[str, str, str]:
+    """Open an alice → bob workflow; return ``(channel_id, alice_id, bob_id)``."""
     alice = await hub.register(_agent("alice"))
     bob = await hub.register(_agent("bob"))
     graph = TransitionGraph(
@@ -351,21 +336,98 @@ async def test_malformed_workflow_envelope_is_rejected_before_the_wal(
         target=[bob.agent_id],
         knobs={"graph": graph.to_dict()},
     )
+    return channel.channel_id, alice.agent_id, bob.agent_id
 
-    with pytest.raises(ProtocolError):
+
+@pytest.mark.asyncio
+class TestWorkflowEnvelopeShape:
+    """The shape of ``EV_CONTEXT_SET`` / ``EV_PACKET`` data on a workflow channel."""
+
+    @pytest.mark.parametrize(
+        ("event_type", "event_data"),
+        [
+            pytest.param(EV_CONTEXT_SET, {"set": "oops"}, id="context-set-not-an-object"),
+            pytest.param(EV_CONTEXT_SET, {"delete": "k1"}, id="context-delete-not-a-list"),
+            pytest.param(EV_CONTEXT_SET, {"delete": [1]}, id="context-delete-not-strings"),
+            pytest.param(EV_CONTEXT_SET, {"set": []}, id="context-set-empty-list"),
+            pytest.param(EV_CONTEXT_SET, {"set": 0}, id="context-set-zero"),
+            pytest.param(EV_CONTEXT_SET, {"delete": ""}, id="context-delete-empty-string"),
+            pytest.param(EV_PACKET, {"body": "hi", "context_updates": {"set": ["k"]}}, id="packet-set-not-an-object"),
+            pytest.param(EV_PACKET, {"body": "hi", "context_updates": {"delete": "k1"}}, id="packet-delete-not-a-list"),
+            pytest.param(EV_PACKET, {"body": "hi", "context_updates": "oops"}, id="packet-updates-not-an-object"),
+            pytest.param(EV_PACKET, {"body": "hi", "routing": "handoff"}, id="packet-routing-not-an-object"),
+        ],
+    )
+    async def test_malformed_envelope_is_rejected_before_the_wal(
+        self, event_type: str, event_data: dict[str, JsonValue]
+    ) -> None:
+        """A malformed context mutation or routing is a protocol error: it never
+        reaches the WAL, so the channel state is untouched and the hub reopens."""
+        store = MemoryKnowledgeStore()
+        hub = await Hub.open(store, ttl_sweep_interval=0)
+        channel_id, alice_id, _ = await _open_workflow(hub)
+
+        with pytest.raises(ProtocolError):
+            await hub.post_envelope(
+                Envelope(
+                    channel_id=channel_id,
+                    sender_id=alice_id,
+                    audience=None,
+                    event_type=event_type,
+                    event_data=event_data,
+                )
+            )
+        await hub.close()
+
+        reopened = await Hub.open(store, ttl_sweep_interval=0)
+        state = reopened.adapter_state(channel_id, WorkflowState)
+        assert state is not None
+        assert (state.context_vars, state.turn_count, state.expected_next_speaker) == ({}, 0, alice_id)
+        await reopened.close()
+
+    async def test_null_routing_and_context_updates_mean_no_change(self) -> None:
+        """An explicit ``null`` is read like an absent field, for both packet fields."""
+        hub = await Hub.open(MemoryKnowledgeStore(), ttl_sweep_interval=0)
+        channel_id, alice_id, bob_id = await _open_workflow(hub)
+
         await hub.post_envelope(
             Envelope(
-                channel_id=channel.channel_id,
-                sender_id=alice.agent_id,
+                channel_id=channel_id,
+                sender_id=alice_id,
                 audience=None,
-                event_type=event_type,
-                event_data=event_data,
+                event_type=EV_PACKET,
+                event_data={"body": "hi", "routing": None, "context_updates": None},
             )
         )
-    await hub.close()
 
-    reopened = await Hub.open(store, ttl_sweep_interval=0)
-    state = reopened.adapter_state(channel.channel_id)
-    assert isinstance(state, WorkflowState)
-    assert (state.context_vars, state.turn_count, state.expected_next_speaker) == ({}, 0, alice.agent_id)
-    await reopened.close()
+        state = hub.adapter_state(channel_id, WorkflowState)
+        assert state is not None
+        assert (state.context_vars, state.turn_count, state.expected_next_speaker) == ({}, 1, bob_id)
+        await hub.close()
+
+    async def test_malformed_context_set_already_in_the_wal_is_skipped_on_replay(self) -> None:
+        """A WAL written before ``validate_send`` checked the shape may hold a
+        malformed ``EV_CONTEXT_SET``. Replaying it ignores that entry and keeps
+        folding the rest, so the hub still opens."""
+        store = MemoryKnowledgeStore()
+        hub = await Hub.open(store, ttl_sweep_interval=0)
+        channel_id, alice_id, _ = await _open_workflow(hub)
+        await _post_context_set(hub, sender=alice_id, channel_id=channel_id, set={"stage": "draft"})
+        await hub.close()
+
+        malformed = Envelope(
+            channel_id=channel_id,
+            sender_id=alice_id,
+            audience=None,
+            event_type=EV_CONTEXT_SET,
+            event_data={"set": "oops"},
+        )
+        await store.append(wal_path(channel_id), malformed.to_json() + "\n")
+
+        reopened = await Hub.open(store, ttl_sweep_interval=0)
+        await _post_context_set(reopened, sender=alice_id, channel_id=channel_id, set={"reviewed": True})
+
+        state = reopened.adapter_state(channel_id, WorkflowState)
+        assert state is not None
+        assert state.context_vars == {"stage": "draft", "reviewed": True}
+        await reopened.close()

@@ -45,7 +45,7 @@ from pydantic import JsonValue
 from ag2.agent import Agent
 from ag2.task import TaskMetadata, TaskState
 
-from ..adapters.base import AdapterStateT, ChannelAdapter, _narrow_state
+from ..adapters.base import AdapterState, ChannelAdapter, StateT, _narrow_state
 from ..channel import ChannelMetadata, ChannelState
 from ..envelope import Envelope
 from ..errors import AccessDeniedError, AuthError, NetworkError, NotFoundError, ProtocolError
@@ -1002,12 +1002,12 @@ class HubClient:
         return self.adapter_for_metadata(metadata)
 
     @overload
-    async def adapter_state(self, channel_id: str) -> object | None: ...
+    async def adapter_state(self, channel_id: str, state_type: None = None) -> AdapterState | None: ...
 
     @overload
-    async def adapter_state(self, channel_id: str, state_type: type[AdapterStateT]) -> AdapterStateT | None: ...
+    async def adapter_state(self, channel_id: str, state_type: type[StateT]) -> StateT | None: ...
 
-    async def adapter_state(self, channel_id: str, state_type: type[object] = object) -> object | None:
+    async def adapter_state(self, channel_id: str, state_type: type[AdapterState] | None = None) -> AdapterState | None:
         """Return ``channel_id``'s folded adapter state, or ``None``.
 
         In-process this reads the hub's cached state. Cross-process it
@@ -1026,9 +1026,12 @@ class HubClient:
         if metadata is None:
             metadata = await self.get_channel(channel_id)
         adapter = self.adapter_for_metadata(metadata)
-        state = adapter.initial_state(metadata)
+        # The registry holds ``ChannelAdapter[Any]``; every fold state is an ``AdapterState``.
+        state: AdapterState = adapter.initial_state(metadata)
         for envelope in await self.read_wal(channel_id):
             state = adapter.fold(envelope, state)
+        if state_type is None:
+            return state
         return _narrow_state(channel_id, state, state_type)
 
     def default_view_policy(self, channel_id: str, participant_id: str) -> ViewPolicy:

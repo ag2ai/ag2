@@ -136,7 +136,7 @@ class DiscussionState:
     turn_count: int = 0
 ```
 
-Read via `#!python hub._adapter_states[channel_id]`. The order is fixed at create time by sorting participants on `#!python Participant.order`; round-robin advances by `(current_index + 1) % len(participant_order)`.
+Read it via `#!python hub.adapter_state(channel_id, DiscussionState)`. The order is fixed at create time by sorting participants on `#!python Participant.order`; round-robin advances by `(current_index + 1) % len(participant_order)`.
 
 ## Customising the Ordering
 

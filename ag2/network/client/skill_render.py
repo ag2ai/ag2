@@ -51,12 +51,16 @@ class ParsedSkill(dict[str, Any]):
 
     @property
     def frontmatter(self) -> dict[str, Any]:
-        frontmatter: dict[str, Any] = self["frontmatter"]
+        frontmatter = self["frontmatter"]
+        if not isinstance(frontmatter, dict):
+            raise TypeError(f"skill frontmatter must be a dict, got {type(frontmatter).__name__}")
         return frontmatter
 
     @property
     def body(self) -> str:
-        body: str = self["body"]
+        body = self["body"]
+        if not isinstance(body, str):
+            raise TypeError(f"skill body must be a str, got {type(body).__name__}")
         return body
 
 

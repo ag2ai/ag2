@@ -43,7 +43,7 @@ from .channel import Channel
 if TYPE_CHECKING:
     from ag2.tools.tool import Tool
 
-    from ..adapters.base import ChannelAdapter
+    from ..adapters.base import AdapterState, ChannelAdapter
     from .agent_client import AgentClient
 
 __all__ = (
@@ -133,7 +133,7 @@ def resolve_view_policy(
 def stamp_dependencies(
     client: "AgentClient",
     channel: Channel,
-    state: object | None,
+    state: "AdapterState | None",
 ) -> dict[object, object]:
     """Build the ``context.dependencies`` dict for the LLM turn.
 
