@@ -79,6 +79,16 @@ class CreateOptions(TypedDict, total=False):
     extra_body: dict[str, Any] | None
 
 
+def _extract_reasoning(source: object) -> str | None:
+    """Return reasoning text from ``reasoning_content`` or ``reasoning``."""
+    # DeepSeek/SGLang attach ``reasoning_content`` while vLLM/OpenRouter attach ``reasoning``.
+    for attr in ("reasoning_content", "reasoning"):
+        value = getattr(source, attr, None)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
 class OpenAIClient(LLMClient):
     def __init__(
         self,
@@ -159,7 +169,7 @@ class OpenAIClient(LLMClient):
             msg = choice.message
             finish_reason = choice.finish_reason
 
-            if r := getattr(msg, "reasoning", None):
+            if r := _extract_reasoning(msg):
                 await context.send(ModelReasoning(r))
 
             if c := msg.content:
@@ -217,7 +227,7 @@ class OpenAIClient(LLMClient):
                     finish_reason = choice.finish_reason
                 delta = choice.delta
 
-                if r := getattr(delta, "reasoning_content", None):
+                if r := _extract_reasoning(delta):
                     await context.send(ModelReasoning(r))
 
                 if c := delta.content:
