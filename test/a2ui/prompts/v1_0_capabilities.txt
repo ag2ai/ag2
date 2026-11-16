@@ -101,7 +101,7 @@ Example 1: Dynamic text form
           "value": {"@path": "/form/value"},
           "placeholder": "0.00",
           "variant": "number",
-          "checks": [
+          "@checks": [
             {
               "condition": {
                 "@call": "required",

@@ -61,7 +61,7 @@ Components are referenced by `id`. Use `children` (array of ids) for layout comp
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://a2ui.org/specification/v0_9/server_to_client.json",
   "title": "A2UI Message Schema",
-  "description": "Describes a JSON payload for an A2UI (Agent to UI) message, which is used to dynamically construct and update user interfaces.",
+  "description": "Describes a JSON payload for an A2UI message, which is used to dynamically construct and update user interfaces.",
   "type": "object",
   "oneOf": [
     {
@@ -93,8 +93,8 @@ Components are referenced by `id`. Use `children` (array of ids) for layout comp
               "description": "The unique identifier for the UI surface to be rendered."
             },
             "catalogId": {
-              "description": "A string that uniquely identifies this catalog. It is recommended to prefix this with an internet domain that you own, to avoid conflicts e.g. mycompany.com:somecatalog'.",
-              "type": "string"
+              "type": "string",
+              "description": "A string that uniquely identifies this catalog. It is recommended to prefix this with an internet domain that you own, to avoid conflicts e.g. mycompany.com:somecatalog'."
             },
             "theme": {
               "$ref": "catalog.json#/$defs/theme",
@@ -126,7 +126,7 @@ Components are referenced by `id`. Use `children` (array of ids) for layout comp
         },
         "updateComponents": {
           "type": "object",
-          "description": "Updates a surface with a new set of components. This message can be sent multiple times to update the component tree of an existing surface. One of the components in one of the components lists MUST have an 'id' of 'root' to serve as the root of the component tree. The createSurface message MUST have been previously sent with the 'catalogId' that is in this message.",
+          "description": "Updates a surface with a new set of components. This message can be sent multiple times to update the component tree of an existing surface. One of the components in one of the components lists MUST have an 'id' of 'root' to serve as the root of the component tree. A createSurface message MUST have been previously sent for the 'surfaceId' in this message; the surface's catalog is the one specified by that createSurface.",
           "properties": {
             "surfaceId": {
               "type": "string",
@@ -162,7 +162,7 @@ Components are referenced by `id`. Use `children` (array of ids) for layout comp
         },
         "updateDataModel": {
           "type": "object",
-          "description": "Updates the data model for an existing surface. This message can be sent multiple times to update the data model. The createSurface message MUST have been previously sent with the 'catalogId' that is in this message.",
+          "description": "Updates the data model for an existing surface. This message can be sent multiple times to update the data model. A createSurface message MUST have been previously sent for the 'surfaceId' in this message; the surface's catalog is the one specified by that createSurface.",
           "properties": {
             "surfaceId": {
               "type": "string",
@@ -197,7 +197,7 @@ Components are referenced by `id`. Use `children` (array of ids) for layout comp
         },
         "deleteSurface": {
           "type": "object",
-          "description": "Signals the client to delete the surface identified by 'surfaceId'. The createSurface message MUST have been previously sent with the 'catalogId' that is in this message.",
+          "description": "Signals the client to delete the surface identified by 'surfaceId'. A createSurface message MUST have been previously sent for the 'surfaceId' in this message; the surface's catalog is the one specified by that createSurface.",
           "properties": {
             "surfaceId": {
               "type": "string",

@@ -27,10 +27,20 @@ sdk_schema = pytest.importorskip("a2ui.core.schema")
 SPEC_ROOT = Path(ag2.a2ui.__file__).parent
 
 KNOWN_DRIFT: dict[tuple[str, str], set[str]] = {
-    # The SDK's basic catalog has a List `listStyle` the vendored v0.9 spec does not, so ag2 rejects it.
-    ("v0.9", "basic_catalog"): {"sdk-only /components/List/allOf[2]/properties/listStyle"},
-    # Metadata only: `returnType` is not a validation keyword.
-    ("1.0", "common_types"): {"sdk-only /$defs/IndexSystemFunction/returnType"},
+    # a2ui-project/a2ui#4044 (2026-11-11) renamed the v1.0 component envelope keys to `@...`; the vendored spec has
+    # it, `a2ui-core` 0.6.0 predates it. Drop these once a release ships it.
+    ("1.0", "common_types"): {
+        "ag2-only /$defs/Checkable/properties/@checks",
+        "ag2-only /$defs/ComponentCommon/properties/@accessibility",
+        "ag2-only /$defs/ComponentCommon/properties/@catalogId",
+        "ag2-only /$defs/ComponentCommon/properties/@metadata",
+        "sdk-only /$defs/Checkable/properties/checks",
+        "sdk-only /$defs/ComponentCommon/properties/accessibility",
+        "sdk-only /$defs/ComponentCommon/properties/catalogId",
+        "sdk-only /$defs/ComponentCommon/properties/metadata",
+    },
+    # The same change rewrote the catalog's prompt instructions to the `@` keys.
+    ("1.0", "basic_catalog"): {"changed /instructions"},
 }
 
 _ANNOTATIONS = frozenset({"description", "title", "examples", "$comment"})

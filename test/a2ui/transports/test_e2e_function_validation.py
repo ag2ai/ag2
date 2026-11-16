@@ -463,7 +463,7 @@ async def test_agent_only_rpc_and_literal_call_objects_are_emitted() -> None:
                         "id": "root",
                         "component": "Text",
                         "text": "Lookup",
-                        "metadata": {"extensions": {"literal": {"@call": "lookup"}}},
+                        "@metadata": {"extensions": {"literal": {"@call": "lookup"}}},
                     }
                 ],
             },

@@ -122,6 +122,32 @@ def _as_messages(values: list[JsonValue]) -> "tuple[list[ServerToClientMessage],
     return messages, None
 
 
+def _missing_root_errors(objects: Sequence[JsonValue]) -> list[str]:
+    """A surface these messages create must have a ``root`` component among the components they give it.
+
+    The spec asks for a ``root`` in one of a surface's component lists, so a partial update to a surface created
+    earlier (by an earlier turn or a server-side handler) needs none. v1.0's ``createSurface`` may carry the
+    initial components itself.
+    """
+    created: dict[str, list[JsonValue]] = {}
+    for op in objects:
+        payload = op.get("createSurface") if isinstance(op, dict) else None
+        surface_id = payload.get("surfaceId") if isinstance(payload, dict) else None
+        if isinstance(surface_id, str):
+            created.setdefault(surface_id, []).extend(_components_of(payload))
+    for op in objects:
+        payload = op.get("updateComponents") if isinstance(op, dict) else None
+        surface_id = payload.get("surfaceId") if isinstance(payload, dict) else None
+        if isinstance(surface_id, str) and surface_id in created:
+            created[surface_id].extend(_components_of(payload))
+    return [
+        f"No component with id 'root' found on surface '{surface_id}' — "
+        "the A2UI spec requires the component tree to have a 'root' node."
+        for surface_id, components in created.items()
+        if components and not any(isinstance(c, dict) and c.get("id") == "root" for c in components)
+    ]
+
+
 def _data_path_errors(messages: Sequence[JsonObject]) -> list[str]:
     """A data-model update's ``path`` must be a JSON Pointer (RFC 6901)."""
     errors: list[str] = []
@@ -134,7 +160,7 @@ def _data_path_errors(messages: Sequence[JsonObject]) -> list[str]:
 
 
 def _components_of(update_components: JsonValue) -> list[JsonValue]:
-    """Return the ``components`` list of an ``updateComponents`` value, or ``[]`` if malformed."""
+    """Return the ``components`` list of an ``updateComponents`` (or v1.0 ``createSurface``) value, or ``[]``."""
     if not isinstance(update_components, dict):
         return []
     components = update_components.get("components", [])
@@ -296,21 +322,7 @@ class A2UIResponseParser:
         if self._component_references is not None and not errors:
             errors.extend(component_graph_errors(objects, self._component_references))
 
-        # Spec rule (server_to_client.json + a2ui.org): across all component-carrying
-        # ops, at least one component must have id 'root'. v1.0's createSurface can
-        # carry the initial components itself, so those count alongside updateComponents.
-        update_ops = [op for op in objects if isinstance(op, dict) and "updateComponents" in op]
-        create_lists = [
-            _components_of(op.get("createSurface")) for op in objects if isinstance(op, dict) and "createSurface" in op
-        ]
-        component_lists = [_components_of(op.get("updateComponents")) for op in update_ops] + create_lists
-        if update_ops or any(create_lists):
-            has_root = any(isinstance(c, dict) and c.get("id") == "root" for lst in component_lists for c in lst)
-            if not has_root:
-                errors.append(
-                    "No component with id 'root' found across the surface's components — "
-                    "the A2UI spec requires the component tree to have a 'root' node."
-                )
+        errors.extend(_missing_root_errors(objects))
 
         return A2UIValidationResult(
             is_valid=len(errors) == 0,

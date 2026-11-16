@@ -688,6 +688,164 @@
    ]
   },
   {
+   "id": "v0.9:list_style_ordered",
+   "version": "v0.9",
+   "note": "List listStyle 'ordered' (a2ui-project/a2ui#3956)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        },
+        "listStyle": "ordered"
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:list_style_numbered",
+   "version": "v0.9",
+   "note": "List listStyle 'numbered' (a2ui-project/a2ui#3956)",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        },
+        "listStyle": "numbered"
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 1: Component 'root' (List): 'numbered' is not one of ['ordered', 'unordered', 'none']"
+  },
+  {
+   "id": "v0.9.1:list_style_ordered",
+   "version": "v0.9.1",
+   "note": "List listStyle 'ordered' (a2ui-project/a2ui#3956)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        },
+        "listStyle": "ordered"
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:list_style_numbered",
+   "version": "v0.9.1",
+   "note": "List listStyle 'numbered' (a2ui-project/a2ui#3956)",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        },
+        "listStyle": "numbered"
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 1: Component 'root' (List): 'numbered' is not one of ['ordered', 'unordered', 'none']"
+  },
+  {
    "id": "v0.9:fn_formatString",
    "version": "v0.9",
    "note": "Text from formatString call",
@@ -1427,7 +1585,7 @@
    "version": "v0.9",
    "note": "components but no id root",
    "expect": "retry",
-   "error": "No component with id 'root' found across the surface's components — the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "v0.9",
@@ -1454,8 +1612,8 @@
   {
    "id": "v0.9:no_root_update_only",
    "version": "v0.9",
-   "note": "update-only, no root",
-   "expect": "retry",
+   "note": "partial update to a surface from an earlier turn: the spec needs a 'root' in one of the surface's component lists, not in each",
+   "expect": "frames",
    "messages": [
     {
      "version": "v0.9",
@@ -1470,8 +1628,7 @@
       ]
      }
     }
-   ],
-   "error": "No component with id 'root' found across the surface's components — the A2UI spec requires the component tree to have a 'root' node."
+   ]
   },
   {
    "id": "v0.9:dangling_child",
@@ -2910,7 +3067,7 @@
    "version": "v0.9.1",
    "note": "components but no id root",
    "expect": "retry",
-   "error": "No component with id 'root' found across the surface's components — the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "v0.9.1",
@@ -2937,8 +3094,8 @@
   {
    "id": "v0.9.1:no_root_update_only",
    "version": "v0.9.1",
-   "note": "update-only, no root",
-   "expect": "retry",
+   "note": "partial update to a surface from an earlier turn: the spec needs a 'root' in one of the surface's component lists, not in each",
+   "expect": "frames",
    "messages": [
     {
      "version": "v0.9.1",
@@ -2953,8 +3110,7 @@
       ]
      }
     }
-   ],
-   "error": "No component with id 'root' found across the surface's components — the A2UI spec requires the component tree to have a 'root' node."
+   ]
   },
   {
    "id": "v0.9.1:dangling_child",
@@ -4389,7 +4545,7 @@
    "version": "v1.0",
    "note": "components but no id root",
    "expect": "retry",
-   "error": "No component with id 'root' found across the surface's components — the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "1.0",
@@ -4416,8 +4572,8 @@
   {
    "id": "v1.0:no_root_update_only",
    "version": "v1.0",
-   "note": "update-only, no root",
-   "expect": "retry",
+   "note": "partial update to a surface from an earlier turn: the spec needs a 'root' in one of the surface's component lists, not in each",
+   "expect": "frames",
    "messages": [
     {
      "version": "1.0",
@@ -4432,8 +4588,7 @@
       ]
      }
     }
-   ],
-   "error": "No component with id 'root' found across the surface's components — the A2UI spec requires the component tree to have a 'root' node."
+   ]
   },
   {
    "id": "v1.0:dangling_child",
@@ -4710,7 +4865,7 @@
    "version": "v1.0",
    "note": "inline components without root",
    "expect": "retry",
-   "error": "No component with id 'root' found across the surface's components — the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "1.0",
@@ -4787,7 +4942,7 @@
         "id": "root",
         "component": "Text",
         "text": "hi",
-        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
        }
       ]
      }
@@ -4816,7 +4971,7 @@
         "id": "root",
         "component": "Text",
         "text": "hi",
-        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
        }
       ]
      }
@@ -4846,7 +5001,7 @@
         "id": "root",
         "component": "Text",
         "text": "hi",
-        "catalogId": "https://example.com/nope.json"
+        "@catalogId": "https://example.com/nope.json"
        }
       ]
      }
@@ -5481,7 +5636,7 @@
    "version": "v1.0",
    "note": "MyWidget on basic surface",
    "expect": "retry",
-   "error": "Operation 1: Component 'root' (MyWidget): 'catalogId' is a required property",
+   "error": "Operation 1: Component 'root' (MyWidget): '@catalogId' is a required property",
    "catalog": "widget_v10",
    "messages": [
     {
@@ -5540,7 +5695,7 @@
    "version": "v1.0",
    "note": "basic-style Text on custom surface",
    "expect": "retry",
-   "error": "Operation 1: Component 'root' (Text): 'catalogId' is a required property",
+   "error": "Operation 1: Component 'root' (Text): '@catalogId' is a required property",
    "catalog": "text_override_v10",
    "messages": [
     {
@@ -5588,7 +5743,7 @@
         "id": "root",
         "component": "Text",
         "text": "x",
-        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
        }
       ]
      }
@@ -5600,7 +5755,7 @@
    "version": "v1.0",
    "note": "customText on basic surface",
    "expect": "retry",
-   "error": "Operation 1: Component 'root' (Text): 'catalogId' is a required property",
+   "error": "Operation 1: Component 'root' (Text): '@catalogId' is a required property",
    "catalog": "text_override_v10",
    "messages": [
     {
@@ -5668,13 +5823,13 @@
           "catalogId": "https://mycompany.com/cat.json"
          }
         },
-        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
        },
        {
         "id": "t",
         "component": "Text",
         "text": "x",
-        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
        }
       ]
      }

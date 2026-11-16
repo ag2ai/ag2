@@ -44,6 +44,18 @@ _IMPLICIT_FUNCTION_SCHEMA_URI = "urn:ag2:a2ui:implicit-renderer-function"
 _IMPLICIT_COMPONENT_SCHEMA_URI = "urn:ag2:a2ui:implicit-component"
 
 
+# Component properties that are envelope, not the component's own: v0.9 spells them bare, v1.0 with ``@``.
+_ENVELOPE_PROPERTIES = frozenset((
+    "id",
+    "component",
+    "accessibility",
+    "@accessibility",
+    "@catalogId",
+    "@metadata",
+    "@checks",
+))
+
+
 def _xid_property_names(schema: JsonValue) -> JsonValue:
     """Rewrite objects whose keys must be UAX #31 identifiers to a ``propertyNames`` format check."""
     if isinstance(schema, list):
@@ -184,18 +196,25 @@ def _check_definition_references(catalog: JsonSchema, schema: JsonValue, pointer
             _check_definition_references(catalog, value, f"{pointer}/{_pointer_token(key)}")
 
 
-def _catalog_selection(catalog_id: str, *, explicit: bool) -> JsonSchema:
+_COMPONENT_CATALOG_KEY = "@catalogId"
+"""Where a v1.0 component names its catalog (an ``@`` envelope key, a2ui-project/a2ui#4044)."""
+_FUNCTION_CATALOG_KEY = "catalogId"
+"""Where a function call names its catalog (``FunctionCommon.catalogId``)."""
+
+
+def _catalog_selection(catalog_id: str, *, explicit: bool, key: str) -> JsonSchema:
     if explicit:
-        return {"properties": {"catalogId": {"const": catalog_id}}, "required": ["catalogId"]}
-    return {"not": {"required": ["catalogId"]}}
+        return {"properties": {key: {"const": catalog_id}}, "required": [key]}
+    return {"not": {"required": [key]}}
 
 
 def _catalog_component_variant(catalog: JsonSchema, *, explicit: bool) -> JsonSchema:
     catalog_id = str(catalog["$id"])
-    return {"allOf": [{"$ref": f"{catalog_id}#/$defs/anyComponent"}, _catalog_selection(catalog_id, explicit=explicit)]}
+    selection = _catalog_selection(catalog_id, explicit=explicit, key=_COMPONENT_CATALOG_KEY)
+    return {"allOf": [{"$ref": f"{catalog_id}#/$defs/anyComponent"}, selection]}
 
 
-_CALL_ENVELOPE = ("@call", "catalogId")
+_CALL_ENVELOPE = ("@call", _FUNCTION_CATALOG_KEY)
 
 # Keywords a function definition may carry and still be closed by listing its ``properties``; anything else
 # (``anyOf``, ``not``, ``then``, ...) may admit properties it does not list.
@@ -265,7 +284,7 @@ def _catalog_function_variant(
             # Report malformed arguments before the caller restriction.
             body = {"allOf": [body, {"if": {"$ref": ref}, "then": {"anyOf": allowed} if allowed else {"not": {}}}]}
         dispatch.append({"if": _call_tag_is(tags[key]), "then": body})
-    selection = _catalog_selection(catalog_id, explicit=explicit)
+    selection = _catalog_selection(catalog_id, explicit=explicit, key=_FUNCTION_CATALOG_KEY)
     return {
         "if": selection,
         "then": {
@@ -507,7 +526,7 @@ def _with_catalog_component_selection(server_to_client: JsonSchema, catalogs: di
     payload_properties = _as_object(payload.get("properties"))
     call_constraints: list[JsonValue] = [
         {"$ref": "common_types.json#/$defs/AgentFunctionCall"},
-        {"required": ["catalogId"]},
+        {"required": [_FUNCTION_CATALOG_KEY]},
     ]
     call: JsonObject = {**_as_object(payload_properties.get("callFunction")), "allOf": call_constraints}
     definitions["CallRendererFunctionMessage"] = {
@@ -760,9 +779,9 @@ class A2UISchemaManager:
         if isinstance(all_of, list):
             for item in all_of:
                 item_props = _as_object(item.get("properties")) if isinstance(item, dict) else {}
-                props.update(k for k in item_props if k not in ("id", "component", "accessibility"))
+                props.update(k for k in item_props if k not in _ENVELOPE_PROPERTIES)
         own_props = _as_object(comp_def.get("properties"))
-        props.update(k for k in own_props if k not in ("id", "component", "accessibility"))
+        props.update(k for k in own_props if k not in _ENVELOPE_PROPERTIES)
 
         if props:
             return f"Properties: {', '.join(sorted(props))}"

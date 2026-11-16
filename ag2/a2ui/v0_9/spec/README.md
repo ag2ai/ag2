@@ -5,7 +5,8 @@ These JSON schemas are vendored **as-is** from the upstream A2UI project.
 - **Source repository:** https://github.com/a2ui-project/a2ui
 - **Source paths:** `specification/v0_9/json/*.json` and
   `specification/v0_9/catalogs/basic/catalog.json` (+ `rules.txt`)
-- **Pinned commit:** `d8af0c56cd8e211b4f7d5c168efb56828d7aae5f`
+- **Pinned commit:** `6e79b2e20fe2e1543aff3b9928613daa2b37189c` (upstream `main`, 2026-11-16). It includes
+  `List.listStyle` in the basic catalog (a2ui-project/a2ui#3956)
 - **Spec status:** v0.9 is a **previous** upstream version; v0.9.1 is the patch
   over it and v1.0 is current.
 

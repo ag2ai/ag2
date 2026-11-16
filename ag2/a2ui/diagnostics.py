@@ -68,7 +68,7 @@ XID_FORMAT = "xid-identifier"
 
 _UNKNOWN_TAG = "unknown-tag"
 """The keyword of a leaf reporting a tag value no variant accepts."""
-_TAG_NOUNS = {"call": "function", "@call": "function", "catalogId": "catalog"}
+_TAG_NOUNS = {"call": "function", "@call": "function", "catalogId": "catalog", "@catalogId": "catalog"}
 
 
 def _is_identifier(value: JsonValue) -> bool:
@@ -173,7 +173,7 @@ def _unselected(error: _SchemaError) -> bool:
     """Whether the error only says the variant does not apply, so the variant was never tried.
 
     That is a selector (``if``) that did not match, failing through its ``else``, or a ``not: {required: ...}``
-    guard such as "no ``catalogId``" on the implicit-catalog component.
+    guard such as "no ``@catalogId``" on the implicit-catalog component.
     """
     if list(error.schema_path)[1:2] == ["else"]:
         return True
