@@ -160,6 +160,7 @@ def client_for(
     protocol_version: A2UIVersion = "v0.9",
     validate_responses: bool = True,
     actions: Sequence[Any] = (),
+    custom_catalog: dict[str, Any] | None = None,
 ) -> Agent:
     """A client Agent talking to ``agent`` via the A2UI executor over in-process HTTP.
 
@@ -173,6 +174,7 @@ def client_for(
         actions=actions,
         protocol_version=protocol_version,
         validate_responses=validate_responses,
+        custom_catalog=custom_catalog,
     )
     a2a_server = A2AServer(agent, executor=executor)
     factory = make_test_client_factory(a2a_server, url="http://test")

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 import pytest
@@ -106,6 +106,21 @@ async def _send_a2a_message(http: httpx.AsyncClient, message: Message) -> Task:
     task = Task()
     ParseDict(payload["result"]["task"], task)
     return task
+
+
+DEVICE_CATALOG: dict[str, Any] = {
+    "$id": "https://example.com/device",
+    "functions": {
+        "getLocation": {
+            "type": "object",
+            "returnType": "string",
+            "allowedCallers": "rendererOrAgent",
+            "properties": {"@call": {"const": "getLocation"}},
+            "required": ["@call"],
+        }
+    },
+}
+"""Declares the renderer function the server asks for, so its ``callRendererFunction`` validates."""
 
 
 class _FunctionRoundTrip(ClientCallInterceptor):
@@ -481,6 +496,7 @@ class TestCallAgentFunction:
             actions=[obtain_location],
             protocol_version="v1.0",
             hitl_hook=hitl_hook,
+            custom_catalog=DEVICE_CATALOG,
         )
         stream = MemoryStream()
         payloads, states = subscribe_task_stream(stream)

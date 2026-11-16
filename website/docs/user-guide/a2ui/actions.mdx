@@ -34,7 +34,7 @@ What the handler returns is mapped to the client per the A2UI spec:
 - one A2UI server→client message — or a list of them (e.g. `#!python updateComponents` / `#!python updateDataModel`) — is sent to the renderer as a **surface update** (works on every protocol version);
 - any other JSON value is dropped: a click is fire-and-forget. To get a value back, the renderer [calls the action as a function](#calling-an-action-as-a-function-v10) instead.
 
-A result that only partly looks like messages (several message keys in one object, or a list mixing messages with other values) is treated as a plain value, with a warning.
+With `#!python validate_responses=True` (the default), the returned messages are [validated](#what-validation-checks) like the model's. Invalid messages are not sent; a warning naming the handler and the errors is logged. Validation knows only the catalogs configured on the server (basic plus `#!python custom_catalog`), so a handler's `#!python callRendererFunction` must name a function declared there, with `#!python allowedCallers` admitting the agent. A result that only partly looks like messages (several message keys in one object, or a list mixing messages with other values) is treated as a plain value, also with a warning.
 
 A turn whose only input is registered server-action interactions **skips the agent entirely** — the handlers' messages are the whole response.
 
@@ -116,7 +116,7 @@ The reply is always exactly one of `#!python value` or `#!python error`. Any mes
 |---|---|
 | `#!python UNKNOWN_FUNCTION` | No action is registered under that name, or an explicit `#!python catalogId` differs from the server's active catalog. |
 | `#!python INVALID_FUNCTION_CALL` | An explicit `#!python catalogId` is not a string, or `#!python args` is not an object or does not fit the handler's parameters, including unknown keyword names when the handler has no `#!python **kwargs`. An omitted `#!python args` uses the handler's defaults. |
-| `#!python FUNCTION_FAILED` | The handler raised (the error text is logged, not sent to the renderer). |
+| `#!python FUNCTION_FAILED` | The handler raised, or returned messages that fail validation (the error text is logged, not sent to the renderer). |
 
 `#!python callAgentFunction` does not exist before v1.0; on an earlier protocol version it is logged and left unanswered, and the turn is handed to the agent as usual.
 
@@ -138,7 +138,7 @@ async def on_client_event(event):
 
 ## What Validation Checks
 
-With `#!python validate_responses=True` (the default), every A2UI message the model emits is checked before it reaches the client. All problems in a response are listed in one retry prompt.
+With `#!python validate_responses=True` (the default), every A2UI message the model emits, or a server-side handler returns, is checked before it reaches the client. All problems in a response are listed in one retry prompt.
 
 - **Schema**: each message must match the protocol version's message schema and the merged catalog (basic plus custom). A call to a function the catalog does not define reports `unknown function '<name>'`. A component naming an unregistered `#!python @catalogId` (v1.0) reports `unknown catalog '<id>'`.
 - **Component tree**: component references are the properties whose schema refers to `#!python ComponentId`, `#!python Child` or `#!python ChildList` from `#!python common_types.json`, plus any `#!python child` / `#!python children` property. For a surface the response creates, every reference must resolve to a component on that surface, every component must be reachable from `#!python root`, there must be no reference cycles, and no id may appear twice in one message (a later message may update an earlier component by id). A surface created in an earlier response may be updated partially, so its references may point at earlier components; only duplicate ids and cycles among the response's own components are rejected there.

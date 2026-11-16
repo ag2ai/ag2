@@ -50,6 +50,7 @@ from .incoming import (
     A2UIIncomingFunctionCallResult,
     A2UIIncomingParseResult,
 )
+from .parser import A2UIResponseParser
 
 if TYPE_CHECKING:
     from ag2.agent import Agent
@@ -127,10 +128,12 @@ async def run_server_action(
     *,
     version: A2UIWireVersion,
     context: ConversationContext,
+    validator: A2UIResponseParser | None = None,
 ) -> list[ServerToClientMessage]:
     """Run a server-side action for a click and map its result to A2UI messages.
 
-    A click is fire-and-forget, so a failing handler is logged and answered with nothing.
+    A click is fire-and-forget, so a failing handler, or one returning messages that fail validation,
+    is logged and answered with nothing.
 
     Args:
         action: The :class:`A2UIAction` to run, with dependency injection resolved against ``context``.
@@ -138,6 +141,7 @@ async def run_server_action(
         version: The wire ``version`` string to stamp on emitted messages.
         context: The conversation context supplying dependencies, variables, and
             the ``dependency_provider`` (see :func:`build_server_action_context`).
+        validator: Checks the returned messages; ``None`` sends them unchecked (validation off).
 
     Returns:
         The server→client messages to emit for this click (possibly empty).
@@ -149,6 +153,8 @@ async def run_server_action(
         return []
 
     messages = _messages_of(result, version, handler=click.name)
+    if _invalid(messages, validator, handler=click.name):
+        return []
     if not messages and result is not None:
         logger.debug(
             "A2UI server action %r returned a value, but an action has no response channel; dropping it. "
@@ -165,6 +171,7 @@ async def run_agent_function(
     protocol: A2UIProtocol,
     catalog_id: str,
     context: ConversationContext,
+    validator: A2UIResponseParser | None = None,
 ) -> list[ServerToClientMessage]:
     """Answer a renderer's ``callAgentFunction`` (v1.0) with an ``agentFunctionResponse``.
 
@@ -178,6 +185,8 @@ async def run_agent_function(
             select a local action merely because its function name matches.
         context: The conversation context supplying dependencies, variables, and
             the ``dependency_provider`` (see :func:`build_server_action_context`).
+        validator: Checks the messages the handler returns; invalid ones fail the call
+            (``FUNCTION_FAILED``). ``None`` sends them unchecked (validation off).
 
     Returns:
         Any messages the handler returned, then the response correlated by
@@ -220,15 +229,11 @@ async def run_agent_function(
         return [_invalid_function_arguments(call, version)]
     except Exception:  # noqa: BLE001 - a handler failure must not tear down the turn
         logger.exception("A2UI function %r failed", call.call)
-        return [
-            _function_response(
-                call.function_call_id,
-                version,
-                error={"code": "FUNCTION_FAILED", "message": f"Function {call.call!r} failed."},
-            )
-        ]
+        return [_function_failed(call, version)]
 
     messages = _messages_of(result, version, handler=call.call)
+    if _invalid(messages, validator, handler=call.call):
+        return [_function_failed(call, version)]
     # Messages are the handler's surface updates; there is no separate value to return.
     value = None if messages else result
     return [*messages, _function_response(call.function_call_id, version, value=value)]
@@ -264,7 +269,11 @@ async def run_client_interactions(
                 context = build_server_action_context(agent, variables=variables)
             messages.extend(
                 await run_server_action(
-                    action, interaction.action, version=runtime.protocol.wire_version, context=context
+                    action,
+                    interaction.action,
+                    version=runtime.protocol.wire_version,
+                    context=context,
+                    validator=runtime.message_validator,
                 )
             )
         elif isinstance(interaction, A2UIIncomingFunctionCallResult):
@@ -277,11 +286,31 @@ async def run_client_interactions(
                 protocol=runtime.protocol,
                 catalog_id=runtime.catalog_id,
                 context=context,
+                validator=runtime.message_validator,
             )
             # Before v1.0 there is no reply to send: leave the turn to the agent.
             handled = handled or bool(answer)
             messages.extend(answer)
     return messages, handled
+
+
+def _invalid(messages: list[ServerToClientMessage], validator: A2UIResponseParser | None, *, handler: str) -> bool:
+    """Whether a handler's ``messages`` fail validation, which is then logged."""
+    if not messages or validator is None:
+        return False
+    result = validator.validate(messages)
+    if result.is_valid:
+        return False
+    logger.warning("A2UI handler %r returned invalid A2UI messages; not sending them: %s", handler, result.errors)
+    return True
+
+
+def _function_failed(call: A2UIIncomingFunctionCall, version: A2UIWireVersion) -> ServerToClientMessage:
+    return _function_response(
+        call.function_call_id,
+        version,
+        error={"code": "FUNCTION_FAILED", "message": f"Function {call.call!r} failed."},
+    )
 
 
 async def _run_handler(

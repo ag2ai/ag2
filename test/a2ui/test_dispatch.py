@@ -477,3 +477,66 @@ class TestMalformedHandlerMessages:
 
         assert frames == []
         assert logs == ""
+
+
+_RELATIVE_PATH_UPDATE: dict[str, Any] = {"updateDataModel": {"surfaceId": "cart", "path": "count", "value": 1}}
+
+
+@pytest.mark.asyncio
+class TestHandlerMessagesAreValidated:
+    """Messages a handler returns are server→client messages, so they are held to the spec like the model's."""
+
+    async def test_an_invalid_click_message_is_dropped_with_a_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        @a2ui_action
+        def refresh() -> dict[str, Any]:
+            return _RELATIVE_PATH_UPDATE
+
+        body = {"a2ui": [_server_action_envelope("refresh", {})]}
+        with caplog.at_level("WARNING", logger="ag2.a2ui.server_action"):
+            frames = await _serve(body, TrackingConfig(TestConfig("unused")), [refresh], validate_responses=True)
+
+        assert frames == []
+        assert "'refresh'" in caplog.text
+        assert "JSON Pointer" in caplog.text
+
+    async def test_validation_off_sends_it_as_is(self) -> None:
+        @a2ui_action
+        def refresh() -> dict[str, Any]:
+            return _RELATIVE_PATH_UPDATE
+
+        body = {"a2ui": [_server_action_envelope("refresh", {})]}
+        frames = await _serve(body, TrackingConfig(TestConfig("unused")), [refresh], validate_responses=False)
+
+        assert frames == [{"version": "v0.9", **_RELATIVE_PATH_UPDATE}]
+
+    async def test_an_invalid_function_message_fails_the_call(self) -> None:
+        @a2ui_action
+        def refresh() -> dict[str, Any]:
+            return _RELATIVE_PATH_UPDATE
+
+        messages, config = await _rpc_messages(_call_envelope("refresh", {}), [refresh])
+
+        assert config.calls == []
+        assert messages == [
+            {
+                "version": "1.0",
+                "agentFunctionResponse": {
+                    "functionCallId": "fc-1",
+                    "error": {"code": "FUNCTION_FAILED", "message": "Function 'refresh' failed."},
+                },
+            },
+        ]
+
+
+@pytest.mark.asyncio
+async def test_a_handler_may_partially_update_a_surface_from_an_earlier_turn() -> None:
+    update = {"updateComponents": {"surfaceId": "s1", "components": [{"id": "t1", "component": "Text", "text": "hi"}]}}
+
+    @a2ui_action
+    def refresh() -> dict[str, Any]:
+        return update
+
+    body = {"a2ui": [_server_action_envelope("refresh", {})]}
+    frames = await _serve(body, TrackingConfig(TestConfig("unused")), [refresh], validate_responses=True)
+
+    assert frames == [{"version": "v0.9", **update}]

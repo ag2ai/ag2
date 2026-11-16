@@ -42,6 +42,8 @@ class _A2UIRuntime:
     system_prompt_section: str
     middleware: Middleware
     """Extracts the A2UI block from each response, and validates it unless validation is off."""
+    message_validator: A2UIResponseParser | None
+    """Checks the messages server-side handlers return; ``None`` when validation is off."""
 
     def get_action(self, name: str) -> A2UIEventAction | None:
         """The declared action ``name``, which an incoming click is routed to."""
@@ -99,6 +101,7 @@ def build_runtime(
     )
     base_prompt = system_message if system_message is not None else DEFAULT_SYSTEM_MESSAGE
     middleware: Middleware
+    validator: A2UIResponseParser | None = None
     if validate_responses:
         if validation_retries < 0:
             raise ValueError(f"validation_retries must be >= 0, got {validation_retries}")
@@ -109,6 +112,7 @@ def build_runtime(
             component_references=schema_manager.component_references(),
         )
         middleware = Middleware(A2UIValidationMiddleware, parser=parser, max_retries=validation_retries)
+        validator = parser
     else:
         # Extraction always runs, so prose and UI travel as separate channels, never raw JSON in the text.
         middleware = Middleware(A2UIExtractionMiddleware, parser=A2UIResponseParser(protocol=schema_manager.protocol))
@@ -119,4 +123,5 @@ def build_runtime(
         server_actions=collect_server_actions(actions),
         system_prompt_section=f"{base_prompt}\n\n{prompt_section}",
         middleware=middleware,
+        message_validator=validator,
     )
