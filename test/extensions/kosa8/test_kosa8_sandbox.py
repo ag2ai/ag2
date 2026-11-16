@@ -7,6 +7,7 @@
 import asyncio
 import base64
 from pathlib import PurePosixPath
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -153,6 +154,53 @@ class TestExec:
         sandbox = _sandbox(FakeCloud(exec_results=[refused]))
         actual = await sandbox.exec(["x"], timeout=120)
         assert actual == ExecResult(output="kosa8 error: streamed exec is not available", exit_code=1)
+        await sandbox.aclose()
+
+    async def test_host_without_streamed_timeout_gets_the_sandbox_timeout(self) -> None:
+        refused = error_answer(501, "not_available", "timeout_s on a streamed exec is not available on this host")
+        cloud = FakeCloud(
+            exec_results=[
+                refused,
+                stream_answer(out_frame("ok\n"), {"done": True, "exit": 0}),
+                stream_answer(out_frame("again\n"), {"done": True, "exit": 0}),
+            ]
+        )
+        sandbox = _sandbox(cloud)
+
+        assert await sandbox.exec(["make"], timeout=600) == ExecResult(output="ok", exit_code=0)
+        assert await sandbox.exec(["make"], timeout=600) == ExecResult(output="again", exit_code=0)
+
+        bodies = cloud.exec_bodies()
+        assert bodies[0] == {"cmd": [*IN_WORKDIR, "/workspace", "make"], "timeout_s": 600, "stream": True}
+        # The refusal is remembered: later commands go straight to the fallback.
+        for body in bodies[1:]:
+            assert "timeout_s" not in body
+            assert body["stream"] is True
+            assert body["cmd"][:2] == ["sh", "-c"]
+            assert "timeout" in body["cmd"][2]
+            assert body["cmd"][3:] == ["ag2", "/workspace", "600", "make"]
+        await sandbox.aclose()
+
+    async def test_sandbox_timeout_kill_returns_124(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        refused = error_answer(501, "not_available", "timeout_s on a streamed exec is not available on this host")
+        killed = stream_answer(out_frame("partial"), {"done": True, "exit": 143})
+        sandbox = _sandbox(FakeCloud(exec_results=[refused, killed]))
+        await sandbox.__aenter__()
+        clock = iter([0.0, 121.0])
+        # The module's own clock only: asyncio keeps the real one.
+        monkeypatch.setattr("ag2.extensions.kosa8.sandbox.time", SimpleNamespace(monotonic=lambda: next(clock)))
+
+        actual = await sandbox.exec(["sleep", "999"], timeout=120)
+
+        monkeypatch.undo()
+        assert actual == ExecResult(output="partial\nkosa8 execution timed out after 120s", exit_code=124)
+        await sandbox.aclose()
+
+    async def test_early_143_is_the_commands_own_exit(self) -> None:
+        refused = error_answer(501, "not_available", "timeout_s on a streamed exec is not available on this host")
+        exited = stream_answer({"done": True, "exit": 143})
+        sandbox = _sandbox(FakeCloud(exec_results=[refused, exited]))
+        assert await sandbox.exec(["x"], timeout=120) == ExecResult(output="", exit_code=143)
         await sandbox.aclose()
 
 

@@ -46,6 +46,22 @@ _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 # The exec API has no working-directory field, so commands enter it first.
 _IN_WORKDIR = ("sh", "-c", 'cd -- "$1" || exit 1; shift; exec "$@"', "ag2")
 
+# For hosts that cannot time a streamed exec: the sandbox's own `timeout`
+# (GNU or busybox) ends the command, when the image has one. It runs as a
+# child of the shell, not in its place: the shell can be the container's
+# PID 1, and a PID 1 that has no handler ignores the SIGTERM.
+_IN_WORKDIR_TIMED = (
+    "sh",
+    "-c",
+    'cd -- "$1" || exit 1; t=$2; shift 2; '
+    'if command -v timeout >/dev/null 2>&1; then timeout "$t" "$@"; exit $?; fi; exec "$@"',
+    "ag2",
+)
+
+# How long past its timeout a streamed command is waited for before the
+# client gives up on it.
+_STREAM_GRACE_S = 30
+
 _WRITE_FIRST = 'mkdir -p -- "$(dirname -- "$1")" && printf %s "$2" | base64 -d > "$1"'
 _WRITE_MORE = 'printf %s "$2" | base64 -d >> "$1"'
 
@@ -198,6 +214,8 @@ class Kosa8Sandbox(SandboxBase):
         self._closed = False
         self._atexit_registered = False
         self._files_api = True
+        # Whether the host takes `timeout_s` on a streamed exec (not all do yet).
+        self._stream_timeout = True
         # Captured up front: the atexit fallback runs after `aclose` has
         # dropped the async client, and has to build a fresh sync one.
         self._sync_base_url = str(client.base_url)
@@ -268,7 +286,7 @@ class Kosa8Sandbox(SandboxBase):
                 output = _joined(answer.get("stdout") or "", answer.get("stderr") or "")
                 exit_code = answer.get("exit")
             else:
-                output, exit_code = await self._exec_streamed(client, sandbox_id, body)
+                output, exit_code = await self._exec_streamed(client, sandbox_id, body, argv)
         except Kosa8APIError as e:
             if e.code == "exec_timeout":
                 partial = ""
@@ -277,7 +295,7 @@ class Kosa8Sandbox(SandboxBase):
                 note = f"kosa8 execution timed out after {exec_timeout}s"
                 return ExecResult(output=f"{partial}\n{note}" if partial else note, exit_code=124)
             return ExecResult(output=f"kosa8 error: {e}", exit_code=1)
-        except httpx.TimeoutException:
+        except (httpx.TimeoutException, TimeoutError):
             return ExecResult(output=f"kosa8 execution timed out after {exec_timeout}s", exit_code=124)
         except httpx.HTTPError as e:
             return ExecResult(output=f"kosa8 error: {e}", exit_code=1)
@@ -294,10 +312,39 @@ class Kosa8Sandbox(SandboxBase):
         client: httpx.AsyncClient,
         sandbox_id: str,
         body: dict[str, Any],
+        argv: list[str],
     ) -> tuple[str, int | None]:
         """Run a command past the buffered limit as a stream of NDJSON frames:
         ``{stream, data: base64}`` while it prints (empty ones are heartbeats),
-        then ``{done: true, exit}`` or ``{done: true, error, code}``."""
+        then ``{done: true, exit}`` or ``{done: true, error, code}``.
+
+        A host that refuses ``timeout_s`` on a streamed exec (HTTP 501) gets
+        the command without it, wrapped in the sandbox's ``timeout``; the
+        client also stops waiting a little after the deadline."""
+        timeout_s: int = body["timeout_s"]
+        if self._stream_timeout:
+            try:
+                return await self._stream_frames(client, sandbox_id, {**body, "stream": True})
+            except Kosa8APIError as e:
+                if e.status != 501 or "timeout_s" not in str(e):
+                    raise
+                self._stream_timeout = False
+        untimed = {key: value for key, value in body.items() if key != "timeout_s"}
+        untimed["cmd"] = [*_IN_WORKDIR_TIMED, str(self._workdir), str(timeout_s), *argv]
+        started = time.monotonic()
+        async with asyncio.timeout(timeout_s + _STREAM_GRACE_S):
+            output, exit_code = await self._stream_frames(client, sandbox_id, {**untimed, "stream": True})
+        # GNU timeout exits 124; busybox's ends the command with SIGTERM (143).
+        if exit_code in (124, 143) and time.monotonic() - started >= timeout_s:
+            raise Kosa8APIError("exec timed out", status=504, code="exec_timeout", body={"stdout": output})
+        return output, exit_code
+
+    async def _stream_frames(
+        self,
+        client: httpx.AsyncClient,
+        sandbox_id: str,
+        body: dict[str, Any],
+    ) -> tuple[str, int | None]:
         chunks: list[bytes] = []
         done: dict[str, Any] = {}
         # The host sends a heartbeat frame every 15 s while the command is quiet.
@@ -305,7 +352,7 @@ class Kosa8Sandbox(SandboxBase):
         async with client.stream(
             "POST",
             f"{self._path(sandbox_id)}/exec",
-            json={**body, "stream": True},
+            json=body,
             timeout=read_timeout,
         ) as response:
             if response.status_code >= 400:
